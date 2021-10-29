@@ -106,6 +106,8 @@ static struct sync_client_state rightnow_sync_cs;
 /* protocol definitions */
 static char *imap_sasl_parsesuccess(char *str, const char **status);
 static void imap_postcapability(struct backend *s);
+static struct sync_name *sync_name_lookup(struct sync_name_list *, const char *);
+static int sync_sieve_activate(const char *userid, const char *bcname);
 
 struct protocol_t imap_csync_protocol =
 { "imap", "imap", TYPE_STD,
@@ -151,6 +153,18 @@ struct protocol_t csync_protocol =
       { "COMPRESS DEFLATE", NULL, "OK" },
       { "NOOP", NULL, "OK" },
       { "EXIT", NULL, "OK" } } }
+};
+
+struct sync_action {
+    struct sync_action *next;
+    int active;
+    char *name;
+    char *user;
+};
+
+struct sync_action_list {
+    struct sync_action *head, *tail;
+    unsigned long count;
 };
 
 /* parse_success api is undocumented but my current understanding
@@ -346,7 +360,7 @@ EXPORTED int sync_get_durationconfig(const char *channel, const char *val, int d
     return response;
 }
 
-EXPORTED int sync_get_switchconfig(const char *channel, const char *val)
+static int sync_get_switchconfig(const char *channel, const char *val)
 {
     int response = -1;
 
@@ -368,7 +382,7 @@ EXPORTED int sync_get_switchconfig(const char *channel, const char *val)
 
 /* Parse routines */
 
-char *sync_encode_options(int options)
+static char *sync_encode_options(int options)
 {
     static char buf[4];
     int i = 0;
@@ -386,7 +400,7 @@ char *sync_encode_options(int options)
     return buf;
 }
 
-int sync_parse_options(const char *options)
+static int sync_parse_options(const char *options)
 {
     int res = 0;
     const char *p = options;
@@ -443,7 +457,7 @@ static int sync_getline(struct protstream *in, struct buf *buf)
 
 /* ====================================================================== */
 
-struct sync_msgid_list *sync_msgid_list_create(int hash_size)
+static struct sync_msgid_list *sync_msgid_list_create(int hash_size)
 {
     struct sync_msgid_list *l = xzmalloc(sizeof (struct sync_msgid_list));
 
@@ -461,8 +475,8 @@ struct sync_msgid_list *sync_msgid_list_create(int hash_size)
     return(l);
 }
 
-struct sync_msgid *sync_msgid_insert(struct sync_msgid_list *l,
-                                     const struct message_guid *guid)
+static struct sync_msgid *sync_msgid_insert(struct sync_msgid_list *l,
+                                            const struct message_guid *guid)
 {
     struct sync_msgid *msgid;
     int offset;
@@ -497,23 +511,7 @@ struct sync_msgid *sync_msgid_insert(struct sync_msgid_list *l,
     return msgid;
 }
 
-void sync_msgid_remove(struct sync_msgid_list *l,
-                       const struct message_guid *guid)
-{
-    int offset = message_guid_hash(guid, l->hash_size);
-    struct sync_msgid *msgid;
-
-    if (message_guid_isnull(guid)) return;
-
-    for (msgid = l->hash[offset] ; msgid ; msgid = msgid->hash_next) {
-        if (message_guid_equal(&msgid->guid, guid)) {
-            message_guid_set_null(&msgid->guid);
-            return;
-        }
-    }
-}
-
-void sync_msgid_list_free(struct sync_msgid_list **lp)
+static void sync_msgid_list_free(struct sync_msgid_list **lp)
 {
     struct sync_msgid_list *l = *lp;
     struct sync_msgid *current, *next;
@@ -531,8 +529,8 @@ void sync_msgid_list_free(struct sync_msgid_list **lp)
     *lp = NULL;
 }
 
-struct sync_msgid *sync_msgid_lookup(const struct sync_msgid_list *l,
-                                     const struct message_guid *guid)
+static struct sync_msgid *sync_msgid_lookup(const struct sync_msgid_list *l,
+                                            const struct message_guid *guid)
 {
     int offset = message_guid_hash(guid, l->hash_size);
     struct sync_msgid *msgid;
@@ -679,8 +677,8 @@ struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
     return NULL;
 }
 
-const struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
-                                                    const char *name)
+static const struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
+                                                           const char *name)
 {
     struct sync_folder *p;
 
@@ -714,16 +712,31 @@ void sync_folder_list_free(struct sync_folder_list **lp)
 }
 
 /* ====================================================================== */
+struct sync_rename {
+    struct sync_rename *next;
+    char *uniqueid;
+    char *oldname;
+    char *newname;
+    char *part;
+    unsigned uidvalidity;
+    int   done;
+};
 
-struct sync_rename_list *sync_rename_list_create(void)
+struct sync_rename_list {
+    struct sync_rename *head, *tail;
+    unsigned long count;
+    unsigned long done;
+};
+
+static struct sync_rename_list *sync_rename_list_create(void)
 {
     return xzmalloc(sizeof(struct sync_rename_list));
 }
 
-struct sync_rename *sync_rename_list_add(struct sync_rename_list *l,
-                                         const char *uniqueid, const char *oldname,
-                                         const char *newname, const char *partition,
-                                         unsigned uidvalidity)
+static struct sync_rename *sync_rename_list_add(struct sync_rename_list *l,
+                                                const char *uniqueid, const char *oldname,
+                                                const char *newname, const char *partition,
+                                                unsigned uidvalidity)
 {
     struct sync_rename *result
         = xzmalloc(sizeof(struct sync_rename));
@@ -746,8 +759,8 @@ struct sync_rename *sync_rename_list_add(struct sync_rename_list *l,
     return result;
 }
 
-struct sync_rename *sync_rename_lookup(struct sync_rename_list *l,
-                                            const char *oldname)
+static struct sync_rename *sync_rename_lookup(struct sync_rename_list *l,
+                                              const char *oldname)
 {
     struct sync_rename *p;
 
@@ -759,7 +772,7 @@ struct sync_rename *sync_rename_lookup(struct sync_rename_list *l,
     return NULL;
 }
 
-void sync_rename_list_free(struct sync_rename_list **lp)
+static void sync_rename_list_free(struct sync_rename_list **lp)
 {
     struct sync_rename_list *l = *lp;
     struct sync_rename *current, *next;
@@ -787,8 +800,8 @@ struct sync_quota_list *sync_quota_list_create(void)
     return xzmalloc(sizeof(struct sync_quota_list));
 }
 
-struct sync_quota *sync_quota_list_add(struct sync_quota_list *l,
-                                       const char *root)
+static struct sync_quota *sync_quota_list_add(struct sync_quota_list *l,
+                                              const char *root)
 {
     struct sync_quota *result
         = xzmalloc(sizeof(struct sync_quota));
@@ -810,8 +823,8 @@ struct sync_quota *sync_quota_list_add(struct sync_quota_list *l,
     return result;
 }
 
-struct sync_quota *sync_quota_lookup(struct sync_quota_list *l,
-                                          const char *name)
+static struct sync_quota *sync_quota_lookup(struct sync_quota_list *l,
+                                            const char *name)
 {
     struct sync_quota *p;
 
@@ -841,7 +854,7 @@ void sync_quota_list_free(struct sync_quota_list **lp)
     *lp = NULL;
 }
 
-void sync_encode_quota_limits(struct dlist *kl, const quota_t limits[QUOTA_NUMRESOURCES])
+static void sync_encode_quota_limits(struct dlist *kl, const quota_t limits[QUOTA_NUMRESOURCES])
 {
     int res;
 
@@ -865,7 +878,7 @@ void sync_encode_quota_limits(struct dlist *kl, const quota_t limits[QUOTA_NUMRE
     }
 }
 
-void sync_decode_quota_limits(/*const*/ struct dlist *kl, quota_t limits[QUOTA_NUMRESOURCES])
+static void sync_decode_quota_limits(/*const*/ struct dlist *kl, quota_t limits[QUOTA_NUMRESOURCES])
 {
     uint32_t limit = 0;
     int res;
@@ -921,7 +934,7 @@ static struct sync_sieve *sync_sieve_list_add(
     return item;
 }
 
-struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, const char *name)
+static struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, const char *name)
 {
     struct sync_sieve *p;
 
@@ -949,13 +962,13 @@ void sync_sieve_list_free(struct sync_sieve_list **lp)
     *lp = NULL;
 }
 
-int sync_sieve_deactivate(const char *userid)
+static int sync_sieve_deactivate(const char *userid)
 {
     return sync_sieve_activate(userid, NULL);
 }
 
 #ifdef USE_SIEVE
-int sync_sieve_activate(const char *userid, const char *bcname)
+static int sync_sieve_activate(const char *userid, const char *bcname)
 {
     struct sieve_db *db = sievedb_open_userid(userid);
     struct mailbox *mailbox = NULL;
@@ -993,7 +1006,7 @@ int sync_sieve_activate(const char *userid, const char *bcname)
     return r;
 }
 
-int sync_sieve_delete(const char *userid, const char *fname)
+static int sync_sieve_delete(const char *userid, const char *fname)
 {
     struct sieve_db *db;
     struct mailbox *mailbox = NULL;
@@ -1085,13 +1098,13 @@ static int sync_sieve_validate(struct index_record *record,
     return r;
 }
 #else  /* !USE_SIEVE */
-int sync_sieve_activate(const char *userid __attribute__((unused)),
+static int sync_sieve_activate(const char *userid __attribute__((unused)),
                         const char *bcname __attribute__((unused)))
 {
     return 0;
 }
 
-int sync_sieve_delete(const char *userid __attribute__((unused)),
+static int sync_sieve_delete(const char *userid __attribute__((unused)),
                       const char *fname __attribute__((unused)))
 {
     return 0;
@@ -1127,8 +1140,8 @@ struct sync_name *sync_name_list_add(struct sync_name_list *l,
     return item;
 }
 
-struct sync_name *sync_name_lookup(struct sync_name_list *l,
-                                        const char *name)
+static struct sync_name *sync_name_lookup(struct sync_name_list *l,
+                                          const char *name)
 {
     struct sync_name *p;
 
@@ -1161,10 +1174,10 @@ struct sync_seen_list *sync_seen_list_create(void)
     return xzmalloc(sizeof (struct sync_seen_list));
 }
 
-struct sync_seen *sync_seen_list_add(struct sync_seen_list *l,
-                                     const char *uniqueid, time_t lastread,
-                                     unsigned lastuid, time_t lastchange,
-                                     const char *seenuids)
+static struct sync_seen *sync_seen_list_add(struct sync_seen_list *l,
+                                            const char *uniqueid, time_t lastread,
+                                            unsigned lastuid, time_t lastchange,
+                                            const char *seenuids)
 {
     struct sync_seen *item = xzmalloc(sizeof(struct sync_seen));
 
@@ -1186,8 +1199,8 @@ struct sync_seen *sync_seen_list_add(struct sync_seen_list *l,
     return item;
 }
 
-struct sync_seen *sync_seen_list_lookup(struct sync_seen_list *l,
-                                        const char *uniqueid)
+static struct sync_seen *sync_seen_list_lookup(struct sync_seen_list *l,
+                                               const char *uniqueid)
 {
     struct sync_seen *p;
 
@@ -1216,7 +1229,7 @@ void sync_seen_list_free(struct sync_seen_list **lp)
 
 /* ====================================================================== */
 
-struct sync_annot_list *sync_annot_list_create(void)
+static struct sync_annot_list *sync_annot_list_create(void)
 {
     return xzmalloc(sizeof (struct sync_annot_list));
 }
@@ -1244,7 +1257,7 @@ static int diff_annotation(const struct sync_annot *a,
     return diff;
 }
 
-void sync_annot_list_add(struct sync_annot_list *l,
+static void sync_annot_list_add(struct sync_annot_list *l,
                          const char *entry, const char *userid,
                          const struct buf *value,
                          modseq_t modseq)
@@ -1317,13 +1330,13 @@ void sync_annot_list_free(struct sync_annot_list **lp)
 
 /* ====================================================================== */
 
-struct sync_action_list *sync_action_list_create(void)
+static struct sync_action_list *sync_action_list_create(void)
 {
     return xzmalloc(sizeof (struct sync_action_list));
 }
 
-void sync_action_list_add(struct sync_action_list *l,
-                          const char *name, const char *user)
+static void sync_action_list_add(struct sync_action_list *l,
+                                 const char *name, const char *user)
 {
     struct sync_action *current;
 
@@ -1354,7 +1367,7 @@ void sync_action_list_add(struct sync_action_list *l,
 
 }
 
-void sync_action_list_free(struct sync_action_list **lp)
+static void sync_action_list_free(struct sync_action_list **lp)
 {
     struct sync_action_list *l = *lp;
     struct sync_action *current, *next;
@@ -1421,10 +1434,10 @@ int read_annotations(const struct mailbox *mailbox,
  * Encode the given list of annotations @sal as a dlist
  * structure with the given @parent.
  */
-void encode_annotations(struct dlist *parent,
-                        struct mailbox *mailbox,
-                        const struct index_record *record,
-                        const struct sync_annot_list *sal)
+static void encode_annotations(struct dlist *parent,
+                               struct mailbox *mailbox,
+                               const struct index_record *record,
+                               const struct sync_annot_list *sal)
 {
     const struct sync_annot *sa;
     struct dlist *annots = NULL;
@@ -1481,10 +1494,10 @@ void encode_annotations(struct dlist *parent,
  *
  * Returns: zero on success or Cyrus error code.
  */
-int decode_annotations(/*const*/struct dlist *annots,
-                       struct sync_annot_list **salp,
-                       struct mailbox *mailbox,
-                       struct index_record *record)
+static int decode_annotations(/*const*/struct dlist *annots,
+                              struct sync_annot_list **salp,
+                              struct mailbox *mailbox,
+                              struct index_record *record)
 {
     struct dlist *aa;
     const char *entry;
@@ -1561,8 +1574,8 @@ int decode_annotations(/*const*/struct dlist *annots,
  * Record may be null, to process mailbox annotations.
  */
 
-int diff_annotations(const struct sync_annot_list *local_annots,
-                     const struct sync_annot_list *remote_annots)
+static int diff_annotations(const struct sync_annot_list *local_annots,
+                            const struct sync_annot_list *remote_annots)
 {
     const struct sync_annot *local = (local_annots ? local_annots->head : NULL);
     const struct sync_annot *remote = (remote_annots ? remote_annots->head : NULL);
@@ -1576,7 +1589,7 @@ int diff_annotations(const struct sync_annot_list *local_annots,
     return 0;
 }
 
-int apply_annotations(struct mailbox *mailbox,
+static int apply_annotations(struct mailbox *mailbox,
                       const struct index_record *record,
                       const struct sync_annot_list *local_annots,
                       const struct sync_annot_list *remote_annots,
@@ -1675,9 +1688,9 @@ out:
 
 /* =========================================================================== */
 
-void sync_print_flags(struct dlist *kl,
-                      struct mailbox *mailbox,
-                      const struct index_record *record)
+static void sync_print_flags(struct dlist *kl,
+                             struct mailbox *mailbox,
+                             const struct index_record *record)
 {
     int flag;
     struct dlist *fl = dlist_newlist(kl, "FLAGS");
@@ -1705,9 +1718,9 @@ void sync_print_flags(struct dlist *kl,
     }
 }
 
-int sync_getflags(struct dlist *kl,
-                  struct mailbox *mailbox,
-                  struct index_record *record)
+static int sync_getflags(struct dlist *kl,
+                         struct mailbox *mailbox,
+                         struct index_record *record)
 {
     struct dlist *ki;
     int userflag;
@@ -1749,9 +1762,9 @@ int sync_getflags(struct dlist *kl,
     return 0;
 }
 
-int parse_upload(struct dlist *kr, struct mailbox *mailbox,
-                 struct index_record *record,
-                 struct sync_annot_list **salp)
+static int parse_upload(struct dlist *kr, struct mailbox *mailbox,
+                        struct index_record *record,
+                        struct sync_annot_list **salp)
 {
     struct dlist *fl;
     struct message_guid *tmpguid;
@@ -1789,7 +1802,7 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 
 /* NOTE - we don't prot_flush here, as we always send an OK at the
  * end of a response anyway */
-void sync_send_response(struct dlist *kl, struct protstream *out)
+static void sync_send_response(struct dlist *kl, struct protstream *out)
 {
     prot_printf(out, "* ");
     dlist_print(kl, 1, out);
@@ -1831,7 +1844,7 @@ void sync_send_lookup(struct dlist *kl, struct protstream *out)
     prot_flush(out);
 }
 
-void sync_send_restart(struct protstream *out)
+static void sync_send_restart(struct protstream *out)
 {
     if (out->userdata) {
         /* IMAP flavor (w/ tag) */
@@ -1841,24 +1854,12 @@ void sync_send_restart(struct protstream *out)
     prot_flush(out);
 }
 
-void sync_send_restore(struct dlist *kl, struct protstream *out)
-{
-    if (out->userdata) {
-        /* IMAP flavor (w/ tag) */
-        prot_printf(out, "%s SYNC", sync_gentag((struct buf *) out->userdata));
-    }
-    prot_printf(out, "RESTORE ");
-    dlist_print(kl, 1, out);
-    prot_printf(out, "\r\n");
-    prot_flush(out);
-}
-
 /*
  * Copied from imapparse.c:eatline(), and extended to also eat
  * dlist file literals
  * XXX potentially dedup back into original eatline
  */
-void sync_eatline(struct protstream *pin, int c)
+static void sync_eatline(struct protstream *pin, int c)
 {
     for (;;) {
         if (c == '\n') return;
@@ -2241,10 +2242,10 @@ int sync_parse_response(const char *cmd, struct protstream *in,
     return IMAP_PROTOCOL_ERROR;
 }
 
-int sync_append_copyfile(struct mailbox *mailbox,
-                         struct index_record *record,
-                         const struct sync_annot_list *annots,
-                         const struct sync_msgid_list *part_list)
+static int sync_append_copyfile(struct mailbox *mailbox,
+                                struct index_record *record,
+                                const struct sync_annot_list *annots,
+                                const struct sync_msgid_list *part_list)
 {
     const char *destname;
     struct message_guid tmp_guid;
@@ -2446,9 +2447,9 @@ redo:
     mailbox_close(&mailbox);
 }
 
-int sync_apply_reserve(struct dlist *kl,
-                       struct sync_reserve_list *reserve_list,
-                       struct sync_state *sstate)
+static int sync_apply_reserve(struct dlist *kl,
+                              struct sync_reserve_list *reserve_list,
+                              struct sync_state *sstate)
 {
     struct message_guid *tmpguid;
     struct sync_name_list *folder_names = sync_name_list_create();
@@ -2529,14 +2530,14 @@ int sync_apply_reserve(struct dlist *kl,
 
 /* ====================================================================== */
 
-int sync_apply_unquota(struct dlist *kin,
-                       struct sync_state *sstate __attribute__((unused)))
+static int sync_apply_unquota(struct dlist *kin,
+                              struct sync_state *sstate __attribute__((unused)))
 {
     return mboxlist_unsetquota(kin->sval, /*silent*/1);
 }
 
-int sync_apply_quota(struct dlist *kin,
-                     struct sync_state *sstate __attribute__((unused)))
+static int sync_apply_quota(struct dlist *kin,
+                            struct sync_state *sstate __attribute__((unused)))
 {
     const char *root;
     quota_t limits[QUOTA_NUMRESOURCES];
@@ -2736,9 +2737,9 @@ out:
     return r;
 }
 
-int sync_apply_mailbox(struct dlist *kin,
-                       struct sync_reserve_list *reserve_list,
-                       struct sync_state *sstate)
+static int sync_apply_mailbox(struct dlist *kin,
+                              struct sync_reserve_list *reserve_list,
+                              struct sync_state *sstate)
 {
     struct sync_msgid_list *part_list;
     /* fields from the request */
@@ -3262,7 +3263,7 @@ static int getannotation_cb(const char *mboxname,
     return 0;
 }
 
-int sync_get_annotation(struct dlist *kin, struct sync_state *sstate)
+static int sync_get_annotation(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
     return annotatemore_findall_mboxname(mboxname, 0, "*", /*modseq*/0,
@@ -3294,7 +3295,7 @@ static int quota_work(const char *root, struct protstream *pout)
     return 0;
 }
 
-int sync_get_quota(struct dlist *kin, struct sync_state *sstate)
+static int sync_get_quota(struct dlist *kin, struct sync_state *sstate)
 {
     return quota_work(kin->sval, sstate->pout);
 }
@@ -3394,7 +3395,7 @@ static int sync_mailbox_byuniqueid(const char *uniqueid, void *rock)
     return r;
 }
 
-int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
+static int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
 {
     struct mailbox *mailbox = NULL;
     struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
@@ -3416,7 +3417,7 @@ out:
     return r;
 }
 
-int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
+static int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
 {
     struct dlist *ki;
     struct mbox_rock mrock = { sstate->pout, NULL, 0, sstate->flags };
@@ -3431,7 +3432,7 @@ int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
     return 0;
 }
 
-int sync_get_uniqueids(struct dlist *kin, struct sync_state *sstate)
+static int sync_get_uniqueids(struct dlist *kin, struct sync_state *sstate)
 {
     struct dlist *ki;
     struct mbox_rock mrock = { sstate->pout, NULL, 0, sstate->flags };
@@ -3519,7 +3520,7 @@ static int list_gen_cb(void *rock, struct sieve_data *sdata)
     return 0;
 }
 
-struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
+static struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 {
     struct sync_sieve_list *list = sync_sieve_list_create();
     struct sieve_db *db = sievedb_open_userid(userid);
@@ -3532,7 +3533,7 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
     return list;
 }
 
-char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
+static char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
 {
     struct sieve_db *db = sievedb_open_userid(userid);
     char *result = NULL;
@@ -3573,7 +3574,7 @@ char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
     return result;
 }
 
-int sync_sieve_upload(const char *userid, const char *fname,
+static int sync_sieve_upload(const char *userid, const char *fname,
                       time_t last_update __attribute__((unused)),
                       const char *content,
                       size_t len)
@@ -3639,21 +3640,21 @@ int sync_sieve_upload(const char *userid, const char *fname,
     return r;
 }
 #else  /* !USE_SIEVE */
-struct sync_sieve_list *sync_sieve_list_generate(const char *userid __attribute__((unused)))
+static struct sync_sieve_list *sync_sieve_list_generate(const char *userid __attribute__((unused)))
 {
     return NULL;
 }
 
-char *sync_sieve_read(const char *userid __attribute__((unused)),
-                      const char *name __attribute__((unused)),
-                      uint32_t *sizep)
+static char *sync_sieve_read(const char *userid __attribute__((unused)),
+                             const char *name __attribute__((unused)),
+                             uint32_t *sizep)
 {
     if (sizep) *sizep = 0;
 
     return NULL;
 }
 
-int sync_sieve_upload(const char *userid __attribute__((unused)),
+static int sync_sieve_upload(const char *userid __attribute__((unused)),
                       const char *name __attribute__((unused)),
                       time_t last_update __attribute__((unused)),
                       const char *content __attribute__((unused)),
@@ -3751,12 +3752,12 @@ static int user_meta(const char *userid, struct sync_state *sstate)
     return 0;
 }
 
-int sync_get_meta(struct dlist *kin, struct sync_state *sstate)
+static int sync_get_meta(struct dlist *kin, struct sync_state *sstate)
 {
     return user_meta(kin->sval, sstate);
 }
 
-int sync_get_user(struct dlist *kin, struct sync_state *sstate)
+static int sync_get_user(struct dlist *kin, struct sync_state *sstate)
 {
     int r;
     struct sync_name_list *quotaroots;
@@ -3808,7 +3809,7 @@ bail:
 
 /* ====================================================================== */
 
-int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
+static int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
 
@@ -3827,7 +3828,7 @@ int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
     return r;
 }
 
-int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
+static int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
 {
     const char *oldmboxname;
     const char *newmboxname;
@@ -3879,7 +3880,7 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     return r;
 }
 
-int sync_apply_changesub(struct dlist *kin, struct sync_state *sstate)
+static int sync_apply_changesub(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname;
     const char *userid;
@@ -3898,7 +3899,7 @@ int sync_apply_changesub(struct dlist *kin, struct sync_state *sstate)
 
 /* ====================================================================== */
 
-int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate)
+static int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate)
 {
     struct entryattlist *entryatts = NULL;
     struct attvaluelist *attvalues = NULL;
@@ -3962,7 +3963,7 @@ done:
     return r;
 }
 
-int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate)
+static int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate)
 {
     struct entryattlist *entryatts = NULL;
     struct attvaluelist *attvalues = NULL;
@@ -4018,8 +4019,8 @@ done:
     return r;
 }
 
-int sync_apply_sieve(struct dlist *kin,
-                     struct sync_state *sstate __attribute__((unused)))
+static int sync_apply_sieve(struct dlist *kin,
+                            struct sync_state *sstate __attribute__((unused)))
 {
     const char *userid;
     const char *filename;
@@ -4039,8 +4040,8 @@ int sync_apply_sieve(struct dlist *kin,
     return sync_sieve_upload(userid, filename, last_update, content, len);
 }
 
-int sync_apply_unsieve(struct dlist *kin,
-                       struct sync_state *sstate __attribute__((unused)))
+static int sync_apply_unsieve(struct dlist *kin,
+                              struct sync_state *sstate __attribute__((unused)))
 {
     const char *userid;
     const char *filename;
@@ -4053,8 +4054,8 @@ int sync_apply_unsieve(struct dlist *kin,
     return sync_sieve_delete(userid, filename);
 }
 
-int sync_apply_activate_sieve(struct dlist *kin,
-                              struct sync_state *sstate __attribute((unused)))
+static int sync_apply_activate_sieve(struct dlist *kin,
+                                     struct sync_state *sstate __attribute((unused)))
 {
     const char *userid;
     const char *filename;
@@ -4067,8 +4068,8 @@ int sync_apply_activate_sieve(struct dlist *kin,
     return sync_sieve_activate(userid, filename);
 }
 
-int sync_apply_unactivate_sieve(struct dlist *kin,
-                            struct sync_state *sstate __attribute__((unused)))
+static int sync_apply_unactivate_sieve(struct dlist *kin,
+                                       struct sync_state *sstate __attribute__((unused)))
 {
     const char *userid;
 
@@ -4078,8 +4079,8 @@ int sync_apply_unactivate_sieve(struct dlist *kin,
     return sync_sieve_deactivate(userid);
 }
 
-int sync_apply_seen(struct dlist *kin,
-                    struct sync_state *sstate __attribute__((unused)))
+static int sync_apply_seen(struct dlist *kin,
+                           struct sync_state *sstate __attribute__((unused)))
 {
     int r;
     struct seen *seendb = NULL;
@@ -4120,7 +4121,7 @@ EXPORTED int addmbox_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
+static int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
 {
     const char *userid = kin->sval;
     int r = 0;
@@ -4180,8 +4181,8 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     return r;
 }
 
-int sync_apply_force(struct dlist *kin __attribute__((unused)),
-                     struct sync_state *sstate __attribute__((unused)))
+static int sync_apply_force(struct dlist *kin __attribute__((unused)),
+                            struct sync_state *sstate __attribute__((unused)))
 {
     if (opt_force) {
         syslog(LOG_NOTICE, "SYNCNOTICE: force already enabled");
@@ -4196,7 +4197,7 @@ int sync_apply_force(struct dlist *kin __attribute__((unused)),
 
 /* ====================================================================== */
 
-int sync_get_sieve(struct dlist *kin, struct sync_state *sstate)
+static int sync_get_sieve(struct dlist *kin, struct sync_state *sstate)
 {
     struct dlist *kl;
     const char *userid;
@@ -4226,7 +4227,7 @@ int sync_get_sieve(struct dlist *kin, struct sync_state *sstate)
 
 /* NOTE - can't lock a mailbox here, because it could deadlock,
  * so just pick the file out from under the hood */
-int sync_get_message(struct dlist *kin, struct sync_state *sstate)
+static int sync_get_message(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname;
     const char *partition;
@@ -4268,8 +4269,8 @@ int sync_get_message(struct dlist *kin, struct sync_state *sstate)
     return 0;
 }
 
-int sync_apply_expunge(struct dlist *kin,
-                       struct sync_state *sstate __attribute__((unused)))
+static int sync_apply_expunge(struct dlist *kin,
+                              struct sync_state *sstate __attribute__((unused)))
 {
     const char *mboxname;
     const char *uniqueid;
@@ -4313,9 +4314,9 @@ done:
     return r;
 }
 
-int sync_apply_message(struct dlist *kin,
-                       struct sync_reserve_list *reserve_list,
-                       struct sync_state *sstate __attribute((unused)))
+static int sync_apply_message(struct dlist *kin,
+                              struct sync_reserve_list *reserve_list,
+                              struct sync_state *sstate __attribute((unused)))
 {
     struct sync_msgid_list *part_list;
     struct dlist *ki;
@@ -4345,7 +4346,7 @@ int sync_apply_message(struct dlist *kin,
     return 0;
 }
 
-int sync_apply_capabilities(struct dlist *kin, struct sync_state *sstate)
+static int sync_apply_capabilities(struct dlist *kin, struct sync_state *sstate)
 {
     struct dlist *ki, *kout;
 
@@ -4376,9 +4377,9 @@ int sync_apply_capabilities(struct dlist *kin, struct sync_state *sstate)
 
 /* ====================================================================== */
 
-int sync_restore_mailbox(struct dlist *kin,
-                         struct sync_reserve_list *reserve_list,
-                         struct sync_state *sstate)
+static int sync_restore_mailbox(struct dlist *kin,
+                                struct sync_reserve_list *reserve_list,
+                                struct sync_state *sstate)
 {
     /* fields from the request, all but mboxname are optional */
     const char *mboxname;
@@ -5248,8 +5249,8 @@ int sync_do_folder_delete(struct sync_client_state *sync_cs, const char *mboxnam
     return r;
 }
 
-int sync_set_sub(struct sync_client_state *sync_cs,
-                 const char *userid, const char *mboxname, int add)
+static int sync_set_sub(struct sync_client_state *sync_cs,
+                        const char *userid, const char *mboxname, int add)
 {
     const char *cmd = add ? "SUB" : "UNSUB";
     struct dlist *kl;
@@ -6564,8 +6565,8 @@ static int update_seen_work(struct sync_client_state *sync_cs,
     return sync_parse_response(cmd, sync_cs->backend->in, NULL);
 }
 
-int sync_do_seen(struct sync_client_state *sync_cs,
-                 const char *userid, char *uniqueid)
+static int sync_do_seen(struct sync_client_state *sync_cs,
+                        const char *userid, char *uniqueid)
 {
     int r = 0;
     struct seen *seendb = NULL;
@@ -6597,8 +6598,8 @@ done:
 
 /* ====================================================================== */
 
-int sync_do_quota(struct sync_client_state *sync_cs,
-                  const char *root)
+static int sync_do_quota(struct sync_client_state *sync_cs,
+                         const char *root)
 {
     int r = 0;
 
