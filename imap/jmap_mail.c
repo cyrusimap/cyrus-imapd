@@ -10763,6 +10763,17 @@ static void _email_update_parse(json_t *jemail,
     else if (!json_object_size(mailboxids)) {
         jmap_parser_invalid(parser, "mailboxIds");
     }
+    else {
+        const char *mailboxid = NULL;
+        json_t *jval;
+        json_object_foreach(mailboxids, mailboxid, jval) {
+            if (jval != json_true()) {
+                jmap_parser_push(parser, "mailboxIds");
+                jmap_parser_invalid(parser, mailboxid);
+                jmap_parser_pop(parser);
+            }
+        }
+    }
     update->mailboxids = mailboxids;
 
     /* Is snoozed being overwritten or patched? */
