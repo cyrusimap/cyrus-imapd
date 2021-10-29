@@ -530,6 +530,8 @@ struct namespace_t {
 
 struct accept {
     char *token;
+    char *version;
+    char *charset;
     float qual;
     struct accept *next;
 };

@@ -1843,6 +1843,8 @@ static void postauth_check_hdrs(struct transaction_t *txn)
                 txn->resp_body.enc.proc = &zlib_compress;
             }
             free(e->token);
+            free(e->version);
+            free(e->charset);
         }
         if (enc) free(enc);
     }
@@ -1882,6 +1884,8 @@ static void postauth_check_hdrs(struct transaction_t *txn)
                 }
             }
             free(e->token);
+            free(e->version);
+            free(e->charset);
         }
         if (enc) free(enc);
     }
@@ -2458,23 +2462,42 @@ struct accept *parse_accept(const char **hdr)
 #define GROW_ACCEPT 10;
 
     for (i = 0; hdr && hdr[i]; i++) {
-        tok_t tok = TOK_INITIALIZER(hdr[i], ";,", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        tok_t tok = TOK_INITIALIZER(hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
         char *token;
 
         while ((token = tok_next(&tok))) {
-            if (!strncmp(token, "q=", 2)) {
-                if (!ret) break;
-                ret[n-1].qual = strtof(token+2, NULL);
+            struct param *params = NULL, *param;
+            char *type = NULL, *subtype = NULL;
+
+            if (n + 1 >= alloc)  {
+                alloc += GROW_ACCEPT;
+                ret = xrealloc(ret, alloc * sizeof(struct accept));
             }
-            else {
-                if (n + 1 >= alloc)  {
-                    alloc += GROW_ACCEPT;
-                    ret = xrealloc(ret, alloc * sizeof(struct accept));
+
+            message_parse_type(token, &type, &subtype, &params);
+
+            ret[n].token = lcase(strconcat(type, "/", subtype, NULL));
+            ret[n].version = NULL;
+            ret[n].charset = NULL;
+            ret[n].qual = 1.0;
+
+            for (param = params; param; param = param->next) {
+                if (!strcasecmp(param->attribute, "q")) {
+                    ret[n].qual = strtof(param->value, NULL);
                 }
-                ret[n].token = xstrdup(token);
-                ret[n].qual = 1.0;
-                ret[++n].token = NULL;
+                else if (!strcasecmp(param->attribute, "version")) {
+                    ret[n].version = xstrdup(param->value);
+                }
+                else if (!strcasecmp(param->attribute, "charset")) {
+                    ret[n].charset = xstrdup(param->value);
+                }
             }
+
+            param_free(&params);
+            free(subtype);
+            free(type);
+
+            ret[++n].token = NULL;
         }
         tok_fini(&tok);
     }
