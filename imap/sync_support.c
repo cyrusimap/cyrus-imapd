@@ -388,12 +388,10 @@ int sync_parse_options(const char *options)
 /* Get a simple line (typically error text) */
 static int sync_getline(struct protstream *in, struct buf *buf)
 {
-    int c;
-
     buf_reset(buf);
 
     for (;;) {
-        c = prot_getc(in);
+        int c = prot_getc(in);
 
         if (c == EOF || (c == '\r') || (c == '\n')) {
             /* Munch optional LF after CR */
@@ -408,7 +406,6 @@ static int sync_getline(struct protstream *in, struct buf *buf)
             fatal("word too long", EX_IOERR);
         buf_putc(buf, c);
     }
-    return c;
 }
 
 
@@ -3036,7 +3033,6 @@ int sync_apply_mailbox(struct dlist *kin,
     r = sync_mailbox_compare_update(mailbox, kr, 1, part_list);
     if (r) {
         abort();
-        return r;
     }
 
     if (!opt_force) {

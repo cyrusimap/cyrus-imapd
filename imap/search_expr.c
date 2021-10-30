@@ -499,7 +499,6 @@ static int dnf_depth(const search_expr_t *e)
         return DNF_NOT;
     default: assert(0); return -1;
     }
-    return -1;
 }
 
 static int has_enough_children(const search_expr_t *e)

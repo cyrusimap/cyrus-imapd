@@ -381,7 +381,6 @@ static json_t *icalcomponent_as_json_array(icalcomponent *comp)
     switch (kind) {
     case ICAL_NO_COMPONENT:
         return NULL;
-        break;
 
     case ICAL_X_COMPONENT:
         kind_string = ""; //comp->x_name;

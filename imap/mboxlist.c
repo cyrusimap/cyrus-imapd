@@ -1866,7 +1866,6 @@ EXPORTED int mboxlist_insertremote(mbentry_t *mbentry,
         break;
     case CYRUSDB_AGAIN:
         abort(); /* shouldn't happen ! */
-        break;
     default:
         xsyslog(LOG_ERR, "DBERROR: error updating database",
                          "mailbox=<%s> error=<%s>",
@@ -1908,7 +1907,6 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
 
     case IMAP_AGAIN:
         goto retry;
-        break;
 
     default:
         goto done;
@@ -2684,7 +2682,6 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                              oldname, newname, cyrusdb_strerror(r));
             r = IMAP_IOERROR;
             goto done;
-            break;
         }
     } while (r == CYRUSDB_AGAIN);
 

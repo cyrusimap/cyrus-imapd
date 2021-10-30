@@ -368,7 +368,6 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
 
     default: /* yikes ! */
         abort();
-        break;
     }
 
     return r;

@@ -268,5 +268,4 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     r = do_notify();
 
     shut_down(r);
-    return 0;
 }

@@ -1026,7 +1026,6 @@ static int lock_run_sqlite(const char *userid, const char *fname,
         /* execlp never returns */
         perror("execlp sqlite3");
         _exit(EX_SOFTWARE);
-        break;
 
     default:
         /* parent */

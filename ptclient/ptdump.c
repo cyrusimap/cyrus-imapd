@@ -87,7 +87,6 @@ int main(int argc, char *argv[])
                     "\n\t-C <filename>\tAlternate Config File"
                     "\n");
             exit(-1);
-            break;
             /* just pass through */
         }
     }

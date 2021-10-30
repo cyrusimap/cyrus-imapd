@@ -99,7 +99,6 @@ EXPORTED void free_mpool(struct mpool *pool)
     if (!pool) return;
     if (!pool->blob) {
         fatal("memory pool without a blob", EX_TEMPFAIL);
-        return;
     }
 
     p = pool->blob;

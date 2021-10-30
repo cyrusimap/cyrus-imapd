@@ -705,7 +705,6 @@ static void deliver_remote(message_data_t *msgdata,
                 /* yikes! we shouldn't be getting a notification for this
                    person! */
                 abort();
-                break;
             }
         }
 
@@ -922,13 +921,11 @@ skipdelivery:
                 syslog(LOG_CRIT,
                        "sieve states reached, but we don't implement sieve");
                 abort();
-            break;
             case nosieve:
                 /* yikes, we never got an answer on this one */
                 syslog(LOG_CRIT, "still waiting for response to rcpt %d",
                        n);
                 abort();
-                break;
             case done:
                 /* good */
                 break;

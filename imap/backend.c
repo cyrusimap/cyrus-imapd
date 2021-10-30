@@ -1371,19 +1371,16 @@ EXPORTED int backend_version(struct backend *be)
     case '2':
     case '3':
         return 7;
-        break;
 
     case '4':
     case '5':
     case '6':
         return 8;
-        break;
 
     case '7':
     case '8':
     case '9':
         return 9;
-        break;
     }
 
 unrecognised:

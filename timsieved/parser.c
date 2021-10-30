@@ -187,7 +187,6 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
       prot_printf(sieved_out, "BYE \"Shutdown TCP timeout\"\r\n");
       ret = TRUE;
       goto done;
-      break;
 
   case AUTHENTICATE:
     if (sieved_tls_required) {
@@ -336,7 +335,6 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
 
       ret = TRUE;
       goto done;
-      break;
 
   case GETSCRIPT:
     if (timlex(NULL, NULL, sieved_in)!=SPACE)
@@ -573,7 +571,6 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
   default:
     error_msg="Expected a command. Got something else.";
     goto error;
-    break;
 
   }
 

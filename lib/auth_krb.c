@@ -397,7 +397,6 @@ static int mymemberof(
     const char *identifier __attribute__((unused)))
 {
         fatal("Authentication mechanism (krb) not compiled in", EX_CONFIG);
-        return 0;
 }
 
 static const char *mycanonifyid(

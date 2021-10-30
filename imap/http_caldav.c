@@ -3142,7 +3142,6 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
         default:
             goto done;
-            break;
         }
 
         /* Update reference count */

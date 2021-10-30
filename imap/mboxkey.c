@@ -193,18 +193,15 @@ static int mboxkey_readit(struct mboxkey *mboxkeydb, const char *mailbox,
         syslog(LOG_DEBUG, "deadlock in mboxkey database for '%s/%s'",
                mboxkeydb->user, mailbox);
         return IMAP_AGAIN;
-        break;
     case CYRUSDB_IOERROR:
         syslog(LOG_ERR, "DBERROR: error fetching txn %s",
                cyrusdb_strerror(r));
         return IMAP_IOERROR;
-        break;
     case CYRUSDB_NOTFOUND:
         *mboxkey = NULL;
         *mboxkeylen = 0;
 
         return 0;
-        break;
     }
 
     /* 'data' is <version><mboxkey> */

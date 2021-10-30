@@ -904,7 +904,6 @@ int main(int argc, char **argv)
 
         default:
             usage(argv[0]);
-            break;
         }
     }
 

@@ -3284,7 +3284,6 @@ static void cmd_idle(char *tag)
                 syslog(LOG_DEBUG, "timeout for user '%s' while idling",
                        imapd_userid);
                 shut_down(0);
-                break;
             }
 
             if (flags & IDLE_INPUT) {
@@ -3405,7 +3404,6 @@ static void cmd_idle(char *tag)
 
         case shutdown_silent:
             shut_down(0);
-            break;
         case shutdown_skip:
         default:
             break;

@@ -3220,8 +3220,6 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
         default:
             return -1;
     }
-
-    return -1;
 }
 
 static int guidsearch_rank_expr(struct conversations_state *cstate,
