@@ -131,7 +131,7 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
 
     if (islocal) {
         mbentry_t *mbentry = NULL;
-        /* Lookup user's cal-home-set to see if its on this server */
+        /* Lookup user's cal-home-set to see if it is on this server */
         mbname_t *mbname = mbname_from_recipient(param->userid, NULL);
         mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
         int r = proxy_mlookup(mbname_intname(mbname), &mbentry, NULL, NULL);
