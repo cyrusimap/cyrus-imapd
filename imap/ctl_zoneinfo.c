@@ -76,7 +76,7 @@ const int config_need_data = 0;
 int verbose = 0;
 
 /* forward declarations */
-void usage(void);
+void usage(void) __attribute__((noreturn));
 void free_zoneinfo(void *data);
 void store_zoneinfo(const char *tzid, void *data, void *rock);
 void do_zonedir(const char *prefix, struct hash_table *tzentries,

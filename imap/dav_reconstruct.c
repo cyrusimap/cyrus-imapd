@@ -81,7 +81,7 @@ static struct namespace recon_namespace;
 const int config_need_data = 0;
 
 /* forward declarations */
-void usage(void);
+static void usage(void) __attribute__((noreturn));
 void shut_down(int code);
 
 static int code = 0;

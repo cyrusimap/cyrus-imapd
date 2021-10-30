@@ -99,7 +99,7 @@ static struct namespace mbexamine_namespace;
 static int do_examine(struct findall_data *data, void *rock);
 static int do_quota(struct findall_data *data, void *rock);
 static int do_compare(struct findall_data *data, void *rock);
-static void usage(void);
+static void usage(void) __attribute__((noreturn));
 void shut_down(int code);
 
 static unsigned wantuid = 0;

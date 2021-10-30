@@ -97,7 +97,7 @@ static struct namespace mbtool_namespace;
 /* forward declarations */
 static int do_cmd(struct findall_data *data, void *rock);
 
-static void usage(void);
+static void usage(void) __attribute__((noreturn));
 void shut_down(int code);
 
 enum {

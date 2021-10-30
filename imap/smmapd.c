@@ -194,7 +194,7 @@ int service_init(int argc, char **argv, char **envp)
 }
 
 /* Called by service API to shut down the service */
-void service_abort(int error)
+__attribute__((noreturn)) void service_abort(int error)
 {
     shut_down(error);
 }

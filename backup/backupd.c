@@ -208,7 +208,7 @@ EXPORTED int service_init(int argc __attribute__((unused)),
 }
 
 /* Called by service API to shut down the service */
-EXPORTED void service_abort(int error)
+EXPORTED __attribute__((noreturn)) void service_abort(int error)
 {
     shut_down(error);
 }

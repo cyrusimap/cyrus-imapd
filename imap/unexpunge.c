@@ -75,7 +75,7 @@ static int verbose = 0;
 static int unsetdeleted = 0;
 static const char *addflag = NULL;
 
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr,
             "unexpunge [-C <altconfig>] -l <mailbox> [<uid>...]\n"

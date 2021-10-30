@@ -110,7 +110,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
                        char **users, int numusers, char *mailbox);
 static struct backend *init_net(const char *sockaddr);
 
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr,
             "421-4.3.0 usage: deliver [-C <alt_config> ] [-m mailbox]"
@@ -273,7 +273,7 @@ int main(int argc, char **argv)
     return r;
 }
 
-static void just_exit(const char *msg)
+static __attribute__((noreturn)) void just_exit(const char *msg)
 {
     com_err(msg, 0, "%s", error_message(errno));
 

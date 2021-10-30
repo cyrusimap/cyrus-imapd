@@ -207,7 +207,7 @@ static void cyr_expire_cleanup(struct cyr_expire_ctx *ctx)
     cyrus_done();
 }
 
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "Usage: %s [OPTIONS] {mailbox|users}\n", progname);
     fprintf(stderr, "Expire messages and duplicate delivery database entries.\n");

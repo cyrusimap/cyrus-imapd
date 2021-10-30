@@ -126,7 +126,7 @@ EXPORTED int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     return _sieve_script_parse(interp, script_context, ret);
 }
 
-static void stub_generic(void)
+static __attribute__((noreturn)) void stub_generic(void)
 {
     fatal("stub function called", 0);
 }

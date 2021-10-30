@@ -89,7 +89,7 @@ EXPORTED void fatal(const char *msg, int err)
 }
 
 static const char *argv0 = NULL;
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "    %s [-C alt_config] [-v] [-f frequency] [-d]\n", argv0);

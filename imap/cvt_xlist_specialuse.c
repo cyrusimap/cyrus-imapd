@@ -59,7 +59,7 @@
 static int verbose = 0;
 
 static const char *argv0 = NULL;
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "    %s [options] mailbox...\n", argv0);

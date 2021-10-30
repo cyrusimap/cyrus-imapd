@@ -742,7 +742,7 @@ out:
     return r;
 }
 
-static void do_rolling(const char *channel)
+static __attribute__((noreturn)) void do_rolling(const char *channel)
 {
     strarray_t *mboxnames = NULL;
     sync_log_reader_t *slr;

@@ -45,7 +45,7 @@
 
 #ifdef __STDC__
 #define assert(ex)      {if (!(ex))assertionfailed(__FILE__, __LINE__, #ex);}
-void assertionfailed(const char *file, int line, const char *expr);
+void assertionfailed(const char *file, int line, const char *expr) __attribute__((noreturn));
 #else
 #define assert(ex)      {if (!(ex))assertionfailed(__FILE__, __LINE__, (char*)0);}
 #endif

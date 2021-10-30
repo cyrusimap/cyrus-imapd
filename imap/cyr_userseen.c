@@ -63,7 +63,7 @@
 /* config.c stuff */
 static int do_remove = 0;
 
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "cyr_userseen [-C <altconfig>] -d\n");
     exit(-1);

@@ -882,7 +882,7 @@ static void do_verify(void)
     mboxlist_allmbox("", &verify_cb, &found, MBOXTREE_TOMBSTONES);
 }
 
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "DUMP:\n");
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-x] [-y] [-p partition] [-f filename]\n");

@@ -387,7 +387,7 @@ static struct capa_struct base_capabilities[] = {
 
 
 static void motd_file(void);
-void shut_down(int code);
+void shut_down(int code) __attribute__((noreturn));
 void fatal(const char *s, int code);
 
 static void cmdloop(void);
@@ -1035,7 +1035,7 @@ int service_main(int argc __attribute__((unused)),
 }
 
 /* Called by service API to shut down the service */
-void service_abort(int error)
+__attribute__((noreturn)) void service_abort(int error)
 {
     shut_down(error);
 }
@@ -1076,7 +1076,6 @@ out:
 /*
  * Cleanly shut down and exit
  */
-void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     int i;

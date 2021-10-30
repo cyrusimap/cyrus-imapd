@@ -480,7 +480,7 @@ ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 static int tls_init(int client_auth, struct buf *serverinfo);
 static void starttls(struct http_connection *conn, int timeout);
-void usage(void);
+void usage(void) __attribute__((noreturn));
 void shut_down(int code) __attribute__ ((noreturn));
 
 /* Enable the resetting of a sasl_conn_t */
@@ -1069,7 +1069,7 @@ int service_main(int argc __attribute__((unused)),
 
 
 /* Called by service API to shut down the service */
-void service_abort(int error)
+__attribute__((noreturn)) void service_abort(int error)
 {
     shut_down(error);
 }

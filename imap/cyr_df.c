@@ -60,7 +60,7 @@ extern int optind;
 extern char *optarg;
 
 /* forward declarations */
-static void usage(void);
+static void usage(void) __attribute__((noreturn));
 static void get_part_stats(const char *key, const char *val, void *rock);
 
 int main(int argc, char *argv[])

@@ -78,7 +78,7 @@ EXPORTED void fatal(const char *error, int code)
 }
 
 static const char *argv0 = NULL;
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "    %s [options] [mode] backup list chunks\n", argv0);

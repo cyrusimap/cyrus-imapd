@@ -2687,7 +2687,7 @@ static int http_do_auth(struct sasl_cmd_t *sasl_cmd __attribute__((unused)),
 /*****************************************************************************/
 
 /* didn't give correct parameters; let's exit */
-static void usage(char *prog, char *prot)
+static __attribute__((noreturn)) void usage(char *prog, char *prot)
 {
     printf("Usage: %s [options] hostname\n", prog);
     printf("  -p port  : port to use (default=standard port for protocol)\n");

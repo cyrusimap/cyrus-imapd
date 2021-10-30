@@ -150,7 +150,7 @@ static void cmd_apply(struct dlist *kl,
 static void cmd_restore(struct dlist *kin,
                         struct sync_reserve_list *reserve_list);
 
-static void usage(void);
+static void usage(void) __attribute__((noreturn));
 void shut_down(int code) __attribute__ ((noreturn));
 void shut_down_via_signal(int code) __attribute__ ((noreturn));
 
@@ -378,7 +378,7 @@ int service_main(int argc __attribute__((unused)),
 }
 
 /* Called by service API to shut down the service */
-void service_abort(int error)
+ __attribute__((noreturn)) void service_abort(int error)
 {
     shut_down(error);
 }

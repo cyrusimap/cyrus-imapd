@@ -68,7 +68,7 @@ struct service_item {
     struct service_item *next;
 };
 
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "cyr_info [-C <altconfig>] [-M <cyrus.conf>] [-n servicename] [-s oldversion] command\n");
     fprintf(stderr, "\n");
