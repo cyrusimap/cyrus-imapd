@@ -82,10 +82,10 @@ extern int sieved_userisadmin;
 extern sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 static const char *referral_host = NULL;
 
-int authenticated = 0;
-int verify_only = 0;
-int starttls_done = 0;
-sasl_ssf_t sasl_ssf = 0;
+static int authenticated = 0;
+static int verify_only = 0;
+static int starttls_done = 0;
+static sasl_ssf_t sasl_ssf = 0;
 #ifdef HAVE_SSL
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;

@@ -120,7 +120,7 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
 const int config_need_data = 0;
 
 static char ptclient_debug = 0;
-struct db *ptsdb = NULL;
+static struct db *ptsdb = NULL;
 
 int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
 {

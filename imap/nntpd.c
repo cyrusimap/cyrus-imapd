@@ -122,10 +122,10 @@ extern int opterr;
    currently piping */
 
 /* the current server most commands go to */
-struct backend *backend_current = NULL;
+static struct backend *backend_current = NULL;
 
 /* our cached connections */
-ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
+static ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 #ifdef HAVE_SSL
 static SSL *tls_conn;

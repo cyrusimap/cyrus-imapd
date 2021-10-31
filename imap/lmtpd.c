@@ -156,7 +156,7 @@ static struct protstream *deliver_out, *deliver_in;
 int deliver_logfd = -1; /* used in lmtpengine.c */
 
 /* our cached connections */
-ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
+static ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 static struct protocol_t lmtp_protocol =
 { "lmtp", "lmtp", TYPE_STD,

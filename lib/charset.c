@@ -64,7 +64,7 @@
 #define unicode_isvalid(c) \
         (!((c >= 0xd800 && c <= 0xdfff) || ((unsigned)c > 0x10ffff)))
 
-char QPSAFECHAR[256] = {
+static const char QPSAFECHAR[256] = {
 /* control chars are unsafe */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -2157,7 +2157,7 @@ static charset_t lookup_buf(const char *buf, size_t len)
 /* of course = and _ are not included in the set, because they themselves
    need to be quoted it’s just saying they can be present in the Q wordi
    itself, because they’re part of the quoting system */
-char QPMIMEPHRASESAFECHAR[256] = {
+static const char QPMIMEPHRASESAFECHAR[256] = {
 /* control chars are unsafe */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

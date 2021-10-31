@@ -70,8 +70,8 @@
 #include "xmalloc.h"
 
 /* global */
-time_t timenow;
-time_t expire_time = (3*60*60); /* 3 Hours */
+static time_t timenow;
+static time_t expire_time = (3*60*60); /* 3 Hours */
 
 static int expire_p(void *rockp __attribute__((unused)),
                     const char *key __attribute__((unused)),

@@ -73,10 +73,10 @@ enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS };
 
 int verbose = 0;
 
-int mode = UNKNOWN;
+static int mode = UNKNOWN;
 static const char *audit_temp_directory;
 
-int recalc_silent = 1;
+static int recalc_silent = 1;
 
 static int do_dump(const char *fname, const char *userid)
 {

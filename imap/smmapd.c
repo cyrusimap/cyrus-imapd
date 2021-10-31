@@ -100,7 +100,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-const char *BB;
+static const char *BB;
 static int forcedowncase;
 
 extern int optind;

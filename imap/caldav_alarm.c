@@ -175,7 +175,7 @@ static struct sqldb_upgrade upgrade[] = {
     ";"
 
 static sqldb_t *my_alarmdb;
-int refcount;
+static int refcount;
 static struct mboxlock *my_alarmdb_lock;
 
 /* get a database handle to the alarm db */
