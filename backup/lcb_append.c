@@ -194,7 +194,7 @@ EXPORTED int backup_append(struct backup *backup,
     int r;
 
     /* preload buffer with timestamp preamble */
-    buf_printf(&buf, INT64_FMT " APPLY ", (int64_t) ts);
+    buf_printf(&buf, "%" PRId64 " APPLY ", (int64_t) ts);
 
     /* iterate over the dlist */
     iter = dlist_print_iter_new(dlist, 1);

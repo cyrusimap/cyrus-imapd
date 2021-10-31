@@ -203,7 +203,7 @@ HIDDEN int backup_real_open(struct backup **backupp,
         // when reindexing, we want to move the old index out of the way
         // and create a new, empty one -- while holding the lock
         char oldindex_fname[PATH_MAX];
-        snprintf(oldindex_fname, sizeof(oldindex_fname), "%s." INT64_FMT,
+        snprintf(oldindex_fname, sizeof(oldindex_fname), "%s.%" PRId64,
                  backup->index_fname, (int64_t) time(NULL));
 
         r = rename(backup->index_fname, oldindex_fname);

@@ -107,12 +107,6 @@ typedef unsigned long long int modseq_t;
 #define MODSEQ_FMT "%llu"
 #define atomodseq_t(s) strtoull(s, NULL, 10)
 
-#if SIZEOF_LONG >= 8
-#define INT64_FMT "%ld"
-#else
-#define INT64_FMT "%lld"
-#endif
-
 #define Uisalnum(c) isalnum((int)((unsigned char)(c)))
 #define Uisalpha(c) isalpha((int)((unsigned char)(c)))
 #define Uisascii(c) isascii((int)((unsigned char)(c)))
