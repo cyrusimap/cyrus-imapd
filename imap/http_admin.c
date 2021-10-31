@@ -134,7 +134,7 @@ static void admin_init(struct buf *serverinfo __attribute__((unused)))
     compile_time = calc_compile_time(__TIME__, __DATE__);
 }
 
-const struct action_t {
+static const struct action_t {
     const char *name;
     const char *desc;
     int (*func)(struct transaction_t *txn);

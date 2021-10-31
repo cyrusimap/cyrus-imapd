@@ -220,7 +220,7 @@
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_vcard_imapuid ON vcard_objs ( mailbox, imap_uid );" \
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_object_imapuid ON dav_objs ( mailbox, imap_uid );"
 
-struct sqldb_upgrade davdb_upgrade[] = {
+static const struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
   { 3, CMD_DBUPGRADEv3, NULL },
   { 4, CMD_DBUPGRADEv4, NULL },

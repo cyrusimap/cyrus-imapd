@@ -66,7 +66,7 @@ extern char *optarg;
 
 static int debugmode = 0;
 
-struct namespace calalarmd_namespace;
+static struct namespace calalarmd_namespace;
 
 EXPORTED void fatal(const char *msg, int err)
 {

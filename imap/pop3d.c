@@ -168,7 +168,7 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 static struct namespace popd_namespace;
 
 /* PROXY stuff */
-struct backend *backend = NULL;
+static struct backend *backend = NULL;
 
 static struct protocol_t pop3_protocol =
 { "pop3", "pop", TYPE_STD,

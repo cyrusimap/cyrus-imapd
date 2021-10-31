@@ -65,7 +65,7 @@
 
 #define DB config_zoneinfo_db
 
-struct db *zoneinfodb;
+static struct db *zoneinfodb;
 static int zoneinfo_dbopen = 0;
 static struct buf databuf = BUF_INITIALIZER;
 

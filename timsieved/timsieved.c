@@ -92,8 +92,8 @@ sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 static struct auth_state *sieved_authstate = 0;
 
 int sieved_timeout;
-struct protstream *sieved_out;
-struct protstream *sieved_in;
+static struct protstream *sieved_out;
+static struct protstream *sieved_in;
 
 int sieved_logfd = -1;
 

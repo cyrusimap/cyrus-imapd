@@ -71,7 +71,7 @@
 #define STACKSIZE 64000
 static char stack[STACKSIZE+1];
 
-int outfd;
+static int outfd;
 
 static struct db *db = NULL;
 

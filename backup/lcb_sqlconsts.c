@@ -144,7 +144,7 @@ const char backup_index_initsql[] = QUOTE(
     CREATE INDEX IF NOT EXISTS idx_siv_fn ON sieve(filename);
 );
 
-const char backup_index_upgrade_v2[] = QUOTE(
+static const char backup_index_upgrade_v2[] = QUOTE(
     CREATE TABLE subscription(
         id INTEGER PRIMARY KEY ASC,
         last_chunk_id INTEGER NOT NULL REFERENCES chunk(id),
@@ -154,7 +154,7 @@ const char backup_index_upgrade_v2[] = QUOTE(
     CREATE INDEX IF NOT EXISTS idx_sub_mbx ON subscription(mboxname);
 );
 
-const char backup_index_upgrade_v3[] = QUOTE(
+static const char backup_index_upgrade_v3[] = QUOTE(
     CREATE TABLE seen(
         id INTEGER PRIMARY KEY ASC,
         last_chunk_id INTEGER NOT NULL REFERENCES chunk(id),
@@ -167,7 +167,7 @@ const char backup_index_upgrade_v3[] = QUOTE(
     CREATE INDEX IF NOT EXISTS idx_seen_unq ON seen(uniqueid);
 );
 
-const char backup_index_upgrade_v4[] = QUOTE(
+static const char backup_index_upgrade_v4[] = QUOTE(
     CREATE TABLE sieve(
         id INTEGER PRIMARY KEY ASC,
         chunk_id INTEGER NOT NULL REFERENCES chunk(id),

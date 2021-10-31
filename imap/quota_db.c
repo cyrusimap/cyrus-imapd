@@ -68,7 +68,7 @@
 
 #define QDB config_quota_db
 
-HIDDEN struct db *qdb;
+static struct db *qdb;
 
 /* skanky reuse of mboxname locks.  Ideally we would rename
  * them to something more general and use them elsewhere */

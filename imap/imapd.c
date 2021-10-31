@@ -150,7 +150,7 @@ static int referral_kick = 0; /* kick after next command received, for
 
 /* global conversations database holder to avoid re-opening during
  * status command or list responses */
-struct conversations_state *global_conversations = NULL;
+static struct conversations_state *global_conversations = NULL;
 
 /* all subscription commands go to the backend server containing the
    user's inbox */

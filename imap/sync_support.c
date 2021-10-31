@@ -99,7 +99,7 @@
 
 static int opt_force = 0; // FIXME
 
-struct sync_client_state rightnow_sync_cs;
+static struct sync_client_state rightnow_sync_cs;
 
 /* protocol definitions */
 static char *imap_sasl_parsesuccess(char *str, const char **status);
