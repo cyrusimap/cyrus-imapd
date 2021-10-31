@@ -71,7 +71,7 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS };
 
-int verbose = 0;
+static int verbose = 0;
 
 int mode = UNKNOWN;
 static const char *audit_temp_directory;

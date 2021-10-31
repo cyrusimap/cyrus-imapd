@@ -68,7 +68,7 @@
 
 static int usage(const char *name);
 
-int verbose = 0;
+static int verbose = 0;
 
 /* ====================================================================== */
 
