@@ -69,7 +69,7 @@ static int jmap_blob_set(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
 static int jmap_usercounters_get(jmap_req_t *req);
 
-jmap_method_t jmap_core_methods_standard[] = {
+static jmap_method_t jmap_core_methods_standard[] = {
     {
         "Blob/copy",
         JMAP_URN_CORE,
@@ -85,7 +85,7 @@ jmap_method_t jmap_core_methods_standard[] = {
     { NULL, NULL, NULL, 0}
 };
 
-jmap_method_t jmap_core_methods_nonstandard[] = {
+static jmap_method_t jmap_core_methods_nonstandard[] = {
     {
         "Blob/get",
         JMAP_BLOB_EXTENSION,
