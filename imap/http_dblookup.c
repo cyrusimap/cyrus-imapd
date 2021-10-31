@@ -87,7 +87,7 @@ struct namespace_t namespace_dblookup = {
     }
 };
 
-static int get_email(struct transaction_t *txn __attribute__((unused)),
+static int get_email(struct transaction_t *txn,
                      const char *userid, const char *key)
 {
     struct carddav_db *db = NULL;
@@ -125,7 +125,7 @@ done:
     return ret;
 }
 
-static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
+static int get_email2uids(struct transaction_t *txn,
                           const char *userid, const char *key)
 {
     struct carddav_db *db = NULL;
@@ -180,7 +180,7 @@ done:
     return ret;
 }
 
-static int get_email2details(struct transaction_t *txn __attribute__((unused)),
+static int get_email2details(struct transaction_t *txn,
                              const char *userid, const char *key)
 {
     struct carddav_db *db = NULL;

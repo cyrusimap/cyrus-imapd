@@ -1072,7 +1072,7 @@ static int sieve_fileinto(void *ac,
                           void *ic __attribute__((unused)),
                           void *sc,
                           void *mc,
-                          const char **errmsg __attribute__((unused)))
+                          const char **errmsg)
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
@@ -1201,7 +1201,7 @@ static int sieve_snooze(void *ac,
                         void *ic __attribute__((unused)),
                         void *sc,
                         void *mc,
-                        const char **errmsg __attribute__((unused)))
+                        const char **errmsg)
 {
     sieve_snooze_context_t *sn = (sieve_snooze_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;

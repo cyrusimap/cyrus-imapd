@@ -2474,7 +2474,7 @@ static void end_part(search_text_receiver_t *rx,
     tr->part = 0;
 }
 
-static void end_bodypart(search_text_receiver_t *rx __attribute__((unused)))
+static void end_bodypart(search_text_receiver_t *rx)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
     tr->partid = NULL;

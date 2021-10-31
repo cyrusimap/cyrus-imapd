@@ -338,7 +338,7 @@ static void get_cb(const char *script, void *data, void *rock)
     getscript(id, script, info->isActive, lrock->sievedir, lrock->get);
 }
 
-static int list_cb(const char *sievedir __attribute__((unused)),
+static int list_cb(const char *sievedir,
                    const char *name, struct stat *sbuf,
                    const char *link_target, void *rock)
 {

@@ -289,7 +289,7 @@ struct restore_info {
     uint32_t uid_torecreate;
 };
 
-static int restore_resource_cb(const char *resource __attribute__((unused)),
+static int restore_resource_cb(const char *resource,
                                void *data, void *rock)
 {
     struct restore_info *restore = (struct restore_info *) data;

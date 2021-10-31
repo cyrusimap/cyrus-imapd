@@ -677,8 +677,7 @@ struct remote_rock {
 };
 
 /* Send an iTIP busytime request to remote attendees via iMIP or iSchedule */
-static void busytime_query_remote(const char *server __attribute__((unused)),
-                                  void *data, void *rock)
+static void busytime_query_remote(const char *server, void *data, void *rock)
 {
     struct caldav_sched_param *remote = (struct caldav_sched_param *) data;
     struct remote_rock *rrock = (struct remote_rock *) rock;

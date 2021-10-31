@@ -122,7 +122,7 @@ const int config_need_data = 0;
 static char ptclient_debug = 0;
 struct db *ptsdb = NULL;
 
-int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
+int service_init(int argc, char *argv[], char **envp)
 {
     int r;
     int opt;

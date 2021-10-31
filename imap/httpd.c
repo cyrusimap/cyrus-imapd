@@ -783,9 +783,7 @@ static void httpd_reset(struct http_connection *conn)
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
  */
-int service_init(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
-                 char **envp __attribute__((unused)))
+int service_init(int argc, char **argv, char **envp)
 {
     int r, events, opt, i;
     int allow_trace = config_getswitch(IMAPOPT_HTTPALLOWTRACE);

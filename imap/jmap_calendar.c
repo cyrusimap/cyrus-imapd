@@ -4635,7 +4635,7 @@ static int validatecomparator(jmap_req_t *req __attribute__((unused)),
 }
 
 static int _calendarevent_queryargs_parse(jmap_req_t *req __attribute__((unused)),
-                                          struct jmap_parser *parser __attribute__((unused)),
+                                          struct jmap_parser *parser,
                                           const char *argname,
                                           json_t *argval,
                                           void *rock)

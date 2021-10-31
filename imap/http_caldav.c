@@ -2316,7 +2316,7 @@ struct list_tzid_rock {
 };
 
 int list_tzid_cb(const char *tzid,
-                 int tzidlen __attribute__((unused)),
+                 int tzidlen,
                  struct zoneinfo *zi __attribute__((unused)),
                  void *rock)
 {
@@ -6066,7 +6066,7 @@ static int propfind_scheddefault(const xmlChar *name, xmlNsPtr ns,
 static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
                                struct propfind_ctx *fctx,
                                xmlNodePtr prop __attribute__((unused)),
-                               xmlNodePtr resp __attribute__((unused)),
+                               xmlNodePtr resp,
                                struct propstat propstat[],
                                void *rock __attribute__((unused)))
 {

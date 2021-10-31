@@ -1783,7 +1783,7 @@ static void append_alnum(struct buf *buf, const char *ss)
     }
 }
 
-static Xapian::Query *query_new_type(const xapian_db_t *db __attribute__((unused)),
+static Xapian::Query *query_new_type(const xapian_db_t *db,
                                      const char *_prefix,
                                      const char *str)
 {

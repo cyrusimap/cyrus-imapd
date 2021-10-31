@@ -5675,7 +5675,7 @@ EXPORTED void index_text_extractor_destroy(void)
 
 static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                             const char *type, const char *subtype,
-                            const struct param *type_params __attribute__((unused)),
+                            const struct param *type_params,
                             const char *disposition,
                             const struct param *disposition_params,
                             const struct message_guid *content_guid,

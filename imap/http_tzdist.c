@@ -634,7 +634,7 @@ static void read_leap_seconds()
 }
 
 
-static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
+static void tzdist_init(struct buf *serverinfo)
 {
     struct buf buf = BUF_INITIALIZER;
 
