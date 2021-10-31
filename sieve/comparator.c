@@ -155,9 +155,8 @@ static int octet_contains_(const char *text, size_t tlen,
 {
     int N = tlen;
     int M = strlen(pat);
-    int i, j;
+    int i = 0, j = 0;
 
-    i = 0, j = 0;
     while ((j < M) && (i < N)) {
         if ((text[i] == pat[j]) ||
             (casemap && (toupper(text[i]) == toupper(pat[j])))) {
