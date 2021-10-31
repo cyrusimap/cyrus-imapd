@@ -1275,9 +1275,9 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
             uint32_t internal_flags;
             modseq_t createdmodseq;
             r = msgrecord_get_systemflags(mr, &flags);
-            if (!r) msgrecord_get_internalflags(mr, &internal_flags);
-            if (!r) msgrecord_get_createdmodseq(mr, &createdmodseq);
             if (!r) {
+                msgrecord_get_internalflags(mr, &internal_flags);
+                msgrecord_get_createdmodseq(mr, &createdmodseq);
                 /* OK, this is a legit record, let's check it out */
                 if (createdmodseq <= check->since_modseq)
                     check->status |= 1;  /* contains old messages */
