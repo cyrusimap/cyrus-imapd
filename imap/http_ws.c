@@ -714,11 +714,10 @@ static void _end_channel(struct transaction_t *txn)
 
 static void _h1_shutdown(struct http_connection *conn)
 {
-    if (!conn->ws_ctx) return;
+    if (!conn->ws_ctx || !*conn->ws_ctx) return;
 
     struct transaction_t txn =  // dummy transaction
-      { .conn = conn,
-        .ws_ctx = (struct ws_context *) conn->ws_ctx, .error = { .desc = NULL } };
+        { .conn = conn, .ws_ctx = *conn->ws_ctx, .error = { .desc = NULL } };
 
     _end_channel(&txn);
 }
@@ -817,7 +816,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
 
         /* Link the WS context into the connection so we can
            properly close the WS during an abnormal shut_down() */
-        txn->conn->ws_ctx = txn->ws_ctx;
+        txn->conn->ws_ctx = &txn->ws_ctx;
         ptrarray_add(&txn->conn->shutdown_callbacks, &_h1_shutdown);
 
         callbacks.recv_callback = &h1_recv_cb;
