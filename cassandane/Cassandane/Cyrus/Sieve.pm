@@ -4083,7 +4083,7 @@ EOF
 
     xlog $self, "Check that the event did NOT make it to calendar";
     my $events = $CalDAV->GetEvents($CalendarId);
-    $self->assert_deep_equals($events, []);
+    $self->assert_deep_equals([], $events);
 }
 
 sub test_imip_update
