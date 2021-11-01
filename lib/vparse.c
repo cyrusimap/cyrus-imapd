@@ -820,7 +820,8 @@ static void _checkwrap(unsigned char c, struct vparse_target *tgt)
     buf_putc(tgt->buf, ' ');
 }
 
-static void _value_to_tgt(const char *value, struct vparse_target *tgt)
+static void _value_to_tgt(const char *value, struct vparse_target *tgt,
+                          int encode)
 {
     if (!value) return; /* null fields or array items are empty string */
     for (; *value; value++) {
@@ -841,7 +842,7 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt)
         case ';':
         case ',':
         case '\\':
-            buf_putc(tgt->buf, '\\');
+            if (encode) buf_putc(tgt->buf, '\\');
             /* fall through */
         default:
             buf_putc(tgt->buf, *value);
@@ -905,9 +906,34 @@ static int _needsquote(const char *p)
     return 0;
 }
 
+static const struct prop_encode {
+    const char *name;
+    int encode;  /* 0 = no; 1 = yes; -1 = check type */
+} prop_encode_map[] = {
+    { "CALADRURI",     0 },
+    { "CALURI",        0 },
+    { "CLIENTPIDMAP",  0 },
+    { "CONTACT-URI",   0 },
+    { "FBURL",         0 },
+    { "GEO",           0 },
+    { "IMPP",          0 },
+    { "KEY",           0 },
+    { "LOGO",          0 },
+    { "MEMBER",        0 },
+    { "ORG-PROPERTY",  0 },
+    { "PHOTO",         0 },
+    { "RELATED",      -1 },
+    { "SOUND",         0 },
+    { "SOURCE",        0 },
+    { "UID",          -1 },
+    { "URL",           0 },
+    { NULL,            1 }
+};
+
 static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target *tgt)
 {
     struct vparse_param *param;
+    int is_uri = -1;
 
     // RFC 6350 3.3 - it is RECOMMENDED that property and parameter names be upper-case on output.
     if (entry->group) {
@@ -929,6 +955,10 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
         else {
             _paramval_to_tgt(param->value, tgt);
         }
+
+        if (!strcasecmp(param->name, "VALUE")) {
+            is_uri = !strcasecmp(param->value, "uri") ? 1 : 0;
+        }
     }
 
     buf_putc(tgt->buf, ':');
@@ -937,11 +967,27 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
         int i;
         for (i = 0; i < entry->v.values->count; i++) {
             if (i) buf_putc(tgt->buf, entry->multivaluesep);
-            _value_to_tgt(strarray_nth(entry->v.values, i), tgt);
+            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, 1);
         }
     }
+    else if (is_uri == 1) {
+        _value_to_tgt(entry->v.value, tgt, 0);
+    }
     else {
-        _value_to_tgt(entry->v.value, tgt);
+        const struct prop_encode *prop;
+        int encode = 1;
+
+        for (prop = prop_encode_map; prop->name; prop++) {
+            if (!strcasecmp(prop->name, entry->name)) {
+                if (prop->encode == -1)
+                    encode = (is_uri == 0);
+                else
+                    encode = prop->encode;
+                break;
+            }
+        }
+
+        _value_to_tgt(entry->v.value, tgt, encode);
     }
 
     _endline(tgt);
