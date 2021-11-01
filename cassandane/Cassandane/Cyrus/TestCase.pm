@@ -888,31 +888,31 @@ sub tear_down
 
     if (defined $self->{instance})
     {
-        push @stop_errors, $self->{instance}->stop();
+        eval { push @stop_errors, $self->{instance}->stop() };
         $self->{instance}->cleanup();
         $self->{instance} = undef;
     }
     if (defined $self->{backups})
     {
-        push @stop_errors, $self->{backups}->stop();
+        eval { push @stop_errors, $self->{backups}->stop() };
         $self->{backups}->cleanup();
         $self->{backups} = undef;
     }
     if (defined $self->{backend2})
     {
-        push @stop_errors, $self->{backend2}->stop();
+        eval { push @stop_errors, $self->{backend2}->stop() };
         $self->{backend2}->cleanup();
         $self->{backend2} = undef;
     }
     if (defined $self->{replica})
     {
-        push @stop_errors, $self->{replica}->stop();
+        eval { push @stop_errors, $self->{replica}->stop() };
         $self->{replica}->cleanup();
         $self->{replica} = undef;
     }
     if (defined $self->{frontend})
     {
-        push @stop_errors, $self->{frontend}->stop();
+        eval { push @stop_errors, $self->{frontend}->stop() };
         $self->{frontend}->cleanup();
         $self->{frontend} = undef;
     }
