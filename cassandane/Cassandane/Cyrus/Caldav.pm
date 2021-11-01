@@ -4596,7 +4596,7 @@ EOF
 }
 
 sub test_sched_busytime_query
-    :min_version_3_0 :needs_component_httpd :NoVirtDomains
+    :min_version_3_4 :needs_component_httpd :NoVirtDomains
 {
     my ($self) = @_;
 
