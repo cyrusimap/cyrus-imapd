@@ -1176,9 +1176,10 @@ static const struct {
     const char *name;  /* property name */
     struct {
         unsigned min;  /* mandatory minimum number of occurrences */
-        unsigned max;  /* allowed maximum number of occurrences */
+        unsigned max;  /* allowed maximum number of occurrences (-1 = inf) */
     } version[3];      /* 1 min/max per vCard version */
 } restrictions[] = {
+    /*                    2.1        3.0        4.0     */
     { "VERSION",     { { 1,  1 }, { 1,  1 }, { 1,  1 } } },
     { "ANNIVERSARY", { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
     { "BDAY",        { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
