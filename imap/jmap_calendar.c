@@ -1176,10 +1176,10 @@ static int jmap_calendar_set(struct jmap_req *req)
                 r = cyrus_acl_set(&newacl, userid,
                                   ACL_MODE_SET, access, NULL, NULL);
                 if (r) {
-                    free(acl);
-                    free(newacl);
                     syslog(LOG_ERR, "IOERROR: failed to set_acl for calendar create (%s, %s) %s",
                                     userid, req->accountid, error_message(r));
+                    free(acl);
+                    free(newacl);
                     goto done;
                 }
             }
