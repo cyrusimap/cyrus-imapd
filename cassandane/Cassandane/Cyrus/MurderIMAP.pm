@@ -948,6 +948,14 @@ sub test_xfer_mailbox_altns_unixhs
 {
     my ($self) = @_;
 
+    # what we expect from this test will depend on the cyrus version being
+    # run on backend2
+    my $backend2_permits_single_mailbox = 1;
+    my ($maj, $min) = Cassandane::Instance->get_version('murder');
+    if ($maj > 3 || ($maj == 3 && $min >= 5)) {
+        $backend2_permits_single_mailbox = 0;
+    }
+
     # set up some data for cassandane on backend1
     my $expected_stay = $self->populate_user(
         $self->{backend1_store},
@@ -990,7 +998,15 @@ sub test_xfer_mailbox_altns_unixhs
     my $ret = $admintalk->_imap_cmd('xfer', 0, {},
                                     'user/cassandane/Big/Red',
                                     $backend2_servername);
-    xlog "XXX xfer returned: " . Dumper $ret;
+
+    # 3.5+ won't permit receiving just one mid-tree mailbox
+    if (not $backend2_permits_single_mailbox) {
+        $self->assert_str_equals(
+            'no', $admintalk->get_last_completion_response()
+        );
+        return; # nothing more to test here!
+    }
+
     $self->assert_str_equals('ok', $ret);
     $self->assert_str_equals(
         'ok', $admintalk->get_last_completion_response()
@@ -1053,7 +1069,45 @@ sub test_xfer_mailbox_altns_unixhs
     });
 }
 
+sub test_xfer_no_user_intermediates
+    :AllowMoves :AltNamespace :UnixHierarchySep
+    :min_version_3_5
+{
+    my ($self) = @_;
+
+    # set up some data for cassandane on backend1
+    my $expected = $self->populate_user(
+        $self->{backend1_store},
+        [qw(INBOX Big Big/Red Big/Red/Dog)]
+    );
+
+    my $admintalk = $self->{backend1_adminstore}->get_client();
+    my $backend2_servername = $self->{backend2}->get_servername();
+
+    # what's the frontend mailboxes.db say before we move?
+    my $mailboxes_db = $self->{frontend}->read_mailboxes_db();
+    xlog "XXX before move, frontend mailboxes.db:" . Dumper $mailboxes_db;
+
+    # try to xfer individual non-INBOX mailboxes, all should be refused
+    foreach my $folder (qw(Big Big/Red Big/Red/Dog)) {
+        $admintalk->_imap_cmd('xfer', 0, {},
+                              "user/cassandane/$folder",
+                              $backend2_servername);
+        $self->assert_str_equals(
+            'no', $admintalk->get_last_completion_response()
+        );
+        $self->assert_matches(
+            qr{Operation is not supported on mailbox},
+            $admintalk->get_last_error()
+        );
+    }
+
+    # everything should still be on the original backend
+    $self->check_user($self->{backend1_store}, $expected);
+}
+
 # XXX test_xfer_partition
 # XXX test_xfer_mboxpattern
+# XXX shared mailboxes!
 
 1;
