@@ -884,40 +884,41 @@ sub tear_down
     $self->{backend1_store} = undef;
     $self->{backend1_adminstore} = undef;
 
-    my $sanity_errors = 0;
+    my @stop_errors;
 
     if (defined $self->{instance})
     {
-        $sanity_errors += $self->{instance}->stop();
+        eval { push @stop_errors, $self->{instance}->stop() };
         $self->{instance}->cleanup();
         $self->{instance} = undef;
     }
     if (defined $self->{backups})
     {
-        $sanity_errors += $self->{backups}->stop();
+        eval { push @stop_errors, $self->{backups}->stop() };
         $self->{backups}->cleanup();
         $self->{backups} = undef;
     }
     if (defined $self->{backend2})
     {
-        $sanity_errors += $self->{backend2}->stop();
+        eval { push @stop_errors, $self->{backend2}->stop() };
         $self->{backend2}->cleanup();
         $self->{backend2} = undef;
     }
     if (defined $self->{replica})
     {
-        $sanity_errors += $self->{replica}->stop();
+        eval { push @stop_errors, $self->{replica}->stop() };
         $self->{replica}->cleanup();
         $self->{replica} = undef;
     }
     if (defined $self->{frontend})
     {
-        $sanity_errors += $self->{frontend}->stop();
+        eval { push @stop_errors, $self->{frontend}->stop() };
         $self->{frontend}->cleanup();
         $self->{frontend} = undef;
     }
 
-    die "INCONSISTENCIES FOUND IN SPOOL" if $sanity_errors;
+    # maybe there's multiple errors, but we can only die for one of them...
+    die $stop_errors[0] if scalar @stop_errors;
 
     xlog "---------- END $self->{_name} ----------";
 }

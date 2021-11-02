@@ -1194,7 +1194,7 @@ sub _compress_berkeley_crud
     if ( -d $dbdir )
     {
         opendir DBDIR, $dbdir
-            or die "Cannot open directory $dbdir: $!";
+            or return "Cannot open directory $dbdir: $!";
         while (my $e = readdir DBDIR)
         {
             push(@files, "$dbdir/$e")
@@ -1208,6 +1208,8 @@ sub _compress_berkeley_crud
         xlog "Compressing Berkeley environment files: " . join(' ', @files);
         system('/bin/bzip2', @files);
     }
+
+    return;
 }
 
 sub _uncompress_berkeley_crud
@@ -1242,11 +1244,11 @@ sub _check_valgrind_logs
     return unless Cassandane::Cassini->instance()->bool_val('valgrind', 'enabled');
 
     my $valgrind_logdir = $self->{basedir} . '/vglogs';
-    my $nerrs = 0;
 
     return unless -d $valgrind_logdir;
     opendir VGLOGS, $valgrind_logdir
-        or die "Cannot open directory $valgrind_logdir for reading: $!";
+        or return "Cannot open directory $valgrind_logdir for reading: $!";
+
     my @nzlogs;
     while ($_ = readdir VGLOGS)
     {
@@ -1256,20 +1258,25 @@ sub _check_valgrind_logs
         next if -z $log;
         push(@nzlogs, $_);
 
-        xlog "Valgrind errors from file $log";
-        open VG, "<$log"
-            or die "Cannot open Valgrind log $log for reading: $!";
-        while (<VG>) {
-            chomp;
-            xlog "$_";
+        if (open VG, "<$log") {
+            xlog "Valgrind errors from file $log";
+            while (<VG>) {
+                chomp;
+                xlog "$_";
+            }
+            close VG;
         }
-        close VG;
+        else {
+            xlog "Cannot open Valgrind log $log for reading: $!";
+        }
 
     }
     closedir VGLOGS;
 
-    die "Found Valgrind errors, see log for details"
+    return "Found Valgrind errors, see log for details"
         if scalar @nzlogs;
+
+    return;
 }
 
 # The 'file' program seems to consistently misreport cores
@@ -1307,7 +1314,7 @@ sub _check_cores
 
     return unless -d $coredir;
     opendir CORES, $coredir
-        or die "Cannot open directory $coredir for reading: $!";
+        or return "Cannot open directory $coredir for reading: $!";
     while ($_ = readdir CORES)
     {
         next if m/^\./;
@@ -1324,7 +1331,9 @@ sub _check_cores
     }
     closedir CORES;
 
-    die "Core files found in $coredir" if $ncores;
+    return "Core files found in $coredir" if $ncores;
+
+    return;
 }
 
 sub _check_sanity
@@ -1336,7 +1345,7 @@ sub _check_sanity
     # this version check.
     my ($maj, $min) = Cassandane::Instance->get_version($self->{installation});
     if ($maj < 3 || ($maj == 3 && $min < 5)) {
-        return 0;
+        return;
     }
 
     my $basedir = $self->{basedir};
@@ -1363,7 +1372,10 @@ sub _check_sanity
             xlog "INCONSISTENCY FOUND: $file $_";
         }
     }
-    return $found;
+
+    return "INCONSISTENCIES FOUND IN SPOOL" if $found;
+
+    return;
 }
 
 sub _check_syslog
@@ -1378,7 +1390,9 @@ sub _check_syslog
 
     $self->xlog("syslog error: $_") for @errors;
 
-    die "Errors found in syslog" if @errors;
+    return "Errors found in syslog" if @errors;
+
+    return;
 }
 
 # Stop a given PID.  Returns 1 if the process died
@@ -1448,7 +1462,9 @@ sub stop
     return if ($self->{_stopped});
     $self->{_stopped} = 1;
 
-    my $sanity_errors = $self->_check_sanity();
+    my @errors;
+
+    push @errors, $self->_check_sanity();
 
     xlog "stop $self->{description}: basedir $self->{basedir}";
 
@@ -1457,23 +1473,35 @@ sub stop
         my $pid = $self->_read_pid_file($name);
         next if (!defined $pid);
         _stop_pid($pid)
-            or die "Cannot shut down $name pid $pid";
+            or push @errors, "Cannot shut down $name pid $pid";
     }
     # Note: no need to reap this daemon which is not our child anymore
 
     foreach my $item (@{$self->{_shutdowncallbacks}}) {
-        $item->($self);
+        eval {
+            $item->($self);
+        };
+        if ($@) {
+            push @errors, "some shutdown callback died: $@";
+        }
     }
     $self->{_shutdowncallbacks} = [];
 
-    $self->_compress_berkeley_crud();
-    $self->_check_valgrind_logs();
-    $self->_check_cores();
-    $self->_check_syslog();
+    # n.b. still need this for testing 2.5
+    push @errors, $self->_compress_berkeley_crud();
 
-    xlog "$self->{description}: INCONSISTENCIES FOUND IN SPOOL"
-        if $sanity_errors;
-    return $sanity_errors;
+    push @errors, $self->_check_valgrind_logs();
+    push @errors, $self->_check_cores();
+    push @errors, $self->_check_syslog();
+
+    # filter out empty errors (shouldn't be any, but just in case)
+    @errors = grep { $_ } @errors;
+
+    foreach my $e (@errors) {
+        xlog "$self->{description}: $e";
+    }
+
+    return @errors;
 }
 
 sub cleanup

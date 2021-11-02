@@ -91,8 +91,8 @@ sub _test_core_files_with_size
     $self->assert_equals(1, $signaled);
     $self->assert_not_null($pid);
 
-    eval { $instance->_check_cores() };
-    my $err = $@;
+    my $err;
+    eval { $err = $instance->_check_cores() };
     $self->assert_matches(qr/Core files found/, $err);
 
     my $core = "$instance->{basedir}/conf/cores/core.$pid";
