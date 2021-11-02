@@ -1,0 +1,19 @@
+Description:
+
+XFER will no longer move individual mailboxes that would leave intermediates
+behind in the user heirarchy.
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Nothing required
+
+
+GitHub issue:
+
+#3705
