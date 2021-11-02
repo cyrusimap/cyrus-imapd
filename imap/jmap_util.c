@@ -570,6 +570,8 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
 {
     charset_t cs = charset_lookupname(charset);
     char *text = NULL;
+    size_t textlen = 0;
+    struct char_counts counts = { 0 };
     const char *charset_id = charset_canon_name(cs);
     assert(confidence >= 0.0 && confidence <= 1.0);
 
@@ -589,14 +591,43 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
         if (is_encoding_problem) *is_encoding_problem = 1;
         goto done;
     }
-    text = charset_to_utf8(data, datalen, cs, encoding);
+
+    /* Decode source data, converting charset if not already in UTF-8 */
+    size_t nreplacement = 0;
+    if (!strcasecmp(charset_id, "UTF-8")) {
+        struct buf buf = BUF_INITIALIZER;
+        if (charset_decode(&buf, data, datalen, encoding)) {
+            xsyslog(LOG_INFO, "failed to decode UTF-8 data",
+                    "encoding=<%s>", encoding_name(encoding));
+            buf_free(&buf);
+            if (is_encoding_problem) *is_encoding_problem = 1;
+            goto done;
+        }
+        textlen = buf_len(&buf);
+        text = buf_release(&buf);
+        counts = charset_count_validutf8(text, textlen);
+        if (counts.invalid) {
+            // Source UTF-8 data contains invalid characters.
+            // Need to run data through charset_to_utf8
+            // to insert replacement characters for these bytes.
+            nreplacement = counts.replacement;
+            xzfree(text);
+            textlen = 0;
+        }
+        else counts.replacement = 0; // ignore replacement in source data
+    }
     if (!text) {
-        if (is_encoding_problem) *is_encoding_problem = 1;
-        goto done;
+        text = charset_to_utf8(data, datalen, cs, encoding);
+        if (!text) {
+            if (is_encoding_problem) *is_encoding_problem = 1;
+            goto done;
+        }
+        textlen = strlen(text);
+        counts = charset_count_validutf8(text, textlen);
+        if (counts.replacement > nreplacement)
+            counts.replacement -= nreplacement;
     }
 
-    size_t textlen = strlen(text);
-    struct char_counts counts = charset_count_validutf8(text, textlen);
     if (is_encoding_problem)
         *is_encoding_problem = counts.invalid || counts.replacement;
 

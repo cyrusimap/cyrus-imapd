@@ -22665,4 +22665,36 @@ sub test_email_set_copymove_no_permission_shared
     $self->assert_str_equals('forbidden', $res->[0][1]{notUpdated}{$email}{type});
 }
 
+sub test_email_get_utf8body_base64_with_replacement_char
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    # MIME message contains a correctly encoded emoji and one UTF-8
+    # replacement character. The latter must not cause Cyrus to
+    # attempt guessing the source charset or report an encoding error.
+    open(my $F, '<', 'data/mime/utf8-base64-replacement.eml') || die $!;
+    $imap->append('INBOX', $F) || die $@;
+    close($F);
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+            properties => ['bodyValues'],
+        }, 'R2'],
+    ]);
+    $self->assert_equals(JSON::false,
+        $res->[1][1]{list}[0]{bodyValues}{1}{isEncodingProblem});
+    $self->assert_str_equals("Hello \N{GRINNING FACE}, World \N{REPLACEMENT CHARACTER} !\n",
+        $res->[1][1]{list}[0]{bodyValues}{1}{value});
+}
+
 1;
