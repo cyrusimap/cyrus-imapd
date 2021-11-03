@@ -1570,7 +1570,6 @@ static int sieve_imip(void *ic, void *sc, void *mc,
                               &sched_param, &sched_data,
                               (struct auth_state *) sd->authstate,
                               NULL, NULL);
-syslog(LOG_INFO, "XXXXXXXX  %d", ret);
     if (ret != 1) {
         buf_setcstr(&imip->errstr, sched_data.status ? sched_data.status :
                     "failed to deliver iMIP message");
