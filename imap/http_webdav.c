@@ -587,7 +587,7 @@ static int webdav_get(struct transaction_t *txn,
         return HTTP_NO_PRIVS;
     }
 
-    struct strlist *action = hash_lookup("action", &txn->req_qparams);
+    const strarray_t *action = hash_lookup("action", &txn->req_qparams);
     if (!action) {
         /* Send HTML with davmount link */
         buf_reset(body);
@@ -604,7 +604,7 @@ static int webdav_get(struct transaction_t *txn,
 
         txn->resp_body.type = "text/html; charset=utf-8";
     }
-    else if (action->next || strcmp(action->s, "davmount")) {
+    else if (strarray_size(action) != 1 || strcmp(strarray_nth(action, 0), "davmount")) {
         return HTTP_BAD_REQUEST;
     }
     else {
@@ -645,7 +645,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     struct webdav_data *wdata;
     struct index_record *oldrecord = NULL, record;
     const char **hdr;
-    char *filename = NULL;
+    const char *filename = NULL;
 
     /* Validate the data */
     if (!buf) return HTTP_FORBIDDEN;
@@ -673,7 +673,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
 
     /* Get filename of attachment */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Disposition"))) {
-        char *dparam;
+        const char *dparam;
         tok_t tok;
 
         tok_initm(&tok, (char *) *hdr, ";", TOK_TRIMLEFT|TOK_TRIMRIGHT);
@@ -682,14 +682,15 @@ static int webdav_put(struct transaction_t *txn, void *obj,
                 filename = dparam+9;
                 if (*filename == '"') {
                     filename++;
-                    filename[strlen(filename)-1] = '\0';
+                    char *backdoor = (char *)filename;
+                    backdoor[strlen(backdoor)-1] = '\0';
                 }
                 break;
             }
         }
         tok_fini(&tok);
     }
-    else filename = (char *) resource;
+    else filename = resource;
 
     /* Create and cache RFC 5322 header fields for resource */
     if (filename) {

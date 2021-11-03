@@ -167,10 +167,10 @@ void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur, void *obj,
 
     /* generate an iCal RRULE string */
     rrule = icalrecurrencetype_as_string_r(recur);
-    
+
     /* split string into rparts & values */
     tok_initm(&rparts, rrule, "=;", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-    while ((rpart = tok_next(&rparts))) {
+    while ((rpart = (char *)tok_next(&rparts))) {
         if (!strcmp(rpart, "UNTIL")) {
             /* need to translate date format to ISO */
             struct icaltimetype until = icaltime_from_string(tok_next(&rparts));
@@ -180,7 +180,8 @@ void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur, void *obj,
         else {
             /* assume the rpart has multiple values - split them */
             tok_t vlist;
-            char *val, *p;
+            const char *val;
+            char *p;
 
             tok_init(&vlist, tok_next(&rparts), ",",
                      TOK_TRIMLEFT|TOK_TRIMRIGHT);

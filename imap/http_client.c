@@ -118,7 +118,7 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
 
         for (; *hdr; hdr++) {
             tok_t tok = TOK_INITIALIZER(*hdr, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-            char *token;
+            const char *token;
 
             while ((token = tok_next(&tok))) {
                 if (body->te & TE_CHUNKED) {
@@ -450,7 +450,7 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
     for (conn = spool_getheader(*hdrs, "Connection"); conn && *conn; conn++) {
         tok_t tok =
             TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        char *token;
+        const char *token;
 
         while ((token = tok_next(&tok))) {
             if (!strcasecmp(token, "keep-alive")) body->flags &= ~BODY_CLOSE;

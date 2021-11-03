@@ -97,7 +97,7 @@ static int action_expand(struct transaction_t *txn);
 static int json_response(int code, struct transaction_t *txn, json_t *root,
                          char **resp);
 static int json_error_response(struct transaction_t *txn, long tz_code,
-                               struct strlist *param, icaltimetype *time);
+                               const strarray_t *param, icaltimetype *time);
 static struct buf *icaltimezone_as_tzif(icalcomponent* comp);
 static struct buf *icaltimezone_as_tzif_leap(icalcomponent* comp);
 static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
@@ -816,7 +816,7 @@ static int action_capa(struct transaction_t *txn)
         if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
 
         buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%s:%s", info.data->s, info.data->next->s);
+        buf_printf(&txn->buf, "%s:%s", strarray_nth(&info.data, 0), strarray_nth(&info.data, 1));
 
         /* Construct our response */
         root = json_pack("{ s:i"                        /* version */
@@ -881,7 +881,7 @@ static int action_capa(struct transaction_t *txn)
                          "name", "leapseconds",
                          "uri-template", "/leapseconds", "parameters");
 
-        freestrlist(info.data);
+        strarray_fini(&info.data);
 
         if (!root) {
             txn->error.desc = "Unable to create JSON response";
@@ -937,14 +937,14 @@ static int action_leap(struct transaction_t *txn)
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
-    precond = check_precond(txn, leap.data->s, leap.dtstamp);
+    precond = check_precond(txn, strarray_nth(&leap.data, 0), leap.dtstamp);
 
     switch (precond) {
     case HTTP_OK:
     case HTTP_PARTIAL:
     case HTTP_NOT_MODIFIED:
         /* Fill in ETag, Last-Modified, and Expires */
-        resp_body->etag = leap.data->s;
+        resp_body->etag = strarray_nth(&leap.data, 0);
         resp_body->lastmod = leap.dtstamp;
         resp_body->maxage = 86400;  /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
@@ -975,8 +975,10 @@ static int action_leap(struct transaction_t *txn)
 
         /* Construct our response */
         root = json_pack("{s:s s:s s:s s:[]}",
-                         "expires", "", "publisher", info.data->s,
-                         "version", info.data->next->s, "leapseconds");
+                         "expires", "",
+                         "publisher", strarray_nth(&info.data, 0),
+                         "version", strarray_nth(&info.data, 1),
+                         "leapseconds");
         if (!root) {
             txn->error.desc = "Unable to create JSON response";
             ret = HTTP_SERVER_ERROR;
@@ -1007,14 +1009,14 @@ static int action_leap(struct transaction_t *txn)
     }
 
   done:
-    freestrlist(leap.data);
-    freestrlist(info.data);
+    strarray_fini(&leap.data);
+    strarray_fini(&info.data);
     return ret;
 }
 
 
 struct list_rock {
-    struct strlist *meta;
+    const strarray_t *meta;
     json_t *tzarray;
     struct hash_table *tztable;
 };
@@ -1038,17 +1040,19 @@ static int list_cb(const char *tzid, int tzidlen,
 
     tz = json_pack("{s:s s:s s:s s:s s:s}",
                    "tzid", tzidbuf, "etag", etag, "last-modified", lastmod,
-                   "publisher", lrock->meta->s, "version", lrock->meta->next->s);
+                   "publisher", strarray_nth(lrock->meta, 0), "version", strarray_nth(lrock->meta, 1));
     json_array_append_new(lrock->tzarray, tz);
 
-    if (zi->data) {
-        struct strlist *sl;
+    if (strarray_size(&zi->data)) {
         json_t *aliases = json_array();
 
         json_object_set_new(tz, "aliases", aliases);
 
-        for (sl = zi->data; sl; sl = sl->next)
-            json_array_append_new(aliases, json_string(sl->s));
+        int i = 0;
+        for (i = 0; i < strarray_size(&zi->data); i++) {
+            const char *val = strarray_nth(&zi->data, i);
+            json_array_append_new(aliases, json_string(val));
+        }
     }
 
     return 0;
@@ -1058,7 +1062,7 @@ static int list_cb(const char *tzid, int tzidlen,
 static int action_list(struct transaction_t *txn)
 {
     int r, ret, precond;
-    struct strlist *param;
+    const strarray_t *param;
     const char *pattern = NULL;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct zoneinfo info;
@@ -1073,24 +1077,26 @@ static int action_list(struct transaction_t *txn)
 
     /* Sanity check the parameters */
     if ((param = hash_lookup("pattern", &txn->req_qparams))) {
-        if (param->next                   /* once only */
-            || !param->s || !*param->s    /* not empty */
-            || strspn(param->s, "*") == strlen(param->s)) {  /* not (*)+ */
+        const char *val = strarray_nth(param, 0);
+        if (strarray_size(param) != 1     /* once only */
+            || !val || !*val              /* not empty */
+            || strspn(val, "*") == strlen(val)) {  /* not (*)+ */
             return json_error_response(txn, TZ_INVALID_PATTERN, param, NULL);
         }
-        pattern = param->s;
+        pattern = val;
     }
     else if (geo_enabled &&
              (param = hash_lookup("location", &txn->req_qparams))) {
         /* Parse 'geo' URI */
         char *endptr;
+        const char *val = strarray_nth(param, 0);
 
-        if (param->next                         /* once only */
-            || strncmp(param->s, "geo:", 4)) {  /* value value */
+        if (strarray_size(param) != 1      /* once only */
+            || strncmp(val, "geo:", 4)) {  /* value value */
             return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
         }
 
-        latitude = strtod(param->s + 4, &endptr);
+        latitude = strtod(val, &endptr);
         if (errno || *endptr != ','
             || latitude < -90.0 || latitude > 90.0) {  /* valid value */ 
             return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
@@ -1133,14 +1139,15 @@ static int action_list(struct transaction_t *txn)
     }
     else if ((param = hash_lookup("changedsince", &txn->req_qparams))) {
         unsigned prefix = 0;
+        const char *val = strarray_nth(param, 0);
 
-        if (param->next) {  /* once only */
+        if (strarray_size(param) != -1) {  /* once only */
             return json_error_response(txn, TZ_INVALID_CHANGEDSINCE,
                                        param, NULL);
         }
 
         /* Parse and sanity check the changedsince token */
-        sscanf(param->s, "%u-" TIME_T_FMT, &prefix, &changedsince);
+        sscanf(val, "%u-" TIME_T_FMT, &prefix, &changedsince);
         if (prefix != synctoken_prefix || changedsince > info.dtstamp) {
             changedsince = 0;
         }
@@ -1195,7 +1202,7 @@ static int action_list(struct transaction_t *txn)
             goto done;
         }
 
-        lrock.meta = info.data;
+        lrock.meta = &info.data;
         lrock.tzarray = json_object_get(root, "timezones");
 
         if (latitude <= 90) {
@@ -1223,7 +1230,7 @@ static int action_list(struct transaction_t *txn)
 
   done:
     strarray_free(geo_tzids);
-    freestrlist(info.data);
+    strarray_fini(&info.data);
     return ret;
 }
 
@@ -1780,7 +1787,7 @@ static void truncate_vtimezone(icalcomponent *vtz,
 static int action_get(struct transaction_t *txn)
 {
     int r, precond;
-    struct strlist *param;
+    const strarray_t *param;
     const char *tzid = txn->req_tgt.resource;
     struct zoneinfo zi;
     time_t lastmod;
@@ -1794,8 +1801,9 @@ static int action_get(struct transaction_t *txn)
     /* Check/find requested MIME type:
        1st entry in gparams->mime_types array MUST be default MIME type */
     if ((param = hash_lookup("format", &txn->req_qparams))) {
+        const char *val = strarray_nth(param, 0);
         for (mime = tz_mime_types;
-             mime->content_type && !is_mediatype(mime->content_type, param->s);
+             mime->content_type && !is_mediatype(mime->content_type, val);
              mime++);
     }
     else if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
@@ -1807,15 +1815,15 @@ static int action_get(struct transaction_t *txn)
 
     /* Sanity check the parameters */
     if ((param = hash_lookup("start", &txn->req_qparams))) {
-        start = icaltime_from_string(param->s);
-        if (param->next || !icaltime_is_utc(start)) {  /* once only, UTC */
+        start = icaltime_from_string(strarray_nth(param, 0));
+        if (strarray_size(param) != 1 || !icaltime_is_utc(start)) {  /* once only, UTC */
             return json_error_response(txn, TZ_INVALID_START, param, &start);
         }
     }
 
     if ((param = hash_lookup("end", &txn->req_qparams))) {
-        end = icaltime_from_string(param->s);
-        if (param->next || !icaltime_is_utc(end)  /* once only, UTC */
+        end = icaltime_from_string(strarray_nth(param, 0));
+        if (strarray_size(param) != 1 || !icaltime_is_utc(end)  /* once only, UTC */
             || icaltime_compare(end, start) <= 0) {  /* end MUST be > start */
             return json_error_response(txn, TZ_INVALID_END, param, &end);
         }
@@ -1832,7 +1840,7 @@ static int action_get(struct transaction_t *txn)
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "%u-" TIME_T_FMT, strhash(tzid), zi.dtstamp);
     lastmod = zi.dtstamp;
-    freestrlist(zi.data);
+    strarray_fini(&zi.data);
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
@@ -1983,7 +1991,7 @@ static int action_get(struct transaction_t *txn)
 static int action_expand(struct transaction_t *txn)
 {
     int r, precond, zdump = 0;
-    struct strlist *param;
+    const strarray_t *param;
     const char *tzid = txn->req_tgt.resource;
     struct zoneinfo zi;
     time_t lastmod;
@@ -1993,18 +2001,18 @@ static int action_expand(struct transaction_t *txn)
 
     /* Sanity check the parameters */
     param = hash_lookup("start", &txn->req_qparams);
-    if (!param || param->next)  /* mandatory, once only */
+    if (strarray_size(param) != 1)  /* mandatory, once only */
         return json_error_response(txn, TZ_INVALID_START, param, NULL);
 
-    start = icaltime_from_string(param->s);
+    start = icaltime_from_string(strarray_nth(param, 0));
     if (!icaltime_is_utc(start))  /* MUST be UTC */
         return json_error_response(txn, TZ_INVALID_START, param, &start);
 
     param = hash_lookup("end", &txn->req_qparams);
-    if (!param || param->next)  /* mandatory, once only */
+    if (strarray_size(param) != 1)  /* mandatory, once only */
         return json_error_response(txn, TZ_INVALID_END, param, NULL);
 
-    end = icaltime_from_string(param->s);
+    end = icaltime_from_string(strarray_nth(param, 0));
     if (!icaltime_is_utc(end)  /* MUST be UTC */
         || icaltime_compare(end, start) <= 0) {  /* end MUST be > start */
         return json_error_response(txn, TZ_INVALID_END, param, &end);
@@ -2012,7 +2020,7 @@ static int action_expand(struct transaction_t *txn)
 
     /* Check requested format (debugging only) */
     if ((param = hash_lookup("format", &txn->req_qparams)) &&
-        !strcmp(param->s, "application/zdump")) {
+        !strcmp(strarray_nth(param, 0), "application/zdump")) {
         /* Mimic zdump(8) -V output for comparison:
 
            For each zonename, print the times both one  second  before  and
@@ -2039,7 +2047,7 @@ static int action_expand(struct transaction_t *txn)
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "%u-" TIME_T_FMT, strhash(tzid), zi.dtstamp);
     lastmod = zi.dtstamp;
-    freestrlist(zi.data);
+    strarray_fini(&zi.data);
 
     /* Check any preconditions, including range request */
     txn->flags.ranges = 1;
@@ -2245,7 +2253,7 @@ static const char *param_names[] = {
 };
 
 static int json_error_response(struct transaction_t *txn, long tz_code,
-                               struct strlist *param, icaltimetype *time)
+                               const strarray_t *param, icaltimetype *time)
 {
     long http_code = HTTP_BAD_REQUEST;
     const char *param_name, *fmt = NULL;
@@ -2274,11 +2282,15 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
             break;
         }
     }
-    else if (param->next) fmt = "Multiple %s parameters";
-    else if (!param->s || !param->s[0]) fmt = "Missing %s value";
-    else if (!time) fmt = "Invalid %s value";
-    else if (!icaltime_is_utc(*time)) fmt = "Invalid %s UTC value";
-    else fmt = "End date-time <= start date-time";
+    else {
+        const char *val = strarray_nth(param, 0);
+
+        if (strarray_size(param) > 1) fmt = "Multiple %s parameters";
+        else if (!val || !val[0]) fmt = "Missing %s value";
+        else if (!time) fmt = "Invalid %s value";
+        else if (!icaltime_is_utc(*time)) fmt = "Invalid %s UTC value";
+        else fmt = "End date-time <= start date-time";
+    }
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, fmt, param_name);

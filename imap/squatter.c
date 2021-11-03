@@ -450,8 +450,8 @@ static int do_indexer(const strarray_t *mboxnames)
 static int squatter_build_query(search_builder_t *bx, const char *query)
 {
     tok_t tok = TOK_INITIALIZER(query, NULL, 0);
-    char *p;
-    char *q;
+    const char *p;
+    const char *q;
     int r = 0;
     int part;
     charset_t utf8 = charset_lookupname("utf-8");
@@ -510,9 +510,9 @@ static int squatter_build_query(search_builder_t *bx, const char *query)
         else
             goto error;
 
-        q = charset_convert(q, utf8, charset_flags);
-        bx->match(bx, part, q);
-        free(q);
+        char *val = charset_convert(q, utf8, charset_flags);
+        bx->match(bx, part, val);
+        free(val);
     }
     r = 0;
 

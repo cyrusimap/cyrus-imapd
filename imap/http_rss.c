@@ -153,8 +153,8 @@ static int meth_get(struct transaction_t *txn,
                     void *params __attribute__((unused)))
 {
     int ret = 0, r, rights;
-    struct strlist *param;
-    char *section = NULL;
+    const strarray_t *param;
+    const char *section = NULL;
     uint32_t uid = 0;
     struct mailbox *mailbox = NULL;
 
@@ -212,7 +212,7 @@ static int meth_get(struct transaction_t *txn,
 
         /* Check for section query param, if any */
         param = hash_lookup("section", &txn->req_qparams);
-        if (param) section = param->s;
+        if (param) section = strarray_nth(param, 0);
     }
 
     /* If no UID specified, list messages as an RSS feed */

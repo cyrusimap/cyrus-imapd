@@ -172,7 +172,7 @@ static int meth_get(struct transaction_t *txn,
 
     if ((urls = config_getstring(IMAPOPT_HTTPALLOWEDURLS))) {
         tok_t tok = TOK_INITIALIZER(urls, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-        char *token;
+        const char *token;
 
         while ((token = tok_next(&tok)) && strcmp(token, txn->req_uri->path));
         tok_fini(&tok);
@@ -316,7 +316,7 @@ static int meth_get(struct transaction_t *txn,
 
             /* Reset the URI part of our current transaction */
             xmlFreeURI(txn->req_uri);
-            free_hash_table(&txn->req_qparams, (void (*)(void *)) &freestrlist);
+            free_hash_table(&txn->req_qparams, (void (*)(void *)) &strarray_free);
 
             /* Examine new request */
             ret = examine_request(txn, hdr[0]);

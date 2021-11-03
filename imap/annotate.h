@@ -56,12 +56,6 @@
 #define IMAP_ANNOT_NS           "/vendor/cmu/cyrus-imapd/"
 #define DAV_ANNOT_NS            "/vendor/cmu/cyrus-httpd/"
 
-/* List of strings, for fetch and search argument blocks */
-struct strlist {
-    char *s;                   /* String */
-    struct strlist *next;
-};
-
 typedef struct annotate_db annotate_db_t;
 
 /* List of attrib-value pairs */
@@ -104,10 +98,6 @@ int annotate_state_set_mailbox_mbe(annotate_state_t *state,
 int annotate_state_set_message(annotate_state_t *state,
                                struct mailbox *mailbox,
                                unsigned int uid);
-
-/* String List Management */
-void appendstrlist(struct strlist **l, char *s);
-void freestrlist(struct strlist *l);
 
 /* Attribute Management (also used by ID) */
 void appendattvalue(struct attvaluelist **l, const char *attrib,

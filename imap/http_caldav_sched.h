@@ -153,7 +153,7 @@ enum {
 extern unsigned config_allowsched;
 extern const char *ical_prodid;
 extern icaltimezone *utc_zone;
-extern struct strlist *cua_domains;
+extern strarray_t cua_domains;
 extern icalarray *rscale_calendars;
 
 extern icalcomponent *busytime_query_local(struct transaction_t *txn,
