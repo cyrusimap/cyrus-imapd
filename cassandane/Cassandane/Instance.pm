@@ -60,6 +60,7 @@ use JSON;
 use HTTP::Daemon;
 use DBI;
 use Time::HiRes qw(usleep);
+use List::Util qw(uniqstr);
 
 use lib '.';
 use Cassandane::Util::DateTime qw(to_iso8601);
@@ -169,18 +170,31 @@ sub get_version
 
     my $cassini = Cassandane::Cassini->instance();
 
-    my $cyrus_prefix = $cassini->val("cyrus $installation",
-                                     'prefix', '/usr/cyrus');
-    my $cyrus_destdir = $cassini->val("cyrus $installation",
-                                      'destdir', '');
+    # Need to check the named-installation directory AND the
+    # default installation directory, before falling back to the
+    # default-default
+    # Usually Cassandane::Cyrus::TestCase only initialises an Instance
+    # object with a non-default installation if that installation actually
+    # exists, but this is a class method, not an object method, so we
+    # don't have that protection and have to DIY.
+    my ($cyrus_prefix, $cyrus_destdir, $cyrus_master);
 
-    my $cyrus_master;
-    foreach my $d (qw( bin sbin libexec libexec/cyrus-imapd lib cyrus/bin ))
-    {
-        my $try = "$cyrus_destdir$cyrus_prefix/$d/master";
-        if (-x $try) {
-            $cyrus_master = $try;
-            last;
+    INSTALLATION: foreach my $i (uniqstr($installation, 'default')) {
+        $cyrus_prefix = $cassini->val("cyrus $i", 'prefix',
+                                      $i eq 'default' ? '/usr/cyrus' : undef);
+
+        # no prefix? non-default installation isn't configured, skip it
+        next INSTALLATION if not defined $cyrus_prefix;
+
+        $cyrus_destdir = $cassini->val("cyrus $i", 'destdir', q{});
+
+        foreach my $d (qw( bin sbin libexec libexec/cyrus-imapd lib cyrus/bin ))
+        {
+            my $try = "$cyrus_destdir$cyrus_prefix/$d/master";
+            if (-x $try) {
+                $cyrus_master = $try;
+                last INSTALLATION;
+            }
         }
     }
 
