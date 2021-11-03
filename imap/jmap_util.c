@@ -487,6 +487,8 @@ HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
 HIDDEN json_t *jmap_server_error(int r)
 {
     switch (r) {
+    case IMAP_PERMISSION_DENIED:
+        return json_pack("{s:s}", "type", "forbidden");
     case IMAP_CONVERSATION_GUIDLIMIT:
         return json_pack("{s:s}", "type", "tooManyMailboxes");
     case IMAP_QUOTA_EXCEEDED:
