@@ -50,6 +50,7 @@
 #include "caldav_util.h"
 #include "http_dav.h"
 #include "mailbox.h"
+#include "proxy.h"
 #include "strarray.h"
 #include "strhash.h"
 #include "syslog.h"
@@ -993,4 +994,186 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     if (store_ical && (store_ical != ical)) icalcomponent_free(store_ical);
 
     return ret;
+}
+
+static int _create_mailbox(const char *userid, const char *mailboxname,
+                           int type, unsigned long comp_types,
+                           int useracl, int anyoneacl, const char *displayname,
+                           const struct namespace *namespace,
+                           const struct auth_state *authstate,
+                           struct mboxlock **namespacelockp)
+{
+    char rights[100];
+    struct mailbox *mailbox = NULL;
+
+    int r = mboxlist_lookup(mailboxname, NULL, NULL);
+    if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+
+    if (!*namespacelockp) {
+        *namespacelockp = mboxname_usernamespacelock(mailboxname);
+        // maybe we lost the race on this one
+        r = mboxlist_lookup(mailboxname, NULL, NULL);
+        if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+    }
+
+    /* Create locally */
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    mbentry.name = (char *) mailboxname;
+    mbentry.mbtype = type;
+    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                               0/*isadmin*/, userid, authstate,
+                               0/*flags*/, displayname ? &mailbox : NULL);
+    if (!r && displayname) {
+        annotate_state_t *astate = NULL;
+
+        r = mailbox_get_annotate_state(mailbox, 0, &astate);
+        if (!r) {
+            const char *disp_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+            const char *comp_annot =
+                DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
+            struct buf value = BUF_INITIALIZER;
+
+            buf_init_ro_cstr(&value, displayname);
+            r = annotate_state_writemask(astate, disp_annot, userid, &value);
+            if (!r && comp_types) {
+                buf_reset(&value);
+                buf_printf(&value, "%lu", comp_types);
+                r = annotate_state_writemask(astate, comp_annot, userid, &value);
+            }
+            buf_free(&value);
+        }
+
+        mailbox_close(&mailbox);
+    }
+    if (!r && useracl) {
+        cyrus_acl_masktostr(useracl, rights);
+        r = mboxlist_setacl(namespace, mailboxname, userid, rights,
+                            1, userid, authstate);
+    }
+    if (!r && anyoneacl) {
+        cyrus_acl_masktostr(anyoneacl, rights);
+        r = mboxlist_setacl(namespace, mailboxname, "anyone", rights,
+                            1, userid, authstate);
+    }
+
+    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                  mailboxname, error_message(r));
+    return r;
+}
+
+EXPORTED unsigned long config_types_to_caldav_types(void)
+{
+    unsigned long config_types =
+        config_getbitfield(IMAPOPT_CALENDAR_COMPONENT_SET);
+    unsigned long types = 0;
+
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VEVENT)
+        types |= CAL_COMP_VEVENT;
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VTODO)
+        types |= CAL_COMP_VTODO;
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VJOURNAL)
+        types |= CAL_COMP_VJOURNAL;
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VFREEBUSY)
+        types |= CAL_COMP_VFREEBUSY;
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VAVAILABILITY)
+        types |= CAL_COMP_VAVAILABILITY;
+#ifdef VPOLL
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VPOLL)
+        types |= CAL_COMP_VPOLL;
+#endif
+
+    return types;
+}
+
+EXPORTED int caldav_create_defaultcalendars(const char *userid,
+                                            const struct namespace *namespace,
+                                            const struct auth_state *authstate,
+                                            mbentry_t **mbentryp)
+{
+    int r;
+    char *mailboxname;
+    struct mboxlock *namespacelock = NULL;
+
+    /* calendar-home-set */
+    mailboxname = caldav_mboxname(userid, NULL);
+    r = mboxlist_lookup(mailboxname, NULL, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* Find location of INBOX */
+        char *inboxname = mboxname_user_mbox(userid, NULL);
+        mbentry_t *mbentry = NULL;
+
+        r = proxy_mlookup(inboxname, &mbentry, NULL, NULL);
+        free(inboxname);
+
+        if (!r) {
+            if (mbentry->server) {
+                r = IMAP_MAILBOX_NONEXISTENT;
+
+                if (mbentryp) {
+                    *mbentryp = mbentry;
+                    mbentry = NULL;
+                }
+            }
+            else {
+                r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
+                                    ACL_ALL | DACL_READFB, DACL_READFB, NULL,
+                                    namespace, authstate, &namespacelock);
+            }
+        }
+        else if (r == IMAP_MAILBOX_NONEXISTENT) {
+            r = IMAP_INVALID_USER;
+        }
+
+        mboxlist_entry_free(&mbentry);
+    }
+
+    free(mailboxname);
+    if (r) goto done;
+
+    if (config_getswitch(IMAPOPT_CALDAV_CREATE_DEFAULT)) {
+        /* Default calendar */
+        unsigned long comp_types = config_types_to_caldav_types();
+
+        mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, comp_types,
+                            ACL_ALL | DACL_READFB, DACL_READFB,
+                            config_getstring(IMAPOPT_CALENDAR_DEFAULT_DISPLAYNAME),
+                            namespace, authstate, &namespacelock);
+        free(mailboxname);
+        if (r) goto done;
+    }
+
+    if (config_getswitch(IMAPOPT_CALDAV_CREATE_SCHED) &&
+        namespace_calendar.allow & ALLOW_CAL_SCHED) {
+        /* Scheduling Inbox */
+        mailboxname = caldav_mboxname(userid, SCHED_INBOX);
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
+                            ACL_ALL | DACL_SCHED, DACL_SCHED, NULL,
+                            namespace, authstate, &namespacelock);
+        free(mailboxname);
+        if (r) goto done;
+
+        /* Scheduling Outbox */
+        mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
+                            ACL_ALL | DACL_SCHED, 0, NULL,
+                            namespace, authstate, &namespacelock);
+        free(mailboxname);
+        if (r) goto done;
+    }
+
+    if (config_getswitch(IMAPOPT_CALDAV_CREATE_ATTACH) &&
+        namespace_calendar.allow & ALLOW_CAL_ATTACH) {
+        /* Managed Attachment Collection */
+        mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
+        r = _create_mailbox(userid, mailboxname, MBTYPE_COLLECTION, 0,
+                            ACL_ALL, ACL_READ, NULL,
+                            namespace, authstate, &namespacelock);
+        free(mailboxname);
+        if (r) goto done;
+    }
+
+  done:
+    if (namespacelock) mboxname_release(&namespacelock);
+    return r;
 }

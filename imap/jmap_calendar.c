@@ -1044,7 +1044,8 @@ static int jmap_calendar_set(struct jmap_req *req)
         json_decref(jstate);
     }
 
-    r = caldav_create_defaultcalendars(req->accountid);
+    r = caldav_create_defaultcalendars(req->accountid,
+                                       &httpd_namespace, httpd_authstate, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
         json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
@@ -3490,7 +3491,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         json_decref(jstate);
     }
 
-    r = caldav_create_defaultcalendars(req->accountid);
+    r = caldav_create_defaultcalendars(req->accountid,
+                                       &httpd_namespace, httpd_authstate, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
         json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
