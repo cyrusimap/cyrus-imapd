@@ -921,18 +921,6 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
     if (r) return r;
 
     index_tellchanges(state, usinguid, printuid, 0);
-
-#if TOIMSP
-    if (state->firstnotseen) {
-        toimsp(state->mboxname, state->mailbox->i.uidvalidity, "SEENsnn", state->userid,
-               0, state->mailbox->i.recenttime, 0);
-    }
-    else {
-        toimsp(state->mboxname, state->mailbox->i.uidvalidity, "SEENsnn", state->userid,
-               state->mailbox->last_uid, state->mailbox->i.recenttime, 0);
-    }
-#endif
-
     index_unlock(state);
 
     return r;

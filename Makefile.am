@@ -393,9 +393,7 @@ EXTRA_DIST = \
 	perl/imap/examples/auditmbox.pl \
 	perl/imap/examples/imapcollate.pl \
 	perl/imap/examples/imapdu.pl \
-	perl/imap/examples/test-imsp.pl \
 	perl/imap/IMAP/Admin.pm \
-	perl/imap/IMAP/IMSP.pm \
 	perl/imap/IMAP/Shell.pm \
 	perl/imap/IMAP.pm \
 	perl/imap/IMAP.xs \
