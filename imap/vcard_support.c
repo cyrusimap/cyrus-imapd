@@ -290,6 +290,14 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
                 }
             }
         }
+        else if (!strcasecmp(name, "kind")) {
+            free(ventry->name);
+            ventry->name = xstrdup("x-addressbookserver-kind");
+        }
+        else if (!strcasecmp(name, "member")) {
+            free(ventry->name);
+            ventry->name = xstrdup("x-addressbookserver-member");
+        }
     }
 
     buf_free(&buf);
@@ -335,6 +343,12 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
                 buf_printf(&buf, ",%s", propval);
                 vparse_set_value(ventry, buf_cstring(&buf));
             }
+        }
+        else if (!strncasecmp(name, "x-addressbookserver-", 20)) {
+            char *newname = xstrdup(name+20);
+
+            free(ventry->name);
+            ventry->name = newname;
         }
     }
 
