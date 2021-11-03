@@ -10763,6 +10763,17 @@ static void _email_update_parse(json_t *jemail,
     else if (!json_object_size(mailboxids)) {
         jmap_parser_invalid(parser, "mailboxIds");
     }
+    else {
+        const char *mailboxid = NULL;
+        json_t *jval;
+        json_object_foreach(mailboxids, mailboxid, jval) {
+            if (jval != json_true()) {
+                jmap_parser_push(parser, "mailboxIds");
+                jmap_parser_invalid(parser, mailboxid);
+                jmap_parser_pop(parser);
+            }
+        }
+    }
     update->mailboxids = mailboxids;
 
     /* Is snoozed being overwritten or patched? */
@@ -10892,17 +10903,7 @@ static struct email_updateplan *_email_bulkupdate_addplan(struct email_bulkupdat
 
 static void _email_updateplan_error(struct email_updateplan *plan, int errcode, json_t *set_errors)
 {
-    json_t *err;
-    switch (errcode) {
-        case IMAP_PERMISSION_DENIED:
-            err = json_pack("{s:s}", "type", "forbidden");
-            break;
-        case IMAP_QUOTA_EXCEEDED:
-            err = json_pack("{s:s}", "type", "overQuota");
-            break;
-        default:
-            err = jmap_server_error(errcode);
-    }
+    json_t *err = jmap_server_error(errcode);
     int i;
     for (i = 0; i < ptrarray_size(&plan->copy); i++) {
         struct email_uidrec *uidrec = ptrarray_nth(&plan->copy, i);
@@ -11617,23 +11618,22 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
     _email_bulkupdate_checklimits(bulk);
 
     /* Validate plans */
-    strarray_t erroneous_plans = STRARRAY_INITIALIZER;
+    hash_table erroneous_plans = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&erroneous_plans,
+            hash_numrecords(&bulk->plans_by_mbox_id) + 1, 0);
 
-    /* Check permissions */
-    hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
-    while (hash_iter_next(iter)) {
-        struct email_updateplan *plan = hash_iter_val(iter);
+    /* Check permissions and quota */
+    int check_quota = !ignorequota && !config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS);
+    hash_iter *plan_iter = hash_table_iter(&bulk->plans_by_mbox_id);
+    while (hash_iter_next(plan_iter)) {
+        struct email_updateplan *plan = hash_iter_val(plan_iter);
         if (!jmap_hasrights(bulk->req, plan->mboxname, plan->needrights)) {
             _email_updateplan_error(plan, IMAP_PERMISSION_DENIED, bulk->set_errors);
-            strarray_append(&erroneous_plans, plan->mbox_id);
+            hash_insert(plan->mbox_id, (void*)IMAP_PERMISSION_DENIED, &erroneous_plans);
         }
-    }
-    if (!ignorequota && !config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS)) {
-        /* Check quota - NOTE, we are only checking message counts here as we
-         * don't have the size handy */
-        hash_iter_reset(iter);
-        while (hash_iter_next(iter)) {
-            struct email_updateplan *plan = hash_iter_val(iter);
+        else if (check_quota) {
+            /* NOTE, we are only checking message counts here as we
+             * don't have the size handy */
             quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
             qdiffs[QUOTA_MESSAGE] = 0;
             int i;
@@ -11644,26 +11644,64 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
             int r = mailbox_quota_check(plan->mbox, qdiffs);
             if (r) {
                 _email_updateplan_error(plan, r, bulk->set_errors);
-                strarray_append(&erroneous_plans, plan->mbox_id);
+                hash_insert(plan->mbox_id, (void*)IMAP_QUOTA_EXCEEDED, &erroneous_plans);
             }
         }
     }
-    hash_iter_free(&iter);
+    if (hash_numrecords(&erroneous_plans)) {
+        /* Fail any update where the email is an erroneous mailbox plan */
+        hash_iter_reset(plan_iter);
+        while (hash_iter_next(plan_iter)) {
+            struct email_updateplan *plan = hash_iter_val(plan_iter);
+            if (hash_lookup(plan->mbox_id, &erroneous_plans))
+                continue;
 
-    /* Remove erroneous plans */
-    for (i = 0; i < strarray_size(&erroneous_plans); i++) {
-        const char *mbox_id = strarray_nth(&erroneous_plans, i);
-        struct email_updateplan *plan = hash_del(mbox_id, &bulk->plans_by_mbox_id);
-        if (!plan) continue;
-        jmap_closembox(bulk->req, &plan->mbox);
-        _email_updateplan_free_p(plan);
+            int i;
+            for (i = 0; i < ptrarray_size(&plan->copy); i++) {
+                ptrarray_t *uidrecs = ptrarray_nth(&plan->copy, i);
+                int j;
+                for (j = 0; j < ptrarray_size(uidrecs); j++) {
+                    struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
+                    intptr_t errcode = (intptr_t)hash_lookup(uidrec->mboxrec->mbox_id, &erroneous_plans);
+                    if (errcode && !json_object_get(bulk->set_errors, uidrec->email_id)) {
+                        json_object_set_new(bulk->set_errors, uidrec->email_id,
+                                jmap_server_error(errcode));
+                    }
+                }
+            }
+            ptrarray_t *uidrecs[3] = { &plan->setflags, &plan->delete, &plan->snooze };
+            for (i = 0; i < 3; i++) {
+                int j;
+                for (j = 0; j < ptrarray_size(uidrecs[i]); j++) {
+                    struct email_uidrec *uidrec = ptrarray_nth(uidrecs[i], j);
+                    intptr_t errcode = (intptr_t)hash_lookup(uidrec->mboxrec->mbox_id, &erroneous_plans);
+                    if (errcode && !json_object_get(bulk->set_errors, uidrec->email_id)) {
+                        json_object_set_new(bulk->set_errors, uidrec->email_id,
+                                jmap_server_error(errcode));
+                    }
+                }
+            }
+        }
+
+        /* Remove erroneous plans */
+        strarray_t *erroneous_mboxids = hash_keys(&erroneous_plans);
+        for (i = 0; i < strarray_size(erroneous_mboxids); i++) {
+            const char *mbox_id = strarray_nth(erroneous_mboxids, i);
+            struct email_updateplan *plan = hash_del(mbox_id, &bulk->plans_by_mbox_id);
+            if (!plan) continue;
+            jmap_closembox(bulk->req, &plan->mbox);
+            _email_updateplan_free_p(plan);
+        }
+        strarray_free(erroneous_mboxids);
+
+        hash_iter_free(&plan_iter);
+        plan_iter = hash_table_iter(&bulk->plans_by_mbox_id);
     }
-    strarray_fini(&erroneous_plans);
 
     /* Sort UID records arrays */
-    iter = hash_table_iter(&bulk->plans_by_mbox_id);
-    while (hash_iter_next(iter)) {
-        struct email_updateplan *plan = hash_iter_val(iter);
+    hash_iter_reset(plan_iter);
+    while (hash_iter_next(plan_iter)) {
+        struct email_updateplan *plan = hash_iter_val(plan_iter);
         for (i = 0; i < ptrarray_size(&plan->copy); i++) {
             ptrarray_t *uidrecs = ptrarray_nth(&plan->copy, i);
             ptrarray_sort(uidrecs, _email_uidrec_compareuid_cb);
@@ -11672,7 +11710,9 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
         ptrarray_sort(&plan->delete, _email_uidrec_compareuid_cb);
         ptrarray_sort(&plan->snooze, _email_uidrec_compareuid_cb);
     }
-    hash_iter_free(&iter);
+
+    hash_iter_free(&plan_iter);
+    free_hash_table(&erroneous_plans, NULL);
 
     return 0;
 }
@@ -11965,6 +12005,12 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
             struct email_uidrec *tmp = ptrarray_nth(src_uidrecs, 0);
             const char *src_mbox_id = tmp->mboxrec->mbox_id;
             struct email_updateplan *src_plan = hash_lookup(src_mbox_id, &bulk->plans_by_mbox_id);
+            if (!src_plan) {
+                // source plan was erroneous and all email ids that
+                // depended on it already were reported in set errors
+                continue;
+            }
+
             struct mailbox *src_mbox = src_plan->mbox;
             uint32_t last_uid_before_copy = dst_mbox->i.last_uid;
 
