@@ -165,10 +165,7 @@ LT_INIT([disable-static])
 AC_SUBST([LIBTOOL_DEPS])
 
 dnl Check the size of various types
-AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(long)
-AC_CHECK_SIZEOF(size_t)
-AC_CHECK_SIZEOF(off_t)
 AC_CHECK_SIZEOF(time_t)
 
 dnl Warn if time_t is only 32 bits
