@@ -1392,6 +1392,7 @@ done:
 }
 
 #ifdef WITH_DAV
+#include "caldav_util.h"
 #include "http_caldav_sched.h"
 
 char *httpd_userid = NULL;  // due to caldav_util.h including httpd.h
@@ -1416,6 +1417,12 @@ static int sieve_imip(void *ic, void *sc, void *mc,
     prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
 
     buf_reset(&imip->errstr);
+
+    if (caldav_create_defaultcalendars(ctx->userid,
+                                       &lmtpd_namespace, sd->authstate, NULL)) {
+        buf_setcstr(&imip->errstr, "could not autoprovision calendars");
+        goto done;
+    }
 
     /* parse the message body if we haven't already */
     if (!mydata->content->body &&

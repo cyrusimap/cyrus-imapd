@@ -130,7 +130,7 @@ static int autocreate_inbox(const mbname_t *mbname);
 #endif
 
 /* current namespace */
-static struct namespace lmtpd_namespace;
+struct namespace lmtpd_namespace;
 
 static struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
                             &spoolfile, &removespool, &lmtpd_namespace,
