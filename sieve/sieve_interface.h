@@ -98,6 +98,7 @@ typedef int sieve_jmapquery(void *interp_context, void *script_context,
                             void *message_context, const char *json);
 
 typedef struct sieve_imip_context {
+    unsigned invites_only    : 1;
     unsigned updates_only    : 1;
     unsigned delete_canceled : 1;
     const char *calendarid;

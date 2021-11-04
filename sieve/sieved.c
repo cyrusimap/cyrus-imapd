@@ -457,7 +457,8 @@ static void print_test(test_t *test)
         break;
 
     case BC_PROCESSIMIP:
-        printf("PROCESSIMIP UPDATESONLY(%d) DELETECANCELED(%d)",
+        printf("PROCESSIMIP INVITESONLY(%d) UPDATESONLY(%d) DELETECANCELED(%d)",
+               !!test->u.imip.invites_only,
                !!test->u.imip.updates_only, !!test->u.imip.delete_canceled);
         print_string(" CALENDARID", test->u.imip.calendarid);
         print_string(" ERRSTR", test->u.imip.errstr_var);
@@ -1301,6 +1302,7 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
     case BC_PROCESSIMIP:
         *requires |= SIEVE_CAPA_IMIP;
         generate_token("processimip", 0, buf);
+        generate_switch(":invitesonly", test.u.imip.invites_only, buf);
         generate_switch(":updatesonly", test.u.imip.updates_only, buf);
         generate_switch(":deletecanceled", test.u.imip.delete_canceled, buf);
         generate_string(":calendarid", test.u.imip.calendarid, buf);

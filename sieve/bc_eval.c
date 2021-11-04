@@ -1580,6 +1580,7 @@ envelope_err:
     case BC_PROCESSIMIP:
         if (interp->imip) {
             sieve_imip_context_t imip_ctx = {
+                !!test.u.imip.invites_only,
                 !!test.u.imip.updates_only,
                 !!test.u.imip.delete_canceled,
                 test.u.imip.calendarid,
