@@ -434,7 +434,7 @@ void dlist_makeguid(struct dlist *dl, const struct message_guid *guid)
     if (!dl) return;
     _dlist_clean(dl);
     if (guid) {
-        dl->type = DL_GUID,
+        dl->type = DL_GUID;
         dl->gval = xzmalloc(sizeof(struct message_guid));
         message_guid_copy(dl->gval, guid);
     }
