@@ -454,14 +454,14 @@ int scan_me(struct findall_data *data, void *rock)
         if (owner) {
             if (user && !strcmp(owner, user->owner)) {
                 i_mbox = user;
+                free(owner);
             } else {
                 /* new owner (Inbox) */
                 struct infected_mbox *new = xzmalloc(sizeof(struct infected_mbox));
-                new->owner = xstrdup(owner);
+                new->owner = owner;
                 new->next = user;
                 i_mbox = user = new;
             }
-            free(owner);
         }
 #if 0  /* XXX what to do with public mailboxes (bboards)? */
         else {
