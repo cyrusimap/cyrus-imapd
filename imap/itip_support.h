@@ -80,12 +80,14 @@ struct sched_data {
 #define SCHEDFLAG_ISCHEDULE        (1<<0)
 #define SCHEDFLAG_IS_REPLY         (1<<1)
 #define SCHEDFLAG_IS_UPDATE        (1<<2)
+#define SCHEDFLAG_INVITES_ONLY     (1<<3)
 #define SCHEDFLAG_UPDATES_ONLY     (1<<4)
 #define SCHEDFLAG_DELETE_CANCELED  (1<<5)
 
 #define SCHED_ISCHEDULE(sched)        (sched->flags & SCHEDFLAG_ISCHEDULE)
 #define SCHED_IS_REPLY(sched)         (sched->flags & SCHEDFLAG_IS_REPLY)
 #define SCHED_IS_UPDATE(sched)        (sched->flags & SCHEDFLAG_IS_UPDATE)
+#define SCHED_INVITES_ONLY(sched)     (sched->flags & SCHEDFLAG_INVITES_ONLY)
 #define SCHED_UPDATES_ONLY(sched)     (sched->flags & SCHEDFLAG_UPDATES_ONLY)
 #define SCHED_DELETE_CANCELED(sched)  (sched->flags & SCHEDFLAG_DELETE_CANCELED)
 

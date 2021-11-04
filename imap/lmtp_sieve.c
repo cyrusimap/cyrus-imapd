@@ -1514,6 +1514,11 @@ static int sieve_imip(void *ic, void *sc, void *mc,
             GCC_FALLTHROUGH
 
         case ICAL_METHOD_CANCEL:
+            if (imip->invites_only) {
+                buf_setcstr(&imip->errstr, "configured to NOT process updates");
+                goto done;
+            }
+
             if (imip->delete_canceled) sched_flags |= SCHEDFLAG_DELETE_CANCELED;
 
             GCC_FALLTHROUGH
@@ -1539,9 +1544,15 @@ static int sieve_imip(void *ic, void *sc, void *mc,
             }
 
             if (imip->updates_only) sched_flags |= SCHEDFLAG_UPDATES_ONLY;
+            else if (imip->invites_only) sched_flags |= SCHEDFLAG_INVITES_ONLY;
             break;
 
         case ICAL_METHOD_REPLY:
+            if (imip->invites_only) {
+                buf_setcstr(&imip->errstr, "configured to NOT process replies");
+                goto done;
+            }
+
             /* Organizer better match owner of script */
             recipient = organizer;
             prop = icalcomponent_get_first_invitee(comp);
