@@ -1411,6 +1411,7 @@ static int sieve_imip(void *ic, void *sc, void *mc,
     const char *uid = NULL, *organizer = NULL;
     const char *originator = NULL, *recipient = NULL;
     strarray_t sched_addresses = STRARRAY_INITIALIZER;
+    unsigned sched_flags = 0;
     int ret = 0;
 
     prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
@@ -1511,8 +1512,12 @@ static int sieve_imip(void *ic, void *sc, void *mc,
 
             GCC_FALLTHROUGH
 
-        case ICAL_METHOD_REQUEST:
         case ICAL_METHOD_CANCEL:
+            if (imip->delete_canceled) sched_flags |= SCHEDFLAG_DELETE_CANCELED;
+
+            GCC_FALLTHROUGH
+
+        case ICAL_METHOD_REQUEST:
             originator = organizer;
 
             /* Find invitee that matches owner of script */
@@ -1531,6 +1536,8 @@ static int sieve_imip(void *ic, void *sc, void *mc,
                             "could not find matching ATTENDEE property");
                 goto done;
             }
+
+            if (imip->updates_only) sched_flags |= SCHEDFLAG_UPDATES_ONLY;
             break;
 
         case ICAL_METHOD_REPLY:
@@ -1542,6 +1549,8 @@ static int sieve_imip(void *ic, void *sc, void *mc,
                 goto done;
             }
             originator = icalproperty_get_invitee(prop);
+
+            sched_flags |= SCHEDFLAG_IS_REPLY;
             break;
 
         unsupported_method:
@@ -1560,14 +1569,8 @@ static int sieve_imip(void *ic, void *sc, void *mc,
         goto done;
     }
 
-    unsigned flags = 0;
-    if (meth == ICAL_METHOD_REPLY) flags |= SCHEDFLAG_IS_REPLY;
-    else if (meth == ICAL_METHOD_CANCEL) {
-        if (imip->delete_canceled) flags |= SCHEDFLAG_DELETE_CANCELED;
-    }
-    else if (imip->updates_only) flags |= SCHEDFLAG_UPDATES_ONLY;
     struct sched_data sched_data =
-        { flags, itip, NULL, NULL,
+        { sched_flags, itip, NULL, NULL,
           ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, imip->calendarid, NULL };
     struct caldav_sched_param sched_param = {
         (char *) ctx->userid, NULL, 0, 0, 1, NULL
