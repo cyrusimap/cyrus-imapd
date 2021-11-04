@@ -148,6 +148,7 @@ struct Test {
             int last;
         } dup;
         struct {
+            int invites_only;
             int updates_only;
             int delete_canceled;
             char *calendarid;

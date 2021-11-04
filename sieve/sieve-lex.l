@@ -394,6 +394,7 @@ ws              [ \t]+
 
     /* vnd.cyrus.imip */
 <INITIAL>processimip          return PROCESSIMIP;
+<INITIAL>:invitesonly         return INVITESONLY;
 <INITIAL>:updatesonly         return UPDATESONLY;
 <INITIAL>:deletecanceled      return DELETECANCELED;
 <INITIAL>:calendarid          return CALENDARID;

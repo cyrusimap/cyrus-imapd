@@ -704,7 +704,8 @@ enum bytecode_tags {
 
 enum bytecode_imip_bitflags {
     IMIP_UPDATESONLY    = 1<<0,
-    IMIP_DELETECANCELED = 1<<1
+    IMIP_DELETECANCELED = 1<<1,
+    IMIP_INVITESONLY    = 1<<2
 };
 
 enum bytecode_variables_bitflags {

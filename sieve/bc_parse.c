@@ -429,8 +429,9 @@ static const struct args_t test_args_table[] = {
         offsetof(struct Test, u.dt.date_part),
         offsetof(struct Test, u.dt.kl)
       } },
-    { BC_PROCESSIMIP,            "B2ss",                                 /* 33 */
+    { BC_PROCESSIMIP,            "B3ss",                                 /* 33 */
       { offsetof(struct Test, u.imip.updates_only),    IMIP_UPDATESONLY,
+        offsetof(struct Test, u.imip.invites_only),    IMIP_INVITESONLY,
         offsetof(struct Test, u.imip.delete_canceled), IMIP_DELETECANCELED,
         offsetof(struct Test, u.imip.calendarid),
         offsetof(struct Test, u.imip.errstr_var)

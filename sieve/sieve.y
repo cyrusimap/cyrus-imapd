@@ -349,7 +349,7 @@ extern void sieverestart(FILE *f);
 %token JMAPQUERY
 
 /* vnd.cyrus.imip */
-%token PROCESSIMIP UPDATESONLY DELETECANCELED CALENDARID ERRSTR
+%token PROCESSIMIP INVITESONLY UPDATESONLY DELETECANCELED CALENDARID ERRSTR
 %type <test> imiptags
 
 
@@ -1879,10 +1879,38 @@ idtype:   HEADER                 { $$ = B_HEADER;   }
 
 /* PROCESSIMIP tagged arguments */
 imiptags: /* empty */            { $$ = new_test(BC_PROCESSIMIP, sscript); }
+        | imiptags INVITESONLY   {
+                                     if ($$->u.imip.invites_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":invitesonly");
+                                     }
+                                     else if ($$->u.imip.updates_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
+                                                      ":updatesonly");
+                                     }
+                                     else if ($$->u.imip.delete_canceled) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
+                                                      ":deletecanceled");
+                                     }
+
+                                     $$->u.imip.invites_only = 1;
+                                 }
+
         | imiptags UPDATESONLY   {
                                      if ($$->u.imip.updates_only) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
+                                                      ":updatesonly");
+                                     }
+                                     else if ($$->u.imip.invites_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
                                                       ":updatesonly");
                                      }
                                      else if ($$->u.imip.calendarid != NULL) {
@@ -1900,6 +1928,12 @@ imiptags: /* empty */            { $$ = new_test(BC_PROCESSIMIP, sscript); }
                                      if ($$->u.imip.delete_canceled) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
+                                                      ":deletecanceled");
+                                     }
+                                     else if ($$->u.imip.invites_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
                                                       ":deletecanceled");
                                      }
 
@@ -3412,6 +3446,7 @@ static test_t *build_imip(sieve_script_t *sscript, test_t *t)
 
     assert(t && t->type == BC_PROCESSIMIP);
 
+    if (t->u.imip.invites_only) flags |= IMIP_INVITESONLY;
     if (t->u.imip.updates_only) flags |= IMIP_UPDATESONLY;
     if (t->u.imip.delete_canceled) flags |= IMIP_DELETECANCELED;
 
