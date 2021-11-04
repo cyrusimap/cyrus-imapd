@@ -800,6 +800,12 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
                       icalcomponent_get_uid(sched_data->itip), &cdata);
 
     if (cdata->dav.mailbox) {
+        if (SCHED_INVITES_ONLY(sched_data)) {
+            /* Configured to NOT process updates - ignore request */
+            SCHED_STATUS(sched_data, REQSTAT_NOPRIVS, SCHEDSTAT_NOPRIVS);
+            goto done;
+        }
+
         if (cdata->dav.mailbox_byname)
             mailboxname = xstrdup(cdata->dav.mailbox);
         else {
