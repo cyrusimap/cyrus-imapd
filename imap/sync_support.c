@@ -870,6 +870,18 @@ static struct sync_sieve *sync_sieve_list_add(
     return item;
 }
 
+struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, const char *name)
+{
+    struct sync_sieve *p;
+
+    for (p = l->head; p; p = p->next) {
+        if (!strcmp(p->name, name))
+            return p;
+    }
+
+    return NULL;
+}
+
 void sync_sieve_list_free(struct sync_sieve_list **lp)
 {
     struct sync_sieve_list *l = *lp;
@@ -884,70 +896,6 @@ void sync_sieve_list_free(struct sync_sieve_list **lp)
     }
     free(l);
     *lp = NULL;
-}
-
-int sync_sieve_upload(const char *userid, const char *name,
-                      time_t last_update __attribute__((unused)),
-                      const char *content,
-                      size_t len)
-{
-    const char *sieve_path = user_sieve_path(userid);
-    char newname[2048];
-    char *ext;
-    int   r = 0;
-    struct stat sbuf;
-    struct sieve_db *db = NULL;
-    struct mailbox *mailbox = NULL;
-    struct sieve_data *sdata = NULL;
-
-    ext = strrchr(name, '.');
-    if (!ext || strcmp(ext, SCRIPT_SUFFIX)) {
-        /* silently ignore attempts to upload anything other than a script */
-        return 0;
-    }
-
-    if (stat(sieve_path, &sbuf) == -1 && errno == ENOENT) {
-        if (cyrus_mkdir(sieve_path, 0755) == -1) return IMAP_IOERROR;
-        if (mkdir(sieve_path, 0755) == -1 && errno != EEXIST) {
-            syslog(LOG_ERR, "Failed to create %s:%m", sieve_path);
-            return IMAP_IOERROR;
-        }
-    }
-
-    db = sievedb_open_userid(userid);
-    if (!db) {
-        syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
-    r = sieve_ensure_folder(userid, &mailbox);
-    if (r) {
-        syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
-        goto done;
-    }
-
-    r = sievedb_lookup_name(db, mailbox_name(mailbox), newname, &sdata, 0);
-    if (!r || r == CYRUSDB_NOTFOUND) {
-        struct buf buf = BUF_INITIALIZER;
-
-        buf_init_ro(&buf, content, len);
-        snprintf(newname, sizeof(newname), "%.*s", (int) (ext - name), name);
-        sdata->name = newname;
-        sdata->content = buf_cstring(&buf);
-
-        r = sieve_script_store(mailbox, sdata);
-        buf_free(&buf);
-    }
-
-    if (!r) sync_log_sieve(userid);
-    else if (r == CYRUSDB_IOERROR) r = IMAP_IOERROR;
-
-  done:
-    mailbox_close(&mailbox);
-    sievedb_close(db);
-
-    return r;
 }
 
 int sync_sieve_activate(const char *userid, const char *bcname)
@@ -3237,6 +3185,7 @@ int sync_get_uniqueids(struct dlist *kin, struct sync_state *sstate)
 
 /* ====================================================================== */
 
+#ifdef USE_SIEVE
 static int list_cb(void *rock, struct sieve_data *sdata)
 {
     strarray_t *list = (strarray_t *) rock;
@@ -3288,6 +3237,149 @@ static int remove_cb(const char *sievedir, const char *fname,
 
     return SIEVEDIR_OK;
 }
+
+static int list_gen_cb(void *rock, struct sieve_data *sdata)
+{
+    struct sync_sieve_list *list = (struct sync_sieve_list *) rock;
+    char target[SIEVEDIR_MAX_NAME_LEN];
+    struct message_guid guid;
+
+    snprintf(target, sizeof(target), "%s%s", sdata->name, SCRIPT_SUFFIX);
+    message_guid_generate(&guid, sdata->content, strlen(sdata->content));
+    sync_sieve_list_add(list, target, sdata->lastupdated, &guid, 0);
+
+    if (sdata->isactive) {
+        snprintf(target, sizeof(target), "%s%s", sdata->name, BYTECODE_SUFFIX);
+        message_guid_set_null(&guid);
+        sync_sieve_list_add(list, target, 0, &guid, 1);
+    }
+
+    return 0;
+}
+
+struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
+{
+    struct sync_sieve_list *list = sync_sieve_list_create();
+    struct sieve_db *db = sievedb_open_userid(userid);
+
+    if (db) {
+        sievedb_foreach(db, &list_gen_cb, list);
+        sievedb_close(db);
+    }
+
+    return list;
+}
+
+char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
+{
+    struct sieve_db *db = sievedb_open_userid(userid);
+    char *result = NULL;
+
+    if (sizep) *sizep = 0;
+
+    if (db) {
+        struct sieve_data *sdata = NULL;
+        char *myname = xstrndup(name, strlen(name) - SCRIPT_SUFFIX_LEN);
+        int r = sievedb_lookup_name(db, NULL, myname, &sdata, 0);
+
+        free(myname);
+
+        if (!r && sdata->content) {
+            if (sizep) *sizep = strlen(sdata->content);
+            result = xstrdup(sdata->content);
+        }
+    }
+
+    return result;
+}
+
+int sync_sieve_upload(const char *userid, const char *name,
+                      time_t last_update __attribute__((unused)),
+                      const char *content,
+                      size_t len)
+{
+    const char *sieve_path = user_sieve_path(userid);
+    char newname[2048];
+    char *ext;
+    int   r = 0;
+    struct stat sbuf;
+    struct sieve_db *db = NULL;
+    struct mailbox *mailbox = NULL;
+    struct sieve_data *sdata = NULL;
+
+    ext = strrchr(name, '.');
+    if (!ext || strcmp(ext, SCRIPT_SUFFIX)) {
+        /* silently ignore attempts to upload anything other than a script */
+        return 0;
+    }
+
+    if (stat(sieve_path, &sbuf) == -1 && errno == ENOENT) {
+        if (cyrus_mkdir(sieve_path, 0755) == -1) return IMAP_IOERROR;
+        if (mkdir(sieve_path, 0755) == -1 && errno != EEXIST) {
+            syslog(LOG_ERR, "Failed to create %s:%m", sieve_path);
+            return IMAP_IOERROR;
+        }
+    }
+
+    db = sievedb_open_userid(userid);
+    if (!db) {
+        syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    r = sieve_ensure_folder(userid, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
+        goto done;
+    }
+
+    r = sievedb_lookup_name(db, mailbox_name(mailbox), newname, &sdata, 0);
+    if (!r || r == CYRUSDB_NOTFOUND) {
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_init_ro(&buf, content, len);
+        snprintf(newname, sizeof(newname), "%.*s", (int) (ext - name), name);
+        sdata->name = newname;
+        sdata->content = buf_cstring(&buf);
+
+        r = sieve_script_store(mailbox, sdata);
+        buf_free(&buf);
+    }
+
+    if (!r) sync_log_sieve(userid);
+    else if (r == CYRUSDB_IOERROR) r = IMAP_IOERROR;
+
+  done:
+    mailbox_close(&mailbox);
+    sievedb_close(db);
+
+    return r;
+}
+#else  /* !USE_SIEVE */
+struct sync_sieve_list *sync_sieve_list_generate(const char *userid __attribute__((unused)))
+{
+    return NULL;
+}
+
+char *sync_sieve_read(const char *userid __attribute__((unused)),
+                      const char *name __attribute__((unused)),
+                      uint32_t *sizep)
+{
+    if (sizep) *sizep = 0;
+
+    return NULL;
+}
+
+int sync_sieve_upload(const char *userid __attribute__((unused)),
+                      const char *name __attribute__((unused)),
+                      time_t last_update __attribute__((unused)),
+                      const char *content __attribute__((unused)),
+                      size_t len __attribute__((unused)))
+{
+    return IMAP_IOERROR;
+}
+#endif  /* USE_SIEVE */
 
 static int print_seen(const char *uniqueid, struct seendata *sd, void *rock)
 {
@@ -3341,10 +3433,36 @@ static int user_getsub(const char *userid, struct protstream *pout)
     return 0;
 }
 
+static int user_getsieve(const char *userid, struct protstream *pout)
+{
+    struct sync_sieve_list *sieve_list;
+    struct sync_sieve *sieve;
+    struct dlist *kl;
+
+    sieve_list = sync_sieve_list_generate(userid);
+
+    if (!sieve_list) return 0;
+
+    for (sieve = sieve_list->head; sieve; sieve = sieve->next) {
+        kl = dlist_newkvlist(NULL, "SIEVE");
+        dlist_setatom(kl, "FILENAME", sieve->name);
+        dlist_setdate(kl, "LAST_UPDATE", sieve->last_update);
+        dlist_setatom(kl, "GUID", message_guid_encode(&sieve->guid));
+        dlist_setnum32(kl, "ISACTIVE", sieve->active ? 1 : 0);
+        sync_send_response(kl, pout);
+        dlist_free(&kl);
+    }
+
+    sync_sieve_list_free(&sieve_list);
+
+    return 0;
+}
+
 static int user_meta(const char *userid, struct protstream *pout)
 {
     user_getseen(userid, pout);
     user_getsub(userid, pout);
+    user_getsieve(userid, pout);
 
     return 0;
 }
@@ -3765,6 +3883,34 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
 }
 
 /* ====================================================================== */
+
+int sync_get_sieve(struct dlist *kin, struct sync_state *sstate)
+{
+    struct dlist *kl;
+    const char *userid;
+    const char *filename;
+    uint32_t size;
+    char *sieve;
+
+    if (!dlist_getatom(kin, "USERID", &userid))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getatom(kin, "FILENAME", &filename))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    sieve = sync_sieve_read(userid, filename, &size);
+    if (!sieve)
+        return IMAP_MAILBOX_NONEXISTENT;
+
+    kl = dlist_newkvlist(NULL, "SIEVE");
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "FILENAME", filename);
+    dlist_setmap(kl, "CONTENT", sieve, size);
+    sync_send_response(kl, sstate->pout);
+    dlist_free(&kl);
+    free(sieve);
+
+    return 0;
+}
 
 /* NOTE - can't lock a mailbox here, because it could deadlock,
  * so just pick the file out from under the hood */
@@ -4805,6 +4951,100 @@ static int folder_unannotation(struct sync_client_state *sync_cs,
     kl = dlist_newkvlist(NULL, cmd);
     dlist_setatom(kl, "MBOXNAME", mboxname);
     dlist_setatom(kl, "ENTRY", entry);
+    dlist_setatom(kl, "USERID", userid);
+    sync_send_apply(kl, sync_cs->backend->out);
+    dlist_free(&kl);
+
+    return sync_parse_response(cmd, sync_cs->backend->in, NULL);
+}
+
+/* ====================================================================== */
+
+static int sieve_upload(struct sync_client_state *sync_cs,
+                        const char *userid, const char *filename,
+                        unsigned long last_update)
+{
+    const char *cmd = "SIEVE";
+    struct dlist *kl;
+    char *sieve;
+    uint32_t size;
+
+    sieve = sync_sieve_read(userid, filename, &size);
+    if (!sieve) return IMAP_IOERROR;
+
+    if (sync_cs->flags & SYNC_FLAG_VERBOSE)
+        printf("%s %s %s\n", cmd, userid, filename);
+
+    if (sync_cs->flags & SYNC_FLAG_LOGGING)
+        syslog(LOG_INFO, "%s %s %s", cmd, userid, filename);
+
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "FILENAME", filename);
+    dlist_setdate(kl, "LAST_UPDATE", last_update);
+    dlist_setmap(kl, "CONTENT", sieve, size);
+    sync_send_apply(kl, sync_cs->backend->out);
+    dlist_free(&kl);
+    free(sieve);
+
+    return sync_parse_response(cmd, sync_cs->backend->in, NULL);
+}
+
+static int sieve_delete(struct sync_client_state *sync_cs,
+                        const char *userid, const char *filename)
+{
+    const char *cmd = "UNSIEVE";
+    struct dlist *kl;
+
+    if (sync_cs->flags & SYNC_FLAG_VERBOSE)
+        printf("%s %s %s\n", cmd, userid, filename);
+
+    if (sync_cs->flags & SYNC_FLAG_LOGGING)
+        syslog(LOG_INFO, "%s %s %s", cmd, userid, filename);
+
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "FILENAME", filename);
+    sync_send_apply(kl, sync_cs->backend->out);
+    dlist_free(&kl);
+
+    return sync_parse_response(cmd, sync_cs->backend->in, NULL);
+}
+
+static int sieve_activate(struct sync_client_state *sync_cs,
+                          const char *userid, const char *filename)
+{
+    const char *cmd = "ACTIVATE_SIEVE";
+    struct dlist *kl;
+
+    if (sync_cs->flags & SYNC_FLAG_VERBOSE)
+        printf("%s %s %s\n", cmd, userid, filename);
+
+    if (sync_cs->flags & SYNC_FLAG_LOGGING)
+        syslog(LOG_INFO, "%s %s %s", cmd, userid, filename);
+
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "FILENAME", filename);
+    sync_send_apply(kl, sync_cs->backend->out);
+    dlist_free(&kl);
+
+    return sync_parse_response(cmd, sync_cs->backend->in, NULL);
+}
+
+static int sieve_deactivate(struct sync_client_state *sync_cs,
+                            const char *userid)
+{
+    const char *cmd = "UNACTIVATE_SIEVE";
+    struct dlist *kl;
+
+    if (sync_cs->flags & SYNC_FLAG_VERBOSE)
+        printf("%s %s\n", cmd, userid);
+
+    if (sync_cs->flags & SYNC_FLAG_LOGGING)
+        syslog(LOG_INFO, "%s %s", cmd, userid);
+
+    kl = dlist_newkvlist(NULL, cmd);
     dlist_setatom(kl, "USERID", userid);
     sync_send_apply(kl, sync_cs->backend->out);
     dlist_free(&kl);
@@ -6604,6 +6844,98 @@ int sync_do_user_seen(struct sync_client_state *sync_cs, const char *userid,
     return 0;
 }
 
+int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
+                       struct sync_sieve_list *replica_sieve)
+{
+    int r = 0;
+    struct sync_sieve_list *master_sieve;
+    struct sync_sieve *mitem, *ritem;
+    int master_active = 0;
+    int replica_active = 0;
+    char *ext;
+
+    if (backend_supports_sieve_mailbox(sync_cs->backend)) return 0;
+
+    master_sieve = sync_sieve_list_generate(userid);
+    if (!master_sieve) {
+        syslog(LOG_ERR, "Unable to list sieve scripts for %s", userid);
+        return IMAP_IOERROR;
+    }
+
+    /* Upload missing and out of date or mismatching scripts */
+    for (mitem = master_sieve->head; mitem; mitem = mitem->next) {
+        ritem = sync_sieve_lookup(replica_sieve, mitem->name);
+        if (ritem) {
+            ritem->mark = 1;
+            /* compare the GUID if known */
+            if (!message_guid_isnull(&ritem->guid)) {
+                if (message_guid_equal(&ritem->guid, &mitem->guid))
+                    continue;
+                /* XXX: copyback support */
+            }
+            /* fallback to date comparison */
+            else if (ritem->last_update >= mitem->last_update)
+                continue; /* changed */
+        }
+
+        /* Don't upload compiled bytecode */
+        ext = strrchr(mitem->name, '.');
+        if (!ext || strcmp(ext, ".bc")) {
+             r = sieve_upload(sync_cs, userid, mitem->name, mitem->last_update);
+             if (r) goto bail;
+        }
+
+        /* but still log it as having been created, since it will be automatically */
+        if (!ritem) {
+            ritem = sync_sieve_list_add(replica_sieve, mitem->name,
+                                        mitem->last_update, &mitem->guid, 0);
+            ritem->mark = 1;
+        }
+    }
+
+    /* Delete scripts which no longer exist on the master */
+    replica_active = 0;
+    for (ritem = replica_sieve->head; ritem; ritem = ritem->next) {
+        if (ritem->mark) {
+            if (ritem->active)
+                replica_active = 1;
+        } else {
+            r = sieve_delete(sync_cs, userid, ritem->name);
+            if (r) goto bail;
+
+            ritem->mark = -1;
+        }
+    }
+
+    /* Change active script if necessary */
+    master_active = 0;
+    for (mitem = master_sieve->head; mitem; mitem = mitem->next) {
+        if (!mitem->active)
+            continue;
+
+        master_active = 1;
+        ritem = sync_sieve_lookup(replica_sieve, mitem->name);
+        if (ritem) {
+            if (ritem->active) break;
+
+            if (ritem->mark != -1) {
+                r = sieve_activate(sync_cs, userid, mitem->name);
+                if (r) goto bail;
+
+                replica_active = 1;
+            }
+        }
+        break;
+    }
+
+    if (!master_active && replica_active)
+        r = sieve_deactivate(sync_cs, userid);
+
+ bail:
+    sync_sieve_list_free(&master_sieve);
+    return(r);
+}
+
 int sync_do_user(struct sync_client_state *sync_cs,
                  const char *userid, const char *topart)
 {
@@ -6685,6 +7017,8 @@ redo:
     if (r) goto done;
     r = sync_do_user_sub(sync_cs, userid, replica_subs);
     if (r) goto done;
+    r = sync_do_user_sieve(sync_cs, userid, replica_sieve);
+    if (r) goto done;
     r = sync_do_user_seen(sync_cs, userid, replica_seen);
 
 done:
@@ -6723,6 +7057,7 @@ int sync_do_meta(struct sync_client_state *sync_cs, const char *userid)
                             replica_subs, replica_sieve, replica_seen, NULL);
     if (!r) r = sync_do_user_seen(sync_cs, userid, replica_seen);
     if (!r) r = sync_do_user_sub(sync_cs, userid, replica_subs);
+    if (!r) r = sync_do_user_sieve(sync_cs, userid, replica_sieve);
     sync_seen_list_free(&replica_seen);
     sync_name_list_free(&replica_subs);
     sync_sieve_list_free(&replica_sieve);
@@ -6818,6 +7153,8 @@ EXPORTED const char *sync_get(struct dlist *kin, struct sync_state *state)
         r = sync_get_annotation(kin, state);
     else if (!strcmp(kin->name, "FETCH"))
         r = sync_get_message(kin, state);
+    else if (!strcmp(kin->name, "FETCH_SIEVE"))
+        r = sync_get_sieve(kin, state);
     else if (!strcmp(kin->name, "FULLMAILBOX"))
         r = sync_get_fullmailbox(kin, state);
     else if (!strcmp(kin->name, "MAILBOXES"))

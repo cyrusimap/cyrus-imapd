@@ -520,6 +520,8 @@ int sync_do_user_sub(struct sync_client_state *sync_cs, const char *userid,
                      struct sync_name_list *replica_subs);
 int sync_do_user_seen(struct sync_client_state *sync_cs, const char *userid,
                       struct sync_seen_list *replica_seen);
+int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
+                       struct sync_sieve_list *replica_sieve);
 
 int sync_do_restart(struct sync_client_state *sync_cs);
 
