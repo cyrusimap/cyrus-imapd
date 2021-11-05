@@ -112,11 +112,11 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
 #define JMAPCACHE_CONTACTVERSION 1
 
-jmap_method_t jmap_contact_methods_standard[] = {
+static jmap_method_t jmap_contact_methods_standard[] = {
     { NULL, NULL, NULL, 0}
 };
 
-jmap_method_t jmap_contact_methods_nonstandard[] = {
+static jmap_method_t jmap_contact_methods_nonstandard[] = {
     {
         "ContactGroup/get",
         JMAP_CONTACTS_EXTENSION,

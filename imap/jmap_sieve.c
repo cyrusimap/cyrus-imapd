@@ -90,11 +90,11 @@ static int jmap_sieve_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 static int maxscripts = 0;
 static json_int_t maxscriptsize = 0;
 
-jmap_method_t jmap_sieve_methods_standard[] = {
+static jmap_method_t jmap_sieve_methods_standard[] = {
     { NULL, NULL, NULL, 0}
 };
 
-jmap_method_t jmap_sieve_methods_nonstandard[] = {
+static jmap_method_t jmap_sieve_methods_nonstandard[] = {
     {
         "SieveScript/get",
         JMAP_SIEVE_EXTENSION,

@@ -67,7 +67,7 @@
 static int jmap_mdn_send(jmap_req_t *req);
 static int jmap_mdn_parse(jmap_req_t *req);
 
-jmap_method_t jmap_mdn_methods_standard[] = {
+static jmap_method_t jmap_mdn_methods_standard[] = {
     {
         "MDN/send",
         JMAP_URN_MDN,
@@ -83,7 +83,7 @@ jmap_method_t jmap_mdn_methods_standard[] = {
     { NULL, NULL, NULL, 0}
 };
 
-jmap_method_t jmap_mdn_methods_nonstandard[] = {
+static jmap_method_t jmap_mdn_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
 

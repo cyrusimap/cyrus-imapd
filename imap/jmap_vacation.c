@@ -68,7 +68,7 @@
 static int jmap_vacation_get(jmap_req_t *req);
 static int jmap_vacation_set(jmap_req_t *req);
 
-jmap_method_t jmap_vacation_methods_standard[] = {
+static jmap_method_t jmap_vacation_methods_standard[] = {
     {
         "VacationResponse/get",
         JMAP_URN_VACATION,
@@ -84,7 +84,7 @@ jmap_method_t jmap_vacation_methods_standard[] = {
     { NULL, NULL, NULL, 0}
 };
 
-jmap_method_t jmap_vacation_methods_nonstandard[] = {
+static jmap_method_t jmap_vacation_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
 

@@ -76,7 +76,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req);
 
 static char *_prodid = NULL;
 
-jmap_method_t jmap_backup_methods_standard[] = {
+static jmap_method_t jmap_backup_methods_standard[] = {
     { NULL, NULL, NULL, 0}
 };
 
@@ -84,7 +84,7 @@ jmap_method_t jmap_backup_methods_standard[] = {
  * a user lock (exclusive if READ_WRITE is requested) for the entire
  * time the method is running.  Backup restores can be quite slow,
  * and we release locks in batches so that the user can keep working */
-jmap_method_t jmap_backup_methods_nonstandard[] = {
+static jmap_method_t jmap_backup_methods_nonstandard[] = {
     {
         "Backup/restoreContacts",
         JMAP_BACKUP_EXTENSION,
