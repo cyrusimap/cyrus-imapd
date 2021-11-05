@@ -403,8 +403,9 @@ extern int opterr;
 sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
 static struct wildmat *allow_cors = NULL;
-int httpd_timeout, httpd_keepalive;
-char *httpd_authid = NULL;
+int httpd_timeout;
+static int httpd_keepalive;
+static char *httpd_authid = NULL;
 char *httpd_userid = NULL;
 char *httpd_extrafolder = NULL;
 char *httpd_extradomain = NULL;
@@ -421,9 +422,9 @@ static struct http_connection http_conn;
 
 static sasl_ssf_t extprops_ssf = 0;
 int https = 0;
-int httpd_tls_required = 0;
-int httpd_tls_enabled = 0;
-unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
+static int httpd_tls_required = 0;
+static int httpd_tls_enabled = 0;
+static unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
 unsigned long config_httpmodules;
 int config_httpprettytelemetry;
 
@@ -2749,7 +2750,7 @@ HIDDEN void connection_hdrs(struct transaction_t *txn)
     }
 }
 
-const char *te_strings[] = { "deflate", "gzip", "chunked", NULL };
+static const char *te_strings[] = { "deflate", "gzip", "chunked", NULL };
 const char *ce_strings[] = { "deflate", "gzip", "br", "zstd", NULL };
 
 HIDDEN void log_request(long code, struct transaction_t *txn)
@@ -4539,7 +4540,7 @@ EXPORTED int check_precond(struct transaction_t *txn,
 }
 
 
-const struct mimetype {
+static const struct mimetype {
     const char *ext;
     const char *type;
     unsigned int compressible;
