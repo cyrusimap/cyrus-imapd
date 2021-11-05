@@ -816,8 +816,7 @@ struct migrate_rock {
 };
 
 static int migrate_cb(const char *sievedir,
-                      const char *fname,
-                      struct stat *sbuf __attribute__((unused)),
+                      const char *fname, struct stat *sbuf,
                       const char *link_target __attribute__((unused)),
                       void *rock)
 {
@@ -838,6 +837,7 @@ static int migrate_cb(const char *sievedir,
         else {
             sdata.name = myname;
         }
+        sdata.lastupdated = sbuf->st_mtime;
         sdata.content = buf_cstring(content);
         sdata.isactive = !strcmpnull(myname, mrock->active);
 
