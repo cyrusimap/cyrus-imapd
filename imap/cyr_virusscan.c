@@ -112,7 +112,7 @@ int email_notification = 0;
 struct infected_mbox *public = NULL;
 struct infected_mbox *user = NULL;
 
-int verbose = 0;
+static int verbose = 0;
 
 /* abstract definition of a virus scan engine */
 struct scan_engine {

@@ -69,7 +69,7 @@
 
 static int usage(const char *name);
 
-int verbose = 0;
+static int verbose = 0;
 enum { PART_TREE, TEXT_SECTIONS, TEXT_RECEIVER } dump_mode = PART_TREE;
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
