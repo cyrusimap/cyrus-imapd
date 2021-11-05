@@ -248,7 +248,7 @@ ec HTTP_NO_STORAGE,
 ec HTTP_LOOP,
    "508 Loop Detected"                   /* RFC 5842 (Binding Extn to WebDAV) */
 
-ec HTTP_LOOP,
+ec HTTP_NOT_EXTENDED,
    "510 Not Extended"                    /* RFC 2774 (An HTTP Extn Framework) */
 
 ec HTTP_NETWORK_AUTH,
