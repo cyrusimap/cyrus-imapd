@@ -1393,3 +1393,12 @@ unrecognised:
                         __func__, be->banner);
     return 6;
 }
+
+EXPORTED int backend_supports_sieve_mailbox(struct backend *be)
+{
+    if (strstr(be->banner, "Cyrus IMAP 3.5")) {
+        return 1;
+    }
+
+    return 0;
+}
