@@ -89,7 +89,6 @@
 static int verbose = 0;
 static const char *progname = NULL;
 static struct namespace expire_namespace; /* current namespace */
-static struct cyr_expire_ctx ctx;
 
 /* command line arguments */
 struct arguments {
@@ -155,6 +154,8 @@ struct cyr_expire_ctx {
     struct delete_rock drock;
     struct expire_rock erock;
 };
+
+static struct cyr_expire_ctx ctx;
 
 /* verbosep - a wrapper to print if the 'verbose' option is
    turned on.
