@@ -1110,8 +1110,9 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
         /* GET on a resource */
         struct carddav_data *cdata = (struct carddav_data *) data;
         unsigned want_ver = (mime && mime->version[0] == '4') ? 4 : 3;
-        
+
         if (cdata->version != want_ver) {
+            /* Translate between vCard versions */
             *obj = record_to_vcard(mailbox, record);
             if (want_ver == 4) vcard_to_v4(*obj);
             else vcard_to_v3(*obj);
@@ -1501,6 +1502,10 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
         }
     }
     else {
+        struct carddav_data *cdata = (struct carddav_data *) fctx->data;
+        struct vparse_card *vcard = NULL;
+        unsigned want_ver;
+
         if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
 
         if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
@@ -1514,14 +1519,28 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
         data = fctx->msg_buf.s + fctx->record->header_size;
         datalen = fctx->record->size - fctx->record->header_size;
 
+        want_ver = (out_type->version[0] == '4') ? 4 : 3;
+
+        if (cdata->version != want_ver) {
+            /* Translate between vCard versions */
+            vcard = fctx->obj;
+
+            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
+
+            if (want_ver == 4) vcard_to_v4(vcard);
+            else vcard_to_v3(vcard);
+        }
+
         if (strarray_size(partial)) {
             /* Limit returned properties */
-            struct vparse_card *vcard = fctx->obj;
+            vcard = fctx->obj;
 
             if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
             prune_properties(vcard->objects, partial);
+        }
 
-            /* Create vCard data from new vcard component */
+        if (vcard) {
+            /* Create vCard data from new vCard component */
             buf_reset(&fctx->msg_buf);
             vparse_tobuf(vcard, &fctx->msg_buf);
             data = buf_cstring(&fctx->msg_buf);
