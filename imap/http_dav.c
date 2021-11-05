@@ -1292,9 +1292,7 @@ struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types)
             }
         }
 
-        free(e->token);
-        free(e->version);
-        free(e->charset);
+        free_accept(e);
     }
     if (enc) free(enc);
 

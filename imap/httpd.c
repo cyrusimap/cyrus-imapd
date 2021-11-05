@@ -1842,9 +1842,7 @@ static void postauth_check_hdrs(struct transaction_t *txn)
                 txn->flags.te = TE_GZIP;
                 txn->resp_body.enc.proc = &zlib_compress;
             }
-            free(e->token);
-            free(e->version);
-            free(e->charset);
+            free_accept(e);
         }
         if (enc) free(enc);
     }
@@ -1883,9 +1881,7 @@ static void postauth_check_hdrs(struct transaction_t *txn)
                     qual = e->qual;
                 }
             }
-            free(e->token);
-            free(e->version);
-            free(e->charset);
+            free_accept(e);
         }
         if (enc) free(enc);
     }
@@ -2506,6 +2502,13 @@ struct accept *parse_accept(const char **hdr)
           (int (*)(const void *, const void *)) &compare_accept);
 
     return ret;
+}
+
+void free_accept(struct accept *a)
+{
+    free(a->token);
+    free(a->version);
+    free(a->charset);
 }
 
 
