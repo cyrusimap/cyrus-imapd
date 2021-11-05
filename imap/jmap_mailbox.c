@@ -3542,7 +3542,7 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
 }
 
 static void _mboxset_state_update_specialuse(struct mboxset_state *state,
-                                             struct mboxset *set __attribute__((unused)),
+                                             struct mboxset *set,
                                              struct mboxset_ops *ops)
 {
     strarray_t have_specialuses = STRARRAY_INITIALIZER;
@@ -3747,7 +3747,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
 static int _mboxset_state_find_specialuse_cb(const char *mboxname,
                                              uint32_t uid __attribute__((unused)),
                                              const char *entry __attribute__((unused)),
-                                             const char *userid __attribute__((unused)),
+                                             const char *userid,
                                              const struct buf *value,
                                              const struct annotate_metadata *mdata __attribute__((unused)),
                                              void *rock)

@@ -178,9 +178,7 @@ EXPORTED void fatal(const char* s, int code)
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
  */
-EXPORTED int service_init(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
-                 char **envp __attribute__((unused)))
+EXPORTED int service_init(int argc, char **argv, char **envp)
 {
     // FIXME should this be calling fatal? fatal exits directly
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);

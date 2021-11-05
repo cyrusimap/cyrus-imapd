@@ -2054,7 +2054,7 @@ int propfind_lockdisc(const xmlChar *name, xmlNsPtr ns,
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop __attribute__((unused)),
-                            xmlNodePtr resp __attribute__((unused)),
+                            xmlNodePtr resp,
                             struct propstat propstat[],
                             void *rock __attribute__((unused)))
 {
@@ -2155,7 +2155,7 @@ int propfind_suplock(const xmlChar *name, xmlNsPtr ns,
 int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
                        struct propfind_ctx *fctx,
                        xmlNodePtr prop __attribute__((unused)),
-                       xmlNodePtr resp __attribute__((unused)),
+                       xmlNodePtr resp,
                        struct propstat propstat[],
                        void *rock)
 {
@@ -2364,7 +2364,7 @@ int propfind_principalurl(const xmlChar *name, xmlNsPtr ns,
 int propfind_owner(const xmlChar *name, xmlNsPtr ns,
                    struct propfind_ctx *fctx,
                    xmlNodePtr prop,
-                   xmlNodePtr resp __attribute__((unused)),
+                   xmlNodePtr resp,
                    struct propstat propstat[],
                    void *rock __attribute__((unused)))
 {

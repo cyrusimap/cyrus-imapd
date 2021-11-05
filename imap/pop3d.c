@@ -407,9 +407,7 @@ static void popd_reset(void)
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
  */
-int service_init(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
-                 char **envp __attribute__((unused)))
+int service_init(int argc, char **argv, char **envp)
 {
     int r;
     int opt;
