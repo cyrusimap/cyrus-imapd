@@ -2504,7 +2504,7 @@ struct accept *parse_accept(const char **hdr)
     return ret;
 }
 
-void free_accept(struct accept *a)
+HIDDEN void free_accept(struct accept *a)
 {
     free(a->token);
     free(a->version);
