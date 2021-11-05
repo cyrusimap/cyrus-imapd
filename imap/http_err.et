@@ -44,6 +44,8 @@ error_table http
 
 # HTTP Response Status Codes
 # (from draft-ietf-httpbis-semantics unless otherwise noted)
+#
+# Commented-out codes are currently unused by Cyrus
 
 # Informational 1xx (Interim connection status or request progress)
 
@@ -71,8 +73,8 @@ ec HTTP_CREATED,
 ec HTTP_ACCEPTED,
    "202 Accepted"
 
-ec HTTP_NON_AUTHORITATIVE,
-   "203 Non-Authoritative Information"
+#ec HTTP_NON_AUTHORITATIVE,
+#   "203 Non-Authoritative Information"
 
 ec HTTP_NO_CONTENT,
    "204 No Content"
@@ -86,17 +88,17 @@ ec HTTP_PARTIAL,
 ec HTTP_MULTI_STATUS,
    "207 Multi-Status"                    /* RFC 4918 (WebDAV) */
 
-ec HTTP_DUPLICATE,
-   "208 Already Reported"                /* RFC 5842 (Binding Extn to WebDAV) */
+#ec HTTP_DUPLICATE,
+#   "208 Already Reported"               /* RFC 5842 (Binding Extn to WebDAV) */
 
-ec HTTP_IM_USED,
-   "226 IM Used"                         /* RFC 3229 (Delta Encoding in HTTP) */
+#ec HTTP_IM_USED,
+#   "226 IM Used"                        /* RFC 3229 (Delta Encoding in HTTP) */
 
 
 # Redirection 3xx (Further action must be taken to complete the request)
 
-ec HTTP_MULTIPLE,
-   "300 Multiple Choices"
+#ec HTTP_MULTIPLE,
+#   "300 Multiple Choices"
 
 ec HTTP_MOVED,
    "301 Moved Permanently"
@@ -104,23 +106,23 @@ ec HTTP_MOVED,
 ec HTTP_FOUND,
    "302 Found"
 
-ec HTTP_SEE_OTHER,
-   "303 See Other"
+#ec HTTP_SEE_OTHER,
+#   "303 See Other"
 
 ec HTTP_NOT_MODIFIED,
    "304 Not Modified"
 
-ec HTTP_USE_PROXY,
-   "305 Use Proxy"
+#ec HTTP_USE_PROXY,
+#   "305 Use Proxy"
 
-ec HTTP_306,
-   "306 (Unused)"                        /* Formerly "Switch Proxy" */
+#ec HTTP_306,
+#   "306 (Unused)"                       /* Formerly "Switch Proxy" */
 
-ec HTTP_TEMP_REDIRECT,
-   "307 Temporary Redirect"
+#ec HTTP_TEMP_REDIRECT,
+#   "307 Temporary Redirect"
 
-ec HTTP_PERM_REDIRECT,
-   "308 Permanent Redirect"
+#ec HTTP_PERM_REDIRECT,
+#   "308 Permanent Redirect"
 
 
 # Client Error 4xx (The request contains bad syntax or cannot be fulfilled)
@@ -131,8 +133,8 @@ ec HTTP_BAD_REQUEST,
 ec HTTP_UNAUTHORIZED,
    "401 Unauthorized"
 
-ec HTTP_PAYMENT_REQUIRED,
-   "402 Payment Required"
+#ec HTTP_PAYMENT_REQUIRED,
+#   "402 Payment Required"
 
 ec HTTP_FORBIDDEN,
    "403 Forbidden"
@@ -146,8 +148,8 @@ ec HTTP_NOT_ALLOWED,
 ec HTTP_NOT_ACCEPTABLE,
    "406 Not Acceptable"
 
-ec HTTP_PROXY_AUTH,
-   "407 Proxy Authentication Required"
+#ec HTTP_PROXY_AUTH,
+#   "407 Proxy Authentication Required"
 
 ec HTTP_TIMEOUT,
    "408 Request Timeout"
@@ -182,11 +184,11 @@ ec HTTP_BAD_RANGE,
 ec HTTP_EXPECT_FAILED,
    "417 Expectation Failed"
 
-ec HTTP_418,
-   "418 (Unused)"                        /* Formerly "I'm a teapot" (RFC 2324) */
+#ec HTTP_418,
+#   "418 (Unused)"                       /* Formerly "I'm a teapot" (RFC 2324) */
 
 ec HTTP_MISDIRECTED,
-   "421 Misdirected Request"             /* RFC 7540 (HTTP/2) */
+   "421 Misdirected Request"
 
 ec HTTP_UNPROCESSABLE,
    "422 Unprocessable Entity"
@@ -197,23 +199,23 @@ ec HTTP_LOCKED,
 ec HTTP_FAILED_DEP,
    "424 Failed Dependency"               /* RFC 4918 (WebDAV) */
 
-ec HTTP_TOO_EARLY,
-   "425 Too Early"                       /* RFC 8470 (Using Early Data) */
+#ec HTTP_TOO_EARLY,
+#   "425 Too Early"                      /* RFC 8470 (Using Early Data) */
 
 ec HTTP_UPGRADE,
    "426 Upgrade Required"
 
-ec HTTP_PRECOND_REQUIRED,
-   "428 Precondition Required"           /* RFC 6585 (Additional Status Codes) */
+#ec HTTP_PRECOND_REQUIRED,
+#   "428 Precondition Required"          /* RFC 6585 (Additional Status Codes) */
 
-ec HTTP_TOO_MANY_REQUESTS,
-   "429 Too Many Requests"               /* RFC 6585 (Additional Status Codes) */
+#ec HTTP_TOO_MANY_REQUESTS,
+#   "429 Too Many Requests"              /* RFC 6585 (Additional Status Codes) */
 
-ec HTTP_HEADERS_TOO_LARGE,
-   "431 Request Header Fields Too Large" /* RFC 6585 (Additional Status Codes) */
+#ec HTTP_HEADERS_TOO_LARGE,
+#   "431 Request Header Fields Too Large"/* RFC 6585 (Additional Status Codes) */
 
-ec HTTP_CENSORED,
-   "451 Unavailable For Legal Reasons"   /* RFC 7725 (Report Legal Obstacles) */
+#ec HTTP_CENSORED,
+#   "451 Unavailable For Legal Reasons"  /* RFC 7725 (Report Legal Obstacles) */
 
 
 # Server Error 5xx (The server is incapable of performing the request)
@@ -233,26 +235,26 @@ ec HTTP_UNAVAILABLE,
 ec HTTP_SHUTDOWN,
    "503 Service Unavailable"             /* Shutdown file vs other issues */
 
-ec HTTP_GATEWAY_TIMEOUT,
-   "504 Gateway Timeout"
+#ec HTTP_GATEWAY_TIMEOUT,
+#   "504 Gateway Timeout"
 
 ec HTTP_BAD_VERSION,
    "505 HTTP Version Not Supported"
 
-ec HTTP_VARIANT_NEGOTIATES,
-   "506 Variant Also Negotiates"         /* RFC 2295 (Transparent Content Neg) */
+#ec HTTP_VARIANT_NEGOTIATES,
+#   "506 Variant Also Negotiates"        /* RFC 2295 (Transparent Content Neg) */
 
 ec HTTP_NO_STORAGE,
    "507 Insufficient Storage"            /* RFC 4918 (WebDAV) */
 
-ec HTTP_LOOP,
-   "508 Loop Detected"                   /* RFC 5842 (Binding Extn to WebDAV) */
+#ec HTTP_LOOP,
+#   "508 Loop Detected"                  /* RFC 5842 (Binding Extn to WebDAV) */
 
-ec HTTP_NOT_EXTENDED,
-   "510 Not Extended"                    /* RFC 2774 (An HTTP Extn Framework) */
+#ec HTTP_NOT_EXTENDED,
+#   "510 Not Extended"                   /* RFC 2774 (An HTTP Extn Framework) */
 
-ec HTTP_NETWORK_AUTH,
-   "511 Network Authentication Required" /* RFC 6585 (Additional Status Codes) */
+#ec HTTP_NETWORK_AUTH,
+#   "511 Network Authentication Required"/* RFC 6585 (Additional Status Codes) */
 
 
 end
