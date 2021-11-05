@@ -42,7 +42,8 @@
 
 error_table http
 
-# HTTP Response Status Codes (from draft-ietf-httpbis-semantics unless otherwise noted)
+# HTTP Response Status Codes
+# (from draft-ietf-httpbis-semantics unless otherwise noted)
 
 # Informational 1xx (Interim connection status or request progress)
 
@@ -246,6 +247,9 @@ ec HTTP_NO_STORAGE,
 
 ec HTTP_LOOP,
    "508 Loop Detected"                   /* RFC 5842 (Binding Extn to WebDAV) */
+
+ec HTTP_LOOP,
+   "510 Not Extended"                    /* RFC 2774 (An HTTP Extn Framework) */
 
 ec HTTP_NETWORK_AUTH,
    "511 Network Authentication Required" /* RFC 6585 (Additional Status Codes) */
