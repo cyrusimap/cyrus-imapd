@@ -1197,7 +1197,7 @@ EXPORTED int index_fetch(struct index_state *state,
 
     if (fetchargs->vanished) {
         struct vanished_params v;
-        v.sequence = sequence;;
+        v.sequence = sequence;
         v.uidvalidity = state->mailbox->i.uidvalidity;
         v.modseq = fetchargs->changedsince;
         v.match_seq = fetchargs->match_seq;

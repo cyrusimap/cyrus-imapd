@@ -7255,7 +7255,7 @@ static void split_user_mailboxes(const char *key __attribute__((unused)),
     struct split_user_mailboxes_rock *smrock =
         (struct split_user_mailboxes_rock *) rock;
     struct sync_action_list *mailbox_list = (struct sync_action_list *) data;
-    struct sync_name_list *mboxname_list = sync_name_list_create();;
+    struct sync_name_list *mboxname_list = sync_name_list_create();
     struct sync_action *action;
 
     for (action = mailbox_list->head; action; action = action->next) {

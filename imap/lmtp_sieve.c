@@ -1768,7 +1768,7 @@ static int sieve_duplicate_check(void *dc,
 {
     sieve_duplicate_context_t *dtc = (sieve_duplicate_context_t *) dc;
     script_data_t *sd = (script_data_t *) sc;
-    time_t t, now = time(NULL);;
+    time_t t, now = time(NULL);
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
 
     dkey.id = dtc->id;

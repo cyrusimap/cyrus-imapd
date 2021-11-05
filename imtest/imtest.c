@@ -2425,7 +2425,7 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
     int inlen;
     const char *mechusing;
     char buf[BASE64_BUF_SIZE+1], *base64 = buf;
-    int initial_response = 1, do_base64 = 1, use_params = 0;;
+    int initial_response = 1, do_base64 = 1, use_params = 0;
     imt_stat status;
     char *username;
     unsigned int userlen;

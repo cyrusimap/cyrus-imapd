@@ -1081,7 +1081,7 @@ static int compute_tzoffset(char *str, int len, int sign)
         if (ch == 'J')
             return 0;
         if (ch <= 'M')
-            return (str[0] - 'A') * 60;;
+            return (str[0] - 'A') * 60;
         if (ch < 'Z')
             return ('M' - str[0]) * 60;
 
