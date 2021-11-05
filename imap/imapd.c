@@ -5016,7 +5016,7 @@ badannotation:
                         eatline(imapd_in, c);
                         goto freeargs;
                     }
-                    lcase(fieldname.s);;
+                    lcase(fieldname.s);
                     /* 19 is magic number -- length of
                      * "RFC822.HEADERS.NOT" */
                     strarray_append(strlen(fetchatt.s) == 19 ?

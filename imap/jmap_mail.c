@@ -13362,7 +13362,7 @@ static void _email_copy_validate_props(json_t *jemail, json_t **err)
     struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
 
     /* Validate properties */
-    json_t *prop, *id = NULL, *mailboxids = NULL;;
+    json_t *prop, *id = NULL, *mailboxids = NULL;
     const char *pname;
     json_object_foreach(jemail, pname, prop) {
         if (!strcmp(pname, "id")) {
