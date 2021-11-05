@@ -317,7 +317,9 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 
     jmap_emailsubmission_init(settings);
     jmap_mailbox_init(settings);
+#ifdef USE_SIEVE
     jmap_vacation_init(settings);
+#endif
 }
 
 HIDDEN void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTopLevel)

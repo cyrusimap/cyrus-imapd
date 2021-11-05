@@ -575,13 +575,13 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_mail_capabilities(capas, mayCreateTopLevel);
         jmap_emailsubmission_capabilities(capas);
         jmap_mdn_capabilities(capas);
-        jmap_vacation_capabilities(capas);
         jmap_contact_capabilities(capas);
         jmap_calendar_capabilities(capas);
         jmap_backup_capabilities(capas);
         jmap_notes_capabilities(capas);
 #ifdef USE_SIEVE
         jmap_sieve_capabilities(capas);
+        jmap_vacation_capabilities(capas);
 #endif
     }
     else {
