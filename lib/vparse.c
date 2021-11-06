@@ -957,7 +957,7 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
         }
 
         if (!strcasecmp(param->name, "VALUE")) {
-            is_uri = !strcasecmp(param->value, "uri") ? 1 : 0;
+            is_uri = !strcasecmp(param->value, "uri");
         }
     }
 
@@ -975,14 +975,11 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
     }
     else {
         const struct prop_encode *prop;
-        int encode = 1;
+        int encode = 1;  /* default to encoding */
 
         for (prop = prop_encode_map; prop->name; prop++) {
             if (!strcasecmp(prop->name, entry->name)) {
-                if (prop->encode == -1)
-                    encode = (is_uri == 0);
-                else
-                    encode = prop->encode;
+                encode = (prop->encode == -1) ? !is_uri : prop->encode;
                 break;
             }
         }
