@@ -9,7 +9,7 @@ We need to develop not just for ourselves, but for those who follow us. This mea
 Coding Style
 ============
 
-* Unix style: CRLF line endings.
+* Unix style: LF line endings.
 * No trailing spaces.
 * No tabs: use 4 spaces instead.
 * Bracketing style: use the style that's already there.
