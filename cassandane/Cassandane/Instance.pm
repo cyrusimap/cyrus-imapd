@@ -626,6 +626,7 @@ sub _build_skeleton
         'conf/log/cassandane',
         'conf/log/user2',
         'conf/log/foo',
+        'conf/log/mailproxy',
         'conf/log/mupduser',
         'conf/log/postman',
         'conf/log/repluser',
