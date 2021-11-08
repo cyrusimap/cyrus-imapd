@@ -5253,14 +5253,6 @@ int meth_get_head(struct transaction_t *txn, void *params)
         return HTTP_NO_CONTENT;
     }
 
-    if (!txn->req_tgt.resource) {
-        /* Do any collection processing */
-        if (gparams->get) return gparams->get(txn, NULL, NULL, NULL, NULL);
-
-        /* We don't handle GET on a collection */
-        return HTTP_NO_CONTENT;
-    }
-
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if ((rights & DACL_READ) != DACL_READ) {
@@ -5278,6 +5270,14 @@ int meth_get_head(struct transaction_t *txn, void *params)
             mime = get_accept_type(hdr, gparams->mime_types);
         else mime = gparams->mime_types;
         if (!mime) return HTTP_NOT_ACCEPTABLE;
+    }
+
+    if (!txn->req_tgt.resource) {
+        /* Do any collection processing */
+        if (gparams->get) return gparams->get(txn, NULL, NULL, NULL, NULL);
+
+        /* We don't handle GET on a collection */
+        return HTTP_NO_CONTENT;
     }
 
     if (txn->req_tgt.mbentry->server) {
