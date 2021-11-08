@@ -75,7 +75,7 @@ sub populate_user
 {
     my ($self, $instance, $store, $folders) = @_;
 
-    my $messages = {};
+    my $created = {};
 
     my @specialuse = qw(Drafts Junk Sent Trash);
 
@@ -85,14 +85,16 @@ sub populate_user
         # create some messages
         foreach my $n (1 .. 20) {
             my $msg = $self->make_message("Message $n", store => $store);
-            $messages->{$folder}->{messages}->{$msg->uid()} = $msg;
+            $created->{mailboxes}->{$folder}->{messages}->{$msg->uid()} = $msg;
         }
 
         # fizzbuzz some flags
         my $talk = $store->get_client();
         $talk->select($folder);
         my $n = 1;
-        while (my ($uid, $msg) = each %{$messages->{$folder}->{messages}}) {
+        while (my ($uid, $msg)
+                = each %{$created->{mailboxes}->{$folder}->{messages}})
+        {
             my @flags;
 
             if ($n % 3 == 0) {
@@ -118,7 +120,7 @@ sub populate_user
 
         # make sure the messages are as expected
         $store->set_fetch_attributes('uid', 'flags');
-        $self->check_messages($messages->{$folder}->{messages},
+        $self->check_messages($created->{mailboxes}->{$folder}->{messages},
                               store => $store,
                               check_guid => 0,
                               keyed_on => 'uid');
@@ -131,11 +133,11 @@ sub populate_user
             $talk->setmetadata($folder, '/private/specialuse', "\\$suflag");
             $self->assert_str_equals('ok',
                                      $talk->get_last_completion_response());
-            $messages->{$folder}->{specialuse} = "\\$suflag";
+            $created->{mailboxes}->{$folder}->{specialuse} = "\\$suflag";
         }
     }
 
-    return $messages;
+    return $created;
 }
 
 # check that the contents of the store match the data returned by
@@ -146,15 +148,15 @@ sub check_user
 
     die "bad expected hash" if ref $expected ne 'HASH';
 
-    foreach my $folder (keys %{$expected}) {
+    foreach my $folder (keys %{$expected->{mailboxes}}) {
         $store->set_folder($folder);
         $store->set_fetch_attributes('uid', 'flags');
-        $self->check_messages($expected->{$folder}->{messages},
+        $self->check_messages($expected->{mailboxes}->{$folder}->{messages},
                               store => $store,
                               check_guid => 0,
                               keyed_on => 'uid');
 
-        my $specialuse = $expected->{$folder}->{specialuse};
+        my $specialuse = $expected->{mailboxes}->{$folder}->{specialuse};
         if ($specialuse) {
             my $talk = $store->get_client();
             my $res = $talk->getmetadata($folder, '/private/specialuse');
@@ -969,8 +971,9 @@ sub test_xfer_mailbox_altns_unixhs
     );
 
     # we're planning to only XFER "Big/Red" (but not the others!)
-    my $expected_move->{'Big/Red'} = $expected_stay->{'Big/Red'};
-    delete $expected_stay->{'Big/Red'};
+    my $expected_move->{mailboxes}->{'Big/Red'}
+        = $expected_stay->{mailboxes}->{'Big/Red'};
+    delete $expected_stay->{mailboxes}->{'Big/Red'};
 
     my $imaptalk = $self->{backend1_store}->get_client();
     my $admintalk = $self->{backend1_adminstore}->get_client();
