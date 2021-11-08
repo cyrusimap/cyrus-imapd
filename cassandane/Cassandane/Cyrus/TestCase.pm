@@ -44,6 +44,8 @@ use attributes;
 use Data::Dumper;
 use Scalar::Util qw(refaddr);
 use List::Util qw(uniq);
+use Digest::file qw(digest_file_hex);
+use File::Temp qw(tempfile);
 
 use lib '.';
 use base qw(Cassandane::Unit::TestCase);
@@ -1376,6 +1378,82 @@ sub assert_mailbox_structure
             "'$mailbox': found unexpected extra mailbox"
         );
     }
+}
+
+sub assert_sieve_exists
+{
+    my ($self, $instance, $user, $scriptname, $bc_only) = @_;
+
+    my $sieve_dir = $instance->get_sieve_script_dir($user);
+
+    $self->assert(( -f "$sieve_dir/$scriptname.bc" ));
+
+    if ($bc_only == 0) {
+        $self->assert(( -f "$sieve_dir/$scriptname.script" ));
+    }
+}
+
+sub assert_sieve_not_exists
+{
+    my ($self, $instance, $user, $scriptname, $bc_only) = @_;
+
+    my $sieve_dir = $instance->get_sieve_script_dir($user);
+
+    $self->assert(( ! -f "$sieve_dir/$scriptname.bc" ));
+
+    if ($bc_only == 0) {
+        $self->assert(( ! -f "$sieve_dir/$scriptname.script" ));
+    }
+}
+
+sub assert_sieve_active
+{
+    my ($self, $instance, $user, $scriptname) = @_;
+
+    my $sieve_dir = $instance->get_sieve_script_dir($user);
+
+    $self->assert(( -l "$sieve_dir/defaultbc" ));
+    $self->assert_str_equals("$scriptname.bc", readlink "$sieve_dir/defaultbc");
+}
+
+sub assert_sieve_noactive
+{
+    my ($self, $instance, $user) = @_;
+
+    my $sieve_dir = $instance->get_sieve_script_dir($user);
+
+    $self->assert(( ! -e "$sieve_dir/defaultbc" ),
+                  "$sieve_dir/defaultbc exists");
+    $self->assert(( ! -l "$sieve_dir/defaultbc" ),
+                  "dangling $sieve_dir/defaultbc symlink exists");
+}
+
+sub assert_sieve_matches
+{
+    my ($self, $instance, $user, $scriptname, $scriptcontent) = @_;
+
+    my $sieve_dir = $instance->get_sieve_script_dir($user);
+
+    my $bcname = "$sieve_dir/$scriptname.bc";
+
+    $self->assert(( -f $bcname ));
+
+    # compile $scriptcontent and compare digests of bytecode
+    my (undef, $tmp) = tempfile('scriptXXXXX', OPEN => 0,
+                                DIR => $instance->{basedir} . "/tmp");
+    open my $f, '>', $tmp or die "open: $!";
+    print $f $scriptcontent;
+    close $f;
+
+    my (undef, $filename) = tempfile('tmpXXXXXX', OPEN => 0,
+        DIR => $instance->{basedir} . "/tmp");
+
+    $instance->run_command({ redirects => {stdin => \$scriptcontent},
+                             cyrus => 1,
+                           },
+                           'sievec', $tmp, "$filename");
+    $self->assert_str_equals(digest_file_hex($bcname, "MD5"),
+                             digest_file_hex($filename, "MD5"));
 }
 
 1;
