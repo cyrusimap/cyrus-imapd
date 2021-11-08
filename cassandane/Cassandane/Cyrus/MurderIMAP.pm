@@ -45,6 +45,7 @@ use Data::Dumper;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Words;
 use Cassandane::Instance;
 
 $Data::Dumper::Sortkeys = 1;
@@ -137,6 +138,21 @@ sub populate_user
         }
     }
 
+    # XXX ought to be conditional on whether $instance was built with sieve
+    # XXX support, but Cassandane::BuildInfo doesn't currently support
+    # XXX choosing an instance to ask about...
+    my $scriptname = random_word();
+    my $scriptcontent = 'keep;';
+
+    $instance->install_sieve_script($scriptcontent,
+                                    name => $scriptname,
+                                    username => $store->{username});
+    $self->assert_sieve_exists($instance, $store->{username}, $scriptname);
+    $self->assert_sieve_active($instance, $store->{username}, $scriptname);
+
+    $created->{sieve}->{scripts}->{$scriptname} = $scriptcontent;
+    $created->{sieve}->{active} = $scriptname;
+
     return $created;
 }
 
@@ -166,6 +182,21 @@ sub check_user
 
             $self->assert_str_equals($specialuse,
                                      $res->{$folder}->{'/private/specialuse'});
+        }
+    }
+
+    if (exists $expected->{sieve}) {
+        while (my ($scriptname, $scriptcontent)
+               = each %{$expected->{sieve}->{scripts}})
+        {
+            $self->assert_sieve_exists($instance, $store->{username},
+                                       $scriptname, 1);
+            $self->assert_sieve_matches($instance, $store->{username},
+                                        $scriptname, $scriptcontent);
+        }
+        if ($expected->{sieve}->{active}) {
+            $self->assert_sieve_active($instance, $store->{username},
+                                       $expected->{sieve}->{active});
         }
     }
 }
