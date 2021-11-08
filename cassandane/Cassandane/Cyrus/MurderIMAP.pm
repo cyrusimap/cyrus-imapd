@@ -73,7 +73,7 @@ sub tear_down
 # returning a hash of what to expect to find there later
 sub populate_user
 {
-    my ($self, $store, $folders) = @_;
+    my ($self, $instance, $store, $folders) = @_;
 
     my $messages = {};
 
@@ -142,7 +142,7 @@ sub populate_user
 # populate_user()
 sub check_user
 {
-    my ($self, $store, $expected) = @_;
+    my ($self, $instance, $store, $expected) = @_;
 
     die "bad expected hash" if ref $expected ne 'HASH';
 
@@ -516,7 +516,8 @@ sub test_xfer_user_altns_unixhs
     my ($self) = @_;
 
     # set up some data for cassandane on backend1
-    my $expected = $self->populate_user($self->{backend1_store},
+    my $expected = $self->populate_user($self->{instance},
+                                        $self->{backend1_store},
                                         [qw(INBOX Drafts)]);
 
     my $imaptalk = $self->{backend1_store}->get_client();
@@ -562,7 +563,7 @@ sub test_xfer_user_altns_unixhs
     );
 
     # account contents should be on the other store now
-    $self->check_user($self->{backend2_store}, $expected);
+    $self->check_user($self->{backend2}, $self->{backend2_store}, $expected);
 
     # frontend should now say the user is on the other store
     # XXX is there a better way to discover this?
@@ -618,7 +619,8 @@ sub test_xfer_user_noaltns_nounixhs
     my ($self) = @_;
 
     # set up some data for cassandane on backend1
-    my $expected = $self->populate_user($self->{backend1_store},
+    my $expected = $self->populate_user($self->{instance},
+                                        $self->{backend1_store},
                                         [qw(INBOX INBOX.Drafts)]);
 
     my $imaptalk = $self->{backend1_store}->get_client();
@@ -664,7 +666,7 @@ sub test_xfer_user_noaltns_nounixhs
     );
 
     # account contents should be on the other store now
-    $self->check_user($self->{backend2_store}, $expected);
+    $self->check_user($self->{backend2}, $self->{backend2_store}, $expected);
 
     # frontend should now say the user is on the other store
     # XXX is there a better way to discover this?
@@ -733,7 +735,9 @@ sub test_xfer_user_altns_unixhs_virtdom
         username => 'foo@example.com');
 
     # set up some data for cassandane on backend1
-    my $expected = $self->populate_user($backend1_store, [qw(INBOX Drafts)]);
+    my $expected = $self->populate_user($self->{instance},
+                                        $backend1_store,
+                                        [qw(INBOX Drafts)]);
 
     my $imaptalk = $backend1_store->get_client();
     my $backend2_servername = $self->{backend2}->get_servername();
@@ -778,7 +782,7 @@ sub test_xfer_user_altns_unixhs_virtdom
     );
 
     # account contents should be on the other store now
-    $self->check_user($backend2_store, $expected);
+    $self->check_user($self->{backend2}, $backend2_store, $expected);
 
     # frontend should now say the user is on the other store
     # XXX is there a better way to discover this?
@@ -847,7 +851,8 @@ sub test_xfer_user_noaltns_nounixhs_virtdom
         username => 'foo@example.com');
 
     # set up some data for cassandane on backend1
-    my $expected = $self->populate_user($backend1_store,
+    my $expected = $self->populate_user($self->{instance},
+                                        $backend1_store,
                                         [qw(INBOX INBOX.Drafts)]);
 
     my $imaptalk = $backend1_store->get_client();
@@ -893,7 +898,7 @@ sub test_xfer_user_noaltns_nounixhs_virtdom
     );
 
     # account contents should be on the other store now
-    $self->check_user($backend2_store, $expected);
+    $self->check_user($self->{backend2}, $backend2_store, $expected);
 
     # frontend should now say the user is on the other store
     # XXX is there a better way to discover this?
@@ -958,6 +963,7 @@ sub test_xfer_mailbox_altns_unixhs
 
     # set up some data for cassandane on backend1
     my $expected_stay = $self->populate_user(
+        $self->{instance},
         $self->{backend1_store},
         [qw(INBOX Big Big/Red Big/Red/Dog)]
     );
@@ -1013,9 +1019,13 @@ sub test_xfer_mailbox_altns_unixhs
     );
 
     # most of the account should have remained on the original backend
-    $self->check_user($self->{backend1_store}, $expected_stay);
+    $self->check_user($self->{instance},
+                      $self->{backend1_store},
+                      $expected_stay);
     # but Big/Red should have been moved
-    $self->check_user($self->{backend2_store}, $expected_move);
+    $self->check_user($self->{backend2},
+                      $self->{backend2_store},
+                      $expected_move);
 
     # frontend should now say the new mailbox locations
     # XXX is there a better way to discover this?
@@ -1077,6 +1087,7 @@ sub test_xfer_no_user_intermediates
 
     # set up some data for cassandane on backend1
     my $expected = $self->populate_user(
+        $self->{instance},
         $self->{backend1_store},
         [qw(INBOX Big Big/Red Big/Red/Dog)]
     );
@@ -1103,7 +1114,7 @@ sub test_xfer_no_user_intermediates
     }
 
     # everything should still be on the original backend
-    $self->check_user($self->{backend1_store}, $expected);
+    $self->check_user($self->{instance}, $self->{backend1_store}, $expected);
 }
 
 # XXX test_xfer_partition
