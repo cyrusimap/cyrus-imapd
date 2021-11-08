@@ -905,9 +905,9 @@ int service_init(int argc __attribute__((unused)),
     prometheus_increment(CYRUS_HTTP_READY_LISTENERS);
 
     /* Initialize Bearer JSON Web Token authentication */
-    const char *keystr = config_getstring(IMAPOPT_HTTP_JWT_KEY);
-    if (keystr) {
-        r = http_jwt_init(keystr,
+    const char *jwtpath = config_getstring(IMAPOPT_HTTP_JWT_KEY_PATH);
+    if (jwtpath) {
+        r = http_jwt_init(jwtpath,
                 config_getduration(IMAPOPT_HTTP_JWT_MAX_AGE, 's'));
     }
     else xsyslog(LOG_DEBUG, "No http_jwt_key configured", NULL);

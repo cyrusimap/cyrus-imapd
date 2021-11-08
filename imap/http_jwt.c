@@ -46,6 +46,7 @@
 #include <string.h>
 #include <syslog.h>
 
+#include <openssl/err.h>
 #include <sasl/saslutil.h>
 
 #include "assert.h"
@@ -57,7 +58,7 @@
 
 static int is_enabled = 0;
 
-static struct buf key = BUF_INITIALIZER;
+static ptrarray_t pkeys = PTRARRAY_INITIALIZER;
 
 static time_t max_age = 0;
 
@@ -70,6 +71,8 @@ struct jwt {
     const char *sig;
     size_t siglen;
 
+    int nid;
+    const EVP_MD *emd;
     struct buf buf;
 };
 
@@ -81,52 +84,167 @@ static inline int is_base64url_char(char c)
             (c == '-' || c == '_'));
 }
 
-HIDDEN int http_jwt_init(const char *keystr, int age)
+static void http_jwt_reset(void)
 {
+    EVP_PKEY *pkey;
+    while ((pkey = ptrarray_pop(&pkeys)))
+        EVP_PKEY_free(pkey);
     is_enabled = 0;
-
-    // Reset previous state
-    size_t oldlen = buf_len(&key);
-    if (oldlen) {
-        char *oldkey = buf_release(&key);
-        memset(oldkey, 0, oldlen);
-        free(oldkey);
-    }
     max_age = 0;
+}
 
-    if (!keystr) {
-        xsyslog(LOG_ERR, "Unexpected null key", NULL);
-        return HTTP_SERVER_ERROR;
+static EVP_PKEY *read_hmac_key(struct buf *b64)
+{
+    struct buf dec = BUF_INITIALIZER;
+    EVP_PKEY *pkey = NULL;
+
+    if (!charset_decode(&dec, buf_base(b64), buf_len(b64), ENCODING_BASE64)) {
+        pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, NULL,
+                (unsigned char*)buf_base(&dec), buf_len(&dec));
     }
 
-    if (strncmp(keystr, "HS256:", 6)) {
-        xsyslog(LOG_ERR, "Unexpected key algo specifier", "key=<%s>", keystr);
-        return HTTP_SERVER_ERROR;
+    buf_free(&dec);
+    return pkey;
+}
+
+static EVP_PKEY *read_public_key(struct buf *pem)
+{
+    BIO *bp = BIO_new_mem_buf(buf_base(pem), buf_len(pem));
+    EVP_PKEY *pkey = PEM_read_bio_PUBKEY(bp, NULL, NULL, NULL);
+
+    if (pkey) {
+        int nid = EVP_PKEY_base_id(pkey);
+        if (nid != EVP_PKEY_RSA) {
+            xsyslog(LOG_ERR, "Unsupported public key",
+                    "type=<%s>", OBJ_nid2ln(nid));
+            EVP_PKEY_free(pkey);
+            pkey = NULL;
+        }
     }
 
-    if (charset_decode(&key, keystr + 6, strlen(keystr) - 6, ENCODING_BASE64URL)) {
-        xsyslog(LOG_ERR, "Invalid base64url key", "key=<%s>", keystr);
-        return HTTP_SERVER_ERROR;
+    BIO_free(bp);
+    return pkey;
+}
+
+static void read_keys(const char *fname, ptrarray_t *keys)
+{
+    struct buf line = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+    enum state { NONE, PUBLIC, HMAC } state = NONE;
+    size_t linenum = 0;
+    int valid = 0;
+
+    FILE *fp = fopen(fname, "r");
+    if (!fp) {
+        xsyslog(LOG_ERR, "Cannot open key file", "fname=<%s>", fname);
+        goto done;
     }
 
-    static const size_t HS256_MINLEN = 32; // see RFC 2104, section 3
-    static const size_t HS256_MAXLEN = 64;
+    while (buf_getline(&line, fp)) {
+        linenum++;
 
-    if (buf_len(&key) < HS256_MINLEN || buf_len(&key) > HS256_MAXLEN) {
-        xsyslog(LOG_ERR, "Key length outside allowed range",
-                "range=<[%zu:%zu]> keylength=<%zu>",
-                HS256_MINLEN, HS256_MAXLEN, buf_len(&key));
-        return HTTP_SERVER_ERROR;
+        buf_trim(&line);
+        if (!buf_len(&line))
+            continue;
+
+        if (!strcmp("-----BEGIN PUBLIC KEY-----", buf_cstring(&line))) {
+            if (state != NONE) {
+                xsyslog(LOG_ERR, "Unexpected line", "linenum=<%zu>", linenum);
+                goto done;
+            }
+            buf_append(&buf, &line);
+            buf_putc(&buf, '\n');
+            state = PUBLIC;
+            continue;
+        }
+
+        if (!strcmp("-----END PUBLIC KEY-----", buf_cstring(&line))) {
+            if (state != PUBLIC) {
+                xsyslog(LOG_ERR, "Unexpected line", "linenum=<%zu>", linenum);
+                goto done;
+            }
+            buf_append(&buf, &line);
+            buf_putc(&buf, '\n');
+
+            EVP_PKEY *pkey = read_public_key(&buf);
+            if (!pkey) {
+                xsyslog(LOG_ERR, "Invalid public key", "linenum=<%zu>", linenum);
+                goto done;
+            }
+            ptrarray_append(keys, pkey);
+
+            buf_reset(&buf);
+            state = NONE;
+            continue;
+        }
+
+        if (!strcmp("-----BEGIN HMAC KEY-----", buf_cstring(&line))) {
+            if (state != NONE) {
+                xsyslog(LOG_ERR, "Unexpected line", "linenum=<%zu>", linenum);
+                goto done;
+            }
+            state = HMAC;
+            continue;
+        }
+
+        if (!strcmp("-----END HMAC KEY-----", buf_cstring(&line))) {
+            if (state != HMAC) {
+                xsyslog(LOG_ERR, "Unexpected line", "linenum=<%zu>", linenum);
+                goto done;
+            }
+
+            EVP_PKEY *pkey = read_hmac_key(&buf);
+            if (!pkey) {
+                xsyslog(LOG_ERR, "Invalid hmac key", "linenum=<%zu>", linenum);
+                goto done;
+            }
+            ptrarray_append(keys, pkey);
+
+            buf_reset(&buf);
+            state = NONE;
+            continue;
+        }
+
+        if (state == NONE)
+            continue;
+
+        buf_append(&buf, &line);
+        buf_putc(&buf, '\n');
     }
+
+    valid = 1;
+
+done:
+    if (fp) fclose(fp);
+    if (!valid) {
+        EVP_PKEY *pkey;
+        while ((pkey = ptrarray_pop(keys)))
+            EVP_PKEY_free(pkey);
+    }
+    buf_free(&buf);
+    buf_free(&line);
+}
+
+HIDDEN int http_jwt_init(const char *fname, int age)
+{
+    http_jwt_reset();
+
+    if (!fname)
+        return 0;
 
     if (age < 0) {
         xsyslog(LOG_ERR, "Maximum age must not be negative", "age=<%d>", age);
-        return HTTP_SERVER_ERROR;
+        return -1;
     }
     max_age = age;
 
-    is_enabled = 1;
+    read_keys(fname, &pkeys);
+    if (!ptrarray_size(&pkeys)) {
+        xsyslog(LOG_ERR, "No keys found", "fname=<%s>", fname);
+        return -1;
+    }
 
+    is_enabled = 1;
     return 0;
 }
 
@@ -174,31 +292,77 @@ static int validate_signature(struct jwt *jwt)
 {
     buf_reset(&jwt->buf);
 
-    const char *k = buf_base(&key);
-    int klen = buf_len(&key);
-    const unsigned char *d = (const unsigned char*) jwt->joh;
-    int dlen = jwt->johlen + jwt->jwslen + 1;
-    unsigned char md[EVP_MAX_MD_SIZE];
-    unsigned int mdlen = 0;
-
-    assert(k && klen);
-
-    if (!HMAC(EVP_sha256(), k, klen, d, dlen, md, &mdlen) || !mdlen) {
-        xsyslog(LOG_ERR, "Cannot generate HMAC", NULL);
-        return 0;
-    }
-
     if (charset_decode(&jwt->buf, jwt->sig, jwt->siglen, ENCODING_BASE64URL)) {
         xsyslog(LOG_ERR, "Cannot decode token signature", NULL);
         return 0;
     }
 
-    if (mdlen != buf_len(&jwt->buf) || memcmp(md, buf_base(&jwt->buf), mdlen)) {
-        xsyslog(LOG_ERR, "Token signature does not match HMAC", NULL);
-        return 0;
+    const unsigned char *tok = (const unsigned char*) jwt->joh;
+    size_t toklen = jwt->johlen + jwt->jwslen + 1;
+    const char *sig = buf_cstring(&jwt->buf);
+    size_t siglen = buf_len(&jwt->buf);
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    int ret = 0;
+
+    int i;
+    for (i = 0; i < ptrarray_size(&pkeys); i++) {
+        EVP_PKEY *pkey = ptrarray_nth(&pkeys, i);
+        EVP_MD_CTX_reset(ctx);
+
+        if (jwt->nid != EVP_PKEY_base_id(pkey))
+            continue;
+
+        if (jwt->nid == EVP_PKEY_HMAC) {
+            unsigned char md[EVP_MAX_MD_SIZE];
+            size_t mdlen = sizeof(md);
+
+            int r = EVP_DigestSignInit(ctx, NULL, jwt->emd, NULL, pkey);
+            if (r != 1) {
+                xsyslog(LOG_ERR, "Cannot initialize digest context",
+                        "sslerr=<%s>", ERR_error_string(r, NULL));
+                continue;
+            }
+
+            r = EVP_DigestSignUpdate(ctx, tok, toklen);
+            if (r != 1) {
+                xsyslog(LOG_ERR, "Cannot update digest context",
+                        "sslerr=<%s>", ERR_error_string(r, NULL));
+                continue;
+            }
+
+            r = EVP_DigestSignFinal(ctx, md, &mdlen);
+            if (r != 1) {
+                xsyslog(LOG_ERR, "Cannot finalize digest context",
+                        "sslerr=<%s>", ERR_error_string(r, NULL));
+                continue;
+            }
+
+            if (mdlen == siglen && !CRYPTO_memcmp(md, sig, mdlen)) {
+                ret = 1;
+                break;
+            }
+        }
+        else {
+            int r = EVP_DigestVerifyInit(ctx, NULL, jwt->emd, NULL, pkey);
+            if (r != 1) {
+                xsyslog(LOG_ERR, "Cannot initialize verify context",
+                        "sslerr=<%s>", ERR_error_string(r, NULL));
+                continue;
+            }
+
+            r = EVP_DigestVerifyUpdate(ctx, tok, toklen);
+            if (r != 1) {
+                xsyslog(LOG_ERR, "Cannot update verify context",
+                        "sslerr=<%s>", ERR_error_string(r, NULL));
+                continue;
+            }
+
+            ret = EVP_DigestVerifyFinal(ctx, (const unsigned char*)sig, siglen) == 1;
+        }
     }
 
-    return 1;
+    EVP_MD_CTX_free(ctx);
+    return ret;
 }
 
 static int validate_header(struct jwt *jwt)
@@ -212,7 +376,7 @@ static int validate_header(struct jwt *jwt)
 
     int ret = 0;
 
-    json_t *joh = json_loads(buf_cstring(&jwt->buf), 0, NULL);
+    json_t *joh = json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
     if (json_object_size(joh) != 2) {
         xsyslog(LOG_ERR, "Unexpected JOSE header structure", NULL);
         goto done;
@@ -224,9 +388,30 @@ static int validate_header(struct jwt *jwt)
         goto done;
     }
 
-    // also rejects the "none" algo
     const char *alg = json_string_value(json_object_get(joh, "alg"));
-    if (strcmpsafe(alg, "HS256")) {
+    jwt->nid = EVP_PKEY_NONE;
+    jwt->emd = NULL;
+
+    if (alg && strlen(alg) == 5 && alg[1] == 'S') {
+        switch (alg[0]) {
+            case 'H':
+                jwt->nid = EVP_PKEY_HMAC;
+                break;
+            case 'R':
+                jwt->nid = EVP_PKEY_RSA;
+                break;
+            default:
+                ;
+        }
+
+        if (!strcmp(&alg[2], "256"))
+            jwt->emd = EVP_sha256();
+        else if (!strcmp(&alg[2], "384"))
+            jwt->emd = EVP_sha384();
+        else if (!strcmp(&alg[2], "512"))
+            jwt->emd = EVP_sha512();
+    }
+    if (jwt->nid == EVP_PKEY_NONE || !jwt->emd) {
         xsyslog(LOG_ERR, "Invalid \"alg\" claim", "alg=<%s>", alg);
         goto done;
     }
@@ -249,7 +434,7 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
 
     int ret = 0;
 
-    json_t *jws = json_loads(buf_cstring(&jwt->buf), 0, NULL);
+    json_t *jws = json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
     if (!json_object_size(jws) || json_object_size(jws) > 2) {
         xsyslog(LOG_ERR, "Unexpected JWS payload structure", NULL);
         goto done;
@@ -321,10 +506,10 @@ HIDDEN int http_jwt_auth(const char *in, size_t inlen, char *out, size_t outlen)
     if (!parse_token(&jwt, in, inlen))
         goto done;
 
-    if (!validate_signature(&jwt))
+    if (!validate_header(&jwt))
         goto done;
 
-    if (!validate_header(&jwt))
+    if (!validate_signature(&jwt))
         goto done;
 
     if (!validate_payload(&jwt, out, outlen))

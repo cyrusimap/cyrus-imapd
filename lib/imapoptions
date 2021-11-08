@@ -1075,28 +1075,30 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If set, HTTP/2 (over TLS) will be advertised as being available on the specifed
    [host]:port. */
 
-{ "http_jwt_key", NULL, STRING, "UNRELEASED" }
-/* If set, this option enables authentication of JSON Web Tokens (RFC 7519)
-   for HTTP connections. The token must be the payload of the HTTP
-   "Authorization" header, using the "Bearer" authentication scheme. Only
-   validation of authentication requests is supported, there is no
-   support to generate tokens.
+{ "http_jwt_key_path", NULL, STRING, "UNRELEASED" }
+/* The absolute path to a file containing one or more keys to
+   authenticate JSON Web Tokens (RFC 7519) for HTTP connections. The
+   token must be the value of the HTTP "Authorization" header, using
+   the "Bearer" authentication scheme. Only validation of authentication
+   requests is supported, there is no support to generate tokens.
+   The following JWS algorithms are supported: "HS256", "HS384", "HS512",
+   "RS256", "RS384", "RS512".
 
-   The option value must have the following format:
+   A key file consists of one or more keys encoded in PEM format.
+   RSA keys must be embedded between the lines
+      "-----BEGIN PUBLIC KEY-----" and "-----END PUBLIC KEY-----"
+   HMAC digest keys must be embedded between the lines
+     "-----BEGIN HMAC KEY-----" and "-----END HMAC KEY-----",
+   encoded in base64.
+   Any lines before or after a PEM key definition are ignored,
+   empty lines are ignored anywhere in the file.
 
-      "HS256:<b64key>"
+   The JWS Header must include the "alg" and "typ" parameter. A
+   header with any other parameter is rejected.
 
-   where "<b64key>" is the secret key to compute a SHA-256 HMAC message digest
-   (RFC 4634), encoded in "base64url" without padding (RFC 4648). The decoded
-   binary key must be between 32 and 64 bytes long inclusively (the lower limit
-   of 32 bytes is recommended in RFC 2104, section 3).
-
-   The JWT token must be a JSON Web Signature in Compact Serialization (RFC 7515)
-   format. The JOSE header "alg" parameter value must be "HS256", the "typ"
-   parameter must be "JWT". A header with any other parameter is rejected. The
-   JWS Payload must include the "sub" claim with the Cyrus user identifier as
-   value. It may include the "iat" claim (see \fIhttp_jwt_max_age\fR). A
-   payload with any other claim is rejected.
+   The JWS Payload must include the "sub" claim with the Cyrus user
+   identifier as value. It may include the "iat" claim (see \fIhttp_jwt_max_age\fR).
+   A payload with any other claim is rejected.
 */
 
 { "http_jwt_max_age", "0s", DURATION, "UNRELEASED" }
