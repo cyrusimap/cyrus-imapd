@@ -1041,6 +1041,10 @@ static int mailbox_open_advanced(const char *name,
     }
 
     r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+
+    if (!r && mbentry->mbtype & MBTYPE_DELETED)
+        r = IMAP_MAILBOX_NONEXISTENT;
+
     if (r) {
         if (mailbox->local_namespacelock)
             mboxname_release(&mailbox->local_namespacelock);
