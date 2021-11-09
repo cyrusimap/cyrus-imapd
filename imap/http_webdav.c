@@ -577,16 +577,6 @@ static int webdav_get(struct transaction_t *txn,
     struct buf *body = &txn->resp_body.payload;
     unsigned level = 0;
 
-    /* Check ACL for current user */
-    int rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if ((rights & DACL_READ) != DACL_READ) {
-        /* DAV:need-privileges */
-        txn->error.precond = DAV_NEED_PRIVS;
-        txn->error.resource = txn->req_tgt.path;
-        txn->error.rights = DACL_READ;
-        return HTTP_NO_PRIVS;
-    }
-
     struct strlist *action = hash_lookup("action", &txn->req_qparams);
     if (!action) {
         /* Send HTML with davmount link */
