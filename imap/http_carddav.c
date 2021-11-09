@@ -664,7 +664,8 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
 }
 
 
-static int export_addressbook(struct transaction_t *txn)
+static int export_addressbook(struct transaction_t *txn,
+                              struct mime_type_t *mime)
 {
     int ret = 0, r, precond;
     struct resp_body_t *resp_body = &txn->resp_body;
@@ -674,14 +675,8 @@ static int export_addressbook(struct transaction_t *txn)
     static const char *displayname_annot =
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct buf attrib = BUF_INITIALIZER;
-    const char **hdr, *sep = "";
-    struct mime_type_t *mime = NULL;
+    const char *sep = "";
 
-    /* Check requested MIME type:
-       1st entry in carddav_mime_types array MUST be default MIME type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
-        mime = get_accept_type(hdr, carddav_mime_types);
-    else mime = carddav_mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     /* Open mailbox for reading */
@@ -750,6 +745,7 @@ static int export_addressbook(struct transaction_t *txn)
     else buf_reset(buf);
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
+    unsigned want_ver = (mime->version[0] == '4') ? 4 : 3;
     struct mailbox_iter *iter =
         mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
 
@@ -762,6 +758,15 @@ static int export_addressbook(struct transaction_t *txn)
         vcard = record_to_vcard(mailbox, record);
 
         if (vcard) {
+            struct vparse_entry *ventry =
+                vparse_get_entry(vcard, NULL, "version");
+            unsigned version = (ventry && ventry->v.value[0] == '4') ? 4 : 3;
+
+            if (version != want_ver) {
+                if (want_ver == 4) vcard_to_v4(vcard);
+                else vcard_to_v3(vcard);
+            }
+
             if (r++ && *sep) {
                 /* Add separator, if necessary */
                 buf_reset(buf);
@@ -1137,7 +1142,7 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
     if (txn->req_tgt.collection) {
         /* Download an entire addressbook collection */
-        return export_addressbook(txn);
+        return export_addressbook(txn, mime);
     }
     else if (txn->req_tgt.userid &&
              config_getswitch(IMAPOPT_CARDDAV_ALLOWADDRESSBOOKADMIN)) {
