@@ -3209,7 +3209,7 @@ static int remove_cb(const char *sievedir, const char *fname,
                      void *rock)
 {
     strarray_t *list = (strarray_t *) rock;
-    char path[PATH_MAX];
+    char path[PATH_MAX] = "";
     size_t namelen;
 
     if (strarray_size(list)) {
