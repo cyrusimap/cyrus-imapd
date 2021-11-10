@@ -258,11 +258,11 @@ EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
 {
     icalcomponent *ical = NULL;
     struct index_record record;
-    int r;
 
     /* Fetch index record for the cal resource */
-    r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-    if (r) return NULL;
+    if (mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record)) {
+        return NULL;
+    }
 
     ical = record_to_ical(mailbox, &record, schedule_addresses);
 
