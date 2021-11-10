@@ -53,6 +53,8 @@
 
 EXPORTED const char lock_method_desc[] = "flock";
 
+EXPORTED double debug_locks_longer_than = 0.0;
+
 /*
  * Block until we obtain an exclusive lock on the file descriptor 'fd',
  * opened for reading and writing on the file named 'filename'.  If
