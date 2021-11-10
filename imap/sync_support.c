@@ -3192,8 +3192,14 @@ static int list_cb(void *rock, struct sieve_data *sdata)
 
     if (sdata->isactive)
         strarray_set(list, 0, sdata->name);
-    else
+    else {
+        if (!strarray_size(list)) {
+            /* Create an empty placeholder for active script as first element */
+            strarray_set(list, 0, NULL);
+        }
+
         strarray_append(list, sdata->name);
+    }
 
     return 0;
 }
@@ -3498,9 +3504,6 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     const char *sieve_path = user_sieve_path(userid);
     struct sieve_db *db = sievedb_open_userid(userid);
     strarray_t list = STRARRAY_INITIALIZER;
-
-    /* Create empty placeholder for active script (always first element) */
-    strarray_set(&list, 0, NULL);
 
     if (db) {
         /* Build a list of scripts */
