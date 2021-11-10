@@ -1,0 +1,192 @@
+#!/usr/bin/perl
+# A little ldif-driven ldap server
+#
+# Based somewhat on Net::LDAP::Server::Test, which didn't do the
+# one thing I specifically needed, but nor was subclassable. :/
+
+use warnings;
+use strict;
+
+# embedded package, so that we needn't care about LIB paths
+{
+    package Cassandane::FakeLDAP;
+
+    use Data::Dumper;
+    use Net::LDAP::Constant qw(
+        LDAP_SUCCESS
+        LDAP_NO_SUCH_OBJECT
+    );
+    use Net::LDAP::Filter;
+    use Net::LDAP::FilterMatch;
+    use Net::LDAP::Server;
+    use Net::LDAP::Util qw(
+        canonical_dn
+        ldap_explode_dn
+    );
+
+    use base qw(Net::LDAP::Server);
+    use fields qw(data debug);
+
+    sub new
+    {
+        my ($class, $sock, $data) = @_;
+        my $self = $class->SUPER::new($sock);
+        $self->{data} = $data;
+        $self->{debug} = 0;
+        return $self;
+    }
+
+    sub set_debug
+    {
+        my ($self, $value) = @_;
+        $self->{debug} = $value;
+    }
+
+    sub debug
+    {
+        my $self = shift;
+        return if not $self->{debug};
+        print STDERR @_;
+    }
+
+    sub ldap_result
+    {
+        my ($dn, $error, $result, @entries) = @_;
+        if (scalar @entries) {
+            return { matchedDN => $dn,
+                     errorMessage => $error,
+                     resultCode => $result },
+                   @entries;
+        }
+        else {
+            return { matchedDN => $dn,
+                     errorMessage => $error,
+                     resultCode => $result };
+        }
+    }
+
+    sub bind
+    {
+        my ($self, $reqdata, $reqmsg) = @_;
+        # don't care, just accept it
+        return ldap_result('', '', LDAP_SUCCESS);
+    }
+
+    sub search
+    {
+        my ($self, $reqdata, $reqmsg) = @_;
+
+        my $scope = $reqdata->{scope};
+        my $base = canonical_dn($reqdata->{baseObject});
+        my $filter = bless($reqdata->{filter}, 'Net::LDAP::Filter');
+        my %attrs = map { $_ => 1 } @{ $reqdata->{attributes} || [] };
+        my @found;
+
+        foreach my $dn (keys %{$self->{data}}) {
+            # assume scope=sub(2), narrow further in a moment
+            next if $base and not $dn =~ m/$base$/;
+
+            if ($scope == 0) {
+                # base
+                next if $dn ne $base;
+            }
+            elsif ($scope == 1) {
+                # one
+                my $dn_depth = scalar @{ ldap_explode_dn($dn) };
+                my $base_depth = scalar @{ ldap_explode_dn($base) };
+
+                next if $dn_depth != $base_depth + 1;
+            }
+            elsif ($scope == 3) {
+                # subordinate
+                next if $dn eq $base;
+            }
+
+            my $entry = $self->{data}->{$dn}->clone();
+            next if not $filter->match($entry);
+
+            if (scalar keys %attrs) {
+                foreach my $a ($entry->attributes()) {
+                    if (not exists $attrs{$a}) {
+                        $entry->delete($a => []);
+                    }
+                }
+            }
+
+            push @found, $entry;
+        }
+
+        $self->debug(map { $_->ldif(change => 0) } @found);
+
+        if ($scope == 0 && scalar @found == 0) {
+            return ldap_result('', '', LDAP_NO_SUCH_OBJECT);
+        }
+
+        return ldap_result('', '', LDAP_SUCCESS, @found);
+    }
+};
+
+package main;
+
+use Data::Dumper;
+use Getopt::Std;
+use IO::Select;
+use IO::Socket;
+use Net::LDAP::LDIF;
+use Net::LDAP::Util qw(canonical_dn);
+
+my %opts;
+my %data;
+
+getopts("C:dl:p:v", \%opts);
+
+die "need a port" if not int($opts{p} // 0);
+die "need an ldif file" if not $opts{l} or not -f $opts{l};
+
+my $ldif = Net::LDAP::LDIF->new($opts{l});
+while (not $ldif->eof()) {
+    my $entry = $ldif->read_entry();
+    my $cdn = canonical_dn($entry->dn);
+    $data{$cdn} = $entry;
+}
+die "ldif file contained no entries" if not scalar keys %data;
+
+# ok, we're good. background ourselves
+if (not $opts{d} and not $ENV{CYRUS_ISDAEMON}) {
+    my $pid = fork;
+    die "unable to fork: $!" if not defined $pid;
+    exit(0) if $pid != 0; # bye bye parent
+}
+
+my $listen = IO::Socket::INET->new(Listen => 1,
+                                   LocalPort => $opts{p},
+                                   ReuseAddr => 1);
+die "could not bind port $opts{p}: $!\n" if not $listen;
+my $select = IO::Select->new($listen);
+my %handlers;
+my $shutdown = 0;
+
+$SIG{HUP} = sub { $shutdown++; };
+
+while (my @ready = $select->can_read()) {
+    foreach my $fh (@ready) {
+        if ($fh == $listen) {
+            my $sock = $listen->accept();
+            $handlers{*$sock} = Cassandane::FakeLDAP->new($sock, \%data);
+            $handlers{*$sock}->set_debug(1) if $opts{d};
+            $select->add($sock);
+        }
+        else {
+            die "no handler???" if not exists $handlers{*$fh};
+            my $finished = $handlers{*$fh}->handle();
+
+            # if we've finished with the socket, close it
+            if ($finished) {
+                delete $handlers{*$fh};
+                $select->remove($fh);
+                close $fh;
+            }
+        }
+    }
+    last if $shutdown;
+}

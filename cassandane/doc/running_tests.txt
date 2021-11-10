@@ -1,0 +1,161 @@
+Copyright (c) 2011 Opera Software Australia Pty. Ltd.  All rights reserved.
+
+This document describes how to run the Cassandane tests.
+
+Prerequisites
+-------------
+
+Before running any Cassandane tests, you need to set up Cassandane,
+Cyrus and your system.  Read the file setting_up.txt and follow the
+instructions there.
+
+Running Tests
+-------------
+
+Cassandane tests are run out of the Cassandane directory itself, without
+installing Cassandane anywhere.  This is not the result of deliberate policy so
+much as implementation laziness.
+
+All runtime state is created under the directory /var/tmp/cass/, and
+results reports are written to the current working directory.  Apart from
+reports, Cassandane does not require write permission to its source directory.
+
+Cassandane (or more precisely, the Cyrus code it exercises) needs to be run
+either as the superuser or as the "cyrus" user.  If run as another user,
+it attempts to use 'sudo' to re-run itself as the "cyrus" user.
+
+The script 'testrunner.pl' is your interface for running Cassandane tests.
+There are several other Perl scripts in the directory, but they are utilities
+which were helpful during manual testing rather than part of the test suite
+itself.
+
+With no arguments, testrunner.pl runs all the tests that come with Cassandane
+and reports the results in the jUnit test report format.  The testrunner.pl
+exit code will be 0 if all tests passed, non-zero otherwise.
+
+
+root@testbox# ls reports
+ls: cannot access reports: No such file or directory
+
+root@testbox# ./testrunner.pl
+
+root@testbox# ls reports
+TEST-Cassandane.Cyrus.Conversations.xml  TEST-Cassandane.Test.DateTime.xml
+TEST-Cassandane.Cyrus.Replication.xml    TEST-Cassandane.Test.Instance.xml
+TEST-Cassandane.Cyrus.Simple.xml         TEST-Cassandane.Test.Message.xml
+TEST-Cassandane.Test.Address.xml         TEST-Cassandane.Test.MessageStoreFactory.xml
+TEST-Cassandane.Test.Config.xml
+
+
+The jUnit format is the default because it's widely used and in particular it's
+compatible with the Jenkins Continuous Integration server.  The reports will be
+available in the directory reports/ and will be named TEST-Cassandane.*.xml,
+one XML file for each group of tests.
+
+Conveniently, the first line of each XML report will contain a count of the
+number of test failures in the corresponding group, so you can use "head" to
+discover if anything went wrong.
+
+root@testbox# head -1 reports/TEST*.xml
+
+==> reports/TEST-Cassandane.Cyrus.Conversations.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Cyrus.Simple.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.Address.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.Config.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.CyrusInstance.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.DateTime.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.MessageStoreFactory.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.Message.xml <==
+<testsuite failures="0"
+
+More useful for manual running is the TAP output format, which is designed for
+automated use but is also more human friendly.  TAP is a common format which
+originated with Perl and is now widely used, see
+http://en.wikipedia.org/wiki/Test_Anything_Protocol for more information. The
+TAP format can be selected by using the "-f tap" option to testrunner.pl.
+
+
+root@testbox# ./testrunner.pl -f tap
+.........................................................................
+.........................................................................
+..........................................................
+Time: 295 wallclock secs ( 0.25 usr  0.01 sys + 398.16 cusr 35.72 csys = 434.14 CPU)
+
+OK (204 tests)
+
+
+You can run only a subset of tests by giving an argument to testrunner.pl.
+The argument can be
+
+ * a group of tests (which is a directory under Cassandane/ )
+
+    me@testbox% ./testrunner.pl Cassandane/Cyrus
+
+ * likewise, but specified with "." or "::" separators
+
+    me@testbox% ./testrunner.pl Cassandane.Cyrus
+
+    me@testbox% ./testrunner.pl Cassandane::Cyrus
+
+ * a test suite (which maps to a Perl module under Cassandane/ )
+
+    me@testbox% ./testrunner.pl Cassandane/Cyrus/Quota.pm
+
+ * likewise, but using the Perl module name syntax
+
+    me@testbox% ./testrunner.pl Cassandane::Cyrus::Quota
+
+ * a test suite without the leading Cassandane::Cyrus
+
+    me@testbox% ./testrunner.pl Quota
+
+ * a single test in a single test suite
+
+    me@testbox% ./testrunner.pl Quota.quotarename
+
+Arguments can be negated by using a leading exclamation mark (!)
+character.  Note that you will need to escape the ! from the
+shell:
+
+    me@testbox% ./testrunner.pl \!Quota
+
+will run all the tests from all the suites except the Quota suite.
+Arguments accumulate from left to right, so e.g.
+
+    me@testbox% ./testrunner.pl Quota \!Quota.quotarename
+
+will run all the tests in the Quota suite except the quoterename test.
+
+The -v (or --verbose) option to testrunner.pl causes both Cassandane and
+several Cyrus programs run by Cassandane, to emit a lot of information
+to stderr.  The output from Cassandane is prefixed by "=====>".  Log
+messages are also written to the syslog.
+
+The --valgrind option to testrunner.pl runs all the Cyrus executables
+using Valgrind.  This is of course much slower but is recommended
+because it finds many subtle bugs.  The Valgrind logs are saved in
+the files /var/tmp/cass/$instance/vglogs/$name.$pid.  Cassandane will
+examine these logs after each test finishes, and will fail the test
+if there are any errors (including memory leaks) reported.
+
+The --cleanup option causes Cassandane to do two things.  Firstly, it
+immediately cleans up any files left over in /var/tmp/cass/.  Secondly,
+it cleans up any such files after each test, unless the test fails.
+This should be helpful when /var/tmp does not have much room.  Be aware
+that Cassandane tests can use over 20 MB per test, most of which is due
+to inefficiencies in the Berkeley DB library.
+
