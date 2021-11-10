@@ -588,7 +588,7 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata)
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
-      syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         return CYRUSDB_IOERROR;
     }
 
@@ -708,7 +708,7 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata)
     struct sieve_db *sievedb = sievedb_open_mailbox(mailbox);
 
     if (!sievedb) {
-      syslog(LOG_ERR, "opening sieve_db for %s failed", mailbox_name(mailbox));
+        syslog(LOG_ERR, "opening sieve_db for %s failed", mailbox_name(mailbox));
         return CYRUSDB_IOERROR;
     }
         
