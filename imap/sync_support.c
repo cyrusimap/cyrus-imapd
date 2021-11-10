@@ -3189,13 +3189,11 @@ int sync_get_uniqueids(struct dlist *kin, struct sync_state *sstate)
 static int list_cb(void *rock, struct sieve_data *sdata)
 {
     strarray_t *list = (strarray_t *) rock;
-    size_t namelen = strlen(sdata->name);
-    char *name = xmalloc(namelen + 2); /* use trailing byte as active flag */
 
-    strcpy(name, sdata->name);
-    name[namelen+1] = sdata->isactive;
-
-    strarray_appendm(list, name);
+    if (sdata->isactive)
+        strarray_set(list, 0, sdata->name);
+    else
+        strarray_append(list, sdata->name);
 
     return 0;
 }
@@ -3225,7 +3223,7 @@ static int remove_cb(const char *sievedir, const char *fname,
         else if (S_ISLNK(sbuf->st_mode) && !strcmp(fname, DEFAULTBC_NAME)) {
             namelen = strlen(link_target) - BYTECODE_SUFFIX_LEN;
             snprintf(path, sizeof(path), "%.*s", (int) namelen, link_target);
-            if (strarray_find(list, path, 0) >= 0 && path[namelen+1] == 1) {
+            if (strarray_find(list, path, 0) == 0) {
                 /* Active link for existing script - keep it */
                 return SIEVEDIR_OK;
             }
@@ -3500,6 +3498,9 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     const char *sieve_path = user_sieve_path(userid);
     struct sieve_db *db = sievedb_open_userid(userid);
     strarray_t list = STRARRAY_INITIALIZER;
+
+    /* Create empty placeholder for active script (always first element) */
+    strarray_set(&list, 0, NULL);
 
     if (db) {
         /* Build a list of scripts */
