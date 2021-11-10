@@ -3292,6 +3292,8 @@ char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
             if (sizep) *sizep = strlen(sdata->content);
             result = xstrdup(sdata->content);
         }
+
+        sievedb_close(db);
     }
 
     return result;
