@@ -547,32 +547,21 @@ static int carddav_parse_path(const char *path, struct request_target_t *tgt,
                                  resultstr);
 }
 
-/* Perform a COPY/MOVE/PUT request
- *
- * preconditions:
- *   CARDDAV:valid-address-data
- *   CARDDAV:no-uid-conflict (DAV:href)
- *   CARDDAV:max-resource-size
- */
-static int store_resource(struct transaction_t *txn,
-                          struct vparse_card *vcard,
-                          struct mailbox *mailbox, const char *resource,
-                          struct carddav_db *davdb, int dupcheck)
+/* Store the vCard data in the specified addressbook/resource */
+static int carddav_store_resource(struct transaction_t *txn,
+                                  struct vparse_card *vcard,
+                                  struct mailbox *mailbox, const char *resource,
+                                  struct carddav_db *davdb)
 {
     struct vparse_entry *ventry;
     struct carddav_data *cdata;
     const char *version = NULL, *uid = NULL, *fullname = NULL;
     struct index_record *oldrecord = NULL, record;
     char *mimehdr;
-    int ret = 0;
 
     /* Validate the vCard data */
-    if (!vcard ||
-        !vcard->objects ||
-        !vcard->objects->type ||
-        strcasecmp(vcard->objects->type, "vcard")) {
+    if (!vcard) {
         txn->error.precond = CARDDAV_VALID_DATA;
-        txn->error.desc = "Not a vCard";
         return HTTP_FORBIDDEN;
     }
 
@@ -584,14 +573,8 @@ static int store_resource(struct transaction_t *txn,
         if (!name) continue;
         if (!propval) continue;
 
-        if (!strcasecmp(name, "version")) {
+        if (!strcasecmp(name, "version"))
             version = propval;
-            if (strcmp(version, "3.0")) {
-                txn->error.precond = CARDDAV_SUPP_DATA;
-                txn->error.desc = "Not a version 3 vCard";
-                return HTTP_FORBIDDEN;
-            }
-        }
 
         else if (!strcasecmp(name, "uid"))
             uid = propval;
@@ -600,64 +583,19 @@ static int store_resource(struct transaction_t *txn,
             fullname = propval;
     }
 
-    /* Sanity check data */
-    if (!version || !uid || !fullname) {
-        txn->error.precond = CARDDAV_VALID_DATA;
-        txn->error.desc = "Missing a mandatory vCard property";
-        return HTTP_FORBIDDEN;
-    }
-
-    /* Check for changed UID on existing resource */
-    /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
-       XXX  because we may have been called as part of a COPY/MOVE */
-    const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
-    carddav_lookup_resource(davdb, &mbentry, resource, &cdata, 0);
-    if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
-        txn->error.precond = CARDDAV_UID_CONFLICT;
-        ret = HTTP_FORBIDDEN;
-    }
-    else if (dupcheck) {
-        /* Check for different resource with same UID */
-        const char *mbox =
-            cdata->dav.mailbox_byname ? mailbox_name(mailbox) : mailbox_uniqueid(mailbox);
-        carddav_lookup_uid(davdb, uid, &cdata);
-        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mbox) ||
-                                    strcmp(cdata->dav.resource, resource))) {
-            /* CARDDAV:no-uid-conflict */
-            txn->error.precond = CARDDAV_UID_CONFLICT;
-            ret = HTTP_FORBIDDEN;
-        }
-    }
-    if (ret) {
-        char *owner;
-        const char *mboxname;
-        mbentry_t *mbentry = NULL;
-
-        if (cdata->dav.mailbox_byname)
-            mboxname = cdata->dav.mailbox;
-        else {
-            mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
-            mboxname = mbentry->name;
-        }
-        owner = mboxname_to_userid(mboxname);
-
-        assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                   namespace_addressbook.prefix, USER_COLLECTION_PREFIX, owner,
-                   strrchr(mboxname, '.') + 1, cdata->dav.resource);
-        txn->error.resource = buf_cstring(&txn->buf);
-        mboxlist_entry_free(&mbentry);
-        free(owner);
-        return ret;
-    }
-
     struct buf *buf = vcard_as_buf(vcard);
     if (buf_len(buf) > (size_t) vcard_max_size) {
         buf_destroy(buf);
         txn->error.precond = CARDDAV_MAX_SIZE;
         return HTTP_FORBIDDEN;
     }
+
+    /* Check for an existing resource */
+    /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
+       XXX  because we may have been called as part of a COPY/MOVE */
+    const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
+    carddav_lookup_resource(davdb, &mbentry, resource, &cdata, 0);
 
     if (cdata->dav.imap_uid) {
         /* Fetch index record for the resource */
@@ -710,7 +648,8 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     struct vparse_card *vcard = (struct vparse_card *)obj;
-    return store_resource(txn, vcard, mailbox, resource, db, /*dupcheck*/0);
+
+    return carddav_store_resource(txn, vcard, mailbox, resource, db);
 }
 
 
@@ -1192,6 +1131,13 @@ static int carddav_get(struct transaction_t *txn,
 }
 
 
+/* Perform a COPY/MOVE/PUT request
+ *
+ * preconditions:
+ *   CARDDAV:valid-address-data
+ *   CARDDAV:no-uid-conflict (DAV:href)
+ *   CARDDAV:max-resource-size
+ */
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
                        void *destdb, unsigned flags __attribute__((unused)))
@@ -1199,14 +1145,88 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     struct carddav_db *db = (struct carddav_db *)destdb;
     struct vparse_card *vcard = (struct vparse_card *)obj;
 
-    if (!(vcard && vcard->objects &&
-          vparse_restriction_check(vcard->objects))) {
+    /* Validate the vCard data */
+    if (!vcard ||
+        !vcard->objects ||
+        !vcard->objects->type ||
+        strcasecmp(vcard->objects->type, "vcard")) {
         txn->error.precond = CARDDAV_VALID_DATA;
-        txn->error.desc = !(vcard && vcard->objects) ? "Not a vCard" : "Failed restriction checks";
+        txn->error.desc = "Resource is not a vCard object";
         return HTTP_FORBIDDEN;
     }
 
-    return store_resource(txn, vcard, mailbox, resource, db, /*dupcheck*/1);
+    if (!vparse_restriction_check(vcard->objects)) {
+        txn->error.precond = CARDDAV_VALID_DATA;
+        txn->error.desc = "Failed restriction checks";
+        return HTTP_FORBIDDEN;
+    }
+
+    /* Sanity check data */
+    struct vparse_entry *ventry;
+    const char *uid = NULL, *fullname = NULL;
+    for (ventry = vcard->objects->properties; ventry; ventry = ventry->next) {
+        const char *name = ventry->name;
+        const char *propval = ventry->v.value;
+
+        if (!name) continue;
+        if (!propval) continue;
+
+        if (!strcasecmp(name, "version")) {
+            if (strcmp(ventry->v.value, "3.0")) {
+                txn->error.precond = CARDDAV_SUPP_DATA;
+                txn->error.desc = "Not a version 3 vCard";
+                return HTTP_FORBIDDEN;
+            }
+        }
+
+        else if (!strcasecmp(name, "uid"))
+            uid = propval;
+
+        else if (!strcasecmp(name, "fn"))
+            fullname = propval;
+    }
+
+    if (!uid) {
+        txn->error.precond = CARDDAV_VALID_DATA;
+        txn->error.desc = "Missing mandatory UID property";
+        return HTTP_FORBIDDEN;
+    }
+    if (!fullname) {
+        txn->error.precond = CARDDAV_VALID_DATA;
+        txn->error.desc = "Missing mandatory FN property";
+        return HTTP_FORBIDDEN;
+    }
+
+    /* Check for changed UID */
+    struct carddav_data *cdata;
+    carddav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
+    if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
+        /* CARDDAV:no-uid-conflict */
+        char *owner;
+        const char *mboxname;
+        mbentry_t *mbentry = NULL;
+
+        if (cdata->dav.mailbox_byname)
+            mboxname = cdata->dav.mailbox;
+        else {
+            mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
+            mboxname = mbentry->name;
+        }
+        owner = mboxname_to_userid(mboxname);
+
+        assert(!buf_len(&txn->buf));
+        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                   namespace_addressbook.prefix, USER_COLLECTION_PREFIX, owner,
+                   strrchr(mboxname, '.') + 1, cdata->dav.resource);
+        txn->error.resource = buf_cstring(&txn->buf);
+        mboxlist_entry_free(&mbentry);
+        free(owner);
+
+        txn->error.precond = CARDDAV_UID_CONFLICT;
+        return HTTP_FORBIDDEN;
+    }
+
+    return carddav_store_resource(txn, vcard, mailbox, resource, db);
 }
 
 
