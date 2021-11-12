@@ -786,7 +786,7 @@ sub test_blob_get
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
 
     xlog "Regular Blob/get works and returns a blobId";
-    $res = $jmap->CallMethods([['Blob/get', { ids => [$blobId], properties => [ 'data:asText', 'data:asHex', 'data:asBase64', 'size' ] }, 'R1']]);
+    $res = $jmap->CallMethods([['Blob/get', { ids => [$blobId], properties => [ 'data:asText', 'data:asBase64', 'size' ] }, 'R1']]);
     $self->assert_str_equals($res->[0][0], 'Blob/get');
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
     $self->assert_str_equals($blobId, $res->[0][1]{list}[0]{id});
@@ -806,7 +806,6 @@ sub test_blob_set_complex
 
     my $data = "The quick brown fox jumped over the lazy dog.";
     my $bdata = encode_base64($data, '');
-    my $hdata = unpack "H*", $data;
 
     my $res;
 
@@ -830,16 +829,6 @@ sub test_blob_set_complex
     $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
     $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
 
-    xlog "Hex Blob/set works and returns the right data";
-    $res = $jmap->CallMethods([
-      ['Blob/set', { create => { b3 => { 'data:asHex' => $hdata } } }, 'S3'],
-      ['Blob/get', { ids => ['#b3'], properties => [ 'data:asText', 'size' ] }, 'G3'],
-    ]);
-    $self->assert_str_equals('Blob/set', $res->[0][0]);
-    $self->assert_str_equals('Blob/get', $res->[1][0]);
-    $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
-    $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
-
     xlog "Complex catenate expression works and returns the right data";
     my $target = "How quick was that?";
     $res = $jmap->CallMethods([
@@ -847,7 +836,7 @@ sub test_blob_set_complex
       ['Blob/set', { create => { cat => { catenate => [
         { 'data:asText' => 'How' },                      # 'How'
         { 'blobId' => '#b4', offset => 3, length => 7 }, # ' quick '
-        { 'data:asHex' => unpack("H*", "was t") },       # 'was t'
+        { 'data:asText' => "was t" },                    # 'was t'
         { 'blobId' => '#b4', offset => 1, length => 1 }, # 'h'
         { 'data:asBase64' => encode_base64('at?', '') }, # 'at?'
       ] } } }, 'CAT'],
