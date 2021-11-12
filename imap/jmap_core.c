@@ -427,11 +427,6 @@ static const jmap_property_t blob_xprops[] = {
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
     },
     {
-        "data:asHex",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
-    },
-    {
         "data:asBase64",
         NULL,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
@@ -568,18 +563,6 @@ static int jmap_blob_get(jmap_req_t *req)
                 }
                 else {
                     json_object_set_new(item, "data:asBase64", json_string(""));
-                }
-            }
-
-            if (jmap_wantprop(get.props, "data:asHex")) {
-                if (len) {
-                    char *encbuf = xzmalloc(len*2);
-                    bin_to_lchex(base, len, encbuf);
-                    json_object_set_new(item, "data:asHex", json_stringn(encbuf, len*2));
-                    free(encbuf);
-                }
-                else {
-                    json_object_set_new(item, "data:asHex", json_string(""));
                 }
             }
 
@@ -940,11 +923,6 @@ static const jmap_property_t blob_set_props[] = {
         0
     },
     {
-        "data:asHex",
-        NULL,
-        0
-    },
-    {
         "catenate",
         NULL,
         0
@@ -978,19 +956,6 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
         if (r) {
             *errp = json_string("base64 decode failed");
             return r;
-        }
-    }
-
-    // hex text
-    jitem = json_object_get(arg, "data:asHex");
-    if (JNOTNULL(jitem) && json_is_string(jitem)) {
-        if (seen_one++) return IMAP_MAILBOX_EXISTS;
-        char *out = xzmalloc(json_string_length(jitem)/2);
-        int done = hex_to_bin(json_string_value(jitem), json_string_length(jitem), out);
-        buf_initm(buf, out, json_string_length(jitem)/2);
-        if (done < 0) {
-            *errp = json_string("hex decode failed");
-            return done;
         }
     }
 
