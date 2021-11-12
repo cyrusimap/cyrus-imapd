@@ -1168,6 +1168,70 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     struct vparse_card *vcard = (struct vparse_card *)obj;
+    char *type = NULL, *subtype = NULL;
+    struct param *params = NULL;
+    const char *want_ver = NULL;
+
+    /* Sanity check Content-Type */
+    const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+    if (hdr && hdr[0]) {
+        const char *profile = NULL;
+        struct param *param;
+
+        message_parse_type(hdr[0], &type, &subtype, &params);
+
+        for (param = params; param; param = param->next) {
+            if (!strcasecmp(param->attribute, "version")) {
+                want_ver = param->value;
+
+                if (strcmp(want_ver, "3.0") &&
+                    strcmp(want_ver, "4.0")) {
+                    txn->error.precond = CARDDAV_SUPP_DATA;
+                    txn->error.desc =
+                        "Unsupported version= specified in Content-Type";
+                    goto done;
+                }
+            }
+            else if (!strcasecmp(param->attribute, "charset")) {
+                charset_t charset = charset_lookupname(param->value);
+
+                if (charset == CHARSET_UNKNOWN_CHARSET) {
+                    txn->error.precond = CARDDAV_SUPP_DATA;
+                    txn->error.desc =
+                        "Unknown charset= specified in Content-Type";
+                    goto done;
+                }
+                if (strcmp(charset_canon_name(charset), "utf-8")) {
+                    txn->error.precond = CARDDAV_SUPP_DATA;
+                    txn->error.desc =
+                        "Server only accepts Content-type charset=utf-8";
+                    goto done;
+                }
+            }
+            else if (!strcasecmp(param->attribute, "profile")) {
+                profile = param->value;
+            }
+        }
+
+        if (!strcasecmp(subtype, "directory")) {
+            if (profile && strcasecmp(profile, "vcard")) {
+                txn->error.precond = CARDDAV_SUPP_DATA;
+                txn->error.desc = "Only profile=vcard is accepted"
+                    " for Content-type 'text/directory'";
+                goto done;
+            }
+
+            if (!want_ver) {
+                want_ver = "3.0";
+            }
+            else if (want_ver[0] != 3) {
+                txn->error.precond = CARDDAV_VALID_DATA;
+                txn->error.desc =
+                    "Content-Type 'text/directory' MUST use version=3.0";
+                goto done;
+            }
+        }
+    }
 
     /* Validate the vCard data */
     if (!vcard ||
@@ -1176,16 +1240,16 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         strcasecmp(vcard->objects->type, "vcard")) {
         txn->error.precond = CARDDAV_VALID_DATA;
         txn->error.desc = "Resource is not a vCard object";
-        return HTTP_FORBIDDEN;
+        goto done;
     }
 
     if (!vparse_restriction_check(vcard->objects)) {
         txn->error.precond = CARDDAV_VALID_DATA;
         txn->error.desc = "Failed restriction checks";
-        return HTTP_FORBIDDEN;
+        goto done;
     }
 
-    /* Sanity check data */
+    /* Sanity check vCard data */
     struct vparse_entry *ventry;
     const char *uid = NULL, *fullname = NULL;
     for (ventry = vcard->objects->properties; ventry; ventry = ventry->next) {
@@ -1196,10 +1260,17 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         if (!propval) continue;
 
         if (!strcasecmp(name, "version")) {
-            if (strcmp(ventry->v.value, "3.0")) {
+            if (strcmp(ventry->v.value, "3.0") &&
+                strcmp(ventry->v.value, "4.0")) {
                 txn->error.precond = CARDDAV_SUPP_DATA;
-                txn->error.desc = "Not a version 3 vCard";
-                return HTTP_FORBIDDEN;
+                txn->error.desc = "Unsupported vCard version";
+                goto done;
+            }
+            if (want_ver && (want_ver[0] != ventry->v.value[0])) {
+                txn->error.precond = CARDDAV_VALID_DATA;
+                txn->error.desc =
+                    "Content-Type version= and vCard VERSION mismatch";
+                goto done;
             }
         }
 
@@ -1213,12 +1284,12 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     if (!uid) {
         txn->error.precond = CARDDAV_VALID_DATA;
         txn->error.desc = "Missing mandatory UID property";
-        return HTTP_FORBIDDEN;
+        goto done;
     }
     if (!fullname) {
         txn->error.precond = CARDDAV_VALID_DATA;
         txn->error.desc = "Missing mandatory FN property";
-        return HTTP_FORBIDDEN;
+        goto done;
     }
 
     /* Check for changed UID */
@@ -1247,8 +1318,15 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         free(owner);
 
         txn->error.precond = CARDDAV_UID_CONFLICT;
-        return HTTP_FORBIDDEN;
+        goto done;
     }
+
+  done:
+    param_free(&params);
+    free(subtype);
+    free(type);
+
+    if (txn->error.precond) return HTTP_FORBIDDEN;
 
     return carddav_store_resource(txn, vcard, mailbox, resource, db);
 }
