@@ -900,55 +900,87 @@ void sync_sieve_list_free(struct sync_sieve_list **lp)
 
 int sync_sieve_activate(const char *userid, const char *bcname)
 {
-    const char *sieve_path = user_sieve_path(userid);
-    char target[2048];
+    struct sieve_db *db = sievedb_open_userid(userid);
+    struct mailbox *mailbox = NULL;
+    struct sieve_data *sdata = NULL;
     int r;
 
-    snprintf(target, sizeof(target), "%.*s",
-             (int) strlen(bcname) - BYTECODE_SUFFIX_LEN, bcname);
+    if (!db) {
+        syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
+        return IMAP_INTERNAL;
+    }
 
-#ifdef USE_SIEVE
-    sieve_script_rebuild(userid, sieve_path, target);
-#endif
+    r = sieve_ensure_folder(userid, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
+        goto done;
+    }
 
-    r = sievedir_activate_script(sieve_path, target);
-    if (r) return r;
+    if (bcname) {
+        char name[2048];
+        snprintf(name, sizeof(name), "%.*s",
+                 (int) strlen(bcname) - BYTECODE_SUFFIX_LEN, bcname);
 
-    sync_log_sieve(userid);
+        r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
+        if (r) goto done;
+    }
 
-    return 0;
+    r = sieve_script_activate(mailbox, sdata);
+
+    if (!r) sync_log_sieve(userid);
+
+  done:
+    mailbox_close(&mailbox);
+    sievedb_close(db);
+
+    return r;
 }
 
 int sync_sieve_deactivate(const char *userid)
 {
-    const char *sieve_path = user_sieve_path(userid);
-    int r = sievedir_deactivate_script(sieve_path);
-
-    if (r) return r;
-
-    sync_log_sieve(userid);
-
-    return(0);
+    return sync_sieve_activate(userid, NULL);
 }
 
-int sync_sieve_delete(const char *userid, const char *script)
+int sync_sieve_delete(const char *userid, const char *bcname)
 {
-    const char *sieve_path = user_sieve_path(userid);
+    struct sieve_db *db = sievedb_open_userid(userid);
+    struct mailbox *mailbox = NULL;
+    struct sieve_data *sdata = NULL;
     char name[2048];
+    int r;
 
-    snprintf(name, sizeof(name), "%.*s",
-             (int) strlen(script) - SCRIPT_SUFFIX_LEN, script);
-
-    /* XXX  Do we NOT care about errors? */
-    if (sievedir_script_isactive(sieve_path, name)) {
-        sievedir_deactivate_script(sieve_path);
+    if (!db) {
+        syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
+        return IMAP_INTERNAL;
     }
 
-    sievedir_delete_script(sieve_path, name);
+    r = sieve_ensure_folder(userid, &mailbox);
+    if (r) {
+        syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
+        goto done;
+    }
 
-    sync_log_sieve(userid);
+    snprintf(name, sizeof(name), "%.*s",
+             (int) strlen(bcname) - BYTECODE_SUFFIX_LEN, bcname);
 
-    return(0);
+    r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
+    if (r) goto done;
+
+    if (sdata->isactive) {
+        r = sieve_script_activate(mailbox, NULL);
+    }
+
+    if (!r) {
+        r = sieve_script_remove(mailbox, sdata);
+
+        if (!r) sync_log_sieve(userid);
+    }
+
+  done:
+    mailbox_close(&mailbox);
+    sievedb_close(db);
+
+    return r;
 }
 
 /* ====================================================================== */
