@@ -3054,6 +3054,7 @@ int sync_get_quota(struct dlist *kin, struct sync_state *sstate)
 struct mbox_rock {
     struct protstream *pout;
     struct sync_name_list *qrl;
+    unsigned exists;
 };
 
 static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
@@ -3092,6 +3093,8 @@ static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
         sync_send_response(kl, mrock->pout);
         goto out;
     }
+
+    mrock->exists = 1;
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
@@ -3160,7 +3163,7 @@ out:
 int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
 {
     struct dlist *ki;
-    struct mbox_rock mrock = { sstate->pout, NULL };
+    struct mbox_rock mrock = { sstate->pout, NULL, 0 };
 
     for (ki = kin->head; ki; ki = ki->next) {
         mbentry_t *mbentry = NULL;
@@ -3175,7 +3178,7 @@ int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
 int sync_get_uniqueids(struct dlist *kin, struct sync_state *sstate)
 {
     struct dlist *ki;
-    struct mbox_rock mrock = { sstate->pout, NULL };
+    struct mbox_rock mrock = { sstate->pout, NULL, 0 };
 
     for (ki = kin->head; ki; ki = ki->next)
         sync_mailbox_byuniqueid(ki->sval, &mrock);
@@ -3489,6 +3492,7 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     quotaroots = sync_name_list_create();
     mrock.qrl = quotaroots;
     mrock.pout = sstate->pout;
+    mrock.exists = 0;
 
     r = mboxlist_usermboxtree(userid, NULL, sync_mailbox_byentry, &mrock, MBOXTREE_DELETED|MBOXTREE_INTERMEDIATES);
     if (r) goto bail;
@@ -3497,6 +3501,9 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
         r = quota_work(qr->name, sstate->pout);
         if (r) goto bail;
     }
+
+    /* Does the user actually exist? */
+    if (!mrock.exists) goto bail;
 
     r = user_meta(userid, sstate->pout);
     if (r) goto bail;
