@@ -820,7 +820,8 @@ static void _checkwrap(unsigned char c, struct vparse_target *tgt)
     buf_putc(tgt->buf, ' ');
 }
 
-static void _value_to_tgt(const char *value, struct vparse_target *tgt)
+static void _value_to_tgt(const char *value, struct vparse_target *tgt,
+                          int encode)
 {
     if (!value) return; /* null fields or array items are empty string */
     for (; *value; value++) {
@@ -841,7 +842,7 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt)
         case ';':
         case ',':
         case '\\':
-            buf_putc(tgt->buf, '\\');
+            if (encode) buf_putc(tgt->buf, '\\');
             /* fall through */
         default:
             buf_putc(tgt->buf, *value);
@@ -905,9 +906,34 @@ static int _needsquote(const char *p)
     return 0;
 }
 
+static const struct prop_encode {
+    const char *name;
+    int encode;  /* 0 = no; 1 = yes; -1 = check type */
+} prop_encode_map[] = {
+    { "CALADRURI",     0 },
+    { "CALURI",        0 },
+    { "CLIENTPIDMAP",  0 },
+    { "CONTACT-URI",   0 },
+    { "FBURL",         0 },
+    { "GEO",           0 },
+    { "IMPP",          0 },
+    { "KEY",           0 },
+    { "LOGO",          0 },
+    { "MEMBER",        0 },
+    { "ORG-PROPERTY",  0 },
+    { "PHOTO",         0 },
+    { "RELATED",      -1 },
+    { "SOUND",         0 },
+    { "SOURCE",        0 },
+    { "UID",          -1 },
+    { "URL",           0 },
+    { NULL,            1 }
+};
+
 static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target *tgt)
 {
     struct vparse_param *param;
+    int is_uri = -1;
 
     // RFC 6350 3.3 - it is RECOMMENDED that property and parameter names be upper-case on output.
     if (entry->group) {
@@ -929,6 +955,10 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
         else {
             _paramval_to_tgt(param->value, tgt);
         }
+
+        if (!strcasecmp(param->name, "VALUE")) {
+            is_uri = !strcasecmp(param->value, "uri");
+        }
     }
 
     buf_putc(tgt->buf, ':');
@@ -937,11 +967,24 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
         int i;
         for (i = 0; i < entry->v.values->count; i++) {
             if (i) buf_putc(tgt->buf, entry->multivaluesep);
-            _value_to_tgt(strarray_nth(entry->v.values, i), tgt);
+            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, 1);
         }
     }
+    else if (is_uri == 1) {
+        _value_to_tgt(entry->v.value, tgt, 0);
+    }
     else {
-        _value_to_tgt(entry->v.value, tgt);
+        const struct prop_encode *prop;
+        int encode = 1;  /* default to encoding */
+
+        for (prop = prop_encode_map; prop->name; prop++) {
+            if (!strcasecmp(prop->name, entry->name)) {
+                encode = (prop->encode == -1) ? !is_uri : prop->encode;
+                break;
+            }
+        }
+
+        _value_to_tgt(entry->v.value, tgt, encode);
     }
 
     _endline(tgt);
@@ -1017,20 +1060,27 @@ EXPORTED void vparse_replace_entry(struct vparse_card *card, const char *group, 
 {
     struct vparse_entry *entry = vparse_get_entry(card, group, name);
     if (entry) {
-        if (entry->multivaluesep) {
-            /* FN isn't allowed to be a multi-value, but let's
-             * rather check than deal with corrupt memory */
-            strarray_free(entry->v.values);
-            entry->v.values = NULL;
-        } else {
-            free(entry->v.value);
-        }
-        entry->v.value = xstrdupnull(value);
-        entry->multivaluesep = '\0';
+        vparse_set_value(entry, value);
     }
     else {
         vparse_add_entry(card, group, name, value);
     }
+}
+
+EXPORTED void vparse_set_value(struct vparse_entry *entry, const char *value)
+{
+    if (!entry) return;
+
+    if (entry->multivaluesep) {
+        /* FN isn't allowed to be a multi-value, but let's
+         * rather check than deal with corrupt memory */
+        strarray_free(entry->v.values);
+        entry->v.values = NULL;
+    } else {
+        free(entry->v.value);
+    }
+    entry->v.value = xstrdupnull(value);
+    entry->multivaluesep = '\0';
 }
 
 EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group, const char *name)
@@ -1123,9 +1173,10 @@ static const struct {
     const char *name;  /* property name */
     struct {
         unsigned min;  /* mandatory minimum number of occurrences */
-        unsigned max;  /* allowed maximum number of occurrences */
+        unsigned max;  /* allowed maximum number of occurrences (-1 = inf) */
     } version[3];      /* 1 min/max per vCard version */
 } restrictions[] = {
+    /*                    2.1        3.0        4.0     */
     { "VERSION",     { { 1,  1 }, { 1,  1 }, { 1,  1 } } },
     { "ANNIVERSARY", { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
     { "BDAY",        { { 0,  1 }, { 0,  1 }, { 0,  1 } } },

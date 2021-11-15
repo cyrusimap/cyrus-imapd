@@ -251,3 +251,143 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
     return size;
 }
 
+EXPORTED void vcard_to_v3(struct vparse_card *vcard)
+{
+    struct vparse_entry *ventry, *next;
+    struct vparse_param *vparam;
+    struct buf buf = BUF_INITIALIZER;
+
+    for (ventry = vcard->objects->properties; ventry; ventry = next) {
+        const char *name = ventry->name;
+        char *propval = ventry->v.value;
+
+        next = ventry->next;
+
+        if (!name) continue;
+        if (!propval) continue;
+
+        if (!strcasecmp(name, "version")) {
+            /* Set proper VERSION */
+            vparse_set_value(ventry, "3.0");
+        }
+        else if (!strcasecmp(name, "key")   ||
+                 !strcasecmp(name, "logo")  ||
+                 !strcasecmp(name, "photo") ||
+                 !strcasecmp(name, "sound")) {
+            /* Rewrite KEY, LOGO, PHOTO, SOUND properties */
+            if (!strncmp(propval, "data:", 5)) {
+                /* Rewrite data: URI as 'b' encoded value */
+                char *type = propval + 5;
+                char *encoding = strchr(type, ';');
+                char *data = strchr(encoding ? encoding : type, ',');
+
+                if (encoding) {
+                    *encoding++ = '\0';
+                }
+                if (data && !strcmpnull(encoding, "base64")) {
+                    *data++ = '\0';
+                    vparse_set_value(ventry, data);
+                    vparse_add_param(ventry, "ENCODING", "b");
+
+                    if (toupper(name[0]) != 'K' && (type = strchr(type, '/'))) {
+                        /* Only use subtype for LOGO, PHOTO, SOUND */
+                        type++;
+                    }
+                    if (type && *type) {
+                        buf_setcstr(&buf, type);
+                        vparse_add_param(ventry, "TYPE", buf_ucase(&buf));
+                    }
+                }
+            }
+            else if ((vparam = vparse_get_param(ventry, "mediatype"))) {
+                /* Rename MEDIATYPE parameter */
+                free(vparam->name);
+                vparam->name = xstrdup("type");
+            }
+        }
+        else if (!strcasecmp(name, "kind")) {
+            /* Rename KIND property */
+            free(ventry->name);
+            ventry->name = xstrdup("x-addressbookserver-kind");
+        }
+        else if (!strcasecmp(name, "member")) {
+            /* Rename MEMBER property */
+            free(ventry->name);
+            ventry->name = xstrdup("x-addressbookserver-member");
+        }
+    }
+
+    buf_free(&buf);
+}
+
+EXPORTED void vcard_to_v4(struct vparse_card *vcard)
+{
+    struct vparse_entry *ventry, *next;
+    struct vparse_param *vparam;
+    struct buf buf = BUF_INITIALIZER;
+
+    for (ventry = vcard->objects->properties; ventry; ventry = next) {
+        const char *name = ventry->name;
+        const char *propval = ventry->v.value;
+
+        next = ventry->next;
+
+        if (!name) continue;
+        if (!propval) continue;
+
+        if (!strcasecmp(name, "version")) {
+            /* Set proper VERSION */
+            vparse_set_value(ventry, "4.0");
+        }
+        else if (!strcasecmp(name, "key")   ||
+                 !strcasecmp(name, "logo")  ||
+                 !strcasecmp(name, "photo") ||
+                 !strcasecmp(name, "sound")) {
+            /* Rewrite KEY, LOGO, PHOTO, SOUND properties */
+            vparam = vparse_get_param(ventry, "value");
+            if (!vparam || strcasecmp(vparam->value, "uri")) {
+                /* Rewrite 'b' encoded value as data: URI */
+                buf_setcstr(&buf, "data:");
+
+                vparam = vparse_get_param(ventry, "type");
+                if (vparam && vparam->value) {
+                    switch (toupper(name[0])) {
+                    case 'K':
+                        buf_appendcstr(&buf, lcase(vparam->value));
+                        break;
+                    case 'S':
+                        buf_printf(&buf, "audio/%s", lcase(vparam->value));
+                        break;
+                    default:
+                        buf_printf(&buf, "image/%s", lcase(vparam->value));
+                        break;
+                    }
+                }
+                vparse_delete_params(ventry, "type");
+
+                vparam = vparse_get_param(ventry, "encoding");
+                if (vparam && !strcasecmpsafe(vparam->value, "b")) {
+                    buf_appendcstr(&buf, ";base64");
+                }
+                vparse_delete_params(ventry, "encoding");
+
+                buf_printf(&buf, ",%s", propval);
+                vparse_set_value(ventry, buf_cstring(&buf));
+            }
+            else if ((vparam = vparse_get_param(ventry, "type"))) {
+                /* Rename TYPE parameter */
+                free(vparam->name);
+                vparam->name = xstrdup("mediatype");
+            }
+        }
+        else if (!strncasecmp(name, "x-addressbookserver-", 20)) {
+            /* Rename X-ADDRESSBOOKSERVER-* properties */
+            char *newname = xstrdup(name+20);
+
+            free(ventry->name);
+            ventry->name = newname;
+        }
+    }
+
+    buf_free(&buf);
+}

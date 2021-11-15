@@ -462,6 +462,20 @@ struct davdb_params {
     db_delete_proc_t delete_resourceLOCKONLY;   /* delete a specific resource */
 };
 
+/* Function to convert to/from MIME type */
+struct mime_type_t {
+    const char *content_type;
+    const char *version;
+    const char *file_ext;
+    struct buf* (*from_object)(void *);
+    void* (*to_object)(const struct buf *);
+    void (*free)(void *);
+    const char* (*begin_stream)(struct buf *, struct mailbox *mailbox,
+                                const char *prodid, const char *name,
+                                const char *desc, const char *color);
+    void (*end_stream)(struct buf *);
+};
+
 /*
  * Process 'priv', augmenting 'rights' as necessary.
  * Returns 1 if processing is complete.
@@ -476,21 +490,8 @@ typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 
 /* Function to do special processing for GET method (optional) */
 typedef int (*get_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
-                          struct index_record *record, void *data, void **obj);
-
-/* Function to convert to/from MIME type */
-struct mime_type_t {
-    const char *content_type;
-    const char *version;
-    const char *file_ext;
-    struct buf* (*from_object)(void *);
-    void* (*to_object)(const struct buf *);
-    void (*free)(void *);
-    const char* (*begin_stream)(struct buf *, struct mailbox *mailbox,
-                                const char *prodid, const char *name,
-                                const char *desc, const char *color);
-    void (*end_stream)(struct buf *);
-};
+                          struct index_record *record, void *data, void **obj,
+                          struct mime_type_t *mime);
 
 /* meth_mkcol() parameters */
 typedef int (*mkcol_proc_t)(struct mailbox *mailbox);

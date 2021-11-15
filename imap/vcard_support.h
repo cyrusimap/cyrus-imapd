@@ -64,4 +64,7 @@ extern size_t vcard_prop_decode_value(struct vparse_entry *prop,
                                       char **content_type,
                                       struct message_guid *guid);
 
+extern void vcard_to_v3(struct vparse_card *vcard);
+extern void vcard_to_v4(struct vparse_card *vcard);
+
 #endif /* VCARD_SUPPORT_H */

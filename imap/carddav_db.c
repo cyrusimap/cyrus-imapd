@@ -1130,6 +1130,9 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
                 cdata->kind = CARDDAV_KIND_GROUP;
             /* default case is CARDDAV_KIND_CONTACT */
         }
+        else if (!strcasecmp(name, "version")) {
+            cdata->version = propval[0] - '0';
+        }
     }
 
     int r = carddav_write(carddavdb, cdata);

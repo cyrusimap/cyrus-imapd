@@ -552,7 +552,7 @@ static char *parse_accept_header(const char **hdr)
         param_free(&params);
         struct accept *tmp;
         for (tmp = accept; tmp && tmp->token; tmp++) {
-            free(tmp->token);
+            free_accept(tmp);
         }
         free(accept);
     }
