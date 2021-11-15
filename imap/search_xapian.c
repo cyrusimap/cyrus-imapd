@@ -72,7 +72,6 @@
 #include "cyr_lock.h"
 #include "xapian_wrap.h"
 #include "command.h"
-#include "user.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
