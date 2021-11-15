@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
 
     if (old_db[0] != '/' || new_db[0] != '/') {
         printf("\nSorry, you cannot use this tool with relative path names.\n"
-               "This is because some database backends (mainly berkeley) do not\n"
+               "This is because some database backends do not\n"
                "always do what you would expect with them.\n"
                "\nPlease use absolute pathnames instead.\n\n");
         exit(EX_OSERR);

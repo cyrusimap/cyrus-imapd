@@ -1,4 +1,4 @@
-/* seen_db.c -- implementation of seen database using per-user berkeley db
+/* seen_db.c -- implementation of seen database using per-user db
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
