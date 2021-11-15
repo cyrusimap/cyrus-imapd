@@ -84,7 +84,6 @@
 #include "sync_log.h"
 #include "user.h"
 #include "util.h"
-#include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
