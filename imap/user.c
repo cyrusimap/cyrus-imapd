@@ -327,12 +327,6 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
     search_deluser(mbentry);
 
 #ifdef WITH_DAV
-    /* delete the entire DAV DB */
-    struct buf fname = BUF_INITIALIZER;
-    dav_getpath_byuserid(&fname, userid);
-    unlink(buf_cstring(&fname));
-    buf_free(&fname);
-
     /* delete all the calendar alarms for the user */
     caldav_alarm_delete_user(userid);
 #endif /* WITH_DAV */
