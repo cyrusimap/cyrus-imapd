@@ -369,15 +369,6 @@ EXTRA_DIST = \
 	lib/charset/us-ascii.t \
 	lib/htmlchar.st \
 	lib/imapoptions \
-	lib/test/cyrusdb.c \
-	lib/test/cyrusdb.INPUT \
-	lib/test/cyrusdblong.INPUT \
-	lib/test/cyrusdblong.OUTPUT \
-	lib/test/cyrusdb.OUTPUT \
-	lib/test/cyrusdbtxn.INPUT \
-	lib/test/cyrusdbtxn.OUTPUT \
-	lib/test/pool.c \
-	lib/test/rnddb.c \
 	master/README \
 	netnews/inn.diffs \
 	perl/annotator/Daemon.pm \
@@ -505,7 +496,6 @@ dist_noinst_SCRIPTS = \
 	com_err/et/config_script \
 	imap/promdatagen \
 	lib/mkchartable.pl \
-	lib/test/run \
 	perl/sieve/scripts/installsieve.pl \
 	perl/sieve/scripts/sieveshell.pl \
 	tools/arbitronsort.pl \
