@@ -2472,7 +2472,10 @@ struct accept *parse_accept(const char **hdr)
 
             message_parse_type(token, &type, &subtype, &params);
 
-            ret[n].token = lcase(strconcat(type, "/", subtype, NULL));
+            if (type)
+                ret[n].token = lcase(strconcat(type, "/", subtype, NULL));
+            else
+                ret[n].token = lcase(xstrdup(token));
             ret[n].version = NULL;
             ret[n].charset = NULL;
             ret[n].qual = 1.0;
