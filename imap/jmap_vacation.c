@@ -594,6 +594,10 @@ static int jmap_vacation_set(struct jmap_req *req)
         vacation_update(req->accountid, mailbox, sdata, arg, &set);
     }
 
+    if (json_object_size(set.updated)) {
+        sync_log_sieve(req->accountid);
+    }
+
 
     /* destroy */
     size_t index;

@@ -66,6 +66,7 @@
 #include "sieve/sieve_interface.h"
 #include "sieve/bc_parse.h"
 #include "strarray.h"
+#include "sync_log.h"
 #include "times.h"
 #include "tok.h"
 #include "user.h"
@@ -832,6 +833,12 @@ static int jmap_sieve_set(struct jmap_req *req)
 
         id = json_string_value(sub_args.onSuccessActivate);
         set_activate(id, mailbox, db, &set);
+        sync_log_sieve(req->accountid);
+    }
+    else if (json_object_size(set.created) ||
+             json_object_size(set.updated) ||
+             json_array_size(set.destroyed)) {
+        sync_log_sieve(req->accountid);
     }
 
     /* Build response */
