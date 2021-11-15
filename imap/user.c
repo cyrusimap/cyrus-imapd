@@ -87,7 +87,6 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
-#include "xstrlcat.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
