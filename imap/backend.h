@@ -114,7 +114,6 @@ char *intersect_mechlists(char *config, char *server);
 char *backend_get_cap_params(const struct backend *, unsigned long capa);
 
 int backend_version(struct backend *);
-int backend_supports_sieve_mailbox(struct backend *);
 
 #define CAPA(s, c) ((s)->capability & (c))
 
