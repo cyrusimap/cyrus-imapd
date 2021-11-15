@@ -599,6 +599,11 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          modseq_t foldermodseq,
                                          int ispartial)
 {
+    if (mbtype_isa(mbtype) == MBTYPE_SIEVE) {
+        /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
+        return NULL;
+    }
+
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
 
     if (l->tail)
@@ -2648,6 +2653,11 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getatom(kin, "MBOXTYPE", &mboxtype);
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
+    if (mbtype_isa(mbtype) == MBTYPE_SIEVE) {
+        /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
+        return 0;
+    }
+
     if (mbtype & (MBTYPE_INTERMEDIATE|MBTYPE_DELETED)) {
         // XXX - make sure what's already there is either nothing or compatible...
         mbentry_t *newmbentry = NULL;
@@ -3099,6 +3109,12 @@ static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
     int r = 0;
 
     if (!mbentry) goto out;
+
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE) {
+        /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
+        goto out;
+    }
+
     if (mbentry->mbtype & MBTYPE_DELETED) goto out;
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
         dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
@@ -6898,8 +6914,6 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
     int master_active = 0;
     int replica_active = 0;
     char *ext;
-
-    if (backend_supports_sieve_mailbox(sync_cs->backend)) return 0;
 
     master_sieve = sync_sieve_list_generate(userid);
     if (!master_sieve) {
