@@ -89,7 +89,7 @@ enum cyrus_opt {
     CYRUSOPT_VIRTDOMAINS,
     /* authorization mechanism (unix) */
     CYRUSOPT_AUTH_MECH,
-    /* BDB max locks (50000) */
+    /* RFC 2086 right which allows DELETE ("c") */
     CYRUSOPT_DELETERIGHT,
     /* SQL database */
     CYRUSOPT_SQL_DATABASE,
