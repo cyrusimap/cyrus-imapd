@@ -1,0 +1,170 @@
+SOFTWARE DEPENDENCIES
+
+Cassandane needs the following software to work:
+
+ * Mail::IMAPTalk
+    This is a fully featured IMAP client package, available on CPAN.
+
+    There is an Ubuntu package for this, libmail-imaptalk-perl.
+
+ * Mail::JMAPTalk
+ * Net::DAVTalk
+ * Net::CalDAVTalk
+ * Net::CardDAVTalk
+
+    Similar idea to Mail::IMAPTalk, but for JMAP/DAV/CalDAV/CardDAV
+    respectively.  These are all available on CPAN.
+
+ * Encode::IMAPUTF7
+    Needed by Mail::IMAPTalk
+    CPAN package http://search.cpan.org/perldoc?Encode::IMAPUTF7
+    Ubuntu package libencode-imaputf7-perl
+    On RH/CentOS, may need to install perl-Test-NoWarnings to build from source
+
+ * URI, URI::Escape
+    Handles URIs.
+    CPAN package at http://search.cpan.org/dist/URI/
+    Ubuntu package liburi-perl.
+    RH/CentOS package perl-URI
+
+ * Digest::SHA
+    Does the SHA1 message digest algorithm.
+    CPAN package http://search.cpan.org/dist/Digest-SHA/
+    Ubuntu package libdigest-sha-perl
+    RH/CentOS package perl-Digest-SHA
+
+ * DateTime
+    Does time manipulation.
+    CPAN package http://search.cpan.org/dist/DateTime/
+    Ubuntu package libdatetime-perl
+    RH/CentOS package perl-DateTime
+
+ * BSD::Resource
+    Allows Cyrus to generate core dumps at all
+    CPAN package http://search.cpan.org/dist/BSD-Resource/
+    Ubuntu package libbsd-resource-perl
+    RH/CentOS package perl-BSD-Resource
+
+ * Test::Unit
+    Unit testing framework for Perl
+    CPAN package http://search.cpan.org/dist/Test-Unit/
+    Ubuntu package libtest-unit-perl
+    RH/CentOS package perl-Test-Unit
+
+ * (Cassandane has it's own copy of this code for now)
+    Test::Unit::Runner::XML
+    Addition to Test::Unit which outputs in jUnit's XML
+    format, for integration with Jenkins CI.
+    CPAN package http://search.cpan.org/dist/Test-Unit-Runner-Xml/
+    No Ubuntu package (sorry) - but install depends on:
+        libxml-generator-perl libxml-xpath-perl
+    RH/CentOS package perl-Test-Unit-Runner-Xml
+
+ * XML::Generator
+    Needed by Test::Unit::Runner::XML
+    CPAN package http://search.cpan.org/dist/XML-Generator/
+    Ubuntu package libxml-generator-perl
+    RH/CentOS package perl-XML-Generator
+
+ * Clone
+    Provides a Perl structure deep-clone operation
+    CPAN package http://search.cpan.org/dist/Clone/
+    Ubuntu package libclone-perl
+    RH/CentOS package perl-Clone
+
+ * Config::IniFiles
+    Read simple .INI style config files.
+    CPAN package http://search.cpan.org/~shlomif/Config-IniFiles-2.68/
+    Ubuntu package libconfig-inifiles-perl
+    RH/CentOS package perl-Config-IniFiles
+
+ * News::NNTPClient
+    Perl 5 module to talk to NNTP (RFC977) server
+    CPAN package http://search.cpan.org/~rva/NNTPClient-0.37/
+    Ubuntu package libnews-nntpclient-perl
+    RH/CentOS package perl-NNTPClient
+
+ * IO::Socket::INET6
+    Object interface for AF_INET|AF_INET6 domain sockets
+    CPAN package http://search.cpan.org/~shlomif/IO-Socket-INET6-2.69/lib/IO/Socket/INET6.pm
+    Ubuntu package libio-socket-inet6-perl
+    RH/CentOS package perl-IO-Socket-INET6
+
+ * IO::Socket::SSL
+    Object interface for TLS sockets
+    CPAN package https://metacpan.org/pod/IO::Socket::SSL
+    Ubuntu package libio-socket-ssl-perl
+    RH/CentOS package perl-IO-Socket-SSL
+
+ * Net::Server
+    Extensible, general Perl server engine
+    Ubuntu package libnet-server-perl
+    RH/CentOS package perl-Net-Server
+
+ * Unix::Syslog
+    Perl interface to the UNIX syslog(3) calls
+    Ubuntu package libunix-syslog-perl
+    RH/CentOS package perl-Unix-Syslog
+
+ * File::chdir
+    A more sensible way to change directories
+    Ubuntu package libfile-chdir-perl
+    RH/CentOS package perl-File-chdir
+
+ * IO::Stringy
+    I/O on in-core objects like strings and arrays
+    Ubuntu package libio-stringy-perl
+
+ * Math::Int64
+    64 bit integer module for calculating conversation IDs
+    cpan Math::Int64
+
+ * Net::LDAP::Server
+    Base module for implementing LDAP Server functionality in perl
+    Available on CPAN, Debian package libnet-ldap-server-perl
+
+ * DBD::SQLite
+    Self-contained RDBMS in a DBI Driver
+    Debian/Ubuntu package libdbd-sqlite3-perl
+
+ * AnyEvent
+ * Convert::Base64
+ * DateTime::Format::ISO8601
+ * String::CRC32
+ * XML::DOM
+    These are available from CPAN
+
+Debian/Ubuntu copypasta:
+  sudo apt-get -y install liburi-perl libdigest-sha-perl \
+       libdatetime-perl libbsd-resource-perl libtest-unit-perl \
+       libxml-generator-perl libxml-xpath-perl libclone-perl \
+       libencode-imaputf7-perl libconfig-inifiles-perl \
+       libio-socket-inet6-perl libio-socket-ssl-perl libnet-server-perl \
+       libunix-syslog-perl libnews-nntpclient-perl \
+       libfile-chdir-perl libio-stringy-perl \
+       libanyevent-perl libjson-perl libjson-xs-perl \
+       libfile-libmagic-perl libtest-xml-perl \
+       libdatetime-format-iso8601-perl libdata-uuid-perl \
+       libmime-types-perl libtext-levenshteinxs-perl \
+       libdatetime-format-ical-perl libuniversal-require-perl \
+       libtest-nowarnings-perl libtest-longstring-perl \
+       libtest-warn-perl libnet-ldap-server-perl \
+       libdbd-sqlite3-perl
+
+  sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
+       Net::CalDAVTalk Net::CardDAVTalk String::CRC32
+
+Fedora copypasta:
+   # there's heaps more to add here... needs to be tested
+   # XXX 2019-07-01: this is stale, someone with fedora please update!
+    dnf install perl-String-CRC32 perl-File-chdir perl-Unix-Syslog \
+        perl-Net-Server perl-Clone perl-Test-NoWarnings perl-URI \
+        perl-Digest-SHA perl-BSD-Resource perl-Test-Unit \
+        perl-Test-Unit-Runner-Xml perl-XML-Generator perl-Config-IniFiles \
+        perl-NNTPClient perl-IO-Socket-INET6 perl-Net-Server \
+        perl-Unix-Syslog perl-File-chdir perl-Math-Int64 \
+        perl-Mail-IMAPTalk perl-String-CRC32 perl-File-chdir \
+        perl-Unix-Syslog perl-Net-Server perl-Net-CalDAVTalk \
+        perl-Net-CardDAVTalk perl-Mail-JMAPTalk perl-AnyEvent \
+        perl-File-Slurp perl-Pod-POM perl-experimental
+
