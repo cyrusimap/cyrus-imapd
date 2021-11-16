@@ -1530,7 +1530,8 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "lock_debugtime", NULL, STRING, "3.1.4" }
 /* A floating point number of seconds.  If set, time how long we wait for
    any lock, and syslog the filename and time if it's longer than this
-   value.  The default of NULL means not to time locks. */
+   value.  The default of NULL means not to time locks.  This is
+   implemented for fcntl(2) locks and has no effect on flock(2) locks. */
 
 # xxx how does this tie into virtual domains?
 { "loginrealms", "", STRING, "2.3.17" }
