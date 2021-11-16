@@ -125,7 +125,7 @@ Fetch the libraries for your platform. The full list (including all optional pac
 
     sudo apt-get install -y autoconf automake autotools-dev bash-completion bison build-essential comerr-dev \
     debhelper flex g++ git gperf groff heimdal-dev libbsd-resource-perl libclone-perl libconfig-inifiles-perl \
-    libcunit1-dev libdatetime-perl libdb-dev libdigest-sha-perl libencode-imaputf7-perl libfile-chdir-perl \
+    libcunit1-dev libdatetime-perl libdigest-sha-perl libencode-imaputf7-perl libfile-chdir-perl \
     libglib2.0-dev libical-dev libio-socket-inet6-perl libio-stringy-perl libjansson-dev libldap2-dev \
     libmysqlclient-dev libnet-server-perl libnews-nntpclient-perl libpam0g-dev libpcre3-dev libsasl2-dev \
     libsqlite3-dev libssl-dev libtest-unit-perl libtool libunix-syslog-perl liburi-perl \
