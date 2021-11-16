@@ -56,6 +56,9 @@ static void test_old(void)
     void *j;
     strarray_t sa = STRARRAY_INITIALIZER;
 
+    /* n.b. This test uses mpool, which coincidentally gets us 100% test
+     * coverage of lib/mpool.c, which we do not otherwise test at all!
+     */
     construct_hash_table(&table, 200, 1);
 
     for (i = 0 ; NULL != strings[i] ; i++ ) {
