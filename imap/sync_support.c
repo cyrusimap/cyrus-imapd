@@ -3090,7 +3090,7 @@ static int getannotation_cb(const char *mboxname,
 int sync_get_annotation(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
-    return annotatemore_findall_pattern(mboxname, 0, "*", /*modseq*/0,
+    return annotatemore_findall_mboxname(mboxname, 0, "*", /*modseq*/0,
                                 &getannotation_cb, (void *) sstate->pout,
                                 /*flags*/0);
 }
@@ -6503,7 +6503,7 @@ int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname)
     r = do_getannotation(sync_cs, mboxname, replica_annot);
     if (r) goto bail;
 
-    r = annotatemore_findall_pattern(mboxname, 0, "*", /*modseq*/0, &do_annotation_cb,
+    r = annotatemore_findall_mboxname(mboxname, 0, "*", /*modseq*/0, &do_annotation_cb,
                              master_annot, /*flags*/0);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: fetching annotations failed",
