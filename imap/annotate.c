@@ -1174,6 +1174,7 @@ static int _findall(struct findall_data *data, void *rock)
 
 static int annotatemore_findall_full(const char *pattern, /* internal */
                          const struct mailbox *mailbox,
+                         const char *mboxname,
                          unsigned int uid,
                          const char *entry,
                          modseq_t since_modseq,
@@ -1183,10 +1184,11 @@ static int annotatemore_findall_full(const char *pattern, /* internal */
 {
     int r;
     struct find_rock frock;
+    mbentry_t *mbentry = NULL;
 
     init_internal();
 
-    assert(pattern || mailbox);
+    assert(pattern || mailbox || mboxname);
     assert(entry);
 
     frock.pattern = pattern;
@@ -1200,22 +1202,22 @@ static int annotatemore_findall_full(const char *pattern, /* internal */
     frock.since_modseq = since_modseq;
     frock.flags = flags;
 
-    r = _annotate_getdb(mailbox ? mailbox_uniqueid(mailbox) : NULL, mailbox, uid, 0, &frock.d);
+    if (mailbox || mboxname) {
+        if (mailbox) mboxname = mailbox_name(mailbox);
+        r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
+        if (r) goto out;
+    }
+
+    r = _annotate_getdb(mbentry ? mbentry->uniqueid : NULL, mailbox, uid, 0, &frock.d);
     if (r) {
         if (r == CYRUSDB_NOTFOUND)
             r = 0;
         goto out;
     }
 
-    if (mailbox) {
-        /* Single mailbox entries */
-        mbentry_t *mbentry = NULL;
-        r = mboxlist_lookup_allow_all(mailbox_name(mailbox), &mbentry, NULL);
-        if (!r) {
-            struct findall_data data = { .mbentry = mbentry, .is_exactmatch = 1 };
-            r = _findall(&data, &frock);
-        }
-        mboxlist_entry_free(&mbentry);
+    if (mbentry) {
+        struct findall_data data = { .mbentry = mbentry, .is_exactmatch = 1 };
+        r = _findall(&data, &frock);
     }
     else if (!*pattern) {
         /* Server entries */
@@ -1228,6 +1230,7 @@ static int annotatemore_findall_full(const char *pattern, /* internal */
     }
 
 out:
+    mboxlist_entry_free(&mbentry);
     glob_free(&frock.eglob);
     annotate_putdb(&frock.d);
 
@@ -1242,7 +1245,7 @@ EXPORTED int annotatemore_findall_mailbox(const struct mailbox *mailbox,
                          void *rock,
                          int flags)
 {
-    return annotatemore_findall_full(NULL, mailbox, uid, entry, since_modseq, proc, rock, flags);
+    return annotatemore_findall_full(NULL, mailbox, NULL, uid, entry, since_modseq, proc, rock, flags);
 }
 
 EXPORTED int annotatemore_findall_pattern(const char *pattern,
@@ -1253,9 +1256,20 @@ EXPORTED int annotatemore_findall_pattern(const char *pattern,
                          void *rock,
                          int flags)
 {
-    return annotatemore_findall_full(pattern, NULL, uid, entry, since_modseq, proc, rock, flags);
+    return annotatemore_findall_full(pattern, NULL, NULL, uid, entry, since_modseq, proc, rock, flags);
 }
 
+
+EXPORTED int annotatemore_findall_mboxname(const char *mboxname,
+                         unsigned int uid,
+                         const char *entry,
+                         modseq_t since_modseq,
+                         annotatemore_find_proc_t proc,
+                         void *rock,
+                         int flags)
+{
+    return annotatemore_findall_full(NULL, NULL, mboxname, uid, entry, since_modseq, proc, rock, flags);
+}
 
 /***************************  Annotate State Management  ***************************/
 
@@ -1968,7 +1982,7 @@ static void annotation_get_fromdb(annotate_state_t *state,
 
     // if mailbox present, will be a mailbox fetch, otherwise will be a server fetch
     // with the blank pattern
-    annotatemore_findall_full("", state->mailbox, state->uid, entry->name, 0, &rw_cb, state, 0);
+    annotatemore_findall_full("", state->mailbox, NULL, state->uid, entry->name, 0, &rw_cb, state, 0);
 
     if (state->found != state->attribs &&
         (!strchr(entry->name, '%') && !strchr(entry->name, '*'))) {

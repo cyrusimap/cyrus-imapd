@@ -165,6 +165,11 @@ EXPORTED int annotatemore_findall_pattern(const char *pattern,
                          modseq_t since_modseq,
                          annotatemore_find_proc_t proc, void *rock,
                          int flags);
+EXPORTED int annotatemore_findall_mboxname(const char *mboxname,
+                         uint32_t uid, const char *entry,
+                         modseq_t since_modseq,
+                         annotatemore_find_proc_t proc, void *rock,
+                         int flags);
 
 /* fetch annotations and output results */
 typedef void (*annotate_fetch_cb_t)(const char *mboxname, /* internal */
