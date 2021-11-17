@@ -2661,8 +2661,9 @@ int sync_apply_mailbox(struct dlist *kin,
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
     if (mbtype_isa(mbtype) == MBTYPE_SIEVE) {
-        /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
-        return 0;
+        /* Client should never send #sieve mailbox
+           (replicated via *SIEVE* commands) */
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
 
     if (mbtype & (MBTYPE_INTERMEDIATE|MBTYPE_DELETED)) {
