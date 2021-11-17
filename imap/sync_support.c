@@ -946,14 +946,22 @@ int sync_sieve_deactivate(const char *userid)
     return sync_sieve_activate(userid, NULL);
 }
 
-int sync_sieve_delete(const char *userid, const char *bcname)
+int sync_sieve_delete(const char *userid, const char *fname)
 {
-    struct sieve_db *db = sievedb_open_userid(userid);
+    struct sieve_db *db;
     struct mailbox *mailbox = NULL;
     struct sieve_data *sdata = NULL;
     char name[2048];
+    const char *ext;
     int r;
 
+    ext = strrchr(fname, '.');
+    if (!ext || strcmp(ext, SCRIPT_SUFFIX)) {
+        /* silently ignore attempts to delete anything other than a script */
+        return 0;
+    }
+
+    db = sievedb_open_userid(userid);
     if (!db) {
         syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
         return IMAP_INTERNAL;
@@ -965,8 +973,7 @@ int sync_sieve_delete(const char *userid, const char *bcname)
         goto done;
     }
 
-    snprintf(name, sizeof(name), "%.*s",
-             (int) strlen(bcname) - BYTECODE_SUFFIX_LEN, bcname);
+    snprintf(name, sizeof(name), "%.*s", (int) (ext - fname), fname);
 
     r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
     if (r) goto done;
@@ -3268,9 +3275,8 @@ static int remove_cb(const char *sievedir, const char *fname,
             const char *ext = strrchr(fname, '.');
 
             if (ext && !strcmp(ext, BYTECODE_SUFFIX)) {
-                namelen = strlen(fname) - BYTECODE_SUFFIX_LEN;
-                snprintf(path, sizeof(path), "%.*s",
-                         (int) strlen(fname) - BYTECODE_SUFFIX_LEN, fname);
+                namelen = ext - fname;
+                snprintf(path, sizeof(path), "%.*s", (int) namelen, fname);
                 if (strarray_find(list, path, 0) >= 0) {
                     /* Bytecode for an existing script - keep it */
                     return SIEVEDIR_OK;
@@ -3350,21 +3356,22 @@ char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
     return result;
 }
 
-int sync_sieve_upload(const char *userid, const char *name,
+int sync_sieve_upload(const char *userid, const char *fname,
                       time_t last_update __attribute__((unused)),
                       const char *content,
                       size_t len)
 {
     const char *sieve_path = user_sieve_path(userid);
-    char newname[2048];
+    char name[2048];
     char *ext;
-    int   r = 0;
+    int r = 0;
     struct stat sbuf;
     struct sieve_db *db = NULL;
     struct mailbox *mailbox = NULL;
     struct sieve_data *sdata = NULL;
+    struct buf buf = BUF_INITIALIZER;
 
-    ext = strrchr(name, '.');
+    ext = strrchr(fname, '.');
     if (!ext || strcmp(ext, SCRIPT_SUFFIX)) {
         /* silently ignore attempts to upload anything other than a script */
         return 0;
@@ -3391,25 +3398,27 @@ int sync_sieve_upload(const char *userid, const char *name,
         goto done;
     }
 
-    r = sievedb_lookup_name(db, mailbox_name(mailbox), newname, &sdata, 0);
-    if (!r || r == CYRUSDB_NOTFOUND) {
-        struct buf buf = BUF_INITIALIZER;
-
+    snprintf(name, sizeof(name), "%.*s", (int) (ext - fname), fname);
+    r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
+    if (r == CYRUSDB_NOTFOUND) {
         buf_init_ro(&buf, content, len);
-        snprintf(newname, sizeof(newname), "%.*s", (int) (ext - name), name);
-        sdata->name = newname;
+        sdata->name = name;
         sdata->content = buf_cstring(&buf);
-
-        r = sieve_script_store(mailbox, sdata);
-        buf_free(&buf);
+    }
+    else if (r) {
+        syslog(LOG_ERR, "Failed to lookup script %s for %s", name, userid);
+        goto done;
     }
 
+    r = sieve_script_store(mailbox, sdata);
+
+  done:
     if (!r) sync_log_sieve(userid);
     else if (r == CYRUSDB_IOERROR) r = IMAP_IOERROR;
 
-  done:
     mailbox_close(&mailbox);
     sievedb_close(db);
+    buf_free(&buf);
 
     return r;
 }
