@@ -630,4 +630,40 @@ sub test_eventsource
     $self->assert_not_null($data->{changed}->{cassandane}->{Email});
 }
 
+sub test_bearer_auth_jwt
+    :min_version_3_5 :needs_component_jmap :NoAltNameSpace :HttpJWTAuthRSA
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $http = $self->{instance}->get_service("http");
+
+    my $token = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjYXNzYW5kYW5lIn0.Eoa-9imqmFVYKU19yMaHZGEwiOWE3rSKQDw598rZYJvLqjrF8bG2fvMAUB6VeXxoJLca-uXAtTNHKBWYye9uvzTO3e8VMQOHHIb2RbBVyC7UxUEkbN8KC8YVrMNQoJDuugxeANKSrbmL8l6AtGEBK8iCoBnedleCzQ-nE7KtnwD356F63teK6jIoGW9KI0zNIeTe1k5Wh6NM3hZKC12mfU2JsOHTes-XH8lig2RQraBmdR1t9EKMTVztq-hXiVxvYtc3eIghdz5Ss52qr3VaCJJXExOXbnp0LwbUNUOFn1GCPfhRyEZdQxhGV19cO-RceIV1aawZnegdQS_kWERQNg";
+
+    xlog "Use valid RS256 token";
+    my $RawRequest = {
+        headers => {
+            'Authorization' => 'Bearer ' . $token,
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('200', $RawResponse->{status});
+
+    xlog "Use invalid RS256 token";
+    $RawRequest = {
+        headers => {
+            'Authorization' => 'Bearer ' . substr $token, 0, -3
+        },
+        content => '',
+    };
+    $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('401', $RawResponse->{status});
+}
+
 1;

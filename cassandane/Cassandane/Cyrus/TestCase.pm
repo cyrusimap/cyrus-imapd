@@ -370,6 +370,11 @@ magic(LowEmailLimits => sub {
         conversations_max_guidinfolder => 2,
     );
 });
+magic(HttpJWTAuthRSA => sub {
+    my $self = shift;
+    $self->config_set(http_jwt_key_path => '@basedir@/conf/certs/jwt.pem');
+    $self->want('install_certificates');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
