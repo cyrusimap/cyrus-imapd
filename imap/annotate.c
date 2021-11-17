@@ -1202,6 +1202,14 @@ static int annotatemore_findall_full(const char *pattern, /* internal */
     frock.since_modseq = since_modseq;
     frock.flags = flags;
 
+    /* special case where mboxname is "" and others are empty, this means
+     * server annotations, which are recognised by an empty pattern by the
+     * code below */
+    if (!mailbox && !pattern && !*mboxname) {
+        mailbox = NULL;
+        pattern = "";
+    }
+
     if (mailbox || mboxname) {
         if (mailbox) mboxname = mailbox_name(mailbox);
         r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
