@@ -61,6 +61,7 @@ sub new
 {
     my ($class, @args) = @_;
     my $config = Cassandane::Config->default()->clone();
+
     $config->set(caldav_realm => 'Cassandane',
                  caldav_historical_age => -1,
                  conversations => 'yes',
@@ -70,11 +71,34 @@ sub new
                  icalendar_max_size => 100000,
                  jmap_nonstandard_extensions => 'yes');
 
+    # Configure Sieve iMIP delivery
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj == 3 && $min == 0) {
+        # need to explicitly add 'body' to sieve_extensions for 3.0
+        $config->set(sieve_extensions =>
+            "fileinto reject vacation vacation-seconds imap4flags notify " .
+            "envelope relational regex subaddress copy date index " .
+            "imap4flags mailbox mboxmetadata servermetadata variables " .
+            "body");
+    }
+    elsif ($maj < 3) {
+        # also for 2.5 (the earliest Cyrus that Cassandane can test)
+        $config->set(sieve_extensions =>
+            "fileinto reject vacation vacation-seconds imap4flags notify " .
+            "envelope relational regex subaddress copy date index " .
+            "imap4flags body");
+    }
+    $config->set(sievenotifier => 'mailto');
+    $config->set(calendar_user_address_set => 'example.com');
+    $config->set(caldav_historical_age => -1);
+    $config->set(virtdomains => 'no');
+
     return $class->SUPER::new({
         config => $config,
         jmap => 1,
         adminstore => 1,
-        services => [ 'imap', 'http' ]
+        deliver => 1,
+        services => [ 'imap', 'sieve', 'http' ],
     }, @args);
 }
 
@@ -7651,5 +7675,102 @@ sub test_calendar_get_freebusy_only
     $self->assert_deep_equals([], $res->[0][1]{list});
 
 }
+
+sub test_calendarevent_query_no_sched_inbox
+    :needs_component_sieve :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    my $caldav = $self->{caldav};
+
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $imap->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    if processimip {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP invite";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', { }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    my $defaultCalendarId = $res->[0][1]{list}[0]{id};
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', { }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => ['calendarId'],
+        }, 'R2'],
+        ['CalendarEvent/query', {
+            filter => {
+                title => 'test',
+            },
+        }, 'R3'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R3',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => ['calendarId'],
+        }, 'R4'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($defaultCalendarId, $res->[1][1]{list}[0]{calendarId});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{ids}});
+    $self->assert_str_equals($defaultCalendarId, $res->[3][1]{list}[0]{calendarId});
+}
+
 
 1;
