@@ -1732,6 +1732,8 @@ struct getcalendarevents_rock {
     hashu64_table jmapcache;
     ptrarray_t *want_eventids;
     int check_acl;
+    const char *sched_inboxname;
+    const char *sched_outboxname;
 };
 
 struct recurid_instanceof_rock {
@@ -1972,6 +1974,9 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
         r = 0;
         goto done;
     }
+    if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
+        !strcmpsafe(mbentry->name, rock->sched_outboxname))
+        goto done;
 
     if (cdata->jmapversion == JMAPCACHE_CALVERSION) {
         json_error_t jerr;
@@ -2312,6 +2317,8 @@ static void cachecalendarevents_cb(uint64_t rowid, void *payload, void *vrock)
 static int jmap_calendarevent_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    char *sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
+    char *sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX);
     struct jmap_get get;
     struct caldav_db *db = NULL;
     json_t *err = NULL;
@@ -2330,7 +2337,10 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            NULL /* mbentry */,
                                            HASHU64_TABLE_INITIALIZER, /* cache */
                                            NULL, /* want_eventids */
-                                           checkacl };
+                                           checkacl,
+                                           sched_inboxname,
+                                           sched_outboxname
+    };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
 
@@ -2426,6 +2436,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
 done:
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
+    free(sched_inboxname);
+    free(sched_outboxname);
     if (db) caldav_close(db);
     if (rock.mailbox) jmap_closembox(req, &rock.mailbox);
     if (rock.mbentry) mboxlist_entry_free(&rock.mbentry);
@@ -3985,6 +3997,8 @@ struct eventquery_rock {
     int expandrecur;
     struct mailbox *mailbox;
     ptrarray_t *matches;
+    const char *sched_inboxname;
+    const char *sched_outboxname;
 };
 
 static int eventquery_cb(void *vrock, struct caldav_data *cdata)
@@ -4002,6 +4016,10 @@ static int eventquery_cb(void *vrock, struct caldav_data *cdata)
     /* Check permissions */
     int rights = mbentry ? jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS) : 0;
     if (!rights) goto done;
+
+    if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
+        !strcmpsafe(mbentry->name, rock->sched_outboxname))
+        goto done;
 
     struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
     match->ical_uid = xstrdup(cdata->ical_uid);
@@ -4123,6 +4141,8 @@ static int eventquery_search_run(jmap_req_t *req,
                                  enum caldav_sort *sort,
                                  size_t nsort,
                                  int expandrecur,
+                                 const char *sched_inboxname,
+                                 const char *sched_outboxname,
                                  ptrarray_t *matches)
 {
     int r, i;
@@ -4195,6 +4215,12 @@ static int eventquery_search_run(jmap_req_t *req,
             continue;
         }
 
+        if (!strcmpsafe(mbentry->name, sched_inboxname) ||
+            !strcmpsafe(mbentry->name, sched_outboxname)) {
+            mboxlist_entry_free(&mbentry);
+            goto done;
+        }
+
         /* Fetch the CalDAV db record */
         if (caldav_lookup_imapuid(db, mbentry, md->uid, &cdata, 0) == 0) {
 
@@ -4263,12 +4289,15 @@ done:
 struct eventquery_fastpath_rock {
     jmap_req_t *req;
     struct jmap_query *query;
+    const char *sched_inboxname;
+    const char *sched_outboxname;
 };
 
-static int eventquery_fastpath_cb(void *rock, struct caldav_data *cdata)
+static int eventquery_fastpath_cb(void *vrock, struct caldav_data *cdata)
 {
-    jmap_req_t *req = ((struct eventquery_fastpath_rock*)rock)->req;
-    struct jmap_query *query = ((struct eventquery_fastpath_rock*)rock)->query;
+    struct eventquery_fastpath_rock *rock = vrock;
+    jmap_req_t *req = rock->req;
+    struct jmap_query *query = rock->query;
 
     assert(query->position >= 0);
 
@@ -4278,6 +4307,11 @@ static int eventquery_fastpath_cb(void *rock, struct caldav_data *cdata)
     }
 
     mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
+        !strcmpsafe(mbentry->name, rock->sched_outboxname)) {
+        mboxlist_entry_free(&mbentry);
+        return 0;
+    }
 
     /* Check permissions */
     int rights = mbentry && jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
@@ -4373,6 +4407,8 @@ static int eventquery_run(jmap_req_t *req,
     int r = HTTP_NOT_IMPLEMENTED;
     enum caldav_sort *sort = NULL;
     size_t nsort = 0;
+    char *sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
+    char *sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX);
 
     /* Sanity check arguments */
     eventquery_read_timerange(query->filter, &before, &after);
@@ -4420,7 +4456,9 @@ static int eventquery_run(jmap_req_t *req,
     /* Attempt to fast-path trivial query */
 
     if (!have_textsearch && !expandrecur && query->position >= 0 && !query->anchor) {
-        struct eventquery_fastpath_rock rock = { req, query };
+        struct eventquery_fastpath_rock rock = {
+            req, query, sched_inboxname, sched_outboxname
+        };
         const char *wantuid = json_string_value(json_object_get(query->filter, "uid"));
         if (wantuid) {
             /* Super fast path!  We only want a single UID */
@@ -4442,12 +4480,18 @@ static int eventquery_run(jmap_req_t *req,
     if (have_textsearch) {
         /* Query and sort matches in search backend. */
         r = eventquery_search_run(req, query->filter, db, before, after,
-                                  sort, nsort, expandrecur, &matches);
+                                  sort, nsort, expandrecur,
+                                  sched_inboxname, sched_outboxname,
+                                  &matches);
         if (r) goto done;
     }
     else {
         /* Query and sort matches in Caldav DB. */
-        struct eventquery_rock rock = { req, expandrecur, NULL, &matches };
+        struct eventquery_rock rock = {
+            req, expandrecur, NULL, &matches,
+            sched_inboxname, sched_outboxname
+        };
+
         enum caldav_sort mboxsort = CAL_SORT_MAILBOX;
         r = caldav_foreach_timerange(db, NULL, after, before,
                                      expandrecur ? &mboxsort : sort,
@@ -4555,6 +4599,8 @@ done:
             eventquery_match_free(&match);
         }
     }
+    free(sched_inboxname);
+    free(sched_outboxname);
     ptrarray_fini(&matches);
     free(sort);
     return r;
