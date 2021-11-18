@@ -289,7 +289,7 @@ EOF
          }, "R4"],
     ]);
     $self->assert_not_null($res->[1][1]{updated});
-    $self->assert_null($res->[1][1]{updated}{$id1});
+    $self->assert_not_null($res->[1][1]{updated}{$id1}{blobId});
     $self->assert_equals(JSON::true, $res->[1][1]{updated}{$id2}{isActive});
     $self->assert_null($res->[1][1]{notUpdated});
 
@@ -456,7 +456,7 @@ EOF
          }, "R4"],
     ]);
     $self->assert_not_null($res->[1][1]{updated});
-    $self->assert_null($res->[1][1]{updated}{$id1});
+    $self->assert_not_null($res->[1][1]{updated}{$id1}{blobId});
     $self->assert_equals(JSON::true, $res->[1][1]{updated}{$id2}{isActive});
     $self->assert_null($res->[1][1]{notUpdated});
 
