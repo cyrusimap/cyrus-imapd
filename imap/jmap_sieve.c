@@ -85,8 +85,6 @@ static int jmap_sieve_query(jmap_req_t *req);
 static int jmap_sieve_validate(jmap_req_t *req);
 static int jmap_sieve_test(jmap_req_t *req);
 
-static int jmap_sieve_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
-
 static int maxscripts = 0;
 static json_int_t maxscriptsize = 0;
 
@@ -143,8 +141,6 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
             hash_insert(mp->name, mp, &settings->methods);
         }
     }
-
-    ptrarray_append(&settings->getblob_handlers, jmap_sieve_getblob);
 
     maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
     maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE) * 1024;
@@ -233,8 +229,10 @@ static int getscript(void *rock, struct sieve_data *sdata)
 
     if (jmap_wantprop(get->props, "blobId")) {
         struct buf buf = BUF_INITIALIZER;
+        struct message_guid uuid;
 
-        buf_printf(&buf, "S%s", sdata->id);
+        message_guid_generate(&uuid, sdata->content, strlen(sdata->content));
+        buf_printf(&buf, "G%s", message_guid_encode(&uuid));
         json_object_set_new(sieve, "blobId", json_string(buf_cstring(&buf)));
         buf_free(&buf);
     }
@@ -448,8 +446,11 @@ static const char *set_create(struct jmap_req *req,
 
     if (!r) {
         /* Report script as created, with server-set properties */
+        struct message_guid uuid;
+
+        message_guid_generate(&uuid, content, strlen(content));
         buf_reset(&buf);
-        buf_printf(&buf, "S%s", id);
+        buf_printf(&buf, "G%s", message_guid_encode(&uuid));
 
         json_t *new_sieve = json_pack("{s:s s:b s:s}",
                                       "id", id, "isActive", 0,
@@ -479,7 +480,7 @@ static void set_update(struct jmap_req *req,
                        struct jmap_set *set)
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
-    const char *name = NULL;
+    const char *name = NULL, *content = NULL;
     struct buf buf = BUF_INITIALIZER;
     struct sieve_data *sdata = NULL;
     int r = 0;
@@ -551,8 +552,7 @@ static void set_update(struct jmap_req *req,
         if (!json_is_string(arg))
             json_array_append_new(invalid, json_string("blobId"));
         else {
-            sdata->content = script_findblob(req,
-                                             json_string_value(arg), &buf, &err);
+            content = script_findblob(req, json_string_value(arg), &buf, &err);
             if (err) goto done;
         }
     }
@@ -565,12 +565,26 @@ static void set_update(struct jmap_req *req,
     }
 
     if (name) sdata->name = name;
+    if (content) sdata->content = content;
 
     r = putscript(mailbox, sdata, &err);
     if (err) goto done;
 
-    /* Report script as updated */
-    json_object_set_new(set->updated, id, json_null());
+    /* Report script as updated, with server-set properties */
+    json_t *new_sieve = NULL;
+    if (content) {
+        struct message_guid uuid;
+
+        message_guid_generate(&uuid, content, strlen(content));
+        buf_reset(&buf);
+        buf_printf(&buf, "G%s", message_guid_encode(&uuid));
+
+        new_sieve = json_pack("{s:s}", "blobId", buf_cstring(&buf));
+    }
+    else {
+        new_sieve = json_null();
+    }
+    json_object_set_new(set->updated, id, new_sieve);
 
   done:
     if (r) {
@@ -2151,38 +2165,4 @@ done:
         unlink(tmpname);
     }
     return 0;
-}
-
-static int jmap_sieve_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
-{
-    if (ctx->blobid[0] != 'S') return 0;
-
-    /* Make sure client can handle blob type. */
-    if (ctx->accept_mime) {
-        if (strcmp(ctx->accept_mime, "application/octet-stream") &&
-            strcmp(ctx->accept_mime, "application/sieve")) {
-            return HTTP_NOT_ACCEPTABLE;
-        }
-
-        buf_setcstr(&ctx->content_type, ctx->accept_mime);
-    }
-    else buf_setcstr(&ctx->content_type, "application/sieve; charset=utf-8");
-
-    buf_setcstr(&ctx->encoding, "8BIT");
-
-    /* Lookup scriptid */
-    struct sieve_db *db = sievedb_open_userid(ctx->from_accountid ?
-                                              ctx->from_accountid : req->accountid);
-    struct sieve_data *sdata = NULL;
-    int r = HTTP_NOT_FOUND;
-
-    if (db) (void) sievedb_lookup_id(db, ctx->blobid+1, &sdata, 0);
-    if (sdata && sdata->imap_uid) {
-        buf_setcstr(&ctx->blob, sdata->content);
-        r = HTTP_OK;
-    }
-
-    sievedb_close(db);
-
-    return r;
 }
