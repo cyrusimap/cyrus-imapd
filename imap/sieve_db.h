@@ -47,6 +47,7 @@
 #include <config.h>
 
 #include "mailbox.h"
+#include "sqldb.h"
 
 struct sieve_db;
 
@@ -139,6 +140,9 @@ int sievedb_get_updates(struct sieve_db *sievedb,
 
 /* count number of scripts */
 int sievedb_count(struct sieve_db *sievedb, int *count);
+
+/* upgrade v12 sieve_script table to v13 */
+int sievedb_upgrade(sqldb_t *db);
 
 int sieve_script_store(struct mailbox *mailbox, struct sieve_data *sdata,
                        const struct buf *content);

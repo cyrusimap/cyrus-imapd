@@ -59,6 +59,7 @@
 #include "cyrusdb.h"
 #include "dav_db.h"
 #include "global.h"
+#include "sieve_db.h"
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -253,7 +254,7 @@ struct sqldb_upgrade davdb_upgrade[] = {
   { 10, CMD_DBUPGRADEv10, NULL },
   /* Don't upgrade to version 11.  We only jump to 11 on CREATE */
   /* Don't upgrade to version 12.  This was an intermediate Sieve DB version */
-  { 13, CMD_DBUPGRADEv13, NULL },
+  { 13, CMD_DBUPGRADEv13, &sievedb_upgrade },
   { 0, NULL, NULL }
 };
 

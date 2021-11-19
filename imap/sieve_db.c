@@ -1085,3 +1085,64 @@ EXPORTED int sieve_script_rebuild(const char *userid,
 
     return r;
 }
+
+#define CMD_ALTER_v12_TABLE              \
+    "ALTER TABLE sieve_scripts RENAME COLUMN content TO contentid;"
+
+#define CMD_UPDATE_v12_ROW               \
+    "UPDATE sieve_scripts SET"           \
+    "  contentid     = :contentid"       \
+    " WHERE rowid = :rowid;"
+
+
+static int upgrade_cb(void *rock, struct sieve_data *sdata)
+{
+    strarray_t *sha1 = (strarray_t *) rock;
+    struct message_guid uuid;
+
+    /* v12 stored script content in the column that is now named 'contentid' */
+    const char *content = sdata->contentid;
+
+    /* Generate SHA1 from content */
+    message_guid_generate(&uuid, content, strlen(content));
+
+    /* Add SHA1 to our array using rowid as the index */
+    strarray_set(sha1, sdata->rowid, message_guid_encode(&uuid));
+
+    return 0;
+}
+
+EXPORTED int sievedb_upgrade(sqldb_t *db)
+{
+    strarray_t sha1 = STRARRAY_INITIALIZER;
+    struct sieve_data sdata;
+    struct sieve_db sievedb = { .db = db };
+    struct read_rock rrock =
+        { &sievedb, &sdata, 1 /*tombstones*/, upgrade_cb, &sha1 };
+    struct sqldb_bindval bval[] = {
+        { ":rowid",     SQLITE_INTEGER, { .i = 0    } },
+        { ":contentid", SQLITE_TEXT,    { .s = NULL } },
+        { NULL,         SQLITE_NULL,    { .s = NULL } } };
+    int rowid, r;
+
+    if (db->version > 12) return 0;
+
+    /* Rename 'content' -> 'contentid' */
+    r = sqldb_exec(db, CMD_ALTER_v12_TABLE, NULL, NULL, NULL);
+    if (r) return r;
+
+    /* Create an array of SHA1 for the content in each record */
+    r = sqldb_exec(db, CMD_GETFIELDS, NULL, &read_cb, &rrock);
+
+    /* Rewrite 'contentid' columns with actual ids (SHA1) */
+    for (rowid = 1; !r && rowid < strarray_size(&sha1); rowid++) {
+        bval[0].val.i = rowid;
+        bval[1].val.s = strarray_nth(&sha1, rowid);
+
+        r = sqldb_exec(db, CMD_UPDATE_v12_ROW, bval, NULL, NULL);
+    }
+
+    strarray_fini(&sha1);
+
+    return r;
+}
