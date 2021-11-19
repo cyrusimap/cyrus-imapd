@@ -185,7 +185,7 @@
     " createdmodseq INTEGER,"                                           \
     " id TEXT NOT NULL,"                                                \
     " name TEXT NOT NULL,"                                              \
-    " content TEXT NOT NULL,"                                           \
+    " contentid TEXT NOT NULL,"                                         \
     " isactive INTEGER,"                                                \
     " alive INTEGER,"                                                   \
     " UNIQUE( mailbox, imap_uid ),"                                     \
@@ -239,7 +239,7 @@
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_vcard_imapuid ON vcard_objs ( mailbox, imap_uid );" \
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_object_imapuid ON dav_objs ( mailbox, imap_uid );"
 
-#define CMD_DBUPGRADEv12 CMD_CREATE_SIEVE
+#define CMD_DBUPGRADEv13 CMD_CREATE_SIEVE
 
 struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
@@ -252,11 +252,12 @@ struct sqldb_upgrade davdb_upgrade[] = {
   { 9, CMD_DBUPGRADEv9, NULL },
   { 10, CMD_DBUPGRADEv10, NULL },
   /* Don't upgrade to version 11.  We only jump to 11 on CREATE */
-  { 12, CMD_DBUPGRADEv12, NULL },
+  /* Don't upgrade to version 12.  This was an intermediate Sieve DB version */
+  { 13, CMD_DBUPGRADEv13, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 12
+#define DB_VERSION 13
 
 static sqldb_t *reconstruct_db;
 

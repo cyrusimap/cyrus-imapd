@@ -187,15 +187,23 @@ static const jmap_property_t vacation_props[] = {
     " because the active Sieve script does not" \
     " properly include the '" JMAP_URN_VACATION "' script."
 
-static json_t *vacation_read(const char *userid,
+static json_t *vacation_read(jmap_req_t *req,
                              struct sieve_data *sdata, unsigned *status)
 {
-    const char *sieve_dir = user_sieve_path(userid);
+    const char *sieve_dir = user_sieve_path(req->accountid);
+    struct mailbox *mailbox = NULL;
+    struct buf content = BUF_INITIALIZER;
     json_t *vacation = NULL;
 
+    int r = jmap_openmbox(req, sdata->mailbox, &mailbox, 0);
+    if (!r) {
+        r = sieve_script_fetch(mailbox, sdata, &content);
+        jmap_closembox(req, &mailbox);
+    }
+
     /* Parse JMAP from vacation script */
-    if (sdata->content) {
-        const char *json = strstr(sdata->content, SCRIPT_HEADER);
+    if (buf_len(&content)) {
+        const char *json = strstr(buf_cstring(&content), SCRIPT_HEADER);
 
         if (json) {
             json_error_t jerr;
@@ -204,6 +212,7 @@ static json_t *vacation_read(const char *userid,
             vacation = json_loads(json, JSON_DISABLE_EOF_CHECK, &jerr);
         }
     }
+    buf_free(&content);
 
     if (vacation) {
         int isEnabled =
@@ -263,11 +272,11 @@ static json_t *vacation_read(const char *userid,
     return vacation;
 }
 
-static void vacation_get(const char *userid,
+static void vacation_get(jmap_req_t *req,
                          struct sieve_data *sdata, struct jmap_get *get)
 {
     /* Read script */
-    json_t *vacation = vacation_read(userid, sdata, NULL);
+    json_t *vacation = vacation_read(req, sdata, NULL);
 
     /* Strip unwanted properties */
     if (!jmap_wantprop(get->props, "isEnabled"))
@@ -329,12 +338,12 @@ static int jmap_vacation_get(jmap_req_t *req)
             const char *id = json_string_value(jval);
 
             if (!strcmp(id, "singleton"))
-                vacation_get(req->accountid, sdata, &get);
+                vacation_get(req, sdata, &get);
             else
                 json_array_append(get.not_found, jval);
         }
     }
-    else vacation_get(req->accountid, sdata, &get);
+    else vacation_get(req, sdata, &get);
 
     /* Build response */
     struct buf buf = BUF_INITIALIZER;
@@ -355,7 +364,7 @@ done:
     return 0;
 }
 
-static void vacation_update(const char *userid,
+static void vacation_update(struct jmap_req *req,
                             struct mailbox *mailbox, struct sieve_data *sdata,
                             json_t *patch, struct jmap_set *set)
 {
@@ -366,7 +375,7 @@ static void vacation_update(const char *userid,
     const char *err = NULL;
     int r;
 
-    vacation = vacation_read(userid, sdata, &status);
+    vacation = vacation_read(req, sdata, &status);
 
     prop = json_object_get(patch, "isEnabled");
     if (!json_is_boolean(prop))
@@ -494,9 +503,8 @@ static void vacation_update(const char *userid,
 
     /* Store script */
     sdata->id = sdata->name = JMAP_URN_VACATION;
-    sdata->content = buf_cstring(&data);
 
-    r = sieve_script_store(mailbox, sdata);
+    r = sieve_script_store(mailbox, sdata, &data);
 
     buf_free(&data);
     json_decref(vacation);
@@ -591,7 +599,7 @@ static int jmap_vacation_set(struct jmap_req *req)
             continue;
         }
 
-        vacation_update(req->accountid, mailbox, sdata, arg, &set);
+        vacation_update(req, mailbox, sdata, arg, &set);
     }
 
     if (json_object_size(set.updated)) {

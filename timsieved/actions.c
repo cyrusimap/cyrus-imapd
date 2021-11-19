@@ -216,6 +216,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
 int getscript(struct protstream *conn, const struct buf *name)
 {
     struct sieve_data *sdata = NULL;
+    struct buf content = BUF_INITIALIZER;
     int result;
 
     if (!sievedir_valid_name(name)) {
@@ -229,14 +230,23 @@ int getscript(struct protstream *conn, const struct buf *name)
         prot_printf(conn, "NO (NONEXISTENT) \"Script does not exist\"\r\n");
         return TIMSIEVE_NOEXIST;
     }
-    else if (result) {
+
+    if (!result) {
+        result = sieve_script_fetch(sieve_mailbox, sdata, &content);
+    }
+    if (result) {
         prot_printf(conn, "NO \"Error getting script\"\r\n");
         return TIMSIEVE_FAIL;
     }
 
-    prot_printf(conn, "{%lu}\r\n%s\r\n", strlen(sdata->content), sdata->content);
+    prot_printf(conn, "{%lu}\r\n", buf_len(&content));
+    prot_putbuf(conn, &content);
+    prot_puts(conn, "\r\n");
 
-    prot_printf(conn, "OK\r\n");
+    buf_free(&content);
+
+    prot_puts(conn, "OK\r\n");
+
     return TIMSIEVE_OK;
 }
 
@@ -287,9 +297,8 @@ int putscript(struct protstream *conn, const struct buf *name,
                                      buf_cstring(name), &sdata, 0);
         if (!result || result == CYRUSDB_NOTFOUND) {
             sdata->name = buf_cstring(name);
-            sdata->content = buf_cstring(data);
 
-            result = sieve_script_store(sieve_mailbox, sdata);
+            result = sieve_script_store(sieve_mailbox, sdata, data);
         }
 
         if (result) {

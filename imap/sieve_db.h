@@ -65,7 +65,7 @@ struct sieve_data {
     modseq_t createdmodseq;
     const char *id;
     const char *name;
-    const char *content;
+    const char *contentid;
     unsigned isactive;
     int alive;
 };
@@ -105,7 +105,7 @@ int sievedb_lookup_imapuid(struct sieve_db *sievedb,
                            struct sieve_data **result, int tombstones);
 
 int sievedb_lookup_active(struct sieve_db *sievedb,
-                        struct sieve_data **result);
+                          struct sieve_data **result);
 
 /* process each entry in 'sievedb' with cb() */
 int sievedb_foreach(struct sieve_db *sievedb,
@@ -140,7 +140,8 @@ int sievedb_get_updates(struct sieve_db *sievedb,
 /* count number of scripts */
 int sievedb_count(struct sieve_db *sievedb, int *count);
 
-int sieve_script_store(struct mailbox *mailbox, struct sieve_data *sdata);
+int sieve_script_store(struct mailbox *mailbox, struct sieve_data *sdata,
+                       const struct buf *content);
 
 int sieve_script_activate(struct mailbox *mailbox, struct sieve_data *sdata);
 
@@ -149,8 +150,8 @@ int sieve_script_remove(struct mailbox *mailbox, struct sieve_data *sdata);
 int sieve_script_rename(struct mailbox *mailbox,
                         struct sieve_data *sdata, const char *newname);
 
-struct buf *sieve_script_fetch(struct mailbox *mailbox,
-                               const struct sieve_data *sdata);
+int sieve_script_fetch(struct mailbox *mailbox,
+                       const struct sieve_data *sdata, struct buf *content);
 
 int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr);
 

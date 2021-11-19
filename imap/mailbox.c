@@ -4058,6 +4058,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
         if (r) goto done;
 
         const char *content = buf_cstring(&msg_buf) + new->header_size;
+        struct message_guid uuid;
         char *errors = NULL;
 
         r = sievedir_put_script(mailbox->sievedir, name, content, &errors);
@@ -4080,7 +4081,9 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
         sdata->isactive = isactive;
         sdata->id = id;
         sdata->name = name;
-        sdata->content = content;
+
+        message_guid_generate(&uuid, content, strlen(content));
+        sdata->contentid = message_guid_encode(&uuid);
 
         if (!sdata->creationdate)
             sdata->creationdate = new->internaldate;

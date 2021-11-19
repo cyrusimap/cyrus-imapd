@@ -90,7 +90,7 @@ struct sieve_db {
     struct buf mailbox;                 /* buffers for copies of column text */
     struct buf id;
     struct buf name;
-    struct buf content;
+    struct buf contentid;
 };
 
 static int sieve_initialized = 0;
@@ -170,7 +170,7 @@ EXPORTED int sievedb_close(struct sieve_db *sievedb)
     buf_free(&sievedb->mailbox);
     buf_free(&sievedb->id);
     buf_free(&sievedb->name);
-    buf_free(&sievedb->content);
+    buf_free(&sievedb->contentid);
 
     r = sqldb_close(&sievedb->db);
 
@@ -239,7 +239,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         sdata->mailbox = (const char *) sqlite3_column_text(stmt, 3);
         sdata->id = (const char *) sqlite3_column_text(stmt, 7);
         sdata->name = (const char *) sqlite3_column_text(stmt, 8);
-        sdata->content = (const char *) sqlite3_column_text(stmt, 9);
+        sdata->contentid = (const char *) sqlite3_column_text(stmt, 9);
         r = rrock->cb(rrock->rock, sdata);
     }
     else {
@@ -255,9 +255,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         sdata->name =
             column_text_to_buf((const char *) sqlite3_column_text(stmt, 8),
                                &db->name);
-        sdata->content =
+        sdata->contentid =
             column_text_to_buf((const char *) sqlite3_column_text(stmt, 9),
-                               &db->content);
+                               &db->contentid);
     }
 
     return r;
@@ -265,7 +265,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
 #define CMD_GETFIELDS                                                       \
     "SELECT rowid, creationdate, lastupdated, mailbox, imap_uid,"           \
-    "  modseq, createdmodseq, id, name, content, isactive, alive"           \
+    "  modseq, createdmodseq, id, name, contentid, isactive, alive"         \
     " FROM sieve_scripts"
 
 
@@ -380,10 +380,10 @@ EXPORTED int sievedb_foreach(struct sieve_db *sievedb,
 #define CMD_INSERT                                                      \
     "INSERT INTO sieve_scripts ("                                       \
     "  creationdate, lastupdated, mailbox, imap_uid,"                   \
-    "  modseq, createdmodseq,  id, name, content, isactive, alive )"    \
+    "  modseq, createdmodseq,  id, name, contentid, isactive, alive )"  \
     " VALUES ("                                                         \
     "  :creationdate, :lastupdated, :mailbox, :imap_uid,"               \
-    "  :modseq, :createdmodseq,  :id, :name, :content, :isactive, :alive );"
+    "  :modseq, :createdmodseq,  :id, :name, :contentid, :isactive, :alive );"
 
 #define CMD_UPDATE                       \
     "UPDATE sieve_scripts SET"           \
@@ -391,7 +391,7 @@ EXPORTED int sievedb_foreach(struct sieve_db *sievedb,
     "  imap_uid      = :imap_uid,"       \
     "  modseq        = :modseq,"         \
     "  name          = :name,"           \
-    "  content       = :content,"        \
+    "  contentid     = :contentid,"      \
     "  isactive      = :isactive,"       \
     "  alive         = :alive"           \
     " WHERE rowid = :rowid;"
@@ -403,7 +403,7 @@ EXPORTED int sievedb_write(struct sieve_db *sievedb, struct sieve_data *sdata)
         { ":imap_uid",      SQLITE_INTEGER, { .i = sdata->imap_uid      } },
         { ":modseq",        SQLITE_INTEGER, { .i = sdata->modseq        } },
         { ":name",          SQLITE_TEXT,    { .s = sdata->name          } },
-        { ":content",       SQLITE_TEXT,    { .s = sdata->content       } },
+        { ":contentid",     SQLITE_TEXT,    { .s = sdata->contentid     } },
         { ":isactive",      SQLITE_INTEGER, { .i = sdata->isactive      } },
         { ":alive",         SQLITE_INTEGER, { .i = sdata->alive         } },
         { NULL,             SQLITE_NULL,    { .s = NULL                 } },
@@ -525,8 +525,10 @@ EXPORTED int sievedb_count(struct sieve_db *sievedb, int *count)
 
 static int lock_and_execute(struct mailbox *mailbox,
                             struct sieve_data *sdata,
+                            void *rock,
                             int (*proc)(struct mailbox *mailbox,
-                                        struct sieve_data *sdata))
+                                        struct sieve_data *sdata,
+                                        void *rock))
 {
     int r, unlock = 0;
 
@@ -542,7 +544,7 @@ static int lock_and_execute(struct mailbox *mailbox,
         unlock = 1;
     }
 
-    r = proc(mailbox, sdata);
+    r = proc(mailbox, sdata, rock);
 
     if (unlock) mailbox_unlock_index(mailbox, NULL);
 
@@ -569,14 +571,16 @@ static int remove_uid(struct mailbox *mailbox, uint32_t uid)
     return r;
 }
 
-static int store_script(struct mailbox *mailbox, struct sieve_data *sdata)
+static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
+                        void *rock)
 {
+    const struct buf *databuf = (const struct buf *) rock;
     strarray_t flags = STRARRAY_INITIALIZER;
     struct auth_state *authstate = NULL;
     struct buf buf = BUF_INITIALIZER;
     uint32_t old_uid = sdata->imap_uid;
-    const char *data = sdata->content;
-    size_t datalen = strlen(data);
+    const char *data = buf_base(databuf);
+    size_t datalen = buf_len(databuf);
     struct stagemsg *stage;
     struct appendstate as;
     time_t now = time(0);
@@ -612,11 +616,13 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata)
     time_to_rfc5322(now, datestr, sizeof(datestr));
     fprintf(f, "Date: %s\r\n", datestr);
 
-    /* Use SHA1(script)@servername as Message-ID */
+    /* Use SHA1(script) as contentid */
     struct message_guid uuid;
     message_guid_generate(&uuid, data, datalen);
-    fprintf(f, "Message-ID: <%s@%s>\r\n",
-            message_guid_encode(&uuid), config_servername);
+    sdata->contentid = message_guid_encode(&uuid);
+
+    /* Use scriptid@servername as Message-ID */
+    fprintf(f, "Message-ID: <%s@%s>\r\n", sdata->contentid, config_servername);
 
     fprintf(f, "Content-Type: application/sieve; charset=utf-8\r\n");
     fprintf(f, "Content-Length: %lu\r\n", datalen);
@@ -681,12 +687,14 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata)
 }
 
 EXPORTED int sieve_script_store(struct mailbox *mailbox,
-                                struct sieve_data *sdata)
+                                struct sieve_data *sdata,
+                                const struct buf *content)
 {
-    return lock_and_execute(mailbox, sdata, &store_script);
+    return lock_and_execute(mailbox, sdata, (void *) content, &store_script);
 }
 
-static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata)
+static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata,
+                           void *rock __attribute__((unused)))
 {
     struct index_record record;
     int activate = (sdata != NULL);
@@ -755,10 +763,11 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata)
 EXPORTED int sieve_script_activate(struct mailbox *mailbox,
                                    struct sieve_data *sdata)
 {
-    return lock_and_execute(mailbox, sdata, &activate_script);
+    return lock_and_execute(mailbox, sdata, NULL, &activate_script);
 }
 
-static int remove_script(struct mailbox *mailbox, struct sieve_data *sdata)
+static int remove_script(struct mailbox *mailbox, struct sieve_data *sdata,
+                         void *rock __attribute__((unused)))
 {
     init_internal();
 
@@ -768,46 +777,69 @@ static int remove_script(struct mailbox *mailbox, struct sieve_data *sdata)
 EXPORTED int sieve_script_remove(struct mailbox *mailbox,
                                  struct sieve_data *sdata)
 {
-    return lock_and_execute(mailbox, sdata, &remove_script);
+    return lock_and_execute(mailbox, sdata, NULL, &remove_script);
 }
 
 EXPORTED int sieve_script_rename(struct mailbox *mailbox,
                                  struct sieve_data *sdata,
                                  const char *newname)
 {
-    sdata->name = newname;
-
-    return sieve_script_store(mailbox, sdata);
-}
-
-EXPORTED struct buf *sieve_script_fetch(struct mailbox *mailbox,
-                                        const struct sieve_data *sdata)
-{
-    struct index_record record;
-    struct buf *data = NULL;
+    struct buf content = BUF_INITIALIZER;
     int r;
 
-    r = mailbox_find_index_record(mailbox, sdata->imap_uid, &record);
+    r = sieve_script_fetch(mailbox, sdata, &content);
+    if (!r) {
+        sdata->name = newname;
+
+        r = sieve_script_store(mailbox, sdata, &content);
+    }
+
+    buf_free(&content);
+
+    return r;
+}
+
+EXPORTED int sieve_script_fetch(struct mailbox *mailbox,
+                                const struct sieve_data *sdata,
+                                struct buf *content)
+{
+    struct mailbox *mymailbox = NULL;
+    struct index_record record;
+    int r;
+
+    if (mailbox) {
+        mymailbox = mailbox;
+    }
+    else {
+        /* Open mailbox */
+        r = mailbox_open_irl(sdata->mailbox, &mymailbox);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
+                   sdata->mailbox, error_message(r));
+            return r;
+        }
+    }
+
+    r = mailbox_find_index_record(mymailbox, sdata->imap_uid, &record);
     if (!r) {
         /* Load message containing the resource */
-        data = buf_new();
+        message_t *m = message_new_from_record(mymailbox, &record);
 
-        r = mailbox_map_record(mailbox, &record, data);
-        if (r) {
-            buf_destroy(data);
-            data = NULL;
-        }
-        else {
-            buf_remove(data, 0, record.header_size);
-        }
+        r = message_get_field(m, "rawbody", MESSAGE_RAW, content);
+
+        message_unref(&m);
     }
 
     if (r) {
         syslog(LOG_ERR, "fetching message (%s:%u) failed: %s",
-               mailbox_name(mailbox), sdata->imap_uid, error_message(r));
+               mailbox_name(mymailbox), sdata->imap_uid, error_message(r));
     }
 
-    return data;
+    if (!mailbox) {
+        mailbox_close(&mymailbox);
+    }
+
+    return r;
 }
 
 struct migrate_rock {
@@ -838,10 +870,9 @@ static int migrate_cb(const char *sievedir,
             sdata.name = myname;
         }
         sdata.lastupdated = sbuf->st_mtime;
-        sdata.content = buf_cstring(content);
         sdata.isactive = !strcmpnull(myname, mrock->active);
 
-        if (!store_script(mrock->mailbox, &sdata)) {
+        if (!store_script(mrock->mailbox, &sdata, content)) {
             char path[PATH_MAX];
 
             /* delete script */
@@ -965,7 +996,17 @@ EXPORTED int sieve_script_rebuild(const char *userid,
     r = sievedb_lookup_name(db, NULL, script, &sdata, 0);
     if (!r) {
         lastupdated = sdata->lastupdated;
-        content = sdata->content;
+
+        content_buf = buf_new();
+        r = sieve_script_fetch(NULL, sdata, content_buf);
+
+        if (!r) {
+            content = buf_cstring(content_buf);
+        }
+        else {
+            syslog(LOG_ERR, "fetching message (%s:%u) failed: %s",
+                   sdata->mailbox, sdata->imap_uid, error_message(r));
+        }
     }
     else if (r == CYRUSDB_NOTFOUND) {
         /* Get mtime of script file */

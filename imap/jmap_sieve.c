@@ -229,10 +229,8 @@ static int getscript(void *rock, struct sieve_data *sdata)
 
     if (jmap_wantprop(get->props, "blobId")) {
         struct buf buf = BUF_INITIALIZER;
-        struct message_guid uuid;
 
-        message_guid_generate(&uuid, sdata->content, strlen(sdata->content));
-        buf_printf(&buf, "G%s", message_guid_encode(&uuid));
+        buf_printf(&buf, "G%s", sdata->contentid);
         json_object_set_new(sieve, "blobId", json_string(buf_cstring(&buf)));
         buf_free(&buf);
     }
@@ -311,27 +309,43 @@ done:
     return 0;
 }
 
-static int putscript(struct mailbox *mailbox, struct sieve_data *sdata,
-                     json_t **err)
+static int putscript(struct mailbox *mailbox, const char *script,
+                     struct sieve_data *sdata, json_t **err)
 {
-    /* check script size */
-    if ((json_int_t) strlen(sdata->content) > maxscriptsize) {
-        *err = json_pack("{s:s}", "type", "tooLarge");
-        return 0;
+    struct buf buf = BUF_INITIALIZER;
+    int r;
+
+    if (!script) {
+        /* fetch existing script content (just a rename) */
+        r = sieve_script_fetch(mailbox, sdata, &buf);
+        goto done;
+    }
+    else {
+        /* check script size */
+        if ((json_int_t) strlen(script) > maxscriptsize) {
+            *err = json_pack("{s:s}", "type", "tooLarge");
+            return 0;
+        }
+
+        /* parse the script */
+        char *errors = NULL;
+        r = sieve_script_parse_string(NULL, script, &errors, NULL);
+        if (r) {
+            *err = json_pack("{s:s, s:s}", "type", "invalidScript",
+                             "description", errors);
+            free(errors);
+            return 0;
+        }
+
+        buf_init_ro_cstr(&buf, script);
     }
 
-    /* parse the script */
-    char *errors = NULL;
-    int r = sieve_script_parse_string(NULL, sdata->content, &errors, NULL);
-    if (r) {
-        *err = json_pack("{s:s, s:s}", "type", "invalidScript",
-                         "description", errors);
-        free(errors);
-        return 0;
-    }
+    r = sieve_script_store(mailbox, sdata, &buf);
 
-    r = sieve_script_store(mailbox, sdata);
+  done:
     if (r) *err = jmap_server_error(r);
+
+    buf_free(&buf);
 
     return 0;
 }
@@ -440,17 +454,13 @@ static const char *set_create(struct jmap_req *req,
     memset(&sdata, 0, sizeof(sdata));
     sdata.id = id;
     sdata.name = name;
-    sdata.content = content;
-    r = putscript(mailbox, &sdata, &err);
+    r = putscript(mailbox, content, &sdata, &err);
     if (err) goto done;
 
     if (!r) {
         /* Report script as created, with server-set properties */
-        struct message_guid uuid;
-
-        message_guid_generate(&uuid, content, strlen(content));
         buf_reset(&buf);
-        buf_printf(&buf, "G%s", message_guid_encode(&uuid));
+        buf_printf(&buf, "G%s", sdata.contentid);
 
         json_t *new_sieve = json_pack("{s:s s:b s:s}",
                                       "id", id, "isActive", 0,
@@ -565,19 +575,15 @@ static void set_update(struct jmap_req *req,
     }
 
     if (name) sdata->name = name;
-    if (content) sdata->content = content;
 
-    r = putscript(mailbox, sdata, &err);
+    r = putscript(mailbox, content, sdata, &err);
     if (err) goto done;
 
     /* Report script as updated, with server-set properties */
     json_t *new_sieve = NULL;
     if (content) {
-        struct message_guid uuid;
-
-        message_guid_generate(&uuid, content, strlen(content));
         buf_reset(&buf);
-        buf_printf(&buf, "G%s", message_guid_encode(&uuid));
+        buf_printf(&buf, "G%s", sdata->contentid);
 
         new_sieve = json_pack("{s:s}", "blobId", buf_cstring(&buf));
     }

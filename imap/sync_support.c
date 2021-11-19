@@ -3307,7 +3307,7 @@ static int list_gen_cb(void *rock, struct sieve_data *sdata)
     struct message_guid guid;
 
     snprintf(target, sizeof(target), "%s%s", sdata->name, SCRIPT_SUFFIX);
-    message_guid_generate(&guid, sdata->content, strlen(sdata->content));
+    message_guid_decode(&guid, sdata->contentid);
     sync_sieve_list_add(list, target, sdata->lastupdated, &guid, 0);
 
     if (sdata->isactive) {
@@ -3341,14 +3341,18 @@ char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
 
     if (db) {
         struct sieve_data *sdata = NULL;
+        struct buf content = BUF_INITIALIZER;
         char *myname = xstrndup(name, strlen(name) - SCRIPT_SUFFIX_LEN);
         int r = sievedb_lookup_name(db, NULL, myname, &sdata, 0);
 
         free(myname);
 
-        if (!r && sdata->content) {
-            if (sizep) *sizep = strlen(sdata->content);
-            result = xstrdup(sdata->content);
+        if (!r) {
+            r = sieve_script_fetch(NULL, sdata, &content);
+            if (!r) {
+                if (sizep) *sizep = buf_len(&content);
+                result =buf_release(&content);
+            }
         }
 
         sievedb_close(db);
@@ -3404,14 +3408,13 @@ int sync_sieve_upload(const char *userid, const char *fname,
     if (r == CYRUSDB_NOTFOUND) {
         buf_init_ro(&buf, content, len);
         sdata->name = name;
-        sdata->content = buf_cstring(&buf);
     }
     else if (r) {
         syslog(LOG_ERR, "Failed to lookup script %s for %s", name, userid);
         goto done;
     }
 
-    r = sieve_script_store(mailbox, sdata);
+    r = sieve_script_store(mailbox, sdata, &buf);
 
   done:
     if (!r) sync_log_sieve(userid);
