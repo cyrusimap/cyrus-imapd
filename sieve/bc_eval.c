@@ -1577,35 +1577,6 @@ envelope_err:
         else res = 0;
         break;
 
-    case BC_PROCESSIMIP:
-        if (interp->imip) {
-            sieve_imip_context_t imip_ctx = {
-                !!test.u.imip.invites_only,
-                !!test.u.imip.updates_only,
-                !!test.u.imip.delete_canceled,
-                test.u.imip.calendarid,
-                BUF_INITIALIZER
-            };
-
-            res = interp->imip(interp->interp_context, sc, m, &imip_ctx);
-
-            if (!res && test.u.imip.errstr_var) {
-                variable_list_t *errstr_var =
-                    varlist_select(variables, test.u.imip.errstr_var);
-
-                if (!errstr_var) {
-                    errstr_var = varlist_extend(variables);
-                    errstr_var->name = xstrdup(test.u.imip.errstr_var);
-                }
-                strarray_fini(errstr_var->var);
-                strarray_appendm(errstr_var->var, buf_release(&imip_ctx.errstr));
-            }
-
-            buf_free(&imip_ctx.errstr);
-        }
-        else res = 0;
-        break;
-
     default:
 #if VERBOSE
         printf("WERT, can't evaluate if statement. %d is not a valid command",
@@ -2488,6 +2459,38 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 }
 
                 i->log(sc, m, text);
+            }
+            break;
+
+        case B_PROCESSIMIP:
+            if (i->imip) {
+                sieve_imip_context_t imip_ctx = {
+                    !!cmd.u.imip.invites_only,
+                    !!cmd.u.imip.updates_only,
+                    !!cmd.u.imip.delete_canceled,
+                    cmd.u.imip.calendarid,
+                    BUF_INITIALIZER
+                };
+
+                res = i->imip(&imip_ctx, i->interp_context, sc, m, errmsg);
+
+                if (!res && cmd.u.imip.errstr_var) {
+                    variable_list_t *errstr_var =
+                        varlist_select(variables, cmd.u.imip.errstr_var);
+
+                    if (!errstr_var) {
+                        errstr_var = varlist_extend(variables);
+                        errstr_var->name = xstrdup(cmd.u.imip.errstr_var);
+                    }
+                    strarray_fini(errstr_var->var);
+                    strarray_appendm(errstr_var->var,
+                                     buf_release(&imip_ctx.errstr));
+                }
+
+                buf_free(&imip_ctx.errstr);
+            }
+            else {
+                return SIEVE_RUN_ERROR;
             }
             break;
 

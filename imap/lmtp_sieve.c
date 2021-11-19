@@ -1398,9 +1398,10 @@ done:
 char *httpd_userid = NULL;  // due to caldav_util.h including httpd.h
 struct namespace_t namespace_calendar = { .allow = ALLOW_USERDATA | ALLOW_CAL_NOTZ };
 
-static int sieve_imip(void *ic, void *sc, void *mc,
-                      sieve_imip_context_t *imip)
+static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
+                      const char **errmsg __attribute__((unused)))
 {
+    sieve_imip_context_t *imip = (sieve_imip_context_t *) ac;
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;

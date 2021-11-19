@@ -147,13 +147,6 @@ struct Test {
             int seconds;
             int last;
         } dup;
-        struct {
-            int invites_only;
-            int updates_only;
-            int delete_canceled;
-            char *calendarid;
-            char *errstr_var;
-        } imip;
         char *jquery; /* jmapquery */
     } u;
 
@@ -261,6 +254,13 @@ struct Commandlist {
             arrayu64_t *times;
             char *tzid;
         } sn;
+        struct {
+            int invites_only;
+            int updates_only;
+            int delete_canceled;
+            char *calendarid;
+            char *errstr_var;
+        } imip;
     } u;
     struct Commandlist *next;
 

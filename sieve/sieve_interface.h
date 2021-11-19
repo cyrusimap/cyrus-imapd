@@ -97,18 +97,6 @@ typedef int sieve_list_comparator(const char *text, size_t tlen,
 typedef int sieve_jmapquery(void *interp_context, void *script_context,
                             void *message_context, const char *json);
 
-typedef struct sieve_imip_context {
-    unsigned invites_only    : 1;
-    unsigned updates_only    : 1;
-    unsigned delete_canceled : 1;
-    const char *calendarid;
-    struct buf errstr;
-} sieve_imip_context_t;
-
-typedef int sieve_processimip(void *interp_context, void *script_context,
-                              void *message_context,
-                              sieve_imip_context_t *imip_context);
-                              
 /* MUST keep this struct sync'd with bodypart in imap/message.h */
 typedef struct sieve_bodypart {
     char section[128];
@@ -136,6 +124,14 @@ typedef struct sieve_duplicate {
     sieve_callback *check;
     sieve_callback *track;
 } sieve_duplicate_t;
+
+typedef struct sieve_imip_context {
+    unsigned invites_only    : 1;
+    unsigned updates_only    : 1;
+    unsigned delete_canceled : 1;
+    const char *calendarid;
+    struct buf errstr;
+} sieve_imip_context_t;
 
 
 /* sieve_imapflags: NULL -> defaults to \flagged */
@@ -233,6 +229,7 @@ void sieve_register_notify(sieve_interp_t *interp,
                            sieve_callback *f, const strarray_t *methods);
 void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
 void sieve_register_logger(sieve_interp_t *interp, sieve_logger *f);
+void sieve_register_imip(sieve_interp_t *interp, sieve_callback *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */
@@ -260,8 +257,6 @@ void sieve_register_extlists(sieve_interp_t *interp,
 int sieve_register_duplicate(sieve_interp_t *interp, sieve_duplicate_t *d);
 
 void sieve_register_jmapquery(sieve_interp_t *interp, sieve_jmapquery *f);
-
-void sieve_register_imip(sieve_interp_t *interp, sieve_processimip *f);
 
 typedef int sieve_parse_error(int lineno, const char *msg,
                               void *interp_context,

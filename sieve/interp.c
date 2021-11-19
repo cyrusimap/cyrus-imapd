@@ -254,6 +254,11 @@ EXPORTED void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
     interp->keep = f;
 }
 
+EXPORTED void sieve_register_imip(sieve_interp_t *interp, sieve_callback *f)
+{
+    interp->imip = f;
+}
+
 EXPORTED void sieve_register_notify(sieve_interp_t *interp,
                                     sieve_callback *f, const strarray_t *methods)
 {
@@ -404,11 +409,6 @@ EXPORTED int sieve_register_duplicate(sieve_interp_t *interp,
 EXPORTED void sieve_register_jmapquery(sieve_interp_t *interp, sieve_jmapquery *f)
 {
     interp->jmapquery = f;
-}
-
-EXPORTED void sieve_register_imip(sieve_interp_t *interp, sieve_processimip *f)
-{
-    interp->imip = f;
 }
 
 EXPORTED void sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f)

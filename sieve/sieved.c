@@ -456,14 +456,6 @@ static void print_test(test_t *test)
         print_stringlist(" KEYS", test->u.mm.keylist);
         break;
 
-    case BC_PROCESSIMIP:
-        printf("PROCESSIMIP INVITESONLY(%d) UPDATESONLY(%d) DELETECANCELED(%d)",
-               !!test->u.imip.invites_only,
-               !!test->u.imip.updates_only, !!test->u.imip.delete_canceled);
-        print_string(" CALENDARID", test->u.imip.calendarid);
-        print_string(" ERRSTR", test->u.imip.errstr_var);
-        break;
-
 #ifdef WITH_JMAP
     case BC_JMAPQUERY: {
         json_error_t jerr;
@@ -844,6 +836,15 @@ static void dump2(bytecode_input_t *d, int bc_len)
             break;
         }
 
+
+        case B_PROCESSIMIP:
+            printf("PROCESSIMIP INVITESONLY(%d)"
+                   " UPDATESONLY(%d) DELETECANCELED(%d)",
+                   !!cmd.u.imip.invites_only,
+                   !!cmd.u.imip.updates_only, !!cmd.u.imip.delete_canceled);
+            print_string(" CALENDARID", cmd.u.imip.calendarid);
+            print_string(" ERRSTR", cmd.u.imip.errstr_var);
+            break;
 
         default:
             printf("%d (NOT AN OP)\n", cmd.type);
@@ -1299,16 +1300,6 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         generate_stringlist(NULL, test.u.mm.keylist, buf);
         break;
 
-    case BC_PROCESSIMIP:
-        *requires |= SIEVE_CAPA_IMIP;
-        generate_token("processimip", 0, buf);
-        generate_switch(":invitesonly", test.u.imip.invites_only, buf);
-        generate_switch(":updatesonly", test.u.imip.updates_only, buf);
-        generate_switch(":deletecanceled", test.u.imip.delete_canceled, buf);
-        generate_string(":calendarid", test.u.imip.calendarid, buf);
-        generate_string(":errstr", test.u.imip.errstr_var, buf);
-        break;
-
 #ifdef WITH_JMAP
     case BC_JMAPQUERY: {
         json_error_t jerr;
@@ -1640,6 +1631,16 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             }
             generate_string(":tzid", cmd.u.sn.tzid, buf);
             generate_valuelist(NULL, cmd.u.sn.times, &generate_time, buf);
+            break;
+
+        case B_PROCESSIMIP:
+            *requires |= SIEVE_CAPA_IMIP;
+            generate_token("processimip", 0, buf);
+            generate_switch(":invitesonly", cmd.u.imip.invites_only, buf);
+            generate_switch(":updatesonly", cmd.u.imip.updates_only, buf);
+            generate_switch(":deletecanceled", cmd.u.imip.delete_canceled, buf);
+            generate_string(":calendarid", cmd.u.imip.calendarid, buf);
+            generate_string(":errstr", cmd.u.imip.errstr_var, buf);
             break;
 
         default:
