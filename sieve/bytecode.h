@@ -428,6 +428,7 @@ enum bytecode {
 
                                    <flags-bitmask: int>
                                    <calendar-id: string>
+                                   <outcome-var: string>
                                    <errstr-var: string>                        */
 
     /*****  insert new actions above this line  *****/

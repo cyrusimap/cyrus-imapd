@@ -2469,24 +2469,36 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                     !!cmd.u.imip.updates_only,
                     !!cmd.u.imip.delete_canceled,
                     cmd.u.imip.calendarid,
-                    BUF_INITIALIZER
+                    BUF_INITIALIZER,  // outcome
+                    BUF_INITIALIZER   // errstr
                 };
+                variable_list_t *vl;
 
                 res = i->imip(&imip_ctx, i->interp_context, sc, m, errmsg);
 
-                if (!res && cmd.u.imip.errstr_var) {
-                    variable_list_t *errstr_var =
-                        varlist_select(variables, cmd.u.imip.errstr_var);
+                if (cmd.u.imip.outcome_var) {
+                    vl = varlist_select(variables, cmd.u.imip.outcome_var);
 
-                    if (!errstr_var) {
-                        errstr_var = varlist_extend(variables);
-                        errstr_var->name = xstrdup(cmd.u.imip.errstr_var);
+                    if (!vl) {
+                        vl = varlist_extend(variables);
+                        vl->name = xstrdup(cmd.u.imip.outcome_var);
                     }
-                    strarray_fini(errstr_var->var);
-                    strarray_appendm(errstr_var->var,
-                                     buf_release(&imip_ctx.errstr));
+                    strarray_fini(vl->var);
+                    strarray_appendm(vl->var, buf_release(&imip_ctx.outcome));
                 }
 
+                if (cmd.u.imip.errstr_var) {
+                    vl = varlist_select(variables, cmd.u.imip.errstr_var);
+
+                    if (!vl) {
+                        vl = varlist_extend(variables);
+                        vl->name = xstrdup(cmd.u.imip.errstr_var);
+                    }
+                    strarray_fini(vl->var);
+                    strarray_appendm(vl->var, buf_release(&imip_ctx.errstr));
+                }
+
+                buf_free(&imip_ctx.outcome);
                 buf_free(&imip_ctx.errstr);
             }
             else {

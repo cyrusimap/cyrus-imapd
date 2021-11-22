@@ -843,6 +843,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
                    !!cmd.u.imip.invites_only,
                    !!cmd.u.imip.updates_only, !!cmd.u.imip.delete_canceled);
             print_string(" CALENDARID", cmd.u.imip.calendarid);
+            print_string(" OUTCOME", cmd.u.imip.outcome_var);
             print_string(" ERRSTR", cmd.u.imip.errstr_var);
             break;
 
@@ -1640,6 +1641,7 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             generate_switch(":updatesonly", cmd.u.imip.updates_only, buf);
             generate_switch(":deletecanceled", cmd.u.imip.delete_canceled, buf);
             generate_string(":calendarid", cmd.u.imip.calendarid, buf);
+            generate_string(":outcome", cmd.u.imip.outcome_var, buf);
             generate_string(":errstr", cmd.u.imip.errstr_var, buf);
             break;
 

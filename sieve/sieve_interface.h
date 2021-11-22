@@ -130,6 +130,7 @@ typedef struct sieve_imip_context {
     unsigned updates_only    : 1;
     unsigned delete_canceled : 1;
     const char *calendarid;
+    struct buf outcome;
     struct buf errstr;
 } sieve_imip_context_t;
 

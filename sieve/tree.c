@@ -547,6 +547,7 @@ void free_tree(commandlist_t *cl)
 
         case B_PROCESSIMIP:
             free(cl->u.imip.calendarid);
+            free(cl->u.imip.outcome_var);
             free(cl->u.imip.errstr_var);
             break;
         }

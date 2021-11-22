@@ -259,6 +259,7 @@ struct Commandlist {
             int updates_only;
             int delete_canceled;
             char *calendarid;
+            char *outcome_var;
             char *errstr_var;
         } imip;
     } u;

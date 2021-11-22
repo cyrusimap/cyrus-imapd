@@ -349,7 +349,8 @@ extern void sieverestart(FILE *f);
 %token JMAPQUERY
 
 /* vnd.cyrus.imip */
-%token PROCESSIMIP INVITESONLY UPDATESONLY DELETECANCELED CALENDARID ERRSTR
+%token PROCESSIMIP INVITESONLY UPDATESONLY DELETECANCELED CALENDARID
+%token OUTCOME ERRSTR
 %type <cl> imiptags
 
 
@@ -1379,6 +1380,22 @@ imiptags: /* empty */            { $$ = new_command(B_PROCESSIMIP, sscript); }
                                      }
 
                                      $$->u.imip.calendarid = $3;
+                                 }
+        | imiptags OUTCOME string
+                                 {
+                                     if ($$->u.imip.outcome_var != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":outcome");
+                                         free($$->u.imip.outcome_var);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_VARIABLES)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "variables");
+                                     }
+
+                                     $$->u.imip.outcome_var = $3;
                                  }
         | imiptags ERRSTR string {
                                      if ($$->u.imip.errstr_var != NULL) {
@@ -2936,11 +2953,13 @@ static commandlist_t *build_imip(sieve_script_t *sscript, commandlist_t *c)
     if (c->u.imip.updates_only) flags |= IMIP_UPDATESONLY;
     if (c->u.imip.delete_canceled) flags |= IMIP_DELETECANCELED;
 
+    if (c->u.imip.outcome_var) verify_identifier(sscript, c->u.imip.outcome_var);
     if (c->u.imip.errstr_var) verify_identifier(sscript, c->u.imip.errstr_var);
     
-    c->nargs = bc_precompile(c->args, "iss",
+    c->nargs = bc_precompile(c->args, "isss",
                              flags,
                              c->u.imip.calendarid,
+                             c->u.imip.outcome_var,
                              c->u.imip.errstr_var);
 
     return c;
