@@ -110,6 +110,14 @@ struct sched_data {
 #define SCHEDTYPE_ISCHEDULE     (1<<1)
 #define SCHEDTYPE_SSL           (1<<2)
 
+enum sched_deliver_outcome {
+    SCHED_DELIVER_ERROR    = -1,
+    SCHED_DELIVER_NOACTION = 0,
+    SCHED_DELIVER_ADDED    = 1,
+    SCHED_DELIVER_UPDATED  = 2,
+    SCHED_DELIVER_DELETED  = 3
+};
+
 extern unsigned config_allowsched;
 extern struct strlist *cua_domains;
 extern icaltimezone *utc_zone;
@@ -142,11 +150,13 @@ extern int partstat_changed(icalcomponent *oldcomp,
 extern icalcomponent *master_to_recurrence(icalcomponent *master,
                                            icalproperty *recurid);
 
-extern unsigned sched_deliver_local(const char *userid,
-                                    const char *sender, const char *recipient,
-                                    struct caldav_sched_param *sparam,
-                                    struct sched_data *sched_data,
-                                    struct auth_state *authstate,
-                                    const char **attendeep, icalcomponent **icalp);
+extern enum sched_deliver_outcome sched_deliver_local(const char *userid,
+                                                      const char *sender,
+                                                      const char *recipient,
+                                                      struct caldav_sched_param *sparam,
+                                                      struct sched_data *sched_data,
+                                                      struct auth_state *authstate,
+                                                      const char **attendeep,
+                                                      icalcomponent **icalp);
 
 #endif /* ITIP_SUPPORT_H */

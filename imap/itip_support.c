@@ -716,12 +716,14 @@ static int deliver_merge_cancel(const char *recipient,
 
 
 /* Deliver scheduling object to local recipient */
-HIDDEN unsigned sched_deliver_local(const char *userid,
-                                    const char *sender, const char *recipient,
-                                    struct caldav_sched_param *sparam,
-                                    struct sched_data *sched_data,
-                                    struct auth_state *authstate,
-                                    const char **attendeep, icalcomponent **icalp)
+HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
+                                                      const char *sender,
+                                                      const char *recipient,
+                                                      struct caldav_sched_param *sparam,
+                                                      struct sched_data *sched_data,
+                                                      struct auth_state *authstate,
+                                                      const char **attendeep,
+                                                      icalcomponent **icalp)
 {
     int r = 0, rights = 0, reqd_privs, deliver_inbox = 1;
     const char *attendee = NULL;
@@ -737,7 +739,7 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
     icalcomponent *comp;
     icalproperty *prop;
     struct transaction_t txn;
-    unsigned result = 0;
+    enum sched_deliver_outcome result = SCHED_DELIVER_ERROR;
 
     syslog(LOG_DEBUG, "sched_deliver_local(%s, %s, %X)",
            sender, recipient, sparam->flags);
@@ -827,7 +829,7 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
     else if (method == ICAL_METHOD_CANCEL || method == ICAL_METHOD_POLLSTATUS) {
         /* Can't find object belonging to attendee - we're done */
         SCHED_STATUS(sched_data, REQSTAT_SUCCESS, SCHEDSTAT_DELIVERED);
-        result = 1;
+        result = SCHED_DELIVER_NOACTION;
         goto done;
     }
     else if (SCHED_UPDATES_ONLY(sched_data)) {
@@ -975,7 +977,7 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
                     mboxevent_set_access(mboxevent, NULL, NULL, sparam->userid,
                                          mailbox_name(mailbox), 0);
                     mboxevent_notify(&mboxevent);
-                    result = 1;
+                    result = SCHED_DELIVER_DELETED;
                 }
 
                 mboxevent_free(&mboxevent);
@@ -1019,7 +1021,8 @@ HIDDEN unsigned sched_deliver_local(const char *userid,
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
         SCHED_STATUS(sched_data, REQSTAT_SUCCESS, SCHEDSTAT_DELIVERED);
-        result = 1;
+        result =
+            (r == HTTP_CREATED) ? SCHED_DELIVER_ADDED : SCHED_DELIVER_UPDATED;
     }
     else {
         syslog(LOG_ERR, "caldav_store_resource(%s) failed: %s (%s)",
