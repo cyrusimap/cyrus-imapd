@@ -4307,6 +4307,9 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_data *cdata)
     }
 
     mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    if (!mbentry) return 0;
+
+    /* don't include the scheduling magic calendars */
     if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
         !strcmpsafe(mbentry->name, rock->sched_outboxname)) {
         mboxlist_entry_free(&mbentry);
@@ -4314,7 +4317,7 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Check permissions */
-    int rights = mbentry && jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
+    int rights = jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
     mboxlist_entry_free(&mbentry);
     if (!rights) return 0;
 
