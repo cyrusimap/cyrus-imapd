@@ -1,0 +1,6 @@
+*.o
+lemming
+gdbtramp
+crash
+syslog.so
+syslog_probe

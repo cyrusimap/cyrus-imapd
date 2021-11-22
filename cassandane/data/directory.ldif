@@ -1,0 +1,52 @@
+dn: cn=internal,ou=domains,o=cyrus
+objectclass: domainrelatedobject
+associateddomain: internal.
+
+dn: uid=admin,dc=internal
+objectclass: user
+uid: admin
+dc: internal
+
+dn: uid=cassandane,dc=internal
+objectclass: user
+uid: cassandane
+dc: internal
+memberof: cn=group co,ou=groups,o=cyrus
+memberof: cn=group c,ou=groups,o=cyrus
+
+dn: uid=otheruser,dc=internal
+objectclass: user
+uid: otheruser
+dc: internal
+memberof: cn=group co,ou=groups,o=cyrus
+memberof: cn=group o,ou=groups,o=cyrus
+
+dn: cn=foo,ou=groups,o=cyrus
+objectclass: group
+cn: foo
+ou: groups
+o: cyrus
+
+dn: cn=this group name has spaces,ou=groups,o=cyrus
+objectclass: group
+cn: this group name has spaces
+ou: groups
+o: cyrus
+
+dn: cn=group co,ou=groups,o=cyrus
+objectclass: group
+cn: group co
+ou: groups
+o: cyrus
+
+dn: cn=group c,ou=groups,o=cyrus
+objectclass: group
+cn: group c
+ou: groups
+o: cyrus
+
+dn: cn=group o,ou=groups,o=cyrus
+objectclass: group
+cn: group o
+ou: groups
+o: cyrus
