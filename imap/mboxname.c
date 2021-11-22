@@ -1543,7 +1543,7 @@ EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isdavdrivemailbox(const char *name, int mbtype)
 {
-    if (mbtype_isa(mbtype) == MBTYPE_COLLECTION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) != MBTYPE_COLLECTION) return 0;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
