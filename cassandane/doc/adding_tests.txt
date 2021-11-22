@@ -1,0 +1,226 @@
+Copyright (c) 2011 Opera Software Australia Pty. Ltd.  All rights reserved.
+
+This document describes how to add new tests to Cassandane.
+
+Source Structure
+----------------
+
+Test sources are Perl modules located in two directories under the
+Cassandane main directory.
+
+Cassandane/Test/
+    contains tests which exercise the Cassandane core classes,
+    i.e. self-tests.
+
+Cassandane/Cyrus/
+    contains tests which exercise Cyrus.
+
+Cassandane uses the Perl Test::Unit framework.  For more detailed
+information consult the Test::Unit documentation.  Each Cassandane test
+module derives from the Cassandane::Unit::TestCase class, and is logically a
+group of related tests.  The module can define the following methods.
+
+new
+    Constructor, creates and returns a new TestCase.  For Cassandane
+    tests, this will typically create Cassandane::Config and
+    Cassandane::Instance objects (see later).
+
+set_up
+    Optional method which is called by the framework before every
+    test is run.  It has no return value and should 'die' if anything
+    goes wrong.  For Cassandane tests, this will typically start an
+    Instance (see later).
+
+tear_down
+    Optional method which is called by the framework after every
+    test is run.  It has no return value and should 'die' if anything
+    goes wrong.  For Cassandane tests, this will typically stop an
+    Instance (see later).
+
+test_foo
+    Defines a test named "foo".  It has no return value and should
+    either call $self->assert(boolean) or 'die' if anything goes wrong.
+    Multiple test_whatever methods can be defined in a module.
+
+Helper Classes
+--------------
+
+Cassandane contains a number of helper classes designed to make easier
+the job of writing tests that access Cyrus.  This section provides a
+brief overview.
+
+Cassandane::Instance
+    Encapsulates an instance of Cyrus, with it's own directory
+    structure, configuration files, master process, and one or more
+    services such as imapd.
+
+    To create a default Instance:
+
+    my $instance = Cassandane::Instance->new();
+
+    To create an Instance with a non-default parameter in the
+    configuration file:
+
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(conversations => 'on');
+    my $instance = Cassandane::Instance->new(config => $config);
+
+    By default the Instance has no services, but just runs the master
+    daemon.  This is rarely a useful setup.  To add a service, in this case
+    the imapd daemon:
+
+    $instance->add_service(name => 'imap');
+
+    Starting the Instance creates the directory structure and
+    configuration files, then starts the master process and waits for
+    all the defined services to be running (as reported by netstat).
+
+    $instance->start();
+
+    Stopping the instance kills all master process and all services
+    as gracefully as possible, and waits for them to die.
+
+    $instance->stop();
+
+    Interactions with services are handled via one of the classed
+    derived from the abstract Cassandane::MessageStore class.  To create
+    a store for a paerticular service in an Instance:
+
+    $store = $instance->get_service('imap')->create_store();
+
+    For the imapd service in particular, Cassandane::IMAPMessageStore
+    wraps a Mail::IMAPTalk object which can be retrieved thus:
+
+    my $imaptalk = $store->get_client();
+
+Cassandane::Config
+    Encapsulates the configuration information present in an imapd.conf
+    format configuration file.  Config objects are useful for passing
+    to the Cassandane::Instance constructor to set up Cyrus instances
+    with particular configuration options.
+
+    The Config module keeps a global Config object.  This object should
+    not be modified directly but should be cloned (see below).  To get
+    the default object:
+
+    my $config = Cassandane::Config->default();
+
+    Configs use a lightweight copy-on-write cloning mechanism.  The
+    clone() method can be used to create a new Config object based on a
+    parent Config object.  The child remembers it's parent.
+
+    my $child_config = $parent_config->clone();
+
+    The set() and get() methods can be used to set and get key-value
+    pairs from a Config object.  The set() method always works on the
+    object itself, but get() will walk back up the ancestry chain until
+    it finds a matching key.
+
+    $config->set(conversations => 'on');
+    $config->set(foo => '1', bar => '2');
+
+    my $foo = $config->get('foo');
+
+    The typical use for a Config object is:
+
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(conversations => 'on');
+    my $instance = Cassandane::Instance->new(config => $config);
+
+Cassandane::Message
+    Encapsulates an RFC822 message, plus a set of non-RFC822 attributes
+    expressed as key-value pairs.   Message objects are returned from
+    MessageStore->read_message() and Generator->generate().
+
+    To create a new default Message object
+
+    my $msg = Cassandane::Message->new();
+
+    To create a Message object read from a file handle
+
+    my $fh = ...
+    my $msg = Cassandane::Message->new(fh => $fh);
+
+    To get all the RFC822 headers of a given name, as a reference
+    to an array of strings:
+
+    my $values = $msg->get_headers('Received');
+
+    To get an RFC822 header and enforce that there is only a single
+    header of that name, use
+
+    my $value = $msg->get_header('From');
+
+    To set an RFC822 header, replacing any previous headers of
+    the same name:
+
+    $msg->set_headers('From', 'Foo Bar <foo@bar.org>');
+
+    To set multiple RFC822 headers with the same name, replacing
+    any previous headers of that name:
+
+    my @values = ('baz', 'quux');
+    $msg->set_headers('Received', @values);
+
+    To add an RFC822 header:
+
+    $msg->add_header('Subject', 'Hello World');
+
+    To set the RFC822 body (as one big string)
+
+    $msg->set_body('....one enormous string...');
+
+    To get a non-RFC822 attribute (this may have be placed on the message
+    as a side effect of it's creation e.g. during an IMAP FETCH command):
+
+    my $cid = $msg->get_attribute('cid);
+
+Cassandane::Generator
+    Creates new Message objects with a number of useful default values
+    based on random words.  Has a constructor and a single function
+
+    my $gen = Cassandane::Generator->new();
+    my $msg = $gen->generate();
+
+    By default, messages will have values for the RFC822 body and the
+    following headers:
+
+    Return-Path
+    Received
+    MIME-Version
+        1.0
+    Content-Type
+        text/plain; charset="us-ascii"
+    Content-Transfer-Encoding
+        7bit
+    Subject
+    From
+    Message-ID
+    Date
+    To
+    X-Cassandane-Unique
+        a string of hex digits which uniquely defines each created
+        message.  Unlike the Cyrus GUID concept, two Message objects
+        generated at different times which happen to have the same
+        headers and body will have different X-Cassandane-Unique values.
+        This can be useful for testing the identity of messages.
+
+    Some of these can be overridden by providing options to generate()
+
+    my $msg = $gen->generate(subject => "Hello world");
+
+    The following options can be used:
+
+    date
+        a DateTime object
+    from
+        a Cassandane::Address object
+    subject
+        a string
+    to
+        a Cassandane::Address object
+    messageid
+        a string
+
+TODO: document MessageStore, IMAPMessageStore, POP3MessageStore, and
+ThreadedGenerator.
