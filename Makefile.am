@@ -323,6 +323,7 @@ EXTRA_DIST = \
 	COPYING \
 	README.md \
 	VERSION \
+	cassandane \
 	com_err/et/et_c.awk \
 	com_err/et/et_h.awk \
 	com_err/et/test1.et \
