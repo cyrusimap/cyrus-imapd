@@ -1,0 +1,193 @@
+#
+# Example cassandane.ini file
+#
+#  Copyright (c) 2011 Opera Software Australia Pty. Ltd.  All rights
+#  reserved.
+#
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions
+#  are met:
+#
+#  1. Redistributions of source code must retain the above copyright
+#     notice, this list of conditions and the following disclaimer.
+#
+#  2. Redistributions in binary form must reproduce the above copyright
+#     notice, this list of conditions and the following disclaimer in
+#     the documentation and/or other materials provided with the
+#     distribution.
+#
+#  3. The name "Opera Software Australia" must not be used to
+#     endorse or promote products derived from this software without
+#     prior written permission. For permission or any legal
+#     details, please contact
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
+#
+#  4. Redistributions of any form whatsoever must retain the following
+#     acknowledgment:
+#     "This product includes software developed by Opera Software
+#     Australia Pty. Ltd."
+#
+#  OPERA SOFTWARE AUSTRALIA DISCLAIMS ALL WARRANTIES WITH REGARD TO
+#  THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+#  AND FITNESS, IN NO EVENT SHALL OPERA SOFTWARE AUSTRALIA BE LIABLE
+#  FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+#  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+#  AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+#  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+
+# This section describes configurable properties of the
+# Cassandane infrastructure
+[cassandane]
+# Directory under which all the instance directories will be created.
+# It's wise to keep this short: UNIX domain sockets will be created
+# under here, and most systems impose a limit of 100 or so characters
+# on paths used for these.
+# Tests will run quite a bit faster if this is on a tmpfs filesystem
+# (though note that you will lose your old instance directories across
+# reboots if you do this).
+##rootdir = /var/tmp/cass
+# Which SASL password checking method to use:
+# alwaystrue
+#    is the default and it makes libsasl conveniently accept
+#    any old password, but it can be configured out at libsasl
+#    build time e.g. on older RedHat builds.
+# sasldb
+#    can be used for those RedHat systems, as it's always available
+#    in libsasl.  Cassandane will build a sasldb2 file containing
+#    usernames and passwords, but it requires installing the package
+#    containing the saslpasswd2 binary.
+##pwcheck = alwaystrue
+# Whether to clean up instance directories after their tests have
+# run (also, will remove and old instance directories from earlier
+# runs).  See also the --cleanup option to testrunner.pl.
+##cleanup = no
+# How many worker processes to run.  Overridden by -j argument to
+# testrunner.pl.
+##maxworkers = 1
+# Base port number to use.  All Cyrus instances run by Cassandane
+# will listen at ports starting from this number.
+##base_port = 9100
+# A list of tests or suites which will be suppressed.  These tests
+# will still run if requested on the command line, but will not be
+# run by default.
+## suppress =
+
+# This section describes configurable properties of Valgrind.
+[valgrind]
+# Whether to run Cyrus binaries under Valgrind (see also the
+# --valgrind option to testrunner.pl)
+##enabled = no
+# Where to find the Valgrind binary
+##binary = /usr/bin/valgrind
+# File containing Valgrind suppression rules
+##suppressions = vg.supp
+# Other arguments passed to Valgrind
+##arguments = -q --tool=memcheck --leak-check=full --run-libc-freeres=no
+
+# This section describes the default Cyrus installation.
+[cyrus default]
+# Prefix of the installation; should be the value which was supplied as
+# --prefix to the Cyrus configure script.  Cassandane will look for Cyrus
+# binaries in {prefix}/bin, {prefix}/sbin, {prefix}/libexec, {prefix}/lib,
+# and {prefix}/cyrus/bin.
+##prefix = /usr/cyrus
+# A non-standard or temporary place where the installation has been made,
+# e.g. by make DESTDIR=/tmp/my-cyrus-inst install
+# If set, binaries will be in {destdir}{prefix}/bin (etc)
+##destdir =
+# If your Cyrus build has renamed binaries, you can tell Cassandane how
+# to find them like this:
+##quota = cyr_quota
+# Maximum core file size in megabytes.  Set to 0 for unlimited (subject
+# to system limitations)
+##coresizelimit = 100
+
+# This optional section describes the Cyrus installation used for the
+# replica side of replication tests.  You can use this to test
+# replication to a different Cyrus version from your main instance.
+# If this section does not exist, or the prefix it names does not
+# exist, then the replica instance will use the "cyrus default".
+##[cyrus replica]
+##prefix = /usr/cyrus
+##destdir =
+
+# This optional section describes the Cyrus installation used for the
+# murder frontend in murder tests.  You can use this to test a murder
+# with a different Cyrus version from your main instance.
+# If this section does not exist, or the prefix it names does not
+# exist, then the murder tests will use the "cyrus default".
+##[cyrus murder]
+##prefix = /usr/cyrus
+##destdir =
+
+# This section enables GDB debugging of services run from Cyrus master
+# on a per-service basis.  To debug, enable one of these, run
+# Cassandane, and look in syslog for helpful instructions from gdbtramp.
+[gdb]
+##imapd = yes
+##sync_server = yes
+##lmtpd = yes
+##timsieved = yes
+##backupd = yes
+
+# This section describes the common configuration parameters to set
+# for each test. This overrides the bare hardcoded configuration, and is
+# overridden by the test case configuration.
+# Some variables of the form @varname@ are available:
+#  name: instance name
+#  basedir: instance directory
+#  cyrus_prefix: cyrus path
+#  prefix: working directory
+[config]
+##sasl_mech_list = PLAIN LOGIN
+##debug_command = @prefix@/utils/gdbtramp %s %d
+
+# This section describes how Cassandane interacts with the Net::CalDAVTalk
+# module.  If the basedir is set, we can test the built in API tests against
+# cyrus's CalDAV support for event+json
+[caldavtalk]
+# The base directory of a clone of Net::CalDAVTalk from git (i.e. the
+# directory to find the 'testdata' directory in).  If empty, the built-in
+# API tests won't be run
+##basedir =
+
+# This section describes how Cassandane interacts with the ImapTest
+# testsuite, which is a test suite for IMAP servers written by the
+# Dovecot team and downloadable from http://www.imapwiki.org/ImapTest/
+[imaptest]
+# The base directory of a built but not installed ImapTest.  If empty,
+# no ImapTests will be found or run.
+##basedir =
+# A list of tests which will be suppressed, i.e. not reported and not
+# run.  The default value is the list of ImapTest tests which are known
+# to trigger unfixed bugs in Cyrus at the moment, hopefully that will
+# shrink to nil in the future.
+##suppress = listext subscribe
+
+# This section describes how Cassandane interacts with the CalDAVTester
+# testsuite, which is a test suite for CalDAV and CardDAV servers written
+# by Apple and downloadable from http://calendarserver.org/wiki/CalDAVTester
+[caldavtester]
+# The base directory of a svn checkout of CalDAVTester. If empty, no
+# CalDAV or CardDAV tests will be found or run
+## basedir =
+# A list of tests which will be suppressed for each category.  The default
+# is a list of CalDAVTester tests which are known to trigger unfixed bugs
+# in Cyrus or which are very Apple specific
+## suppress-caldav =
+## suppress-carddav =
+
+# This section describes how Cassandane interacts with the JMAP::TestSuite
+# test suite, which is a test suite for JMAP services available from
+# https://github.com/fastmail/JMAP-TestSuite
+[jmaptestsuite]
+# The base directory of a git checkout of JMAP::TestSuite.  If empty, no
+# JMAP tests will be found or run
+## basedir =
+# A list of tests which will be suppressed
+## suppress =
