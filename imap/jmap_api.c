@@ -1373,6 +1373,9 @@ HIDDEN int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
          case MBTYPE_SIEVE:
              server_modseq = req->counters.sievemodseq;
              break;
+         case MBTYPE_COLLECTION:
+             server_modseq = req->counters.filesmodseq;
+             break;
          default:
              server_modseq = req->counters.mailmodseq;
         }
@@ -1403,6 +1406,9 @@ HIDDEN modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
             break;
         case MBTYPE_SIEVE:
             modseq = req->counters.sievemodseq;
+            break;
+        case MBTYPE_COLLECTION:
+            modseq = req->counters.filesmodseq;
             break;
         case MBTYPE_EMAIL:
             modseq = req->counters.mailmodseq;
