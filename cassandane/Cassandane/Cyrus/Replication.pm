@@ -165,7 +165,9 @@ EOF
 
         # sync server should have logged the write error
         @lines = $self->{replica}->getsyslog();
-        $self->assert_matches(qr/IOERROR: failed to upload file $canaryguid/,
+        $self->assert_matches(qr{IOERROR:\sfailed\sto\supload\sfile
+                                 (?:\s\(simulated\))?:\sguid=<$canaryguid>
+                              }x,
                               "@lines");
     }
 }
@@ -240,7 +242,9 @@ EOF
 
         # sync server should have logged the write error
         @lines = $self->{replica}->getsyslog();
-        $self->assert_matches(qr/IOERROR: failed to upload file $canaryguid/,
+        $self->assert_matches(qr{IOERROR:\sfailed\sto\supload\sfile
+                                 (?:\s\(simulated\))?:\sguid=<$canaryguid>
+                              }x,
                               "@lines");
 
         # contents of message 4 should not appear on the wire (or logs) as
