@@ -3732,8 +3732,8 @@ sub test_imip_invite
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "added" {
         setflag "\\\\Flagged";
     }
 }
@@ -3802,8 +3802,8 @@ sub test_imip_invite_base64
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "added" {
         setflag "\\\\Flagged";
     }
 }
@@ -3879,8 +3879,8 @@ sub test_imip_invite_multipart
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "added" {
         setflag "\\\\Flagged";
     }
 }
@@ -3964,8 +3964,8 @@ sub test_imip_invite_calendarid
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :calendarid "$CalendarId" :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :calendarid "$CalendarId" :outcome "outcome";
+    if string "\${outcome}" "added" {
         setflag "\\\\Flagged";
     }
 }
@@ -4034,8 +4034,8 @@ sub test_imip_invite_updatesonly
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :updatesonly :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :updatesonly :outcome "outcome";
+    if string "\${outcome}" "added" {
         setflag "\\\\Flagged";
     }
 }
@@ -4103,8 +4103,8 @@ sub test_imip_update
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "updated" {
         setflag "\\\\Flagged";
     }
 }
@@ -4224,8 +4224,8 @@ sub test_imip_cancel
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "updated" {
         setflag "\\\\Flagged";
     }
 }
@@ -4340,8 +4340,8 @@ sub test_imip_cancel_delete
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :deletecanceled :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :deletecanceled :outcome "outcome";
+    if string "\${outcome}" "deleted" {
         setflag "\\\\Flagged";
     }
 }
@@ -4452,8 +4452,8 @@ sub test_imip_reply
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "updated" {
         setflag "\\\\Flagged";
     }
 }
@@ -4554,8 +4554,8 @@ sub test_imip_reply_override
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "updated" {
         setflag "\\\\Flagged";
     }
 }
@@ -4670,8 +4670,8 @@ sub test_imip_reply_override_invalid
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :errstr "status";
-    if string :matches "\${status}" "OK*" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "updated" {
         setflag "\\\\Flagged";
     }
 }
