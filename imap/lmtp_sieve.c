@@ -1418,10 +1418,12 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
 
     prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
 
+    buf_setcstr(&imip->outcome, "no_action");
     buf_reset(&imip->errstr);
 
     if (caldav_create_defaultcalendars(ctx->userid,
                                        &lmtpd_namespace, sd->authstate, NULL)) {
+        buf_setcstr(&imip->outcome, "error");
         buf_setcstr(&imip->errstr, "could not autoprovision calendars");
         goto done;
     }
@@ -1452,20 +1454,22 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
         goto done;
     }
 
-    icalrestriction_check(itip);
-    if (get_icalcomponent_errstr(itip)) {
-        buf_setcstr(&imip->errstr, "invalid iCalendar data");
-        goto done;
-    }
-
     meth = icalcomponent_get_method(itip);
     if (meth == ICAL_METHOD_NONE) {
         buf_setcstr(&imip->errstr, "missing METHOD property");
         goto done;
     }
 
+    icalrestriction_check(itip);
+    if (get_icalcomponent_errstr(itip)) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "invalid iCalendar data");
+        goto done;
+    }
+
     comp = icalcomponent_get_first_real_component(itip);
     if (!comp) {
+        buf_setcstr(&imip->outcome, "error");
         buf_setcstr(&imip->errstr, "no component to schedule");
         goto done;
     }
@@ -1473,12 +1477,14 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     kind = icalcomponent_isa(comp);
     uid = icalcomponent_get_uid(comp);
     if (!uid) {
+        buf_setcstr(&imip->outcome, "error");
         buf_setcstr(&imip->errstr, "missing UID property");
         goto done;
     }
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (!prop) {
+        buf_setcstr(&imip->outcome, "error");
         buf_setcstr(&imip->errstr, "missing ORGANIZER property");
         goto done;
     }
@@ -1539,6 +1545,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
                 }
             }
             if (!recipient) {
+                buf_setcstr(&imip->outcome, "error");
                 buf_setcstr(&imip->errstr,
                             "could not find matching ATTENDEE property");
                 goto done;
@@ -1558,6 +1565,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
             recipient = organizer;
             prop = icalcomponent_get_first_invitee(comp);
             if (!prop) {
+                buf_setcstr(&imip->outcome, "error");
                 buf_setcstr(&imip->errstr, "missing ATTENDEE property");
                 goto done;
             }
@@ -1569,6 +1577,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
         unsupported_method:
         default:
             /* Unsupported method */
+            buf_setcstr(&imip->outcome, "error");
             buf_printf(&imip->errstr, "unsupported method: '%s'",
                        icalproperty_method_to_string(meth));
             goto done;
@@ -1577,6 +1586,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
 
     default:
         /* Unsupported component */
+        buf_setcstr(&imip->outcome, "error");
         buf_printf(&imip->errstr, "unsupported component: '%s'",
                    icalcomponent_kind_to_string(kind));
         goto done;
@@ -1588,14 +1598,25 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     struct caldav_sched_param sched_param = {
         (char *) ctx->userid, NULL, 0, 0, 1, NULL
     };
-    ret = sched_deliver_local(ctx->userid, originator, recipient,
-                              &sched_param, &sched_data,
-                              (struct auth_state *) sd->authstate,
-                              NULL, NULL);
-    if (ret != 1) {
-        buf_setcstr(&imip->errstr, sched_data.status ? sched_data.status :
-                    "failed to deliver iMIP message");
-        ret = 0;
+    int r = sched_deliver_local(ctx->userid, originator, recipient,
+                                &sched_param, &sched_data,
+                                (struct auth_state *) sd->authstate,
+                                NULL, NULL);
+    switch (r) {
+    case SCHED_DELIVER_ERROR:
+        buf_setcstr(&imip->outcome, "error");
+        buf_printf(&imip->errstr, "failed to deliver iMIP message: %s",
+                   sched_data.status ? sched_data.status : "");
+        break;
+    case SCHED_DELIVER_NOACTION:
+        buf_setcstr(&imip->outcome, "no_action");
+        break;
+    case SCHED_DELIVER_ADDED:
+        buf_setcstr(&imip->outcome, "added");
+        break;
+    default:
+        buf_setcstr(&imip->outcome, "updated");
+        break;
     }
 
     syslog(LOG_INFO, "sieve iMIP processed: %s: %s",
