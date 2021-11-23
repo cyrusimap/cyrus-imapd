@@ -43,6 +43,10 @@
 
 #include <config.h>
 
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#include <fts.h>
 #include <string.h>
 #include <syslog.h>
 
@@ -84,13 +88,14 @@ static inline int is_base64url_char(char c)
             (c == '-' || c == '_'));
 }
 
-static void http_jwt_reset(void)
+HIDDEN int http_jwt_reset(void)
 {
     EVP_PKEY *pkey;
     while ((pkey = ptrarray_pop(&pkeys)))
         EVP_PKEY_free(pkey);
     is_enabled = 0;
     max_age = 0;
+    return 0;
 }
 
 static EVP_PKEY *read_hmac_key(struct buf *b64)
@@ -126,17 +131,17 @@ static EVP_PKEY *read_public_key(struct buf *pem)
     return pkey;
 }
 
-static void read_keys(const char *fname, ptrarray_t *keys)
+static int read_keyfile(const char *fname, ptrarray_t *keys)
 {
     struct buf line = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     enum state { NONE, PUBLIC, HMAC } state = NONE;
     size_t linenum = 0;
-    int valid = 0;
+    int r = -1;
 
     FILE *fp = fopen(fname, "r");
     if (!fp) {
-        xsyslog(LOG_ERR, "Cannot open key file", "fname=<%s>", fname);
+        xsyslog(LOG_ERR, "Can not open key file", "fname=<%s>", fname);
         goto done;
     }
 
@@ -212,40 +217,63 @@ static void read_keys(const char *fname, ptrarray_t *keys)
         buf_putc(&buf, '\n');
     }
 
-    valid = 1;
+    r = 0;
 
 done:
     if (fp) fclose(fp);
-    if (!valid) {
-        EVP_PKEY *pkey;
-        while ((pkey = ptrarray_pop(keys)))
-            EVP_PKEY_free(pkey);
-    }
     buf_free(&buf);
     buf_free(&line);
+    return r;
 }
 
-HIDDEN int http_jwt_init(const char *fname, int age)
+HIDDEN int http_jwt_init(const char *keydir, int age)
 {
     http_jwt_reset();
 
-    if (!fname)
-        return 0;
+    int r = -1;
+
+    char *paths[2] = { (char *) keydir, NULL };
+    FTS *fts = fts_open(paths, 0, NULL);
+    if (!fts) {
+        xsyslog(LOG_ERR, "Can not open keydir", "keydir=<%s>", keydir);
+        goto done;
+    }
 
     if (age < 0) {
         xsyslog(LOG_ERR, "Maximum age must not be negative", "age=<%d>", age);
-        return -1;
+        goto done;
     }
     max_age = age;
 
-    read_keys(fname, &pkeys);
+    FTSENT *fe;
+    while ((fe = fts_read(fts))) {
+        if (fe->fts_info == FTS_D && fe->fts_level > 0) {
+            // do not descend into directories
+            fts_set(fts, fe, FTS_SKIP);
+            continue;
+        }
+
+        if (fe->fts_info == FTS_F || fe->fts_info == FTS_SL) {
+            r = read_keyfile(fe->fts_accpath, &pkeys);
+            if (r) {
+                xsyslog(LOG_ERR, "Can not read keyfile", "keyfile=<%s>", fe->fts_accpath);
+                goto done;
+            }
+        }
+    }
+
     if (!ptrarray_size(&pkeys)) {
-        xsyslog(LOG_ERR, "No keys found", "fname=<%s>", fname);
-        return -1;
+        xsyslog(LOG_ERR, "No keys found in keydir", "keydir=<%s>", keydir);
+        goto done;
     }
 
     is_enabled = 1;
-    return 0;
+    r = 0;
+
+done:
+    if (fts) fts_close(fts);
+    if (r) http_jwt_reset();
+    return r;
 }
 
 HIDDEN int http_jwt_is_enabled(void)

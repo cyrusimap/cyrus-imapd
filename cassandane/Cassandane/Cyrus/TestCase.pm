@@ -372,7 +372,7 @@ magic(LowEmailLimits => sub {
 });
 magic(HttpJWTAuthRSA => sub {
     my $self = shift;
-    $self->config_set(http_jwt_key_path => '@basedir@/conf/certs/jwt.pem');
+    $self->config_set(http_jwt_key_dir => '@basedir@/conf/certs/http_jwt');
     $self->want('install_certificates');
 });
 

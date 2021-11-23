@@ -63,39 +63,55 @@ static const char RSA_PRIVATE_KEY_PEM[] =
 
 static void test_init_multi(void)
 {
+    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
 
-    char fname[] = "/tmp/cyrus-cunit-XXXXXX";
-    int fd = mkstemp(fname);
-    CU_ASSERT_NOT_EQUAL(-1, fd);
+    char *fnames[2] = {
+        strconcat(dname, "/hmac.pem", NULL),
+        strconcat(dname, "/rsa.pem", NULL)
+    };
 
-    write(fd, HMAC_PEM, sizeof(HMAC_PEM)-1);
-    write(fd, RSA_PEM, sizeof(RSA_PEM)-1);
-    close(fd);
+    FILE *fp = fopen(fnames[0], "w");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
+    fputs(HMAC_PEM, fp);
+    fclose(fp);
 
-    int r = http_jwt_init(fname, 0);
+    fp = fopen(fnames[1], "w");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
+    fputs(RSA_PEM, fp);
+    fclose(fp);
+
+    int r = http_jwt_init(dname, 0);
     CU_ASSERT_EQUAL(0, r);
     CU_ASSERT_EQUAL(1, http_jwt_is_enabled());
 
-    unlink(fname);
-    http_jwt_init(NULL, 0);
+    unlink(fnames[0]);
+    unlink(fnames[1]);
+    free(fnames[0]);
+    free(fnames[1]);
+    rmdir(dname);
+    http_jwt_reset();
 }
 
 static void test_init_nokeys(void)
 {
+    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
 
-    char fname[] = "/tmp/cyrus-cunit-XXXXXX";
-    int fd = mkstemp(fname);
-    CU_ASSERT_NOT_EQUAL(-1, fd);
+    char *fname = strconcat(dname, "/key.pem", NULL);
+    FILE *fp = fopen(fname, "w");
+    CU_ASSERT_PTR_NOT_NULL(fp);
+    fputs("xxx", fp);
+    fclose(fp);
 
-    write(fd, "xxx", 3);
-    close(fd);
-
-    int r = http_jwt_init(fname, 0);
-    CU_ASSERT_NOT_EQUAL(0, r);
+    int r = http_jwt_init(dname, 0);
+    CU_ASSERT_NOT_EQUAL(-1, r);
     CU_ASSERT_NOT_EQUAL(1, http_jwt_is_enabled());
 
     unlink(fname);
-    http_jwt_init(NULL, 0);
+    free(fname);
+    rmdir(dname);
+    http_jwt_reset();
 }
 
 static void token(struct buf *buf,
@@ -138,13 +154,16 @@ static void token(struct buf *buf,
 
 static void test_validate(void)
 {
-    char fname[] = "/tmp/cyrus-cunit-XXXXXX";
-    int fd = mkstemp(fname);
-    CU_ASSERT_NOT_EQUAL(-1, fd);
-    write(fd, HMAC_PEM, sizeof(HMAC_PEM));
-    close(fd);
+    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
 
-    int r = http_jwt_init(fname, 0);
+    char *fname = strconcat(dname, "/key.pem", NULL);
+    FILE *fp = fopen(fname, "w");
+    CU_ASSERT_PTR_NOT_NULL(fp);
+    fputs(HMAC_PEM, fp);
+    fclose(fp);
+
+    int r = http_jwt_init(dname, 0);
     CU_ASSERT_EQUAL(0, r);
     CU_ASSERT_NOT_EQUAL(0, http_jwt_is_enabled());
 
@@ -274,20 +293,32 @@ static void test_validate(void)
 
     EVP_PKEY_free(pkey);
     unlink(fname);
-    http_jwt_init(NULL, 0);
+    free(fname);
+    rmdir(dname);
+    http_jwt_reset();
 }
 
 static void test_auth(void)
 {
-    char fname[] = "/tmp/cyrus-cunit-XXXXXX";
-    int fd = mkstemp(fname);
-    CU_ASSERT_NOT_EQUAL(-1, fd);
+    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
 
-    write(fd, HMAC_PEM, sizeof(HMAC_PEM)-1);
-    write(fd, RSA_PEM, sizeof(RSA_PEM)-1);
-    close(fd);
+    char *fnames[2] = {
+        strconcat(dname, "/hmac.pem", NULL),
+        strconcat(dname, "/rsa.pem", NULL)
+    };
 
-    int r = http_jwt_init(fname, 0);
+    FILE *fp = fopen(fnames[0], "w");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
+    fputs(HMAC_PEM, fp);
+    fclose(fp);
+
+    fp = fopen(fnames[1], "w");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
+    fputs(RSA_PEM, fp);
+    fclose(fp);
+
+    int r = http_jwt_init(dname, 0);
     CU_ASSERT_EQUAL(0, r);
     CU_ASSERT_EQUAL(1, http_jwt_is_enabled());
 
@@ -328,8 +359,12 @@ static void test_auth(void)
     EVP_PKEY_free(pkey);
     BIO_free(bp);
 
-    unlink(fname);
-    http_jwt_init(NULL, 0);
+    unlink(fnames[0]);
+    unlink(fnames[1]);
+    free(fnames[0]);
+    free(fnames[1]);
+    rmdir(dname);
+    http_jwt_reset();
 }
 
 /* vim: set ft=c: */
