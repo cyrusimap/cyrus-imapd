@@ -11,7 +11,9 @@ This assumes you have your :ref:`basic server running <installing>` and you've m
 Installing Cassandane
 =====================
 
-Cassandane is a Perl-based integration test suite for Cyrus. `Cassandane documentation <https://github.com/cyrusimap/cassandane/tree/master/doc>`_ includes information on setting up tests and writing new tests.
+Cassandane is a Perl-based integration test suite for Cyrus.
+`Cassandane documentation <https://github.com/cyrusimap/cyrus-imapd/tree/master/cassandane/doc>`_
+includes information on setting up tests and writing new tests.
 
 Why "Cassandane"? Wikipedia indicates that Cassandane_ was the name of
 the consort of King Cyrus the Great of Persia, founder of the Achaemenid
@@ -22,9 +24,8 @@ Persian Empire.  So that's kinda cool.
 Install and configure Cassandane
 --------------------------------
 
-1. Clone the Cassandane repository
-
-    * ``git clone https://github.com/cyrusimap/cassandane.git``
+1. You already have it -- it's in the "cassandane" subdirectory of the cyrus-imapd
+   sources.
 
 2. Install dependencies
 
@@ -61,10 +62,10 @@ Install and configure Cassandane
 
    .. code-block:: bash
 
-    cd /path/to/cassandane
+    cd /path/to/cyrus-imapd/cassandane
     make
 
-4. Copy ``cassandane.ini.example`` to ``cassandane.ini``
+4. Copy ``cassandane.ini.example`` to ``cassandane.ini`` in your home directory
 
 5. Edit ``cassandane.ini`` to set up your cassandane environment.
 
@@ -172,7 +173,7 @@ As user ``cyrus``, run the tests.
 
 .. code-block:: bash
 
-    cd /path/to/cassandane
+    cd /path/to/cyrus-imapd/cassandane
     sudo -u cyrus ./testrunner.pl -f pretty -j 8
 
 Debugging and stacktraces
