@@ -112,7 +112,7 @@ struct namespace_t namespace_rss = {
     http_allow_noauth_get, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    rss_init, NULL, NULL, NULL, NULL, NULL,
+    rss_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

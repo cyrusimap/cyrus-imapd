@@ -517,8 +517,6 @@ struct namespace_t {
     void (*reset)(void);        /* Function run before change in auth */
     void (*shutdown)(void);     /* Function run during service shutdown */
     int (*premethod)(txn_t *);  /* Function run prior to any method */
-    int (*bearer)(const char *, /* Function run to authenticate Bearer token */
-                  char *, size_t);
     struct method_t methods[];  /* Array of functions to perform HTTP methods.
                                  * MUST be an entry for EACH method listed,
                                  * and in the SAME ORDER in which they appear

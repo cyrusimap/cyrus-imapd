@@ -62,7 +62,7 @@ struct namespace_t namespace_applepush = {
     http_allow_noauth_get, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ|ALLOW_POST,
-    &applepush_init, NULL, NULL, NULL, NULL, NULL,
+    &applepush_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

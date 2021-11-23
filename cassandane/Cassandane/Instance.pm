@@ -1151,7 +1151,7 @@ sub start
                                                         $self->{cyrus_prefix});
         $self->_generate_imapd_conf();
         $self->_generate_master_conf();
-        $self->install_tls_certificates() if $self->{install_certificates};
+        $self->install_certificates() if $self->{install_certificates};
         $self->_fix_ownership();
     }
     elsif (!scalar $self->{services})
@@ -2322,7 +2322,7 @@ sub install_old_mailbox
     return "user.$user.version$version";
 }
 
-sub install_tls_certificates
+sub install_certificates
 {
     my ($self) = @_;
 
@@ -2336,6 +2336,12 @@ sub install_tls_certificates
         copy($f, $destdir)
             or die "cannot install $f to $destdir: $!";
     }
+
+    $destdir = $self->get_basedir() . "/conf/certs/http_jwt";
+    my $jwt_file = abs_path("data/certs/http_jwt/jwt.pem");
+    xlog "installing JSON Web Token key file ...";
+    copy($jwt_file, $destdir)
+        or die "cannot install $jwt_file to $destdir: $!";
 }
 
 sub get_servername

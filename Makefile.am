@@ -1142,6 +1142,14 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/webdav_db.c \
 	imap/webdav_db.h
 
+if CUNIT
+
+cunit_TESTS += cunit/http_jwt.testc
+cunit_unit_SOURCES += imap/http_jwt.c
+
+endif # CUNIT
+
+
 endif # HTTPD
 
 if USE_XAPIAN
@@ -1254,6 +1262,8 @@ imap_httpd_SOURCES = \
 	imap/http_h2.c \
 	imap/http_h2.h \
 	imap/http_ischedule.c \
+	imap/http_jwt.c \
+	imap/http_jwt.h \
 	imap/http_prometheus.c \
 	imap/http_proxy.c \
 	imap/http_proxy.h \

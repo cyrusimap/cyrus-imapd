@@ -69,6 +69,7 @@
 
 #include "httpd.h"
 #include "http_h2.h"
+#include "http_jwt.h"
 #include "http_proxy.h"
 #include "http_ws.h"
 
@@ -548,7 +549,7 @@ static struct namespace_t namespace_default = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -869,6 +870,7 @@ int service_init(int argc __attribute__((unused)),
             fatal("https: TLS engine initialization failure", EX_SOFTWARE);
         }
     }
+    r = 0;
 
     http2_enabled = http2_init(&http_conn, &serverinfo);
     ws_enabled = ws_init(&http_conn, &serverinfo);
@@ -902,7 +904,14 @@ int service_init(int argc __attribute__((unused)),
 
     prometheus_increment(CYRUS_HTTP_READY_LISTENERS);
 
-    return 0;
+    /* Initialize Bearer JSON Web Token authentication */
+    const char *jwtdir = config_getstring(IMAPOPT_HTTP_JWT_KEY_DIR);
+    if (jwtdir) {
+        r = http_jwt_init(jwtdir,
+                config_getduration(IMAPOPT_HTTP_JWT_MAX_AGE, 's'));
+    }
+
+    return r;
 }
 
 
@@ -1003,6 +1012,10 @@ int service_main(int argc __attribute__((unused)),
             }
         }
     }
+
+    if (http_jwt_is_enabled())
+        avail_auth_schemes |= AUTH_BEARER;
+
     httpd_tls_required =
         config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
 
@@ -1669,11 +1682,6 @@ static int check_namespace(struct transaction_t *txn)
     /* See if this namespace whitelists auth schemes */
     if (namespace->auth_schemes) {
         avail_auth_schemes = (namespace->auth_schemes & avail_auth_schemes);
-
-        /* Bearer auth must be advertised and supported by the namespace */
-        if ((namespace->auth_schemes & AUTH_BEARER) && namespace->bearer) {
-            avail_auth_schemes |= AUTH_BEARER;
-        }
     }
 
     return 0;
@@ -1980,9 +1988,6 @@ static void transaction_reset(struct transaction_t *txn)
     txn->flags.vary = VARY_AE;
 
     memset(&txn->req_line, 0, sizeof(struct request_line_t));
-
-    /* Reset Bearer auth scheme for each transaction */
-    avail_auth_schemes &= ~AUTH_BEARER;
 
     if (txn->req_uri) xmlFreeURI(txn->req_uri);
     txn->req_uri = NULL;
@@ -4251,15 +4256,11 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         httpd_extradomain = xstrdupnull(extra);
     }
     else if (scheme->id == AUTH_BEARER) {
-        /* Bearer authentication */
-        assert(txn->req_tgt.namespace->bearer);
-
-        /* Call namespace bearer authentication.
+        /* Authenticate JSON web token
          * We are working with base64 buffer, so the namespace can
          * write the canonicalized userid into the buffer */
         base64[0] = 0;
-        status = txn->req_tgt.namespace->bearer(clientin,
-                                                base64, BASE64_BUF_SIZE);
+        status = http_jwt_auth(clientin, clientinlen, base64, BASE64_BUF_SIZE);
         if (status) return status;
         canon_user = user = base64;
 

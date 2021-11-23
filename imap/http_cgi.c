@@ -75,7 +75,7 @@ struct namespace_t namespace_cgi = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ | ALLOW_POST,
-    cgi_init, NULL, NULL, NULL, NULL, NULL,
+    cgi_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

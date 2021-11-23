@@ -145,7 +145,7 @@ struct namespace_t namespace_tzdist = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    tzdist_init, NULL, NULL, tzdist_shutdown, NULL, NULL,
+    tzdist_init, NULL, NULL, tzdist_shutdown, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
