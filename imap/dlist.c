@@ -93,20 +93,23 @@ static void printfile(struct protstream *out, const struct dlist *dl)
 
     f = fopen(dl->sval, "r");
     if (!f) {
-        syslog(LOG_ERR, "IOERROR: Failed to read file %s", dl->sval);
+        xsyslog(LOG_ERR, "IOERROR: Failed to read file",
+                         "sval=<%s>", dl->sval);
         prot_printf(out, "NIL");
         return;
     }
     if (fstat(fileno(f), &sbuf) == -1) {
-        syslog(LOG_ERR, "IOERROR: Failed to stat file %s", dl->sval);
+        xsyslog(LOG_ERR, "IOERROR: Failed to stat file",
+                         "sval=<%s>", dl->sval);
         prot_printf(out, "NIL");
         fclose(f);
         return;
     }
     size = sbuf.st_size;
     if (size != dl->nval) {
-        syslog(LOG_ERR, "IOERROR: Size mismatch %s (%lu != " MODSEQ_FMT ")",
-               dl->sval, size, dl->nval);
+        xsyslog(LOG_ERR, "IOERROR: Size mismatch",
+                         "sval=<%s> len=<%lu> expected=<" MODSEQ_FMT ">",
+                         dl->sval, size, dl->nval);
         prot_printf(out, "NIL");
         fclose(f);
         return;
@@ -118,8 +121,8 @@ static void printfile(struct protstream *out, const struct dlist *dl)
     message_guid_generate(&guid2, msg_base, msg_len);
 
     if (!message_guid_equal(&guid2, dl->gval)) {
-        syslog(LOG_ERR, "IOERROR: GUID mismatch %s",
-               dl->sval);
+        xsyslog(LOG_ERR, "IOERROR: GUID mismatch",
+                         "guid=<%s>", dl->sval);
         prot_printf(out, "NIL");
         fclose(f);
         map_free(&msg_base, &msg_len);
@@ -163,8 +166,9 @@ EXPORTED const char *dlist_reserve_path(const char *part, int isarchive, int isb
     /* gotta make sure we can create files */
     if (cyrus_mkdir(buf, 0755)) {
         /* it's going to fail later, but at least this will help */
-        syslog(LOG_ERR, "IOERROR: failed to create %s/sync./%lu/ for reserve: %m",
-                        base, (unsigned long)getpid());
+        xsyslog(LOG_ERR, "IOERROR: failed to create directory for reserve",
+                         "directory=<%s/sync./%lu/> file=<%s>",
+                         base, (unsigned long) getpid(), buf);
     }
     return buf;
 }
@@ -200,8 +204,8 @@ static int reservefile(struct protstream *in, const char *part,
 
     file = fopen(*fname, "w+");
     if (!file) {
-        syslog(LOG_ERR,
-               "IOERROR: failed to upload file %s", message_guid_encode(guid));
+        xsyslog(LOG_ERR, "IOERROR: failed to upload file",
+                         "guid=<%s>", message_guid_encode(guid));
         r = IMAP_IOERROR;
     }
     else if (debug_writefail_guid.status == GUID_NONNULL
@@ -210,8 +214,8 @@ static int reservefile(struct protstream *in, const char *part,
         fclose(file);
         file = NULL;
         errno = ENOSPC;
-        syslog(LOG_ERR, "IOERROR: failed to upload file %s (simulated)",
-                        message_guid_encode(guid));
+        xsyslog(LOG_ERR, "IOERROR: failed to upload file (simulated)",
+                         "guid=<%s>", message_guid_encode(guid));
         r = IMAP_IOERROR;
     }
     /* Note: in the case of error we still read the file's data from the wire,
@@ -221,15 +225,16 @@ static int reservefile(struct protstream *in, const char *part,
     while (size) {
         size_t n = prot_read(in, buf, size > 8192 ? 8192 : size);
         if (!n) {
-            syslog(LOG_ERR,
-                "IOERROR: reading message: unexpected end of file");
+            xsyslog(LOG_ERR,
+                    "IOERROR: reading message: unexpected end of file", NULL);
             r = IMAP_IOERROR;
             break;
         }
         size -= n;
         if (!file) continue;
         if (fwrite(buf, 1, n, file) != n) {
-            syslog(LOG_ERR, "IOERROR: writing to file '%s': %m", *fname);
+            xsyslog(LOG_ERR, "IOERROR: write failed",
+                             "fname=<%s>", *fname);
             r = IMAP_IOERROR;
             break;
         }
@@ -246,7 +251,8 @@ static int reservefile(struct protstream *in, const char *part,
     }
 
     if (fsync(fileno(file)) < 0) {
-        syslog(LOG_ERR, "IOERROR: fsyncing file '%s': %m", *fname);
+        xsyslog(LOG_ERR, "IOERRROR: fsync failed",
+                         "fname=<%s>", *fname);
         r = IMAP_IOERROR;
         goto error;
     }
