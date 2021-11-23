@@ -6735,6 +6735,11 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
 
     /* XXX - check for deleted? */
 
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE) {
+        /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
+        return 0;
+    }
+
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
         sync_name_list_add(info->mboxlist, mbentry->name);
         return 0;
