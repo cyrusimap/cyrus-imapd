@@ -912,11 +912,17 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
     if (r) return IMAP_IOERROR;
 
 
+    quota_t newquotas[QUOTA_NUMRESOURCES];
+    for (r = 0 ; r < QUOTA_NUMRESOURCES ; r++)
+        newquotas[r] = QUOTA_UNLIMITED;
+
+
     struct mboxlock *namespacelock = NULL;
     mbname_t *mbname = mbname_from_userid(userid);
 
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_SIEVE_FOLDER));
 
+    struct mailbox *mailbox = NULL;
     const char *mboxname = mbname_intname(mbname);
     r = mboxlist_lookup(mboxname, NULL, NULL);
 
@@ -932,25 +938,32 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
         r = mboxlist_lookup(mboxname, NULL, NULL);
     }
 
-    if (!r && mailboxptr) {
-        r = mailbox_open_iwl(mboxname, mailboxptr);
+    if (!r) {
+        r = mailbox_open_iwl(mboxname, &mailbox);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
                    mboxname, error_message(r));
             goto done;
         }
+
+        if (strcmpnull(mboxname, mailbox_quotaroot(mailbox))) {
+            r = mboxlist_setquotas(mboxname, newquotas, 0, 0);
+        }
     }
 
     else if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Create locally */
-        struct mailbox *mailbox = NULL;
         mbentry_t mbentry = MBENTRY_INITIALIZER;
         mbentry.name = (char *) mboxname;
         mbentry.mbtype = MBTYPE_SIEVE;
 
-        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                                   1/*isadmin*/, userid, NULL/*auth_state*/,
-                                   MBOXLIST_CREATE_LOCALONLY/*flags*/, &mailbox);
+        r = mboxlist_setquotas(mboxname, newquotas, 0, 1);
+
+        if (!r) r = mboxlist_createmailbox(&mbentry, 0/*options*/,
+                                           0/*highestmodseq*/,
+                                           1/*isadmin*/, userid, NULL/*auth_state*/,
+                                           MBOXLIST_CREATE_LOCALONLY/*flags*/,
+                                           &mailbox);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                    mboxname, error_message(r));
@@ -964,12 +977,11 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
         sievedir_foreach(sievedir, SIEVEDIR_SCRIPTS_ONLY, &migrate_cb, &mrock);
 
         free(mrock.active);
-
-        if (mailboxptr) *mailboxptr = mailbox;
-        else mailbox_close(&mailbox);
     }
 
   done:
+    if (mailboxptr) *mailboxptr = mailbox;
+    else mailbox_close(&mailbox);
     mboxname_release(&namespacelock);
     mbname_free(&mbname);
     return r;
