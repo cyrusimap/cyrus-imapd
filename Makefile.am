@@ -506,7 +506,6 @@ dist_noinst_SCRIPTS = \
 	tools/config2sample \
 	tools/fixsearchpath.pl \
 	tools/git-version.sh \
-	tools/jenkins-build.sh \
 	tools/masssievec \
 	tools/mkimap \
 	tools/mknewsgroups \
