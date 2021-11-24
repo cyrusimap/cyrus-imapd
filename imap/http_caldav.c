@@ -4381,19 +4381,29 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         if (organizer && !strncasecmp(organizer, "mailto:", 7)) organizer += 7;
     }
 
-    /* Also make sure DTEND > DTSTART, and both values have value same type */
-    dtend = icalcomponent_get_dtend(comp);
+    /* Also make sure DTEND > DTSTART, and both values have same type.
+     * For VTODO use DUE instead of DTEND */
+    if (kind == ICAL_VTODO_COMPONENT)
+        dtend = icalcomponent_get_due(comp);
+    else
+        dtend = icalcomponent_get_dtend(comp);
     if (!icaltime_is_null_time(dtend)) {
         dtstart = icalcomponent_get_dtstart(comp);
 
-        if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
-            txn->error.desc = "DTSTART and DTEND must have same value type";
+        if (icaltime_is_date(dtend) != icaltime_is_date(dtstart) && (kind != ICAL_VTODO_COMPONENT || !icaltime_is_null_time(dtstart))) {
+            if (kind == ICAL_VTODO_COMPONENT)
+                txn->error.desc = "DTSTART and DUE must have same value type";
+            else
+                txn->error.desc = "DTSTART and DTEND must have same value type";
             txn->error.precond = CALDAV_VALID_DATA;
             ret = HTTP_FORBIDDEN;
             goto done;
         }
-        if (icaltime_compare(dtend, dtstart) < 1) {
-            txn->error.desc = "DTEND must occur after DTSTART";
+        if ((kind != ICAL_VTODO_COMPONENT || !icaltime_is_null_time(dtstart)) && icaltime_compare(dtend, dtstart) < 1) {
+            if (kind == ICAL_VTODO_COMPONENT)
+                txn->error.desc = "DUE must occur after DTSTART";
+            else
+                txn->error.desc = "DTEND must occur after DTSTART";
             txn->error.precond = CALDAV_VALID_DATA;
             ret = HTTP_FORBIDDEN;
             goto done;
@@ -4427,18 +4437,27 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             goto done;
         }
 
-        dtend = icalcomponent_get_dtend(nextcomp);
+        if (kind == ICAL_VTODO_COMPONENT)
+            dtend = icalcomponent_get_due(nextcomp);
+        else
+            dtend = icalcomponent_get_dtend(nextcomp);
         if (!icaltime_is_null_time(dtend)) {
             dtstart = icalcomponent_get_dtstart(nextcomp);
 
-            if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
-                txn->error.desc = "DTSTART and DTEND must have same value type";
+            if (icaltime_is_date(dtend) != icaltime_is_date(dtstart) && (kind != ICAL_VTODO_COMPONENT || !icaltime_is_null_time(dtstart))) {
+                if (kind == ICAL_VTODO_COMPONENT)
+                    txn->error.desc = "DUE and DTEND must have same value type";
+                else
+                    txn->error.desc = "DTSTART and DTEND must have same value type";
                 txn->error.precond = CALDAV_VALID_DATA;
                 ret = HTTP_FORBIDDEN;
                 goto done;
             }
-            if (icaltime_compare(dtend, dtstart) < 1) {
-                txn->error.desc = "DTEND must occur after DTSTART";
+            if ((kind != ICAL_VTODO_COMPONENT || !icaltime_is_null_time(dtstart)) && icaltime_compare(dtend, dtstart) < 1) {
+                if (kind == ICAL_VTODO_COMPONENT)
+                    txn->error.desc = "DUE must occur after DTSTART";
+                else
+                    txn->error.desc = "DTEND must occur after DTSTART";
                 txn->error.precond = CALDAV_VALID_OBJECT;
                 ret = HTTP_FORBIDDEN;
                 goto done;
