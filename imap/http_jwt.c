@@ -55,8 +55,10 @@
 
 #include "assert.h"
 #include "global.h"
-#include "http_err.h"
 #include "util.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
 
 #include "http_jwt.h"
 
