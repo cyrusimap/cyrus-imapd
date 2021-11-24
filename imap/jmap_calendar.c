@@ -312,8 +312,9 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
             JMAP_URN_PRINCIPALS, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+
         json_object_set_new(settings->server_capabilities,
-                JMAP_CALENDARS_EXTENSION, json_object());
+                JMAP_CALENDARS_EXTENSION, json_pack("{s:b}", "isRFC", 1));
 
         for (mp = jmap_calendar_methods_nonstandard; mp->name; mp++) {
             hash_insert(mp->name, mp, &settings->methods);
