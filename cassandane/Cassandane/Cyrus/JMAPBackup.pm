@@ -84,6 +84,8 @@ sub set_up
     $self->{jmap}->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/backup',
         'https://cyrusimap.org/ns/jmap/contacts',
         'https://cyrusimap.org/ns/jmap/calendars',
@@ -559,7 +561,9 @@ sub test_restore_calendars_all
         ['CalendarEvent/set', {
             create => {
                 "1" => {
-                    "calendarId" => $calid,
+                    "calendarIds" => {
+                        $calid => JSON::true,
+                    },
                     "title" => "foo",
                     "description" => "foo's description",
                     "freeBusyStatus" => "busy",
@@ -592,7 +596,9 @@ sub test_restore_calendars_all
                     },
                 },
                 "2" => {
-                    "calendarId" => $calid2,
+                    "calendarIds" => {
+                        $calid2 => JSON::true,
+                    },
                     "title" => "bar",
                     "description" => "bar's description",
                     "freeBusyStatus" => "busy",
@@ -639,7 +645,8 @@ sub test_restore_calendars_all
             },
          }, 'R2'],
         ['Calendar/set', {
-            destroy => ["$calid2"]
+            destroy => ["$calid2"],
+            onDestroyRemoveEvents => JSON::true,
          }, "R2.5"],
         ['CalendarEvent/get', {
             properties => ['title', 'sequence'],
@@ -660,7 +667,7 @@ sub test_restore_calendars_all
             undoAll => JSON::true
          }, "R4"],
         ['CalendarEvent/get', {
-            properties => ['title', 'sequence', 'calendarId'],
+            properties => ['title', 'sequence', 'calendarIds'],
          }, "R5"]
     ]);
     $self->assert_not_null($res);
@@ -682,7 +689,7 @@ sub test_restore_calendars_all
     xlog "check that the restored calendar has correct name and color";
     $res = $jmap->CallMethods([
         ['Calendar/get', {
-            ids => [$got[0]{calendarId}],
+            ids => [(keys %{$got[0]{calendarIds}})[0]],
             properties => ['name', 'color'],
          }, "R5.5"]
     ]);
@@ -746,7 +753,9 @@ sub test_restore_calendars_all_dryrun
         ['CalendarEvent/set', {
             create => {
                 "1" => {
-                    "calendarId" => $calid,
+                    "calendarIds" => {
+                        $calid => JSON::true,
+                    },
                     "title" => "foo",
                     "description" => "foo's description",
                     "freeBusyStatus" => "busy",
@@ -779,7 +788,9 @@ sub test_restore_calendars_all_dryrun
                     },
                 },
                 "2" => {
-                    "calendarId" => $calid2,
+                    "calendarIds" => {
+                        $calid2 => JSON::true,
+                    },
                     "title" => "bar",
                     "description" => "bar's description",
                     "freeBusyStatus" => "busy",
@@ -826,7 +837,8 @@ sub test_restore_calendars_all_dryrun
             },
          }, 'R2'],
         ['Calendar/set', {
-            destroy => ["$calid2"]
+            destroy => ["$calid2"],
+            onDestroyRemoveEvents => JSON::true,
          }, "R2.5"],
         ['CalendarEvent/get', {
             properties => ['title', 'sequence'],
