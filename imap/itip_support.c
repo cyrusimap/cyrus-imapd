@@ -805,6 +805,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         if (SCHED_INVITES_ONLY(sched_data)) {
             /* Configured to NOT process updates - ignore request */
             SCHED_STATUS(sched_data, REQSTAT_NOPRIVS, SCHEDSTAT_NOPRIVS);
+            result = SCHED_DELIVER_NOACTION;
             goto done;
         }
 
