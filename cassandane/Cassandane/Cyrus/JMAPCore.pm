@@ -190,7 +190,8 @@ sub test_get_session
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:submission'});
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:calendars'});
     $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
-    $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
+    $self->assert_deep_equals({ isRFC => JSON::true },
+        , $capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
     if ($buildinfo->get('component', 'sieve')) {
         $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:vacationresponse'});
         if ($maj > 3 || ($maj == 3 && $min >= 3)) {
