@@ -15706,4 +15706,29 @@ sub test_calendarevent_set_standalone_instances_to_main
     $self->assert_deep_equals([$instance1Id], $res->[1][1]{destroyed});
 }
 
+sub test_session_capability_isrfc
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('200', $RawResponse->{status});
+    my $session = eval { decode_json($RawResponse->{content}) };
+    $self->assert_not_null($session);
+
+    $self->assert_deep_equals(
+        $session->{capabilities}{'https://cyrusimap.org/ns/jmap/calendars'},
+        { isRFC => JSON::true });
+}
+
 1;
