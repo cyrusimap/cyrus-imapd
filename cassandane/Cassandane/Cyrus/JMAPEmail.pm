@@ -22697,4 +22697,58 @@ sub test_email_get_utf8body_base64_with_replacement_char
         $res->[1][1]{list}[0]{bodyValues}{1}{value});
 }
 
+sub test_email_set_multipart_related
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $data = $jmap->Upload((pack "H*", "beefcode"), "image/gif");
+    my $blobId = $data->{blobId};
+    $self->assert_not_null($blobId);
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    from => [{
+                       email => 'from@local'
+                    }],
+                    subject => "test",
+                    bodyStructure => {
+                        type => "multipart/related",
+                        subParts => [{
+                                type => 'text/html',
+                                partId => '1',
+                            }, {
+                                type => 'image/gif',
+                                blobId => $blobId,
+                            }],
+                    },
+                    bodyValues => {
+                        "1" => {
+                            value => "test",
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => [ '#email1' ],
+            properties => [ 'bodyStructure' ],
+            bodyProperties => [ 'type', 'header:Content-Type' ],
+        }, 'R2' ],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{email1});
+    $self->assert_str_equals('multipart/related',
+        $res->[1][1]{list}[0]{bodyStructure}{type});
+
+    my $ct = $res->[1][1]{list}[0]{bodyStructure}{'header:Content-Type'};
+    $ct =~ tr/ \t\r\n//ds;
+    $self->assert($ct =~ /;type=\"text\/html\"$/);
+}
+
 1;
