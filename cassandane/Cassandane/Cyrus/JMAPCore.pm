@@ -204,6 +204,7 @@ sub test_get_session
         'urn:ietf:params:jmap:mail' => 'cassandane',
         'urn:ietf:params:jmap:submission' => 'cassandane',
         'urn:ietf:params:jmap:calendars' => 'cassandane',
+        'urn:ietf:params:jmap:principals' => 'cassandane',
         'https://cyrusimap.org/ns/jmap/contacts' => 'cassandane',
         'https://cyrusimap.org/ns/jmap/calendars' => 'cassandane',
     };
