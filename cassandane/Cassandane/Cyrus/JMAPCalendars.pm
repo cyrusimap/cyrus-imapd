@@ -1327,6 +1327,9 @@ sub normalize_event
     if (not exists $event->{isDraft}) {
         $event->{isDraft} = JSON::false;
     }
+    if (not exists $event->{excluded}) {
+        $event->{excluded} = JSON::false,
+    }
 
     if (not exists $event->{calendarIds}) {
         $event->{calendarIds} = undef;
@@ -13034,7 +13037,7 @@ sub test_participantidentity_set
 }
 
 sub test_calendarevent_set_fullblown
-    :min_version_3_4 :needs_component_jmap
+    :min_version_3_5 :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
