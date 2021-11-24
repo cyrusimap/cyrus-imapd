@@ -12914,7 +12914,7 @@ sub test_calendarevent_set_participant_links_dir
     $self->assert_not_null($res->[0][1]{updated}{$event->{id}});
 
     $res = $caldav->Request('GET', $icshref);
-    $self->assert_matches(qr/DIR="https:\/\/local\/attendee\/dir2"/, $res->{content});
+    $self->assert_matches(qr/DIR="https:/, $res->{content});
 }
 
 sub test_participantidentity_get
