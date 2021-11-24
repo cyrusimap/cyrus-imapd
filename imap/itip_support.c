@@ -836,6 +836,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     else if (SCHED_UPDATES_ONLY(sched_data)) {
         /* Can't find object belonging to attendee - ignore request */
         SCHED_STATUS(sched_data, REQSTAT_NOPRIVS, SCHEDSTAT_NOPRIVS);
+        result = SCHED_DELIVER_NOACTION;
         goto done;
     }
     else {
