@@ -381,7 +381,9 @@ sub test_issue_LP52545479
         ['CalendarEvent/set', {
             create => {
                 event1 => {
-                    calendarId => $calendarId,
+                    calendarIds => {
+                        $calendarId => JSON::true,
+                    },
                     uid => '58ADE31-custom-UID',
                     title => 'event1',
                     start => '2015-11-07T09:00:00',
