@@ -44,6 +44,7 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.12;
 use Data::Dumper;
+use Text::VCardFast;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -4593,6 +4594,124 @@ EOF
     $self->assert_caldav_notified(
         { recipient => 'attendee@local', is_update => JSON::true, method => 'REQUEST' },
     );
+}
+
+sub test_managed_attachments
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:123456789
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
+        'Content-Type' => 'text/calendar');
+    my $eventHref = '/dav/calendars/user/cassandane/Default/test.ics';
+
+    xlog "Add attachment via CalDAV";
+    my $url = $caldav->request_url($eventHref) . '?action=attachment-add';
+    my $res = $caldav->ua->post($url, {
+        headers => {
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment;filename=test',
+            'Prefer' => 'return=representation',
+            'Authorization' => $caldav->auth_header(),
+        },
+        content => 'davattach',
+    });
+    $self->assert_str_equals('201', $res->{status});
+
+    my $hash = Text::VCardFast::vcard2hash($res->{content});
+    my $attach = $hash->{objects}[0]{objects}[0]{properties}{attach}[0];
+
+    $self->assert_not_null($attach);
+    $self->assert_str_equals('test', $attach->{params}{filename}[0]);
+    $self->assert_str_equals('9', $attach->{params}{size}[0]);
+    $self->assert_str_equals('application/octet-stream',
+                             $attach->{params}{fmttype}[0]);
+
+    my $managedid = $attach->{params}{'managed-id'}[0];
+    my $attachHref = $attach->{value};
+
+    xlog "Fetch new attachment";
+    $res = $caldav->ua->request('GET', $attachHref, {
+        headers => {
+            'Authorization' => $caldav->auth_header()
+        }
+    });
+    $self->assert_str_equals('davattach', $res->{content});
+
+    xlog "Update attachment via CalDAV";
+    $url = $caldav->request_url($eventHref) . '?action=attachment-update&managed-id=' . $managedid;
+    $res = $caldav->ua->post($url, {
+        headers => {
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment;filename=test2',
+            'Prefer' => 'return=representation',
+            'Authorization' => $caldav->auth_header(),
+        },
+        content => 'davattach2',
+    });
+    $self->assert_str_equals('200', $res->{status});
+
+    $hash = Text::VCardFast::vcard2hash($res->{content});
+    $attach = $hash->{objects}[0]{objects}[0]{properties}{attach}[0];
+
+    $self->assert_not_null($attach);
+    $self->assert_str_equals('test2', $attach->{params}{filename}[0]);
+    $self->assert_str_equals('10', $attach->{params}{size}[0]);
+    $self->assert_str_equals('application/octet-stream',
+                             $attach->{params}{fmttype}[0]);
+
+    $managedid = $attach->{params}{'managed-id'}[0];
+    $attachHref = $attach->{value};
+
+    xlog "Fetch updated attachment";
+    $res = $caldav->ua->request('GET', $attachHref, {
+        headers => {
+            'Authorization' => $caldav->auth_header()
+        }
+    });
+    $self->assert_str_equals('davattach2', $res->{content});
+
+    xlog "Delete attachment via CalDAV";
+    $url = $caldav->request_url($eventHref) . '?action=attachment-remove&managed-id=' . $managedid;
+    $res = $caldav->ua->post($url, {
+        headers => {
+            'Prefer' => 'return=representation',
+            'Authorization' => $caldav->auth_header(),
+        },
+    });
+    $self->assert_str_equals('200', $res->{status});
+
+    $hash = Text::VCardFast::vcard2hash($res->{content});
+    $attach = $hash->{objects}[0]{objects}[0]{properties}{attach};
+
+    $self->assert_null($attach);
+
+    xlog "Attempt to fetch deleted attachment";
+    $res = $caldav->ua->request('GET', $attachHref, {
+        headers => {
+            'Authorization' => $caldav->auth_header()
+        }
+    });
+    $self->assert_str_equals('404', $res->{status});
 }
 
 sub test_sched_busytime_query
