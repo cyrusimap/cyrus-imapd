@@ -321,6 +321,7 @@ EXTRA_DIST = \
 	COPYING \
 	README.md \
 	VERSION \
+	cassandane \
 	com_err/et/et_c.awk \
 	com_err/et/et_h.awk \
 	com_err/et/test1.et \
@@ -505,7 +506,6 @@ dist_noinst_SCRIPTS = \
 	tools/config2sample \
 	tools/fixsearchpath.pl \
 	tools/git-version.sh \
-	tools/jenkins-build.sh \
 	tools/masssievec \
 	tools/mkimap \
 	tools/mknewsgroups \
@@ -2097,7 +2097,3 @@ valgrind:
 
 libtool: $(LIBTOOL_DEPS)
 	$(SHELL) ./config.status libtool
-
-# Install for Cassandane
-cassandane:
-	$(MAKE) DESTDIR=`cd ../inst ; /bin/pwd` install
