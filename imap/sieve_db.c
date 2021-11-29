@@ -1137,7 +1137,7 @@ EXPORTED int sievedb_upgrade(sqldb_t *db)
         { NULL,         SQLITE_NULL,    { .s = NULL } } };
     int rowid, r;
 
-    if (db->version > 12) return 0;
+    if (db->version != 12) return 0;
 
     /* Rename 'content' -> 'contentid' */
     r = sqldb_exec(db, CMD_ALTER_v12_TABLE, NULL, NULL, NULL);
