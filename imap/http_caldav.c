@@ -3852,9 +3852,9 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
         txn->error.precond = CALDAV_SUPP_DATA;
         ret = HTTP_BAD_REQUEST;
     }
-
-    if (!ret) ret = icalcomponent_apply_vpatch(ical, vpatch,
-                                               &num_changes, &txn->error.desc);
+    else
+        ret = icalcomponent_apply_vpatch(ical, vpatch,
+                                         &num_changes, &txn->error.desc);
 
     icalcomponent_free(pdoc);
 
