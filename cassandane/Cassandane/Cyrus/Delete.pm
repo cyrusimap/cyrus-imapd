@@ -492,7 +492,9 @@ EOF
     my ($maj, $min) = Cassandane::Instance->get_version();
 
     xlog $self, "Verify user data directories have been deleted";
-    if ($maj > 3 || ($maj == 3 && $min > 4)) {
+    if (($maj > 3 || ($maj == 3 && $min > 4))
+        && !$self->{instance}->{config}->get_bool('mailbox_legacy_dirs'))
+    {
         # Entire UUID-hashed directory should be removed
         $self->assert( !-e dirname($data->{user}{dav}));
     }

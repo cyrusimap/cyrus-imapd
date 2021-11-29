@@ -11888,7 +11888,7 @@ static int xfer_delete(struct xfer_header *xfer)
         newentry->acl = xstrdupnull(item->mbentry->acl);
         newentry->server = xstrdupnull(item->mbentry->server);
         newentry->partition = xstrdupnull(item->mbentry->partition);
-        newentry->mbtype |= MBTYPE_DELETED;
+        newentry->mbtype = item->mbentry->mbtype | MBTYPE_DELETED;
         r = mboxlist_updatelock(newentry, 1);
         mboxlist_entry_free(&newentry);
 
