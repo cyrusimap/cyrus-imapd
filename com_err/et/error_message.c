@@ -72,6 +72,14 @@ long code;
     int started = 0;
     char *cp;
 
+    /* Support for error number 0 differs among implementations of
+       strerror(). Linux/glibc returns "Success", which is nice, while
+       macOS returns "Undefined error: 0", which is rather confusing
+       in an LMTP success response "250 2.1.5 Undefined error: 0
+       SESSIONID=...". Return a known, consistent string instead. */
+    if (code == 0) {
+        return "Success";
+    }
     l_offset = code & ((1<<ERRCODE_RANGE)-1);
     offset = (int) l_offset;
     table_num = code - l_offset;
