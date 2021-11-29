@@ -9221,63 +9221,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         struct param *type_params = NULL;
         /* Validate type value */
         message_parse_type(type, &part->type, &part->subtype, &type_params);
-        if (part->type && part->subtype && !type_params) {
-            /* Build Content-Type header */
-            if (!strcasecmp(part->type, "MULTIPART")) {
-                /* Make boundary */
-                part->boundary = _mime_make_boundary();
-            }
-            buf_reset(&buf);
-            buf_printf(&buf, "%s/%s", part->type, part->subtype);
-            buf_lcase(&buf);
-            if (part->charset) {
-                buf_appendcstr(&buf, "; charset=");
-                buf_appendcstr(&buf, part->charset);
-            }
-            if (part->filename) {
-                /* Check if filename can be encoded as quoted string */
-                struct buf valbuf = BUF_INITIALIZER;
-                int is_qstring = 1;
-                const char *p;
-                for (p = part->filename; *p && is_qstring; p++) {
-                    switch (QSTRINGCHAR[(unsigned char)*p]) {
-                        case 0:
-                            is_qstring = 0;
-                            break;
-                        case 2:
-                            buf_putc(&valbuf, '\\');
-                            /* fall through */
-                        default:
-                            buf_putc(&valbuf, *p);
-                    }
-                }
-                /* Encode and write header value */
-                char *value;
-                if (!is_qstring || buf_len(&valbuf) > MIME_MAX_HEADER_LENGTH) {
-                    value = charset_encode_mimeheader(part->filename, 0, /*qpencode*/1);
-                    if (strlen(value) > MIME_MAX_HEADER_LENGTH) {
-                        buf_appendcstr(&buf, ";\r\n ");
-                    }
-                    else buf_appendcstr(&buf, "; ");
-                }
-                else {
-                    value = buf_release(&valbuf);
-                    buf_appendcstr(&buf, "; ");
-                }
-                buf_appendcstr(&buf, "name=\"");
-                buf_appendcstr(&buf, value);
-                buf_appendcstr(&buf, "\"");
-                buf_free(&valbuf);
-                free(value);
-            }
-            if (part->boundary) {
-                buf_appendcstr(&buf, ";\r\n boundary=");
-                buf_appendcstr(&buf, part->boundary);
-            }
-            _headers_add_new(&part->headers,
-                    _header_make("Content-Type", "type", &buf));
-        }
-        else {
+        if (!part->type || !part->subtype || type_params) {
             jmap_parser_invalid(parser, "type");
         }
         param_free(&type_params);
@@ -9286,10 +9230,101 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         jmap_parser_invalid(parser, "type");
     }
 
+    /* subParts */
+    json_t *subParts = json_object_get(jpart, "subParts");
+    if (json_array_size(subParts)) {
+        size_t i;
+        json_t *subPart;
+        json_array_foreach(subParts, i, subPart) {
+            jmap_parser_push_index(parser, "subParts", i, NULL);
+            struct emailpart *subpart = _emailpart_parse(req, subPart, parser, bodies);
+            if (subpart) ptrarray_append(&part->subparts, subpart);
+            jmap_parser_pop(parser);
+        }
+    }
+
+    if (part->type && part->subtype) {
+        /* Build Content-Type header */
+        if (!strcasecmp(part->type, "MULTIPART")) {
+            /* Make boundary */
+            part->boundary = _mime_make_boundary();
+        }
+        buf_reset(&buf);
+        buf_printf(&buf, "%s/%s", part->type, part->subtype);
+        buf_lcase(&buf);
+
+        if (part->charset) {
+            buf_appendcstr(&buf, "; charset=");
+            buf_appendcstr(&buf, part->charset);
+        }
+
+        if (part->filename) {
+            /* Check if filename can be encoded as quoted string */
+            struct buf valbuf = BUF_INITIALIZER;
+            int is_qstring = 1;
+            const char *p;
+            for (p = part->filename; *p && is_qstring; p++) {
+                switch (QSTRINGCHAR[(unsigned char)*p]) {
+                    case 0:
+                        is_qstring = 0;
+                        break;
+                    case 2:
+                        buf_putc(&valbuf, '\\');
+                        /* fall through */
+                    default:
+                        buf_putc(&valbuf, *p);
+                }
+            }
+            /* Encode and write header value */
+            char *value;
+            if (!is_qstring || buf_len(&valbuf) > MIME_MAX_HEADER_LENGTH) {
+                value = charset_encode_mimeheader(part->filename, 0, /*qpencode*/1);
+                if (strlen(value) > MIME_MAX_HEADER_LENGTH) {
+                    buf_appendcstr(&buf, ";\r\n ");
+                }
+                else buf_appendcstr(&buf, "; ");
+            }
+            else {
+                value = buf_release(&valbuf);
+                buf_appendcstr(&buf, "; ");
+            }
+            buf_appendcstr(&buf, "name=\"");
+            buf_appendcstr(&buf, value);
+            buf_appendcstr(&buf, "\"");
+            buf_free(&valbuf);
+            free(value);
+        }
+
+        if (part->boundary) {
+            buf_appendcstr(&buf, ";\r\n boundary=");
+            buf_appendcstr(&buf, part->boundary);
+        }
+
+        if (!strcasecmp(part->type, "MULTIPART") &&
+                !strcasecmp(part->subtype, "RELATED")) {
+            /* RFC 2387 mandates a type parameter */
+            struct emailpart *subpart = ptrarray_nth(&part->subparts, 0);
+            if (subpart) {
+                struct buf reltype = BUF_INITIALIZER;
+                buf_printf(&reltype, "\"%s/%s\"",
+                        subpart->type && subpart->subtype ?
+                        subpart->type : "text",
+                        subpart->type && subpart->subtype ?
+                        subpart->subtype : "plain");
+                buf_lcase(&reltype);
+                buf_appendcstr(&buf, ";\r\n type=");
+                buf_append(&buf, &reltype);
+                buf_free(&reltype);
+            }
+        }
+
+        _headers_add_new(&part->headers,
+                _header_make("Content-Type", "type", &buf));
+    }
+
     /* Validate by type */
     const char *part_id = json_string_value(json_object_get(jpart, "partId"));
     const char *blob_id = jmap_id_string_value(req, json_object_get(jpart, "blobId"));
-    json_t *subParts = json_object_get(jpart, "subParts");
     json_t *bodyValue = part_id ? json_object_get(bodies, part_id) : NULL;
 
     if (part_id && blob_id)
@@ -9298,20 +9333,9 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         jmap_parser_invalid(parser, "partId");
 
     if (subParts || (part->type && !strcasecmp(part->type, "MULTIPART"))) {
-        /* Parse sub parts */
-        if (json_array_size(subParts)) {
-            size_t i;
-            json_t *subPart;
-            json_array_foreach(subParts, i, subPart) {
-                jmap_parser_push_index(parser, "subParts", i, NULL);
-                struct emailpart *subpart = _emailpart_parse(req, subPart, parser, bodies);
-                if (subpart) ptrarray_append(&part->subparts, subpart);
-                jmap_parser_pop(parser);
-            }
-        }
-        else {
+        /* Must have subParts */
+        if (!json_array_size(subParts))
             jmap_parser_invalid(parser, "subParts");
-        }
         /* Must not have a body value */
         if (JNOTNULL(bodyValue))
             jmap_parser_invalid(parser, "partId");
