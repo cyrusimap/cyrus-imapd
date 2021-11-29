@@ -4308,13 +4308,13 @@ static int personalize_resource(struct transaction_t *txn,
 
 
 static const struct endtime_errors_t {
-    const char *type_mismatch;
-    const char *bad_value;
+    const char type_mismatch[43];
+    const char bad_value[31];
 } endtime_errors[] = {
     { "DTEND must have same value type as DTSTART",
       "DTEND must occur after DTSTART" },
     { "DUE must have same value type as DTSTART",
-      "DUE must occur after DTSTART"}
+      "DUE must occur after DTSTART" }
 };
 
 /* Make sure DTEND|DUE > DTSTART, and both values have value same type */
