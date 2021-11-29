@@ -2101,6 +2101,8 @@ char *mboxname_lockpath_suffix(const char *mboxname,
     const char *root = config_getstring(IMAPOPT_MBOXNAME_LOCKPATH);
     int len;
 
+    if (!mboxname) return NULL;
+
     if (!root) {
         snprintf(basepath, MAX_MAILBOX_PATH, "%s/lock", config_dir);
         root = basepath;
