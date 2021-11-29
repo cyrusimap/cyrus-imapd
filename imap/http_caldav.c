@@ -4307,6 +4307,49 @@ static int personalize_resource(struct transaction_t *txn,
 }
 
 
+static const struct endtime_errors_t {
+    const char *type_mismatch;
+    const char *bad_value;
+} endtime_errors[] = {
+    { "DTEND must have same value type as DTSTART",
+      "DTEND must occur after DTSTART" },
+    { "DUE must have same value type as DTSTART",
+      "DUE must occur after DTSTART"}
+};
+
+/* Make sure DTEND|DUE > DTSTART, and both values have value same type */
+static int check_endtime(icalcomponent *comp, const char **errstr)
+{
+    const struct endtime_errors_t *errors = NULL;
+    icaltimetype dtstart, dtend;
+
+    dtstart = icalcomponent_get_dtstart(comp);
+    if (icaltime_is_null_time(dtstart)) return 0;
+
+    if (icalcomponent_isa(comp) == ICAL_VTODO_COMPONENT) {
+        dtend = icalcomponent_get_due(comp);
+        errors = &endtime_errors[1];
+    }
+    else {
+        dtend = icalcomponent_get_dtend(comp);
+        errors = &endtime_errors[0];
+    }
+
+    if (icaltime_is_null_time(dtend)) return 0;
+
+    if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
+        *errstr = errors->type_mismatch;
+        return HTTP_FORBIDDEN;
+    }
+
+    if (icaltime_compare(dtend, dtstart) < 1) {
+        *errstr = errors->bad_value;
+        return HTTP_FORBIDDEN;
+    }
+
+    return 0;
+}
+
 /* Perform a PUT request
  *
  * preconditions:
@@ -4330,7 +4373,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent *oldical = NULL;
     icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
-    icaltimetype dtstart, dtend;
     icalproperty *prop, *rrule = NULL;
     const char *uid, *organizer = NULL;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
@@ -4367,6 +4409,13 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
     }
 
+    /* Make sure DTEND|DUE > DTSTART, and both values have value same type */
+    ret = check_endtime(comp, &txn->error.desc);
+    if (ret) {
+        txn->error.precond = CALDAV_VALID_DATA;
+        goto done;
+    }
+
     /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     kind = icalcomponent_isa(comp);
     uid = icalcomponent_get_uid(comp);
@@ -4380,25 +4429,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     if (prop) {
         organizer = icalproperty_get_organizer(prop);
         if (organizer && !strncasecmp(organizer, "mailto:", 7)) organizer += 7;
-    }
-
-    /* Also make sure DTEND > DTSTART, and both values have value same type */
-    dtend = icalcomponent_get_dtend(comp);
-    if (!icaltime_is_null_time(dtend)) {
-        dtstart = icalcomponent_get_dtstart(comp);
-
-        if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
-            txn->error.desc = "DTSTART and DTEND must have same value type";
-            txn->error.precond = CALDAV_VALID_DATA;
-            ret = HTTP_FORBIDDEN;
-            goto done;
-        }
-        if (icaltime_compare(dtend, dtstart) < 1) {
-            txn->error.desc = "DTEND must occur after DTSTART";
-            txn->error.precond = CALDAV_VALID_DATA;
-            ret = HTTP_FORBIDDEN;
-            goto done;
-        }
     }
 
     while ((nextcomp =
@@ -4428,22 +4458,11 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             goto done;
         }
 
-        dtend = icalcomponent_get_dtend(nextcomp);
-        if (!icaltime_is_null_time(dtend)) {
-            dtstart = icalcomponent_get_dtstart(nextcomp);
-
-            if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
-                txn->error.desc = "DTSTART and DTEND must have same value type";
-                txn->error.precond = CALDAV_VALID_DATA;
-                ret = HTTP_FORBIDDEN;
-                goto done;
-            }
-            if (icaltime_compare(dtend, dtstart) < 1) {
-                txn->error.desc = "DTEND must occur after DTSTART";
-                txn->error.precond = CALDAV_VALID_OBJECT;
-                ret = HTTP_FORBIDDEN;
-                goto done;
-            }
+        /* Make sure DTEND|DUE > DTSTART, and both values have value same type */
+        ret = check_endtime(comp, &txn->error.desc);
+        if (ret) {
+            txn->error.precond = CALDAV_VALID_DATA;
+            goto done;
         }
 
         if (rscale_calendars && !rrule) {
