@@ -575,13 +575,13 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_mail_capabilities(capas, mayCreateTopLevel);
         jmap_emailsubmission_capabilities(capas);
         jmap_mdn_capabilities(capas);
-        jmap_vacation_capabilities(capas);
         jmap_contact_capabilities(capas);
         jmap_calendar_capabilities(capas);
         jmap_backup_capabilities(capas);
         jmap_notes_capabilities(capas);
 #ifdef USE_SIEVE
         jmap_sieve_capabilities(capas);
+        jmap_vacation_capabilities(capas);
 #endif
     }
     else {
@@ -1365,6 +1365,9 @@ HIDDEN int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
          case MBTYPE_JMAPSUBMIT:
              server_modseq = req->counters.submissionmodseq;
              break;
+         case MBTYPE_SIEVE:
+             server_modseq = req->counters.sievemodseq;
+             break;
          default:
              server_modseq = req->counters.mailmodseq;
         }
@@ -1392,6 +1395,9 @@ HIDDEN modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
             break;
         case MBTYPE_JMAPSUBMIT:
             modseq = req->counters.submissionmodseq;
+            break;
+        case MBTYPE_SIEVE:
+            modseq = req->counters.sievemodseq;
             break;
         case MBTYPE_EMAIL:
             modseq = req->counters.mailmodseq;

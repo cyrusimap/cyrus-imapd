@@ -11518,6 +11518,10 @@ static int xfer_addusermbox(const mbentry_t *mbentry, void *rock)
 {
     struct xfer_header *xfer = (struct xfer_header *)rock;
 
+    /* Skip #sieve mailbox */
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE)
+        return 0;
+
     /* Skip remote mailbox */
     if (mbentry->mbtype & MBTYPE_REMOTE)
         return 0;
@@ -12047,6 +12051,11 @@ static int xfer_addmbox(struct findall_data *data, void *rock)
     if (!data) return 0;
     if (!data->is_exactmatch) return 0;
     struct xfer_list *list = (struct xfer_list *) rock;
+
+    if (mbtype_isa(data->mbentry->mbtype) == MBTYPE_SIEVE) {
+        /* Skip #sieve mailbox */
+        return 0;
+    }
 
     if (list->part && strcmp(data->mbentry->partition, list->part)) {
         /* Not on specified partition */
@@ -13492,7 +13501,8 @@ static int recursivematch_cb(struct findall_data *data, void *rockp)
             r = mboxname_iscalendarmailbox(intname, 0) ||
                 mboxname_isaddressbookmailbox(intname, 0) ||
                 mboxname_isdavdrivemailbox(intname, 0) ||
-                mboxname_isdavnotificationsmailbox(intname, 0);
+                mboxname_isdavnotificationsmailbox(intname, 0) ||
+                mboxname_issievemailbox(intname, 0);
 
             if (!data->mbname) mbname_free(&mbname);
 

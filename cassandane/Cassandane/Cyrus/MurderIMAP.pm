@@ -45,6 +45,7 @@ use Data::Dumper;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Words;
 use Cassandane::Instance;
 
 $Data::Dumper::Sortkeys = 1;
@@ -73,9 +74,9 @@ sub tear_down
 # returning a hash of what to expect to find there later
 sub populate_user
 {
-    my ($self, $store, $folders) = @_;
+    my ($self, $instance, $store, $folders) = @_;
 
-    my $messages = {};
+    my $created = {};
 
     my @specialuse = qw(Drafts Junk Sent Trash);
 
@@ -85,14 +86,16 @@ sub populate_user
         # create some messages
         foreach my $n (1 .. 20) {
             my $msg = $self->make_message("Message $n", store => $store);
-            $messages->{$folder}->{messages}->{$msg->uid()} = $msg;
+            $created->{mailboxes}->{$folder}->{messages}->{$msg->uid()} = $msg;
         }
 
         # fizzbuzz some flags
         my $talk = $store->get_client();
         $talk->select($folder);
         my $n = 1;
-        while (my ($uid, $msg) = each %{$messages->{$folder}->{messages}}) {
+        while (my ($uid, $msg)
+                = each %{$created->{mailboxes}->{$folder}->{messages}})
+        {
             my @flags;
 
             if ($n % 3 == 0) {
@@ -118,7 +121,7 @@ sub populate_user
 
         # make sure the messages are as expected
         $store->set_fetch_attributes('uid', 'flags');
-        $self->check_messages($messages->{$folder}->{messages},
+        $self->check_messages($created->{mailboxes}->{$folder}->{messages},
                               store => $store,
                               check_guid => 0,
                               keyed_on => 'uid');
@@ -131,30 +134,45 @@ sub populate_user
             $talk->setmetadata($folder, '/private/specialuse', "\\$suflag");
             $self->assert_str_equals('ok',
                                      $talk->get_last_completion_response());
-            $messages->{$folder}->{specialuse} = "\\$suflag";
+            $created->{mailboxes}->{$folder}->{specialuse} = "\\$suflag";
         }
     }
 
-    return $messages;
+    # XXX ought to be conditional on whether $instance was built with sieve
+    # XXX support, but Cassandane::BuildInfo doesn't currently support
+    # XXX choosing an instance to ask about...
+    my $scriptname = random_word();
+    my $scriptcontent = 'keep;';
+
+    $instance->install_sieve_script($scriptcontent,
+                                    name => $scriptname,
+                                    username => $store->{username});
+    $self->assert_sieve_exists($instance, $store->{username}, $scriptname);
+    $self->assert_sieve_active($instance, $store->{username}, $scriptname);
+
+    $created->{sieve}->{scripts}->{$scriptname} = $scriptcontent;
+    $created->{sieve}->{active} = $scriptname;
+
+    return $created;
 }
 
 # check that the contents of the store match the data returned by
 # populate_user()
 sub check_user
 {
-    my ($self, $store, $expected) = @_;
+    my ($self, $instance, $store, $expected) = @_;
 
     die "bad expected hash" if ref $expected ne 'HASH';
 
-    foreach my $folder (keys %{$expected}) {
+    foreach my $folder (keys %{$expected->{mailboxes}}) {
         $store->set_folder($folder);
         $store->set_fetch_attributes('uid', 'flags');
-        $self->check_messages($expected->{$folder}->{messages},
+        $self->check_messages($expected->{mailboxes}->{$folder}->{messages},
                               store => $store,
                               check_guid => 0,
                               keyed_on => 'uid');
 
-        my $specialuse = $expected->{$folder}->{specialuse};
+        my $specialuse = $expected->{mailboxes}->{$folder}->{specialuse};
         if ($specialuse) {
             my $talk = $store->get_client();
             my $res = $talk->getmetadata($folder, '/private/specialuse');
@@ -164,6 +182,21 @@ sub check_user
 
             $self->assert_str_equals($specialuse,
                                      $res->{$folder}->{'/private/specialuse'});
+        }
+    }
+
+    if (exists $expected->{sieve}) {
+        while (my ($scriptname, $scriptcontent)
+               = each %{$expected->{sieve}->{scripts}})
+        {
+            $self->assert_sieve_exists($instance, $store->{username},
+                                       $scriptname, 1);
+            $self->assert_sieve_matches($instance, $store->{username},
+                                        $scriptname, $scriptcontent);
+        }
+        if ($expected->{sieve}->{active}) {
+            $self->assert_sieve_active($instance, $store->{username},
+                                       $expected->{sieve}->{active});
         }
     }
 }
@@ -516,7 +549,8 @@ sub test_xfer_user_altns_unixhs
     my ($self) = @_;
 
     # set up some data for cassandane on backend1
-    my $expected = $self->populate_user($self->{backend1_store},
+    my $expected = $self->populate_user($self->{instance},
+                                        $self->{backend1_store},
                                         [qw(INBOX Drafts)]);
 
     my $imaptalk = $self->{backend1_store}->get_client();
@@ -562,7 +596,7 @@ sub test_xfer_user_altns_unixhs
     );
 
     # account contents should be on the other store now
-    $self->check_user($self->{backend2_store}, $expected);
+    $self->check_user($self->{backend2}, $self->{backend2_store}, $expected);
 
     # frontend should now say the user is on the other store
     # XXX is there a better way to discover this?
@@ -618,7 +652,8 @@ sub test_xfer_user_noaltns_nounixhs
     my ($self) = @_;
 
     # set up some data for cassandane on backend1
-    my $expected = $self->populate_user($self->{backend1_store},
+    my $expected = $self->populate_user($self->{instance},
+                                        $self->{backend1_store},
                                         [qw(INBOX INBOX.Drafts)]);
 
     my $imaptalk = $self->{backend1_store}->get_client();
@@ -664,7 +699,7 @@ sub test_xfer_user_noaltns_nounixhs
     );
 
     # account contents should be on the other store now
-    $self->check_user($self->{backend2_store}, $expected);
+    $self->check_user($self->{backend2}, $self->{backend2_store}, $expected);
 
     # frontend should now say the user is on the other store
     # XXX is there a better way to discover this?
@@ -733,7 +768,9 @@ sub test_xfer_user_altns_unixhs_virtdom
         username => 'foo@example.com');
 
     # set up some data for cassandane on backend1
-    my $expected = $self->populate_user($backend1_store, [qw(INBOX Drafts)]);
+    my $expected = $self->populate_user($self->{instance},
+                                        $backend1_store,
+                                        [qw(INBOX Drafts)]);
 
     my $imaptalk = $backend1_store->get_client();
     my $backend2_servername = $self->{backend2}->get_servername();
@@ -778,7 +815,7 @@ sub test_xfer_user_altns_unixhs_virtdom
     );
 
     # account contents should be on the other store now
-    $self->check_user($backend2_store, $expected);
+    $self->check_user($self->{backend2}, $backend2_store, $expected);
 
     # frontend should now say the user is on the other store
     # XXX is there a better way to discover this?
@@ -847,7 +884,8 @@ sub test_xfer_user_noaltns_nounixhs_virtdom
         username => 'foo@example.com');
 
     # set up some data for cassandane on backend1
-    my $expected = $self->populate_user($backend1_store,
+    my $expected = $self->populate_user($self->{instance},
+                                        $backend1_store,
                                         [qw(INBOX INBOX.Drafts)]);
 
     my $imaptalk = $backend1_store->get_client();
@@ -893,7 +931,7 @@ sub test_xfer_user_noaltns_nounixhs_virtdom
     );
 
     # account contents should be on the other store now
-    $self->check_user($backend2_store, $expected);
+    $self->check_user($self->{backend2}, $backend2_store, $expected);
 
     # frontend should now say the user is on the other store
     # XXX is there a better way to discover this?
@@ -958,13 +996,15 @@ sub test_xfer_mailbox_altns_unixhs
 
     # set up some data for cassandane on backend1
     my $expected_stay = $self->populate_user(
+        $self->{instance},
         $self->{backend1_store},
         [qw(INBOX Big Big/Red Big/Red/Dog)]
     );
 
     # we're planning to only XFER "Big/Red" (but not the others!)
-    my $expected_move->{'Big/Red'} = $expected_stay->{'Big/Red'};
-    delete $expected_stay->{'Big/Red'};
+    my $expected_move->{mailboxes}->{'Big/Red'}
+        = $expected_stay->{mailboxes}->{'Big/Red'};
+    delete $expected_stay->{mailboxes}->{'Big/Red'};
 
     my $imaptalk = $self->{backend1_store}->get_client();
     my $admintalk = $self->{backend1_adminstore}->get_client();
@@ -1013,9 +1053,13 @@ sub test_xfer_mailbox_altns_unixhs
     );
 
     # most of the account should have remained on the original backend
-    $self->check_user($self->{backend1_store}, $expected_stay);
+    $self->check_user($self->{instance},
+                      $self->{backend1_store},
+                      $expected_stay);
     # but Big/Red should have been moved
-    $self->check_user($self->{backend2_store}, $expected_move);
+    $self->check_user($self->{backend2},
+                      $self->{backend2_store},
+                      $expected_move);
 
     # frontend should now say the new mailbox locations
     # XXX is there a better way to discover this?
@@ -1077,6 +1121,7 @@ sub test_xfer_no_user_intermediates
 
     # set up some data for cassandane on backend1
     my $expected = $self->populate_user(
+        $self->{instance},
         $self->{backend1_store},
         [qw(INBOX Big Big/Red Big/Red/Dog)]
     );
@@ -1103,7 +1148,7 @@ sub test_xfer_no_user_intermediates
     }
 
     # everything should still be on the original backend
-    $self->check_user($self->{backend1_store}, $expected);
+    $self->check_user($self->{instance}, $self->{backend1_store}, $expected);
 }
 
 # XXX test_xfer_partition

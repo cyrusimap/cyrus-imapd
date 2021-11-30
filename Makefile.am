@@ -1093,6 +1093,12 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/xstats.h \
 	imap/xstats_metrics.h
 
+if SIEVE
+imap_libcyrus_imap_la_SOURCES += \
+	imap/sieve_db.c \
+	imap/sieve_db.h
+endif # SIEVE
+
 if OBJECTSTORE
 imap_libcyrus_imap_la_SOURCES += \
     imap/objectstore_db.c \
@@ -1323,12 +1329,12 @@ imap_httpd_SOURCES += \
 	imap/jmap_push.c \
 	imap/jmap_push.h \
 	imap/jmap_util.c \
-	imap/jmap_util.h \
-	imap/jmap_vacation.c
+	imap/jmap_util.h
 
 if SIEVE
 imap_httpd_SOURCES += \
-	imap/jmap_sieve.c
+	imap/jmap_sieve.c \
+	imap/jmap_vacation.c
 endif
 
 nodist_imap_httpd_SOURCES += \
@@ -1797,7 +1803,6 @@ sieve_libcyrus_sieve_la_SOURCES = \
 	sieve/interp.h \
 	sieve/message.c \
 	sieve/message.h \
-	sieve/rebuild.c \
 	sieve/script.c \
 	sieve/script.h \
 	sieve/sieve.y \
