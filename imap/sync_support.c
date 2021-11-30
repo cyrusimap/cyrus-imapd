@@ -3687,7 +3687,7 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
                                    mbname_userid(newmbname));
                 }
             }
-            mbname_free(&newmbname);
+            mbname_free(&oldmbname);
         }
         mbname_free(&newmbname);
     }
