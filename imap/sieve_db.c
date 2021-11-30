@@ -918,12 +918,8 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
 
 
     struct mboxlock *namespacelock = NULL;
-    mbname_t *mbname = mbname_from_userid(userid);
-
-    mbname_push_boxes(mbname, config_getstring(IMAPOPT_SIEVE_FOLDER));
-
     struct mailbox *mailbox = NULL;
-    const char *mboxname = mbname_intname(mbname);
+    char *mboxname = sieve_mboxname(userid);
     r = mboxlist_lookup(mboxname, NULL, NULL);
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -983,7 +979,7 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
     if (mailboxptr) *mailboxptr = mailbox;
     else mailbox_close(&mailbox);
     mboxname_release(&namespacelock);
-    mbname_free(&mbname);
+    free(mboxname);
     return r;
 }
 
@@ -1157,4 +1153,20 @@ EXPORTED int sievedb_upgrade(sqldb_t *db)
     strarray_fini(&sha1);
 
     return r;
+}
+
+EXPORTED char *sieve_mboxname(const char *userid)
+{
+    struct buf boxbuf = BUF_INITIALIZER;
+    char *res = NULL;
+
+    init_internal();
+
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_SIEVE_FOLDER));
+
+    res = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+
+    buf_free(&boxbuf);
+
+    return res;
 }
