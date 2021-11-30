@@ -172,7 +172,7 @@ EXPORTED int sievedb_close(struct sieve_db *sievedb)
     buf_free(&sievedb->name);
     buf_free(&sievedb->contentid);
 
-    r = sqldb_close(&sievedb->db);
+    r = dav_close(&sievedb->db);
 
     free(sievedb);
 
