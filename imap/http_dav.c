@@ -5247,11 +5247,11 @@ int meth_get_head(struct transaction_t *txn, void *params)
     r = dav_parse_req_target(txn, gparams);
     if (r) return r;
 
-    if (txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
-        /* Special "principal" */
-        if (txn->req_tgt.flags == TGT_SERVER_INFO) return get_server_info(txn);
+    /* Special "principal" */
+    if (txn->req_tgt.flags == TGT_SERVER_INFO) return get_server_info(txn);
 
-        /* No content for principals (yet) */
+    if (!txn->req_tgt.mbentry) {
+        /* No content for non-mailbox URLs (yet) */
         return HTTP_NO_CONTENT;
     }
 
