@@ -7692,9 +7692,10 @@ sub test_calendarevent_query_no_sched_inbox
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    if processimip {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "added" {
         setflag "\\\\Flagged";
     }
 }
