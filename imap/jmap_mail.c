@@ -13003,7 +13003,7 @@ static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
 
     /* Ignore anything but regular and intermediate mailboxes */
     if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
-        mbtypes_unavailable(mbentry->mbtype)) {
+        mbtypes_unavailable(mbentry->mbtype) || (mbentry->mbtype & MBTYPE_DELETED)) {
         return 0;
     }
     if (!json_object_get(rock->dst_mboxids, mbentry->uniqueid)) {
