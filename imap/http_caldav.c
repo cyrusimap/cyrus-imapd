@@ -4502,26 +4502,27 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         }
     }
     if (ret) {
-        char *owner;
-        const char *mboxname;
+        const char *mboxname = NULL;
         mbentry_t *mbentry = NULL;
 
         if (cdata->dav.mailbox_byname)
             mboxname = cdata->dav.mailbox;
         else {
             mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
-            mboxname = mbentry->name;
+            if (mbentry) mboxname = mbentry->name;
         }
-        owner = mboxname_to_userid(mboxname);
 
-        buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                   namespace_calendar.prefix, USER_COLLECTION_PREFIX, owner,
-                   strrchr(mboxname, '.') + 1, cdata->dav.resource);
-        txn->error.resource = buf_cstring(&txn->buf);
+        if (mboxname) {
+            char *owner = mboxname_to_userid(mboxname);
+
+            buf_reset(&txn->buf);
+            buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                       namespace_calendar.prefix, USER_COLLECTION_PREFIX, owner,
+                       strrchr(mboxname, '.') + 1, cdata->dav.resource);
+            txn->error.resource = buf_cstring(&txn->buf);
+            free(owner);
+        }
         mboxlist_entry_free(&mbentry);
-        free(owner);
-        ret = HTTP_FORBIDDEN;
         goto done;
     }
 
