@@ -610,6 +610,75 @@ sub test_rename_deepuser
     $self->check_replication('newuser');
 }
 
+sub test_rename_user_sieve
+    :AllowMoves :Replication :SyncLog :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog $self, "Test user rename with Sieve script";
+
+    my $user = 'cassandane';
+    my $newuser = 'newuser';
+    my $scriptname = 'test1';
+    my $scriptcontent = <<'EOF';
+keep;
+EOF
+
+    # install sieve script on master
+    $self->{instance}->install_sieve_script($scriptcontent, name=>$scriptname);
+
+    # verify that sieve script exists on master
+    $self->assert_sieve_exists($self->{instance}, $user, $scriptname, 0);
+
+    # check if we have the new-style sieve
+    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
+    my $have_new_sieve = $mailboxesdb->{'user.cassandane.#sieve'} ? 1 : 0;
+    xlog "Checking for new sieve resulted in $have_new_sieve";
+    die Dumper($mailboxesdb);
+
+    # replicate and check initial state
+    $self->run_replication();
+    $self->check_replication($user);
+
+    # verify that sieve script exists on both master and replica
+    $self->assert_sieve_exists($self->{instance}, $user, $scriptname, 1);
+    $self->assert_sieve_exists($self->{replica}, $user, $scriptname, 1);
+
+    if ($have_new_sieve) {
+        xlog "Checking that sieve mailbox is created on replica";
+        my $mailboxesdb = $self->{replica}->read_mailboxes_db();
+        $self->assert_not_null($mailboxesdb->{'user.cassandane.#sieve'});
+    }
+
+    # rename user
+    my $admintalk = $self->{adminstore}->get_client();
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert(not $admintalk->get_last_error());
+
+    # verify that sieve script exists on master
+    $self->assert_sieve_exists($self->{instance}, $newuser, $scriptname, 1);
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname, 1);
+
+    # replicate and check the renames
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication($newuser);
+
+    # verify that sieve script exists replica
+    $self->assert_sieve_exists($self->{replica}, $newuser, $scriptname, 1);
+    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname, 1);
+
+    if ($have_new_sieve) {
+        xlog "Checking that sieve mailboxes are renamed at both ends";
+        my $mdb = $self->{instance}->read_mailboxes_db();
+        my $rdb = $self->{replica}->read_mailboxes_db();
+        $self->assert_null($mdb->{'user.cassandane.#sieve'});
+        $self->assert_null($rdb->{'user.cassandane.#sieve'});
+        $self->assert_not_null($mdb->{'user.newuser.#sieve'});
+        $self->assert_not_null($rdb->{'user.newuser.#sieve'});
+    }
+}
+
 sub test_rename_paths
     :MetaPartition :NoAltNameSpace
 {

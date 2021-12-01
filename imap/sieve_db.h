@@ -162,4 +162,7 @@ int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr);
 int sieve_script_rebuild(const char *userid,
                          const char *sievedir, const char *script);
 
+/* calculate a mailbox name */
+char *sieve_mboxname(const char *userid);
+
 #endif /* SIEVE_DB_H */
