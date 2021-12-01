@@ -1599,7 +1599,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
         if (!fctx->msg_buf.len) return HTTP_SERVER_ERROR;
 
-        data = fctx->msg_buf.s + fctx->record->header_size;
+        data = buf_cstring(&fctx->msg_buf) + fctx->record->header_size;
         datalen = fctx->record->size - fctx->record->header_size;
 
         want_ver = (out_type->version[0] == '4') ? 4 : 3;
@@ -1608,10 +1608,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Translate between vCard versions */
             vcard = fctx->obj;
 
-            if (!vcard) {
-                vcard = fctx->obj = vcard_parse_string(data);
-                if (!vcard) return HTTP_SERVER_ERROR;
-            }
+            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
 
             if (want_ver == 4) vcard_to_v4(vcard);
             else vcard_to_v3(vcard);
@@ -1621,11 +1618,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Limit returned properties */
             vcard = fctx->obj;
 
-            if (!vcard) {
-                vcard = fctx->obj = vcard_parse_string(data);
-                if (!vcard) return HTTP_SERVER_ERROR;
-            }
-
+            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
             prune_properties(vcard->objects, partial);
         }
 
