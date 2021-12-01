@@ -630,6 +630,12 @@ EOF
     # verify that sieve script exists on master
     $self->assert_sieve_exists($self->{instance}, $user, $scriptname, 0);
 
+    # check if we have the new-style sieve
+    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
+    my $have_new_sieve = $mailboxesdb->{'user.cassandane.#sieve'} ? 1 : 0;
+    xlog "Checking for new sieve resulted in $have_new_sieve";
+    die Dumper($mailboxesdb);
+
     # replicate and check initial state
     $self->run_replication();
     $self->check_replication($user);
@@ -637,6 +643,12 @@ EOF
     # verify that sieve script exists on both master and replica
     $self->assert_sieve_exists($self->{instance}, $user, $scriptname, 1);
     $self->assert_sieve_exists($self->{replica}, $user, $scriptname, 1);
+
+    if ($have_new_sieve) {
+        xlog "Checking that sieve mailbox is created on replica";
+        my $mailboxesdb = $self->{replica}->read_mailboxes_db();
+        $self->assert_not_null($mailboxesdb->{'user.cassandane.#sieve'});
+    }
 
     # rename user
     my $admintalk = $self->{adminstore}->get_client();
@@ -655,6 +667,16 @@ EOF
     # verify that sieve script exists replica
     $self->assert_sieve_exists($self->{replica}, $newuser, $scriptname, 1);
     $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname, 1);
+
+    if ($have_new_sieve) {
+        xlog "Checking that sieve mailboxes are renamed at both ends";
+        my $mdb = $self->{instance}->read_mailboxes_db();
+        my $rdb = $self->{replica}->read_mailboxes_db();
+        $self->assert_null($mdb->{'user.cassandane.#sieve'});
+        $self->assert_null($rdb->{'user.cassandane.#sieve'});
+        $self->assert_not_null($mdb->{'user.newuser.#sieve'});
+        $self->assert_not_null($rdb->{'user.newuser.#sieve'});
+    }
 }
 
 sub test_rename_paths
