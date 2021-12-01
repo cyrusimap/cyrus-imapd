@@ -594,6 +594,102 @@ static void combine(search_expr_t **ep, search_expr_t **prevp)
     }
 }
 
+static int detrivialise(search_expr_t **ep)
+{
+    if (!ep || !*ep) return 0;
+
+    int r = 0;
+
+    search_expr_t *e = *ep;
+    search_expr_t *c, *next;
+    for (c = e->children; c; c = next) {
+        next = c->next;
+        int r2 = detrivialise(&c);
+        if (!r2) r = r2;
+    }
+
+    search_expr_t *detached_children = NULL;
+
+    switch (e->op) {
+        case SEOP_AND:
+        case SEOP_OR:
+            {
+                enum search_op trivop = e->op == SEOP_AND ?
+                    SEOP_FALSE : SEOP_TRUE;
+                enum search_op noop = e->op == SEOP_AND ?
+                    SEOP_TRUE : SEOP_FALSE;
+                for (c = e->children; c; c = next) {
+                    next = c->next;
+                    if (c->op == trivop) {
+                        detached_children = e->children;
+                        e->children = NULL;
+                        e->op = trivop;
+                        r = 1;
+                        break;
+                    }
+                    else if (c->op == noop) {
+                        search_expr_detach(e, c);
+                        search_expr_free(c);
+                        r = 1;
+                    }
+                }
+                break;
+            }
+        case SEOP_NOT:
+            if (e->children) {
+                int childop = e->children->op;
+                if (childop == SEOP_TRUE || childop == SEOP_FALSE) {
+                    detached_children = e->children;
+                    e->children = NULL;
+                    e->op = childop == SEOP_TRUE ? SEOP_FALSE : SEOP_TRUE;
+                    r = 1;
+                }
+            }
+            break;
+        default:
+            // do nothing
+            ;
+    }
+
+    for (c = detached_children; c; c = next) {
+        next = c->next;
+        search_expr_free(c);
+    }
+
+    if (e->op == SEOP_AND || e->op == SEOP_OR) {
+        if (e->children && !e->children->next) {
+            if (e->parent) {
+                // Prepend sole child to parent children
+                search_expr_t *p = e->parent;
+                c = e->children;
+                e->children = NULL;
+                search_expr_detach(e->parent, e);
+                search_expr_free(e);
+                c->next = p->children;
+                p->children = c;
+                c->parent = p;
+            }
+            else {
+                *ep = e->children;
+                e->children = NULL;
+                search_expr_free(e);
+            }
+            r = 1;
+        }
+        else if (!e->children) {
+            e->op = e->op == SEOP_AND ? SEOP_TRUE : SEOP_FALSE;
+            r = 1;
+        }
+    }
+
+    return r;
+}
+
+EXPORTED void search_expr_detrivialise(search_expr_t **ep)
+{
+    detrivialise(ep); // ignore return code
+}
+
 /*
  * Top-level normalisation step.  Returns 1 if it changed the subtree, 0
  * if it didn't, and -1 on error (such as exceeding a complexity limit).
@@ -801,11 +897,16 @@ static int search_expr_normalise_nnodes(search_expr_t **ep, unsigned *nnodes)
     the_rootp = ep;
 #endif
     r = normalise(ep, nnodes);
+    if (r >= 0) {
+        int r2 = detrivialise(ep);
+        if (!r) r = r2;
+    }
     sort_children(*ep);
 #if DEBUG
     the_rootp = NULL;
     the_focus = NULL;
 #endif
+
     return r;
 }
 
@@ -2054,6 +2155,7 @@ struct conv_rock {
     struct conversations_state *cstate;
     int cstate_is_ours;
     int num;        /* -1=invalid, 0=\Seen, 1+=index into cstate->counted_flags+1 */
+    int include_trash;
 };
 
 static void conv_rock_new(struct mailbox *mailbox,
@@ -2075,6 +2177,11 @@ static void search_convflags_internalise(struct index_state *state,
         if (rock->cstate) {
             if (!strcasecmp(v->s, "\\Seen")) {
                 rock->num = 0;
+            }
+            else if (!strcasecmp(v->s, "\\SeenInclTrash")) {
+                // XXX workaround for conv.unseen not counting Trash mailbox
+                rock->num = 0;
+                rock->include_trash = 1;
             }
             else if (!rock->cstate->counted_flags) {
                 rock->num = -1;
@@ -2102,13 +2209,26 @@ static int search_convflags_match(message_t *m,
     if (!rock->cstate) return 0;
 
     message_get_cid(m, &cid);
-    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/0)) return 0;
+    int flags = rock->include_trash ? CONV_WITHFOLDERS : 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, flags)) return 0;
     if (!conv.exists) return 0;
 
-    if (rock->num == 0)
-        r = (conv.unseen != conv.exists);
-    else if (rock->num > 0)
+    if (rock->num == 0) {
+        uint64_t unseen = conv.unseen;
+        if (rock->include_trash) {
+            conv_folder_t *folder;
+            for (folder = conv.folders; folder; folder = folder->next) {
+                if (folder->number == rock->cstate->trashfolder) {
+                    unseen += folder->unseen;
+                    break;
+                }
+            }
+        }
+        r = (unseen != conv.exists);
+    }
+    else if (rock->num > 0) {
         r = !!conv.counts[rock->num-1];
+    }
 
     conversation_fini(&conv);
     return r;
@@ -2127,11 +2247,23 @@ static int search_allconvflags_match(message_t *m,
     if (!rock->cstate) return 0;
 
     message_get_cid(m, &cid);
-    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/0)) return 0;
+    int flags = rock->include_trash ? CONV_WITHFOLDERS : 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, flags)) return 0;
     if (!conv.exists) return 0;
 
-    if (rock->num == 0)
-        r = !conv.unseen;
+    if (rock->num == 0) {
+        uint64_t unseen = conv.unseen;
+        if (rock->include_trash) {
+            conv_folder_t *folder;
+            for (folder = conv.folders; folder; folder = folder->next) {
+                if (folder->number == rock->cstate->trashfolder) {
+                    unseen += folder->unseen;
+                    break;
+                }
+            }
+        }
+        r = !unseen;
+    }
     else if (rock->num > 0)
         r = (conv.counts[rock->num-1] == conv.exists);
 

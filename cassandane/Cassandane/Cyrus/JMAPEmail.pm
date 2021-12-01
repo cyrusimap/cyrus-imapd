@@ -19492,7 +19492,15 @@ EOF
     }, $res->[0][1]{list}[0]{mailboxIds});
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
     $self->assert_deep_equals([], $res->[1][1]{ids});
-    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj ==3 && $min < 5)) {
+        $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    }
+    else {
+        # Due to improved JMAP Email query optimizer
+        $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isGuidSearch});
+    }
+
     $self->assert_deep_equals([], $res->[2][1]{ids});
 
     xlog "Create message in inbox";
@@ -22749,6 +22757,151 @@ sub test_email_set_multipart_related
     my $ct = $res->[1][1]{list}[0]{bodyStructure}{'header:Content-Type'};
     $ct =~ tr/ \t\r\n//ds;
     $self->assert($ct =~ /;type=\"text\/html\"$/);
+}
+
+sub test_email_query_convflags_seen_in_trash
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxTrash => {
+                    name => 'Trash',
+                },
+            }
+        }, 'R2'],
+    ]);
+    my $mboxTrash = $res->[0][1]{created}{mboxTrash}{id};
+    $self->assert_not_null($mboxTrash);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                emailInInbox => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    messageId => ['emailInInbox@local'],
+                    subject => 'test',
+                    keywords => {
+                        '$seen' => JSON::true,
+                    },
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test inbox',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Email/set', {
+            create => {
+                emailInTrash => {
+                    mailboxIds => {
+                        $mboxTrash => JSON::true,
+                    },
+                    messageId => ['emailInThrash@local'],
+                    subject => 'Re: test',
+                    references => ['emailInInbox@local'],
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test trash',
+                        }
+                    },
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{emailInInbox}{id});
+    $self->assert_not_null($res->[1][1]{created}{emailInTrash}{id});
+    $self->assert_str_equals($res->[0][1]{created}{emailInInbox}{threadId},
+        $res->[1][1]{created}{emailInTrash}{threadId});
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    allInThreadHaveKeyword => '$seen',
+                }],
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    operator => 'NOT',
+                    conditions => [{
+                        allInThreadHaveKeyword => '$seen',
+                    }],
+                }, {
+                    inMailboxOtherThan => [ $mboxTrash ],
+                }],
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    body => 'test',
+                }, {
+                    operator => 'NOT',
+                    conditions => [{
+                        allInThreadHaveKeyword => '$seen',
+                    }],
+                }],
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    body => 'test',
+                }, {
+                    operator => 'NOT',
+                    conditions => [{
+                        allInThreadHaveKeyword => '$seen',
+                    }],
+                }, {
+                    inMailboxOtherThan => [ $mboxTrash ],
+                }],
+            },
+        }, 'R4'],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ]);
+
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(2, scalar @{$res->[2][1]{ids}});
+    $self->assert_num_equals(0, scalar @{$res->[3][1]{ids}});
+
+    $self->assert_equals(JSON::false,
+        $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false,
+        $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::true,
+        $res->[2][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::true,
+        $res->[3][1]{performance}{details}{isGuidSearch});
 }
 
 1;
