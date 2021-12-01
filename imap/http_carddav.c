@@ -1608,7 +1608,10 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Translate between vCard versions */
             vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
+            if (!vcard) {
+                vcard = fctx->obj = vcard_parse_string(data);
+                if (!vcard) return HTTP_SERVER_ERROR;
+            }
 
             if (want_ver == 4) vcard_to_v4(vcard);
             else vcard_to_v3(vcard);
@@ -1618,7 +1621,11 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Limit returned properties */
             vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
+            if (!vcard) {
+                vcard = fctx->obj = vcard_parse_string(data);
+                if (!vcard) return HTTP_SERVER_ERROR;
+            }
+
             prune_properties(vcard->objects, partial);
         }
 
