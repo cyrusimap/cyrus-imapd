@@ -5124,16 +5124,20 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         if (cdata->comp_flags.tzbyref) {
             if (need_tz) {
                 /* Add VTIMEZONE components for known TZIDs */
-                if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
-                ical = fctx->obj;
+                if (!fctx->obj) {
+                    ical = fctx->obj = icalparser_parse_string(data);
+                    if (!ical) return HTTP_SERVER_ERROR;
+                }
 
                 icalcomponent_add_required_timezones(ical);
             }
         }
         else if (!need_tz && (namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
             /* Strip all VTIMEZONE components for known TZIDs */
-            if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
-            ical = fctx->obj;
+            if (!fctx->obj) {
+                ical = fctx->obj = icalparser_parse_string(data);
+                if (!ical) return HTTP_SERVER_ERROR;
+            }
 
             strip_vtimezones(ical);
         }
@@ -5144,8 +5148,10 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
             if (caldav_is_personalized(fctx->mailbox, fctx->data,
                                        httpd_userid, &userdata)) {
-                if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
-                ical = fctx->obj;
+                if (!fctx->obj) {
+                    ical = fctx->obj = icalparser_parse_string(data);
+                    if (!ical) return HTTP_SERVER_ERROR;
+                }
 
                 add_personal_data(ical, &userdata);
                 buf_free(&userdata);
@@ -5154,8 +5160,10 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
         if (!icaltime_is_null_time(partial->range.start)) {
             /* Expand/limit recurrence set */
-            if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
-            ical = fctx->obj;
+            if (!fctx->obj) {
+                ical = fctx->obj = icalparser_parse_string(data);
+                if (!ical) return HTTP_SERVER_ERROR;
+            }
 
             if (partial->expand) {
                 fctx->obj = expand_caldata(&ical, partial->range);
@@ -5165,8 +5173,11 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
         if (partial->comp) {
             /* Limit returned properties */
-            if (!fctx->obj) fctx->obj = icalparser_parse_string(data);
-            ical = fctx->obj;
+            if (!fctx->obj) {
+                ical = fctx->obj = icalparser_parse_string(data);
+                if (!ical) return HTTP_SERVER_ERROR;
+            }
+
             prune_properties(ical, partial->comp);
         }
 
