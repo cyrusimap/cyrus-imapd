@@ -55,11 +55,11 @@
 #include "acl.h"
 #include "annotate.h"
 #include "caldav_db.h"
+#include "caldav_util.h"
 #include "cyr_qsort_r.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
-#include "http_caldav.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_jmap.h"
@@ -1044,7 +1044,8 @@ static int jmap_calendar_set(struct jmap_req *req)
         json_decref(jstate);
     }
 
-    r = caldav_create_defaultcalendars(req->accountid);
+    r = caldav_create_defaultcalendars(req->accountid,
+                                       &httpd_namespace, httpd_authstate, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
         json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
@@ -1731,6 +1732,8 @@ struct getcalendarevents_rock {
     hashu64_table jmapcache;
     ptrarray_t *want_eventids;
     int check_acl;
+    const char *sched_inboxname;
+    const char *sched_outboxname;
 };
 
 struct recurid_instanceof_rock {
@@ -1971,6 +1974,9 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
         r = 0;
         goto done;
     }
+    if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
+        !strcmpsafe(mbentry->name, rock->sched_outboxname))
+        goto done;
 
     if (cdata->jmapversion == JMAPCACHE_CALVERSION) {
         json_error_t jerr;
@@ -2311,6 +2317,8 @@ static void cachecalendarevents_cb(uint64_t rowid, void *payload, void *vrock)
 static int jmap_calendarevent_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    char *sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
+    char *sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX);
     struct jmap_get get;
     struct caldav_db *db = NULL;
     json_t *err = NULL;
@@ -2329,7 +2337,10 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            NULL /* mbentry */,
                                            HASHU64_TABLE_INITIALIZER, /* cache */
                                            NULL, /* want_eventids */
-                                           checkacl };
+                                           checkacl,
+                                           sched_inboxname,
+                                           sched_outboxname
+    };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
 
@@ -2425,6 +2436,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
 done:
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
+    free(sched_inboxname);
+    free(sched_outboxname);
     if (db) caldav_close(db);
     if (rock.mailbox) jmap_closembox(req, &rock.mailbox);
     if (rock.mbentry) mboxlist_entry_free(&rock.mbentry);
@@ -2717,7 +2730,8 @@ static int setcalendarevents_create(jmap_req_t *req,
     struct transaction_t txn;
     memset(&txn, 0, sizeof(struct transaction_t));
     txn.req_hdrs = spool_new_hdrcache();
-    /* XXX - fix userid */
+    txn.userid = req->userid;
+    txn.authstate = req->authstate;
 
     /* Locate the mailbox */
     r = proxy_mlookup(mailbox_name(mbox), &txn.req_tgt.mbentry, NULL, NULL);
@@ -3277,7 +3291,9 @@ static int setcalendarevents_update(jmap_req_t *req,
     struct transaction_t txn;
     memset(&txn, 0, sizeof(struct transaction_t));
     txn.req_hdrs = spool_new_hdrcache();
-    /* XXX - fix userid */
+    txn.userid = req->userid;
+    txn.authstate = req->authstate;
+
     r = proxy_mlookup(mailbox_name(mbox), &txn.req_tgt.mbentry, NULL, NULL);
     if (r) {
         syslog(LOG_ERR, "mlookup(%s) failed: %s", mailbox_name(mbox), error_message(r));
@@ -3487,7 +3503,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         json_decref(jstate);
     }
 
-    r = caldav_create_defaultcalendars(req->accountid);
+    r = caldav_create_defaultcalendars(req->accountid,
+                                       &httpd_namespace, httpd_authstate, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
         json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
@@ -3980,6 +3997,8 @@ struct eventquery_rock {
     int expandrecur;
     struct mailbox *mailbox;
     ptrarray_t *matches;
+    const char *sched_inboxname;
+    const char *sched_outboxname;
 };
 
 static int eventquery_cb(void *vrock, struct caldav_data *cdata)
@@ -3997,6 +4016,10 @@ static int eventquery_cb(void *vrock, struct caldav_data *cdata)
     /* Check permissions */
     int rights = mbentry ? jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS) : 0;
     if (!rights) goto done;
+
+    if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
+        !strcmpsafe(mbentry->name, rock->sched_outboxname))
+        goto done;
 
     struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
     match->ical_uid = xstrdup(cdata->ical_uid);
@@ -4118,6 +4141,8 @@ static int eventquery_search_run(jmap_req_t *req,
                                  enum caldav_sort *sort,
                                  size_t nsort,
                                  int expandrecur,
+                                 const char *sched_inboxname,
+                                 const char *sched_outboxname,
                                  ptrarray_t *matches)
 {
     int r, i;
@@ -4190,6 +4215,12 @@ static int eventquery_search_run(jmap_req_t *req,
             continue;
         }
 
+        if (!strcmpsafe(mbentry->name, sched_inboxname) ||
+            !strcmpsafe(mbentry->name, sched_outboxname)) {
+            mboxlist_entry_free(&mbentry);
+            goto done;
+        }
+
         /* Fetch the CalDAV db record */
         if (caldav_lookup_imapuid(db, mbentry, md->uid, &cdata, 0) == 0) {
 
@@ -4258,12 +4289,15 @@ done:
 struct eventquery_fastpath_rock {
     jmap_req_t *req;
     struct jmap_query *query;
+    const char *sched_inboxname;
+    const char *sched_outboxname;
 };
 
-static int eventquery_fastpath_cb(void *rock, struct caldav_data *cdata)
+static int eventquery_fastpath_cb(void *vrock, struct caldav_data *cdata)
 {
-    jmap_req_t *req = ((struct eventquery_fastpath_rock*)rock)->req;
-    struct jmap_query *query = ((struct eventquery_fastpath_rock*)rock)->query;
+    struct eventquery_fastpath_rock *rock = vrock;
+    jmap_req_t *req = rock->req;
+    struct jmap_query *query = rock->query;
 
     assert(query->position >= 0);
 
@@ -4273,9 +4307,17 @@ static int eventquery_fastpath_cb(void *rock, struct caldav_data *cdata)
     }
 
     mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    if (!mbentry) return 0;
+
+    /* don't include the scheduling magic calendars */
+    if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
+        !strcmpsafe(mbentry->name, rock->sched_outboxname)) {
+        mboxlist_entry_free(&mbentry);
+        return 0;
+    }
 
     /* Check permissions */
-    int rights = mbentry && jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
+    int rights = jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
     mboxlist_entry_free(&mbentry);
     if (!rights) return 0;
 
@@ -4368,6 +4410,8 @@ static int eventquery_run(jmap_req_t *req,
     int r = HTTP_NOT_IMPLEMENTED;
     enum caldav_sort *sort = NULL;
     size_t nsort = 0;
+    char *sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
+    char *sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX);
 
     /* Sanity check arguments */
     eventquery_read_timerange(query->filter, &before, &after);
@@ -4415,7 +4459,9 @@ static int eventquery_run(jmap_req_t *req,
     /* Attempt to fast-path trivial query */
 
     if (!have_textsearch && !expandrecur && query->position >= 0 && !query->anchor) {
-        struct eventquery_fastpath_rock rock = { req, query };
+        struct eventquery_fastpath_rock rock = {
+            req, query, sched_inboxname, sched_outboxname
+        };
         const char *wantuid = json_string_value(json_object_get(query->filter, "uid"));
         if (wantuid) {
             /* Super fast path!  We only want a single UID */
@@ -4437,12 +4483,18 @@ static int eventquery_run(jmap_req_t *req,
     if (have_textsearch) {
         /* Query and sort matches in search backend. */
         r = eventquery_search_run(req, query->filter, db, before, after,
-                                  sort, nsort, expandrecur, &matches);
+                                  sort, nsort, expandrecur,
+                                  sched_inboxname, sched_outboxname,
+                                  &matches);
         if (r) goto done;
     }
     else {
         /* Query and sort matches in Caldav DB. */
-        struct eventquery_rock rock = { req, expandrecur, NULL, &matches };
+        struct eventquery_rock rock = {
+            req, expandrecur, NULL, &matches,
+            sched_inboxname, sched_outboxname
+        };
+
         enum caldav_sort mboxsort = CAL_SORT_MAILBOX;
         r = caldav_foreach_timerange(db, NULL, after, before,
                                      expandrecur ? &mboxsort : sort,
@@ -4550,6 +4602,8 @@ done:
             eventquery_match_free(&match);
         }
     }
+    free(sched_inboxname);
+    free(sched_outboxname);
     ptrarray_fini(&matches);
     free(sort);
     return r;

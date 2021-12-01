@@ -155,6 +155,16 @@ EXPORTED struct caldav_db *caldav_open_userid(const char *userid)
     /* Construct mbox name corresponding to userid's scheduling Inbox */
     caldavdb->sched_inbox = caldav_mboxname(userid, SCHED_INBOX);
 
+    if (db->version >= DB_MBOXID_VERSION) {
+        /* Lookup mailbox ID of scheduling Inbox */
+        mbentry_t *mbentry = NULL;
+        if (!mboxlist_lookup(caldavdb->sched_inbox, &mbentry, NULL)) {
+            free(caldavdb->sched_inbox);
+            caldavdb->sched_inbox = xstrdup(mbentry->uniqueid);
+        }
+        mboxlist_entry_free(&mbentry);
+    }
+
     return caldavdb;
 }
 

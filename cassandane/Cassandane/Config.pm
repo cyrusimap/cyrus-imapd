@@ -57,7 +57,7 @@ my %bitfields = (
     'httpmodules' => 'admin caldav carddav cgi domainkey freebusy ischedule jmap prometheus rss tzdist webdav',
     'metapartition_files' => 'header index cache expunge squat annotations lock dav archivecache',
     'newsaddheaders' => 'to replyto',
-    'sieve_extensions' => 'fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags imapflags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log x-cyrus-log vnd.cyrus.jmapquery x-cyrus-jmapquery snooze vnd.cyrus.snooze x-cyrus-snooze',
+    'sieve_extensions' => 'fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags imapflags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log x-cyrus-log vnd.cyrus.jmapquery x-cyrus-jmapquery snooze vnd.cyrus.snooze x-cyrus-snooze vnd.cyrus.imip',
 );
 my $bitfields_fixed = 0;
 

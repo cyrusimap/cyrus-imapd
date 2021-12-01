@@ -837,6 +837,16 @@ static void dump2(bytecode_input_t *d, int bc_len)
         }
 
 
+        case B_PROCESSIMIP:
+            printf("PROCESSIMIP INVITESONLY(%d)"
+                   " UPDATESONLY(%d) DELETECANCELED(%d)",
+                   !!cmd.u.imip.invites_only,
+                   !!cmd.u.imip.updates_only, !!cmd.u.imip.delete_canceled);
+            print_string(" CALENDARID", cmd.u.imip.calendarid);
+            print_string(" OUTCOME", cmd.u.imip.outcome_var);
+            print_string(" ERRSTR", cmd.u.imip.errstr_var);
+            break;
+
         default:
             printf("%d (NOT AN OP)\n", cmd.type);
             exit(1);
@@ -1622,6 +1632,17 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             }
             generate_string(":tzid", cmd.u.sn.tzid, buf);
             generate_valuelist(NULL, cmd.u.sn.times, &generate_time, buf);
+            break;
+
+        case B_PROCESSIMIP:
+            *requires |= SIEVE_CAPA_IMIP;
+            generate_token("processimip", 0, buf);
+            generate_switch(":invitesonly", cmd.u.imip.invites_only, buf);
+            generate_switch(":updatesonly", cmd.u.imip.updates_only, buf);
+            generate_switch(":deletecanceled", cmd.u.imip.delete_canceled, buf);
+            generate_string(":calendarid", cmd.u.imip.calendarid, buf);
+            generate_string(":outcome", cmd.u.imip.outcome_var, buf);
+            generate_string(":errstr", cmd.u.imip.errstr_var, buf);
             break;
 
         default:

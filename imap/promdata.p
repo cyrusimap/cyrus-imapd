@@ -88,6 +88,7 @@ metric counter cyrus_lmtp_sieve_fileinto_total          The number of sieve FILE
 metric counter cyrus_lmtp_sieve_snooze_total            The number of sieve SNOOZEs
 metric counter cyrus_lmtp_sieve_keep_total              The number of sieve KEEPs
 metric counter cyrus_lmtp_sieve_notify_total            The number of sieve NOTIFYs
+metric counter cyrus_lmtp_sieve_imip_total              The number of sieve IMIPs
 metric counter cyrus_lmtp_sieve_autorespond_total       The number of sieve AUTORESPONDs considered
 metric counter cyrus_lmtp_sieve_autorespond_sent_total  The number of sieve AUTORESPONDs sent
 

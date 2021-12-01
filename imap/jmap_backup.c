@@ -56,6 +56,7 @@
 #include "append.h"
 #include "arrayu64.h"
 #include "caldav_db.h"
+#include "caldav_util.h"
 #include "carddav_db.h"
 #include "hash.h"
 #include "http_caldav_sched.h"
@@ -1003,6 +1004,8 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
             memset(&txn, 0, sizeof(struct transaction_t));
             txn.req_hdrs = spool_new_hdrcache();
             txn.req_tgt.mbentry = (mbentry_t *) &mbentry;
+            txn.userid = httpd_userid;
+            txn.authstate = httpd_authstate;
 
             r = caldav_store_resource(&txn, ical, mailbox,
                                       cdata->dav.resource, record->createdmodseq,

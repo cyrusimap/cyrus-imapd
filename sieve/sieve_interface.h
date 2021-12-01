@@ -125,6 +125,15 @@ typedef struct sieve_duplicate {
     sieve_callback *track;
 } sieve_duplicate_t;
 
+typedef struct sieve_imip_context {
+    unsigned invites_only    : 1;
+    unsigned updates_only    : 1;
+    unsigned delete_canceled : 1;
+    const char *calendarid;
+    struct buf outcome;
+    struct buf errstr;
+} sieve_imip_context_t;
+
 
 /* sieve_imapflags: NULL -> defaults to \flagged */
 
@@ -221,6 +230,7 @@ void sieve_register_notify(sieve_interp_t *interp,
                            sieve_callback *f, const strarray_t *methods);
 void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
 void sieve_register_logger(sieve_interp_t *interp, sieve_logger *f);
+void sieve_register_imip(sieve_interp_t *interp, sieve_callback *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */

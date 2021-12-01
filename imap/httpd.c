@@ -1986,6 +1986,8 @@ static void transaction_reset(struct transaction_t *txn)
     memset(&txn->flags, 0, sizeof(struct txn_flags_t));
     txn->flags.ver = VER_1_1;
     txn->flags.vary = VARY_AE;
+    txn->userid = httpd_userid;
+    txn->authstate = httpd_authstate;
 
     memset(&txn->req_line, 0, sizeof(struct request_line_t));
 
@@ -3998,7 +4000,8 @@ static int auth_success(struct transaction_t *txn, const char *userid)
     int logfd = txn->conn->logfd;
     int i;
 
-    httpd_userid = xstrdup(userid);
+    txn->authstate = httpd_authstate;
+    txn->userid = httpd_userid = xstrdup(userid);
     httpd_userisanonymous = is_userid_anonymous(httpd_userid);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s SESSIONID=<%s>",

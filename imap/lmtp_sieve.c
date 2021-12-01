@@ -1177,7 +1177,7 @@ done:
     return ret;
 }
 
-#if defined(HAVE_JANSSON) && defined(HAVE_ICAL)
+#ifdef HAVE_ICAL
 #include <jansson.h>
 #include "ical_support.h"
 
@@ -1390,7 +1390,260 @@ done:
 
     return ret;
 }
-#endif /* HAVE_JANSSON && HAVE_ICAL */
+
+#ifdef WITH_DAV
+#include "caldav_util.h"
+#include "http_caldav_sched.h"
+
+char *httpd_userid = NULL;  // due to caldav_util.h including httpd.h
+struct namespace_t namespace_calendar = { .allow = ALLOW_USERDATA | ALLOW_CAL_NOTZ };
+
+static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
+                      const char **errmsg __attribute__((unused)))
+{
+    sieve_imip_context_t *imip = (sieve_imip_context_t *) ac;
+    struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
+    script_data_t *sd = (script_data_t *) sc;
+    deliver_data_t *mydata = (deliver_data_t *) mc;
+    message_data_t *m = mydata->m;
+    icalcomponent *itip = NULL, *comp;
+    icalcomponent_kind kind = 0;
+    icalproperty_method meth = 0;
+    icalproperty *prop = NULL;
+    const char *uid = NULL, *organizer = NULL;
+    const char *originator = NULL, *recipient = NULL;
+    strarray_t sched_addresses = STRARRAY_INITIALIZER;
+    unsigned sched_flags = 0;
+    int ret = 0;
+
+    prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
+
+    buf_setcstr(&imip->outcome, "no_action");
+    buf_reset(&imip->errstr);
+
+    if (caldav_create_defaultcalendars(ctx->userid,
+                                       &lmtpd_namespace, sd->authstate, NULL)) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "could not autoprovision calendars");
+        goto done;
+    }
+
+    /* parse the message body if we haven't already */
+    if (!mydata->content->body &&
+        message_parse_file_buf(m->f, &mydata->content->map,
+                               &mydata->content->body, NULL)) {
+        buf_setcstr(&imip->errstr, "unable to parse iMIP message");
+        goto done;
+    }
+
+    /* XXX currently struct bodypart as defined in message.h is the same as
+       sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
+    struct bodypart **parts = NULL;
+    const char *content_types[] = { "text/calendar", NULL };
+    message_fetch_part(mydata->content, content_types, &parts);
+    if (parts && parts[0]) {
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_init_ro_cstr(&buf, parts[0]->decoded_body);
+        itip = ical_string_as_icalcomponent(&buf);
+        buf_free(&buf);
+    }
+
+    if (!itip) {
+        buf_setcstr(&imip->errstr, "unable to find & parse text/calendar part");
+        goto done;
+    }
+
+    meth = icalcomponent_get_method(itip);
+    if (meth == ICAL_METHOD_NONE) {
+        buf_setcstr(&imip->errstr, "missing METHOD property");
+        goto done;
+    }
+
+    icalrestriction_check(itip);
+    if (get_icalcomponent_errstr(itip)) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "invalid iCalendar data");
+        goto done;
+    }
+
+    comp = icalcomponent_get_first_real_component(itip);
+    if (!comp) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "no component to schedule");
+        goto done;
+    }
+
+    kind = icalcomponent_isa(comp);
+    uid = icalcomponent_get_uid(comp);
+    if (!uid) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "missing UID property");
+        goto done;
+    }
+
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (!prop) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "missing ORGANIZER property");
+        goto done;
+    }
+    organizer = icalproperty_get_organizer(prop);
+
+    if (strchr(ctx->userid, '@')) {
+        strarray_add(&sched_addresses, ctx->userid);
+    }
+    else {
+        const char *domains;
+        char *domain;
+        tok_t tok;
+
+        domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
+        if (!domains) domains = config_defdomain;
+        if (!domains) domains = config_servername;
+
+        tok_init(&tok, domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        while ((domain = tok_next(&tok))) {
+            strarray_appendm(&sched_addresses,
+                             strconcat(ctx->userid, "@", domain, NULL));
+        }
+        tok_fini(&tok);
+    }
+
+    switch (kind) {
+    case ICAL_VEVENT_COMPONENT:
+    case ICAL_VTODO_COMPONENT:
+    case ICAL_VPOLL_COMPONENT:
+        switch (meth) {
+        case ICAL_METHOD_POLLSTATUS:
+            if (kind != ICAL_VPOLL_COMPONENT) goto unsupported_method;
+
+            GCC_FALLTHROUGH
+
+        case ICAL_METHOD_CANCEL:
+            if (imip->invites_only) {
+                buf_setcstr(&imip->errstr, "configured to NOT process updates");
+                goto done;
+            }
+
+            if (imip->delete_canceled) sched_flags |= SCHEDFLAG_DELETE_CANCELED;
+
+            GCC_FALLTHROUGH
+
+        case ICAL_METHOD_REQUEST:
+            originator = organizer;
+
+            /* Find invitee that matches owner of script */
+            for (prop = icalcomponent_get_first_invitee(comp); prop;
+                 prop = icalcomponent_get_next_invitee(comp)) {
+                const char *invitee = icalproperty_get_invitee(prop);
+                if (!strncasecmp(invitee, "mailto:", 7)) invitee += 7;
+                int n = strarray_find(&sched_addresses, invitee, 0);
+                if (n >= 0) {
+                    recipient = strarray_nth(&sched_addresses, n);
+                    break;
+                }
+            }
+            if (!recipient) {
+                buf_setcstr(&imip->outcome, "error");
+                buf_setcstr(&imip->errstr,
+                            "could not find matching ATTENDEE property");
+                goto done;
+            }
+
+            if (imip->updates_only) sched_flags |= SCHEDFLAG_UPDATES_ONLY;
+            else if (imip->invites_only) sched_flags |= SCHEDFLAG_INVITES_ONLY;
+            break;
+
+        case ICAL_METHOD_REPLY:
+            if (imip->invites_only) {
+                buf_setcstr(&imip->errstr, "configured to NOT process replies");
+                goto done;
+            }
+
+            /* Organizer better match owner of script */
+            recipient = organizer;
+            prop = icalcomponent_get_first_invitee(comp);
+            if (!prop) {
+                buf_setcstr(&imip->outcome, "error");
+                buf_setcstr(&imip->errstr, "missing ATTENDEE property");
+                goto done;
+            }
+            originator = icalproperty_get_invitee(prop);
+
+            sched_flags |= SCHEDFLAG_IS_REPLY;
+            break;
+
+        unsupported_method:
+        default:
+            /* Unsupported method */
+            buf_setcstr(&imip->outcome, "error");
+            buf_printf(&imip->errstr, "unsupported method: '%s'",
+                       icalproperty_method_to_string(meth));
+            goto done;
+        }
+        break;
+
+    default:
+        /* Unsupported component */
+        buf_setcstr(&imip->outcome, "error");
+        buf_printf(&imip->errstr, "unsupported component: '%s'",
+                   icalcomponent_kind_to_string(kind));
+        goto done;
+    }
+
+    struct sched_data sched_data =
+        { sched_flags, itip, NULL, NULL,
+          ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, imip->calendarid, NULL };
+    struct caldav_sched_param sched_param = {
+        (char *) ctx->userid, NULL, 0, 0, 1, NULL
+    };
+    int r = sched_deliver_local(ctx->userid, originator, recipient,
+                                &sched_param, &sched_data,
+                                (struct auth_state *) sd->authstate,
+                                NULL, NULL);
+    switch (r) {
+    case SCHED_DELIVER_ERROR:
+        buf_setcstr(&imip->outcome, "error");
+        buf_printf(&imip->errstr, "failed to deliver iMIP message: %s",
+                   sched_data.status ? sched_data.status : "");
+        break;
+    case SCHED_DELIVER_NOACTION:
+        buf_setcstr(&imip->outcome, "no_action");
+        break;
+    case SCHED_DELIVER_ADDED:
+        buf_setcstr(&imip->outcome, "added");
+        break;
+    default:
+        buf_setcstr(&imip->outcome, "updated");
+        break;
+    }
+
+    syslog(LOG_INFO, "sieve iMIP processed: %s: %s",
+           m->id ? m->id : "<nomsgid>", buf_cstring(&imip->errstr));
+    if (config_auditlog)
+        syslog(LOG_NOTICE,
+               "auditlog: processed iMIP sessionid=<%s> message-id=%s: %s",
+               session_id(), m->id ? m->id : "<nomsgid>",
+               buf_cstring(&imip->errstr));
+
+  done:
+    strarray_fini(&sched_addresses);
+    if (parts) {
+        struct bodypart **part;
+
+        for (part = parts; *part; part++) {
+            free(*part);
+        }
+        free(parts);
+
+        if (itip) icalcomponent_free(itip);
+    }
+
+    return ret;
+}
+#endif /* WITH_DAV */
+#endif /* HAVE_ICAL */
 
 static int sieve_keep(void *ac,
                       void *ic __attribute__((unused)),
@@ -1974,11 +2227,14 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interp, &jmapquery);
 #endif
-#if defined(HAVE_JANSSON) && defined(HAVE_ICAL)
+#ifdef HAVE_ICAL
     /* need timezones for sieve snooze */
     ical_support_init();
     sieve_register_snooze(interp, &sieve_snooze);
+#ifdef WITH_DAV
+    sieve_register_imip(interp, &sieve_imip);
 #endif
+#endif /* HAVE_ICAL */
     sieve_register_parse_error(interp, &sieve_parse_error_handler);
     sieve_register_execute_error(interp, &sieve_execute_error_handler);
 

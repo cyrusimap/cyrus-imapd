@@ -531,9 +531,11 @@ static int meth_post_isched(struct transaction_t *txn,
         case ICAL_METHOD_REQUEST:
         case ICAL_METHOD_REPLY:
         case ICAL_METHOD_CANCEL: {
+            unsigned flags = SCHEDFLAG_ISCHEDULE;
+            if (meth == ICAL_METHOD_REPLY) flags |= SCHEDFLAG_IS_REPLY;
             struct sched_data sched_data =
-                { 1, meth == ICAL_METHOD_REPLY, 0,
-                  ical, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL };
+                { flags, ical, NULL, NULL,
+                  ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL, NULL };
             xmlNodePtr root = NULL;
             xmlNsPtr ns[NUM_NAMESPACE];
             struct auth_state *authstate;

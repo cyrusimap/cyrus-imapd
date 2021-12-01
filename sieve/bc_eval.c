@@ -2462,6 +2462,50 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             }
             break;
 
+        case B_PROCESSIMIP:
+            if (i->imip) {
+                sieve_imip_context_t imip_ctx = {
+                    !!cmd.u.imip.invites_only,
+                    !!cmd.u.imip.updates_only,
+                    !!cmd.u.imip.delete_canceled,
+                    cmd.u.imip.calendarid,
+                    BUF_INITIALIZER,  // outcome
+                    BUF_INITIALIZER   // errstr
+                };
+                variable_list_t *vl;
+
+                res = i->imip(&imip_ctx, i->interp_context, sc, m, errmsg);
+
+                if (cmd.u.imip.outcome_var) {
+                    vl = varlist_select(variables, cmd.u.imip.outcome_var);
+
+                    if (!vl) {
+                        vl = varlist_extend(variables);
+                        vl->name = xstrdup(cmd.u.imip.outcome_var);
+                    }
+                    strarray_fini(vl->var);
+                    strarray_appendm(vl->var, buf_release(&imip_ctx.outcome));
+                }
+
+                if (cmd.u.imip.errstr_var) {
+                    vl = varlist_select(variables, cmd.u.imip.errstr_var);
+
+                    if (!vl) {
+                        vl = varlist_extend(variables);
+                        vl->name = xstrdup(cmd.u.imip.errstr_var);
+                    }
+                    strarray_fini(vl->var);
+                    strarray_appendm(vl->var, buf_release(&imip_ctx.errstr));
+                }
+
+                buf_free(&imip_ctx.outcome);
+                buf_free(&imip_ctx.errstr);
+            }
+            else {
+                return SIEVE_RUN_ERROR;
+            }
+            break;
+
         case B_ERROR:
             res = SIEVE_RUN_ERROR;
             *errmsg = cmd.u.str;

@@ -317,7 +317,7 @@ ws              [ \t]+
     /* notify - draft-martin-sieve-notify-01 */
 <INITIAL>denotify             return DENOTIFY;
 <INITIAL>:method              return METHOD;
-<INITIAL>:id                  return ID;
+<INITIAL>:id                  return NID;
 <INITIAL>:low                 return yylval->nval = LOW;
 <INITIAL>:normal              return yylval->nval = NORMAL;
 <INITIAL>:high                return yylval->nval = HIGH;
@@ -391,6 +391,15 @@ ws              [ \t]+
 
     /* vnd.cyrus.jmapquery */
 <INITIAL>jmapquery             return JMAPQUERY;
+
+    /* vnd.cyrus.imip */
+<INITIAL>processimip          return PROCESSIMIP;
+<INITIAL>:invitesonly         return INVITESONLY;
+<INITIAL>:updatesonly         return UPDATESONLY;
+<INITIAL>:deletecanceled      return DELETECANCELED;
+<INITIAL>:calendarid          return CALENDARID;
+<INITIAL>:outcome             return OUTCOME;
+<INITIAL>:errstr              return ERRSTR;
 
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
