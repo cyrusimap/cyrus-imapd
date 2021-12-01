@@ -1469,7 +1469,11 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Limit returned properties */
             struct vparse_card *vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
+            if (!vcard) {
+                vcard = fctx->obj = vcard_parse_string(data);
+                if (!vcard) return HTTP_SERVER_ERROR;
+            }
+
             prune_properties(vcard->objects, partial);
 
             /* Create vCard data from new vcard component */
