@@ -302,6 +302,11 @@ static void replica_connect(void)
     }
 #endif
 
+    if (1) {
+        /* Assume we support #sieve until we have in-protocol detection */
+        sync_cs.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+
     if (verbose > 1) {
         prot_setlog(sync_cs.backend->in, fileno(stderr));
         prot_setlog(sync_cs.backend->out, fileno(stderr));

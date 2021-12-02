@@ -417,7 +417,7 @@ struct sync_client_state {
     const char *channel;
     struct db *cachedb;
     struct buf tagbuf;
-    int flags;
+    unsigned flags;
 };
 #define SYNC_CLIENT_STATE_INITIALIZER { NULL, NULL, NULL, NULL, NULL, BUF_INITIALIZER, 0 }
 
@@ -429,7 +429,7 @@ struct sync_state {
     struct auth_state *authstate;
     struct namespace *namespace;
     struct protstream *pout;
-    int local_only;
+    unsigned flags;
 };
 
 int sync_get_message(struct dlist *kin, struct sync_state *sstate);
@@ -479,6 +479,7 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_DELETE_REMOTE (1<<3)
 #define SYNC_FLAG_NO_COPYBACK (1<<4)
 #define SYNC_FLAG_BATCH (1<<5)
+#define SYNC_FLAG_SIEVE_MAILBOX (1<<6)
 
 int sync_do_seen(struct sync_client_state *sync_cs, const char *userid, char *uniqueid);
 int sync_do_quota(struct sync_client_state *sync_cs, const char *root);

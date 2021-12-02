@@ -11300,6 +11300,11 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
         syslog(LOG_INFO, "XFER: destination supports replication");
         xfer->use_replication = 1;
         be->in->userdata = be->out->userdata = &xfer->sync_cs.tagbuf;
+
+        if (1) {
+            /* Assume we support #sieve until we have in-protocol detection */
+            xfer->sync_cs.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+        }
     }
 
     xfer->toserver = xstrdup(toserver);
@@ -11518,9 +11523,11 @@ static int xfer_addusermbox(const mbentry_t *mbentry, void *rock)
 {
     struct xfer_header *xfer = (struct xfer_header *)rock;
 
-    /* Skip #sieve mailbox */
-    if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE)
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE &&
+        !(xfer->sync_cs.flags & SYNC_FLAG_SIEVE_MAILBOX)) {
+        /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
         return 0;
+    }
 
     /* Skip remote mailbox */
     if (mbentry->mbtype & MBTYPE_REMOTE)
@@ -11833,7 +11840,9 @@ static int xfer_finalsync(struct xfer_header *xfer)
     if (!r && xfer->userid) {
         r = sync_do_user_seen(&xfer->sync_cs, xfer->userid, replica_seen);
         if (!r) r = sync_do_user_sub(&xfer->sync_cs, xfer->userid, replica_subs);
-        if (!r) r = sync_do_user_sieve(&xfer->sync_cs, xfer->userid, replica_sieve);
+        if (!r && !(xfer->sync_cs.flags & SYNC_FLAG_SIEVE_MAILBOX)) {
+            r = sync_do_user_sieve(&xfer->sync_cs, xfer->userid, replica_sieve);
+        }
     }
 
   done:
@@ -12052,11 +12061,6 @@ static int xfer_addmbox(struct findall_data *data, void *rock)
     if (!data->is_exactmatch) return 0;
     struct xfer_list *list = (struct xfer_list *) rock;
 
-    if (mbtype_isa(data->mbentry->mbtype) == MBTYPE_SIEVE) {
-        /* Skip #sieve mailbox */
-        return 0;
-    }
-
     if (list->part && strcmp(data->mbentry->partition, list->part)) {
         /* Not on specified partition */
         return 0;
@@ -12140,6 +12144,15 @@ static void cmd_xfer(const char *tag, const char *name,
          * So, 'name' should be used in any command we send to a backend, and
          * 'mbentry->name' is the internal name to be used for mupdate and findall.
          */
+
+        if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE &&
+            !(xfer->use_replication & SYNC_FLAG_SIEVE_MAILBOX)) {
+            /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
+            mboxlist_entry_free(&mbentry);
+            next = item->next;
+            free(item);
+            continue;
+        }
 
         r = 0;
         xfer->topart = xstrdup(topart ? topart : mbentry->partition);
@@ -14489,8 +14502,13 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
         imapd_authstate,
         &imapd_namespace,
         imapd_out,
-        0 /* local_only */
+        0 /* flags */
     };
+
+    if (1) {
+        /* Assume we support #sieve until we have in-protocol detection */
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
 
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -14519,8 +14537,13 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
         imapd_authstate,
         &imapd_namespace,
         imapd_out,
-        0 /* local_only */
+        0 /* flags */
     };
+
+    if (1) {
+        /* Assume we support #sieve until we have in-protocol detection */
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
 
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -14627,8 +14650,13 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
         imapd_authstate,
         &imapd_namespace,
         imapd_out,
-        0 /* local_only */
+        0 /* flags */
     };
+
+    if (1) {
+        /* Assume we support #sieve until we have in-protocol detection */
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
 
     /* administrators only please */
     if (!imapd_userisadmin) {
