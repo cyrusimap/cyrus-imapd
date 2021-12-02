@@ -65,7 +65,6 @@
 #include "imap/global.h"
 #include "imap/sievedir.h"
 #include "imap/sieve_db.h"
-#include "imap/sync_log.h"
 #include "imap/tls.h"
 #include "imap/user.h"
 #include "imap/version.h"
@@ -307,7 +306,6 @@ int putscript(struct protstream *conn, const struct buf *name,
         }
     }
 
-    sync_log_sieve(sieved_userid);
     prot_printf(conn, "OK\r\n");
     return TIMSIEVE_OK;
 }
@@ -342,7 +340,6 @@ int deletescript(struct protstream *conn, const struct buf *name)
         return TIMSIEVE_FAIL;
     }
 
-    sync_log_sieve(sieved_userid);
     prot_printf(conn,"OK\r\n");
     return TIMSIEVE_OK;
 }
@@ -399,7 +396,6 @@ int setactive(struct protstream *conn, const struct buf *name)
         return TIMSIEVE_FAIL;
     }
 
-    sync_log_sieve(sieved_userid);
     prot_printf(conn,"OK\r\n");
     return TIMSIEVE_OK;
 }
@@ -448,7 +444,6 @@ int renamescript(struct protstream *conn,
         return TIMSIEVE_FAIL;
     }
 
-    sync_log_sieve(sieved_userid);
     prot_printf(conn,"OK\r\n");
     return TIMSIEVE_OK;
 }
