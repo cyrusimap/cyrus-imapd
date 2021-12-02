@@ -974,12 +974,7 @@ sub test_calendar_set_error
     ]);
     $errType = $res->[0][1]{notCreated}{"1"}{type};
     $self->assert_str_equals("invalidProperties", $errType);
-    my @errProp = sort @{$res->[0][1]{notCreated}{"1"}{properties}};
-    $errProp = join(',', @errProp);
-    $self->assert_str_equals($errProp,
-                             "mayAddItems,mayDelete,mayModifyItems," .
-                             "mayReadFreeBusy,mayReadItems,mayRemoveItems," .
-                             "mayRename");
+    $self->assert_deep_equals(['myRights'], $res->[0][1]{notCreated}{"1"}{properties});
 
     xlog $self, "update unknown calendar";
     $res = $jmap->CallMethods([
@@ -1013,12 +1008,7 @@ sub test_calendar_set_error
     ]);
     $errType = $res->[0][1]{notUpdated}{$id}{type};
     $self->assert_str_equals("invalidProperties", $errType);
-    @errProp = sort @{$res->[0][1]{notUpdated}{$id}{properties}};
-    $errProp = join(',', @errProp);
-    $self->assert_str_equals($errProp,
-                             "mayAddItems,mayDelete,mayModifyItems," .
-                             "mayReadFreeBusy,mayReadItems,mayRemoveItems," .
-                             "mayRename");
+    $self->assert_deep_equals(['myRights'], $res->[0][1]{notUpdated}{$id}{properties});
 
     xlog $self, "destroy unknown calendar";
     $res = $jmap->CallMethods([
