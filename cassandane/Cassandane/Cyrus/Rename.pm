@@ -634,7 +634,6 @@ EOF
     my $mailboxesdb = $self->{instance}->read_mailboxes_db();
     my $have_new_sieve = $mailboxesdb->{'user.cassandane.#sieve'} ? 1 : 0;
     xlog "Checking for new sieve resulted in $have_new_sieve";
-    die Dumper($mailboxesdb);
 
     # replicate and check initial state
     $self->run_replication();
