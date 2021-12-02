@@ -3652,46 +3652,6 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
                                        0/*move_subscription*/,
                                        1/*silent*/);
 
-    if (!r) {
-        mbname_t *newmbname = mbname_from_intname(newmboxname);
-
-        if (mbname_localpart(newmbname) &&
-            !mbname_isdeleted(newmbname) &&
-            !strarray_size(mbname_boxes(newmbname))) {
-            /* Renaming INBOX - also rename #sieve */
-            const char *sieve_folder = config_getstring(IMAPOPT_SIEVE_FOLDER);
-            mbname_t *oldmbname = mbname_from_intname(oldmboxname);
-
-            mbname_push_boxes(oldmbname, sieve_folder);
-            oldmboxname = mbname_intname(oldmbname);
-                
-            mbname_push_boxes(newmbname, sieve_folder);
-            newmboxname = mbname_intname(newmbname);
-
-            mboxlist_entry_free(&mbentry);
-
-            if (!mboxlist_lookup_allow_all(oldmboxname, &mbentry, 0)) {
-                r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
-                                           uidvalidity, 1, sstate->userid,
-                                           sstate->authstate, NULL,
-                                           sstate->local_only, 1, 1,
-                                           1/*keep_intermediaries*/,
-                                           0/*move_subscription*/,
-                                           1/*silent*/);
-
-                if (!r) {
-                    /* Take care of changing quotaroot and ACL */
-                    user_copyquotaroot(oldmboxname, newmboxname);
-                    user_renameacl(NULL /*namespace*/, newmboxname,
-                                   mbname_userid(oldmbname),
-                                   mbname_userid(newmbname));
-                }
-            }
-            mbname_free(&newmbname);
-        }
-        mbname_free(&newmbname);
-    }
-
     mboxlist_entry_free(&mbentry);
     mboxname_release(&oldlock);
     mboxname_release(&newlock);
