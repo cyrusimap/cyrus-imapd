@@ -1599,7 +1599,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
         if (!fctx->msg_buf.len) return HTTP_SERVER_ERROR;
 
-        data = fctx->msg_buf.s + fctx->record->header_size;
+        data = buf_cstring(&fctx->msg_buf) + fctx->record->header_size;
         datalen = fctx->record->size - fctx->record->header_size;
 
         want_ver = (out_type->version[0] == '4') ? 4 : 3;
