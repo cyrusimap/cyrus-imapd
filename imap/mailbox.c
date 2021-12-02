@@ -2630,10 +2630,7 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 
     if (mailbox->has_changed) {
         if (updatenotifier) updatenotifier(mailbox_name(mailbox));
-        if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_SIEVE) {
-            /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
-            sync_log_mailbox(mailbox_name(mailbox));
-        }
+        sync_log_mailbox(mailbox_name(mailbox));
 
         if (!sdata) {
             status_fill_mailbox(mailbox, &mysdata);
