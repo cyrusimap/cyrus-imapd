@@ -2158,7 +2158,7 @@ sub test_lookup_only_own_racl
 }
 
 sub test_no_tombstones
-    :UnixHierarchySep :ReverseACLs
+    :UnixHierarchySep :AltNamespace :ReverseACLs
 {
     my ($self) = @_;
 
