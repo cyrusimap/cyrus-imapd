@@ -333,37 +333,10 @@ EOF
     $self->assert_num_equals(1, scalar @{$res->[2][1]{list}});
 }
 
-sub _set_quotaroot
-{
-    my ($self, $quotaroot) = @_;
-    $self->{quotaroot} = $quotaroot;
-}
-
-sub _set_quotalimits
-{
-    my ($self, %resources) = @_;
-    my $admintalk = $self->{adminstore}->get_client();
-
-    my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
-    my @quotalist;
-    foreach my $resource (keys %resources)
-    {
-        my $limit = $resources{$resource}
-            or die "No limit specified for $resource";
-        push(@quotalist, uc($resource), $limit);
-    }
-    $self->{limits}->{$quotaroot} = { @quotalist };
-    $admintalk->setquota($quotaroot, \@quotalist);
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-}
-
 sub test_sieve_set_replication
     :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
-
-    $self->_set_quotaroot('user.cassandane');
-    $self->_set_quotalimits(storage => 1000);
 
     my $script1 = <<EOF;
 keep;
