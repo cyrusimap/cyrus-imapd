@@ -8082,28 +8082,32 @@ sub test_calendarevent_set_utcstart
             },
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => ['#1', '#2'],
+            ids => ['#1'],
             properties => ['start', 'utcStart', 'utcEnd', 'timeZone', 'duration'],
-        }, 'R2']
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => ['#2'],
+            properties => ['start', 'utcStart', 'utcEnd', 'timeZone', 'duration'],
+        }, 'R3']
     ]);
     my $eventId1 = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($eventId1);
     my $eventId2 = $res->[0][1]{created}{2}{id};
     $self->assert_not_null($eventId2);
 
-    my $event = $res->[1][1]{list}[0];
-    $self->assert_str_equals('2019-12-11T10:30:00', $event->{start});
-    $self->assert_str_equals('2019-12-10T23:30:00Z', $event->{utcStart});
-    $self->assert_str_equals('2019-12-11T00:30:00Z', $event->{utcEnd});
-    $self->assert_str_equals('Australia/Melbourne', $event->{timeZone});
-    $self->assert_str_equals('PT1H', $event->{duration});
+    my $event1 = $res->[1][1]{list}[0];
+    $self->assert_str_equals('2019-12-11T10:30:00', $event1->{start});
+    $self->assert_str_equals('2019-12-10T23:30:00Z', $event1->{utcStart});
+    $self->assert_str_equals('2019-12-11T00:30:00Z', $event1->{utcEnd});
+    $self->assert_str_equals('Australia/Melbourne', $event1->{timeZone});
+    $self->assert_str_equals('PT1H', $event1->{duration});
 
-    $event = $res->[1][1]{list}[1];
-    $self->assert_str_equals('2019-12-10T23:30:00', $event->{start});
-    $self->assert_str_equals('2019-12-10T23:30:00Z', $event->{utcStart});
-    $self->assert_str_equals('2019-12-11T00:30:00Z', $event->{utcEnd});
-    $self->assert_str_equals('Etc/UTC', $event->{timeZone});
-    $self->assert_str_equals('PT1H', $event->{duration});
+    my $event2 = $res->[2][1]{list}[0];
+    $self->assert_str_equals('2019-12-10T23:30:00', $event2->{start});
+    $self->assert_str_equals('2019-12-10T23:30:00Z', $event2->{utcStart});
+    $self->assert_str_equals('2019-12-11T00:30:00Z', $event2->{utcEnd});
+    $self->assert_str_equals('Etc/UTC', $event2->{timeZone});
+    $self->assert_str_equals('PT1H', $event2->{duration});
 
     # Assert event updates.
     $res = $jmap->CallMethods([
@@ -8120,25 +8124,29 @@ sub test_calendarevent_set_utcstart
             },
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => [$eventId1, $eventId2],
+            ids => [$eventId1],
             properties => ['start', 'utcStart', 'utcEnd', 'timeZone', 'duration'],
-        }, 'R2']
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => [$eventId2],
+            properties => ['start', 'utcStart', 'utcEnd', 'timeZone', 'duration'],
+        }, 'R3']
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId1});
 
-    $event = $res->[1][1]{list}[0];
-    $self->assert_str_equals('2019-12-11T12:30:00', $event->{start});
-    $self->assert_str_equals('2019-12-11T01:30:00Z', $event->{utcStart});
-    $self->assert_str_equals('2019-12-11T02:30:00Z', $event->{utcEnd});
-    $self->assert_str_equals('Australia/Melbourne', $event->{timeZone});
-    $self->assert_str_equals('PT1H', $event->{duration});
+    $event1 = $res->[1][1]{list}[0];
+    $self->assert_str_equals('2019-12-11T12:30:00', $event1->{start});
+    $self->assert_str_equals('2019-12-11T01:30:00Z', $event1->{utcStart});
+    $self->assert_str_equals('2019-12-11T02:30:00Z', $event1->{utcEnd});
+    $self->assert_str_equals('Australia/Melbourne', $event1->{timeZone});
+    $self->assert_str_equals('PT1H', $event1->{duration});
 
-    $event = $res->[1][1]{list}[1];
-    $self->assert_str_equals('2019-12-10T06:30:00', $event->{start});
-    $self->assert_str_equals('2019-12-10T11:30:00Z', $event->{utcStart});
-    $self->assert_str_equals('2019-12-10T12:00:00Z', $event->{utcEnd});
-    $self->assert_str_equals('America/New_York', $event->{timeZone});
-    $self->assert_str_equals('PT30M', $event->{duration});
+    $event2 = $res->[2][1]{list}[0];
+    $self->assert_str_equals('2019-12-10T06:30:00', $event2->{start});
+    $self->assert_str_equals('2019-12-10T11:30:00Z', $event2->{utcStart});
+    $self->assert_str_equals('2019-12-10T12:00:00Z', $event2->{utcEnd});
+    $self->assert_str_equals('America/New_York', $event2->{timeZone});
+    $self->assert_str_equals('PT30M', $event2->{duration});
 }
 
 sub test_calendarevent_set_utcstart_recur
