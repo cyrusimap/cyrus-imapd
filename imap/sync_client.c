@@ -372,9 +372,10 @@ static int do_mailbox(const char *mboxname)
     return r;
 }
 
-static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
+static int cb_allmbox(const mbentry_t *mbentry, void *rock)
 {
     int r = 0;
+    int *exit_rcp = (int *)rock;
 
     char *userid = mboxname_to_userid(mbentry->name);
 
@@ -411,7 +412,8 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused
 
 done:
     free(userid);
-    return r;
+    if (r) *exit_rcp = 1;
+    return 0; // but keep going anyway
 }
 
 /* ====================================================================== */
@@ -664,7 +666,7 @@ int main(int argc, char **argv)
         /* Open up connection to server */
         replica_connect();
 
-        if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &channel, 0))
+        if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &exit_rc, 0))
             exit_rc = 1;
 
         replica_disconnect();
