@@ -2127,6 +2127,16 @@ sub test_splitbrain_different_uniqueid_used
     $rid = $rres->{mailboxid}[0];
 
     $self->assert_str_not_equals($mid, $rid);
+
+    xlog "Trying again with no-copyback";
+    $self->run_replication(nosyncback => 1);
+    $self->check_replication('cassandane');
+
+    $rtalk = $replica_store->get_client();
+    $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+    $rid = $rres->{mailboxid}[0];
+
+    $self->assert_str_equals($mid, $rid);
 }
 
 1;
