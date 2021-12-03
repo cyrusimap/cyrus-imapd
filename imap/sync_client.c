@@ -311,6 +311,20 @@ static void replica_connect(void)
         prot_setlog(sync_cs.backend->in, fileno(stderr));
         prot_setlog(sync_cs.backend->out, fileno(stderr));
     }
+
+    if (no_copyback) {
+        const char *cmd = "FORCE";
+        struct dlist *kl = dlist_newkvlist(NULL, cmd);
+        struct dlist *kin = NULL;
+        sync_send_apply(kl, sync_cs.backend->out);
+        int r = sync_parse_response(cmd, sync_cs.backend->in, &kin);
+        if (r) {
+            syslog(LOG_ERR, "SYNCERROR: failed to enable force mode");
+            _exit(1);
+        }
+        dlist_free(&kl);
+        dlist_free(&kin);
+    }
 }
 
 static void replica_disconnect(void)

@@ -3965,6 +3965,20 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     return r;
 }
 
+int sync_apply_force(struct dlist *kin __attribute__((unused)),
+                     struct sync_state *sstate __attribute__((unused)))
+{
+    if (opt_force) {
+        syslog(LOG_NOTICE, "SYNCNOTICE: force already enabled");
+    }
+    else {
+        opt_force = 1;
+        syslog(LOG_NOTICE, "SYNCNOTICE: enabling force mode");
+    }
+
+    return 0;
+}
+
 /* ====================================================================== */
 
 int sync_get_sieve(struct dlist *kin, struct sync_state *sstate)
@@ -7234,6 +7248,10 @@ EXPORTED const char *sync_apply(struct dlist *kin, struct sync_reserve_list *res
         state->flags |= SYNC_FLAG_LOCALONLY;
         r = sync_apply_unuser(kin, state);
     }
+
+    // magic command to turn on "force mode"
+    else if (!strcmp(kin->name, "FORCE"))
+        r = sync_apply_force(kin, state);
 
     else {
         xsyslog(LOG_ERR, "SYNCERROR: unknown command",
