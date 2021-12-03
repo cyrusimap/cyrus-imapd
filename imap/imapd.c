@@ -192,6 +192,7 @@ static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
 static int imapd_compress_done = 0; /* have we done a successful compress? */
 static const char *plaintextloginalert = NULL;
 static int ignorequota = 0;
+static int sync_sieve_mailbox_enabled = 0;
 
 #define QUIRK_SEARCHFUZZY (1<<0)
 static struct id_data {
@@ -3007,6 +3008,7 @@ static void cmd_unauthenticate(char *tag)
 
     /* Reset client-enabled extensions */
     client_capa = 0;
+    sync_sieve_mailbox_enabled = 0;
 
     /* Send response
        (MUST be done with current SASL and/or commpression layer still active) */
@@ -14506,7 +14508,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
         0 /* flags */
     };
 
-    if (client_capa & CAPA_SIEVE_MAILBOX) {
+    if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
 
@@ -14520,7 +14522,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
 
     if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
-        client_capa |= CAPA_SIEVE_MAILBOX;
+        sync_sieve_mailbox_enabled = 1;
     }
 
     // chaining!
@@ -14544,7 +14546,7 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
         0 /* flags */
     };
 
-    if (client_capa & CAPA_SIEVE_MAILBOX) {
+    if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
 
@@ -14656,7 +14658,7 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
         0 /* flags */
     };
 
-    if (client_capa & CAPA_SIEVE_MAILBOX) {
+    if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
 

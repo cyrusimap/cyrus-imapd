@@ -133,6 +133,7 @@ static struct protstream *sync_in = NULL;
 static int sync_logfd = -1;
 static int sync_starttls_done = 0;
 static int sync_compress_done = 0;
+static int sync_sieve_mailbox_enabled = 0;
 
 static int opt_force = 0;
 
@@ -221,7 +222,8 @@ static void sync_reset(void)
     }
     sync_starttls_done = 0;
     sync_compress_done = 0;
-    client_capa = 0;
+
+    sync_sieve_mailbox_enabled = 0;
 
     saslprops_reset(&saslprops);
 }
@@ -983,14 +985,14 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
         0 /* flags */
     };
 
-    if (client_capa & CAPA_SIEVE_MAILBOX) {
+    if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
 
     if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
-        client_capa |= CAPA_SIEVE_MAILBOX;
+        sync_sieve_mailbox_enabled = 1;
     }
 
     sync_checkpoint(sync_in);
@@ -1008,7 +1010,7 @@ static void cmd_get(struct dlist *kin)
         0 /* flags */
     };
 
-    if (client_capa & CAPA_SIEVE_MAILBOX) {
+    if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
 
@@ -1027,7 +1029,7 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
         0 /* flags */
     };
 
-    if (client_capa & CAPA_SIEVE_MAILBOX) {
+    if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
 
