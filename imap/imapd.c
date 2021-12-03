@@ -378,6 +378,7 @@ static struct capa_struct base_capabilities[] = {
     { "THREAD=REFS",           2 }, /* draft-ietf-morg-inthread */
     { "X-CREATEDMODSEQ",       2 }, /* Cyrus custom */
     { "X-REPLICATION",         2 }, /* Cyrus custom */
+    { "X-SIEVE-MAILBOX",       2 }, /* Cyrus custom */
     { "XLIST",                 2 }, /* not standard */
     { "XMOVE",                 2 }, /* not standard */
 

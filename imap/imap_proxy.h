@@ -64,7 +64,8 @@ enum {
     CAPA_LISTEXTENDED   = (1 << 7),
     CAPA_SASL_IR        = (1 << 8),
     CAPA_REPLICATION    = (1 << 9),
-    CAPA_METADATA       = (1 << 10)
+    CAPA_METADATA       = (1 << 10),
+    CAPA_SIEVE_MAILBOX  = (1 << 11),
 };
 
 extern struct protocol_t imap_protocol;

@@ -292,6 +292,8 @@ static void dobanner(void)
             prot_printf(sync_out, "* COMPRESS DEFLATE\r\n");
         }
 #endif
+
+        prot_printf(sync_out, "* SIEVE-MAILBOX\r\n");
     }
 
     prot_printf(sync_out,
