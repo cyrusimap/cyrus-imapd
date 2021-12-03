@@ -976,7 +976,7 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        SYNC_FLAG_SIEVE_MAILBOX /* flags */
     };
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
@@ -992,7 +992,7 @@ static void cmd_get(struct dlist *kin)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        SYNC_FLAG_SIEVE_MAILBOX /* flags */
     };
 
     const char *resp = sync_get(kin, &sync_state);
@@ -1007,7 +1007,7 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        SYNC_FLAG_SIEVE_MAILBOX /* flags */
     };
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
