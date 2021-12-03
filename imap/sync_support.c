@@ -4130,6 +4130,28 @@ int sync_apply_message(struct dlist *kin,
     return 0;
 }
 
+int sync_apply_capabilities(struct dlist *kin, struct sync_state *sstate)
+{
+    struct dlist *ki, *kout;
+
+    kout = dlist_newlist(NULL, "ENABLED");
+    for (ki = kin->head; ki; ki = ki->next) {
+        const char *capa;
+
+        dlist_toatom(ki, &capa);
+
+        if (!strcasecmp(capa, "SIEVE-MAILBOX")) {
+            sstate->flags |= SYNC_FLAG_SIEVE_MAILBOX;
+            dlist_setatom(kout, NULL, capa);
+        }
+    }
+
+    sync_send_response(kout, sstate->pout);
+    dlist_free(&kout);
+
+    return 0;
+}
+
 /* ====================================================================== */
 
 int sync_restore_mailbox(struct dlist *kin,
@@ -7255,6 +7277,10 @@ EXPORTED const char *sync_apply(struct dlist *kin, struct sync_reserve_list *res
     else if (!strcmp(kin->name, "FORCE"))
         r = sync_apply_force(kin, state);
 
+    /* enable capabilities advertised by the server */
+    else if (!strcmp(kin->name, "CAPABILITIES"))
+        r = sync_apply_capabilities(kin, state);
+
     else {
         xsyslog(LOG_ERR, "SYNCERROR: unknown command",
                          "command=<%s>",
@@ -7894,13 +7920,9 @@ EXPORTED int sync_connect(struct sync_client_state *sync_cs)
                                   (verbose > 1 ? fileno(stderr) : -1));
 
         if (backend) {
-            if (backend->capability & CAPA_REPLICATION) {
+            if (CAPA(backend, CAPA_REPLICATION)) {
                 /* attach our IMAP tag buffer to our protstreams as userdata */
                 backend->in->userdata = backend->out->userdata = &sync_cs->tagbuf;
-                if (1) {
-                    /* Assume we support #sieve until we have in-protocol detection */
-                    sync_cs->flags |= SYNC_FLAG_SIEVE_MAILBOX;
-                }
 
                 goto connected;
             }
@@ -7922,6 +7944,8 @@ EXPORTED int sync_connect(struct sync_client_state *sync_cs)
     }
 
 connected:
+
+    sync_cs->backend = backend;
 
     free_callbacks(cb);
     cb = NULL;
@@ -7948,6 +7972,11 @@ connected:
     }
 #endif
 
+    if (CAPA(backend, CAPA_SIEVE_MAILBOX)) {
+        syslog(LOG_INFO, "Destination supports #sieve mailbox");
+        sync_do_enable(sync_cs, CAPA_SIEVE_MAILBOX);
+    }
+
     /* Set inactivity timer */
     timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
     if (timeout < 3) timeout = 3;
@@ -7956,8 +7985,6 @@ connected:
     /* Force use of LITERAL+ so we don't need two way communications */
     prot_setisclient(backend->in, 1);
     prot_setisclient(backend->out, 1);
-
-    sync_cs->backend = backend;
 
     return 0;
 }
@@ -8045,4 +8072,51 @@ EXPORTED int sync_checkpoint(struct protstream *clientin)
     buf_reset(buf);
 
     return 0;
+}
+
+/* ====================================================================== */
+
+int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
+{
+    struct dlist *kl, *kin = NULL;
+    int r;
+
+    if (sync_cs->flags & SYNC_FLAG_VERBOSE)
+        printf("ENABLE 0x%x\n", capabilities);
+
+    if (sync_cs->flags & SYNC_FLAG_LOGGING)
+        syslog(LOG_INFO, "ENABLE 0x%x", capabilities);
+
+    kl = dlist_newlist(NULL, "CAPABILITIES");
+    if (capabilities & CAPA_SIEVE_MAILBOX) {
+        dlist_setatom(kl, NULL, "SIEVE-MAILBOX");
+    }
+
+    sync_send_apply(kl, sync_cs->backend->out);
+    dlist_free(&kl);
+
+    r = sync_parse_response("ENABLED", sync_cs->backend->in, &kin);
+
+    if (!r && kin) {
+        struct dlist *ki = kin->head;
+        if (strcmp(ki->name, "ENABLED")) {
+            xsyslog(LOG_ERR, "SYNCERROR: Illegal response to CAPABILITIES",
+                    "name=<%s>", ki->name);
+            r = IMAP_PROTOCOL_BAD_PARAMETERS;
+        }
+        else {
+            for (ki = ki->head; ki; ki = ki->next) {
+                const char *capa;
+
+                dlist_toatom(ki, &capa);
+
+                if (!strcasecmp(capa, "SIEVE-MAILBOX"))
+                    sync_cs->flags |= SYNC_FLAG_SIEVE_MAILBOX;
+            }
+        }
+    }
+
+    dlist_free(&kin);
+
+    return r;
 }

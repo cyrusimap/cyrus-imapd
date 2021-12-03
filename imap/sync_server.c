@@ -82,6 +82,7 @@
 #include "global.h"
 #include "hash.h"
 #include "imparse.h"
+#include "imap_proxy.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
@@ -220,6 +221,7 @@ static void sync_reset(void)
     }
     sync_starttls_done = 0;
     sync_compress_done = 0;
+    client_capa = 0;
 
     saslprops_reset(&saslprops);
 }
@@ -978,10 +980,19 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        SYNC_FLAG_SIEVE_MAILBOX /* flags */
+        0 /* flags */
     };
 
+    if (client_capa & CAPA_SIEVE_MAILBOX) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
+
+    if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
+        client_capa |= CAPA_SIEVE_MAILBOX;
+    }
+
     sync_checkpoint(sync_in);
     prot_printf(sync_out, "%s\r\n", resp);
 }
@@ -994,8 +1005,12 @@ static void cmd_get(struct dlist *kin)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        SYNC_FLAG_SIEVE_MAILBOX /* flags */
+        0 /* flags */
     };
+
+    if (client_capa & CAPA_SIEVE_MAILBOX) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
 
     const char *resp = sync_get(kin, &sync_state);
     prot_printf(sync_out, "%s\r\n", resp);
@@ -1009,8 +1024,12 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
         sync_authstate,
         &sync_namespace,
         sync_out,
-        SYNC_FLAG_SIEVE_MAILBOX /* flags */
+        0 /* flags */
     };
+
+    if (client_capa & CAPA_SIEVE_MAILBOX) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
     sync_checkpoint(sync_in);

@@ -528,6 +528,8 @@ int sync_do_restart(struct sync_client_state *sync_cs);
 
 int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr);
 
+int sync_do_enable(struct sync_client_state *sync_cs, unsigned capa);
+
 int sync_connect(struct sync_client_state *sync_cs);
 void sync_disconnect(struct sync_client_state *sync_cs);
 

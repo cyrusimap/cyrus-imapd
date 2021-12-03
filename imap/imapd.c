@@ -11297,14 +11297,14 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
     struct backend *be = xfer->sync_cs.backend;
     xfer->sync_cs.clientin = be->in;
     xfer->remoteversion = backend_version(be);
-    if (be->capability & CAPA_REPLICATION) {
+    if (CAPA(be, CAPA_REPLICATION)) {
         syslog(LOG_INFO, "XFER: destination supports replication");
         xfer->use_replication = 1;
         be->in->userdata = be->out->userdata = &xfer->sync_cs.tagbuf;
 
-        if (1) {
-            /* Assume we support #sieve until we have in-protocol detection */
-            xfer->sync_cs.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+        if (CAPA(be, CAPA_SIEVE_MAILBOX)) {
+            syslog(LOG_INFO, "XFER: destination supports #sieve mailbox");
+            sync_do_enable(&xfer->sync_cs, CAPA_SIEVE_MAILBOX);
         }
     }
 
@@ -14506,8 +14506,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
         0 /* flags */
     };
 
-    if (1) {
-        /* Assume we support #sieve until we have in-protocol detection */
+    if (client_capa & CAPA_SIEVE_MAILBOX) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
 
@@ -14519,6 +14518,10 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     }
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
+
+    if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
+        client_capa |= CAPA_SIEVE_MAILBOX;
+    }
 
     // chaining!
     index_release(imapd_index);
@@ -14541,8 +14544,7 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
         0 /* flags */
     };
 
-    if (1) {
-        /* Assume we support #sieve until we have in-protocol detection */
+    if (client_capa & CAPA_SIEVE_MAILBOX) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
 
@@ -14654,8 +14656,7 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
         0 /* flags */
     };
 
-    if (1) {
-        /* Assume we support #sieve until we have in-protocol detection */
+    if (client_capa & CAPA_SIEVE_MAILBOX) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
 
