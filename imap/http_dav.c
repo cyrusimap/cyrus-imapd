@@ -5643,6 +5643,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     char *partition = NULL;
     struct proppatch_ctx pctx;
     struct mailbox *mailbox = NULL;
+    struct mboxlock *namespacelock = NULL;
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
@@ -5728,7 +5729,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         instr = root->children;
     }
 
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(txn->req_tgt.mbentry->name);
+    namespacelock = mboxname_usernamespacelock(txn->req_tgt.mbentry->name);
 
     /* Create the mailbox */
     mbentry_t mbentry = MBENTRY_INITIALIZER;
