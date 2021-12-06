@@ -1623,3 +1623,16 @@ done:
     caldav_close(db);
     return r;
 }
+
+HIDDEN void caldav_attachment_url(struct buf *buf,
+                                  const char *userid,
+                                  const char *proto,
+                                  const char *host,
+                                  const char *managedid)
+{
+    buf_printf(buf, "%s://%s%s/%s/%s/%s%s",
+            proto, host, namespace_calendar.prefix,
+            USER_COLLECTION_PREFIX,
+            userid, MANAGED_ATTACH, managedid);
+}
+
