@@ -1482,7 +1482,7 @@ int apply_annotations(struct mailbox *mailbox,
     const struct sync_annot *local = (local_annots ? local_annots->head : NULL);
     const struct sync_annot *remote = (remote_annots ? remote_annots->head : NULL);
     const struct sync_annot *chosen;
-    static const struct buf novalue = BUF_INITIALIZER;
+    const struct buf novalue = BUF_INITIALIZER;
     const struct buf *value;
     int r = 0;
     int diff;
