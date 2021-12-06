@@ -204,6 +204,7 @@ static int should_index(const char *name)
     int ret = 1;
     mbentry_t *mbentry = NULL;
     mbname_t *mbname = mbname_from_intname(name);
+    const char *userid = mbname_userid(mbname);
     /* Skip remote mailboxes */
     int r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
@@ -245,6 +246,13 @@ static int should_index(const char *name)
         goto done;
     }
 
+    // skip CalDAV scheduling Inbox
+    if ((mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR) && userid &&
+        !strcmp("Inbox", strarray_nth(mbname_boxes(mbname), 1))) {
+        ret = 0;
+        goto done;
+    }
+
     // skip deleted mailboxes
     if (mbname_isdeleted(mbname)) {
         ret = 0;
@@ -259,8 +267,7 @@ static int should_index(const char *name)
     }
 
     // skip listed users
-    if (mbname_userid(mbname) && skip_users &&
-        strarray_find(skip_users, mbname_userid(mbname), 0) >= 0) {
+    if (userid && skip_users && strarray_find(skip_users, userid, 0) >= 0) {
         ret = 0;
         goto done;
     }
