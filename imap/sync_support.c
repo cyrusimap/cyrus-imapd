@@ -6671,17 +6671,35 @@ int sync_do_mailboxes(struct sync_client_state *sync_cs,
                       const char *topart, int flags)
 
 {
-    struct sync_name *mbox;
+    struct sync_name *mbox, *next, *prev = NULL;
     struct sync_folder_list *replica_folders = sync_folder_list_create();
     struct buf buf = BUF_INITIALIZER;
-    int r;
+    int r = 0;
     strarray_t userids = STRARRAY_INITIALIZER;
+    strarray_t dosieve = STRARRAY_INITIALIZER;
     ptrarray_t locks = PTRARRAY_INITIALIZER;
 
     // what a pain, we need to lock all the users in order, so..
-    for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
+    for (mbox = mboxname_list->head; mbox; mbox = next) {
         char *userid = mboxname_to_userid(mbox->name);
         strarray_add(&userids, userid ? userid : "");
+
+        next = mbox->next;
+        if (!(sync_cs->flags & SYNC_FLAG_SIEVE_MAILBOX) &&
+            userid && mboxname_issievemailbox(mbox->name, 0)) {
+            /* Remove #sieve mailbox from the list and replicate via SIEVE */
+            if (prev) prev->next = next;
+            else mboxname_list->head = next;
+            if (!next) mboxname_list->tail = prev;
+            mboxname_list->count--;
+            free(mbox->name);
+            free(mbox);
+
+            strarray_add(&dosieve, userid);
+        }
+        else {
+            prev = mbox;
+        }
         free(userid);
     }
     strarray_sort(&userids, cmpstringp_raw);
@@ -6696,6 +6714,8 @@ int sync_do_mailboxes(struct sync_client_state *sync_cs,
         }
         ptrarray_append(&locks, lock);
     }
+
+    if (!mboxname_list->count) goto dosieve;
 
     int tries = 0;
 
@@ -6763,10 +6783,36 @@ redo:
         goto redo;
     }
 
+  dosieve:
+    for (i = 0; !r && i < strarray_size(&dosieve); i++) {
+        struct sync_sieve_list *replica_sieve = sync_sieve_list_create();
+        struct sync_name_list *replica_subs = sync_name_list_create();
+        struct sync_seen_list *replica_seen = sync_seen_list_create();
+        const char *userid = strarray_nth(&dosieve, i);
+
+        if (sync_cs->flags & SYNC_FLAG_VERBOSE)
+            printf("META %s\n", userid);
+
+        if (sync_cs->flags & SYNC_FLAG_LOGGING)
+            syslog(LOG_INFO, "META %s", userid);
+
+        kl = dlist_setatom(NULL, "META", userid);
+        sync_send_lookup(kl, sync_cs->backend->out);
+        dlist_free(&kl);
+
+        r = sync_response_parse(sync_cs, "META", NULL,
+                                replica_subs, replica_sieve, replica_seen, NULL);
+        if (!r) r = sync_do_user_sieve(sync_cs, userid, replica_sieve);
+        sync_seen_list_free(&replica_seen);
+        sync_name_list_free(&replica_subs);
+        sync_sieve_list_free(&replica_sieve);
+    }
+
 done:
 
     sync_folder_list_free(&replica_folders);
     strarray_fini(&userids);
+    strarray_fini(&dosieve);
     for (i = 0; i < ptrarray_size(&locks); i++) {
         struct mboxlock *lock = ptrarray_nth(&locks, i);
         mboxname_release(&lock);
