@@ -84,6 +84,7 @@
 #include "index.h"
 #include "message.h"
 #include "util.h"
+#include "itip_support.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -248,7 +249,9 @@ static int should_index(const char *name)
 
     // skip CalDAV scheduling Inbox
     if ((mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR) && userid &&
-        !strcmp("Inbox", strarray_nth(mbname_boxes(mbname), 1))) {
+        /* SCHED_INBOX ends in "/", so trim it */
+        !strncmp(strarray_nth(mbname_boxes(mbname), 1),
+                 SCHED_INBOX, strlen(SCHED_INBOX)-1)) {
         ret = 0;
         goto done;
     }
