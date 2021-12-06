@@ -1529,6 +1529,22 @@ AC_SUBST([CLD2_CFLAGS])
 AM_CONDITIONAL([HAVE_CLD2], [test "x$with_cld2" = xyes])
 
 dnl
+dnl Check for guesstz library
+dnl
+AC_ARG_WITH([guesstz],
+       [AS_HELP_STRING([--without-guesstz], [ignore presence of guesstz library and disable it])],
+    [],
+    [with_guesstz=yes])
+AS_IF([test "x$with_guesstz" = "xyes"],
+       [ PKG_CHECK_MODULES([GUESSTZ], [guesstz],
+               [ AC_DEFINE(HAVE_GUESSTZ, [], [Build with guesstz library support])
+                 with_guesstz=yes ],
+          with_guesstz=no)])
+AC_SUBST([GUESSTZ_LIBS])
+AC_SUBST([GUESSTZ_CFLAGS])
+AM_CONDITIONAL([HAVE_GUESSTZ], [test "x$with_guesstz" = xyes])
+
+dnl
 dnl Set pidfile location
 dnl
 AC_ARG_WITH(pidfile,
@@ -2501,6 +2517,7 @@ External dependencies:
    icu4c:              $with_icu4c
    chardet:            $with_chardet
    cld2:               $with_cld2
+   guesstz:            $with_guesstz
 
 Database support:
    mysql:              $with_mysql

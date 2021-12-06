@@ -51,6 +51,10 @@
 #include <syslog.h>
 #include <assert.h>
 
+#ifdef HAVE_GUESSTZ
+#include <guesstz.h>
+#endif
+
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
@@ -429,25 +433,6 @@ static icalproperty* findprop_byid(icalcomponent *comp, const char *id,
     return prop;
 }
 
-static void jstimezones_add_icaltz(jstimezones_t *jstzones,
-                                   const char *jstzid,
-                                   icaltimezone *tz)
-{
-    if (!jstzones->tzs.count) {
-        construct_hash_table(&jstzones->bytzid, 128, 0);
-        construct_hash_table(&jstzones->byjstzid, 128, 0);
-
-    }
-
-    const char *tzid = icaltimezone_get_tzid(tz);
-    if (!strcasecmp(tzid, "UTC")) {
-        tzid = "Etc/UTC";
-    }
-    hash_insert(tzid, tz, &jstzones->bytzid);
-    hash_insert(jstzid ? jstzid : tzid, tz, &jstzones->byjstzid);
-    ptrarray_append(&jstzones->tzs, tz);
-}
-
 HIDDEN icaltimezone *jstimezones_lookup_tzid(jstimezones_t *jstzones, const char *tzid)
 {
     if (!tzid) return NULL;
@@ -517,53 +502,113 @@ static const char *jstimezones_get_jstzid(jstimezones_t *jstzones, const char *t
 
 static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *ical)
 {
-    icalcomponent *tzcomp;
+    icalcomponent *vtz;
     icalproperty *prop;
 
+    /* Return early if there's no work to do */
     size_t count = 0;
-    for (tzcomp = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-         tzcomp;
-         tzcomp = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
-        count++;
-    }
-
-    struct buf idbuf = BUF_INITIALIZER;
-
-    for (tzcomp = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-         tzcomp;
-         tzcomp = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
-
-        prop = icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
-        if (!prop) continue;
+    for (vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+         vtz;
+         vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
 
         /* Ignore IANA and Windows timezone ids */
+        prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+        if (!prop) continue;
         const char *tzid = icalproperty_get_tzid(prop);
         if (!tzid || !*tzid || icaltimezone_get_cyrus_timezone_from_tzid(tzid)) {
             continue;
         }
 
+        count++;
+    }
+    if (!count) return;
 
-        icalcomponent *mytzcomp = icalcomponent_clone(tzcomp);
+#ifdef HAVE_GUESSTZ
+    /* Determine the timespan of the event */
+    const icaltimezone *utc = icaltimezone_get_utc_timezone();
+    unsigned is_recurring = 0;
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    if (!comp) return;
+    struct icalperiodtype span = icalrecurrenceset_get_utc_timespan(ical,
+            icalcomponent_isa(comp), NULL, &is_recurring, NULL, NULL);
+    if (icaltime_as_timet_with_zone(span.end, utc) == caldav_epoch) {
+        span.end = icaltime_null_time();
+    }
+
+    /* Open database to guess IANA timezones */
+    guesstz_t *gtz = NULL;
+    if (config_getstring(IMAPOPT_ZONEINFO_DIR)) {
+        char *fname = strconcat(config_getstring(IMAPOPT_ZONEINFO_DIR),
+                                "/guesstz.db", NULL);
+        gtz = guesstz_open(fname);
+        free(fname);
+        if (guesstz_error(gtz)) {
+            xsyslog(LOG_ERR, "can't open guesstz database",
+                    "err<%s>", guesstz_error(gtz));
+            guesstz_close(&gtz);
+        }
+    }
+#endif
+
+    /* Process custom timezones */
+
+    struct buf idbuf = BUF_INITIALIZER;
+
+    for (vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+         vtz;
+         vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
+
+        /* Ignore IANA and Windows timezone ids */
+        prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+        if (!prop) continue;
+        const char *tzid = icalproperty_get_tzid(prop);
+        if (!tzid || !*tzid || icaltimezone_get_cyrus_timezone_from_tzid(tzid)) {
+            continue;
+        }
+
+        /* Need to keep track of this timezone */
+        if (!jstzones->tzs.count) {
+            construct_hash_table(&jstzones->bytzid, count, 0);
+            construct_hash_table(&jstzones->byjstzid, count, 0);
+        }
+
+        /* Make sure it returns tzid for timezone_get_location */
+        icalcomponent *myvtz = icalcomponent_clone(vtz);
         prop = icalproperty_new_x(tzid);
         icalproperty_set_x_name(prop, "X-LIC-LOCATION");
-        icalcomponent_add_property(mytzcomp, prop);
+        icalcomponent_add_property(myvtz, prop);
 
-        const char *jstzid = get_icalxprop_value(mytzcomp, JMAPICAL_XPROP_ID);
-        if (!jstzid || *jstzid != '/') {
-            buf_reset(&idbuf);
-            buf_putc(&idbuf, '/');
-            buf_appendcstr(&idbuf, jstzid ? jstzid : tzid);
+        /* Determine timezone name */
+        const char *jstzid = get_icalxprop_value(myvtz, JMAPICAL_XPROP_ID);
+        if (!jstzid) {
+#ifdef HAVE_GUESSTZ
+            if (gtz) {
+                char *ianaid = guesstz_guess(gtz, myvtz, span.start, span.end);
+                if (ianaid) buf_setcstr(&idbuf, ianaid);
+                free(ianaid);
+            }
+#endif
+            if (!buf_len(&idbuf)) {
+                buf_putc(&idbuf, '/');
+                buf_appendcstr(&idbuf, tzid);
+            }
             jstzid = buf_cstring(&idbuf);
             prop = icalproperty_new_x(jstzid);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
-            icalcomponent_add_property(mytzcomp, prop);
+            icalcomponent_add_property(myvtz, prop);
         }
         icaltimezone *tz = icaltimezone_new();
-        icaltimezone_set_component(tz, mytzcomp);
+        icaltimezone_set_component(tz, myvtz);
 
-        jstimezones_add_icaltz(jstzones, jstzid, tz);
+        /* Add the custom timezone for lookup */
+        hash_insert(tzid, tz, &jstzones->bytzid);
+        hash_insert(jstzid, tz, &jstzones->byjstzid);
+        ptrarray_append(&jstzones->tzs, tz);
     }
 
+#ifdef HAVE_GUESSTZ
+    guesstz_close(&gtz);
+#endif
     buf_free(&idbuf);
 }
 
