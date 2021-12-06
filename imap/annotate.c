@@ -3951,9 +3951,32 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
                               /*copy*/1);
     }
 
-    /* delete displayname records only */
-    struct rename_rock rrock = { oldmailbox, .newmailbox = NULL, .copy = 0 };
+    /* delete displayname records, as they're wrong now
+     *
+     * XXX this is awfully tricky -- there's no direct api for deleting
+     * XXX a single annotation, so instead we're abusing "rename_cb".
+     * XXX but which trickery to use depends on how we got here...
+     * .newmailbox = NULL:
+     *      nothing to copy, we already took care of that above
+     * .copy = 0:
+     *      it's a move, so delete it from "oldmailbox" after "copying" it
+     * .oldmailbox = whichever object will persist...
+     *      so the quota updates get applied to the correct place
+     */
+    struct rename_rock rrock = { .newmailbox = NULL, .copy = 0 };
+    if (mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS) {
+        /* legacy mailbox. "newmailbox" is the object that will persist */
+        rrock.oldmailbox = newmailbox;
+    }
+    else {
+        /* uuid mailbox. "oldmailbox" is the object that will persist */
+        rrock.oldmailbox = oldmailbox;
+    }
 
+    /* XXX regardless of rrock trickiness above, the mailbox argument here
+     * XXX must be "oldmailbox", because "newmailbox" doesn't fully exist
+     * XXX (yet) and won't be found in either case
+     */
     r = annotatemore_findall_mailbox(oldmailbox, /*olduid*/0,
                                      IMAP_ANNOT_NS "displayname", /*modseq*/0,
                                      &rename_cb, &rrock, /*flags*/0);
