@@ -2682,18 +2682,6 @@ static struct webdav_data *increment_refcount(const char *managed_id,
     return wdata;
 }
 
-HIDDEN void caldav_attachment_url(struct buf *buf,
-                                  const char *userid,
-                                  const char *proto,
-                                  const char *host,
-                                  const char *managedid)
-{
-    buf_printf(buf, "%s://%s%s/%s/%s/%s%s",
-            proto, host, namespace_calendar.prefix,
-            USER_COLLECTION_PREFIX,
-            userid, MANAGED_ATTACH, managedid);
-}
-
 /* Manage attachment */
 static int caldav_post_attach(struct transaction_t *txn, int rights)
 {
