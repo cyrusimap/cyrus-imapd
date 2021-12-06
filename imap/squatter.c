@@ -84,6 +84,7 @@
 #include "index.h"
 #include "message.h"
 #include "util.h"
+#include "itip_support.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -204,6 +205,7 @@ static int should_index(const char *name)
     int ret = 1;
     mbentry_t *mbentry = NULL;
     mbname_t *mbname = mbname_from_intname(name);
+    const char *userid = mbname_userid(mbname);
     /* Skip remote mailboxes */
     int r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
@@ -245,6 +247,15 @@ static int should_index(const char *name)
         goto done;
     }
 
+    // skip CalDAV scheduling Inbox
+    if ((mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR) && userid &&
+        /* SCHED_INBOX ends in "/", so trim it */
+        !strncmp(strarray_nth(mbname_boxes(mbname), 1),
+                 SCHED_INBOX, strlen(SCHED_INBOX)-1)) {
+        ret = 0;
+        goto done;
+    }
+
     // skip deleted mailboxes
     if (mbname_isdeleted(mbname)) {
         ret = 0;
@@ -259,8 +270,7 @@ static int should_index(const char *name)
     }
 
     // skip listed users
-    if (mbname_userid(mbname) && skip_users &&
-        strarray_find(skip_users, mbname_userid(mbname), 0) >= 0) {
+    if (userid && skip_users && strarray_find(skip_users, userid, 0) >= 0) {
         ret = 0;
         goto done;
     }
