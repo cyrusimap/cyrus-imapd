@@ -276,6 +276,43 @@ sub apply_parameter_setting
     }
 }
 
+# n.b. it's okay for unexpected bits to also be set!
+# if you need to test that ONLY specific bits are set, try:
+#
+#   assert_bits_set($want, $got);
+#   assert_bits_not_set(~$want, $got);
+#
+sub assert_bits_set
+{
+    my ($self, $expected_bits, $actual_bitfield) = @_;
+
+    # force args to be numeric
+    # XXX use feature 'bitwise';
+    $expected_bits += 0;
+    $actual_bitfield += 0;
+
+    my $fail_msg = sprintf("%#.8b does not have all of %#.8b bits set",
+                           $actual_bitfield, $expected_bits);
+
+    $self->assert((($actual_bitfield & $expected_bits) == $expected_bits),
+                  $fail_msg);
+}
+
+sub assert_bits_not_set
+{
+    my ($self, $expected_bits, $actual_bitfield) = @_;
+
+    # force args to be numeric
+    # XXX use feature 'bitwise';
+    $expected_bits += 0;
+    $actual_bitfield += 0;
+
+    my $fail_msg = sprintf("%#.8b has some of %#.8b bits set",
+                           $actual_bitfield, $expected_bits);
+
+    $self->assert((($actual_bitfield & $expected_bits) == 0), $fail_msg);
+}
+
 sub assert_num_gte
 {
     my ($self, $expected, $actual) = @_;
