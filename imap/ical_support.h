@@ -99,6 +99,7 @@ extern int icalcomponent_myforeach(icalcomponent *comp,
                                    int (*callback) (icalcomponent *comp,
                                                     icaltimetype start,
                                                     icaltimetype end,
+                                                    icaltimetype recurid,
                                                     void *data),
                                    void *callback_data);
 
