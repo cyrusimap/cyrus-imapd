@@ -485,6 +485,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
                                    int (*callback) (icalcomponent *comp,
                                                     icaltimetype start,
                                                     icaltimetype end,
+                                                    icaltimetype recurid,
                                                     void *data),
                                    void *callback_data)
 {
@@ -618,15 +619,18 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
     struct icaltimetype xitem = exrule_itr.nentries ?
         multirrule_iterator_next(&exrule_itr) : icaltime_null_time();
 
+    int has_rrule = !!icalcomponent_get_first_property(mastercomp, ICAL_RRULE_PROPERTY);
+
     while (data || !icaltime_is_null_time(ritem)) {
         time_t otime = data ? data->span.start : eternity;
         time_t rtime = icaltime_to_timet(ritem, floatingtz);
 
         if (icaltime_is_null_time(ritem) || (data && otime <= rtime)) {
+            icaltimetype recurid = icalcomponent_get_recurrenceid(data->comp);
             /* an overridden recurrence */
             if (data->comp &&
                 !span_compare_range(&data->span, &range_span) &&
-                !callback(data->comp, data->dtstart, data->dtend, callback_data))
+                !callback(data->comp, data->dtstart, data->dtend, recurid, callback_data))
                 goto done;
 
             /* if they're both the same time, it's a precisely overridden
@@ -655,11 +659,18 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
                 icaltime_span this_span = {
                     rtime, icaltime_to_timet(thisend, floatingtz), 0 /* is_busy */
                 };
-                int r = span_compare_range(&this_span, &range_span);
 
-                if (r > 0 || /* gone past the end of range */
-                        (!r && !callback(mastercomp, ritem, thisend, callback_data)))
-                    goto done;
+                int r = span_compare_range(&this_span, &range_span);
+                if (r > 0)
+                    goto done; /* gone past the end of range */
+
+                if (!r) {
+                    icaltimetype recurid = ritem;
+                    recurid.zone = dtstart.zone;
+                    r = callback(mastercomp, ritem, thisend, has_rrule ?
+                            recurid : icaltime_null_time(), callback_data);
+                    if (!r) goto done;
+                }
             }
 
             /* incr recurrences */

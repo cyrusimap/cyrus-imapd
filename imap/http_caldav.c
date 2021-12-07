@@ -4963,7 +4963,9 @@ static void prune_properties(icalcomponent *parent,
 }
 
 static int expand_cb(icalcomponent *comp,
-                     icaltimetype start, icaltimetype end, void *rock)
+                     icaltimetype start, icaltimetype end,
+                     icaltimetype _recurid __attribute__((unused)), // FIXME
+                     void *rock)
 {
     icalcomponent *ical = icalcomponent_get_parent(comp);
     icalcomponent *expanded_ical = (icalcomponent *) rock;
@@ -6917,6 +6919,7 @@ static void add_freebusy(struct icaltimetype *recurid,
 /* Append a new busytime period for recurring comp to the busytime array */
 static int add_freebusy_comp(icalcomponent *comp,
                              icaltimetype start, icaltimetype end,
+                             icaltimetype _recurid __attribute__((unused)), 
                              void *rock)
 {
     struct freebusy_filter *fbfilter = (struct freebusy_filter *) rock;
@@ -7363,13 +7366,15 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
 
                 period.end = fb->per.start;
                 if (icaltime_compare(period.end, period.start) > 0) {
-                    add_freebusy_comp(comp, period.start, period.end, fbfilter);
+                    add_freebusy_comp(comp, period.start, period.end,
+                            icaltime_null_time(), fbfilter);
                 }
                 period.start = fb->per.end;
             }
             period.end = availfilter.end;
             if (icaltime_compare(period.end, period.start) > 0) {
-                add_freebusy_comp(comp, period.start, period.end, fbfilter);
+                add_freebusy_comp(comp, period.start, period.end,
+                        icaltime_null_time(), fbfilter);
             }
         }
 

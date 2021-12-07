@@ -306,6 +306,7 @@ EXPORTED void caldav_alarm_rollback_reconstruct()
 static int send_alarm(struct get_alarm_rock *rock,
                       icalcomponent *comp, icalcomponent *alarm,
                       icaltimetype start, icaltimetype end,
+                      icaltimetype recurid,
                       icaltimetype alarmtime)
 {
     const char *userid = rock->userid;
@@ -347,9 +348,24 @@ static int send_alarm(struct get_alarm_rock *rock,
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, buf_release(&calname));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_COLOR, buf_release(&calcolor));
 
+    struct jmap_caleventid eid = { 0 };
+
     prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
+    if (prop) eid.ical_uid = icalproperty_get_value_as_string(prop);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_UID,
                       xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
+    if (!icaltime_is_null_time(recurid))
+        eid.ical_recurid = icaltime_as_ical_string(recurid);
+
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_RECURID,
+            xstrdup(eid.ical_recurid ? eid.ical_recurid : ""));
+
+    if (eid.ical_uid) {
+        struct buf buf = BUF_INITIALIZER;
+        if (jmap_caleventid_encode(&eid, &buf))
+            FILL_STRING_PARAM(event, EVENT_CALENDAR_EVENTID, buf_release(&buf));
+    }
 
     prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_SUMMARY,
@@ -396,6 +412,10 @@ static int send_alarm(struct get_alarm_rock *rock,
     }
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ALARM_RECIPIENTS, recipients);
 
+    prop = icalcomponent_get_first_property(alarm, ICAL_UID_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ALERTID,
+            xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
     strarray_t *attendee_names = strarray_new();
     strarray_t *attendee_emails = strarray_new();
     strarray_t *attendee_status = strarray_new();
@@ -433,8 +453,10 @@ static int send_alarm(struct get_alarm_rock *rock,
     return 0;
 }
 
-static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
-                            icaltimetype end, void *rock)
+static int process_alarm_cb(icalcomponent *comp,
+                            icaltimetype start, icaltimetype end,
+                            icaltimetype recurid,
+                            void *rock)
 {
     struct get_alarm_rock *data = (struct get_alarm_rock *)rock;
 
@@ -518,7 +540,7 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
                        data->mboxname, data->imap_uid,
                        icaltime_as_ical_string(start), alarmno,
                        summary);
-                send_alarm(data, comp, alarm, start, end, alarmtime);
+                send_alarm(data, comp, alarm, start, end, recurid, alarmtime);
             }
         }
 
