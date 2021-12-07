@@ -2659,104 +2659,6 @@ done:
     return res;
 }
 
-struct eventid {
-    const char *raw; /* as requested by client */
-    const char *ical_uid;
-    const char *ical_recurid;
-    char *_alloced[2];
-};
-
-static struct eventid *decode_eventid(const char *id)
-{
-    struct eventid *eid = xzmalloc(sizeof(struct eventid));
-    char *val = NULL;
-    eid->raw = id;
-
-    if (id[0] != 'E' || (id[1] != '-' && (id[1] != 'B' || id[2] != '-'))) {
-        // most likely a legacy identifier
-        eid->ical_uid = eid->_alloced[0] = xstrdup(id);
-        goto done;
-    }
-
-    if (id[1] == '-') {
-        // copy verbatim UID
-        eid->ical_uid = eid->_alloced[0] = xstrdup(id + 2);
-        goto done;
-    }
-
-    val = jmap_decode_base64_nopad(id + 3, strlen(id + 3));
-    if (!val) {
-        // treat as legacy id
-        eid->ical_uid = eid->_alloced[0] = xstrdup(id);
-        goto done;
-    }
-
-    const char *sem = strchr(val, ';');
-    if (sem) {
-        // A recurrence instance
-        eid->ical_uid = eid->_alloced[0] = xstrndup(val, sem - val);
-        eid->ical_recurid = eid->_alloced[1] = xstrdup(sem + 1);
-    }
-    else {
-        // A main event
-        eid->ical_uid = eid->_alloced[0] = xstrdup(val);
-    }
-
-done:
-    free(val);
-    return eid;
-}
-
-static void free_eventid(struct eventid **eidptr)
-{
-    if (eidptr == NULL || *eidptr == NULL) return;
-
-    struct eventid *eid = *eidptr;
-    free(eid->_alloced[0]);
-    free(eid->_alloced[1]);
-    free(eid);
-    *eidptr = NULL;
-}
-
-static const char *encode_eventid(const struct eventid *eid, struct buf *buf)
-{
-    int need_base64 = eid->ical_recurid && eid->ical_recurid[0];
-    buf_reset(buf);
-
-    if (!need_base64) {
-        const char *c;
-        for (c = eid->ical_uid; *c; c++) {
-            if (!isascii(*c) || !(isalnum(*c) || *c == '-' || *c == '_')) {
-                need_base64 = 1;
-                break;
-            }
-        }
-    }
-
-    if (!need_base64) {
-        buf_putc(buf, 'E');
-        buf_putc(buf, '-');
-        buf_appendcstr(buf, eid->ical_uid);
-    }
-    else {
-        buf_setcstr(buf, eid->ical_uid);
-        if (eid->ical_recurid && eid->ical_recurid[0]) {
-            buf_putc(buf, ';');
-            buf_appendcstr(buf, eid->ical_recurid);
-        }
-        char *tmp = jmap_encode_base64_nopad(buf_base(buf), buf_len(buf));
-        buf_reset(buf);
-        buf_putc(buf, 'E');
-        buf_putc(buf, 'B');
-        buf_putc(buf, '-');
-        buf_appendcstr(buf, tmp);
-        free(tmp);
-    }
-
-    return buf_cstring(buf);
-}
-
-
 struct getcalendarevents_rock {
     /* Request-scoped context */
     struct caldav_db *db;
@@ -2790,25 +2692,25 @@ struct recurid_instanceof_rock {
 static int _recurid_instanceof_cb(icalcomponent *comp __attribute__((unused)),
                                   icaltimetype start,
                                   icaltimetype end __attribute__((unused)),
+                                  icaltimetype recurid __attribute__((unused)), // FIXME
                                   void *vrock)
 {
     struct recurid_instanceof_rock *rock = vrock;
-    struct icaltimetype recurid = rock->recurid;
 
-    if (start.is_date && !recurid.is_date) {
+    if (start.is_date && !rock->recurid.is_date) {
         start.is_date = 0;
         start.hour = 0;
         start.minute = 0;
         start.second = 0;
     }
-    else if (!start.is_date && recurid.is_date) {
+    else if (!start.is_date && rock->recurid.is_date) {
         recurid.is_date = 0;
         recurid.hour = 0;
         recurid.minute = 0;
         recurid.second = 0;
     }
 
-    int cmp = icaltime_compare(start, recurid);
+    int cmp = icaltime_compare(start, rock->recurid);
     if (cmp == 0) {
         rock->found = 1;
     }
@@ -3040,7 +2942,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
 
     int i;
     for (i = 0; i < ptrarray_size(rock->want_eventids); i++) {
-        struct eventid *eid = ptrarray_nth(rock->want_eventids, i);
+        struct jmap_caleventid *eid = ptrarray_nth(rock->want_eventids, i);
         if (!eid->ical_recurid) continue;
 
         format_icaltimestr_to_datetimestr(eid->ical_recurid, &rock->buf);
@@ -3468,11 +3370,11 @@ gotevent:
     if (rock->want_eventids == NULL) {
         /* Client requested all events */
         jmap_filterprops(jsevent, props);
-        struct eventid eid = {
+        struct jmap_caleventid eid = {
             .ical_uid = cdata->ical_uid,
             .ical_recurid = jscal->ical_recurid,
         };
-        const char *id = encode_eventid(&eid, &rock->buf);
+        const char *id = jmap_caleventid_encode(&eid, &rock->buf);
         json_object_set_new(jsevent, "id", json_string(id));
         json_object_set_new(jsevent, "uid", json_string(id));
         json_object_set_new(jsevent, "@type", json_string("Event"));
@@ -3482,15 +3384,15 @@ gotevent:
         /* Client requested specific event ids */
         int i;
         for (i = 0; i < ptrarray_size(rock->want_eventids); i++) {
-            struct eventid *eid = ptrarray_nth(rock->want_eventids, i);
+            struct jmap_caleventid *eid = ptrarray_nth(rock->want_eventids, i);
             if (!strcmpsafe(eid->ical_recurid, jscal->ical_recurid)) {
                 json_t *myevent = json_deep_copy(jsevent);
                 jmap_filterprops(myevent, props);
-                struct eventid eid = {
+                struct jmap_caleventid eid = {
                     .ical_uid = cdata->ical_uid,
                     .ical_recurid = jscal->ical_recurid,
                 };
-                const char *id = encode_eventid(&eid, &rock->buf);
+                const char *id = jmap_caleventid_encode(&eid, &rock->buf);
                 json_object_set_new(myevent, "id", json_string(id));
                 json_object_set_new(myevent, "uid", json_string(cdata->ical_uid));
                 json_object_set_new(myevent, "@type", json_string("Event"));
@@ -3865,7 +3767,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         /* Split into single-valued uids and event recurrence instance ids */
         json_array_foreach(get.ids, i, jval) {
             const char *id = json_string_value(jval);
-            struct eventid *eid = decode_eventid(id);
+            struct jmap_caleventid *eid = jmap_caleventid_decode(id);
             if (eid) {
                 ptrarray_t *eventids = hash_lookup(eid->ical_uid, &eventids_by_uid);
                 if (!eventids) {
@@ -3896,7 +3798,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                 /* caldavdb silently ignores non-existent uids */
                 int j;
                 for (j = 0; j < ptrarray_size(rock.want_eventids); j++) {
-                    struct eventid *eid = ptrarray_nth(rock.want_eventids, j);
+                    struct jmap_caleventid *eid = ptrarray_nth(rock.want_eventids, j);
                     json_array_append_new(rock.get->not_found, json_string(eid->raw));
                 }
             }
@@ -3907,9 +3809,9 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         iter = hash_table_iter(&eventids_by_uid);
         while (hash_iter_next(iter)) {
             ptrarray_t *eventids = hash_iter_val(iter);
-            struct eventid *eid;
+            struct jmap_caleventid *eid;
             while ((eid = ptrarray_pop(eventids))) {
-                free_eventid(&eid);
+                jmap_caleventid_free(&eid);
             }
             ptrarray_free(eventids);
         }
@@ -4378,10 +4280,10 @@ json_t *build_eventnotif(const char *type,
     json_object_set_new(jn, "type", json_string(type));
     json_object_set_new(jn, "isDraft", json_boolean(is_draft));
 
-    struct eventid eid = {
+    struct jmap_caleventid eid = {
         .ical_uid = ical_uid
     };
-    const char *id = encode_eventid(&eid, &buf);
+    const char *id = jmap_caleventid_encode(&eid, &buf);
     json_object_set_new(jn, "calendarEventId", json_string(id));
 
     char date3339[RFC3339_DATETIME_MAX+1];
@@ -4969,12 +4871,12 @@ static int createevent_store(jmap_req_t *req,
     json_decref(myevent);
 
     // Set server-set properties
-    struct eventid eid = {
+    struct jmap_caleventid eid = {
         .ical_uid = create->ical_uid,
         .ical_recurid = create->ical_recurid,
     };
     json_object_set_new(create->serverset, "id",
-            json_string(encode_eventid(&eid, &buf)));
+            json_string(jmap_caleventid_encode(&eid, &buf)));
 
     json_object_set_new(create->serverset, "uid",
             json_string(eid.ical_uid));
@@ -5221,7 +5123,7 @@ static int setcalendarevents_apply_patch(jmap_req_t *req,
                                          int is_standalone,
                                          mbentry_t *mbentry,
                                          struct caldav_data *cdata,
-                                         struct eventid *eid,
+                                         struct jmap_caleventid *eid,
                                          strarray_t *schedule_addresses,
                                          int may_updateprivate_only,
                                          json_t *invalid,
@@ -5622,7 +5524,7 @@ int updateevent_check_exists_cb(void *vrock __attribute__((unused)),
 static int setcalendarevents_update(jmap_req_t *req,
                                     struct mailbox *notifmbox,
                                     json_t *event_patch,
-                                    struct eventid *eid,
+                                    struct jmap_caleventid *eid,
                                     struct caldav_db *db,
                                     json_t *invalid,
                                     int send_scheduling_messages,
@@ -5994,7 +5896,7 @@ static icalcomponent *prune_vevent_instances(icalcomponent *ical,
 
 static int setcalendarevents_destroy(jmap_req_t *req,
                                      struct mailbox *notifmbox,
-                                     struct eventid *eid,
+                                     struct jmap_caleventid *eid,
                                      struct caldav_db *db,
                                      int send_scheduling_messages)
 {
@@ -6216,14 +6118,14 @@ done:
     return r;
 }
 
-static struct eventid *setcalendarevents_parse_id(jmap_req_t *req, const char *id)
+static struct jmap_caleventid *setcalendarevents_parse_id(jmap_req_t *req, const char *id)
 {
     if (id && id[0] == '#') {
         const char *newid = jmap_lookup_id(req, id + 1);
         if (!newid) return NULL;
         id = newid;
     }
-    return decode_eventid(id);
+    return jmap_caleventid_decode(id);
 }
 
 static int setcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
@@ -6250,7 +6152,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     struct jmap_set set;
     json_t *err = NULL;
     struct caldav_db *db = NULL;
-    struct eventid *eid = NULL;
+    struct jmap_caleventid *eid = NULL;
     const char *id;
     int r = 0;
     int send_itip = 1;
@@ -6336,7 +6238,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
     /* update */
     json_object_foreach(set.update, id, arg) {
-        free_eventid(&eid);
+        jmap_caleventid_free(&eid);
 
         eid = setcalendarevents_parse_id(req, id);
         if (!eid) {
@@ -6411,7 +6313,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         /* Report calendar event as updated. */
         json_object_set_new(set.updated, eid->raw, update);
     }
-    free_eventid(&eid);
+    jmap_caleventid_free(&eid);
 
 
     /* destroy */
@@ -6419,7 +6321,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     json_t *juid;
 
     json_array_foreach(set.destroy, index, juid) {
-        free_eventid(&eid);
+        jmap_caleventid_free(&eid);
 
         const char *id = json_string_value(juid);
         if (!id) continue;
@@ -6450,7 +6352,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         /* Report calendar event as destroyed. */
         json_array_append_new(set.destroyed, json_string(eid->raw));
     }
-    free_eventid(&eid);
+    jmap_caleventid_free(&eid);
 
 
     // TODO refactor jmap_getstate to return a string, once
@@ -6467,7 +6369,7 @@ done:
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     if (db) caldav_close(db);
-    free_eventid(&eid);
+    jmap_caleventid_free(&eid);
     return r;
 }
 
@@ -6540,11 +6442,11 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
         return 0;
     }
 
-    struct eventid eid = {
+    struct jmap_caleventid eid = {
         .ical_uid = jscal->cdata.ical_uid,
         .ical_recurid = jscal->ical_recurid
     };
-    const char *id = encode_eventid(&eid, &rock->buf);
+    const char *id = jmap_caleventid_encode(&eid, &rock->buf);
 
     /* Report item as updated or destroyed. */
     if (jscal->alive) {
@@ -7159,11 +7061,11 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_jscal *jscal)
         return 0;
     }
 
-    struct eventid eid = {
+    struct jmap_caleventid eid = {
         .ical_uid =jscal->cdata.ical_uid,
         .ical_recurid = jscal->ical_recurid,
     };
-    const char *id = encode_eventid(&eid, buf);
+    const char *id = jmap_caleventid_encode(&eid, buf);
     json_array_append_new(query->ids, json_string(id));
 
     return 0;
@@ -7179,6 +7081,7 @@ struct eventquery_recur_rock {
 static int eventquery_recur_cb(icalcomponent *comp,
                                icaltimetype start,
                                icaltimetype end __attribute__((unused)),
+                               icaltimetype recurid __attribute__((unused)), // FIXME
                                void *vrock)
 {
     struct eventquery_recur_rock *rock = vrock;
@@ -7391,11 +7294,11 @@ static int eventquery_run(jmap_req_t *req,
         size_t j;
         for (j = 0; j < (size_t) ptrarray_size(&matches); j++) {
             struct eventquery_match *m = ptrarray_nth(&matches, j);
-            struct eventid eid = {
+            struct jmap_caleventid eid = {
                 .ical_uid = m->ical_uid,
                 .ical_recurid = m->ical_recurid
             };
-            encode_eventid(&eid, &buf);
+            jmap_caleventid_encode(&eid, &buf);
             if (!strcmp(query->anchor, buf_cstring(&buf))) {
                 /* Found anchor */
                 if (query->anchor_offset < 0) {
@@ -7424,12 +7327,12 @@ static int eventquery_run(jmap_req_t *req,
             break;
         }
         struct eventquery_match *match = ptrarray_nth(&matches, i);
-        struct eventid eid = {
+        struct jmap_caleventid eid = {
             .ical_uid = match->ical_uid,
             .ical_recurid = match->ical_recurid,
         };
         json_array_append_new(query->ids,
-                json_string(encode_eventid(&eid, &buf)));
+                json_string(jmap_caleventid_encode(&eid, &buf)));
     }
 
 done:
@@ -7608,7 +7511,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     }
 
     /* Lookup event */
-    struct eventid *eid = decode_eventid(src_id);
+    struct jmap_caleventid *eid = jmap_caleventid_decode(src_id);
     struct caldav_data *cdata = NULL;
     r = caldav_lookup_uid(src_db, eid->ical_uid, &cdata);
     if (r && r != CYRUSDB_NOTFOUND) {
@@ -7620,7 +7523,7 @@ static void _calendarevent_copy(jmap_req_t *req,
         *set_err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
-    free_eventid(&eid);
+    jmap_caleventid_free(&eid);
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
@@ -8939,6 +8842,7 @@ static int getavailability_ishidden(icalcomponent *comp)
 static int principal_getavailability_ical_cb(icalcomponent *comp,
                                              icaltimetype start,
                                              icaltimetype end,
+                                             icaltimetype recurid __attribute__((unused)),
                                              void *vrock)
 {
     if (!getavailability_ishidden(comp)) return 1;
@@ -9121,7 +9025,8 @@ static int principal_getavailability_cb(void *vrock, struct caldav_jscal *jscal)
             /* Callback will take care of filtering time range */
             icaltimetype dtstart = icalcomponent_get_dtstart(comp);
             icaltimetype dtend = icalcomponent_get_dtend(comp);
-            principal_getavailability_ical_cb(comp, dtstart, dtend, rock);
+            principal_getavailability_ical_cb(comp, dtstart, dtend,
+                    icaltime_null_time(), rock);
         }
     }
 
