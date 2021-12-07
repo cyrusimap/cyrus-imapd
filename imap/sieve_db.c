@@ -271,15 +271,11 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
 #define CMD_SELNAME CMD_GETFIELDS                                           \
     " WHERE name = :name;"
-//    " WHERE mailbox = :mailbox AND name = :name;"
 
-EXPORTED int sievedb_lookup_name(struct sieve_db *sievedb,
-                                 const char *mailbox, const char *name,
-                                 struct sieve_data **result,
-                                 int tombstones)
+EXPORTED int sievedb_lookup_name(struct sieve_db *sievedb, const char *name,
+                                 struct sieve_data **result, int tombstones)
 {
     struct sqldb_bindval bval[] = {
-        { ":mailbox", SQLITE_TEXT, { .s = mailbox       } },
         { ":name",    SQLITE_TEXT, { .s = name          } },
         { NULL,       SQLITE_NULL, { .s = NULL          } } };
     static struct sieve_data sdata;
@@ -318,15 +314,12 @@ EXPORTED int sievedb_lookup_id(struct sieve_db *sievedb, const char *id,
 
 
 #define CMD_SELIMAPUID CMD_GETFIELDS                                        \
-    " WHERE mailbox = :mailbox AND imap_uid = :imap_uid;"
+    " WHERE imap_uid = :imap_uid;"
 
-EXPORTED int sievedb_lookup_imapuid(struct sieve_db *sievedb,
-                                    const char *mailbox, int imap_uid,
-                                    struct sieve_data **result,
-                                    int tombstones)
+EXPORTED int sievedb_lookup_imapuid(struct sieve_db *sievedb, int imap_uid,
+                                    struct sieve_data **result, int tombstones)
 {
     struct sqldb_bindval bval[] = {
-        { ":mailbox",  SQLITE_TEXT,    { .s = mailbox       } },
         { ":imap_uid", SQLITE_INTEGER, { .i = imap_uid      } },
         { NULL,        SQLITE_NULL,    { .s = NULL          } } };
     static struct sieve_data sdata;
@@ -338,7 +331,6 @@ EXPORTED int sievedb_lookup_imapuid(struct sieve_db *sievedb,
     r = sqldb_exec(sievedb->db, CMD_SELIMAPUID, bval, &read_cb, &rrock);
     if (!r && !sdata.rowid) r = CYRUSDB_NOTFOUND;
 
-    sdata.mailbox = mailbox;
     sdata.imap_uid = imap_uid;
 
     return r;
@@ -459,27 +451,23 @@ EXPORTED int sievedb_delete(struct sieve_db *sievedb, unsigned rowid)
 }
 
 
-#define CMD_DELMBOX "DELETE FROM sieve_scripts WHERE mailbox = :mailbox;"
+#define CMD_DELMBOX "DELETE FROM sieve_scripts;"
 
-HIDDEN int sievedb_delmbox(struct sieve_db *sievedb, const char *mailbox)
+HIDDEN int sievedb_delmbox(struct sieve_db *sievedb)
 {
-    struct sqldb_bindval bval[] = {
-        { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
-        { NULL,       SQLITE_NULL, { .s = NULL    } } };
     int r;
 
-    r = sqldb_exec(sievedb->db, CMD_DELMBOX, bval, NULL, NULL);
+    r = sqldb_exec(sievedb->db, CMD_DELMBOX, NULL, NULL, NULL);
 
     return r;
 }
 
 EXPORTED int sievedb_get_updates(struct sieve_db *sievedb,
-                                 modseq_t oldmodseq, const char *mboxname, int limit,
+                                 modseq_t oldmodseq, int limit,
                                  int (*cb)(void *rock, struct sieve_data *sdata),
                                  void *rock)
 {
     struct sqldb_bindval bval[] = {
-        { ":mailbox",      SQLITE_TEXT,    { .s = mboxname  } },
         { ":modseq",       SQLITE_INTEGER, { .i = oldmodseq } },
         /* SQLite interprets a negative limit as unbounded. */
         { ":limit",        SQLITE_INTEGER, { .i = limit > 0 ? limit : -1 } },
@@ -491,7 +479,6 @@ EXPORTED int sievedb_get_updates(struct sieve_db *sievedb,
     int r;
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
-    if (mboxname) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
     if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
     buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
 
@@ -803,27 +790,13 @@ EXPORTED int sieve_script_fetch(struct mailbox *mailbox,
                                 const struct sieve_data *sdata,
                                 struct buf *content)
 {
-    struct mailbox *mymailbox = NULL;
     struct index_record record;
     int r;
 
-    if (mailbox) {
-        mymailbox = mailbox;
-    }
-    else {
-        /* Open mailbox */
-        r = mailbox_open_irl(sdata->mailbox, &mymailbox);
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
-                   sdata->mailbox, error_message(r));
-            return r;
-        }
-    }
-
-    r = mailbox_find_index_record(mymailbox, sdata->imap_uid, &record);
+    r = mailbox_find_index_record(mailbox, sdata->imap_uid, &record);
     if (!r) {
         /* Load message containing the resource */
-        message_t *m = message_new_from_record(mymailbox, &record);
+        message_t *m = message_new_from_record(mailbox, &record);
 
         r = message_get_field(m, "rawbody", MESSAGE_RAW, content);
 
@@ -832,11 +805,7 @@ EXPORTED int sieve_script_fetch(struct mailbox *mailbox,
 
     if (r) {
         syslog(LOG_ERR, "fetching message (%s:%u) failed: %s",
-               mailbox_name(mymailbox), sdata->imap_uid, error_message(r));
-    }
-
-    if (!mailbox) {
-        mailbox_close(&mymailbox);
+               mailbox_name(mailbox), sdata->imap_uid, error_message(r));
     }
 
     return r;
@@ -989,20 +958,31 @@ EXPORTED int sieve_script_rebuild(const char *userid,
     }
 
     /* Lookup script in Sieve DB */
-    r = sievedb_lookup_name(db, NULL, script, &sdata, 0);
+    r = sievedb_lookup_name(db, script, &sdata, 0);
     if (!r) {
+        char *mboxname = sieve_mboxname(userid);
+        struct mailbox *mailbox = NULL;
+
         lastupdated = sdata->lastupdated;
 
         content_buf = buf_new();
-        r = sieve_script_fetch(NULL, sdata, content_buf);
 
-        if (!r) {
-            content = buf_cstring(content_buf);
+        r = mailbox_open_irl(mboxname, &mailbox);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
+                   mboxname, error_message(r));
         }
         else {
-            syslog(LOG_ERR, "fetching message (%s:%u) failed: %s",
-                   sdata->mailbox, sdata->imap_uid, error_message(r));
+            r = sieve_script_fetch(mailbox, sdata, content_buf);
+
+            if (!r) {
+                content = buf_cstring(content_buf);
+            }
         }
+        mailbox_close(&mailbox);
+        free(mboxname);
+
+        if (r) goto done;
     }
     else if (r == CYRUSDB_NOTFOUND) {
         /* Get mtime of script file */
@@ -1090,6 +1070,9 @@ EXPORTED int sieve_script_rebuild(const char *userid,
     "  contentid     = :contentid"       \
     " WHERE rowid = :rowid;"
 
+#define CMD_UPDATE_v13_TABLE             \
+    "UPDATE sieve_scripts SET mailbox = :mailbox;"
+
 
 static int upgrade_cb(void *rock, struct sieve_data *sdata)
 {
@@ -1118,26 +1101,47 @@ EXPORTED int sievedb_upgrade(sqldb_t *db)
     struct sqldb_bindval bval[] = {
         { ":rowid",     SQLITE_INTEGER, { .i = 0    } },
         { ":contentid", SQLITE_TEXT,    { .s = NULL } },
+        { ":mailbox",   SQLITE_TEXT,    { .s = NULL } },
         { NULL,         SQLITE_NULL,    { .s = NULL } } };
+    mbentry_t *mbentry = NULL;
     int rowid, r;
 
-    if (db->version != 12) return 0;
+    if (db->version < 12) return 0;
+    if (db->version > 13) return 0;
 
-    /* Rename 'content' -> 'contentid' */
-    r = sqldb_exec(db, CMD_ALTER_v12_TABLE, NULL, NULL, NULL);
-    if (r) return r;
+    if (db->version == 12) {
+        /* Rename 'content' -> 'contentid' */
+        r = sqldb_exec(db, CMD_ALTER_v12_TABLE, NULL, NULL, NULL);
+        if (r) return r;
 
-    /* Create an array of SHA1 for the content in each record */
-    r = sqldb_exec(db, CMD_GETFIELDS, NULL, &read_cb, &rrock);
+        /* Create an array of SHA1 for the content in each record */
+        r = sqldb_exec(db, CMD_GETFIELDS, NULL, &read_cb, &rrock);
 
-    /* Rewrite 'contentid' columns with actual ids (SHA1) */
-    for (rowid = 1; !r && rowid < strarray_size(&sha1); rowid++) {
-        bval[0].val.i = rowid;
-        bval[1].val.s = strarray_nth(&sha1, rowid);
+        /* Rewrite 'contentid' columns with actual ids (SHA1) */
+        for (rowid = 1; !r && rowid < strarray_size(&sha1); rowid++) {
+            bval[0].val.i = rowid;
+            bval[1].val.s = strarray_nth(&sha1, rowid);
 
-        r = sqldb_exec(db, CMD_UPDATE_v12_ROW, bval, NULL, NULL);
+            r = sqldb_exec(db, CMD_UPDATE_v12_ROW, bval, NULL, NULL);
+            if (r) goto done;
+        }
+    }
+    else if (db->version == 13) {
+        rrock.cb = NULL;
+        sdata.mailbox = NULL;
+        r = sqldb_exec(db, CMD_GETFIELDS " WHERE rowid = 1;",
+                       NULL, &read_cb, &rrock);
+        if (r || !sdata.mailbox) goto done;
     }
 
+    r = mboxlist_lookup_allow_all(sdata.mailbox, &mbentry, NULL);
+    if (r) goto done;
+
+    bval[2].val.s = mbentry->uniqueid;
+    r = sqldb_exec(db, CMD_UPDATE_v13_TABLE, bval, NULL, NULL);
+
+  done:
+    mboxlist_entry_free(&mbentry);
     strarray_fini(&sha1);
 
     return r;

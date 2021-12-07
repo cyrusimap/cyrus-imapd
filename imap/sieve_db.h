@@ -90,8 +90,7 @@ int sievedb_close(struct sieve_db *sievedb);
 
 /* lookup an entry from 'sievedb' by script name
    (optionally inside a transaction for updates) */
-int sievedb_lookup_name(struct sieve_db *sievedb,
-                        const char *mailbox, const char *name,
+int sievedb_lookup_name(struct sieve_db *sievedb, const char *name,
                         struct sieve_data **result, int tombstones);
 
 /* lookup an entry from 'sievedb' by id
@@ -101,8 +100,7 @@ int sievedb_lookup_id(struct sieve_db *sievedb, const char *id,
 
 /* lookup an entry from 'sievedb' by IMAP uid
    (optionally inside a transaction for updates) */
-int sievedb_lookup_imapuid(struct sieve_db *sievedb,
-                           const char *mailbox, int uid,
+int sievedb_lookup_imapuid(struct sieve_db *sievedb, int uid,
                            struct sieve_data **result, int tombstones);
 
 int sievedb_lookup_active(struct sieve_db *sievedb,
@@ -120,7 +118,7 @@ int sievedb_write(struct sieve_db *sievedb, struct sieve_data *sdata);
 int sievedb_delete(struct sieve_db *sievedb, unsigned rowid);
 
 /* delete all entries for 'mailbox' from 'sievedb' */
-int sievedb_delmbox(struct sieve_db *sievedb, const char *mailbox);
+int sievedb_delmbox(struct sieve_db *sievedb);
 
 /* begin transaction */
 int sievedb_begin(struct sieve_db *sievedb);
@@ -134,8 +132,7 @@ int sievedb_abort(struct sieve_db *sievedb);
 /* Process each entry for 'sievedb' with a modseq higher than oldmodseq,
  * in ascending order of modseq.
  * If max_records is positive, only call cb for at most this entries. */
-int sievedb_get_updates(struct sieve_db *sievedb,
-                        modseq_t oldmodseq, const char *mboxname,
+int sievedb_get_updates(struct sieve_db *sievedb, modseq_t oldmodseq,
                         int max_records, sieve_cb_t *cb, void *rock);
 
 /* count number of scripts */

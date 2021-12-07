@@ -923,7 +923,7 @@ int sync_sieve_activate(const char *userid, const char *bcname)
         snprintf(name, sizeof(name), "%.*s",
                  (int) strlen(bcname) - BYTECODE_SUFFIX_LEN, bcname);
 
-        r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
+        r = sievedb_lookup_name(db, name, &sdata, 0);
         if (r) goto done;
     }
 
@@ -972,7 +972,7 @@ int sync_sieve_delete(const char *userid, const char *fname)
 
     snprintf(name, sizeof(name), "%.*s", (int) (ext - fname), fname);
 
-    r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
+    r = sievedb_lookup_name(db, name, &sdata, 0);
     if (r) goto done;
 
     if (sdata->isactive) {
@@ -3346,7 +3346,7 @@ char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
         struct sieve_data *sdata = NULL;
         struct buf content = BUF_INITIALIZER;
         char *myname = xstrndup(name, strlen(name) - SCRIPT_SUFFIX_LEN);
-        int r = sievedb_lookup_name(db, NULL, myname, &sdata, 0);
+        int r = sievedb_lookup_name(db, myname, &sdata, 0);
 
         free(myname);
 
@@ -3407,7 +3407,7 @@ int sync_sieve_upload(const char *userid, const char *fname,
     }
 
     snprintf(name, sizeof(name), "%.*s", (int) (ext - fname), fname);
-    r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
+    r = sievedb_lookup_name(db, name, &sdata, 0);
     if (r == CYRUSDB_NOTFOUND) {
         buf_init_ro(&buf, content, len);
         sdata->name = name;

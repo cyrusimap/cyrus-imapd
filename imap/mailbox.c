@@ -4072,7 +4072,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
         }
 
         sdata->lastupdated = new->internaldate;
-        sdata->mailbox = mailbox_name(mailbox);
+        sdata->mailbox = mailbox_uniqueid(mailbox);
         sdata->imap_uid = new->uid;
         sdata->modseq = new->modseq;
         sdata->createdmodseq = new->createdmodseq;
@@ -4108,7 +4108,7 @@ static int mailbox_delete_sieve(struct mailbox *mailbox)
 
     sievedb = sievedb_open_mailbox(mailbox);
     if (sievedb) {
-        int r = sievedb_delmbox(sievedb, mailbox_name(mailbox));
+        int r = sievedb_delmbox(sievedb);
         sievedb_close(sievedb);
         if (r) return r;
     }
