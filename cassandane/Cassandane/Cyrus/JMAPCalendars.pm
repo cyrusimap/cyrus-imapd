@@ -121,11 +121,25 @@ sub encode_eventid
 {
     # This function hard-codes the event id format.
     # It might break if we change the id scheme.
-    my ($id) = @_;
-    if ($id =~ /[^0-9A-Za-z\-_]/) {
-        return 'EB-' . encode_base64url($id);
+    my ($uid, $recurid) = @_;
+    my $eid = 'E';
+    if ($recurid) {
+        $eid .= 'R'
     }
-    return 'E-' . $id;
+    if ($uid =~ /[^0-9A-Za-z\-_]/) {
+        $eid .= 'B';
+    }
+    $eid .= '-';
+    if ($recurid) {
+        $eid .= $recurid . '-';
+    }
+    if ($uid =~ /[^0-9A-Za-z\-_]/) {
+        $eid .= encode_base64url($uid);
+    }
+    else {
+        $eid .= $uid;
+    }
+    return $eid;
 }
 
 sub test_calendar_get
@@ -6649,12 +6663,12 @@ sub test_calendarevent_query_expandrecurrences
     ]);
     $self->assert_num_equals(6, $res->[0][1]{total});
     $self->assert_deep_equals([
-           encode_eventid('event1uid;20190115T090000'),
-           encode_eventid('event1uid;20190108T090000'),
-           encode_eventid('event1uid;20190103T130000'),
+           encode_eventid('event1uid','20190115T090000'),
+           encode_eventid('event1uid','20190108T090000'),
+           encode_eventid('event1uid','20190103T130000'),
            encode_eventid('event2uid'),
-           encode_eventid('event1uid;20190101T140000'),
-           encode_eventid('event1uid;20190101T090000'),
+           encode_eventid('event1uid','20190101T140000'),
+           encode_eventid('event1uid','20190101T090000'),
     ], $res->[0][1]{ids});
 }
 
@@ -6720,11 +6734,11 @@ sub test_calendarevent_query_expandrecurrences_with_exrule
     ]);
     $self->assert_num_equals(5, $res->[0][1]{total});
     $self->assert_deep_equals([
-         encode_eventid("event1uid;20210119T090000"),
-         encode_eventid("event1uid;20210101T090000"),
-         encode_eventid("event1uid;20201124T090000"),
-         encode_eventid("event1uid;20201027T090000"),
-         encode_eventid("event1uid;20200929T090000"),
+         encode_eventid('event1uid','20210119T090000'),
+         encode_eventid('event1uid','20210101T090000'),
+         encode_eventid('event1uid','20201124T090000'),
+         encode_eventid('event1uid','20201027T090000'),
+         encode_eventid('event1uid','20200929T090000'),
     ], $res->[0][1]{ids});
 }
 
@@ -6776,12 +6790,12 @@ sub test_calendarevent_get_recurrenceinstances
     ]);
 
     my @ids = (
-        encode_eventid('event1uid;20190108T090000'),
-        encode_eventid('event1uid;20190115T090000'),
-        encode_eventid('event1uid;20190110T120000'),
-        encode_eventid('event1uid;20190122T090000'), # is excluded
-        encode_eventid('event1uid;20191201T090000'), # does not exist
-        encode_eventid('event1uid;20190102T090000'), # from second rrule
+        encode_eventid('event1uid','20190108T090000'),
+        encode_eventid('event1uid','20190115T090000'),
+        encode_eventid('event1uid','20190110T120000'),
+        encode_eventid('event1uid','20190122T090000'), # is excluded
+        encode_eventid('event1uid','20191201T090000'), # does not exist
+        encode_eventid('event1uid','20190102T090000'), # from second rrule
     );
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
@@ -6852,7 +6866,7 @@ sub test_calendarevent_set_recurrenceinstances
     # This might break if we change the id scheme.
 
     xlog $self, "Override a regular recurrence instance";
-    my $overrideId1 = encode_eventid('event1uid;2019-01-15T09:00:00');
+    my $overrideId1 = encode_eventid('event1uid','20190115T090000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -6914,7 +6928,7 @@ sub test_calendarevent_set_recurrenceinstances
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
     xlog $self, "Set regular recurrence excluded";
-    my $overrideId2 = encode_eventid('event1uid;2019-01-08T09:00:00');
+    my $overrideId2 = encode_eventid('event1uid','20190108T090000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -7009,7 +7023,7 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     $self->assert_not_null($eventId1);
 
     xlog $self, "Delete RDATE by setting it excluded";
-    my $overrideId1 = encode_eventid('event1uid;2019-01-10T14:00:00');
+    my $overrideId1 = encode_eventid('event1uid','20190110T140000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -8298,7 +8312,7 @@ sub test_calendarevent_get_utcstart
     # Assert utcStart for regular recurrence instance.
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
-            ids => [encode_eventid('eventuid1local;20191208T112101')],
+            ids => [encode_eventid('eventuid1local', '20191208T112101')],
             properties => ['utcStart', 'utcEnd'],
         }, 'R2']
     ]);
@@ -8616,7 +8630,7 @@ sub test_calendarevent_set_utcstart_recur
     $self->assert_str_equals('PT1H', $event->{duration});
 
     # Updating utcStart on a expanded recurrence instance is OK.
-    my $eventInstanceId = encode_eventid('eventuid1local;20191213T123000');
+    my $eventInstanceId = encode_eventid('eventuid1local', '20191213T123000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -15729,6 +15743,301 @@ sub test_session_capability_isrfc
     $self->assert_deep_equals(
         $session->{capabilities}{'https://cyrusimap.org/ns/jmap/calendars'},
         { isRFC => JSON::true });
+}
+
+sub test_calendaralert_notification
+    :min_version_3_5 :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    my $calendarId = $caldav->NewCalendar({name => 'foo'});
+    $self->assert_not_null($calendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$calendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART;TZID=Australia/Sydney:$start
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+UID:E157A1FC-06BB-4495-933E-4E99C79A8649
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    my $data = $self->{instance}->getnotify();
+    my @events;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                push @events, $e;
+            }
+        }
+    }
+
+    $self->assert_num_equals(1, scalar @events);
+    $self->assert_str_equals('cassandane',
+        $events[0]{userId}); # accountId
+    $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+        $events[0]{uid});
+    $self->assert_str_equals('E-574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+        $events[0]{calendarEventId});
+    $self->assert_str_equals('', $events[0]{recurrenceId});
+    $self->assert_str_equals('E157A1FC-06BB-4495-933E-4E99C79A8649',
+        $events[0]{alertId});
+}
+
+sub test_calendaralert_notification_recurring
+    :min_version_3_5 :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    my $calendarId = $caldav->NewCalendar({name => 'foo'});
+    $self->assert_not_null($calendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
+
+    # define the event to start yesterday in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    $startdt->subtract(DateTime::Duration->new(days => 1));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $recurdt = $startdt->clone();
+    $recurdt->add(DateTime::Duration->new(days => 1));
+    my $recurid = $recurdt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$calendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART;TZID=Australia/Sydney:$start
+RRULE:FREQ=DAILY;COUNT=2
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+UID:E157A1FC-06BB-4495-933E-4E99C79A8649
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    my $data = $self->{instance}->getnotify();
+    my @events;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                push @events, $e;
+            }
+        }
+    }
+
+    $self->assert_num_equals(1, scalar @events);
+    $self->assert_str_equals('cassandane',
+        $events[0]{userId}); # accountId
+    $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+        $events[0]{uid});
+    $self->assert_str_equals('ER-' . $recurid . '-574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+        $events[0]{calendarEventId});
+    $self->assert_str_equals($recurid, $events[0]{recurrenceId});
+    $self->assert_str_equals('E157A1FC-06BB-4495-933E-4E99C79A8649',
+        $events[0]{alertId});
+}
+
+sub test_calendaralert_notification_standalone
+    :min_version_3_5 :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    my $calendarId = $caldav->NewCalendar({name => 'foo'});
+    $self->assert_not_null($calendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$calendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART;TZID=Australia/Sydney:$start
+RECURRENCE-ID;TZID=Australia/Sydney:$start
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+UID:E157A1FC-06BB-4495-933E-4E99C79A8649
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    my $data = $self->{instance}->getnotify();
+    my @events;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                push @events, $e;
+            }
+        }
+    }
+
+    $self->assert_num_equals(1, scalar @events);
+    $self->assert_str_equals('cassandane',
+        $events[0]{userId}); # accountId
+    $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+        $events[0]{uid});
+    $self->assert_str_equals('ER-' . $start . '-574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+        $events[0]{calendarEventId});
+    $self->assert_str_equals($start, $events[0]{recurrenceId});
+    $self->assert_str_equals('E157A1FC-06BB-4495-933E-4E99C79A8649',
+        $events[0]{alertId});
 }
 
 1;
