@@ -189,4 +189,17 @@ extern void jmap_set_emailid(const struct message_guid *guid, char *buf);
 #define JMAP_THREADID_SIZE 18
 extern void jmap_set_threadid(conversation_id_t cid, char *buf);
 
+struct jmap_caleventid {
+    const char *raw; /* as requested by client */
+    const char *ical_uid;
+    const char *ical_recurid;
+    char *_alloced[2];
+};
+
+extern struct jmap_caleventid *jmap_caleventid_decode(const char *id);
+
+extern const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf);
+
+extern void jmap_caleventid_free(struct jmap_caleventid **eidptr);
+
 #endif /* JMAP_UTIL_H */

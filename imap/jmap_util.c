@@ -1227,3 +1227,117 @@ EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)
     memcpy(buf+1, conversation_id_encode(cid), JMAP_THREADID_SIZE-2);
     buf[JMAP_THREADID_SIZE-1] = 0;
 }
+
+EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
+{
+    struct jmap_caleventid *eid = xzmalloc(sizeof(struct jmap_caleventid));
+    eid->raw = id;
+
+    int has_recurid = 0;
+    int is_base64 = 0;
+    const char *p = id;
+
+    // read prefix
+    if (*p != 'E')
+        goto done;
+    p++;
+    if (*p == 'R') {
+        has_recurid = 1;
+        p++;
+    }
+    if (*p == 'B') {
+        is_base64 = 1;
+        p++;
+    }
+    if (*p != '-')
+        goto done;
+    p++;
+
+    // read recurid
+    if (has_recurid) {
+        const char *dash = strchr(p, '-');
+        if (dash) {
+            struct buf buf = BUF_INITIALIZER;
+            buf_setmap(&buf, p, dash - p);
+            icaltimetype t = icaltime_from_string(buf_cstring(&buf));
+            if (!icaltime_is_null_time(t)) {
+                eid->ical_recurid = eid->_alloced[1] = buf_release(&buf);
+            }
+            buf_free(&buf);
+            p = dash + 1;
+        }
+
+        if (!eid->ical_recurid) {
+            goto done;
+        }
+    }
+
+    // read uid
+    eid->ical_uid = eid->_alloced[0] = is_base64 ?
+        jmap_decode_base64_nopad(p, strlen(p)) : xstrdup(p);
+
+done:
+    if (!eid->ical_uid) {
+        // fall back to verbatim uid
+        xzfree(eid->_alloced[0]);
+        xzfree(eid->_alloced[1]);
+        eid->ical_recurid = NULL;
+        eid->ical_uid = eid->_alloced[0] = xstrdup(id);
+    }
+
+    return eid;
+}
+
+EXPORTED void jmap_caleventid_free(struct jmap_caleventid **eidptr)
+{
+    if (eidptr == NULL || *eidptr == NULL) return;
+
+    struct jmap_caleventid *eid = *eidptr;
+    free(eid->_alloced[0]);
+    free(eid->_alloced[1]);
+    free(eid);
+    *eidptr = NULL;
+}
+
+EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf)
+{
+    buf_reset(buf);
+
+    int need_base64 = 0;
+    if (!need_base64) {
+        const char *c;
+        for (c = eid->ical_uid; *c; c++) {
+            if (!isascii(*c) || !(isalnum(*c) || *c == '-' || *c == '_')) {
+                need_base64 = 1;
+                break;
+            }
+        }
+    }
+
+    int has_recurid = eid->ical_recurid && eid->ical_recurid[0];
+
+    buf_putc(buf, 'E');
+    if (has_recurid)
+        buf_putc(buf, 'R');
+    if (need_base64)
+        buf_putc(buf, 'B');
+    buf_putc(buf, '-');
+
+    if (has_recurid) {
+        buf_appendcstr(buf, eid->ical_recurid);
+        buf_putc(buf, '-');
+    }
+
+    if (need_base64) {
+        char *tmp = jmap_encode_base64_nopad(eid->ical_uid, strlen(eid->ical_uid));
+        buf_appendcstr(buf, tmp);
+        free(tmp);
+    }
+    else {
+        buf_appendcstr(buf, eid->ical_uid);
+    }
+
+    return buf_cstring(buf);
+}
+
+
