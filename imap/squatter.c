@@ -248,12 +248,15 @@ static int should_index(const char *name)
     }
 
     // skip CalDAV scheduling Inbox
-    if ((mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR) && userid &&
-        /* SCHED_INBOX ends in "/", so trim it */
-        !strncmp(strarray_nth(mbname_boxes(mbname), 1),
-                 SCHED_INBOX, strlen(SCHED_INBOX)-1)) {
-        ret = 0;
-        goto done;
+    if ((mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR) && userid) {
+        const strarray_t *boxes = mbname_boxes(mbname);
+        if (strarray_size(boxes) == 2 &&
+            /* SCHED_INBOX ends in "/", so trim it */
+            !strncmpsafe(strarray_nth(boxes, 1),
+                         SCHED_INBOX, strlen(SCHED_INBOX)-1)) {
+            ret = 0;
+            goto done;
+        }
     }
 
     // skip deleted mailboxes
