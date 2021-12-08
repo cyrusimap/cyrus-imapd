@@ -3351,11 +3351,23 @@ char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
         free(myname);
 
         if (!r) {
-            r = sieve_script_fetch(NULL, sdata, &content);
-            if (!r) {
-                if (sizep) *sizep = buf_len(&content);
-                result =buf_release(&content);
+            char *mboxname = sieve_mboxname(userid);
+            struct mailbox *mailbox = NULL;
+
+            r = mailbox_open_irl(mboxname, &mailbox);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
+                       mboxname, error_message(r));
             }
+            else {
+                r = sieve_script_fetch(mailbox, sdata, &content);
+                if (!r) {
+                    if (sizep) *sizep = buf_len(&content);
+                    result = buf_release(&content);
+                }
+            }
+            mailbox_close(&mailbox);
+            free(mboxname);
         }
 
         sievedb_close(db);
