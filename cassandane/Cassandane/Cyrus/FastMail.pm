@@ -708,7 +708,7 @@ sub test_rename_deepfolder_intermediates
     $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
 
     xlog $self, "Make sure there are no files left with cassandane in the name";
-    $self->assert_null(glob "$self->{instance}{basedir}/conf/user/c/cassandane.*");
+    $self->assert_str_equals(q{}, join(q{ }, glob "$self->{instance}{basedir}/conf/user/c/cassandane.*"));
     $self->assert(not -d "$self->{instance}{basedir}/data/c/user/cassandane");
     $self->assert(not -f "$self->{instance}{basedir}/conf/quota/c/user.cassandane");
 
@@ -718,8 +718,8 @@ sub test_rename_deepfolder_intermediates
     $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
     $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
 
-    xlog $self, "Make sure there are no files left with cassandane in the on the replica";
-    $self->assert_null(glob "$self->{replica}{basedir}/conf/user/c/cassandane.*");
+    xlog $self, "Make sure there are no files left with cassandane in the name on the replica";
+    $self->assert_str_equals(q{}, join(q{ }, glob "$self->{replica}{basedir}/conf/user/c/cassandane.*"));
     $self->assert(not -d "$self->{replica}{basedir}/data/c/user/cassandane");
     $self->assert(not -f "$self->{replica}{basedir}/conf/quota/c/user.cassandane");
 
@@ -1308,7 +1308,7 @@ sub test_rename_deepfolder_intermediates_rightnow
     $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
 
     xlog $self, "Make sure there are no files left with cassandane in the name";
-    $self->assert_null(glob "$self->{instance}{basedir}/conf/user/c/cassandane.*");
+    $self->assert_str_equals(q{}, join(q{ }, glob "$self->{instance}{basedir}/conf/user/c/cassandane.*"));
     $self->assert(not -d "$self->{instance}{basedir}/data/c/user/cassandane");
     $self->assert(not -f "$self->{instance}{basedir}/conf/quota/c/user.cassandane");
 
@@ -1318,7 +1318,7 @@ sub test_rename_deepfolder_intermediates_rightnow
     $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
 
     xlog $self, "Make sure there are no files left with cassandane in the on the replica";
-    $self->assert_null(glob "$self->{replica}{basedir}/conf/user/c/cassandane.*");
+    $self->assert_str_equals(q{}, join(q{ }, glob "$self->{replica}{basedir}/conf/user/c/cassandane.*"));
     $self->assert(not -d "$self->{replica}{basedir}/data/c/user/cassandane");
     $self->assert(not -f "$self->{replica}{basedir}/conf/quota/c/user.cassandane");
 
