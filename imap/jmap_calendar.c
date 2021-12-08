@@ -598,16 +598,17 @@ static int jmap_calendar_get(struct jmap_req *req)
     json_t *err = NULL;
     int r = 0;
 
-    if (!has_calendars(req)) {
-        jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
-        return 0;
-    }
 
     /* Parse request */
     jmap_get_parse(req, &parser, calendar_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
+        goto done;
+    }
+
+    if (!has_calendars(req)) {
+        jmap_ok(req, jmap_get_reply(&get));
         goto done;
     }
 
@@ -738,16 +739,16 @@ static int jmap_calendar_changes(struct jmap_req *req)
     json_t *err = NULL;
     int r = 0;
 
-    if (!has_calendars(req)) {
-        jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
-        return 0;
-    }
-
     /* Parse request */
     jmap_changes_parse(req, &parser, req->counters.caldavfoldersdeletedmodseq,
                        NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
+        goto done;
+    }
+
+    if (!has_calendars(req)) {
+        jmap_ok(req, jmap_changes_reply(&changes));
         goto done;
     }
 
@@ -2324,11 +2325,6 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     json_t *err = NULL;
     int r = 0;
 
-    if (!has_calendars(req)) {
-        jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
-        return 0;
-    }
-
     /* Build callback data */
     int checkacl = strcmp(req->accountid, req->userid);
     struct getcalendarevents_rock rock = { NULL /* db */,
@@ -2349,6 +2345,11 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
+        goto done;
+    }
+
+    if (!has_calendars(req)) {
+        jmap_ok(req, jmap_get_reply(&get));
         goto done;
     }
 
