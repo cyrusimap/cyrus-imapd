@@ -1103,14 +1103,19 @@ static int notify_put(struct transaction_t *txn, void *obj,
         if (!xmlStrcmp(type->name, BAD_CAST SHARE_INVITE_NOTIFICATION)) {
             for (node = xmlFirstElementChild(type); node;
                  node = xmlNextElementSibling(node)) {
+
+                xmlURIPtr p_uri = NULL;
                 if (!xmlStrcmp(node->name, BAD_CAST "sharer-resource-uri")) {
                     struct request_target_t tgt;
                     struct meth_params *pparams;
-                    const char *path, *errstr;
+                    const char *errstr;
                     int i;
 
+                    xmlFreeURI(p_uri);
+
                     value = xmlNodeGetContent(xmlFirstElementChild(node));
-                    path = (const char *) value;
+                    p_uri = xmlParseURI((const char*)value);
+                    if (!p_uri || !p_uri->path) continue;
 
                     /* Find the namespace of the requested resource */
                     for (i = 0; http_namespaces[i]; i++) {
@@ -1121,8 +1126,9 @@ static int notify_put(struct transaction_t *txn, void *obj,
 
                         /* See if the prefix matches - terminated with NUL or '/' */
                         len = strlen(http_namespaces[i]->prefix);
-                        if (!strncmp(path, http_namespaces[i]->prefix, len) &&
-                            (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
+                        if (!strncmp(p_uri->path, http_namespaces[i]->prefix, len) &&
+                            (!p_uri->path[len] || (p_uri->path[len] == '/') ||
+                             !strcmp(p_uri->path, "*"))) {
                             break;
                         }
                     }
@@ -1132,7 +1138,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
                     pparams =
                         (struct meth_params *) tgt.namespace->methods[METH_PUT].params;
                     tgt.flags = TGT_DAV_SHARED;  // prevent old-style sharing redirect
-                    pparams->parse_path(path, &tgt, &errstr);
+                    pparams->parse_path(p_uri->path, &tgt, &errstr);
                     xmlFree(value);
                     free(tgt.userid);
 
@@ -1141,6 +1147,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
                     mboxlist_entry_free(&tgt.mbentry);
                     break;
                 }
+                xmlFreeURI(p_uri);
             }
         }
 
