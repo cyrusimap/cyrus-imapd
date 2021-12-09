@@ -554,7 +554,9 @@ static void commitstatus_cb(const char *key, void *data, void *rock)
      * recreated while a replica was still valid with the old user) */
     if (!state->folders_byname) {
         mboxlist_lookup_by_uniqueid(folder, &mbentry, NULL);
-        folder = mbentry ? mbentry->name : "";
+        if (!mbentry) return;
+
+        folder = mbentry->name;
     }
     mboxname_setmodseq(folder, status->threadmodseq, /*mbtype */0, /*flags*/0);
     sync_log_mailbox(folder);
