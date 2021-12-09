@@ -533,12 +533,12 @@ static int capabilities_cb(const mbentry_t *mbentry, void *vrock)
         rock->has_mail = mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL;
     }
     if (!rock->has_contacts) {
-        rock->has_contacts = strarray_size(boxes) > 1 &&
+        rock->has_contacts = strarray_size(boxes) >= 1 &&
             !strcmpsafe(config_getstring(IMAPOPT_ADDRESSBOOKPREFIX),
                     strarray_nth(boxes, 0));
     }
     if (!rock->has_calendars) {
-        rock->has_calendars = strarray_size(boxes) > 1 &&
+        rock->has_calendars = strarray_size(boxes) >= 1 &&
             !strcmpsafe(config_getstring(IMAPOPT_CALENDARPREFIX),
                     strarray_nth(boxes, 0));
     }

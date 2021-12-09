@@ -4478,7 +4478,7 @@ sub test_calendarevent_query_shared
         my $calidB = $res->[0][1]{created}{"2"}{id};
         my $state = $res->[0][1]{newState};
 
-        if ($account == 'manifold') {
+        if ($account eq 'manifold') {
             $admintalk->setacl("user.manifold.#calendars.$calidA", cassandane => 'lrswipkxtecdn');
             $admintalk->setacl("user.manifold.#calendars.$calidB", cassandane => 'lrswipkxtecdn');
         }
@@ -7773,7 +7773,7 @@ EOF
     $self->assert_str_equals($defaultCalendarId, $res->[3][1]{list}[0]{calendarId});
 }
 
-sub test_calendar_session_no_calendarhome
+sub test_no_shared_calendar
     :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
 {
     my ($self) = @_;
@@ -7804,6 +7804,8 @@ sub test_calendar_session_no_calendarhome
             properties => ['id'],
         }, 'R1'],
     ]);
+    my $otherCalendarId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($otherCalendarId);
     $admintalk->setacl('user.other.#calendars', cassandane => 'lr') or die;
 
     $res = $jmap->ua->get($jmap->uri(), {
@@ -7815,7 +7817,45 @@ sub test_calendar_session_no_calendarhome
     $self->assert_str_equals('200', $res->{status});
     my $session = eval { decode_json($res->{content}) };
     my $capabilities = $session->{accounts}{other}{accountCapabilities};
-    $self->assert_null($capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
+    $self->assert_not_null($capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
+
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            accountId => 'other',
+        }, 'R1'],
+        ['Calendar/changes', {
+            accountId => 'other',
+            sinceState => '0',
+        }, 'R2'],
+        ['Calendar/set', {
+            accountId => 'other',
+            create => {
+                calendar1 => {
+                    name => 'test',
+                },
+            },
+            update => {
+                $otherCalendarId => {
+                    name => 'test',
+                },
+            },
+            destroy => [$otherCalendarId],
+        }, 'R3'],
+        ['CalendarEvent/get', {
+            accountId => 'other',
+        }, 'R4'],
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{list});
+    $self->assert_deep_equals([], $res->[1][1]{created});
+    $self->assert_deep_equals([], $res->[1][1]{updated});
+    $self->assert_deep_equals([], $res->[1][1]{destroyed});
+    $self->assert_str_equals('accountReadOnly',
+        $res->[2][1]{notCreated}{calendar1}{type});
+    $self->assert_str_equals('notFound',
+        $res->[2][1]{notUpdated}{$otherCalendarId}{type});
+    $self->assert_str_equals('notFound',
+        $res->[2][1]{notDestroyed}{$otherCalendarId}{type});
+    $self->assert_deep_equals([], $res->[3][1]{list});
 }
 
 
