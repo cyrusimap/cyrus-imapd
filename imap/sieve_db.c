@@ -1116,9 +1116,10 @@ EXPORTED int sievedb_upgrade(sqldb_t *db)
 
         /* Create an array of SHA1 for the content in each record */
         r = sqldb_exec(db, CMD_GETFIELDS, NULL, &read_cb, &rrock);
+        if (r || !strarray_size(&sha1)) goto done;
 
         /* Rewrite 'contentid' columns with actual ids (SHA1) */
-        for (rowid = 1; !r && rowid < strarray_size(&sha1); rowid++) {
+        for (rowid = 1; rowid < strarray_size(&sha1); rowid++) {
             bval[0].val.i = rowid;
             bval[1].val.s = strarray_nth(&sha1, rowid);
 
@@ -1127,6 +1128,7 @@ EXPORTED int sievedb_upgrade(sqldb_t *db)
         }
     }
     else if (db->version == 13) {
+        /* Fetch mailbox name from first record */
         rrock.cb = NULL;
         sdata.mailbox = NULL;
         r = sqldb_exec(db, CMD_GETFIELDS " WHERE rowid = 1;",
