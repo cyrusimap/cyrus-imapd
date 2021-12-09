@@ -664,6 +664,7 @@ sub test_bearer_auth_jwt
         warn "JMAP " . Dumper($RawRequest, $RawResponse);
     }
     $self->assert_str_equals('401', $RawResponse->{status});
+}
 
 sub test_blob_set_basic
     :min_version_3_5 :needs_component_jmap :JMAPExtensions
