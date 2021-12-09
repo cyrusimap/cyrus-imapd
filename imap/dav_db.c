@@ -241,7 +241,7 @@
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_object_imapuid ON dav_objs ( mailbox, imap_uid );" \
     "DROP INDEX IF EXISTS idx_res_uid;"
 
-#define CMD_DBUPGRADEv13 CMD_CREATE_SIEVE
+#define CMD_DBUPGRADEv14 CMD_CREATE_SIEVE
 
 struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
@@ -255,11 +255,12 @@ struct sqldb_upgrade davdb_upgrade[] = {
   { 10, CMD_DBUPGRADEv10, NULL },
   /* Don't upgrade to version 11.  We only jump to 11 on CREATE */
   /* Don't upgrade to version 12.  This was an intermediate Sieve DB version */
-  { 13, CMD_DBUPGRADEv13, &sievedb_upgrade },
+  /* Don't upgrade to version 13.  This was an intermediate Sieve DB version */
+  { 14, CMD_DBUPGRADEv14, &sievedb_upgrade },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 13
+#define DB_VERSION 14
 
 static sqldb_t *reconstruct_db;
 

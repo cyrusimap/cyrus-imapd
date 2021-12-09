@@ -123,6 +123,7 @@ struct protocol_t imap_csync_protocol =
 //        { "LIST-EXTENDED", CAPA_LISTEXTENDED },
           { "SASL-IR", CAPA_SASL_IR },
           { "X-REPLICATION", CAPA_REPLICATION },
+          { "X-SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
           { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
@@ -140,6 +141,7 @@ struct protocol_t csync_protocol =
         { { "SASL", CAPA_AUTH },
           { "STARTTLS", CAPA_STARTTLS },
           { "COMPRESS=DEFLATE", CAPA_COMPRESS },
+          { "SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
           { NULL, 0 } } },
       { "STARTTLS", "OK", "NO", 1 },
       { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
@@ -599,11 +601,6 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          modseq_t foldermodseq,
                                          int ispartial)
 {
-    if (mbtype_isa(mbtype) == MBTYPE_SIEVE) {
-        /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
-        return NULL;
-    }
-
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
 
     if (l->tail)
@@ -926,7 +923,7 @@ int sync_sieve_activate(const char *userid, const char *bcname)
         snprintf(name, sizeof(name), "%.*s",
                  (int) strlen(bcname) - BYTECODE_SUFFIX_LEN, bcname);
 
-        r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
+        r = sievedb_lookup_name(db, name, &sdata, 0);
         if (r) goto done;
     }
 
@@ -975,7 +972,7 @@ int sync_sieve_delete(const char *userid, const char *fname)
 
     snprintf(name, sizeof(name), "%.*s", (int) (ext - fname), fname);
 
-    r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
+    r = sievedb_lookup_name(db, name, &sdata, 0);
     if (r) goto done;
 
     if (sdata->isactive) {
@@ -2660,7 +2657,8 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getatom(kin, "MBOXTYPE", &mboxtype);
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
-    if (mbtype_isa(mbtype) == MBTYPE_SIEVE) {
+    if (mbtype_isa(mbtype) == MBTYPE_SIEVE &&
+        !(sstate->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
         /* Client should never send #sieve mailbox
            (replicated via *SIEVE* commands) */
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -2756,7 +2754,8 @@ int sync_apply_mailbox(struct dlist *kin,
             mbentry.foldermodseq = foldermodseq;
 
             unsigned flags = MBOXLIST_CREATE_SYNC;
-            if (sstate->local_only) flags |= MBOXLIST_CREATE_LOCALONLY;
+            if (sstate->flags & SYNC_FLAG_LOCALONLY)
+                flags |= MBOXLIST_CREATE_LOCALONLY;
 
             r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
                                        1/*isadmin*/,
@@ -2800,7 +2799,8 @@ int sync_apply_mailbox(struct dlist *kin,
                                 mboxname, mailbox_uniqueid(mailbox), uniqueid);
             mailbox_close(&mailbox);
             int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT;
-            if (sstate->local_only) delflags |= MBOXLIST_DELETE_LOCALONLY;
+            if (sstate->flags & SYNC_FLAG_LOCALONLY)
+                delflags |= MBOXLIST_DELETE_LOCALONLY;
             r = mboxlist_deletemailbox(mboxname, sstate->userisadmin,
                                        sstate->userid, sstate->authstate,
                                        NULL, delflags);
@@ -2816,7 +2816,8 @@ int sync_apply_mailbox(struct dlist *kin,
             mbentry.foldermodseq = foldermodseq;
 
             unsigned flags = MBOXLIST_CREATE_SYNC;
-            if (sstate->local_only) flags |= MBOXLIST_CREATE_LOCALONLY;
+            if (sstate->flags & SYNC_FLAG_LOCALONLY)
+                flags |= MBOXLIST_CREATE_LOCALONLY;
 
             r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
                                        1/*isadmin*/,
@@ -3105,6 +3106,7 @@ struct mbox_rock {
     struct protstream *pout;
     struct sync_name_list *qrl;
     unsigned exists;
+    unsigned flags;
 };
 
 static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
@@ -3118,7 +3120,8 @@ static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
 
     if (!mbentry) goto out;
 
-    if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE) {
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE &&
+        !(mrock->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
         /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
         goto out;
     }
@@ -3219,7 +3222,7 @@ out:
 int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
 {
     struct dlist *ki;
-    struct mbox_rock mrock = { sstate->pout, NULL, 0 };
+    struct mbox_rock mrock = { sstate->pout, NULL, 0, sstate->flags };
 
     for (ki = kin->head; ki; ki = ki->next) {
         mbentry_t *mbentry = NULL;
@@ -3234,7 +3237,7 @@ int sync_get_mailboxes(struct dlist *kin, struct sync_state *sstate)
 int sync_get_uniqueids(struct dlist *kin, struct sync_state *sstate)
 {
     struct dlist *ki;
-    struct mbox_rock mrock = { sstate->pout, NULL, 0 };
+    struct mbox_rock mrock = { sstate->pout, NULL, 0, sstate->flags };
 
     for (ki = kin->head; ki; ki = ki->next)
         sync_mailbox_byuniqueid(ki->sval, &mrock);
@@ -3343,16 +3346,28 @@ char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
         struct sieve_data *sdata = NULL;
         struct buf content = BUF_INITIALIZER;
         char *myname = xstrndup(name, strlen(name) - SCRIPT_SUFFIX_LEN);
-        int r = sievedb_lookup_name(db, NULL, myname, &sdata, 0);
+        int r = sievedb_lookup_name(db, myname, &sdata, 0);
 
         free(myname);
 
         if (!r) {
-            r = sieve_script_fetch(NULL, sdata, &content);
-            if (!r) {
-                if (sizep) *sizep = buf_len(&content);
-                result =buf_release(&content);
+            char *mboxname = sieve_mboxname(userid);
+            struct mailbox *mailbox = NULL;
+
+            r = mailbox_open_irl(mboxname, &mailbox);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
+                       mboxname, error_message(r));
             }
+            else {
+                r = sieve_script_fetch(mailbox, sdata, &content);
+                if (!r) {
+                    if (sizep) *sizep = buf_len(&content);
+                    result = buf_release(&content);
+                }
+            }
+            mailbox_close(&mailbox);
+            free(mboxname);
         }
 
         sievedb_close(db);
@@ -3404,7 +3419,7 @@ int sync_sieve_upload(const char *userid, const char *fname,
     }
 
     snprintf(name, sizeof(name), "%.*s", (int) (ext - fname), fname);
-    r = sievedb_lookup_name(db, mailbox_name(mailbox), name, &sdata, 0);
+    r = sievedb_lookup_name(db, name, &sdata, 0);
     if (r == CYRUSDB_NOTFOUND) {
         buf_init_ro(&buf, content, len);
         sdata->name = name;
@@ -3528,18 +3543,20 @@ static int user_getsieve(const char *userid, struct protstream *pout)
     return 0;
 }
 
-static int user_meta(const char *userid, struct protstream *pout)
+static int user_meta(const char *userid, struct sync_state *sstate)
 {
-    user_getseen(userid, pout);
-    user_getsub(userid, pout);
-    user_getsieve(userid, pout);
+    user_getseen(userid, sstate->pout);
+    user_getsub(userid, sstate->pout);
+
+    if (!(sstate->flags & SYNC_FLAG_SIEVE_MAILBOX))
+        user_getsieve(userid, sstate->pout);
 
     return 0;
 }
 
 int sync_get_meta(struct dlist *kin, struct sync_state *sstate)
 {
-    return user_meta(kin->sval, sstate->pout);
+    return user_meta(kin->sval, sstate);
 }
 
 int sync_get_user(struct dlist *kin, struct sync_state *sstate)
@@ -3554,6 +3571,7 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     mrock.qrl = quotaroots;
     mrock.pout = sstate->pout;
     mrock.exists = 0;
+    mrock.flags = sstate->flags;
 
     r = mboxlist_usermboxtree(userid, NULL, sync_mailbox_byentry, &mrock, MBOXTREE_DELETED|MBOXTREE_INTERMEDIATES);
     if (r) goto bail;
@@ -3566,7 +3584,7 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     /* Does the user actually exist? */
     if (!mrock.exists) goto bail;
 
-    r = user_meta(userid, sstate->pout);
+    r = user_meta(userid, sstate);
     if (r) goto bail;
 
 #ifdef USE_SIEVE
@@ -3600,7 +3618,8 @@ int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
 
     /* Delete with admin privileges */
     int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT;
-    if (sstate->local_only) delflags |= MBOXLIST_DELETE_LOCALONLY;
+    if (sstate->flags & SYNC_FLAG_LOCALONLY)
+        delflags |= MBOXLIST_DELETE_LOCALONLY;
     int r = mboxlist_deletemailbox(mboxname, sstate->userisadmin,
                                    sstate->userid, sstate->authstate,
                                    NULL, delflags);
@@ -3647,50 +3666,13 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
 
     if (!r) r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
                                        uidvalidity, 1, sstate->userid,
-                                       sstate->authstate, NULL, sstate->local_only, 1, 1,
+                                       sstate->authstate, NULL,
+                                       (sstate->flags & SYNC_FLAG_LOCALONLY),
+                                       1/*forceuser*/,
+                                       1/*ignorequota*/,
                                        1/*keep_intermediaries*/,
                                        0/*move_subscription*/,
                                        1/*silent*/);
-
-    if (!r) {
-        mbname_t *newmbname = mbname_from_intname(newmboxname);
-
-        if (mbname_localpart(newmbname) &&
-            !mbname_isdeleted(newmbname) &&
-            !strarray_size(mbname_boxes(newmbname))) {
-            /* Renaming INBOX - also rename #sieve */
-            const char *sieve_folder = config_getstring(IMAPOPT_SIEVE_FOLDER);
-            mbname_t *oldmbname = mbname_from_intname(oldmboxname);
-
-            mbname_push_boxes(oldmbname, sieve_folder);
-            oldmboxname = mbname_intname(oldmbname);
-                
-            mbname_push_boxes(newmbname, sieve_folder);
-            newmboxname = mbname_intname(newmbname);
-
-            mboxlist_entry_free(&mbentry);
-
-            if (!mboxlist_lookup_allow_all(oldmboxname, &mbentry, 0)) {
-                r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
-                                           uidvalidity, 1, sstate->userid,
-                                           sstate->authstate, NULL,
-                                           sstate->local_only, 1, 1,
-                                           1/*keep_intermediaries*/,
-                                           0/*move_subscription*/,
-                                           1/*silent*/);
-
-                if (!r) {
-                    /* Take care of changing quotaroot and ACL */
-                    user_copyquotaroot(oldmboxname, newmboxname);
-                    user_renameacl(NULL /*namespace*/, newmboxname,
-                                   mbname_userid(oldmbname),
-                                   mbname_userid(newmbname));
-                }
-            }
-            mbname_free(&oldmbname);
-        }
-        mbname_free(&newmbname);
-    }
 
     mboxlist_entry_free(&mbentry);
     mboxname_release(&oldlock);
@@ -3971,7 +3953,8 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
 
     /* delete in reverse so INBOX is last */
     int delflags = MBOXLIST_DELETE_FORCE;
-    if (sstate->local_only) delflags |= MBOXLIST_DELETE_LOCALONLY;
+    if (sstate->flags & SYNC_FLAG_LOCALONLY)
+        delflags |= MBOXLIST_DELETE_LOCALONLY;
     for (i = list->count; i; i--) {
         const char *name = strarray_nth(list, i-1);
         r = mboxlist_deletemailbox(name, sstate->userisadmin,
@@ -3994,6 +3977,20 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     strarray_free(list);
 
     return r;
+}
+
+int sync_apply_force(struct dlist *kin __attribute__((unused)),
+                     struct sync_state *sstate __attribute__((unused)))
+{
+    if (opt_force) {
+        syslog(LOG_NOTICE, "SYNCNOTICE: force already enabled");
+    }
+    else {
+        opt_force = 1;
+        syslog(LOG_NOTICE, "SYNCNOTICE: enabling force mode");
+    }
+
+    return 0;
 }
 
 /* ====================================================================== */
@@ -4145,6 +4142,28 @@ int sync_apply_message(struct dlist *kin,
     return 0;
 }
 
+int sync_apply_capabilities(struct dlist *kin, struct sync_state *sstate)
+{
+    struct dlist *ki, *kout;
+
+    kout = dlist_newlist(NULL, "ENABLED");
+    for (ki = kin->head; ki; ki = ki->next) {
+        const char *capa;
+
+        dlist_toatom(ki, &capa);
+
+        if (!strcasecmp(capa, "SIEVE-MAILBOX")) {
+            sstate->flags |= SYNC_FLAG_SIEVE_MAILBOX;
+            dlist_setatom(kout, NULL, capa);
+        }
+    }
+
+    sync_send_response(kout, sstate->pout);
+    dlist_free(&kout);
+
+    return 0;
+}
+
 /* ====================================================================== */
 
 int sync_restore_mailbox(struct dlist *kin,
@@ -4195,6 +4214,13 @@ int sync_restore_mailbox(struct dlist *kin,
     /* derived */
     options = sync_parse_options(options_str);
     mbtype = mboxlist_string_to_mbtype(mboxtype);
+
+    if (mbtype_isa(mbtype) == MBTYPE_SIEVE &&
+        !(sstate->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
+        /* XXX  What do we do here?
+           Ignore/reject the request or migrate scripts into sievedir */
+        return 0;
+    }
 
     /* XXX sanely handle deletedprefix mboxnames */
 
@@ -4249,7 +4275,8 @@ int sync_restore_mailbox(struct dlist *kin,
             mbentry.foldermodseq = foldermodseq;
 
             unsigned flags = MBOXLIST_CREATE_SYNC;
-            if (sstate->local_only) flags |= MBOXLIST_CREATE_LOCALONLY;
+            if (sstate->flags & SYNC_FLAG_LOCALONLY)
+                flags |= MBOXLIST_CREATE_LOCALONLY;
 
             r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
                                        1/*isadmin*/,
@@ -4952,7 +4979,8 @@ static int folder_rename(struct sync_client_state *sync_cs,
                          const char *oldname, const char *newname,
                          const char *partition, unsigned uidvalidity)
 {
-    const char *cmd = (sync_cs->flags & SYNC_FLAG_LOCALONLY) ? "LOCAL_RENAME" : "RENAME";
+    const char *cmd =
+        (sync_cs->flags & SYNC_FLAG_LOCALONLY) ? "LOCAL_RENAME" : "RENAME";
     struct dlist *kl;
 
     if (sync_cs->flags & SYNC_FLAG_VERBOSE)
@@ -6655,17 +6683,35 @@ int sync_do_mailboxes(struct sync_client_state *sync_cs,
                       const char *topart, int flags)
 
 {
-    struct sync_name *mbox;
+    struct sync_name *mbox, *next, *prev = NULL;
     struct sync_folder_list *replica_folders = sync_folder_list_create();
     struct buf buf = BUF_INITIALIZER;
-    int r;
+    int r = 0;
     strarray_t userids = STRARRAY_INITIALIZER;
+    strarray_t dosieve = STRARRAY_INITIALIZER;
     ptrarray_t locks = PTRARRAY_INITIALIZER;
 
     // what a pain, we need to lock all the users in order, so..
-    for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
+    for (mbox = mboxname_list->head; mbox; mbox = next) {
         char *userid = mboxname_to_userid(mbox->name);
         strarray_add(&userids, userid ? userid : "");
+
+        next = mbox->next;
+        if (!(sync_cs->flags & SYNC_FLAG_SIEVE_MAILBOX) &&
+            userid && mboxname_issievemailbox(mbox->name, 0)) {
+            /* Remove #sieve mailbox from the list and replicate via SIEVE */
+            if (prev) prev->next = next;
+            else mboxname_list->head = next;
+            if (!next) mboxname_list->tail = prev;
+            mboxname_list->count--;
+            free(mbox->name);
+            free(mbox);
+
+            strarray_add(&dosieve, userid);
+        }
+        else {
+            prev = mbox;
+        }
         free(userid);
     }
     strarray_sort(&userids, cmpstringp_raw);
@@ -6680,6 +6726,8 @@ int sync_do_mailboxes(struct sync_client_state *sync_cs,
         }
         ptrarray_append(&locks, lock);
     }
+
+    if (!mboxname_list->count) goto dosieve;
 
     int tries = 0;
 
@@ -6747,10 +6795,36 @@ redo:
         goto redo;
     }
 
+  dosieve:
+    for (i = 0; !r && i < strarray_size(&dosieve); i++) {
+        struct sync_sieve_list *replica_sieve = sync_sieve_list_create();
+        struct sync_name_list *replica_subs = sync_name_list_create();
+        struct sync_seen_list *replica_seen = sync_seen_list_create();
+        const char *userid = strarray_nth(&dosieve, i);
+
+        if (sync_cs->flags & SYNC_FLAG_VERBOSE)
+            printf("META %s\n", userid);
+
+        if (sync_cs->flags & SYNC_FLAG_LOGGING)
+            syslog(LOG_INFO, "META %s", userid);
+
+        kl = dlist_setatom(NULL, "META", userid);
+        sync_send_lookup(kl, sync_cs->backend->out);
+        dlist_free(&kl);
+
+        r = sync_response_parse(sync_cs, "META", NULL,
+                                replica_subs, replica_sieve, replica_seen, NULL);
+        if (!r) r = sync_do_user_sieve(sync_cs, userid, replica_sieve);
+        sync_seen_list_free(&replica_seen);
+        sync_name_list_free(&replica_subs);
+        sync_sieve_list_free(&replica_sieve);
+    }
+
 done:
 
     sync_folder_list_free(&replica_folders);
     strarray_fini(&userids);
+    strarray_fini(&dosieve);
     for (i = 0; i < ptrarray_size(&locks); i++) {
         struct mboxlock *lock = ptrarray_nth(&locks, i);
         mboxname_release(&lock);
@@ -6765,6 +6839,7 @@ done:
 struct mboxinfo {
     struct sync_name_list *mboxlist;
     struct sync_name_list *quotalist;
+    unsigned flags;
 };
 
 static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
@@ -6775,7 +6850,8 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
 
     /* XXX - check for deleted? */
 
-    if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE) {
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE &&
+        !(info->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
         /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
         return 0;
     }
@@ -6853,6 +6929,7 @@ static int do_user_main(struct sync_client_state *sync_cs,
 
     info.mboxlist = sync_name_list_create();
     info.quotalist = sync_name_list_create();
+    info.flags = sync_cs->flags;
 
     r = mboxlist_usermboxtree(userid, NULL, do_mailbox_info, &info, MBOXTREE_DELETED);
 
@@ -7134,8 +7211,10 @@ redo:
     if (r) goto done;
     r = sync_do_user_sub(sync_cs, userid, replica_subs);
     if (r) goto done;
-    r = sync_do_user_sieve(sync_cs, userid, replica_sieve);
-    if (r) goto done;
+    if (!(sync_cs->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
+        r = sync_do_user_sieve(sync_cs, userid, replica_sieve);
+        if (r) goto done;
+    }
     r = sync_do_user_seen(sync_cs, userid, replica_seen);
 
 done:
@@ -7174,7 +7253,9 @@ int sync_do_meta(struct sync_client_state *sync_cs, const char *userid)
                             replica_subs, replica_sieve, replica_seen, NULL);
     if (!r) r = sync_do_user_seen(sync_cs, userid, replica_seen);
     if (!r) r = sync_do_user_sub(sync_cs, userid, replica_subs);
-    if (!r) r = sync_do_user_sieve(sync_cs, userid, replica_sieve);
+    if (!r && !(sync_cs->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
+        r = sync_do_user_sieve(sync_cs, userid, replica_sieve);
+    }
     sync_seen_list_free(&replica_seen);
     sync_name_list_free(&replica_subs);
     sync_sieve_list_free(&replica_sieve);
@@ -7203,7 +7284,7 @@ EXPORTED const char *sync_apply(struct dlist *kin, struct sync_reserve_list *res
     else if (!strcmp(kin->name, "MAILBOX"))
         r = sync_apply_mailbox(kin, reserve_list, state);
     else if (!strcmp(kin->name, "LOCAL_MAILBOX")) {
-        state->local_only = 1;
+        state->flags |= SYNC_FLAG_LOCALONLY;
         r = sync_apply_mailbox(kin, reserve_list, state);
     }
     else if (!strcmp(kin->name, "QUOTA"))
@@ -7213,7 +7294,7 @@ EXPORTED const char *sync_apply(struct dlist *kin, struct sync_reserve_list *res
     else if (!strcmp(kin->name, "RENAME"))
         r = sync_apply_rename(kin, state);
     else if (!strcmp(kin->name, "LOCAL_RENAME")) {
-        state->local_only = 1;
+        state->flags |= SYNC_FLAG_LOCALONLY;
         r = sync_apply_rename(kin, state);
     }
     else if (!strcmp(kin->name, "RESERVE"))
@@ -7231,7 +7312,7 @@ EXPORTED const char *sync_apply(struct dlist *kin, struct sync_reserve_list *res
     else if (!strcmp(kin->name, "UNMAILBOX"))
         r = sync_apply_unmailbox(kin, state);
     else if (!strcmp(kin->name, "LOCAL_UNMAILBOX")) {
-        state->local_only = 1;
+        state->flags |= SYNC_FLAG_LOCALONLY;
         r = sync_apply_unmailbox(kin, state);
     }
     else if (!strcmp(kin->name, "UNQUOTA"))
@@ -7246,9 +7327,17 @@ EXPORTED const char *sync_apply(struct dlist *kin, struct sync_reserve_list *res
     else if (!strcmp(kin->name, "UNUSER"))
         r = sync_apply_unuser(kin, state);
     else if (!strcmp(kin->name, "LOCAL_UNUSER")) {
-        state->local_only = 1;
+        state->flags |= SYNC_FLAG_LOCALONLY;
         r = sync_apply_unuser(kin, state);
     }
+
+    // magic command to turn on "force mode"
+    else if (!strcmp(kin->name, "FORCE"))
+        r = sync_apply_force(kin, state);
+
+    /* enable capabilities advertised by the server */
+    else if (!strcmp(kin->name, "CAPABILITIES"))
+        r = sync_apply_capabilities(kin, state);
 
     else {
         xsyslog(LOG_ERR, "SYNCERROR: unknown command",
@@ -7301,7 +7390,7 @@ EXPORTED const char *sync_restore(struct dlist *kin,
     if (!strcmp(kin->name, "MAILBOX"))
         r = sync_restore_mailbox(kin, reserve_list, state);
     else if (!strcmp(kin->name, "LOCAL_MAILBOX")) {
-        state->local_only = 1;
+        state->flags |= SYNC_FLAG_LOCALONLY;
         r = sync_restore_mailbox(kin, reserve_list, state);
     }
     else {
@@ -7889,9 +7978,10 @@ EXPORTED int sync_connect(struct sync_client_state *sync_cs)
                                   (verbose > 1 ? fileno(stderr) : -1));
 
         if (backend) {
-            if (backend->capability & CAPA_REPLICATION) {
+            if (CAPA(backend, CAPA_REPLICATION)) {
                 /* attach our IMAP tag buffer to our protstreams as userdata */
                 backend->in->userdata = backend->out->userdata = &sync_cs->tagbuf;
+
                 goto connected;
             }
             else {
@@ -7912,6 +8002,8 @@ EXPORTED int sync_connect(struct sync_client_state *sync_cs)
     }
 
 connected:
+
+    sync_cs->backend = backend;
 
     free_callbacks(cb);
     cb = NULL;
@@ -7938,6 +8030,11 @@ connected:
     }
 #endif
 
+    if (CAPA(backend, CAPA_SIEVE_MAILBOX)) {
+        syslog(LOG_INFO, "Destination supports #sieve mailbox");
+        sync_do_enable(sync_cs, CAPA_SIEVE_MAILBOX);
+    }
+
     /* Set inactivity timer */
     timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
     if (timeout < 3) timeout = 3;
@@ -7946,8 +8043,6 @@ connected:
     /* Force use of LITERAL+ so we don't need two way communications */
     prot_setisclient(backend->in, 1);
     prot_setisclient(backend->out, 1);
-
-    sync_cs->backend = backend;
 
     return 0;
 }
@@ -8035,4 +8130,51 @@ EXPORTED int sync_checkpoint(struct protstream *clientin)
     buf_reset(buf);
 
     return 0;
+}
+
+/* ====================================================================== */
+
+int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
+{
+    struct dlist *kl, *kin = NULL;
+    int r;
+
+    if (sync_cs->flags & SYNC_FLAG_VERBOSE)
+        printf("ENABLE 0x%x\n", capabilities);
+
+    if (sync_cs->flags & SYNC_FLAG_LOGGING)
+        syslog(LOG_INFO, "ENABLE 0x%x", capabilities);
+
+    kl = dlist_newlist(NULL, "CAPABILITIES");
+    if (capabilities & CAPA_SIEVE_MAILBOX) {
+        dlist_setatom(kl, NULL, "SIEVE-MAILBOX");
+    }
+
+    sync_send_apply(kl, sync_cs->backend->out);
+    dlist_free(&kl);
+
+    r = sync_parse_response("ENABLED", sync_cs->backend->in, &kin);
+
+    if (!r && kin) {
+        struct dlist *ki = kin->head;
+        if (strcmp(ki->name, "ENABLED")) {
+            xsyslog(LOG_ERR, "SYNCERROR: Illegal response to CAPABILITIES",
+                    "name=<%s>", ki->name);
+            r = IMAP_PROTOCOL_BAD_PARAMETERS;
+        }
+        else {
+            for (ki = ki->head; ki; ki = ki->next) {
+                const char *capa;
+
+                dlist_toatom(ki, &capa);
+
+                if (!strcasecmp(capa, "SIEVE-MAILBOX"))
+                    sync_cs->flags |= SYNC_FLAG_SIEVE_MAILBOX;
+            }
+        }
+    }
+
+    dlist_free(&kin);
+
+    return r;
 }

@@ -2795,10 +2795,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
          * we never nuke the mailbox from the replica before realising
          * that it has been renamed.  This can be moved later again when
          * we sync mailboxes by uniqueid rather than name... */
-        if (mbtype_isa(mailbox_mbtype(oldmailbox)) != MBTYPE_SIEVE) {
-            /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
-            sync_log_rename(oldname, newname);
-        }
+        sync_log_rename(oldname, newname);
 
         if (newmailbox) {
             /* prepare the event notification */
@@ -2878,10 +2875,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
              * we never nuke the mailbox from the replica before realising
              * that it has been renamed.  This can be moved later again when
              * we sync mailboxes by uniqueid rather than name... */
-            if (mbtype_isa(mailbox_mbtype(oldmailbox)) != MBTYPE_SIEVE) { 
-                /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
-                sync_log_rename(oldname, newname);
-            }
+            sync_log_rename(oldname, newname);
 
             mailbox_close(&oldmailbox);
         }
@@ -4447,8 +4441,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
 done:
     quota_free(&q);
     if (r && tid) quota_abort(&tid);
-    if (!r && !mboxname_issievemailbox(root, 0)) {
-        /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
+    if (!r) {
         sync_log_quota(root);
 
         /* send QuotaChange and QuotaWithin event notifications */
@@ -4503,10 +4496,7 @@ EXPORTED int mboxlist_unsetquota(const char *root)
     r = quota_deleteroot(root, 0);
     quota_changelockrelease();
 
-    if (!r && !mboxname_issievemailbox(root, 0)) {
-        /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
-        sync_log_quota(root);
-    }
+    if (!r) sync_log_quota(root);
 
  done:
     quota_free(&q);

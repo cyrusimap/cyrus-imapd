@@ -2630,10 +2630,7 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 
     if (mailbox->has_changed) {
         if (updatenotifier) updatenotifier(mailbox_name(mailbox));
-        if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_SIEVE) {
-            /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
-            sync_log_mailbox(mailbox_name(mailbox));
-        }
+        sync_log_mailbox(mailbox_name(mailbox));
 
         if (!sdata) {
             status_fill_mailbox(mailbox, &mysdata);
@@ -4075,7 +4072,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
         }
 
         sdata->lastupdated = new->internaldate;
-        sdata->mailbox = mailbox_name(mailbox);
+        sdata->mailbox = mailbox_uniqueid(mailbox);
         sdata->imap_uid = new->uid;
         sdata->modseq = new->modseq;
         sdata->createdmodseq = new->createdmodseq;
@@ -4111,7 +4108,7 @@ static int mailbox_delete_sieve(struct mailbox *mailbox)
 
     sievedb = sievedb_open_mailbox(mailbox);
     if (sievedb) {
-        int r = sievedb_delmbox(sievedb, mailbox_name(mailbox));
+        int r = sievedb_delmbox(sievedb);
         sievedb_close(sievedb);
         if (r) return r;
     }

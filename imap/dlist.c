@@ -1347,7 +1347,7 @@ struct dlist *dlist_getkvchild_bykey(struct dlist *dl,
     return NULL;
 }
 
-int dlist_toatom(struct dlist *dl, const char **valp)
+EXPORTED int dlist_toatom(struct dlist *dl, const char **valp)
 {
     const char *str;
     size_t len;

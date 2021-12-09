@@ -306,6 +306,20 @@ static void replica_connect(void)
         prot_setlog(sync_cs.backend->in, fileno(stderr));
         prot_setlog(sync_cs.backend->out, fileno(stderr));
     }
+
+    if (no_copyback) {
+        const char *cmd = "FORCE";
+        struct dlist *kl = dlist_newkvlist(NULL, cmd);
+        struct dlist *kin = NULL;
+        sync_send_apply(kl, sync_cs.backend->out);
+        int r = sync_parse_response(cmd, sync_cs.backend->in, &kin);
+        if (r) {
+            syslog(LOG_ERR, "SYNCERROR: failed to enable force mode");
+            _exit(1);
+        }
+        dlist_free(&kl);
+        dlist_free(&kin);
+    }
 }
 
 static void replica_disconnect(void)
@@ -353,9 +367,10 @@ static int do_mailbox(const char *mboxname)
     return r;
 }
 
-static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
+static int cb_allmbox(const mbentry_t *mbentry, void *rock)
 {
     int r = 0;
+    int *exit_rcp = (int *)rock;
 
     char *userid = mboxname_to_userid(mbentry->name);
 
@@ -392,7 +407,8 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused
 
 done:
     free(userid);
-    return r;
+    if (r) *exit_rcp = 1;
+    return 0; // but keep going anyway
 }
 
 /* ====================================================================== */
@@ -645,7 +661,7 @@ int main(int argc, char **argv)
         /* Open up connection to server */
         replica_connect();
 
-        if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &channel, 0))
+        if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &exit_rc, 0))
             exit_rc = 1;
 
         replica_disconnect();

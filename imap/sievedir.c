@@ -319,6 +319,14 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     snprintf(new_bcpath, sizeof(new_bcpath),
              "%s/%s%s.NEW", sievedir, name, BYTECODE_SUFFIX);
 
+    r = cyrus_mkdir(new_bcpath, 0755);
+    if (r) {
+        xsyslog(LOG_ERR, "IOERROR: failed to create directory for bytecode file",
+                "path=<%s>", new_bcpath);
+        r = SIEVEDIR_IOERROR;
+        goto done;
+    }
+
     /* make sure no stray hardlink is lying around */
     unlink(new_bcpath);
 

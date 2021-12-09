@@ -82,6 +82,7 @@
 #include "global.h"
 #include "hash.h"
 #include "imparse.h"
+#include "imap_proxy.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
@@ -132,6 +133,7 @@ static struct protstream *sync_in = NULL;
 static int sync_logfd = -1;
 static int sync_starttls_done = 0;
 static int sync_compress_done = 0;
+static int sync_sieve_mailbox_enabled = 0;
 
 static int opt_force = 0;
 
@@ -221,6 +223,8 @@ static void sync_reset(void)
     sync_starttls_done = 0;
     sync_compress_done = 0;
 
+    sync_sieve_mailbox_enabled = 0;
+
     saslprops_reset(&saslprops);
 }
 
@@ -292,6 +296,8 @@ static void dobanner(void)
             prot_printf(sync_out, "* COMPRESS DEFLATE\r\n");
         }
 #endif
+
+        prot_printf(sync_out, "* SIEVE-MAILBOX\r\n");
     }
 
     prot_printf(sync_out,
@@ -976,10 +982,19 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        0 /* flags */
     };
 
+    if (sync_sieve_mailbox_enabled) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
+
+    if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
+        sync_sieve_mailbox_enabled = 1;
+    }
+
     sync_checkpoint(sync_in);
     prot_printf(sync_out, "%s\r\n", resp);
 }
@@ -992,8 +1007,12 @@ static void cmd_get(struct dlist *kin)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        0 /* flags */
     };
+
+    if (sync_sieve_mailbox_enabled) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
 
     const char *resp = sync_get(kin, &sync_state);
     prot_printf(sync_out, "%s\r\n", resp);
@@ -1007,8 +1026,12 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        0 /* flags */
     };
+
+    if (sync_sieve_mailbox_enabled) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
     sync_checkpoint(sync_in);
