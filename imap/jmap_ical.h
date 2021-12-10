@@ -262,6 +262,8 @@ extern void jmapical_duration_between_utctime(const struct jmapical_datetime *t1
 extern void jmapical_duration_as_string(const struct jmapical_duration *dur, struct buf *buf);
 extern int jmapical_duration_from_string(const char *val, struct jmapical_duration *dur);
 
+extern void jmapical_remove_peruserprops(json_t *jevent);
+
 #ifdef __cplusplus
 }
 #endif
