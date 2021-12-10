@@ -49,6 +49,7 @@
 #include <libical/ical.h>
 
 #include "acl.h"
+#include "parseaddr.h"
 #include "strarray.h"
 
 
@@ -153,6 +154,7 @@ extern icalcomponent *master_to_recurrence(icalcomponent *master,
 extern enum sched_deliver_outcome sched_deliver_local(const char *userid,
                                                       const char *sender,
                                                       const char *recipient,
+                                                      struct address *mailfrom,
                                                       struct caldav_sched_param *sparam,
                                                       struct sched_data *sched_data,
                                                       struct auth_state *authstate,

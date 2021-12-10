@@ -1303,7 +1303,7 @@ void sched_deliver(const char *userid, const char *sender, const char *recipient
 
         syslog(LOG_NOTICE, "CalDAV scheduling delivery to %s", recipient);
 
-        r = sched_deliver_local(userid, sender, recipient, &sparam, sched_data,
+        r = sched_deliver_local(userid, sender, recipient, NULL, &sparam, sched_data,
                                 authstate, &attendee, &ical);
 
         /* XXX  Should this be a config option? - it might have perf implications */
