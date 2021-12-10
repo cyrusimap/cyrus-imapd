@@ -11198,7 +11198,13 @@ struct xfer_header {
     struct xfer_item *items;
 };
 
-static int xfer_mupdate(int isactivate,
+enum {
+    MUPDATE_ACTIVATE,
+    MUPDATE_DEACTIVATE,
+    MUPDATE_DELETE
+};
+
+static int xfer_mupdate(int op,
                         const char *mboxname, const char *part,
                         const char *servername, const char *acl)
 {
@@ -11209,11 +11215,14 @@ static int xfer_mupdate(int isactivate,
     /* no mupdate handle */
     if (!mupdate_h) return 0;
 
-    snprintf(buf, sizeof(buf), "%s!%s", servername, part);
+    if (servername && part)
+        snprintf(buf, sizeof(buf), "%s!%s", servername, part);
 
 retry:
     /* make the change */
-    if (isactivate)
+    if (op == MUPDATE_DELETE)
+        r = mupdate_delete(mupdate_h, mboxname);
+    else if (op == MUPDATE_ACTIVATE)
         r = mupdate_activate(mupdate_h, mboxname, buf, acl);
     else
         r = mupdate_deactivate(mupdate_h, mboxname, buf);
@@ -11411,8 +11420,8 @@ static int xfer_deactivate(struct xfer_header *xfer)
 
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     for (item = xfer->items; item; item = item->next) {
-        r = xfer_mupdate(0, item->mbentry->name, item->mbentry->partition,
-                         config_servername, item->mbentry->acl);
+        r = xfer_mupdate(MUPDATE_DEACTIVATE, item->mbentry->name,
+                         item->mbentry->partition, config_servername, NULL);
         if (r) {
             syslog(LOG_ERR,
                    "Could not move mailbox: %s, MUPDATE DEACTIVATE failed",
@@ -11525,12 +11534,6 @@ static int xfer_undump(struct xfer_header *xfer)
 static int xfer_addusermbox(const mbentry_t *mbentry, void *rock)
 {
     struct xfer_header *xfer = (struct xfer_header *)rock;
-
-    if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE &&
-        !(xfer->sync_cs.flags & SYNC_FLAG_SIEVE_MAILBOX)) {
-        /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
-        return 0;
-    }
 
     /* Skip remote mailbox */
     if (mbentry->mbtype & MBTYPE_REMOTE)
@@ -11756,6 +11759,12 @@ static int xfer_finalsync(struct xfer_header *xfer)
     if (r) goto done;
 
     for (item = xfer->items; item; item = item->next) {
+        if (mbtype_isa(item->mbentry->mbtype) == MBTYPE_SIEVE &&
+            !(xfer->sync_cs.flags & SYNC_FLAG_SIEVE_MAILBOX)) {
+            /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
+            continue;
+        }
+
         r = mailbox_open_iwl(item->mbentry->name, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
         if (r) {
@@ -11870,6 +11879,18 @@ static int xfer_reactivate(struct xfer_header *xfer)
 
     /* 6.5) Kick remote server to correct mupdate entry */
     for (item = xfer->items; item; item = item->next) {
+        if (mbtype_isa(item->mbentry->mbtype) == MBTYPE_SIEVE &&
+            !(xfer->sync_cs.flags & SYNC_FLAG_SIEVE_MAILBOX)) {
+            /* Don't activate #sieve on remote, remove it from mupdate */
+            r = xfer_mupdate(MUPDATE_DELETE, item->mbentry->name,
+                             NULL, NULL, NULL);
+            if (r) {
+                syslog(LOG_ERR, "MUPDATE: can't delete mailbox entry '%s': %s",
+                           item->mbentry->name, error_message(r));
+            }
+            continue;
+        }
+
         struct backend *be = xfer->sync_cs.backend;
         prot_printf(be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
                     strlen(item->extname), item->extname);
@@ -11972,7 +11993,8 @@ static void xfer_recover(struct xfer_header *xfer)
 
         case XFER_DEACTIVATED:
             /* Tell murder it's back here and active */
-            r = xfer_mupdate(1, item->mbentry->name, item->mbentry->partition,
+            r = xfer_mupdate(MUPDATE_ACTIVATE, item->mbentry->name,
+                             item->mbentry->partition,
                              config_servername, item->mbentry->acl);
             if (r) {
                 syslog(LOG_ERR,
