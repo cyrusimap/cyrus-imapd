@@ -16224,5 +16224,176 @@ EOF
     $self->assert_str_equals('destroyed', $res->[2][1]{list}[0]{type});
 }
 
+sub test_calendarevent_defaultalerts_imip
+    :needs_component_sieve :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :deletecanceled :outcome "outcome";
+    if string "\${outcome}" "added" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    my $alertWithTime = {
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => '-PT5M',
+        },
+        action => 'display',
+    };
+    my $alertWithoutTime = {
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => 'PT0S',
+        },
+        action => 'display',
+    };
+
+    xlog 'Set default alerts on calendar';
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => {
+                        alert1 => $alertWithTime,
+                    },
+                    defaultAlertsWithoutTime => {
+                        alert2 => $alertWithoutTime,
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    my $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sally Sender <sender@example.net>
+To: Cassandane <cassandane@example.com>
+Message-ID: <6de280c9-edff-4019-8ebd-cfebc73f8201@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: 6de280c9-edff-4019-8ebd-cfebc73f8201
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane@example.com
+BEGIN:VALARM
+UID:0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1
+TRIGGER:PT25M
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP invite";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id', 'alerts']
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals({ alert1 => $alertWithTime },
+        $res->[0][1]{list}[0]{alerts});
+    my $eventId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($eventId);
+
+    my $customAlert = {
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => '-PT10M',
+        },
+        action => 'display',
+    };
+
+    xlog "Set custom alert on event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    alerts => {
+                        alert1 => $customAlert,
+                    },
+                },
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 10:06:18 -0400
+From: Sally Sender <sender@example.net>
+To: Cassandane <cassandane@example.com>
+Message-ID: <6de280c9-edff-4019-8ebd-cfebc73f8201@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: 6de280c9-edff-4019-8ebd-cfebc73f8201
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Updated Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane@example.com
+BEGIN:VALARM
+UID:0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1
+TRIGGER:PT25M
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP update";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id', 'alerts']
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals({ alert1 => $customAlert },
+        $res->[0][1]{list}[0]{alerts});
+
+}
 
 1;
