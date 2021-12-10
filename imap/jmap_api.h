@@ -77,6 +77,7 @@
 #define JMAP_BACKUP_EXTENSION        "https://cyrusimap.org/ns/jmap/backup"
 #define JMAP_NOTES_EXTENSION         "https://cyrusimap.org/ns/jmap/notes"
 #define JMAP_SIEVE_EXTENSION         "https://cyrusimap.org/ns/jmap/sieve"
+#define JMAP_FILES_EXTENSION         "https://cyrusimap.org/ns/jmap/files"
 #define JMAP_USERCOUNTERS_EXTENSION  "https://cyrusimap.org/ns/jmap/usercounters"
 
 enum {
