@@ -331,6 +331,7 @@ static void blobid_from_href(struct jmapical_ctx *jmapctx,
     buf_appendcstr(blobid, mid);
 }
 
+#ifndef BUILD_LMTPD
 static int create_managedattach(struct jmapical_ctx *jmapctx,
                                 const char *blobid,
                                 struct buf *managedid,
@@ -387,7 +388,7 @@ static int create_managedattach(struct jmapical_ctx *jmapctx,
 
     /* Append blob to mailbox */
     r = append_setup_mbox(&as, jmapctx->attachments.mbox, req->userid,
-            httpd_authstate, 0, NULL, 0, 0, 0);
+            req->authstate, 0, NULL, 0, 0, 0);
     if (r) goto done;
 
     strarray_t flags = STRARRAY_INITIALIZER;
@@ -491,6 +492,7 @@ static int attachment_from_blobid(struct jmapical_ctx *jmapctx,
 
     return 0;
 }
+#endif // BUILD_LMTPD
 
 HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req)
 {
@@ -529,10 +531,12 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
     struct jmapical_ctx *jmapctx = *jmapctxp;
     if (!jmapctx) return;
 
+#ifndef BUILD_LMTPD
     if (jmapctx->attachments.mbox)
         jmap_closembox(jmapctx->req, &jmapctx->attachments.mbox);
     if (jmapctx->attachments.db)
         webdav_close(jmapctx->attachments.db);
+#endif // BUILD_LMTPD
     buf_free(&jmapctx->attachments.davbaseurl);
 
     free(jmapctx->alert.emailrecipient);
@@ -1978,7 +1982,9 @@ link_from_ical(icalproperty *prop, struct jmapical_ctx *jmapctx)
     const char *s;
 
     /* blobId */
-    if (jmapctx && jmap_is_using(jmapctx->req, JMAP_CALENDARS_EXTENSION)) {
+    if (jmapctx &&
+            strarray_find(jmapctx->req->using_capabilities,
+                JMAP_CALENDARS_EXTENSION, 0) >= 0) {
         param = icalproperty_get_managedid_parameter(prop);
         const char *mid = param ? icalparameter_get_managedid(param) : NULL;
         struct buf blobid = BUF_INITIALIZER;
@@ -3707,7 +3713,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
     return event;
 }
 
-json_t*
+EXPORTED json_t*
 jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
                     struct jmapical_ctx *jmapctx)
 {
@@ -3791,7 +3797,7 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
     return events;
 }
 
-json_t*
+EXPORTED json_t*
 jmapical_tojmap(icalcomponent *ical, hash_table *props,
                 struct jmapical_ctx *jmapctx)
 {
@@ -4314,6 +4320,7 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
         }
         else if (blobid) {
             if (jmapctx) {
+#ifndef BUILD_LMTPD
                 int r = attachment_from_blobid(jmapctx, blobid,
                         &attachhref, &attachmid, &newblobid);
                 if (!r) {
@@ -4328,6 +4335,9 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
                             error_message(r));
                     jmap_parser_invalid(parser, "blobId");
                 }
+#else
+                xsyslog(LOG_INFO, "managed attachments are disabled in lmtpd", NULL);
+#endif // BUILD_LMTPD
             }
             else {
                 xsyslog(LOG_ERR, "need jmapical_context to translate blobId to href", NULL);
@@ -7027,7 +7037,12 @@ EXPORTED struct buf *icalcomponent_as_jevent_string(icalcomponent *ical)
 
     jcal = jmapical_tojmap(ical, NULL, NULL);
 
+#ifndef BUILD_LMTPD
     flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+#else
+    flags |= JSON_COMPACT;
+#endif // BUILD_LMTPD
+
     buf = json_dumps(jcal, flags);
 
     json_decref(jcal);
@@ -7058,4 +7073,36 @@ EXPORTED icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf)
     json_decref(obj);
 
     return ical;
+}
+
+HIDDEN void jmapical_remove_peruserprops(json_t *jevent)
+{
+    json_object_del(jevent, "keywords");
+    json_object_del(jevent, "color");
+    json_object_del(jevent, "freeBusyStatus");
+    json_object_del(jevent, "useDefaultAlerts");
+    json_object_del(jevent, "alerts");
+
+    json_t *joverrides = json_object_get(jevent, "recurrenceOverrides");
+    const char *recurid;
+    json_t *joverride;
+    void *tmp;
+    json_object_foreach_safe(joverrides, tmp, recurid, joverride) {
+        json_object_del(joverride, "keywords");
+        json_object_del(joverride, "color");
+        json_object_del(joverride, "freeBusyStatus");
+        json_object_del(joverride, "useDefaultAlerts");
+        json_object_del(joverride, "alerts");
+        const char *prop;
+        json_t *jpatch;
+        void *tmp2;
+        json_object_foreach_safe(joverride, tmp2, prop, jpatch) {
+            if (!strncmp(prop, "alerts/", 7)) {
+                json_object_del(joverride, prop);
+            }
+        }
+        if (!json_object_size(joverride)) {
+            json_object_del(joverrides, recurid);
+        }
+    }
 }

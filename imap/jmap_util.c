@@ -51,13 +51,19 @@
 #include <sasl/saslutil.h>
 
 #include "annotate.h"
+#include "append.h"
+#include "caldav_util.h"
+#include "carddav_db.h"
 #include "global.h"
 #include "hash.h"
+#include "http_err.h"
 #include "index.h"
+#include "jmap_ical.h"
 #include "jmap_util.h"
 #include "json_support.h"
 #include "search_query.h"
 #include "times.h"
+#include "user.h"
 #include "xapian_wrap.h"
 
 #ifdef HAVE_LIBCHARDET
@@ -1339,5 +1345,3 @@ EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, s
 
     return buf_cstring(buf);
 }
-
-

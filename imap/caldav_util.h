@@ -171,17 +171,6 @@ extern int caldav_read_usedefaultalerts(struct dlist *dl,
 
 extern icaltimezone *caldav_get_calendar_tz(const char *mboxname, const char *userid);
 
-#ifdef WITH_JMAP
-extern int jmap_create_caldaveventnotif(struct transaction_t *txn,
-                                        const char *calmboxname,
-                                        const char *ical_uid,
-                                        const strarray_t *schedule_addresses,
-                                        int is_draft,
-                                        icalcomponent *oldical,
-                                        icalcomponent *newical);
-
-#endif
-
 extern int caldav_is_secretarymode(const char *mboxname);
 
 #endif /* HTTP_CALDAV_H */
