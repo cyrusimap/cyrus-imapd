@@ -719,6 +719,7 @@ static int deliver_merge_cancel(const char *recipient,
 HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                                                       const char *sender,
                                                       const char *recipient,
+                                                      struct address *mailfrom,
                                                       struct caldav_sched_param *sparam,
                                                       struct sched_data *sched_data,
                                                       struct auth_state *authstate,
@@ -734,12 +735,16 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     struct caldav_db *caldavdb = NULL;
     struct caldav_data *cdata;
     icalcomponent *ical = NULL;
+    icalcomponent *oldical = NULL;
     icalproperty_method method;
     icalcomponent_kind kind;
     icalcomponent *comp;
     icalproperty *prop;
     struct transaction_t txn;
     enum sched_deliver_outcome result = SCHED_DELIVER_ERROR;
+    strarray_t recipient_addresses = STRARRAY_INITIALIZER;
+
+    strarray_append(&recipient_addresses, recipient);
 
     syslog(LOG_DEBUG, "sched_deliver_local(%s, %s, %X)",
            sender, recipient, sparam->flags);
@@ -754,6 +759,18 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     /* Create header cache */
     txn.req_hdrs = spool_new_hdrcache();
     if (!txn.req_hdrs) goto done;
+
+    /* Set scheduling headers for JMAP CalendarEventNotification */
+    char *sched_sender_address = NULL;
+    if (mailfrom && mailfrom->mailbox)
+        sched_sender_address = address_get_all(mailfrom, 0);
+    if (!sched_sender_address)
+        sched_sender_address = xstrdup(sender);
+    spool_append_header(xstrdup("Schedule-Sender-Address"),
+            sched_sender_address, txn.req_hdrs);
+    if (mailfrom && mailfrom->name)
+        spool_append_header(xstrdup("Schedule-Sender-Name"),
+                xstrdup(mailfrom->name), txn.req_hdrs);
 
     /* Check ACL of sender on recipient's Scheduling Inbox */
     mailboxname = caldav_mboxname(sparam->userid, SCHED_INBOX);
@@ -888,7 +905,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     if (cdata->dav.imap_uid) {
         /* Load message containing the resource and parse iCal data */
-        ical = caldav_record_to_ical(mailbox, cdata, NULL, NULL);
+        oldical = caldav_record_to_ical(mailbox, cdata, NULL, NULL);
+        ical = icalcomponent_clone(oldical);
 
         for (comp = icalcomponent_get_first_component(sched_data->itip,
                                                       ICAL_ANY_COMPONENT);
@@ -982,6 +1000,21 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                     result = SCHED_DELIVER_DELETED;
                 }
 
+#ifdef WITH_JMAP
+                if (!r) {
+                    comp = icalcomponent_get_first_real_component(ical);
+                    if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+                        int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
+                                mailbox_name(mailbox), icalcomponent_get_uid(sched_data->itip),
+                                &recipient_addresses, 0, oldical, NULL);
+                        if (r2) {
+                            xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
+                                    "error=%s", error_message(r2));
+                        }
+                    }
+                }
+#endif
+
                 mboxevent_free(&mboxevent);
             }
 
@@ -1014,13 +1047,25 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     }
 
     /* Store the (updated) object in the recipients's calendar */
-    strarray_t recipient_addresses = STRARRAY_INITIALIZER;
-    strarray_append(&recipient_addresses, recipient);
     r = caldav_store_resource(&txn, ical, mailbox,
                               buf_cstring(&resource), cdata->dav.createdmodseq,
                               caldavdb, NEW_STAG, sparam->userid,
                               NULL, NULL, &recipient_addresses);
-    strarray_fini(&recipient_addresses);
+
+#ifdef WITH_JMAP
+    if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
+        comp = icalcomponent_get_first_real_component(ical);
+        if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+            int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
+                    mailbox_name(mailbox), icalcomponent_get_uid(sched_data->itip),
+                    &recipient_addresses, 0, oldical, ical);
+            if (r2) {
+                xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
+                        "error=%s", error_message(r2));
+            }
+        }
+    }
+#endif
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
         SCHED_STATUS(sched_data, REQSTAT_SUCCESS, SCHEDSTAT_DELIVERED);
@@ -1048,8 +1093,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     }
 
   done:
+    strarray_fini(&recipient_addresses);
     if (icalp) *icalp = ical;
     else if (ical) icalcomponent_free(ical);
+    if (oldical) icalcomponent_free(oldical);
     mailbox_close(&inbox);
     mailbox_close(&mailbox);
     if (caldavdb) caldav_close(caldavdb);
