@@ -1598,7 +1598,9 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     struct caldav_sched_param sched_param = {
         (char *) ctx->userid, NULL, 0, 0, 1, NULL
     };
+
     int r = sched_deliver_local(ctx->userid, originator, recipient,
+                                mydata->content->body->from,
                                 &sched_param, &sched_data,
                                 (struct auth_state *) sd->authstate,
                                 NULL, NULL);

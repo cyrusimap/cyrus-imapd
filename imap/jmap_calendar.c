@@ -71,6 +71,8 @@
 #include "mboxname.h"
 #include "json_support.h"
 #include "jmap_ical.h"
+#include "jmap_notif.h"
+#include "jmap_util.h"
 #include "search_query.h"
 #include "seen.h"
 #include "stristr.h"
@@ -1872,7 +1874,7 @@ static void setcalendars_create(struct jmap_req *req,
     mbentry.acl = acl;
     mbentry.mbtype = MBTYPE_CALENDAR;
     r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-            0/*isadmin*/, httpd_userid, httpd_authstate,
+            0/*isadmin*/, req->userid, req->authstate,
             0/*flags*/, NULL/*mailboxptr*/);
     free(acl);
     if (r) {
@@ -2269,7 +2271,7 @@ static int jmap_calendar_set(struct jmap_req *req)
     }
 
     r = caldav_create_defaultcalendars(req->accountid,
-                                       &httpd_namespace, httpd_authstate, NULL);
+                                       &httpd_namespace, req->authstate, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
         json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
@@ -4054,426 +4056,6 @@ done:
     buf_free(&buf);
 }
 
-static void remove_peruserprops(json_t *jevent)
-{
-    json_object_del(jevent, "keywords");
-    json_object_del(jevent, "color");
-    json_object_del(jevent, "freeBusyStatus");
-    json_object_del(jevent, "useDefaultAlerts");
-    json_object_del(jevent, "alerts");
-
-    json_t *joverrides = json_object_get(jevent, "recurrenceOverrides");
-    const char *recurid;
-    json_t *joverride;
-    void *tmp;
-    json_object_foreach_safe(joverrides, tmp, recurid, joverride) {
-        json_object_del(joverride, "keywords");
-        json_object_del(joverride, "color");
-        json_object_del(joverride, "freeBusyStatus");
-        json_object_del(joverride, "useDefaultAlerts");
-        json_object_del(joverride, "alerts");
-        const char *prop;
-        json_t *jpatch;
-        void *tmp2;
-        json_object_foreach_safe(joverride, tmp2, prop, jpatch) {
-            if (!strncmp(prop, "alerts/", 7)) {
-                json_object_del(joverride, prop);
-            }
-        }
-        if (!json_object_size(joverride)) {
-            json_object_del(joverrides, recurid);
-        }
-    }
-}
-
-
-static char *jmap_notifmboxname(const char *userid)
-{
-    /* Create notification mailbox name from the parsed path */
-    mbname_t *mbname = mbname_from_userid(userid);
-    mbname_push_boxes(mbname, config_getstring(IMAPOPT_JMAPNOTIFICATIONFOLDER));
-    char *mboxname = xstrdup(mbname_intname(mbname));
-    mbname_free(&mbname);
-    return mboxname;
-}
-
-static int create_notify_collection(const char *userid, mbentry_t **mbentryptr)
-{
-    /* notifications collection */
-    char *notifmboxname = jmap_notifmboxname(userid);
-
-    int r = mboxlist_lookup(notifmboxname, mbentryptr, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* lock the namespace lock and try again */
-        struct mboxlock *namespacelock = user_namespacelock(userid);
-
-        mbentry_t mbentry = MBENTRY_INITIALIZER;
-        mbentry.name = notifmboxname;
-        mbentry.mbtype = MBTYPE_JMAPNOTIFY;
-        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                                   1/*isadmin*/, userid, NULL/*authstate*/,
-                                   0/*flags*/, NULL/*mboxptr*/);
-
-        /* we lost the race, that's OK */
-        if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                      notifmboxname, error_message(r));
-
-        r = mboxlist_lookup(notifmboxname, mbentryptr, NULL);
-        mboxname_release(&namespacelock);
-    }
-
-    free(notifmboxname);
-    return r;
-}
-
-#define JMAP_NOTIF_CALENDAREVENT "jmap-notif-calendarevent"
-
-
-static char *eventnotif_fromheader(const char *userid)
-{
-    struct buf buf = BUF_INITIALIZER;
-    if (strchr(userid, '@')) {
-        buf_printf(&buf, "<%s>", userid);
-    }
-    else {
-        buf_printf(&buf, "<%s@%s>", userid, config_servername);
-    }
-    char *notfrom = charset_encode_mimeheader(buf_cstring(&buf), buf_len(&buf), 0);
-    buf_free(&buf);
-    return notfrom;
-}
-
-static int append_eventnotif(const char *from,
-                             const char *authuserid,
-                             struct auth_state *authstate,
-                             struct mailbox *notifmbox,
-                             const char *calmboxname,
-                             time_t created,
-                             json_t *jnotif)
-{
-    struct stagemsg *stage = NULL;
-    int r = 0;
-    char *notifstr = json_dumps(jnotif, 0);
-    struct buf buf = BUF_INITIALIZER;
-    const char *type = json_string_value(json_object_get(jnotif, "type"));
-    const char *ical_uid = json_string_value(json_object_get(jnotif, "calendarEventId"));
-
-    if (!strcmp(type, "destroyed")) {
-        /* Expunge all former event notifications for this UID */
-        struct mailbox_iter *iter = mailbox_iter_init(notifmbox, 0, 0);
-        message_t *msg;
-        while ((msg = (message_t *) mailbox_iter_step(iter))) {
-            buf_reset(&buf);
-            if (message_get_subject(msg, &buf) ||
-                    strcmp(JMAP_NOTIF_CALENDAREVENT, buf_cstring(&buf))) {
-                continue;
-            }
-            const struct body *body;
-            if (message_get_cachebody(msg, &body)) {
-                continue;
-            }
-            int matches_uid = 0;
-            struct dlist *dl = NULL;
-            if (!dlist_parsemap(&dl, 1, 0, body->description,
-                        strlen(body->description))) {
-                const char *val;
-                matches_uid = dlist_getatom(dl, "ID", &val) &&
-                              !strcmp(val, ical_uid);
-            }
-            dlist_free(&dl);
-            if (!matches_uid) continue;
-
-            struct index_record record = *msg_record(msg);
-            if (!(record.system_flags & FLAG_DELETED) &&
-                !(record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-                record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-                 mailbox_rewrite_index_record(notifmbox, &record);
-            }
-        }
-        mailbox_iter_done(&iter);
-    }
-    buf_reset(&buf);
-
-    FILE *fp = append_newstage(mailbox_name(notifmbox), created, 0, &stage);
-    if (!fp) {
-        xsyslog(LOG_ERR, "append_newstage failed", "name=%s", mailbox_name(notifmbox));
-        r = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
-    fputs("From: ", fp);
-    fputs(from, fp);
-    fputs("\r\n", fp);
-
-    fputs("Subject: " JMAP_NOTIF_CALENDAREVENT "\r\n", fp);
-
-    char date5322[RFC5322_DATETIME_MAX+1];
-    time_to_rfc5322(created, date5322, RFC5322_DATETIME_MAX);
-    fputs("Date: ", fp);
-    fputs(date5322, fp);
-    fputs("\r\n", fp);
-
-    fprintf(fp, "Message-ID: <%s-%ld@%s>\r\n", makeuuid(), created, config_servername);
-    fputs("Content-Type: application/json; charset=utf-8\r\n", fp);
-    fputs("Content-Transfer-Encoding: 8bit\r\n", fp);
-
-    struct dlist *dl = dlist_newkvlist(NULL, "N");
-    dlist_setdate(dl, "S", created);
-    dlist_setatom(dl, "T", JMAP_NOTIF_CALENDAREVENT);
-    dlist_setatom(dl, "ID", ical_uid);
-    dlist_setatom(dl, "NT", type);
-    dlist_setatom(dl, "M", calmboxname);
-    dlist_printbuf(dl, 1, &buf);
-    fputs("Content-Description: ", fp);
-    fputs(buf_cstring(&buf), fp);
-    fputs("\r\n", fp);
-    buf_reset(&buf);
-    dlist_free(&dl);
-
-    fprintf(fp, "Content-Length: %zu\r\n", strlen(notifstr));
-    fputs("MIME-Version: 1.0\r\n", fp);
-
-    fputs("\r\n", fp);
-    fputs(notifstr, fp);
-
-    fclose(fp);
-    if (r) goto done;
-
-    struct appendstate as;
-    r = append_setup_mbox(&as, notifmbox, authuserid, authstate,
-            0, NULL, 0, 0, EVENT_MESSAGE_NEW);
-    if (r) goto done;
-
-    struct body *body = NULL;
-    r = append_fromstage(&as, &body, stage, created, 0, NULL, 0, NULL);
-    message_free_body(body);
-    free(body);
-    if (!r) {
-        append_commit(&as);
-    }
-    else {
-        append_abort(&as);
-    }
-
-done:
-    append_removestage(stage);
-    buf_free(&buf);
-    free(notifstr);
-    return r;
-}
-
-json_t *build_eventnotif(const char *type,
-                         time_t created,
-                         const char *byprincipal,
-                         const char *byname,
-                         const char *byemail,
-                         const char *ical_uid,
-                         const char *comment,
-                         int is_draft,
-                         json_t *jevent,
-                         json_t *jpatch)
-{
-    json_t *jn = json_object();
-    struct buf buf = BUF_INITIALIZER;
-
-    json_object_set_new(jn, "type", json_string(type));
-    json_object_set_new(jn, "isDraft", json_boolean(is_draft));
-
-    struct jmap_caleventid eid = {
-        .ical_uid = ical_uid
-    };
-    const char *id = jmap_caleventid_encode(&eid, &buf);
-    json_object_set_new(jn, "calendarEventId", json_string(id));
-
-    char date3339[RFC3339_DATETIME_MAX+1];
-    time_to_rfc3339(created, date3339, RFC3339_DATETIME_MAX);
-    json_object_set_new(jn, "created", json_string(date3339));
-
-    json_t *jchangedby = json_object();
-    if (byemail) {
-        if (!strncasecmp(byemail, "mailto:", 7)) byemail += 7;
-        json_object_set_new(jchangedby, "email", json_string(byemail));
-    }
-    if (byname) {
-        json_object_set_new(jchangedby, "name", json_string(byname));
-    }
-    if (byprincipal) {
-        json_object_set_new(jchangedby, "calendarPrincipalId",
-                json_string(byprincipal));
-    }
-    if (!json_object_size(jchangedby)) {
-        json_decref(jchangedby);
-        jchangedby = json_null();
-    }
-    json_object_set_new(jn, "changedBy", jchangedby);
-
-    if (comment) {
-        json_object_set_new(jn, "comment", json_string(comment));
-    }
-    if (jpatch) {
-        json_object_set(jn, "eventPatch", jpatch);
-    }
-    if (jevent) {
-        json_object_set(jn, "event", jevent);
-    }
-
-    buf_free(&buf);
-    return jn;
-}
-
-
-static int create_eventnotif(jmap_req_t *req,
-                             struct mailbox *notifmbox,
-                             const char *calmboxname,
-                             const char *type,
-                             const char *ical_uid,
-                             const strarray_t *schedule_addresses,
-                             const char *comment,
-                             int is_draft,
-                             json_t *jevent,
-                             json_t *jpatch)
-{
-    if (!notifmbox) {
-        xsyslog(LOG_ERR, "can not create event notification (null notifmbox)",
-                "calendar=%s ical_uid=%s", calmboxname, ical_uid);
-        return 0;
-    }
-
-    time_t now = time(NULL);
-
-    const char *byemail = schedule_addresses ?
-        strarray_nth(schedule_addresses, 0) : NULL;
-
-    struct buf byname = BUF_INITIALIZER;
-    const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-    char *calhomename = caldav_mboxname(req->userid, NULL);
-    annotatemore_lookupmask(calhomename, annotname, req->userid, &byname);
-    free(calhomename);
-
-    json_t *jnotif = build_eventnotif(type, now, req->userid,
-            buf_cstring(&byname), byemail, ical_uid, comment,
-            is_draft, jevent, jpatch);
-
-    char *from = eventnotif_fromheader(req->userid);
-    int r = append_eventnotif(from, req->userid, req->authstate, notifmbox,
-            calmboxname, now, jnotif);
-    free(from);
-
-    json_decref(jnotif);
-    buf_free(&byname);
-    return r;
-}
-
-HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
-                                        const char *calmboxname,
-                                        const char *ical_uid,
-                                        const strarray_t *schedule_addresses,
-                                        int is_draft,
-                                        icalcomponent *oldical,
-                                        icalcomponent *newical)
-{
-    mbname_t *mbname = mbname_from_intname(calmboxname);
-    const char *accountid = mbname_userid(mbname);
-    struct mailbox *notifmbox = NULL;
-    mbentry_t *notifmb = NULL;
-    time_t now = time(NULL);
-    json_t *jevent = NULL;
-    json_t *jpatch = NULL;
-    int r = 0;
-
-    assert(oldical || newical);
-
-    if ((user_isnamespacelocked(accountid) == LOCK_SHARED) ||
-        (user_isnamespacelocked(httpd_userid) == LOCK_SHARED)) {
-        /* bail out, before notification mailbox crashes on invalid lock */
-        xsyslog(LOG_ERR, "can not exlusively lock jmapnotify collection",
-                "accountid=%s", accountid);
-        goto done;
-    }
-
-    r = create_notify_collection(accountid, &notifmb);
-    if (r) {
-        xsyslog(LOG_ERR, "can not create jmapnotify collection",
-                "accountid=%s error=%s", accountid, error_message(r));
-        goto done;
-    }
-
-    r = mailbox_open_iwl(notifmb->name, &notifmbox);
-    if (r) {
-        xsyslog(LOG_ERR, "can not open notification mailbox",
-                "name=%s", notifmb->name);
-        goto done;
-    }
-
-    const char *type;
-    if (oldical) {
-        jevent = jmapical_tojmap(oldical, NULL, NULL);
-        if (newical) {
-            type = "updated";
-            json_t *tmp = jmapical_tojmap(newical, NULL, NULL);
-            jpatch = jmap_patchobject_create(jevent, tmp);
-            json_decref(tmp);
-        }
-        else type = "destroyed";
-    }
-    else {
-        type = "created";
-        jevent = jmapical_tojmap(newical, NULL, NULL);
-    }
-    if (!jevent) goto done;
-
-    remove_peruserprops(jevent);
-    remove_peruserprops(jpatch);
-
-    /* Determine who triggered that event notification */
-    struct buf byname = BUF_INITIALIZER;
-    const char *byemail = NULL;
-    const char *byprincipal = NULL;
-    const char **hdr;
-    char *from = NULL;
-
-    if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-Address"))) {
-        byemail = *hdr;
-        if (!strncasecmp(byemail, "mailto:", 7)) {
-            byemail += 7;
-        }
-        from = strconcat("<", byemail, ">", NULL);
-        if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-name"))) {
-            char *val = charset_decode_mimeheader(*hdr, CHARSET_KEEPCASE);
-            if (val) buf_initmcstr(&byname, val);
-        }
-    }
-    else {
-        from = eventnotif_fromheader(httpd_userid);
-        byprincipal = httpd_userid;
-        static const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-        char *calhomename = caldav_mboxname(httpd_userid, NULL);
-        annotatemore_lookupmask(calhomename, annotname, httpd_userid, &byname);
-        free(calhomename);
-        byemail = strarray_nth(schedule_addresses, 0);
-    }
-
-    json_t *jnotif = build_eventnotif(type, now,
-            byprincipal, buf_cstring(&byname), byemail,
-            ical_uid, NULL, is_draft, jevent, jpatch);
-
-    r = append_eventnotif(from, httpd_userid, httpd_authstate, notifmbox,
-                          calmboxname, now, jnotif);
-
-    json_decref(jnotif);
-    buf_free(&byname);
-    free(from);
-
-done:
-    json_decref(jevent);
-    json_decref(jpatch);
-    mailbox_close(&notifmbox);
-    mboxlist_entry_free(&notifmb);
-    mbname_free(&mbname);
-    return r;
-}
-
 static void merge_missing_vevents(icalcomponent *dstical, icalcomponent *srcical)
 {
     hash_table have = HASH_TABLE_INITIALIZER;
@@ -4860,9 +4442,10 @@ static int createevent_store(jmap_req_t *req,
 
     // Create notification
     json_t *myevent = json_deep_copy(create->jsevent);
-    remove_peruserprops(myevent);
-    r2 = create_eventnotif(req, notifmbox, mailbox_name(mbox),
-            "created", create->ical_uid, &schedule_addresses, NULL,
+    jmapical_remove_peruserprops(myevent);
+    r2 = jmap_create_caleventnotif(notifmbox, req->userid, req->authstate,
+            mailbox_name(mbox), "created", create->ical_uid,
+            &schedule_addresses, NULL,
             is_draft, myevent, NULL);
     if (r2) {
         xsyslog(LOG_WARNING, "could not create notification",
@@ -5804,11 +5387,12 @@ static int setcalendarevents_update(jmap_req_t *req,
                                   NULL, &del_imapflags, &schedule_addresses);
         if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
             json_t *patch_copy = json_deep_copy(event_patch);
-            remove_peruserprops(patch_copy);
-            remove_peruserprops(old_event);
+            jmapical_remove_peruserprops(patch_copy);
+            jmapical_remove_peruserprops(old_event);
             if (json_object_size(patch_copy)) {
-                int r2 = create_eventnotif(req, notifmbox, mailbox_name(mbox),
-                        "updated", eid->ical_uid, &schedule_addresses, NULL,
+                int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
+                        req->authstate, mailbox_name(mbox), "updated",
+                        eid->ical_uid, &schedule_addresses, NULL,
                         record.system_flags & FLAG_DRAFT, old_event, patch_copy);
                 if (r2) {
                     xsyslog(LOG_WARNING, "could not create notification",
@@ -6088,9 +5672,10 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     }
 
     /* Create notification */
-    remove_peruserprops(old_event);
-    int r2 = create_eventnotif(req, notifmbox, mailbox_name(mbox),
-            "destroyed", eid->ical_uid, &schedule_addresses, NULL,
+    jmapical_remove_peruserprops(old_event);
+    int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
+            req->authstate, mailbox_name(mbox), "destroyed",
+            eid->ical_uid, &schedule_addresses, NULL,
             record.system_flags & FLAG_DRAFT, old_event, NULL);
     if (r2) {
         xsyslog(LOG_WARNING, "could not create notification",
@@ -6184,7 +5769,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     }
 
     r = caldav_create_defaultcalendars(req->accountid,
-                                       &httpd_namespace, httpd_authstate, NULL);
+                                       &httpd_namespace, req->authstate, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
         json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
@@ -6201,7 +5786,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     }
 
     /* Open notifications mailbox, but continue even on error. */
-    r = create_notify_collection(req->accountid, &notifmb);
+    r = jmap_create_notify_collection(req->accountid, &notifmb);
     if (!r) {
         r = jmap_openmbox(req, notifmb->name, &notifmbox, 1);
     }
@@ -7609,7 +7194,7 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
     }
 
     /* Open notifications mailbox, but continue even on error. */
-    int r = create_notify_collection(req->accountid, &notifmb);
+    int r = jmap_create_notify_collection(req->accountid, &notifmb);
     if (!r) {
         r = jmap_openmbox(req, notifmb->name, &notifmbox, 1);
     }
@@ -10627,7 +10212,7 @@ static int jmap_calendareventnotification_get(struct jmap_req *req)
     struct jmap_get get;
     json_t *err = NULL;
     char *notifmboxname = jmap_notifmboxname(req->accountid);
-    char *notfrom = eventnotif_fromheader(req->userid);
+    char *notfrom = jmap_caleventnotif_format_fromheader(req->userid);
     mbentry_t *notifmb = NULL;
 
     jmap_get_parse(req, &parser, calendareventnotification_props,
@@ -10891,7 +10476,7 @@ static int jmap_calendareventnotification_query(struct jmap_req *req)
     }
 
     if (notifmbox) {
-        char *notfrom = eventnotif_fromheader(req->userid);
+        char *notfrom = jmap_caleventnotif_format_fromheader(req->userid);
         struct eventnotif_match_rock matchrock = {
             req,
             BUF_INITIALIZER,
@@ -10996,7 +10581,7 @@ static int jmap_calendareventnotification_changes(struct jmap_req *req)
     }
 
     char *notifmboxname = jmap_notifmboxname(req->accountid);
-    char *notfrom = eventnotif_fromheader(req->userid);
+    char *notfrom = jmap_caleventnotif_format_fromheader(req->userid);
     struct eventnotif_match_rock matchrock = {
         req,
         BUF_INITIALIZER,

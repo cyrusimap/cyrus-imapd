@@ -78,6 +78,7 @@
 #include "index.h"
 #include "ical_support.h"
 #include "jmap_ical.h"
+#include "jmap_notif.h"
 #include "jcal.h"
 #include "xcal.h"
 #include "map.h"
@@ -1555,7 +1556,8 @@ static int caldav_delete_cal(struct transaction_t *txn,
     if (ical) {
         icalcomponent *comp = icalcomponent_get_first_real_component(ical);
         if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
-            int r2 = jmap_create_caldaveventnotif(txn, mailbox_name(mailbox),
+            int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
+                    httpd_authstate, mailbox_name(mailbox),
                     cdata->ical_uid, &schedule_addresses, is_draft, ical, NULL);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
@@ -3978,7 +3980,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 oldical = caldav_record_to_ical(mailbox, cdata,
                         NULL, NULL);
             }
-            int r2 = jmap_create_caldaveventnotif(txn, mailbox_name(mailbox), uid,
+            int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
+                    httpd_authstate, mailbox_name(mailbox), uid,
                     &schedule_addresses, is_draft, oldical, ical);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",

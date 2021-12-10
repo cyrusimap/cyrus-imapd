@@ -47,7 +47,9 @@
 #include <jansson.h>
 
 #include "hash.h"
+#include "ical_support.h"
 #include "message.h"
+#include "mboxlist.h"
 #include "parseaddr.h"
 #include "smtpclient.h"
 
@@ -201,5 +203,34 @@ extern struct jmap_caleventid *jmap_caleventid_decode(const char *id);
 extern const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf);
 
 extern void jmap_caleventid_free(struct jmap_caleventid **eidptr);
+
+#define JMAP_NOTIF_CALENDAREVENT "jmap-notif-calendarevent"
+
+extern char *jmap_notifmboxname(const char *userid);
+extern int jmap_create_notify_collection(const char *userid, mbentry_t **mbentryptr);
+extern char *jmap_caleventnotif_format_fromheader(const char *userid);
+extern int jmap_create_caleventnotif(struct mailbox *notifmbox,
+                                     const char *userid,
+                                     const struct auth_state *authstate,
+                                     const char *calmboxname,
+                                     const char *type,
+                                     const char *ical_uid,
+                                     const strarray_t *schedule_addresses,
+                                     const char *comment,
+                                     int is_draft,
+                                     json_t *jevent,
+                                     json_t *jpatch);
+
+typedef struct transaction_t txn_t; // defined in httpd.h
+
+extern int jmap_create_caldaveventnotif(struct transaction_t *txn,
+                                        const char *userid,
+                                        const struct auth_state *authstate,
+                                        const char *calmboxname,
+                                        const char *ical_uid,
+                                        const strarray_t *schedule_addresses,
+                                        int is_draft,
+                                        icalcomponent *oldical,
+                                        icalcomponent *newical);
 
 #endif /* JMAP_UTIL_H */
