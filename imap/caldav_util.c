@@ -1389,10 +1389,10 @@ EXPORTED int caldav_create_defaultcalendars(const char *userid,
     return r;
 }
 
-EXPORTED int caldav_read_defaultalarms(const char *mboxname,
-                                       const char *userid,
-                                       const char *annot,
-                                       struct buf *buf)
+static int caldav_read_defaultalarms(const char *mboxname,
+                                     const char *userid,
+                                     const char *annot,
+                                     struct buf *buf)
 {
     struct buf mybuf = BUF_INITIALIZER;
     annotatemore_lookupmask(mboxname, annot, userid, &mybuf);
