@@ -13789,7 +13789,7 @@ EOF
 
     my $event = $self->putandget_vevent($eventId,
         $ical, ['timeZone', 'timeZones']);
-    $self->assert_str_equals('US/Eastern', $event->{timeZone});
+    $self->assert_str_equals('America/New_York', $event->{timeZone});
     $self->assert_null($event->{timeZones});
 }
 
