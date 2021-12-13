@@ -11198,13 +11198,13 @@ struct xfer_header {
     struct xfer_item *items;
 };
 
-enum {
+enum mupdate_op {
     MUPDATE_ACTIVATE,
     MUPDATE_DEACTIVATE,
     MUPDATE_DELETE
 };
 
-static int xfer_mupdate(int op,
+static int xfer_mupdate(enum mupdate_op op,
                         const char *mboxname, const char *part,
                         const char *servername, const char *acl)
 {
