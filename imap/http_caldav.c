@@ -4409,7 +4409,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
     }
 
-    /* Make sure DTEND|DUE > DTSTART, and both values have value same type */
+    /* Make sure DTEND|DUE > DTSTART, and both have the value same type */
     ret = check_endtime(comp, &txn->error.desc);
     if (ret) {
         txn->error.precond = CALDAV_VALID_DATA;
@@ -4458,8 +4458,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             goto done;
         }
 
-        /* Make sure DTEND|DUE > DTSTART, and both values have value same type */
-        ret = check_endtime(comp, &txn->error.desc);
+        /* Make sure DTEND|DUE > DTSTART, and both have the value same type */
+        ret = check_endtime(nextcomp, &txn->error.desc);
         if (ret) {
             txn->error.precond = CALDAV_VALID_DATA;
             goto done;
