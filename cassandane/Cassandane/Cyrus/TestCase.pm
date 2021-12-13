@@ -704,50 +704,43 @@ sub _setup_http_service_objects
     my $service = $self->{instance}->get_service("http");
     return if !$service;
 
-    eval {
-        if ($self->{instance}->{config}->get_bit('httpmodules', 'carddav')) {
-            require Net::CardDAVTalk;
-            $self->{carddav} = Net::CardDAVTalk->new(
-                user => 'cassandane',
-                password => 'pass',
-                host => $service->host(),
-                port => $service->port(),
-                scheme => 'http',
-                url => '/',
-                expandurl => 1,
-            );
-        }
-        if ($self->{instance}->{config}->get_bit('httpmodules', 'caldav')) {
-            require Net::CalDAVTalk;
-            $self->{caldav} = Net::CalDAVTalk->new(
-                user => 'cassandane',
-                password => 'pass',
-                host => $service->host(),
-                port => $service->port(),
-                scheme => 'http',
-                url => '/',
-                expandurl => 1,
-            );
-            $self->{caldav}->UpdateAddressSet("Test User",
-                                              "cassandane\@example.com");
-        }
-        if ($self->{instance}->{config}->get_bit('httpmodules', 'jmap')) {
-            require Mail::JMAPTalk;
-            $ENV{DEBUGJMAP} = 1;
-            $self->{jmap} = Mail::JMAPTalk->new(
-                user => 'cassandane',
-                password => 'pass',
-                host => $service->host(),
-                port => $service->port(),
-                scheme => 'http',
-                url => '/jmap/',
-            );
-        }
-    };
-    if ($@) {
-        my $e = $@;
-        $self->tear_down();
-        die $e;
+    if ($self->{instance}->{config}->get_bit('httpmodules', 'carddav')) {
+        require Net::CardDAVTalk;
+        $self->{carddav} = Net::CardDAVTalk->new(
+            user => 'cassandane',
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+    }
+    if ($self->{instance}->{config}->get_bit('httpmodules', 'caldav')) {
+        require Net::CalDAVTalk;
+        $self->{caldav} = Net::CalDAVTalk->new(
+            user => 'cassandane',
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+        $self->{caldav}->UpdateAddressSet("Test User",
+                                            "cassandane\@example.com");
+    }
+    if ($self->{instance}->{config}->get_bit('httpmodules', 'jmap')) {
+        require Mail::JMAPTalk;
+        $ENV{DEBUGJMAP} = 1;
+        $self->{jmap} = Mail::JMAPTalk->new(
+            user => 'cassandane',
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/jmap/',
+        );
     }
 
     xlog $self, "http service objects setup complete!";
@@ -761,8 +754,15 @@ sub set_up
 
     $self->_create_instances();
     if ($self->{_want}->{start_instances}) {
-        $self->_start_instances();
-        $self->_setup_http_service_objects() if defined $self->{instance};
+        eval {
+            $self->_start_instances();
+            $self->_setup_http_service_objects() if defined $self->{instance};
+        };
+        if ($@) {
+            my $e = $@;
+            $self->tear_down();
+            die $e;
+        }
     }
     else {
         xlog $self, "Instances not started due to :NoStartInstances magic!";
