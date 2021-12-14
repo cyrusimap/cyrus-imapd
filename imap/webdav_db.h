@@ -97,6 +97,12 @@ int webdav_lookup_imapuid(struct webdav_db *webdavdb,
                           struct webdav_data **result,
                           int tombstones);
 
+/* lookup an entry from 'webdavdb' by mailbox and resource content id
+   (optionally inside a transaction for updates) */
+int webdav_lookup_cid(struct webdav_db *webdavdb,
+                      const mbentry_t *mbentry, const char *contentid,
+                      struct webdav_data **result);
+
 /* lookup an entry from 'webdavdb' by resource UID
    (optionally inside a transaction for updates) */
 int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,

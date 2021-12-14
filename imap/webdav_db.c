@@ -363,6 +363,33 @@ EXPORTED int webdav_lookup_imapuid(struct webdav_db *webdavdb,
 }
 
 
+#define CMD_SELCID CMD_GETFIELDS \
+    " WHERE mailbox = :mailbox AND contentid = :contentid;"
+
+EXPORTED int webdav_lookup_cid(struct webdav_db *webdavdb,
+                               const mbentry_t *mbentry,
+                               const char *contentid,
+                               struct webdav_data **result)
+{
+    const char *mailbox = (webdavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",   SQLITE_TEXT, { .s = mailbox       } },
+        { ":contentid", SQLITE_TEXT, { .s = contentid     } },
+        { NULL,         SQLITE_NULL, { .s = NULL          } } };
+    static struct webdav_data wdata;
+    struct read_rock rrock = { webdavdb, &wdata, 0, NULL, NULL };
+    int r;
+
+    *result = memset(&wdata, 0, sizeof(struct webdav_data));
+
+    r = sqldb_exec(webdavdb->db, CMD_SELCID, bval, &read_cb, &rrock);
+    if (!r && !wdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+
+    return r;
+}
+
+
 #define CMD_SELUID CMD_GETFIELDS                                        \
     " WHERE res_uid = :res_uid AND alive = 1;"
 
