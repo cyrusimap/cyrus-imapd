@@ -84,6 +84,7 @@ struct webdav_db {
     struct buf filename;
     struct buf type;
     struct buf subtype;
+    struct buf contentid;
     struct buf res_uid;
     unsigned ref_count;
 };
@@ -171,6 +172,7 @@ EXPORTED int webdav_close(struct webdav_db *webdavdb)
     buf_free(&webdavdb->filename);
     buf_free(&webdavdb->type);
     buf_free(&webdavdb->subtype);
+    buf_free(&webdavdb->contentid);
     buf_free(&webdavdb->res_uid);
 
     r = dav_close(&webdavdb->db);
@@ -248,6 +250,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         wdata->type = (const char *) sqlite3_column_text(stmt, 10);
         wdata->subtype = (const char *) sqlite3_column_text(stmt, 11);
         wdata->res_uid = (const char *) sqlite3_column_text(stmt, 12);
+        wdata->contentid = (const char *) sqlite3_column_text(stmt, 17);
         r = rrock->cb(rrock->rock, wdata);
     }
     else {
@@ -281,6 +284,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         wdata->res_uid =
             column_text_to_buf((const char *) sqlite3_column_text(stmt, 12),
                                &db->res_uid);
+        wdata->contentid =
+            column_text_to_buf((const char *) sqlite3_column_text(stmt, 17),
+                               &db->contentid);
     }
 
     return r;
@@ -290,7 +296,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"          \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  filename, type, subtype, res_uid, ref_count, alive,"             \
-    "  modseq, createdmodseq"                                           \
+    "  modseq, createdmodseq, contentid"                                \
     " FROM dav_objs"                                                    \
 
 

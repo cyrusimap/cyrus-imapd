@@ -67,6 +67,7 @@ struct webdav_data {
     const char *filename;
     const char *type;
     const char *subtype;
+    const char *contentid;
     const char *res_uid;
     unsigned ref_count;
 };
