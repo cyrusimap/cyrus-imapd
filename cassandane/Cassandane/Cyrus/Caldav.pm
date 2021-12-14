@@ -4762,4 +4762,251 @@ EOF
     $self->assert_matches(qr/schedule-response/, $text);
 }
 
+sub test_calendar_query
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $Cal = $CalDAV->GetCalendar($CalendarId);
+
+    xlog $self, "Load some resources";
+    my $vtz = <<EOF;
+BEGIN:VTIMEZONE
+TZID:America/Chicago
+LAST-MODIFIED:20210816T175139Z
+X-LIC-LOCATION:America/Chicago
+TZUNTIL:20211215T221500Z
+BEGIN:DAYLIGHT
+TZNAME:CDT
+TZOFFSETFROM:-0600
+TZOFFSETTO:-0500
+DTSTART:20070311T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZNAME:CST
+TZOFFSETFROM:-0500
+TZOFFSETTO:-0600
+DTSTART:20071104T020000
+RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+END:STANDARD
+END:VTIMEZONE
+EOF
+
+    my $uuid1 = "851e34f4-23fc-4b69-9e90-67468336e53c";
+    my $href1 = "$CalendarId/$uuid1.ics";
+    my $event1 = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+$vtz
+BEGIN:VEVENT
+UID:$uuid1
+SEQUENCE:1
+DTSTART;TZID=America/Chicago:20211215T151500
+DURATION:PT1H
+CREATED:20211213T192812Z
+DTSTAMP:20211213T222618Z
+PRIORITY:0
+SUMMARY:One-Time Event
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+CLASS:PUBLIC
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $uuid2 = "add65fb2-ebdb-455b-b346-8c8673064b27";
+    my $href2 = "$CalendarId/$uuid2.ics";
+    my $event2 = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+$vtz
+BEGIN:VEVENT
+UID:$uuid2
+SEQUENCE:3
+DTSTART;TZID=America/Chicago:20211215T140000
+DURATION:PT1H
+CREATED:20211213T192620Z
+DTSTAMP:20211213T222633Z
+PRIORITY:0
+SUMMARY:Recurring Event
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+CLASS:PUBLIC
+RRULE:FREQ=DAILY;UNTIL=20220101T055959Z
+END:VEVENT
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=America/Chicago:20211217T140000
+UID:$uuid2
+DTSTART;TZID=America/Chicago:20211217T140000
+DURATION:PT1H
+SEQUENCE:3
+CREATED:20211213T192620Z
+DTSTAMP:20211213T222633Z
+PRIORITY:0
+SUMMARY:Recurring Event (exception)
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+CLASS:PUBLIC
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $uuid3 = "d4643cf9-4552-4a3e-8d6c-5f318bcc5b79";
+    my $href3 = "$CalendarId/$uuid3.ics";
+    my $event3 = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+$vtz
+BEGIN:VEVENT
+UID:$uuid3
+SEQUENCE:1
+DTSTART;TZID=America/Chicago:20211201T151500
+DURATION:PT1H
+CREATED:20211213T192812Z
+DTSTAMP:20211213T222618Z
+PRIORITY:0
+SUMMARY:Out-of-Range Event
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+CLASS:PUBLIC
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $uuid4 = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href4 = "$CalendarId/$uuid4.ics";
+    my $event4 = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+$vtz
+BEGIN:VTODO
+CREATED:20211213T192812Z
+DTSTAMP:20211213T222618Z
+DUE;TZID=America/Chicago:20211217T151500
+SEQUENCE:1
+STATUS:NEEDS-ACTION
+SUMMARY:Task to be ignored
+UID:$uuid4
+END:VTODO
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href1, $event1, 'Content-Type' => 'text/calendar');
+    $CalDAV->Request('PUT', $href2, $event2, 'Content-Type' => 'text/calendar');
+    $CalDAV->Request('PUT', $href3, $event3, 'Content-Type' => 'text/calendar');
+    $CalDAV->Request('PUT', $href4, $event4, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Perform calendar-query";
+    my $xml = <<EOF;
+<c:calendar-query xmlns:d="DAV:"
+                  xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop>
+    <d:getetag />
+    <c:calendar-data>
+      <c:expand start="20211212T060000Z" end="20211219T060000Z"/>
+      <c:comp name="VCALENDAR">
+        <c:prop name="VERSION"/>
+        <c:comp name="VEVENT">
+          <c:prop name="SUMMARY"/>
+          <c:prop name="UID"/>
+          <c:prop name="DTSTART"/>
+          <c:prop name="RECURRENCE-ID"/>
+        </c:comp>
+      </c:comp>
+    </c:calendar-data>
+  </d:prop>
+  <c:filter>
+    <c:comp-filter name="VCALENDAR">
+      <c:comp-filter name="VEVENT">
+        <c:time-range start="20211212T060000Z" end="20211219T060000Z"/>
+      </c:comp-filter>
+    </c:comp-filter>
+  </c:filter>
+</c:calendar-query>
+EOF
+
+    my $res = $CalDAV->Request('REPORT',
+                               "/dav/calendars/user/cassandane/$CalendarId",
+                               $xml, Depth => 1, 'Content-Type' => 'text/xml');
+    my $responses = $res->{'{DAV:}response'};
+    $self->assert_equals(2, scalar @$responses);
+
+    my $ical = Data::ICal->new(data =>
+                               $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content});
+    $self->assert_str_equals('One-Time Event',
+                             $ical->{entries}[0]{properties}{summary}[0]{value});
+    $self->assert_str_equals($uuid1,
+                             $ical->{entries}[0]{properties}{uid}[0]{value});
+    $self->assert_str_equals('20211215T211500Z',
+                             $ical->{entries}[0]{properties}{dtstart}[0]{value});
+    $self->assert_null($ical->{entries}[0]{properties}{dtstamp});
+    $self->assert_null($ical->{entries}[0]{properties}{status});
+    $self->assert_null($ical->{entries}[0]{properties}{rrule});
+    $self->assert_null($ical->{entries}[0]{properties}{'recurrence-id'});
+
+    $ical = Data::ICal->new(data =>
+                            $res->{'{DAV:}response'}[1]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content});
+
+    $self->assert_str_equals('Recurring Event',
+                             $ical->{entries}[0]{properties}{summary}[0]{value});
+    $self->assert_str_equals($uuid2,
+                             $ical->{entries}[0]{properties}{uid}[0]{value});
+    $self->assert_str_equals('20211215T200000Z',
+                             $ical->{entries}[0]{properties}{dtstart}[0]{value});
+    $self->assert_null($ical->{entries}[0]{properties}{dtstamp});
+    $self->assert_null($ical->{entries}[0]{properties}{status});
+    $self->assert_null($ical->{entries}[0]{properties}{rrule});
+    $self->assert_null($ical->{entries}[0]{properties}{'recurrence-id'});
+
+    $self->assert_str_equals('Recurring Event',
+                             $ical->{entries}[1]{properties}{summary}[0]{value});
+    $self->assert_str_equals($uuid2,
+                             $ical->{entries}[1]{properties}{uid}[0]{value});
+    $self->assert_str_equals('20211216T200000Z',
+                             $ical->{entries}[1]{properties}{dtstart}[0]{value});
+    $self->assert_str_equals('20211216T200000Z',
+                             $ical->{entries}[1]{properties}{'recurrence-id'}[0]{value});
+    $self->assert_null($ical->{entries}[1]{properties}{dtstamp});
+    $self->assert_null($ical->{entries}[1]{properties}{status});
+    $self->assert_null($ical->{entries}[1]{properties}{rrule});
+
+    $self->assert_str_equals('Recurring Event (exception)',
+                             $ical->{entries}[2]{properties}{summary}[0]{value});
+    $self->assert_str_equals($uuid2,
+                             $ical->{entries}[2]{properties}{uid}[0]{value});
+    $self->assert_str_equals('20211217T200000Z',
+                             $ical->{entries}[2]{properties}{dtstart}[0]{value});
+    $self->assert_str_equals('20211217T200000Z',
+                             $ical->{entries}[2]{properties}{'recurrence-id'}[0]{value});
+    $self->assert_null($ical->{entries}[2]{properties}{dtstamp});
+    $self->assert_null($ical->{entries}[2]{properties}{status});
+    $self->assert_null($ical->{entries}[2]{properties}{rrule});
+
+    $self->assert_str_equals('Recurring Event',
+                             $ical->{entries}[3]{properties}{summary}[0]{value});
+    $self->assert_str_equals($uuid2,
+                             $ical->{entries}[3]{properties}{uid}[0]{value});
+    $self->assert_str_equals('20211218T200000Z',
+                             $ical->{entries}[3]{properties}{dtstart}[0]{value});
+    $self->assert_str_equals('20211218T200000Z',
+                             $ical->{entries}[3]{properties}{'recurrence-id'}[0]{value});
+    $self->assert_null($ical->{entries}[3]{properties}{dtstamp});
+    $self->assert_null($ical->{entries}[3]{properties}{status});
+    $self->assert_null($ical->{entries}[3]{properties}{rrule});
+}
+
 1;
