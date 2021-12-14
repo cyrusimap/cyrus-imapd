@@ -579,6 +579,7 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_calendar_capabilities(capas, authstate, authuserid, accountid);
         jmap_backup_capabilities(capas);
         jmap_notes_capabilities(capas);
+        jmap_files_capabilities(capas);
 #ifdef USE_SIEVE
         jmap_sieve_capabilities(capas);
         jmap_vacation_capabilities(capas);
