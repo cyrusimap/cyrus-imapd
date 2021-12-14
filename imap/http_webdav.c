@@ -77,7 +77,7 @@ static int webdav_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct mime_type_t *mime);
 static int webdav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
-                      void *davdb, unsigned flags);
+                      const char *uid, void *davdb, unsigned flags);
 
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
@@ -630,7 +630,8 @@ static int webdav_get(struct transaction_t *txn,
 /* Perform a PUT request on a WebDAV resource */
 static int webdav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
-                      void *destdb, unsigned flags __attribute__((unused)))
+                      const char *uid __attribute__((unused)), void *destdb,
+                      unsigned flags __attribute__((unused)))
 {
     struct webdav_db *db = (struct webdav_db *)destdb;
     struct buf *buf = (struct buf *) obj;
