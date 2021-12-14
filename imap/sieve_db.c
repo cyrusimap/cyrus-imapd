@@ -1071,8 +1071,6 @@ EXPORTED int sieve_script_rebuild(const char *userid,
     " WHERE rowid = :rowid;"
 
 #define CMD_UPDATE_v13_TABLE             \
-    "DELETE FROM sieve_scripts WHERE (rowid, modseq) NOT IN" \
-    " (SELECT rowid, MAX(modseq) FROM sieve_scripts GROUP BY imap_uid);" \
     "UPDATE sieve_scripts SET mailbox = :mailbox;"
 
 
