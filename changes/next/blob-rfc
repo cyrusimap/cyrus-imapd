@@ -1,9 +1,9 @@
 Description:
 
-JMAP Blob handling updated to draft-ietf-jmap-blob-02
+JMAP Blob handling updated to draft-ietf-jmap-blob-04
 
-NOTE: this is still an incomplete draft, and we're not doing all
-the capabilities yet, and we also have Blob/xget for now
+NOTE: this is in working group last call.  There may be further
+changes before it's totally standard.
 
 Config changes:
 
