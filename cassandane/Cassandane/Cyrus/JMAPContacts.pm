@@ -2241,7 +2241,7 @@ sub test_contact_set_avatar_singlecommand
 
     my $res = $jmap->CallMethods([
         ['Blob/set', { create => {
-            "img" => { content => 'some photo',
+            "img" => { 'data:asText' => 'some photo',
                        type => 'image/jpeg' } } }, 'R0'],
         ['Contact/set', {create => {"1" => $contact }}, "R1"],
         ['Contact/get', {}, "R2"]],
@@ -2309,7 +2309,7 @@ sub test_contact_set_avatar_from_deleted_contact
     xlog $self, "create initial card";
     my $res = $jmap->CallMethods([
         ['Blob/set', { create => {
-            "img" => { content => 'some photo',
+            "img" => { 'data:asText' => 'some photo',
                        type => 'image/jpeg' } } }, 'R0'],
         ['Contact/set', {create => {"1" => $contact }}, "R1"],
         ['Contact/get', {}, "R2"]],

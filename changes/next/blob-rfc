@@ -1,0 +1,19 @@
+Description:
+
+JMAP Blob handling updated to draft-ietf-jmap-blob-04
+
+NOTE: this is in working group last call.  There may be further
+changes before it's totally standard.
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+No upgrade changes.  If you were relying on old behaviour of
+Blob/get or Blob/set then you need to update your client to match
+
+GitHub issue:
+
+None

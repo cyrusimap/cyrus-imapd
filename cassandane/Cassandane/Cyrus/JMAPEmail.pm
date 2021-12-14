@@ -14753,27 +14753,22 @@ sub test_blob_get
     my $blobId = $res->[1][1]{list}[0]{blobId};
     $self->assert_not_null($blobId);
 
-    my $wantMailboxIds = $res->[1][1]{list}[0]{mailboxIds};
-    my $wantEmailIds = {
-        $res->[1][1]{list}[0]{id} => JSON::true
-    };
-    my $wantThreadIds = {
-        $res->[1][1]{list}[0]{threadId} => JSON::true
-    };
+    my $wantMailboxIds = [keys %{$res->[1][1]{list}[0]{mailboxIds}}];
+    my $wantEmailIds = [$res->[1][1]{list}[0]{id}];
+    my $wantThreadIds = [$res->[1][1]{list}[0]{threadId}];
 
     my @using = @{ $jmap->DefaultUsing() };
     push @using, 'https://cyrusimap.org/ns/jmap/blob';
     $jmap->DefaultUsing(\@using);
 
     $res = $jmap->CallMethods([
-        ['Blob/get', { ids => [$blobId]}, "R1"],
+        ['Blob/lookup', { ids => [$blobId], types => ['Mailbox', 'Thread', 'Email']}, "R1"],
     ]);
 
     my $blob = $res->[0][1]{list}[0];
-    $self->assert_deep_equals($wantMailboxIds, $blob->{mailboxIds});
-    $self->assert_deep_equals($wantEmailIds, $blob->{emailIds});
-    $self->assert_deep_equals($wantThreadIds, $blob->{threadIds});
-
+    $self->assert_deep_equals($wantMailboxIds, $blob->{types}{Mailbox});
+    $self->assert_deep_equals($wantEmailIds, $blob->{types}{Email});
+    $self->assert_deep_equals($wantThreadIds, $blob->{types}{Thread});
 }
 
 sub test_email_set_mimeversion
@@ -19630,7 +19625,7 @@ EOF
 
     xlog $self, "do the lot!";
     $res = $jmap->CallMethods([
-            ['Blob/set', { create => { "a" => { content => $email } } }, 'R0'],
+            ['Blob/set', { create => { "a" => { 'data:asText' => $email } } }, 'R0'],
             ['Email/import', {
             emails => {
                 "1" => {
@@ -19654,7 +19649,7 @@ EOF
     close(FH);
 
     $res = $jmap->CallMethods([
-            ['Blob/set', { create => { "img" => { content64 => encode_base64($binary, ''), type => 'image/gif' } } }, 'R0'],
+            ['Blob/set', { create => { "img" => { 'data:asBase64' => encode_base64($binary, ''), type => 'image/gif' } } }, 'R0'],
             ['Email/set', {
             create => {
                 "2" => {
