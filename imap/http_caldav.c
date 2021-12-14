@@ -4834,7 +4834,7 @@ static int expand_cb(icalcomponent *comp,
 
         switch (icalproperty_isa(prop)) {
         case ICAL_DTSTART_PROPERTY:
-            /* Fetch exiting DTSTART (might be master) */
+            /* Fetch existing DTSTART (might be master) */
             dtp = icalproperty_get_datetimeperiod(prop);
             dtstart = icaltime_convert_to_zone(dtp.time, utc_zone);
 
@@ -5106,7 +5106,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     }
     else {
         struct caldav_data *cdata = (struct caldav_data *) fctx->data;
-        icalcomponent *ical = NULL;
+        icalcomponent *ical = fctx->obj;
 
         if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
 
