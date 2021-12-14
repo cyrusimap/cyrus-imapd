@@ -2184,8 +2184,8 @@ sub test_no_tombstones
         $mbtype_deleted = 1 << 4;
     }
 
-    $self->assert_num_equals($mbtype_deleted,
-                             $mailboxesdb->{$tombstone_name}->{mbtype});
+    $self->assert_bits_set($mbtype_deleted,
+                           $mailboxesdb->{$tombstone_name}->{mbtype});
 
     # basic list
     my $data = $imaptalk->list("", "*");
@@ -2239,8 +2239,8 @@ sub test_no_inbox_tombstone
         $mbtype_deleted = 1 << 4;
     }
 
-    $self->assert_num_equals($mbtype_deleted,
-                             $mailboxesdb->{$tombstone_name}->{mbtype});
+    $self->assert_bits_set($mbtype_deleted,
+                           $mailboxesdb->{$tombstone_name}->{mbtype});
 
     my $imaptalk = $self->{store}->get_client();
 

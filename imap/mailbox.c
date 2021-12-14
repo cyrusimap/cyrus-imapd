@@ -6474,13 +6474,9 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     newmailbox->h.uniqueid = xstrdup(newuniqueid);
     newmailbox->header_dirty = 1;
 
-    /* copy any mailbox annotations (but keep the known quota
-     * amount, because we already counted that usage.  XXX horrible
-     * hack */
-    quota_t annotused = newmailbox->i.quota_annot_used;
+    /* update mailbox annotations if necessary */
     r = annotate_rename_mailbox(oldmailbox, newmailbox);
     if (r) goto fail;
-    newmailbox->i.quota_annot_used = annotused;
 
     /* mark the "used" back to zero, so it updates the new quota! */
     mailbox_set_quotaroot(newmailbox, newquotaroot);
