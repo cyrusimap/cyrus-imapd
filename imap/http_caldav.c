@@ -1282,6 +1282,7 @@ static void decrement_refcount(const char *managed_id,
                                struct mailbox *attachments,
                                struct webdav_db *webdavdb);
 static struct webdav_data *increment_refcount(const char *managed_id,
+                                              struct mailbox *attachments,
                                               struct webdav_db *webdavdb);
 
 enum {
@@ -1304,7 +1305,7 @@ static void update_refcount(const char *mid, short *op,
         break;
 
     case REFCNT_INC:
-        increment_refcount(mid, urock->webdavdb);
+        increment_refcount(mid, urock->attachments, urock->webdavdb);
         break;
     }
 }
@@ -1388,6 +1389,13 @@ HIDDEN int caldav_manage_attachments(const char *userid,
                 /* Find DAV record for the attachment with this managed-id */
                 mid = icalparameter_get_managedid(param);
                 webdav_lookup_uid(webdavdb, mid, &wdata);
+
+                if (!wdata->dav.rowid) {
+                    /* Check managed-id as contentid
+                       (legacy record prior to res_uid being unique) */
+                    webdav_lookup_cid(webdavdb,
+                                      attachments->mbentry, mid, &wdata);
+                }
 
                 if (!wdata->dav.rowid) {
                     ret = HTTP_NOT_FOUND;
@@ -2636,6 +2644,12 @@ static void decrement_refcount(const char *managed_id,
     /* Find DAV record for the attachment with this managed-id */
     webdav_lookup_uid(webdavdb, managed_id, &wdata);
 
+    if (!wdata->dav.rowid) {
+        /* Check managed-id as contentid
+           (legacy record prior to res_uid being unique) */
+        webdav_lookup_cid(webdavdb, attachments->mbentry, managed_id, &wdata);
+    }
+
     if (!wdata->dav.rowid) return;
 
     if (!--wdata->ref_count) {
@@ -2665,6 +2679,7 @@ static void decrement_refcount(const char *managed_id,
 
 /* Increment reference count on a managed attachment resource */
 static struct webdav_data *increment_refcount(const char *managed_id,
+                                              struct mailbox *attachments,
                                               struct webdav_db *webdavdb)
 {
     int r;
@@ -2672,6 +2687,12 @@ static struct webdav_data *increment_refcount(const char *managed_id,
 
     /* Find DAV record for the attachment with this managed-id */
     webdav_lookup_uid(webdavdb, managed_id, &wdata);
+
+    if (!wdata->dav.rowid) {
+        /* Check managed-id as contentid
+           (legacy record prior to res_uid being unique) */
+        webdav_lookup_cid(webdavdb, attachments->mbentry, managed_id, &wdata);
+    }
 
     if (wdata->dav.rowid) {
         /* Update reference count on WebDAV record */
@@ -2893,7 +2914,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         }
 
         /* Update reference count */
-        wdata = increment_refcount(uid, webdavdb);
+        wdata = increment_refcount(uid, attachments, webdavdb);
 
         /* Create new ATTACH property */
         const char *baseurl = config_getstring(IMAPOPT_WEBDAV_ATTACHMENTS_BASEURL);
