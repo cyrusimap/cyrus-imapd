@@ -99,6 +99,14 @@ int json_array_find(json_t *array, const char *needle)
     return -1;
 }
 
+const char *json_array_get_string(const json_t *array, size_t index)
+{
+    const json_t *jval = json_array_get(array, index);
+    if (!jval) return NULL;
+    const char *val = json_string_value(jval);
+    return val;
+}
+
 #ifdef NEED_JANSSON_JSON_DUMPB
 /* https://jansson.readthedocs.io/en/2.11/apiref.html#c.json_dumpb */
 EXPORTED size_t json_dumpb(const json_t *json,

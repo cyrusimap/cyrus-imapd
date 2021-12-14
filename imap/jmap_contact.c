@@ -703,14 +703,6 @@ static int jmap_contactgroup_get(struct jmap_req *req)
     return _contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP);
 }
 
-static const char *_json_array_get_string(const json_t *obj, size_t index)
-{
-    const json_t *jval = json_array_get(obj, index);
-    if (!jval) return NULL;
-    const char *val = json_string_value(jval);
-    return val;
-}
-
 
 static int getchanges_cb(void *rock, struct carddav_data *cdata)
 {
@@ -836,7 +828,7 @@ static int _add_group_entries(struct jmap_req *req,
     struct buf buf = BUF_INITIALIZER;
 
     for (index = 0; index < json_array_size(members); index++) {
-        const char *item = _json_array_get_string(members, index);
+        const char *item = json_array_get_string(members, index);
         const char *uid = _resolve_contactid(req, item);
         if (!item || !uid) {
             buf_printf(&buf, "contactIds[%zu]", index);
@@ -1315,7 +1307,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
     /* destroy */
     size_t index;
     for (index = 0; index < json_array_size(set.destroy); index++) {
-        const char *uid = _json_array_get_string(set.destroy, index);
+        const char *uid = json_array_get_string(set.destroy, index);
         if (!uid) {
             json_t *err = json_pack("{s:s}", "type", "invalidArguments");
             json_object_set_new(set.not_destroyed, uid, err);
