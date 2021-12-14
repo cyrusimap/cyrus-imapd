@@ -55,6 +55,7 @@
 #include "annotate.h"
 #include "carddav_db.h"
 #include "cyr_qsort_r.h"
+#include "dav_util.h"
 #include "global.h"
 #include "hash.h"
 #include "http_carddav.h"
@@ -1252,8 +1253,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                     property_blob_free(&blob);
                 }
 
-                r = carddav_remove(mailbox, olduid,
-                                   /*isreplace*/!newmailbox, req->userid);
+                r = dav_remove_resource(mailbox, olduid,
+                                        /*isreplace*/!newmailbox, req->userid);
             }
         }
 
@@ -1357,7 +1358,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                "jmap: remove %s %s/%s",
                kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                req->accountid, uid);
-        r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
+        r = dav_remove_resource(mailbox, olduid, /*isreplace*/0, req->userid);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
                              "kind=<%s> mailbox=<%s> olduid=<%u>",

@@ -165,4 +165,7 @@ int dav_store_resource(struct transaction_t *txn,
                        const strarray_t *add_imapflags,
                        const strarray_t *del_imapflags);
 
+int dav_remove_resource(struct mailbox *mailbox,
+                        uint32_t olduid, int isreplace, const char *userid);
+
 #endif /* DAV_UTIL_H */
