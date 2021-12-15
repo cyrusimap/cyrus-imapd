@@ -582,6 +582,26 @@ EXPORTED int webdav_get_updates(struct webdav_db *webdavdb,
     return r;
 }
 
+EXPORTED char *webdav_mboxname(const char *userid, const char *name)
+{
+    struct buf boxbuf = BUF_INITIALIZER;
+    char *res = NULL;
+
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
+
+    if (name) {
+        size_t len = strcspn(name, "/");
+        buf_putc(&boxbuf, '.');
+        buf_appendmap(&boxbuf, name, len);
+    }
+
+    res = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+
+    buf_free(&boxbuf);
+
+    return res;
+}
+
 #else
 
 EXPORTED int webdav_init(void)

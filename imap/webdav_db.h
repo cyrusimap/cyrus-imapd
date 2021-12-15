@@ -140,6 +140,8 @@ int webdav_get_updates(struct webdav_db *webdavdb,
                        modseq_t oldmodseq, const mbentry_t *mbentry, int kind,
                        int max_records, webdav_cb_t *cb, void *rock);
 
+char *webdav_mboxname(const char *userid, const char *name);
+
 #endif /* WITH_DAV */
 
 #endif /* WEBDAV_DB_H */
