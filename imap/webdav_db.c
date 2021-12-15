@@ -436,12 +436,14 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const mbentry_t *mbentry
     "  creationdate, mailbox, resource, imap_uid, modseq,"              \
     "  createdmodseq,"                                                  \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
-    "  filename, type, subtype, res_uid, ref_count, alive )"            \
+    "  filename, type, subtype,"                                        \
+    "  contentid, res_uid, ref_count, alive )"                          \
     " VALUES ("                                                         \
     "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"         \
     "  :createdmodseq,"                                                 \
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"          \
-    "  :filename, :type, :subtype, :res_uid, :ref_count, :alive );"
+    "  :filename, :type, :subtype,"                                     \
+    "  :contentid, :res_uid, :ref_count, :alive );"
 
 #define CMD_UPDATE                      \
     "UPDATE dav_objs SET"               \
@@ -455,7 +457,7 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const mbentry_t *mbentry
     "  filename     = :filename,"       \
     "  type         = :type,"           \
     "  subtype      = :subtype,"        \
-    "  res_uid      = :res_uid,"        \
+    "  contentid    = :contentid,"      \
     "  ref_count    = :ref_count,"      \
     "  alive        = :alive"           \
     " WHERE rowid = :rowid;"
@@ -473,9 +475,10 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata)
         { ":filename",     SQLITE_TEXT,    { .s = wdata->filename         } },
         { ":type",         SQLITE_TEXT,    { .s = wdata->type             } },
         { ":subtype",      SQLITE_TEXT,    { .s = wdata->subtype          } },
-        { ":res_uid",      SQLITE_TEXT,    { .s = wdata->res_uid          } },
+        { ":contentid",    SQLITE_TEXT,    { .s = wdata->contentid        } },
         { ":ref_count",    SQLITE_INTEGER, { .i = wdata->ref_count        } },
         { ":alive",        SQLITE_INTEGER, { .i = wdata->dav.alive        } },
+        { NULL,            SQLITE_NULL,    { .s = NULL                    } },
         { NULL,            SQLITE_NULL,    { .s = NULL                    } },
         { NULL,            SQLITE_NULL,    { .s = NULL                    } },
         { NULL,            SQLITE_NULL,    { .s = NULL                    } },
@@ -502,6 +505,9 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata)
         bval[15].name = ":resource";
         bval[15].type = SQLITE_TEXT;
         bval[15].val.s = wdata->dav.resource;
+        bval[16].name = ":res_uid";
+        bval[16].type = SQLITE_TEXT;
+        bval[16].val.s = wdata->res_uid;
     }
 
     r = sqldb_exec(webdavdb->db, cmd, bval, NULL, NULL);
