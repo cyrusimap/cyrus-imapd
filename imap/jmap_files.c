@@ -195,12 +195,206 @@ static const jmap_property_t files_props[] = {
     { NULL, NULL, 0 }
 };
 
+struct get_rock {
+    struct jmap_req *req;
+    struct jmap_get *get;
+    struct webdav_db *db;
+    struct buf *buf;
+    const mbentry_t *mbentry;
+    int isroot;
+};
+
+static int getfiles_cb(void *vrock, struct webdav_data *wdata)
+{
+    struct get_rock *rock = vrock;
+
+    json_t *obj = json_pack("{s:s}", "id", wdata->res_uid);
+
+    if (jmap_wantprop(rock->get->props, "parentId")) {
+        if (rock->isroot) {
+            /* child of root */
+            json_object_set_new(obj, "parentId", json_string("root"));
+        }
+        else {
+            json_object_set_new(obj, "parentId",
+                                json_string(rock->mbentry->uniqueid));
+        }
+    }
+
+    if (jmap_wantprop(rock->get->props, "blobId")) {
+        buf_reset(rock->buf);
+        buf_printf(rock->buf, "G%s", wdata->contentid);
+        json_object_set_new(obj, "blobId", json_string(buf_cstring(rock->buf)));
+    }
+
+    if (jmap_wantprop(rock->get->props, "name")) {
+        json_object_set_new(obj, "name", json_string(wdata->filename));
+    }
+
+    if (jmap_wantprop(rock->get->props, "type")) {
+        buf_reset(rock->buf);
+        buf_printf(rock->buf, "%s/%s", wdata->type, wdata->subtype);
+        json_object_set_new(obj, "type", json_string(buf_cstring(rock->buf)));
+    }
+
+    if (jmap_wantprop(rock->get->props, "size")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "created")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "modified")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "width")) {
+        json_object_set_new(obj, "width", json_null());
+    }
+
+    if (jmap_wantprop(rock->get->props, "height")) {
+        json_object_set_new(obj, "height", json_null());
+    }
+
+    if (jmap_wantprop(rock->get->props, "orientation")) {
+        json_object_set_new(obj, "orientation", json_null());
+    }
+
+    if (jmap_wantprop(rock->get->props, "title")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "comment")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "myRights")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "shareWith")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "sharedLinkURL")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "isSharedLinkEnabled")) {
+    }
+
+    json_array_append_new(rock->get->list, obj);
+
+    return 0;
+}
+
+static int getfolders_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct get_rock *rock = vrock;
+    mbname_t *mbname = NULL;
+    int r;
+
+    /* Only DAV drive collections... */
+    if (!mboxname_isdavdrivemailbox(mbentry->name, mbentry->mbtype)) return 0;
+
+    /* ...which are at least readable or visible... */
+    if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS))
+        return IMAP_PERMISSION_DENIED;
+
+    // needed for some fields
+//    int rights = jmap_myrights_mbentry(rock->req, mbentry);
+
+    /* OK, we want this one... */
+    mbname = mbname_from_intname(mbentry->name);
+
+    const strarray_t *boxes = mbname_boxes(mbname);
+
+    if (strarray_size(boxes) < 2) {
+        /* Don't create an entry for root collection */
+        goto files;
+    }
+
+    json_t *obj = json_pack("{s:s}", "id", mbentry->uniqueid);
+
+    if (jmap_wantprop(rock->get->props, "parentId")) {
+        if (strarray_size(boxes) == 2) {
+            /* child of root */
+            json_object_set_new(obj, "parentId", json_string("root"));
+        }
+        else {
+            mbentry_t *parent = NULL;
+            r = mboxlist_findparent(mbentry->name, &parent);
+            json_object_set_new(obj, "parentId", json_string(parent->uniqueid));
+            mboxlist_entry_free(&parent);
+            if (r) goto done;
+        }
+    }
+
+    if (jmap_wantprop(rock->get->props, "blobId")) {
+        json_object_set_new(obj, "blobId", json_null());
+    }
+
+    if (jmap_wantprop(rock->get->props, "name")) {
+        json_object_set_new(obj, "name", json_string(strarray_nth(boxes, -1)));
+    }
+
+    if (jmap_wantprop(rock->get->props, "type")) {
+        json_object_set_new(obj, "type", json_null());
+    }
+
+    if (jmap_wantprop(rock->get->props, "size")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "created")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "modified")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "width")) {
+        json_object_set_new(obj, "width", json_null());
+    }
+
+    if (jmap_wantprop(rock->get->props, "height")) {
+        json_object_set_new(obj, "height", json_null());
+    }
+
+    if (jmap_wantprop(rock->get->props, "orientation")) {
+        json_object_set_new(obj, "orientation", json_null());
+    }
+
+    if (jmap_wantprop(rock->get->props, "title")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "comment")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "myRights")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "shareWith")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "sharedLinkURL")) {
+    }
+
+    if (jmap_wantprop(rock->get->props, "isSharedLinkEnabled")) {
+    }
+
+    json_array_append_new(rock->get->list, obj);
+
+  files:
+    if (rock->db) {
+        rock->mbentry = mbentry;
+        rock->isroot = (strarray_size(boxes) < 2);
+        r = webdav_foreach(rock->db, mbentry, &getfiles_cb, rock);
+    }
+
+  done:
+    mbname_free(&mbname);
+    return 0;
+}
+
 static int jmap_files_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
     json_t *err = NULL;
     struct webdav_db *db = NULL;
+    struct buf buf = BUF_INITIALIZER;
     int r = 0;
 
     jmap_get_parse(req, &parser, files_props, /*allow_null_ids*/1,
@@ -218,16 +412,67 @@ static int jmap_files_get(jmap_req_t *req)
         goto done;
     }
 
-    /* Does the client request specific files? */
+    /* Build callback data */
+    struct get_rock rock = { req, &get, NULL, &buf, NULL, 0 };
+
+    /* Does the client request specific resources? */
     if (JNOTNULL(get.ids)) {
         size_t i;
         json_t *jval;
+        char *root = webdav_mboxname(req->accountid, NULL);
 
         json_array_foreach(get.ids, i, jval) {
-//            const char *id = json_string_value(jval);
+            const char *id = json_string_value(jval);
+            struct webdav_data *wdata = NULL;
+            mbentry_t *mbentry = NULL;
+
+            r = webdav_lookup_uid(db, id, &wdata);
+            if (!r) {
+                id = wdata->dav.mailbox;
+            }
+
+            r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
+            if (r == IMAP_NOTFOUND || !mbentry) {
+                r = IMAP_NOTFOUND;
+            }
+            else if (wdata->dav.rowid) {
+                if (!mboxname_isdavdrivemailbox(mbentry->name, mbentry->mbtype)) {
+                    /* Only DAV drive collections... */
+                    r = IMAP_NOTFOUND;
+                }
+                else if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+                    /* ...which are at least readable or visible... */
+                    r = IMAP_PERMISSION_DENIED;
+                }
+                else {
+                    rock.mbentry = mbentry;
+                    rock.isroot = !strcmp(root, mbentry->name);
+                    r = getfiles_cb(&rock, wdata);
+                }
+            }
+            else {
+                r = getfolders_cb(mbentry, &rock);
+            }
+
+            if (r) {
+                json_array_append(get.not_found, jval);
+            }
+
+            mboxlist_entry_free(&mbentry);
+            r = 0;
         }
+
+        free(root);
     }
     else {
+        rock.db = db;  // do files in addition to collections
+        // XXX: replace with a function which only looks inside INBOX.#drive
+        r = mboxlist_usermboxtree(req->accountid, req->authstate,
+                                  &getfolders_cb, &rock, 0);
+        if (r) {
+            jmap_error(req, jmap_server_error(r));
+            goto done;
+        }
     }
 
     /* Build response */
@@ -235,12 +480,11 @@ static int jmap_files_get(jmap_req_t *req)
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     jmap_ok(req, jmap_get_reply(&get));
-    r = 0;
 
 done:
-    if (r) jmap_error(req, jmap_server_error(r));
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
+    buf_free(&buf);
     if (db) webdav_close(db);
 
     return 0;
