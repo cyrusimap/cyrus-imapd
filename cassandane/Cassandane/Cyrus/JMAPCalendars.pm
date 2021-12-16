@@ -1631,7 +1631,6 @@ sub test_calendarevent_get_participants
                 imip => 'mailto:smithers@example.com',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
         },
         '39b16b858076733c1d890cbcef73eca0e874064d' => {
             '@type' => 'Participant',
@@ -1645,7 +1644,6 @@ sub test_calendarevent_get_participants
                 imip => 'mailto:homer@example.com',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
         },
         'carl' => {
             '@type' => 'Participant',
@@ -1678,7 +1676,6 @@ sub test_calendarevent_get_participants
                 imip => 'mailto:lenny@example.com',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
         },
         'd6db3540fe51335b7154f144456e9eac2778fc8f' => {
             '@type' => 'Participant',
@@ -1695,7 +1692,6 @@ sub test_calendarevent_get_participants
                 imip => 'mailto:larry@example.com',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
         },
     };
     $self->assert_deep_equals($wantParticipants, $event->{participants});
@@ -1720,7 +1716,6 @@ sub test_calendarevent_get_organizer
                 imip => 'mailto:organizer@local',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
             participationStatus => 'needs-action',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
@@ -1732,7 +1727,6 @@ sub test_calendarevent_get_organizer
                 imip => 'mailto:attendee@local',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
             participationStatus => 'needs-action',
         },
     };
@@ -1764,7 +1758,6 @@ sub test_calendarevent_organizer_noattendees_legacy
                 imip => 'mailto:organizer@local',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
             participationStatus => 'needs-action',
         },
     };
@@ -1793,7 +1786,6 @@ sub test_calendarevent_organizer_noattendees
                 imip => 'mailto:organizer@local',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
             participationStatus => 'needs-action',
         },
     };
@@ -1885,7 +1877,6 @@ sub test_calendarevent_attendee_noorganizer
             },
             'participationStatus' => 'needs-action',
             'expectReply' => JSON::false,
-            'scheduleSequence' => 0
         }
     };
     $self->assert_deep_equals($wantParticipants, $event->{participants});
@@ -1962,7 +1953,6 @@ sub test_calendarevent_get_organizer_bogusuri
                 other => '/foo-bar/principal/',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
             participationStatus => 'needs-action',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
@@ -1974,7 +1964,6 @@ sub test_calendarevent_get_organizer_bogusuri
                 imip => 'mailto:attendee@local',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
             participationStatus => 'needs-action',
         },
     };
@@ -2004,7 +1993,6 @@ sub test_calendarevent_get_organizermailto
                 imip => 'mailto:organizer@local',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
             participationStatus => 'needs-action',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
@@ -2017,7 +2005,6 @@ sub test_calendarevent_get_organizermailto
                 imip => 'mailto:attendee@local',
             },
             expectReply => JSON::false,
-            scheduleSequence => 0,
             participationStatus => 'needs-action',
         },
     };

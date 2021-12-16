@@ -5319,7 +5319,7 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     /* Load VEVENT from record, personalizing as needed. */
-    oldical = caldav_record_to_ical(mbox, cdata, req->userid, &schedule_addresses);
+    oldical = caldav_record_to_ical(mbox, cdata, req->userid, NULL);
     if (!oldical) {
         syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
                 cdata->dav.imap_uid, mailbox_name(mbox));
