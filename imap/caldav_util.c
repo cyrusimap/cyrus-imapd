@@ -405,6 +405,28 @@ EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
     return ical;
 }
 
+static int compare_properties(icalproperty *propa, icalproperty *propb)
+{
+    int cmp = 0;
+
+    if (strcmp(icalproperty_as_ical_string(propa),
+                icalproperty_as_ical_string(propb))) {
+        icalproperty *mypropa = icalproperty_clone(propa);
+        icalproperty *mypropb = icalproperty_clone(propb);
+
+        icalproperty_remove_parameter_by_name(mypropa, "X-JMAP-ID");
+        icalproperty_remove_parameter_by_name(mypropb, "X-JMAP-ID");
+        cmp = strcmp(icalproperty_as_ical_string(mypropa),
+                     icalproperty_as_ical_string(mypropb));
+
+        icalproperty_free(mypropa);
+        icalproperty_free(mypropb);
+    }
+
+    return cmp;
+}
+
+
 
 /*
  * Compare two components and extract per-user data (alarms, transparency).
@@ -484,14 +506,16 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 GCC_FALLTHROUGH
 
             default:
-                /* Compare entire properties (names, values, parameters) */
-                if (strcmp(icalproperty_as_ical_string(prop),
-                           icalproperty_as_ical_string(oldprop))) {
-                    /* Property has been updated in ical */
-                    if (read_only) return HTTP_FORBIDDEN;
-                    if (num_changes) (*num_changes)++;
+                {
+                    if (compare_properties(prop, oldprop)) {
+                        /* Property has been updated in ical */
+                        if (read_only) {
+                            return HTTP_FORBIDDEN;
+                        }
+                        if (num_changes) (*num_changes)++;
+                    }
+                    break;
                 }
-                break;
             }
         }
         else if (r < 0) {
