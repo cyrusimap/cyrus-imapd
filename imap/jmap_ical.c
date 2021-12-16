@@ -2390,8 +2390,8 @@ static json_t *participant_from_ical(icalproperty *prop,
         if (parsenum(xval, &xval, strlen(xval), &res) == 0) {
             schedule_sequence = res;
         }
+        json_object_set_new(p, "scheduleSequence", json_integer(schedule_sequence));
     }
-    json_object_set_new(p, "scheduleSequence", json_integer(schedule_sequence));
 
     /* scheduleUpdated */
     if ((xval = get_icalxparam_value(prop, JMAPICAL_XPARAM_DTSTAMP))) {
@@ -3578,7 +3578,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
 
     /* status */
     if (jmap_wantprop(props, "status")) {
-        const char *status = "confirmed";
+        const char *status = NULL;
         switch (icalcomponent_get_status(comp)) {
             case ICAL_STATUS_TENTATIVE:
                 status = "tentative";
@@ -3590,9 +3590,10 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
                 status = "cancelled";
                 break;
             default:
-                status = "confirmed";
+                ;
         }
-        json_object_set_new(event, "status", json_string(status));
+        if (status)
+            json_object_set_new(event, "status", json_string(status));
     }
 
     /* freeBusyStatus */
