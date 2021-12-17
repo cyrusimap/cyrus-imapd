@@ -16383,4 +16383,153 @@ EOF
 
 }
 
+sub create_user
+{
+    my ($self, $username) = @_;
+
+    xlog $self, "create user $username";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.$username");
+    $admin->setacl("user.$username", admin => 'lrswipkxtecdan') or die;
+    $admin->setacl("user.$username", $username => 'lrswipkxtecdn') or die;
+
+    my $http = $self->{instance}->get_service("http");
+    my $userJmap = Mail::JMAPTalk->new(
+        user => $username,
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $userJmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $userCalDAV = Net::CalDAVTalk->new(
+        user => $username,
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    return ($userJmap, $userCalDAV);
+}
+
+sub test_calendarevent_set_mayrsvp
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my ($shareeJmap, $shareCalDAV) = $self->create_user('sharee');
+
+    xlog "create and share event";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'test',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                'owner' => JSON::true,
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                        sharee => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:sharee@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        'sharee' => {
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
+    $self->assert(exists $res->[1][1]{updated}{Default});
+
+    xlog "update as sharee without mayRSVP";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    'participants/sharee/participationStatus' => 'accepted',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('forbidden', $res->[0][1]{notUpdated}{$eventId}{type});
+
+    xlog "assign mayRSVP to sharee",
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        'sharee' => {
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayRSVP => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "update as sharee with mayRSVP";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    'participants/sharee/participationStatus' => 'accepted',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+}
+
 1;

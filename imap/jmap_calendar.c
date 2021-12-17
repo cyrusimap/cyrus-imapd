@@ -4553,78 +4553,6 @@ done:
     jmap_parser_fini(&parser);
 }
 
-static int updates_peruserprops_only_internal(json_t *jdiff, strarray_t *participant_peruserprops)
-{
-    const char *prop;
-    json_t *jval;
-    void *tmp;
-
-    json_object_foreach_safe(jdiff, tmp, prop, jval) {
-        if (!strcmp(prop, "recurrenceOverrides")) {
-            const char *recurid;
-            json_t *joverride;
-            json_object_foreach(jval, recurid, joverride) {
-                if (!updates_peruserprops_only_internal(joverride, participant_peruserprops)) {
-                    return 0;
-                }
-            }
-            continue;
-        }
-        else if (!strcmp(prop, "participants")) {
-            /* Patches *all* participants */
-            return 0;
-        }
-        else if (!strncmp(prop, "recurrenceOverrides/", 20)) {
-            /* Does prop point *into* an override? */
-            const char *p = strchr(prop + 21, '/');
-            if (!p) {
-                /* Override value is a JSON object */
-                if (!updates_peruserprops_only_internal(jval, participant_peruserprops)) {
-                    return 0;
-                }
-                continue;
-            }
-            /* fall through */
-            prop = p + 1;
-        }
-
-        if (strcmp(prop, "keywords") &&
-            strcmp(prop, "color") &&
-            strcmp(prop, "freeBusyStatus") &&
-            strcmp(prop, "useDefaultAlerts") &&
-            strcmp(prop, "alerts") &&
-            strncmp(prop, "alerts/", 7) &&
-            (strarray_find(participant_peruserprops, prop, 0) < 0)) {
-            /* Patches some non-user property */
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-static int eventpatch_updates_peruserprops_only(json_t *jdiff, strarray_t *participant_ids)
-{
-    strarray_t participant_peruserprops = STRARRAY_INITIALIZER;
-
-    if (participant_ids) {
-        int i;
-        for (i = 0; i < strarray_size(participant_ids); i++) {
-            const char *participant_id = strarray_nth(participant_ids, i);
-            strarray_appendm(&participant_peruserprops,
-                    strconcat("participants/", participant_id, "/participationStatus", NULL));
-            strarray_appendm(&participant_peruserprops,
-                    strconcat("participants/", participant_id, "/participationComment", NULL));
-            strarray_appendm(&participant_peruserprops,
-                    strconcat("participants/", participant_id, "/expectReply", NULL));
-        }
-    }
-
-    int ret = updates_peruserprops_only_internal(jdiff, &participant_peruserprops);
-    strarray_fini(&participant_peruserprops);
-    return ret;
-}
-
 static int eventpatch_updates_recurrenceoverrides(json_t *event_patch)
 {
     const char *prop;
@@ -4991,6 +4919,91 @@ done:
     jstimezones_free(&jstzones);
 }
 
+enum propupdate {
+    propupdate_common  = 1 << 0,
+    propupdate_private = 1 << 1,
+    propupdate_rsvp    = 1 << 2
+};
+
+static enum propupdate updateevent_read_propupdates_internal(json_t *jdiff,
+        strarray_t *rsvpprops)
+{
+    enum propupdate mask = 0;
+
+    const char *prop;
+    json_t *jval;
+    void *tmp;
+
+    json_object_foreach_safe(jdiff, tmp, prop, jval) {
+        if (!strcmp(prop, "recurrenceOverrides")) {
+            const char *recurid;
+            json_t *joverride;
+            json_object_foreach(jval, recurid, joverride) {
+                mask |= updateevent_read_propupdates_internal(joverride, rsvpprops);
+            }
+            continue;
+        }
+        else if (!strcmp(prop, "participants")) {
+            /* Patches *all* participants */
+            mask |= propupdate_common;
+        }
+        else if (!strncmp(prop, "recurrenceOverrides/", 20)) {
+            /* Does prop point *into* an override? */
+            const char *p = strchr(prop + 21, '/');
+            if (!p) {
+                /* Override value is a JSON object */
+                mask |= updateevent_read_propupdates_internal(jval, rsvpprops);
+                continue;
+            }
+            /* fall through */
+            prop = p + 1;
+        }
+
+        if (!strcmp(prop, "keywords") ||
+            !strcmp(prop, "color") ||
+            !strcmp(prop, "freeBusyStatus") ||
+            !strcmp(prop, "useDefaultAlerts") ||
+            !strcmp(prop, "alerts") ||
+            !strncmp(prop, "alerts/", 7)) {
+
+            mask |= propupdate_private;
+        }
+        else if (strarray_find(rsvpprops, prop, 0) >= 0) {
+            mask |= propupdate_rsvp;
+        }
+        else {
+            mask |= propupdate_common;
+        }
+    }
+
+    return mask;
+}
+
+static enum propupdate updateevent_read_propupdates(json_t *jdiff, strarray_t *participant_ids)
+{
+    enum propupdate mask = 0;
+
+    strarray_t rsvpprops = STRARRAY_INITIALIZER;
+
+    if (participant_ids) {
+        int i;
+        for (i = 0; i < strarray_size(participant_ids); i++) {
+            const char *participant_id = strarray_nth(participant_ids, i);
+            strarray_appendm(&rsvpprops,
+                    strconcat("participants/", participant_id, "/participationStatus", NULL));
+            strarray_appendm(&rsvpprops,
+                    strconcat("participants/", participant_id, "/participationComment", NULL));
+            strarray_appendm(&rsvpprops,
+                    strconcat("participants/", participant_id, "/expectReply", NULL));
+        }
+    }
+
+    mask = updateevent_read_propupdates_internal(jdiff, &rsvpprops);
+
+    strarray_fini(&rsvpprops);
+    return mask;
+}
+
 /* XXX - the argument list of this function is insane */
 static int updateevent_apply_patch(jmap_req_t *req,
                                    icalcomponent *oldical,
@@ -5000,7 +5013,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
                                    struct caldav_data *cdata,
                                    struct jmap_caleventid *eid,
                                    strarray_t *schedule_addresses,
-                                   int may_updateprivate_only,
+                                   int check_acl,
                                    json_t *invalid,
                                    json_t **old_eventptr,
                                    icalcomponent **newicalptr,
@@ -5011,6 +5024,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
     strarray_t participant_ids = STRARRAY_INITIALIZER;
     int r = 0;
     json_t *old_event = NULL;
+    enum propupdate allowed_propupdates = 0;
 
     int floatingtz_is_malloced = 0;
     icaltimezone *floatingtz =
@@ -5046,6 +5060,30 @@ static int updateevent_apply_patch(jmap_req_t *req,
         }
     }
 
+    if (check_acl) {
+        if (jmap_hasrights_mbentry(req, mbentry, JACL_WRITEALL|JACL_SETMETADATA) ||
+            (jmap_hasrights_mbentry(req, mbentry, JACL_WRITEOWN) &&
+                    (!cdata->organizer ||
+                     strarray_find(schedule_addresses, cdata->organizer, 0) >= 0))) {
+            // may update all properties
+            allowed_propupdates = ~0;
+        }
+        else {
+            // may update some properties
+            if (jmap_hasrights_mbentry(req, mbentry, JACL_UPDATEPRIVATE))
+                allowed_propupdates |= propupdate_private;
+
+            if (jmap_hasrights_mbentry(req, mbentry, JACL_RSVP))
+                allowed_propupdates |= propupdate_rsvp;
+        }
+
+        if (!allowed_propupdates) {
+            *err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+    }
+    else allowed_propupdates = ~0;
+
     // Read old event
     struct jmapical_ctx *jmapctx = jmapical_context_new(req);
     context_begin_cdata(jmapctx, mbentry, cdata);
@@ -5071,7 +5109,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
 
     updateevent_validate_ids(old_event, new_event, invalid);
 
-    /* Determine if non-private properties are patched */
+    /* Determine which properties are patched */
     if (schedule_addresses) {
         json_t *jparticipants = json_object_get(old_event, "participants");
         json_t *jparticipant;
@@ -5088,23 +5126,24 @@ static int updateevent_apply_patch(jmap_req_t *req,
     }
     json_t *jdiff = jmap_patchobject_create(old_event, new_event);
     json_object_del(jdiff, "updated");
-    if (!eventpatch_updates_peruserprops_only(jdiff, &participant_ids)) {
-        if (may_updateprivate_only) {
-            /* Reject update */
-            *err = json_pack("{s:s}", "type", "forbidden");
-        }
-        else {
-            /* Bump sequence */
-            json_int_t oldseq = json_integer_value(json_object_get(old_event, "sequence"));
-            json_int_t newseq = json_integer_value(json_object_get(new_event, "sequence"));
-            if (newseq <= oldseq) {
-                json_int_t newseq = oldseq + 1;
-                json_object_set_new(new_event, "sequence", json_integer(newseq));
-                json_object_set_new(update, "sequence", json_integer(newseq));
-            }
+    enum propupdate propupdates = updateevent_read_propupdates(jdiff, &participant_ids);
+    json_decref(jdiff);
+
+    if ((propupdates & allowed_propupdates) != propupdates) {
+        *err = json_pack("{s:s}", "type", "forbidden");
+        goto done;
+    }
+
+    if (propupdates & propupdate_common) {
+        /* Bump sequence */
+        json_int_t oldseq = json_integer_value(json_object_get(old_event, "sequence"));
+        json_int_t newseq = json_integer_value(json_object_get(new_event, "sequence"));
+        if (newseq <= oldseq) {
+            json_int_t newseq = oldseq + 1;
+            json_object_set_new(new_event, "sequence", json_integer(newseq));
+            json_object_set_new(update, "sequence", json_integer(newseq));
         }
     }
-    json_decref(jdiff);
 
     /* Convert to iCalendar */
     icalcomponent *newical = jmapical_toical(new_event, myoldical,
@@ -5164,7 +5203,7 @@ static void setcalendarevents_update(jmap_req_t *req,
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     strarray_t del_imapflags = STRARRAY_INITIALIZER;
     json_t *old_event = NULL;
-    int may_updateprivate_only = 0;
+    int check_acl = 1;
 
     static int icalendar_max_size = -1;
     if (icalendar_max_size < 0) {
@@ -5284,24 +5323,7 @@ static void setcalendarevents_update(jmap_req_t *req,
             *err = json_pack("{s:s}", "type", "forbidden");
             goto done;
         }
-    }
-    else {
-        /* Validate permissions for update */
-        if (!jmap_hasrights_mbentry(req, mbentry, JACL_WRITEALL|JACL_SETMETADATA)) {
-            if (jmap_hasrights_mbentry(req, mbentry, JACL_WRITEOWN) &&
-                    (!cdata->organizer ||
-                     strarray_find(&schedule_addresses, cdata->organizer, 0) >= 0)) {
-                /* allowed */
-            }
-            else if (jmap_hasrights_mbentry(req, mbentry, JACL_UPDATEPRIVATE)) {
-                /* allowed, but we'll need verify when we apply the patch */
-                may_updateprivate_only = 1;
-            }
-            else {
-                *err = json_pack("{s:s}", "type", "forbidden");
-                goto done;
-            }
-        }
+        check_acl = 0;
     }
 
     /* Fetch index record for the resource */
@@ -5346,9 +5368,9 @@ static void setcalendarevents_update(jmap_req_t *req,
     /* Apply patch */
     r = updateevent_apply_patch(req, oldical, event_patch,
             is_standalone_instance, mbentry, cdata, eid, &schedule_addresses,
-            may_updateprivate_only, parser.invalid,
-            &old_event, &ical, update, err);
-    if (json_array_size(parser.invalid)) {
+            check_acl, parser.invalid, &old_event, &ical, update, err);
+    if (json_array_size(parser.invalid) || *err) {
+
         r = 0;
         goto done;
     }
