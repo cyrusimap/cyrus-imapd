@@ -426,7 +426,13 @@ static int compare_properties(icalproperty *propa, icalproperty *propb)
     return cmp;
 }
 
+enum propupdate {
+    propupdate_common  = (1 << 0),
+    propupdate_private = (1 << 1),
+    propupdate_rsvp =    (1 << 2)
+};
 
+static enum propupdate propupdate_all = ~0;
 
 /*
  * Compare two components and extract per-user data (alarms, transparency).
@@ -435,7 +441,9 @@ static int compare_properties(icalproperty *propa, icalproperty *propb)
  */
 static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                                  icalcomponent *vpatch, struct buf *path,
-                                 int read_only, unsigned *num_changes)
+                                 enum propupdate allowed_propupdates,
+                                 const strarray_t *schedule_addresses,
+                                 unsigned *num_changes)
 {
     icalcomponent *comp, *nextcomp, *oldcomp = NULL, *patch = NULL;
     icalproperty *prop, *nextprop, *oldprop = NULL;
@@ -497,6 +505,26 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 /* Ok to modify these - ignore */
                 break;
 
+            case ICAL_ATTENDEE_PROPERTY:
+                {
+                    const char *uri = icalproperty_get_attendee(prop);
+                    if (uri && !strncasecmp(uri, "mailto:", 7) && schedule_addresses &&
+                            strarray_find(schedule_addresses, uri + 7, 0) >= 0) {
+                        /* User updates their own ATTENDEE */
+                        if (!(allowed_propupdates & propupdate_rsvp)) {
+                            return HTTP_FORBIDDEN;
+                        }
+                        if (num_changes) (*num_changes)++;
+                    }
+                    else if (compare_properties(prop, oldprop)) {
+                        if (!(allowed_propupdates & propupdate_common)) {
+                            return HTTP_FORBIDDEN;
+                        }
+                        if (num_changes) (*num_changes)++;
+                    }
+                    break;
+                }
+
             case ICAL_X_PROPERTY:
                 if (!strcmpsafe(xname, "X-MOZ-GENERATION")) {
                     /* Ok to modify these - ignore */
@@ -509,7 +537,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 {
                     if (compare_properties(prop, oldprop)) {
                         /* Property has been updated in ical */
-                        if (read_only) {
+                        if (!(allowed_propupdates & propupdate_common)) {
                             return HTTP_FORBIDDEN;
                         }
                         if (num_changes) (*num_changes)++;
@@ -534,7 +562,8 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                     (strncmp(xname, "X-MOZ-", 6) ||
                      (strcmp(xname+6, "LASTACK") &&
                       strcmp(xname+6, "SNOOZE-TIME")))) {
-                    if (read_only) return HTTP_FORBIDDEN;
+                    if (!(allowed_propupdates & propupdate_common))
+                        return HTTP_FORBIDDEN;
                     if (num_changes) (*num_changes)++;
                     break;
                 }
@@ -558,7 +587,8 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 break;
 
             default:
-                if (read_only) return HTTP_FORBIDDEN;
+                if (!(allowed_propupdates & propupdate_common))
+                    return HTTP_FORBIDDEN;
                 if (num_changes) (*num_changes)++;
                 break;
             }
@@ -576,7 +606,8 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 break;
 
             default:
-                if (read_only) return HTTP_FORBIDDEN;
+                if (!(allowed_propupdates & propupdate_common))
+                    return HTTP_FORBIDDEN;
                 if (num_changes) (*num_changes)++;
                 break;
             }
@@ -614,7 +645,8 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 
         if (r == 0) {
             r = extract_personal_data(comp, oldcomp, vpatch,
-                                      path, read_only, num_changes);
+                                      path, allowed_propupdates,
+                                      schedule_addresses, num_changes);
             if (r) return r;
         }
         else if (r < 0) {
@@ -635,18 +667,20 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 break;
 
             default:
-                if (read_only) return HTTP_FORBIDDEN;
+                if (!(allowed_propupdates & propupdate_common))
+                    return HTTP_FORBIDDEN;
                 if (num_changes) (*num_changes)++;
 
                 r = extract_personal_data(comp, oldcomp, vpatch,
-                                          path, read_only, num_changes);
+                                          path, allowed_propupdates,
+                                          schedule_addresses, num_changes);
                 if (r) return r;
                 break;
             }
 
             continue;  /* Do NOT increment to next old component */
         }
-        else if (read_only) {
+        else if (!(allowed_propupdates & propupdate_common)) {
             return HTTP_FORBIDDEN;
         }
         else {
@@ -696,7 +730,6 @@ static int write_personal_data(const char *userid,
     return ret;
 }
 
-
 /*
  * Handle stripping per-user data from existing and/or new shared resource.
  *
@@ -731,13 +764,14 @@ static int personalize_resource(struct transaction_t *txn,
                                 const strarray_t *schedule_addresses)
 
 {
-    int is_owner, rights, read_only, ret = 0;
+    int is_owner, rights, ret = 0;
     mbname_t *mbname;
     const char *owner;
     icalcomponent *oldical = NULL;
     unsigned num_changes = 0;
     struct auth_state *authstate = auth_newstate(userid);
     char *resource = xstrdupnull(cdata->dav.resource);
+    enum propupdate allowed_propupdates = 0;
 
     *store_me = ical;
 
@@ -753,25 +787,34 @@ static int personalize_resource(struct transaction_t *txn,
 
     if (rights & DACL_WRITECONT) {
         /* User has read-write access */
-        read_only = 0;
+        allowed_propupdates = propupdate_all;
     }
-    else if (cdata->dav.imap_uid && (rights & DACL_WRITEOWNRSRC) &&
+
+    if (cdata->dav.imap_uid && (rights & DACL_WRITEOWNRSRC) &&
             (!cdata->organizer ||
              (schedule_addresses &&
               strarray_find(schedule_addresses, cdata->organizer, 0) >= 0))) {
         /* User may update resource whey they are organizer */
-        read_only = 0;
+        allowed_propupdates = propupdate_all;
     }
-    else if (rights & DACL_UPDATEPRIVATE) {
+
+    if (rights & DACL_UPDATEPRIVATE) {
         /* User may only update their per-user properties */
-        read_only = 1;
+        allowed_propupdates |= propupdate_private;
     }
-    else if (cdata->dav.imap_uid &&
+
+    if (rights & DACL_REPLY) {
+        /* User may update their own ATTENDEE */
+        allowed_propupdates |= propupdate_rsvp;
+    }
+
+    if (cdata->dav.imap_uid &&
              !(mailbox->i.options & OPT_IMAP_SHAREDSEEN)) {
         /* User has read-only access to existing resource */
-        read_only = 1;
+        allowed_propupdates |= propupdate_private;
     }
-    else {
+
+    if (!allowed_propupdates) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
@@ -781,7 +824,7 @@ static int personalize_resource(struct transaction_t *txn,
     }
 
     if (cdata->dav.imap_uid &&
-        (!is_owner || read_only || cdata->comp_flags.shared)) {
+        (!is_owner || allowed_propupdates != propupdate_all || cdata->comp_flags.shared)) {
         syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
 
         /* Load message containing the existing resource and parse iCal data */
@@ -815,8 +858,8 @@ static int personalize_resource(struct transaction_t *txn,
         /* Extract personal info from owner's resource and create vpatch */
         int usedefaultalerts = icalcomponent_read_usedefaultalerts(oldical) > 0;
         ret = extract_personal_data(oldical, NULL, *userdata,
-                                    &txn->buf /* path */, 0 /* read_only */,
-                                    &num_changes);
+                                    &txn->buf /* path */, propupdate_all,
+                                    schedule_addresses, &num_changes);
         buf_reset(&txn->buf);
 
         if (!ret) ret = write_personal_data(owner, mailbox, cdata->dav.imap_uid,
@@ -825,7 +868,7 @@ static int personalize_resource(struct transaction_t *txn,
 
         if (ret) goto done;
 
-        if (read_only) {
+        if (allowed_propupdates == propupdate_private) {
             /* Resource to store is the existing resource just stripped */
             *store_me = oldical;
         }
@@ -834,7 +877,7 @@ static int personalize_resource(struct transaction_t *txn,
         *userdata = NULL;
     }
 
-    if (!is_owner || read_only ||
+    if (!is_owner || allowed_propupdates != propupdate_all ||
         (cdata->dav.imap_uid && cdata->comp_flags.shared)) {
         /* Extract personal info from user's resource and create vpatch */
         if (oldical) {
@@ -865,8 +908,8 @@ static int personalize_resource(struct transaction_t *txn,
         /* XXX  DO NOT reinitialize num_changes.  We need the changes
            from rewriting owner resource to force storage of that resource */
         ret = extract_personal_data(ical, oldical, *userdata,
-                                    &txn->buf /* path */, read_only,
-                                    &num_changes);
+                                    &txn->buf /* path */, allowed_propupdates,
+                                    schedule_addresses, &num_changes);
         buf_reset(&txn->buf);
 
         if (ret) goto done;
