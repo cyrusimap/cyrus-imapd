@@ -2230,7 +2230,8 @@ HIDDEN json_t *jmap_copy_reply(struct jmap_copy *copy)
 
 /* Foo/query */
 
-HIDDEN jmap_filter *jmap_buildfilter(json_t *arg, jmap_buildfilter_cb *parse)
+HIDDEN jmap_filter *jmap_buildfilter(json_t *arg,
+                                     jmap_buildfilter_cb *parse, void *rock)
 {
     jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
     int pe;
@@ -2256,12 +2257,12 @@ HIDDEN jmap_filter *jmap_buildfilter(json_t *arg, jmap_buildfilter_cb *parse)
         size_t i, n_conditions = json_array_size(conds);
         for (i = 0; i < n_conditions; i++) {
             json_t *cond = json_array_get(conds, i);
-            ptrarray_push(&f->conditions, jmap_buildfilter(cond, parse));
+            ptrarray_push(&f->conditions, jmap_buildfilter(cond, parse, rock));
         }
     }
 
     if (iscond) {
-        ptrarray_push(&f->conditions, parse(arg));
+        ptrarray_push(&f->conditions, parse(arg, rock));
     }
 
     return f;

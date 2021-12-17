@@ -487,11 +487,12 @@ typedef struct jmap_filter {
     ptrarray_t conditions;
 } jmap_filter;
 
-typedef void* jmap_buildfilter_cb(json_t* arg);
+typedef void* jmap_buildfilter_cb(json_t* arg, void* rock);
 typedef int   jmap_filtermatch_cb(void* cond, void* rock);
 typedef void  jmap_filterfree_cb(void* cond);
 
-extern jmap_filter *jmap_buildfilter(json_t *arg, jmap_buildfilter_cb *parse);
+extern jmap_filter *jmap_buildfilter(json_t *arg,
+                                     jmap_buildfilter_cb *parse, void *rock);
 extern int jmap_filter_match(jmap_filter *f,
                              jmap_filtermatch_cb *match, void *rock);
 extern void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond);
