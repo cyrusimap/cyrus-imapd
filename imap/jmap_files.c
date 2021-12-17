@@ -55,11 +55,13 @@
 #include "acl.h"
 #include "append.h"
 #include "dav_util.h"
+#include "hash.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "jmap_util.h"
 #include "json_support.h"
 #include "proxy.h"
+#include "stristr.h"
 #include "sync_support.h"
 #include "util.h"
 #include "webdav_db.h"
@@ -70,6 +72,7 @@
 
 static int jmap_files_get(jmap_req_t *req);
 static int jmap_files_set(jmap_req_t *req);
+static int jmap_files_query(jmap_req_t *req);
 
 static jmap_method_t jmap_files_methods_standard[] = {
     { NULL, NULL, NULL, 0}
@@ -87,6 +90,12 @@ static jmap_method_t jmap_files_methods_nonstandard[] = {
         JMAP_FILES_EXTENSION,
         &jmap_files_set,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "StorageNode/query",
+        JMAP_FILES_EXTENSION,
+        &jmap_files_query,
+        JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
 };
@@ -676,6 +685,427 @@ done:
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     jmap_closembox(req, &mailbox);
+    webdav_close(db);
+
+    return 0;
+}
+
+static void filter_validate(jmap_req_t *req __attribute__((unused)),
+                            struct jmap_parser *parser,
+                            json_t *filter,
+                            json_t *unsupported __attribute__((unused)),
+                            void *rock __attribute__((unused)),
+                            json_t **err __attribute__((unused)))
+{
+    const char *field;
+    json_t *arg;
+
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "parentIds")) {
+            jmap_parse_strings(arg, parser, field);
+        }
+        else if (!strcmp(field, "ancestorIds")) {
+            jmap_parse_strings(arg, parser, field);
+        }
+        else if (!strcmp(field, "hasBlobId")) {
+            if (!json_is_boolean(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "createdBefore")) {
+            if (!json_is_date(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "createdAfter")) {
+            if (!json_is_date(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "modifiedBefore")) {
+            if (!json_is_date(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "modifiedAfter")) {
+            if (!json_is_date(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "minSize")) {
+            if (!json_is_integer(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "maxSize")) {
+            if (!json_is_integer(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "name")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "type")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, field);
+        }
+    }
+}
+
+
+static int comparator_validate(jmap_req_t *req __attribute__((unused)),
+                               struct jmap_comparator *comp,
+                               void *rock __attribute__((unused)),
+                               json_t **err __attribute__((unused)))
+{
+    /* Reject any collation */
+    if (comp->collation) {
+        return 0;
+    }
+    if (!strcmp(comp->property, "id") ||
+        !strcmp(comp->property, "hasBlobId") ||
+        !strcmp(comp->property, "name") ||
+        !strcmp(comp->property, "type") ||
+        !strcmp(comp->property, "size") ||
+        !strcmp(comp->property, "created") ||
+        !strcmp(comp->property, "modified")) {
+        return 1;
+    }
+    return 0;
+}
+
+typedef struct file_filter {
+    hash_table *parentIds;
+    strarray_t *ancestorIds;
+    int hasBlobId;
+    time_t createdBefore;
+    time_t createdAfter;
+    time_t modifiedBefore;
+    time_t modifiedAfter;
+    long long int minSize;
+    long long int maxSize;
+    const char *name;
+    const char *type;
+    int files_prefilter_result;
+} file_filter_t;
+
+/* Free the memory allocated by this filter. */
+static void filter_free(void *vf)
+{
+    file_filter_t *f = (file_filter_t *) vf;
+
+    if (f->parentIds) {
+        free_hash_table(f->parentIds, NULL);
+        free(f->parentIds);
+    }
+    strarray_free(f->ancestorIds);
+    free(f);
+}
+
+static void *filter_build(json_t *arg, void *rock)
+{
+    file_filter_t *f = (file_filter_t *) xzmalloc(sizeof(file_filter_t));
+    const char *root = (const char *) rock;
+    json_t *ids;
+    size_t i;
+    json_t *val;
+    const char *id;
+
+    f->hasBlobId = -1;
+    f->maxSize = ULLONG_MAX;
+#if (SIZEOF_TIME_T == SIZEOF_LONG_LONG_INT)
+    f->createdBefore  = LLONG_MAX;
+    f->createdAfter   = LLONG_MIN;
+    f->modifiedBefore = LLONG_MAX;
+    f->modifiedAfter  = LLONG_MIN;
+#else
+    f->createdBefore  = LONG_MAX;
+    f->createdAfter   = LONG_MIN;
+    f->modifiedBefore = LONG_MAX;
+    f->modifiedAfter  = LONG_MIN;
+#endif
+
+    /* parentIds */
+    ids = json_object_get(arg, "parentIds");
+    if (ids) {
+        f->parentIds = xmalloc(sizeof(struct hash_table));
+        construct_hash_table(f->parentIds,
+                             json_array_size(ids)+1, 0);
+        json_array_foreach(ids, i, val) {
+            mbentry_t *mbentry = NULL;
+            if (json_unpack(val, "s", &id) != -1) {
+                if (!strcmp("root", id))
+                    hash_insert(root, (void*)1, f->parentIds);
+                else if (!mboxlist_lookup_by_uniqueid(id, &mbentry, NULL))
+                    hash_insert(mbentry->name, (void*)1, f->parentIds);
+            }
+            mboxlist_entry_free(&mbentry);
+        }
+    }
+
+    /* ancestorIds */
+    ids = json_object_get(arg, "ancestorIds");
+    if (ids) {
+        f->ancestorIds = strarray_new();
+        json_array_foreach(ids, i, val) {
+            mbentry_t *mbentry = NULL;
+            if (json_unpack(val, "s", &id) != -1 &&
+                !mboxlist_lookup_by_uniqueid(id, &mbentry, NULL)) {
+                strarray_append(f->ancestorIds, mbentry->name);
+            }
+            mboxlist_entry_free(&mbentry);
+        }
+    }
+
+    /* hasBlobId */
+    if (JNOTNULL(json_object_get(arg, "hasBlobId"))) {
+        jmap_readprop(arg, "hasBlobId", 0, NULL, "b", &f->hasBlobId);
+    }
+
+    /* name */
+    if (JNOTNULL(json_object_get(arg, "name"))) {
+        jmap_readprop(arg, "name", 0, NULL, "s", &f->name);
+    }
+
+    /* type */
+    if (JNOTNULL(json_object_get(arg, "type"))) {
+        jmap_readprop(arg, "type", 0, NULL, "s", &f->type);
+    }
+
+    return f;
+}
+
+typedef struct file_info {
+    char *id;
+    char *name;
+    char *type;
+    size_t size;
+    time_t created;
+    time_t modified;
+    int hasBlobId;
+} file_info_t;
+
+static void free_file_info(void *data)
+{
+    file_info_t *info = (file_info_t *) data;
+
+    if (!info) return;
+
+    free(info->id);
+    free(info->name);
+    free(info->type);
+    free(info);
+}
+
+typedef struct filter_rock {
+    struct jmap_query *query;
+    jmap_filter *parsed_filter;
+    struct webdav_db *db;
+    const char *root;
+    ptrarray_t matches;
+    file_info_t *anchor;
+} filter_rock_t;
+
+/* Match the folder in rock against filter. */
+static int filter_match_folder(void *vf, void *rock)
+{
+    file_filter_t *f = (file_filter_t *) vf;
+    const mbentry_t *mbentry = (const mbentry_t *) rock;
+
+    /* hasBlobId */
+    if (f->hasBlobId == 1) return 0;
+
+    if (f->name || f->parentIds) {
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        char *name = mbname_pop_boxes(mbname);
+        int r = 1;
+
+        /* name */
+        if (f->name && !stristr(name, f->name)) r = 0;  // XXX  FIXME
+
+        /* parentIds */
+        else if (f->parentIds &&
+                 !hash_lookup(mbname_intname(mbname), f->parentIds)) r = 0;
+
+        mbname_free(&mbname);
+        free(name);
+
+        if (r == 0) return 0;
+    }
+
+    /* All matched. */
+    return 1;
+}
+
+/* Match the file in rock against filter. */
+static int prefilter_match_files(void *vf, void *rock)
+{
+    file_filter_t *f = (file_filter_t *) vf;
+    const mbentry_t *mbentry = (const mbentry_t *) rock;
+    int r = 1;
+
+    /* hasBlobId */
+    if (f->hasBlobId == 0) r = 0;
+
+    /* parentIds */
+    else if (f->parentIds && !hash_lookup(mbentry->name, f->parentIds)) r = 0;
+
+    /* All matched. */
+    return (f->files_prefilter_result = r);
+}
+
+/* Match the file in rock against filter. */
+static int filter_match_file(void *vf, void *rock)
+{
+    file_filter_t *f = (file_filter_t *) vf;
+    struct webdav_data *wdata = (struct webdav_data *) rock;
+
+    /* hasBlobId and parentIds */
+    if (f->files_prefilter_result == 0) return 0;
+
+    /* name */
+    if (f->name && !stristr(wdata->filename, f->name)) return 0;  // XXX  FIXME
+
+    /* All matched. */
+    return 1;
+}
+
+static int filter_files_cb(void *rock, struct webdav_data *wdata)
+{
+    filter_rock_t *frock = (filter_rock_t *) rock;
+    struct jmap_query *query = frock->query;
+    file_info_t *info;
+
+    if (query->filter &&
+        !jmap_filter_match(frock->parsed_filter, &filter_match_file, wdata)) {
+        return 0;
+    }
+
+    info = xzmalloc(sizeof(file_info_t));
+    info->id = xstrdup(wdata->res_uid);
+
+    /* Add record of the match to our array */
+    ptrarray_append(&frock->matches, info);
+
+    if (query->anchor && !strcmp(query->anchor, info->id)) {
+        /* Mark record corresponding to anchor */
+        frock->anchor = info;
+    }
+
+    query->total++;
+
+    return 0;
+}
+
+static int filter_folders_cb(const mbentry_t *mbentry, void *rock)
+{
+    filter_rock_t *frock = (filter_rock_t *) rock;
+    struct jmap_query *query = frock->query;
+    file_info_t *info;
+
+    if (!strcmp(mbentry->name, frock->root)) goto files;
+
+    if (query->filter &&
+        !jmap_filter_match(frock->parsed_filter,
+                           &filter_match_folder, (void *) mbentry)) {
+        goto files;
+    }
+
+    info = xzmalloc(sizeof(file_info_t));
+    info->id = xstrdup(mbentry->uniqueid);
+
+    /* Add record of the match to our array */
+    ptrarray_append(&frock->matches, info);
+
+    if (query->anchor && !strcmp(query->anchor, info->id)) {
+        /* Mark record corresponding to anchor */
+        frock->anchor = info;
+    }
+
+    query->total++;
+
+  files:
+    if (query->filter &&
+        !jmap_filter_match(frock->parsed_filter,
+                           &prefilter_match_files, (void *) mbentry)) {
+        return 0;
+    }
+
+    webdav_foreach(frock->db, mbentry, &filter_files_cb, frock);
+
+    return 0;
+}
+
+static int jmap_files_query(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_query query;
+    jmap_filter *parsed_filter = NULL;
+    struct webdav_db *db = NULL;
+    int r = 0;
+
+    /* Parse request */
+    json_t *err = NULL;
+    jmap_query_parse(req, &parser, NULL, NULL, filter_validate, NULL,
+                     comparator_validate, NULL, &query, &err);
+    if (err) goto done;
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(err, "arguments", parser.invalid);
+        goto done;
+    }
+
+    db = webdav_open_userid(req->accountid);
+    if (!db) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Build filter */
+    char *root = webdav_mboxname(req->accountid, NULL);
+    if (JNOTNULL(query.filter)) {
+        parsed_filter = jmap_buildfilter(query.filter, filter_build, root);
+    }
+
+    filter_rock_t frock = {
+        &query, parsed_filter, db, root, PTRARRAY_INITIALIZER, NULL };
+
+    r = mboxlist_mboxtree(root, &filter_folders_cb, &frock, 0);
+    free(root);
+
+    size_t i;
+    for (i = 0; i < query.total; i++) {
+        file_info_t *match = ptrarray_nth(&frock.matches, i);
+
+        /* Apply position and limit */
+        if (i >= (size_t) query.position &&
+            (!query.limit || query.limit > json_array_size(query.ids))) {
+            /* Add the submission identifier */
+            json_array_append_new(query.ids, json_string(match->id));
+        }
+
+        free_file_info(ptrarray_nth(&frock.matches, i));
+    }
+    ptrarray_fini(&frock.matches);
+
+    /* Build response */
+    json_t *jstate = jmap_getstate(req, MBTYPE_COLLECTION, /*refresh*/0);
+    query.query_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
+    jmap_ok(req, jmap_query_reply(&query));
+
+done:
+    if (r) err = jmap_server_error(r);
+    if (err) jmap_error(req, err);
+    if (parsed_filter) jmap_filter_free(parsed_filter, filter_free);
+    jmap_parser_fini(&parser);
+    jmap_query_fini(&query);
     webdav_close(db);
 
     return 0;
