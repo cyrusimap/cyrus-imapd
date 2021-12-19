@@ -3,6 +3,7 @@
 *.gcda
 *.la
 *.lo
+*.loT
 *.o
 *.orig
 *.patch
