@@ -982,23 +982,21 @@ static int filter_files_cb(void *rock, struct webdav_data *wdata)
     struct jmap_query *query = frock->query;
     file_info_t *info;
 
-    if (query->filter &&
-        !jmap_filter_match(frock->parsed_filter, &filter_match_file, wdata)) {
-        return 0;
+    if (!query->filter ||
+        jmap_filter_match(frock->parsed_filter, &filter_match_file, wdata)) {
+        info = xzmalloc(sizeof(file_info_t));
+        info->id = xstrdup(wdata->res_uid);
+
+        /* Add record of the match to our array */
+        ptrarray_append(&frock->matches, info);
+
+        if (query->anchor && !strcmp(query->anchor, info->id)) {
+            /* Mark record corresponding to anchor */
+            frock->anchor = info;
+        }
+
+        query->total++;
     }
-
-    info = xzmalloc(sizeof(file_info_t));
-    info->id = xstrdup(wdata->res_uid);
-
-    /* Add record of the match to our array */
-    ptrarray_append(&frock->matches, info);
-
-    if (query->anchor && !strcmp(query->anchor, info->id)) {
-        /* Mark record corresponding to anchor */
-        frock->anchor = info;
-    }
-
-    query->total++;
 
     return 0;
 }
@@ -1009,35 +1007,33 @@ static int filter_folders_cb(const mbentry_t *mbentry, void *rock)
     struct jmap_query *query = frock->query;
     file_info_t *info;
 
-    if (!strcmp(mbentry->name, frock->root)) goto files;
 
-    if (query->filter &&
-        !jmap_filter_match(frock->parsed_filter,
-                           &filter_match_folder, (void *) mbentry)) {
-        goto files;
+    /* Filter folder */
+    if (strcmp(mbentry->name, frock->root) &&
+        (!query->filter ||
+         jmap_filter_match(frock->parsed_filter,
+                           &filter_match_folder, (void *) mbentry))) {
+        info = xzmalloc(sizeof(file_info_t));
+        info->id = xstrdup(mbentry->uniqueid);
+
+        /* Add record of the match to our array */
+        ptrarray_append(&frock->matches, info);
+
+        if (query->anchor && !strcmp(query->anchor, info->id)) {
+            /* Mark record corresponding to anchor */
+            frock->anchor = info;
+        }
+
+        query->total++;
     }
 
-    info = xzmalloc(sizeof(file_info_t));
-    info->id = xstrdup(mbentry->uniqueid);
-
-    /* Add record of the match to our array */
-    ptrarray_append(&frock->matches, info);
-
-    if (query->anchor && !strcmp(query->anchor, info->id)) {
-        /* Mark record corresponding to anchor */
-        frock->anchor = info;
+    /* Prefilter this folder for files */
+    if (!query->filter ||
+        jmap_filter_match(frock->parsed_filter,
+                          &prefilter_match_files, (void *) mbentry)) {
+        /* Now filter files in this folder */
+        webdav_foreach(frock->db, mbentry, &filter_files_cb, frock);
     }
-
-    query->total++;
-
-  files:
-    if (query->filter &&
-        !jmap_filter_match(frock->parsed_filter,
-                           &prefilter_match_files, (void *) mbentry)) {
-        return 0;
-    }
-
-    webdav_foreach(frock->db, mbentry, &filter_files_cb, frock);
 
     return 0;
 }
@@ -1086,7 +1082,7 @@ static int jmap_files_query(jmap_req_t *req)
         /* Apply position and limit */
         if (i >= (size_t) query.position &&
             (!query.limit || query.limit > json_array_size(query.ids))) {
-            /* Add the submission identifier */
+            /* Add the identifier */
             json_array_append_new(query.ids, json_string(match->id));
         }
 
