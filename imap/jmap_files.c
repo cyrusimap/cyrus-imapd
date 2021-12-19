@@ -52,8 +52,10 @@
 #include <assert.h>
 #include <errno.h>
 
+#include "arrayu64.h"
 #include "acl.h"
 #include "append.h"
+#include "cyr_qsort_r.h"
 #include "dav_util.h"
 #include "hash.h"
 #include "http_jmap.h"
@@ -1038,11 +1040,71 @@ static int filter_folders_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
+enum files_sort {
+    FILES_SORT_NONE = 0,
+    FILES_SORT_ID,
+    FILES_SORT_HASBLOBID,
+    FILES_SORT_NAME,
+    FILES_SORT_TYPE,
+    FILES_SORT_SIZE,
+    FILES_SORT_CREATED,
+    FILES_SORT_MODIFIED,
+    FILES_SORT_DESC = 0x80 /* bit-flag for descending sort */
+};
+
+static int files_cmp QSORT_R_COMPAR_ARGS(const void *va, const void *vb, void *rock)
+{
+    arrayu64_t *sortcrit = (arrayu64_t *) rock;
+    file_info_t *ma = (file_info_t *) *(void **) va;
+    file_info_t *mb = (file_info_t *) *(void **) vb;
+    size_t i, nsort = arrayu64_size(sortcrit);
+
+    for (i = 0; i < nsort; i++) {
+        enum files_sort sort = arrayu64_nth(sortcrit, i);
+        int ret = 0;
+
+        switch (sort & ~FILES_SORT_DESC) {
+        case FILES_SORT_ID:
+            ret = strcmp(ma->id, mb->id);
+            break;
+
+        case FILES_SORT_HASBLOBID:
+            ret = ma->hasBlobId - mb->hasBlobId;
+            break;
+
+        case FILES_SORT_NAME:
+            ret = strcmp(ma->name, mb->name);
+            break;
+
+        case FILES_SORT_TYPE:
+            ret = strcmpnull(ma->type, mb->type);
+            break;
+
+        case FILES_SORT_SIZE:
+            ret = ma->size - mb->size;
+            break;
+
+        case FILES_SORT_CREATED:
+            ret = ma->created - mb->created;
+            break;
+
+        case FILES_SORT_MODIFIED:
+            ret = ma->modified - mb->modified;
+            break;
+        }
+
+        if (ret) return (sort & FILES_SORT_DESC) ? -ret : ret;
+    }
+
+    return 0;
+}
+
 static int jmap_files_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
     jmap_filter *parsed_filter = NULL;
+    arrayu64_t sortcrit = ARRAYU64_INITIALIZER;
     struct webdav_db *db = NULL;
     int r = 0;
 
@@ -1069,11 +1131,67 @@ static int jmap_files_query(jmap_req_t *req)
         parsed_filter = jmap_buildfilter(query.filter, filter_build, root);
     }
 
+    /* Build sort */
+    if (json_array_size(query.sort)) {
+        json_t *jval;
+        size_t i;
+        json_array_foreach(query.sort, i, jval) {
+            const char *prop =
+                json_string_value(json_object_get(jval, "property"));
+            enum files_sort sort = FILES_SORT_NONE;
+
+            if (!strcmp(prop, "id")) {
+                sort = FILES_SORT_ID;
+            } else if (!strcmp(prop, "hasBlobId")) {
+                sort = FILES_SORT_HASBLOBID;
+            } else if (!strcmp(prop, "name")) {
+                sort = FILES_SORT_NAME;
+            } else if (!strcmp(prop, "type")) {
+                sort = FILES_SORT_TYPE;
+            } else if (!strcmp(prop, "size")) {
+                sort = FILES_SORT_SIZE;
+            } else if (!strcmp(prop, "created")) {
+                sort = FILES_SORT_CREATED;
+            } else if (!strcmp(prop, "modified")) {
+                sort = FILES_SORT_MODIFIED;
+            }
+
+            if (json_object_get(jval, "isAscending") == json_false()) {
+                sort |= FILES_SORT_DESC;
+            }
+
+            arrayu64_append(&sortcrit, sort);
+        }
+    }
+
+    /* Filter the resources */
     filter_rock_t frock = {
         &query, parsed_filter, db, root, PTRARRAY_INITIALIZER, NULL };
 
     r = mboxlist_mboxtree(root, &filter_folders_cb, &frock, 0);
     free(root);
+
+    /* Sort results */
+    if (arrayu64_size(&sortcrit)) {
+        cyr_qsort_r(frock.matches.data, frock.matches.count,
+                    sizeof(void *), &files_cmp, &sortcrit);
+    }
+    arrayu64_fini(&sortcrit);
+
+    /* Process results */
+    if (query.anchor) {
+        query.position = ptrarray_find(&frock.matches, frock.anchor, 0);
+        if (query.position < 0) {
+            query.position = query.total;
+        }
+        else {
+            query.position += query.anchor_offset;
+        }
+    }
+    else if (query.position < 0) {
+        query.position += query.total;
+    }
+    if (query.position < 0) query.position = 0;
 
     size_t i;
     for (i = 0; i < query.total; i++) {
