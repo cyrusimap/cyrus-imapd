@@ -3654,6 +3654,13 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
         json_object_set_new(event, "alerts", alerts_from_ical(comp));
     }
 
+    /* mayInviteSelf */
+    if (jmap_wantprop(props, "mayInviteSelf")) {
+        const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_MAYINVITESELF);
+        if (!strcasecmpsafe(v, "true"))
+            json_object_set_new(event, "mayInviteSelf", json_true());
+    }
+
     if (!is_override) {
         /* must go go last, we need all other properties to be set */
 
@@ -6936,6 +6943,20 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
     /* FIXME localizations */
     /* FIXME categories */
+
+    /* mayInviteSelf */
+    jprop = json_object_get(event, "mayInviteSelf");
+    if (json_is_boolean(jprop) && !is_exc) {
+        if (jprop == json_true()) {
+            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITESELF);
+            icalproperty_set_value(prop, icalvalue_new_boolean(1));
+            icalcomponent_add_property(comp, prop);
+        }
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "mayInviteSelf");
+    }
 
     /* recurrenceOverrides - must be last to apply patches */
     jprop = json_object_get(event, "recurrenceOverrides");

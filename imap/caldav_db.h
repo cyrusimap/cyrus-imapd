@@ -87,6 +87,7 @@ struct comp_flags {
     unsigned mattach      : 1;          /* Has managed ATTACHment(s) */
     unsigned shared       : 1;          /* Is shared (per-user-data stripped) */
     unsigned defaultalerts : 1;         /* Has default alerts property set */
+    unsigned mayinviteself : 1;         /* Users may invite themselves */
 };
 
 /* Status values */
