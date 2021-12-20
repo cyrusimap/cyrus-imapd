@@ -3640,6 +3640,11 @@ static const jmap_property_t event_props[] = {
         JMAP_URN_CALENDARS,
         JMAP_PROP_SKIP_GET
     },
+    {
+        "mayInviteSelf",
+        JMAP_URN_CALENDARS,
+        0
+    },
 
     /* FM specific */
     {
@@ -4429,7 +4434,7 @@ static int createevent_store(jmap_req_t *req,
     strarray_t add_imapflags = STRARRAY_INITIALIZER;
     if (is_draft) strarray_append(&add_imapflags, "\\draft");
     r = caldav_store_resource(&txn, create->ical, mbox,
-            create->resourcename, 0, create->db, 0,
+            create->resourcename, 0, create->db, PERMS_NOKEEP,
             req->userid, &add_imapflags, NULL, &schedule_addresses);
     strarray_fini(&add_imapflags);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
@@ -4919,17 +4924,8 @@ done:
     jstimezones_free(&jstzones);
 }
 
-enum propupdate {
-    propupdate_common  = 1 << 0,
-    propupdate_private = 1 << 1,
-    propupdate_rsvp    = 1 << 2
-};
-
-static enum propupdate updateevent_read_propupdates_internal(json_t *jdiff,
-        strarray_t *rsvpprops)
+static int updateevent_bump_sequence_internal(json_t *jdiff, strarray_t *rsvpprops)
 {
-    enum propupdate mask = 0;
-
     const char *prop;
     json_t *jval;
     void *tmp;
@@ -4939,69 +4935,87 @@ static enum propupdate updateevent_read_propupdates_internal(json_t *jdiff,
             const char *recurid;
             json_t *joverride;
             json_object_foreach(jval, recurid, joverride) {
-                mask |= updateevent_read_propupdates_internal(joverride, rsvpprops);
+                if (updateevent_bump_sequence_internal(joverride, rsvpprops))
+                    return 1;
             }
             continue;
         }
         else if (!strcmp(prop, "participants")) {
             /* Patches *all* participants */
-            mask |= propupdate_common;
+            return 1;
         }
         else if (!strncmp(prop, "recurrenceOverrides/", 20)) {
             /* Does prop point *into* an override? */
             const char *p = strchr(prop + 21, '/');
             if (!p) {
-                /* Override value is a JSON object */
-                mask |= updateevent_read_propupdates_internal(jval, rsvpprops);
+                if (updateevent_bump_sequence_internal(jval, rsvpprops))
+                    return 1;
                 continue;
             }
             /* fall through */
             prop = p + 1;
         }
 
-        if (!strcmp(prop, "keywords") ||
-            !strcmp(prop, "color") ||
-            !strcmp(prop, "freeBusyStatus") ||
-            !strcmp(prop, "useDefaultAlerts") ||
-            !strcmp(prop, "alerts") ||
-            !strncmp(prop, "alerts/", 7)) {
-
-            mask |= propupdate_private;
-        }
-        else if (strarray_find(rsvpprops, prop, 0) >= 0) {
-            mask |= propupdate_rsvp;
-        }
-        else {
-            mask |= propupdate_common;
+        if (strcmp(prop, "keywords") &&
+            strcmp(prop, "color") &&
+            strcmp(prop, "freeBusyStatus") &&
+            strcmp(prop, "useDefaultAlerts") &&
+            strcmp(prop, "alerts") &&
+            strncmp(prop, "alerts/", 7) &&
+            strarray_find(rsvpprops, prop, 0) < 0) {
+            return 1;
         }
     }
 
-    return mask;
+    return 0;
 }
 
-static enum propupdate updateevent_read_propupdates(json_t *jdiff, strarray_t *participant_ids)
+static void updateevent_bump_sequence(json_t *old_event,
+                                      json_t *new_event,
+                                      json_t *update,
+                                      strarray_t *schedule_addresses)
 {
-    enum propupdate mask = 0;
-
+    // do not bump sequence for user updating their own RSVP
     strarray_t rsvpprops = STRARRAY_INITIALIZER;
 
-    if (participant_ids) {
-        int i;
-        for (i = 0; i < strarray_size(participant_ids); i++) {
-            const char *participant_id = strarray_nth(participant_ids, i);
-            strarray_appendm(&rsvpprops,
-                    strconcat("participants/", participant_id, "/participationStatus", NULL));
-            strarray_appendm(&rsvpprops,
-                    strconcat("participants/", participant_id, "/participationComment", NULL));
-            strarray_appendm(&rsvpprops,
-                    strconcat("participants/", participant_id, "/expectReply", NULL));
+    if (schedule_addresses) {
+        json_t *jparticipants = json_object_get(old_event, "participants");
+        json_t *jparticipant;
+        const char *participant_id;
+        json_object_foreach(jparticipants, participant_id, jparticipant) {
+            json_t *jsendto = json_object_get(jparticipant, "sendTo");
+            const char *uri = json_string_value(json_object_get(jsendto, "imip"));
+            if (uri && !strncasecmp(uri, "mailto:", 7)) {
+                if (strarray_find_case(schedule_addresses, uri + 7, 0) >= 0) {
+                    strarray_appendm(&rsvpprops,
+                            strconcat("participants/",participant_id,
+                                "/participationStatus", NULL));
+                    strarray_appendm(&rsvpprops,
+                            strconcat("participants/", participant_id,
+                                "/participationComment", NULL));
+                    strarray_appendm(&rsvpprops,
+                            strconcat("participants/", participant_id,
+                                "/expectReply", NULL));
+                }
+            }
         }
     }
 
-    mask = updateevent_read_propupdates_internal(jdiff, &rsvpprops);
+
+    json_t *jdiff = jmap_patchobject_create(old_event, new_event);
+    json_object_del(jdiff, "updated");
+    if (updateevent_bump_sequence_internal(jdiff, &rsvpprops)) {
+        json_int_t oldseq = json_integer_value(json_object_get(old_event, "sequence"));
+        json_int_t newseq = json_integer_value(json_object_get(new_event, "sequence"));
+        if (newseq <= oldseq) {
+            json_int_t newseq = oldseq + 1;
+            json_object_set_new(new_event, "sequence", json_integer(newseq));
+            json_object_set_new(update, "sequence", json_integer(newseq));
+        }
+    }
+    json_decref(jdiff);
 
     strarray_fini(&rsvpprops);
-    return mask;
 }
 
 /* XXX - the argument list of this function is insane */
@@ -5013,7 +5027,6 @@ static int updateevent_apply_patch(jmap_req_t *req,
                                    struct caldav_data *cdata,
                                    struct jmap_caleventid *eid,
                                    strarray_t *schedule_addresses,
-                                   int check_acl,
                                    json_t *invalid,
                                    json_t **old_eventptr,
                                    icalcomponent **newicalptr,
@@ -5021,10 +5034,8 @@ static int updateevent_apply_patch(jmap_req_t *req,
                                    json_t **err)
 {
     json_t *new_event = NULL;
-    strarray_t participant_ids = STRARRAY_INITIALIZER;
-    int r = 0;
     json_t *old_event = NULL;
-    enum propupdate allowed_propupdates = 0;
+    int r = 0;
 
     int floatingtz_is_malloced = 0;
     icaltimezone *floatingtz =
@@ -5060,30 +5071,6 @@ static int updateevent_apply_patch(jmap_req_t *req,
         }
     }
 
-    if (check_acl) {
-        if (jmap_hasrights_mbentry(req, mbentry, JACL_WRITEALL|JACL_SETMETADATA) ||
-            (jmap_hasrights_mbentry(req, mbentry, JACL_WRITEOWN) &&
-                    (!cdata->organizer ||
-                     strarray_find(schedule_addresses, cdata->organizer, 0) >= 0))) {
-            // may update all properties
-            allowed_propupdates = ~0;
-        }
-        else {
-            // may update some properties
-            if (jmap_hasrights_mbentry(req, mbentry, JACL_UPDATEPRIVATE))
-                allowed_propupdates |= propupdate_private;
-
-            if (jmap_hasrights_mbentry(req, mbentry, JACL_RSVP))
-                allowed_propupdates |= propupdate_rsvp;
-        }
-
-        if (!allowed_propupdates) {
-            *err = json_pack("{s:s}", "type", "forbidden");
-            goto done;
-        }
-    }
-    else allowed_propupdates = ~0;
-
     // Read old event
     struct jmapical_ctx *jmapctx = jmapical_context_new(req);
     context_begin_cdata(jmapctx, mbentry, cdata);
@@ -5109,41 +5096,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
 
     updateevent_validate_ids(old_event, new_event, invalid);
 
-    /* Determine which properties are patched */
-    if (schedule_addresses) {
-        json_t *jparticipants = json_object_get(old_event, "participants");
-        json_t *jparticipant;
-        const char *participant_id;
-        json_object_foreach(jparticipants, participant_id, jparticipant) {
-            json_t *jsendto = json_object_get(jparticipant, "sendTo");
-            const char *uri = json_string_value(json_object_get(jsendto, "imip"));
-            if (uri && !strncasecmp(uri, "mailto:", 7)) {
-                if (strarray_find_case(schedule_addresses, uri + 7, 0) >= 0) {
-                    strarray_append(&participant_ids, participant_id);
-                }
-            }
-        }
-    }
-    json_t *jdiff = jmap_patchobject_create(old_event, new_event);
-    json_object_del(jdiff, "updated");
-    enum propupdate propupdates = updateevent_read_propupdates(jdiff, &participant_ids);
-    json_decref(jdiff);
-
-    if ((propupdates & allowed_propupdates) != propupdates) {
-        *err = json_pack("{s:s}", "type", "forbidden");
-        goto done;
-    }
-
-    if (propupdates & propupdate_common) {
-        /* Bump sequence */
-        json_int_t oldseq = json_integer_value(json_object_get(old_event, "sequence"));
-        json_int_t newseq = json_integer_value(json_object_get(new_event, "sequence"));
-        if (newseq <= oldseq) {
-            json_int_t newseq = oldseq + 1;
-            json_object_set_new(new_event, "sequence", json_integer(newseq));
-            json_object_set_new(update, "sequence", json_integer(newseq));
-        }
-    }
+    updateevent_bump_sequence(old_event, new_event, update, schedule_addresses);
 
     /* Convert to iCalendar */
     icalcomponent *newical = jmapical_toical(new_event, myoldical,
@@ -5165,7 +5118,6 @@ done:
     jmapical_context_free(&jmapctx);
     json_decref(old_event);
     json_decref(new_event);
-    strarray_fini(&participant_ids);
     return r;
 }
 
@@ -5203,7 +5155,6 @@ static void setcalendarevents_update(jmap_req_t *req,
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     strarray_t del_imapflags = STRARRAY_INITIALIZER;
     json_t *old_event = NULL;
-    int check_acl = 1;
 
     static int icalendar_max_size = -1;
     if (icalendar_max_size < 0) {
@@ -5323,7 +5274,6 @@ static void setcalendarevents_update(jmap_req_t *req,
             *err = json_pack("{s:s}", "type", "forbidden");
             goto done;
         }
-        check_acl = 0;
     }
 
     /* Fetch index record for the resource */
@@ -5368,7 +5318,7 @@ static void setcalendarevents_update(jmap_req_t *req,
     /* Apply patch */
     r = updateevent_apply_patch(req, oldical, event_patch,
             is_standalone_instance, mbentry, cdata, eid, &schedule_addresses,
-            check_acl, parser.invalid, &old_event, &ical, update, err);
+            parser.invalid, &old_event, &ical, update, err);
     if (json_array_size(parser.invalid) || *err) {
 
         r = 0;
@@ -5380,21 +5330,6 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     else if (r) goto done;
-
-    /* Manage attachments */
-    int ret = caldav_manage_attachments(req->accountid, ical, oldical);
-    if (ret && ret != HTTP_NOT_FOUND) {
-        syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
-    /* Handle scheduling. */
-    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
-        r = setcalendarevents_schedule(sched_userid, &schedule_addresses,
-                oldical, ical, JMAP_UPDATE);
-        if (r) goto done;
-    }
 
     if (dstmbox) {
         /* Expunge the resource from mailbox. */
@@ -5437,7 +5372,7 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
     else {
         r = caldav_store_resource(&txn, ical, mbox, resource, record.createdmodseq,
-                                  db, 0, req->userid,
+                                  db, PERMS_NOKEEP, req->userid,
                                   NULL, &del_imapflags, &schedule_addresses);
         if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
             json_t *patch_copy = json_deep_copy(event_patch);
@@ -5463,6 +5398,21 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     r = 0;
+
+    /* Handle scheduling. */
+    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
+        r = setcalendarevents_schedule(sched_userid, &schedule_addresses,
+                oldical, ical, JMAP_UPDATE);
+        if (r) goto done;
+    }
+
+    /* Manage attachments */
+    int ret = caldav_manage_attachments(req->accountid, ical, oldical);
+    if (ret && ret != HTTP_NOT_FOUND) {
+        syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
+        r = IMAP_INTERNAL;
+        goto done;
+    }
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         struct buf blobid = BUF_INITIALIZER;
@@ -5736,7 +5686,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
             .authstate = req->authstate
         };
         r = caldav_store_resource(&txn, newical, mbox,
-                resource, record.createdmodseq, db, 0, req->userid,
+                resource, record.createdmodseq, db, PERMS_NOKEEP, req->userid,
                 NULL, NULL, &schedule_addresses);
         transaction_free(&txn);
         if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
