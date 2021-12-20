@@ -3645,6 +3645,11 @@ static const jmap_property_t event_props[] = {
         JMAP_URN_CALENDARS,
         0
     },
+    {
+        "mayInviteOthers",
+        JMAP_URN_CALENDARS,
+        0
+    },
 
     /* FM specific */
     {
