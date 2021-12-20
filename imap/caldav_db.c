@@ -262,6 +262,7 @@ static void _num_to_comp_flags(struct comp_flags *flags, unsigned num)
     flags->shared    = (num >> 6) & 1;
     flags->defaultalerts = (num >> 7) & 1;
     flags->mayinviteself = (num >> 8) & 1;
+    flags->mayinviteothers = (num >> 9) & 1;
 }
 
 static unsigned _comp_flags_to_num(struct comp_flags *flags)
@@ -273,7 +274,8 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
        + ((flags->mattach   & 1) << 5)
        + ((flags->shared    & 1) << 6)
        + ((flags->defaultalerts & 1) << 7)
-       + ((flags->mayinviteself & 1) << 8);
+       + ((flags->mayinviteself & 1) << 8)
+       + ((flags->mayinviteothers & 1) << 9);
 }
 
 #define ICALOBJS_FIELDS         \
@@ -1190,10 +1192,13 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
             icalcomponent_read_usedefaultalerts(comp) > 0;
     }
 
-    /* Read JMAP field mayInviteSelf */
+    /* Read JMAP fields mayInviteSelf and mayInviteOthers */
     comp = icalcomponent_get_first_real_component(ical);
     prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_MAYINVITESELF);
     cdata->comp_flags.mayinviteself = prop &&
+        !strcasecmpsafe(icalproperty_get_value_as_string(prop), "true");
+    prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_MAYINVITEOTHERS);
+    cdata->comp_flags.mayinviteothers = prop &&
         !strcasecmpsafe(icalproperty_get_value_as_string(prop), "true");
 
     int r = caldav_write(caldavdb, cdata);
