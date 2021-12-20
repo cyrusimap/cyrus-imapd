@@ -56,6 +56,7 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"
+#include "jmap_ical.h"
 #include "libconfig.h"
 #include "mboxname.h"
 #include "util.h"
@@ -260,6 +261,7 @@ static void _num_to_comp_flags(struct comp_flags *flags, unsigned num)
     flags->mattach   = (num >> 5) & 1;
     flags->shared    = (num >> 6) & 1;
     flags->defaultalerts = (num >> 7) & 1;
+    flags->mayinviteself = (num >> 8) & 1;
 }
 
 static unsigned _comp_flags_to_num(struct comp_flags *flags)
@@ -270,7 +272,8 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
        + ((flags->tzbyref   & 1) << 4)
        + ((flags->mattach   & 1) << 5)
        + ((flags->shared    & 1) << 6)
-       + ((flags->defaultalerts & 1) << 7);
+       + ((flags->defaultalerts & 1) << 7)
+       + ((flags->mayinviteself & 1) << 8);
 }
 
 #define ICALOBJS_FIELDS         \
@@ -1186,6 +1189,12 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
         cdata->comp_flags.defaultalerts =
             icalcomponent_read_usedefaultalerts(comp) > 0;
     }
+
+    /* Read JMAP field mayInviteSelf */
+    comp = icalcomponent_get_first_real_component(ical);
+    prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_MAYINVITESELF);
+    cdata->comp_flags.mayinviteself = prop &&
+        !strcasecmpsafe(icalproperty_get_value_as_string(prop), "true");
 
     int r = caldav_write(caldavdb, cdata);
     if (!r) r = caldav_writeical_jmap(caldavdb, cdata, ical);
