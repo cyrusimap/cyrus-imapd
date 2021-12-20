@@ -428,10 +428,11 @@ static int compare_properties(icalproperty *propa, icalproperty *propb)
 }
 
 enum propupdate {
-    propupdate_shared     = (1 << 0),
-    propupdate_private    = (1 << 1),
-    propupdate_rsvp       = (1 << 2),
-    propupdate_inviteself = (1 << 3)
+    propupdate_shared       = (1 << 0),
+    propupdate_private      = (1 << 1),
+    propupdate_rsvp         = (1 << 2),
+    propupdate_inviteself   = (1 << 3),
+    propupdate_inviteothers = (1 << 4)
 };
 
 static enum propupdate propupdate_all = ~0;
@@ -449,31 +450,29 @@ static int validate_mayinvite(icalproperty *prop,
         /* User adds their own ATTENDEE */
         if (!(allow_propupdates & propupdate_inviteself))
             return HTTP_FORBIDDEN;
-
-        // Assert no ROLE is set
-        if (icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER))
-            return HTTP_FORBIDDEN;
-
-        // Assert JSCalendar role only contains 'attendee'
-        icalparameter *param;
-        for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
-             param;
-             param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
-
-            if (!strcmpsafe(icalparameter_get_xname(param), JMAPICAL_XPARAM_ROLE)) {
-                const char *val =
-                    icalparameter_get_value_as_string(param);
-
-                if (strcasecmpsafe(val, "attendee"))
-                    return HTTP_FORBIDDEN;
-            }
-        }
-
-        return 0;
+    }
+    else if (!(allow_propupdates & propupdate_inviteothers)) {
+        /* User adds another ATTENDEE */
+        return HTTP_FORBIDDEN;
     }
 
-    if (!(allow_propupdates & propupdate_shared))
+    // Assert no ROLE is set
+    if (icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER))
         return HTTP_FORBIDDEN;
+
+    // Assert JSCalendar role only contains 'attendee'
+    icalparameter *param;
+    for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
+         param;
+         param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
+
+        if (!strcmpsafe(icalparameter_get_xname(param), JMAPICAL_XPARAM_ROLE)) {
+            const char *val = icalparameter_get_value_as_string(param);
+
+            if (strcasecmpsafe(val, "attendee"))
+                return HTTP_FORBIDDEN;
+        }
+    }
 
     return 0;
 }
@@ -804,6 +803,30 @@ static int write_personal_data(const char *userid,
     return ret;
 }
 
+static int includes_attendee(icalcomponent *ical, const strarray_t *sched_addrs)
+{
+    if (!ical || !sched_addrs) return 0;
+
+    icalcomponent *comp;
+    for (comp = icalcomponent_get_first_real_component(ical);
+         comp;
+         comp = icalcomponent_get_next_component(ical, icalcomponent_isa(comp))) {
+
+        icalproperty *prop;
+        for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+
+            const char *uri = icalproperty_get_attendee(prop);
+            if (uri && !strncasecmp(uri, "mailto:", 7) &&
+                    strarray_find(sched_addrs, uri + 7, 0) >= 0)
+                return 1;
+        }
+    }
+
+    return 0;
+}
+
 /*
  * Enforce per-property permissions in iCalendar data and optionally
  * handle stripping per-user data from existing and/or new shared resource.
@@ -865,33 +888,40 @@ static int caldav_store_preprocess(struct transaction_t *txn,
         /* User has read-write access */
         allow_propupdates = propupdate_all;
     }
-
-    if (cdata->dav.imap_uid && (rights & DACL_WRITEOWNRSRC) &&
+    else if (cdata->dav.imap_uid && (rights & DACL_WRITEOWNRSRC) &&
             (!cdata->organizer ||
              (schedule_addresses &&
               strarray_find(schedule_addresses, cdata->organizer, 0) >= 0))) {
         /* User may update resource whey they are organizer */
         allow_propupdates = propupdate_all;
     }
-
-    if (rights & DACL_UPDATEPRIVATE) {
-        /* User may only update their per-user properties */
-        allow_propupdates |= propupdate_private;
-    }
-
-    if (rights & DACL_REPLY) {
-        /* User may update their own ATTENDEE */
-        allow_propupdates |= propupdate_rsvp;
-        if (cdata->dav.imap_uid && cdata->comp_flags.mayinviteself) {
-            /* User may add their own ATTENDEE */
-            allow_propupdates |= propupdate_inviteself;
+    else {
+        if (rights & DACL_UPDATEPRIVATE) {
+            /* User may only update their per-user properties */
+            allow_propupdates |= propupdate_private;
         }
-    }
 
-    if (cdata->dav.imap_uid &&
-             !(mailbox->i.options & OPT_IMAP_SHAREDSEEN)) {
-        /* User has read-only access to existing resource */
-        allow_propupdates |= propupdate_private;
+        if (rights & DACL_REPLY) {
+            /* User may update their own ATTENDEE */
+            allow_propupdates |= propupdate_rsvp;
+
+            if (cdata->dav.imap_uid && cdata->comp_flags.mayinviteself) {
+                /* User may add their own ATTENDEE */
+                allow_propupdates |= propupdate_inviteself;
+            }
+
+            if (cdata->dav.imap_uid && cdata->comp_flags.mayinviteothers &&
+                    includes_attendee(ical, schedule_addresses)) {
+                /* User may add add other ATTENDEEs */
+                allow_propupdates |= propupdate_inviteothers;
+            }
+        }
+
+        if (cdata->dav.imap_uid &&
+                !(mailbox->i.options & OPT_IMAP_SHAREDSEEN)) {
+            /* User has read-only access to existing resource */
+            allow_propupdates |= propupdate_private;
+        }
     }
 
     if (!allow_propupdates) {
@@ -1089,7 +1119,8 @@ static void preserve_jmap_permissions(icalcomponent *ical,
 
             nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
 
-            if (!strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_MAYINVITESELF))
+            if (!strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_MAYINVITESELF) ||
+                !strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_MAYINVITEOTHERS))
                 icalcomponent_remove_property(comp, prop);
         }
     }
@@ -1102,6 +1133,13 @@ static void preserve_jmap_permissions(icalcomponent *ical,
         if (cdata->comp_flags.mayinviteself) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITESELF);
+            icalproperty_set_value(prop, icalvalue_new_boolean(1));
+            icalcomponent_add_property(comp, prop);
+        }
+
+        if (cdata->comp_flags.mayinviteothers) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITEOTHERS);
             icalproperty_set_value(prop, icalvalue_new_boolean(1));
             icalcomponent_add_property(comp, prop);
         }
