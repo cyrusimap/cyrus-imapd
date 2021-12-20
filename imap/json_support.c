@@ -49,15 +49,42 @@
 
 #include "json_support.h"
 
-int json_is_utcdate(json_t *json)
+static int parse_date(json_t *json, unsigned utc)
 {
     const char *s = NULL;
     struct tm date;
 
     if (!json_is_string(json)) return 0;
 
-    s = strptime(json_string_value(json), "%Y-%m-%dT%H:%M:%SZ", &date);
+    /* parse full-date and partial-time up to time-secfrac */
+    s = strptime(json_string_value(json), "%Y-%m-%dT%H:%M:%S", &date);
+    if (!s) return 0;
+
+    /* parse time-secfrac */
+    if (*s == '.') {
+        while (Uisdigit(*(++s)));
+    }
+
+    if (utc) {
+        /* time-offset MUST be "Z" */
+        return (!strcmp(s, "Z"));
+    }
+
+    /* parse time-numoffset */
+    if (*s == '-' || *s == '+') s++;
+    s = strptime(s, "%H:%M", &date);
+
     return (s && *s == '\0');
+}
+
+int json_is_date(json_t *json)
+{
+    return parse_date(json, 0);
+}
+
+int json_is_utcdate(json_t *json)
+{
+    return parse_date(json, 1);
 }
 
 int json_array_find(json_t *array, const char *needle)
