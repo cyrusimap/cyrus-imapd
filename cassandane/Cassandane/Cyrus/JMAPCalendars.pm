@@ -1333,6 +1333,10 @@ sub normalize_event
         $event->{timeZone} = undef;
     }
 
+    if (not exists $event->{mayInviteSelf}) {
+        $event->{mayInviteSelf} = JSON::false,
+    }
+
     # undefine dynamically generated values
     $event->{created} = undef;
     $event->{updated} = undef;
@@ -16530,6 +16534,305 @@ sub test_calendarevent_set_mayrsvp
         }, 'R1'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
+}
+
+sub test_calendarevent_set_mayinviteself
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my ($shareeJmap, $shareeCalDAV) = $self->create_user('sharee');
+
+    xlog "create event";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'eventuid',
+                    title => 'test',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                'owner' => JSON::true,
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                        someone => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+
+    xlog "can not set mayInviteSelf on override";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    recurrenceOverrides => {
+                        '2022-02-03T22:22:22' => {
+                            mayInviteSelf => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals({
+        type => 'invalidProperties',
+        properties => ['recurrenceOverrides/2022-02-03T22:22:22/mayInviteSelf'],
+    }, $res->[0][1]{notUpdated}{$eventId});
+
+    xlog "assign mayUpdatePrivate to sharee",
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        'sharee' => {
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "sharee can not invite self";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    'participants/sharee' => {
+                        roles => {
+                            'attendee' => JSON::true,
+                        },
+                        sendTo => {
+                            imip => 'mailto:sharee@example.com',
+                        },
+                        expectReply => JSON::true,
+                        participationStatus => 'accepted',
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('forbidden', $res->[0][1]{notUpdated}{$eventId}{type});
+
+    xlog "set mayInviteSelf on event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    mayInviteSelf => JSON::true,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['mayInviteSelf'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mayInviteSelf});
+
+    xlog "sharee can not invite self due to missing mayRSVP permission";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    'participants/sharee' => {
+                        roles => {
+                            'attendee' => JSON::true,
+                        },
+                        sendTo => {
+                            imip => 'mailto:sharee@example.com',
+                        },
+                        expectReply => JSON::true,
+                        participationStatus => 'accepted',
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('forbidden', $res->[0][1]{notUpdated}{$eventId}{type});
+
+    xlog "assign mayRSVP to sharee",
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        'sharee' => {
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayRSVP => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "sharee invites self as attendee and chair";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    'participants/sharee' => {
+                        roles => {
+                            'attendee' => JSON::true,
+                            'chair' => JSON::true,
+                        },
+                        sendTo => {
+                            imip => 'mailto:sharee@example.com',
+                        },
+                        expectReply => JSON::true,
+                        participationStatus => 'accepted',
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('forbidden', $res->[0][1]{notUpdated}{$eventId}{type});
+
+    xlog "sharee invites self as attendee";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    'participants/sharee' => {
+                        roles => {
+                            'attendee' => JSON::true,
+                        },
+                        sendTo => {
+                            imip => 'mailto:sharee@example.com',
+                        },
+                        expectReply => JSON::true,
+                        participationStatus => 'accepted',
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => ['participants'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_not_null($res->[1][1]{list}[0]{participants}{sharee});
+}
+
+sub test_calendarevent_set_mayinviteself_preserve_caldav
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create event with mayInviteSelf set";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'eventuid',
+                    title => 'test',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                'owner' => JSON::true,
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                        someone => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                    },
+                    mayInviteSelf => JSON::true,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event'],
+            properties => ['mayInviteSelf'],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+    my $href = $res->[0][1]{created}{event}{'x-href'};
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mayInviteSelf});
+
+    xlog "remove mayInviteSelf via CalDAV";
+    my $ical = $caldav->Request('GET', $href)->{content};
+    $self->assert($ical =~ m/X-JMAP-MAY-INVITE-SELF;VALUE=BOOLEAN:TRUE/);
+
+    $ical = join("\r\n",
+        grep { !($_ =~ m/X-JMAP-MAY-INVITE-SELF;VALUE=BOOLEAN:TRUE/) }
+        split(/\r\n/, $ical)
+    );
+    $res = $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+
+    xlog "assert mayInviteSelf is preserved";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['mayInviteSelf'],
+        }, 'R2'],
+    ]);
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{mayInviteSelf});
 }
 
 1;

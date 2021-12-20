@@ -53,8 +53,9 @@
 #include "strarray.h"
 
 
-#define NEW_STAG (1<<8)         /* Make sure we skip over PREFER bits */
+#define NEW_STAG (1<<8)           /* Make sure we skip over PREFER bits */
 #define TZ_STRIP (1<<9)
+#define PERMS_NOKEEP (1<<10)      /* Do not keep JMAP permissions during event updates  */
 
 #define SHARED_MODSEQ \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">shared-modseq"
