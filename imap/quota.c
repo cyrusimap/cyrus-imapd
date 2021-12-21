@@ -318,12 +318,15 @@ static void test_sync_done(const char *mboxname)
 /*
  * A quotaroot was found, add it to our list
  */
-static int fixquota_addroot(struct quota *q,
-                            void *rock __attribute__((unused)))
+static int fixquota_addroot(struct quota *q, void *rock)
 {
     struct quota localq;
     struct txn *tid = NULL;
+    const char *userid = (const char *)rock;
     int r;
+
+    if (userid && !mboxname_userownsmailbox(userid, q->root))
+        return 0;
 
     if (quota_num == quota_alloc) {
         /* Create new qr list entry */
@@ -390,7 +393,7 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-        r = quota_foreach(buf, fixquota_addroot, buf, NULL);
+        r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
         if (r) {
             errmsg(IMAP_IOERROR, "failed building quota list for '%s'", buf);
         }
@@ -405,12 +408,13 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
             char *res = mboxname_user_mbox(roots[i], NULL);
             strlcpy(buf, res, sizeof(buf));
             free(res);
+            r = quota_foreach(buf, fixquota_addroot, roots[i], NULL);
         }
         else {
             strlcpy(tail, roots[i], sizeof(buf) - domainlen);
+            r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
         }
-        /* XXX - namespace fixes here */
-        r = quota_foreach(buf, fixquota_addroot, buf, NULL);
+
         if (r) {
             errmsg(IMAP_IOERROR, "failed building quota list for '%s'", buf);
             break;
