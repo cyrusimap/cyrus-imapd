@@ -3238,6 +3238,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         hashu64_insert(cdata->dav.rowid, cached, &rock->cache_jsevents);
     }
     json_object_set(cached, jscal->ical_recurid, jsevent);
+    jsevent = json_deep_copy(jsevent);
 
 gotevent:
 
@@ -3683,6 +3684,7 @@ static void cachecalendarevents_cb(uint64_t rowid, void *payload, void *vrock)
         char *data = json_dumps(jsevent, 0);
         caldav_write_jscalcache(rock->db, rowid, ical_recurid,
                 rock->req->userid, JMAPCACHE_CALVERSION, data);
+        json_decref(jsevent);
         free(data);
     }
 }
