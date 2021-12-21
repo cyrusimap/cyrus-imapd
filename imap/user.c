@@ -348,7 +348,7 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
 
     return 0;
 }
-#if 0
+
 struct rename_rock {
     const char *olduser;
     const char *newuser;
@@ -480,7 +480,7 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser)
 
     return 0;
 }
-#endif
+
 EXPORTED int user_renameacl(const struct namespace *namespace, const char *name,
                             const char *olduser, const char *newuser)
 {

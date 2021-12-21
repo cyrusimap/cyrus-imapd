@@ -7910,6 +7910,10 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     if (!r && rename_user) {
         user_copyquotaroot(oldmailboxname, newmailboxname);
         user_renameacl(&imapd_namespace, newmailboxname, olduser, newuser);
+        if (config_getswitch(IMAPOPT_MAILBOX_LEGACY_DIRS)) {
+            /* Change seen state, subscriptions and sieve scripts */
+            user_renamedata(olduser, newuser);
+        }
 
         /* XXX report status/progress of meta-data */
     }
