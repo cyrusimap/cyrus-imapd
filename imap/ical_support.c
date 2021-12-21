@@ -1817,7 +1817,7 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
          patch;
          patch = icalcomponent_get_next_component(vpatch, ICAL_ANY_COMPONENT)) {
         struct path_segment_t *target = NULL;
-        struct patch_data_t patch_data = { patch, NULL, NULL };
+        struct patch_data_t patch_data = { NULL, NULL, NULL };
         r = 0;
 
         if (icalcomponent_isa(patch) != ICAL_XPATCH_COMPONENT) {
@@ -1828,7 +1828,7 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
         }
 
         /* This function is destructive of PATCH components, make a clone */
-        patch = icalcomponent_clone(patch);
+        patch_data.patch = patch = icalcomponent_clone(patch);
 
         prop = icalcomponent_get_first_property(patch,
                                                 ICAL_PATCHTARGET_PROPERTY);
