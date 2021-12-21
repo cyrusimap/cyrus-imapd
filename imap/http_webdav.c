@@ -687,7 +687,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     /* Create and cache RFC 5322 header fields for resource */
     json_t *jdesc = json_pack("{ s:s }", "uid", uid ? uid : makeuuid());
     if (filename) {
-        json_object_set(jdesc, "filename", json_string(filename));
+        json_object_set_new(jdesc, "filename", json_string(filename));
         spool_replace_header(xstrdup("Subject"),
                              xstrdup(filename), txn->req_hdrs);
     }
