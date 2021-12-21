@@ -890,7 +890,7 @@ typedef struct file_info {
     size_t size;
     time_t created;
     time_t modified;
-    int hasBlobId;
+    unsigned hasBlobId : 1;
 } file_info_t;
 
 static void free_file_info(void *data)
@@ -914,18 +914,25 @@ typedef struct filter_rock {
     file_info_t *anchor;
 } filter_rock_t;
 
+typedef struct match_folder_rock {
+    const mbentry_t *mbentry;
+    mbname_t *mbname;
+} match_folder_rock_t;
+
 /* Match the folder in rock against filter. */
 static int filter_match_folder(void *vf, void *rock)
 {
     file_filter_t *f = (file_filter_t *) vf;
-    const mbentry_t *mbentry = (const mbentry_t *) rock;
+    match_folder_rock_t *mf = (match_folder_rock_t *) rock;
 
     /* hasBlobId */
     if (f->hasBlobId == 1) return 0;
 
     if (f->name || f->parentIds) {
-        mbname_t *mbname = mbname_from_intname(mbentry->name);
-        char *name = mbname_pop_boxes(mbname);
+        if (!mf->mbname) mf->mbname = mbname_from_intname(mf->mbentry->name);
+
+        /* Pop off the name to generate parentId, but replace it when done */
+        char *name = mbname_pop_boxes(mf->mbname);
         int r = 1;
 
         /* name */
@@ -933,9 +940,9 @@ static int filter_match_folder(void *vf, void *rock)
 
         /* parentIds */
         else if (f->parentIds &&
-                 !hash_lookup(mbname_intname(mbname), f->parentIds)) r = 0;
+                 !hash_lookup(mbname_intname(mf->mbname), f->parentIds)) r = 0;
 
-        mbname_free(&mbname);
+        mbname_push_boxes(mf->mbname, name);
         free(name);
 
         if (r == 0) return 0;
@@ -988,6 +995,9 @@ static int filter_files_cb(void *rock, struct webdav_data *wdata)
         jmap_filter_match(frock->parsed_filter, &filter_match_file, wdata)) {
         info = xzmalloc(sizeof(file_info_t));
         info->id = xstrdup(wdata->res_uid);
+        info->name = xstrdup(wdata->filename);
+        info->type = strconcat(wdata->type, "/", wdata->subtype, NULL);
+        info->hasBlobId = 1;
 
         /* Add record of the match to our array */
         ptrarray_append(&frock->matches, info);
@@ -1007,16 +1017,19 @@ static int filter_folders_cb(const mbentry_t *mbentry, void *rock)
 {
     filter_rock_t *frock = (filter_rock_t *) rock;
     struct jmap_query *query = frock->query;
+    match_folder_rock_t mf = { mbentry, NULL };
     file_info_t *info;
-
 
     /* Filter folder */
     if (strcmp(mbentry->name, frock->root) &&
         (!query->filter ||
-         jmap_filter_match(frock->parsed_filter,
-                           &filter_match_folder, (void *) mbentry))) {
+         jmap_filter_match(frock->parsed_filter, &filter_match_folder, &mf))) {
+
+        if (!mf.mbname) mf.mbname = mbname_from_intname(mbentry->name);
+
         info = xzmalloc(sizeof(file_info_t));
         info->id = xstrdup(mbentry->uniqueid);
+        info->name = xstrdup(strarray_nth(mbname_boxes(mf.mbname), -1));
 
         /* Add record of the match to our array */
         ptrarray_append(&frock->matches, info);
@@ -1037,6 +1050,8 @@ static int filter_folders_cb(const mbentry_t *mbentry, void *rock)
         webdav_foreach(frock->db, mbentry, &filter_files_cb, frock);
     }
 
+    mbname_free(&mf.mbname);
+
     return 0;
 }
 
@@ -1052,7 +1067,8 @@ enum files_sort {
     FILES_SORT_DESC = 0x80 /* bit-flag for descending sort */
 };
 
-static int files_cmp QSORT_R_COMPAR_ARGS(const void *va, const void *vb, void *rock)
+static int files_cmp QSORT_R_COMPAR_ARGS(const void *va, const void *vb,
+                                         void *rock)
 {
     arrayu64_t *sortcrit = (arrayu64_t *) rock;
     file_info_t *ma = (file_info_t *) *(void **) va;
