@@ -1061,36 +1061,17 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     /* Add default alarms for new VEVENTs */
     if (!oldical && ical) {
-        comp = icalcomponent_get_first_real_component(ical);
-        if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
-            icalcomponent *alarmsdatetime =
-                caldav_read_calendar_icalalarms(mailbox_name(mailbox), userid,
-                        CALDAV_DEFAULTALARMS_ANNOT_WITHTIME);
-            icalcomponent *alarmsdate =
-                caldav_read_calendar_icalalarms(mailbox_name(mailbox), userid,
-                        CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
+        icalcomponent *alarms_withtime =
+            caldav_read_calendar_icalalarms(mailbox_name(mailbox), userid,
+                    CALDAV_DEFAULTALARMS_ANNOT_WITHTIME);
+        icalcomponent *alarms_withdate =
+            caldav_read_calendar_icalalarms(mailbox_name(mailbox), userid,
+                    CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
 
-            for ( ; comp;
-                    comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+        icalcomponent_add_defaultalerts(ical, alarms_withtime, alarms_withdate, 1);
 
-                icaltimetype dtstart = icalcomponent_get_dtstart(comp);
-                icalcomponent *alarms = dtstart.is_date ? alarmsdate : alarmsdatetime;
-                if (alarms) {
-                    icalcomponent *alarm;
-                    for (alarm = icalcomponent_get_first_component(alarms,
-                                ICAL_VALARM_COMPONENT);
-                            alarm;
-                            alarm = icalcomponent_get_next_component(alarms,
-                                ICAL_VALARM_COMPONENT)) {
-
-                        icalcomponent_add_component(comp, icalcomponent_clone(alarm));
-                    }
-                }
-            };
-
-            if (alarmsdatetime) icalcomponent_free(alarmsdatetime);
-            if (alarmsdate) icalcomponent_free(alarmsdate);
-        }
+        if (alarms_withtime) icalcomponent_free(alarms_withtime);
+        if (alarms_withdate) icalcomponent_free(alarms_withdate);
     }
 
     /* Store the (updated) object in the recipients's calendar */
