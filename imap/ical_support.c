@@ -1142,6 +1142,7 @@ union match_criteria_t {
 struct path_segment_t {
     unsigned type;                    /* Is it comp, prop, or param segment? */
     unsigned kind;                    /* libical kind of comp, prop, or param */
+    char *xname;                      /* name of element, if type 'X' */
     union match_criteria_t match;     /* match criteria (depends on 'type') */
     unsigned action;                  /* patch action (create,update,setparam)*/
     void *data;                       /* patch data (depends on 'action') */
@@ -1170,6 +1171,7 @@ static int parse_target_path(char *path, struct path_segment_t **path_seg,
         new = xzmalloc(sizeof(struct path_segment_t));
         new->type = SEGMENT_COMP;
         new->kind = icalcomponent_string_to_kind(path);
+        if (new->kind == ICAL_X_COMPONENT) new->xname = xstrdup(path);
         /* Initialize RID as invalid time rather than NULL time
            since NULL time is used for empty RID (master component) */
         new->match.comp.rid.year = -1;
@@ -1235,6 +1237,7 @@ static int parse_target_path(char *path, struct path_segment_t **path_seg,
         new = xzmalloc(sizeof(struct path_segment_t));
         new->type = SEGMENT_PROP;
         new->kind = icalproperty_string_to_kind(path);
+        if (new->kind == ICAL_X_PROPERTY) new->xname = xstrdup(path);
 
         if (!*path_seg) *path_seg = new;
         else tail->child = new;
@@ -1275,6 +1278,7 @@ static int parse_target_path(char *path, struct path_segment_t **path_seg,
             new = xzmalloc(sizeof(struct path_segment_t));
             new->type = SEGMENT_PARAM;
             new->kind = icalparameter_string_to_kind(path);
+            if (new->kind == ICAL_X_PARAMETER) new->xname = xstrdup(path);
 
             tail->child = new;
             tail = new;
@@ -1325,11 +1329,15 @@ static char *remove_single_value(const char *oldstr, const char *single)
 static void apply_patch_parameter(struct path_segment_t *path_seg,
                                   icalproperty *parent, int *num_changes)
 {
-    icalparameter *param =
-        icalproperty_get_first_parameter(parent, path_seg->kind);
-    if (!param) return;
+    icalparameter *param, *nextparam;
 
-    if (path_seg->action == ACTION_DELETE) {
+    if (path_seg->action != ACTION_DELETE) return;
+
+    /* Iterate through each parameter */
+    for (param = icalproperty_get_first_parameter(parent, path_seg->kind);
+         param; param = nextparam) {
+        nextparam = icalproperty_get_next_parameter(parent, path_seg->kind);
+
         switch (path_seg->kind) {
         case ICAL_MEMBER_PARAMETER:
             /* Multi-valued parameter */
@@ -1346,18 +1354,21 @@ static void apply_patch_parameter(struct path_segment_t *path_seg,
                         icalparameter_set_member(param, newval);
                         free(newval);
                     }
-                    break;
+                    continue;
                 }
             }
+            break;
 
-            /* Fall through and delete entire parameter */
-            GCC_FALLTHROUGH
-
-        default:
-            *num_changes += 1;
-            icalproperty_remove_parameter_by_ref(parent, param);
+        case ICAL_X_PARAMETER:
+            /* Check X- parameter name match */
+            if (strcmp(path_seg->xname, icalparameter_get_iana_name(param))) {
+                continue;
+            }
             break;
         }
+
+        *num_changes += 1;
+        icalproperty_remove_parameter_by_ref(parent, param);
     }
 }
 
@@ -1365,22 +1376,29 @@ static int apply_param_match(icalproperty *prop, union match_criteria_t *match)
 {
     icalparameter_kind kind;
     icalparameter *param;
-    int ret = 1;
-
-    /* XXX  Need to handle X- parameters */
+    int ret = 0;
 
     kind = icalparameter_string_to_kind(match->prop.param);
-    param = icalproperty_get_first_parameter(prop, kind);
-    if (!param) {
-        /* property doesn't have this parameter */
-        ret = match->prop.not;
-    }
-    else if (match->prop.value) {
-        const char *param_val = icalparameter_get_value_as_string(param);
 
-        ret = !strcmp(match->prop.value, param_val);
-        if (match->prop.not) ret = !ret;  /* invert */
+    /* Iterate through each parameter */
+    for (param = icalproperty_get_first_parameter(prop, kind);
+         !ret && param; param = icalproperty_get_next_parameter(prop, kind)) {
+        /* Check X- parameter name match */
+        if (kind == ICAL_X_PARAMETER &&
+            strcmp(match->prop.param, icalparameter_get_iana_name(param))) {
+            continue;
+        }
+        else if (match->prop.value) {
+            const char *param_val = icalparameter_get_value_as_string(param);
+
+            ret = !strcmp(match->prop.value, param_val);
+        }
+        else {
+            ret = 1;
+        }
     }
+
+    if (match->prop.not) ret = !ret;  /* invert */
 
     return ret;
 }
@@ -1396,6 +1414,12 @@ static void apply_patch_property(struct path_segment_t *path_seg,
     for (prop = icalcomponent_get_first_property(parent, path_seg->kind);
          prop; prop = nextprop) {
         nextprop = icalcomponent_get_next_property(parent, path_seg->kind);
+
+        /* Check X- property name match */
+        if (path_seg->kind == ICAL_X_PROPERTY &&
+            strcmp(path_seg->xname, icalproperty_get_property_name(prop))) {
+            continue;
+        }
 
         /* Check prop-match */
         int match = 1;
@@ -1684,6 +1708,12 @@ static void apply_patch_component(struct path_segment_t *path_seg,
     for (; comp; comp = nextcomp) {
         nextcomp = icalcomponent_get_next_component(parent, path_seg->kind);
 
+        /* Check X- component name match */
+        if (path_seg->kind == ICAL_X_COMPONENT &&
+            strcmp(path_seg->xname, icalcomponent_get_component_name(comp))) {
+            continue;
+        }
+
         /* Check comp-match */
         if (path_seg->match.comp.uid &&
             strcmpnull(path_seg->match.comp.uid, icalcomponent_get_uid(comp))) {
@@ -1796,6 +1826,7 @@ static void path_segment_free(struct path_segment_t *path_seg)
             break;
         }
 
+        free(path_seg->xname);
         free(path_seg);
     }
 }
@@ -1817,7 +1848,7 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
          patch;
          patch = icalcomponent_get_next_component(vpatch, ICAL_ANY_COMPONENT)) {
         struct path_segment_t *target = NULL;
-        struct patch_data_t patch_data = { patch, NULL, NULL };
+        struct patch_data_t patch_data = { NULL, NULL, NULL };
         r = 0;
 
         if (icalcomponent_isa(patch) != ICAL_XPATCH_COMPONENT) {
@@ -1828,7 +1859,7 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
         }
 
         /* This function is destructive of PATCH components, make a clone */
-        patch = icalcomponent_clone(patch);
+        patch_data.patch = patch = icalcomponent_clone(patch);
 
         prop = icalcomponent_get_first_property(patch,
                                                 ICAL_PATCHTARGET_PROPERTY);
