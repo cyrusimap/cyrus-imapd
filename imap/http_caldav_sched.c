@@ -57,6 +57,7 @@
 #include <sasl/saslutil.h>
 
 #include "caldav_util.h"
+#include "dynarray.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
@@ -1414,6 +1415,11 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
     }
 }
 
+struct comp_attendee {
+    icalcomponent *comp;
+    icalproperty *prop;
+};
+
 /*
  * sched_request() helper function
  *
@@ -1421,7 +1427,9 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
  * to the request data
  */
 static void add_attendees(icalcomponent *ical,
-                          const char *organizer, strarray_t *attendees)
+                          const char *organizer,
+                          int hide_attendees,
+                          hash_table *attendees)
 {
     if (!ical) return;
 
@@ -1434,11 +1442,12 @@ static void add_attendees(icalcomponent *ical,
     icalcomponent_kind kind = icalcomponent_isa(comp);
 
     for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
-        icalproperty *prop;
+        icalproperty *prop, *nextprop;
         icalparameter *param;
         for (prop = icalcomponent_get_first_invitee(comp);
-            prop;
-            prop = icalcomponent_get_next_invitee(comp)) {
+            prop; prop = nextprop) {
+
+            nextprop = icalcomponent_get_next_invitee(comp);
 
             const char *attendee = icalproperty_get_invitee(prop);
             if (!attendee) continue;
@@ -1456,9 +1465,43 @@ static void add_attendees(icalcomponent *ical,
                 if (agent != ICAL_SCHEDULEAGENT_SERVER) continue;
             }
 
-            strarray_add_case(attendees, attendee);
+            dynarray_t *bycomp = hash_lookup(attendee, attendees);
+            if (!bycomp) {
+                bycomp = dynarray_new(sizeof(struct comp_attendee));
+                hash_insert(attendee, bycomp, attendees);
+            }
+            struct comp_attendee ca = { comp, prop };
+            dynarray_append(bycomp, &ca);
+
+            if (hide_attendees)
+                icalcomponent_remove_property(comp, prop);
         }
     }
+}
+
+/*
+ * sched_request() helper function
+ *
+ * Counts the number of ATTENDEE properties in ical. Does not deduplicate
+ * ATTENDEEs by their calendar address.
+ */
+static size_t count_attendees(icalcomponent *ical)
+{
+    if (!ical) return 0;
+
+    size_t count = 0;
+
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        icalproperty *prop;
+        for (prop = icalcomponent_get_first_invitee(comp);
+                prop; prop = icalcomponent_get_next_invitee(comp)) {
+            count++;
+        }
+    }
+
+    return count;
 }
 
 static icalcomponent *find_component(icalcomponent *ical, const char *match)
@@ -2253,6 +2296,24 @@ done:
     buf_free(&baseurl);
 }
 
+static int get_hide_attendees(icalcomponent *ical)
+{
+    if (!ical) return 0;
+
+    icalcomponent *comp;
+    for (comp = icalcomponent_get_first_real_component(ical);
+         comp;
+         comp = icalcomponent_get_next_component(ical,
+             icalcomponent_isa(comp))) {
+
+        if (icalcomponent_get_x_property_by_name(comp,
+                    JMAPICAL_XPROP_HIDEATTENDEES))
+            return 1;
+    }
+
+    return 0;
+}
+
 /* Create and deliver an organizer scheduling request */
 void sched_request(const char *userid, const strarray_t *schedule_addresses,
                    const char *organizer,
@@ -2292,24 +2353,63 @@ void sched_request(const char *userid, const strarray_t *schedule_addresses,
     if (myoldical) oldical = myoldical;
     if (mynewical) newical = mynewical;
 
+    int hide_attendees = newical ?
+        get_hide_attendees(newical) : get_hide_attendees(oldical);
+    if (hide_attendees) {
+        if (oldical && !myoldical) {
+            myoldical = icalcomponent_clone(oldical);
+            oldical = myoldical;
+        }
+        if (newical && !mynewical) {
+            mynewical = icalcomponent_clone(newical);
+            newical = mynewical;
+        }
+    }
+
     /* ok, let's figure out who the attendees are */
-    strarray_t attendees = STRARRAY_INITIALIZER;
-    add_attendees(oldical, organizer, &attendees);
-    add_attendees(newical, organizer, &attendees);
+    hash_table attendees = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&attendees,
+            count_attendees(oldical) + count_attendees(newical) + 1, 0);
+    add_attendees(oldical, organizer, hide_attendees, &attendees);
+    add_attendees(newical, organizer, hide_attendees, &attendees);
 
     icaltimetype h_cutoff = get_historical_cutoff();
 
-    int i;
-    for (i = 0; i < strarray_size(&attendees); i++) {
-        const char *attendee = strarray_nth(&attendees, i);
+    hash_iter *it = hash_table_iter(&attendees);
+    while (hash_iter_next(it)) {
+        const char *attendee = hash_iter_key(it);
+        dynarray_t *bycomp = hash_iter_val(it);
+        int i;
+
+        if (hide_attendees) {
+            /* Add attendee */
+            for (i = 0; i < dynarray_size(bycomp); i++) {
+                struct comp_attendee *ca = dynarray_nth(bycomp, i);
+                icalcomponent_add_property(ca->comp, ca->prop);
+            }
+        }
+
         syslog(LOG_NOTICE, "iTIP scheduling request from %s to %s",
                organizer, attendee);
-        schedule_one_attendee(userid, schedule_addresses, organizer, attendee, h_cutoff, oldical, newical);
+        schedule_one_attendee(userid, schedule_addresses, organizer, attendee,
+                h_cutoff, oldical, newical);
+
+        if (hide_attendees) {
+            /* Remove and free attendee */
+            for (i = 0; i < dynarray_size(bycomp); i++) {
+                struct comp_attendee *ca = dynarray_nth(bycomp, i);
+                icalcomponent_remove_property(ca->comp, ca->prop);
+                icalproperty_free(ca->prop);
+            }
+        }
+
+        dynarray_free(&bycomp);
     }
+    hash_iter_free(&it);
 
     if (myoldical) icalcomponent_free(myoldical);
     if (mynewical) icalcomponent_free(mynewical);
-    strarray_fini(&attendees);
+    free_hash_table(&attendees, NULL);
 }
 
 /*******************************************************************/

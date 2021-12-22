@@ -245,7 +245,9 @@ static json_t *calendarevent_from_ical(icalcomponent *comp, hash_table *props,
                                        struct jmapical_ctx *jmapctx);
 
 static void calendarevent_to_ical(icalcomponent *comp,
-                                  struct jmap_parser *parser, json_t *jsevent,
+                                  struct jmap_parser *parser,
+                                  json_t *jsevent,
+                                  icalcomponent *maincomp,
                                   struct icalcomps *oldcomps,
                                   jstimezones_t *jtzcache,
                                   struct jmapical_ctx *jmapctx);
@@ -1982,9 +1984,7 @@ link_from_ical(icalproperty *prop, struct jmapical_ctx *jmapctx)
     const char *s;
 
     /* blobId */
-    if (jmapctx &&
-            strarray_find(jmapctx->req->using_capabilities,
-                JMAP_CALENDARS_EXTENSION, 0) >= 0) {
+    if (jmapctx) {
         param = icalproperty_get_managedid_parameter(prop);
         const char *mid = param ? icalparameter_get_managedid(param) : NULL;
         struct buf blobid = BUF_INITIALIZER;
@@ -3666,6 +3666,13 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
         const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_MAYINVITEOTHERS);
         if (!strcasecmpsafe(v, "true"))
             json_object_set_new(event, "mayInviteOthers", json_true());
+    }
+
+    /* hideAttendees */
+    if (jmap_wantprop(props, "hideAttendees")) {
+        const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_HIDEATTENDEES);
+        if (!strcasecmpsafe(v, "true"))
+            json_object_set_new(event, "hideAttendees", json_true());
     }
 
     if (!is_override) {
@@ -6585,7 +6592,8 @@ static void overrides_to_ical(icalcomponent *comp,
             else if (jrecurrenceId) {
                 jmap_parser_invalid(parser, "recurrenceId");
             }
-            calendarevent_to_ical(excomp, parser, ex, oldcomps, jstzones, jmapctx);
+            calendarevent_to_ical(excomp, parser, ex, comp, oldcomps,
+                    jstzones, jmapctx);
             jmap_parser_pop(parser);
 
             /* Add the exception */
@@ -6606,6 +6614,7 @@ static void overrides_to_ical(icalcomponent *comp,
 static void calendarevent_to_ical(icalcomponent *comp,
                                   struct jmap_parser *parser,
                                   json_t *event,
+                                  icalcomponent *maincomp,
                                   struct icalcomps *oldcomps,
                                   jstimezones_t *jstzones,
                                   struct jmapical_ctx *jmapctx)
@@ -6953,7 +6962,15 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
     /* mayInviteSelf */
     jprop = json_object_get(event, "mayInviteSelf");
-    if (json_is_boolean(jprop) && !is_exc) {
+    if (json_is_boolean(jprop)) {
+        if (maincomp) {
+            /* override must not change value */
+            const char *v = get_icalxprop_value(maincomp,
+                    JMAPICAL_XPROP_MAYINVITESELF);
+            if (jprop != json_boolean(!strcasecmpsafe(v, "true"))) {
+                jmap_parser_invalid(parser, "mayInviteSelf");
+            }
+        }
         if (jprop == json_true()) {
             prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITESELF);
@@ -6967,7 +6984,15 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
     /* mayInviteOthers */
     jprop = json_object_get(event, "mayInviteOthers");
-    if (json_is_boolean(jprop) && !is_exc) {
+    if (json_is_boolean(jprop)) {
+        if (maincomp) {
+            /* override must not change value */
+            const char *v = get_icalxprop_value(maincomp,
+                    JMAPICAL_XPROP_MAYINVITEOTHERS);
+            if (jprop != json_boolean(!strcasecmpsafe(v, "true"))) {
+                jmap_parser_invalid(parser, "mayInviteOthers");
+            }
+        }
         if (jprop == json_true()) {
             prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITEOTHERS);
@@ -6977,6 +7002,28 @@ static void calendarevent_to_ical(icalcomponent *comp,
     }
     else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "mayInviteOthers");
+    }
+
+    /* hideAttendees */
+    jprop = json_object_get(event, "hideAttendees");
+    if (json_is_boolean(jprop)) {
+        if (maincomp) {
+            /* override must not change value */
+            const char *v = get_icalxprop_value(maincomp,
+                    JMAPICAL_XPROP_HIDEATTENDEES);
+            if (jprop != json_boolean(!strcasecmpsafe(v, "true"))) {
+                jmap_parser_invalid(parser, "hideAttendees");
+            }
+        }
+        if (jprop == json_true()) {
+            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_HIDEATTENDEES);
+            icalproperty_set_value(prop, icalvalue_new_boolean(1));
+            icalcomponent_add_property(comp, prop);
+        }
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "hideAttendees");
     }
 
     /* recurrenceOverrides - must be last to apply patches */
@@ -7027,7 +7074,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical,
         if (compptr) *compptr = comp;
 
         /* Convert the JMAP calendar event to ical. */
-        calendarevent_to_ical(comp, &parser, jsevent, &oldcomps, NULL, jmapctx);
+        calendarevent_to_ical(comp, &parser, jsevent, NULL, &oldcomps, NULL, jmapctx);
         icalcomponent_add_required_timezones(ical);
     }
     else jmap_parser_invalid(&parser, "uid");

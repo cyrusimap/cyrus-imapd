@@ -121,7 +121,7 @@ static int jmap_sharenotification_querychanges(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-#define JMAPCACHE_CALVERSION 23
+#define JMAPCACHE_CALVERSION 24
 
 static jmap_method_t jmap_calendar_methods_standard[] = {
     {
@@ -3084,6 +3084,103 @@ static void context_end_cdata(struct jmapical_ctx *jmapctx)
     jmapctx->icalsrc.partid = NULL;
 }
 
+static void getcalendarevents_reduce_participants_internal(json_t *jparticipants,
+                                                           json_t *keep_ids,
+                                                           const char *userid,
+                                                           strarray_t *schedule_addresses)
+{
+    const char *participant_id;
+    json_t *jparticipant;
+    void *tmp;
+    json_object_foreach_safe(jparticipants, tmp, participant_id, jparticipant) {
+        if (json_object_get(keep_ids, participant_id))
+            continue;
+
+        if (json_object_get(json_object_get(jparticipant, "roles"), "owner"))
+            continue;
+
+        json_t *jsendto = json_object_get(jparticipant,"sendTo");
+        const char *uri = json_string_value(json_object_get(jsendto, "imip"));
+        if (uri && !strncasecmp(uri, "mailto:", 7)) {
+            if (!strcasecmp(userid, uri + 7)) {
+                json_object_set_new(keep_ids,
+                        participant_id, json_true());
+                continue;
+            }
+
+            if (strarray_find_case(schedule_addresses, uri + 7, 0) >= 0) {
+                json_object_set_new(keep_ids,
+                        participant_id, json_true());
+                continue;
+            }
+        }
+
+        json_object_del(jparticipants, participant_id);
+    }
+}
+
+static void getcalendarevents_reduce_participants(json_t *jsevent,
+                                                  const char *userid,
+                                                  strarray_t *schedule_addresses)
+{
+    json_t *keep_ids = json_object();
+
+    // Reduce participants of main event
+
+    json_t *jparticipants = json_object_get(jsevent, "participants");
+    getcalendarevents_reduce_participants_internal(jparticipants, keep_ids,
+            userid, schedule_addresses);
+    if (!json_object_size(jparticipants))
+        json_object_del(jsevent, "participants");
+
+    // Reduce participants in overrides
+
+    struct buf buf = BUF_INITIALIZER;
+    json_t *joverrides = json_object_get(jsevent, "recurrenceOverrides");
+    const char *recur_id;
+    json_t *joverride;
+    void *tmp;
+
+    json_object_foreach_safe(joverrides, tmp, recur_id, joverride) {
+        const char *pname;
+        json_t *jval;
+        json_object_foreach_safe(joverride, tmp, pname, jval) {
+
+            if (!strcmp(pname, "participants")) {
+                getcalendarevents_reduce_participants_internal(jval, keep_ids,
+                        userid, schedule_addresses);
+                if (!json_object_size(jval))
+                    json_object_del(joverride, pname);
+            }
+            else if (!strncmp(pname, "participants/", 13)) {
+                const char *path = pname + 13;
+
+                const char *p = strchr(path, '/');
+                if (p) {
+                    // partially patches a participant of the main event
+                    buf_setmap(&buf, path, p - path);
+                    if (!json_object_get(keep_ids, buf_cstring(&buf))) {
+                        json_object_del(joverride, pname);
+                    }
+                }
+                else {
+                    // completely patches or adds a participant
+                    json_t *myparticipants = json_object();
+                    json_object_set(myparticipants, path, jval);
+                    getcalendarevents_reduce_participants_internal(myparticipants,
+                            keep_ids, userid, schedule_addresses);
+                    if (!json_object_size(myparticipants))
+                        json_object_del(joverride, pname);
+                    json_decref(myparticipants);
+                }
+            }
+        }
+    }
+
+    json_decref(keep_ids);
+    buf_free(&buf);
+}
+
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct getcalendarevents_rock *rock = vrock;
@@ -3343,31 +3440,13 @@ gotevent:
     /* Remove UTC start/end if client didn't ask for it */
     getcalendarevents_del_utctimes(req, props, jsevent);
 
-    /* reduceParticipants */
-    if (rock->reduce_participants) {
-        json_t *jparticipants = json_object_get(jsevent, "participants");
-        const char *participant_id;
-        json_t *jparticipant;
-        void *tmp;
-        json_object_foreach_safe(jparticipants, tmp, participant_id, jparticipant) {
-            if (json_object_get(json_object_get(jparticipant, "roles"), "owner")) {
-                continue;
-            }
-            json_t *jsendto = json_object_get(jparticipant,"sendTo");
-            const char *uri = json_string_value(json_object_get(jsendto, "imip"));
-            if (uri && !strncasecmp(uri, "mailto:", 7)) {
-                /* XXX case-insensitive comparison of complete email addresses
-                 * isn't entirely correct: only the domain is case-insensitive.
-                 * But better allow false positives. */
-                if (!strcasecmp(req->userid, uri + 7)) {
-                    continue;
-                }
-                if (strarray_find_case(&rock->schedule_addresses, uri + 7, 0) >= 0) {
-                    continue;
-                }
-            }
-            json_object_del(jparticipants, participant_id);
-        }
+
+    /* reduceParticipants and hideAtttendees */
+    if (rock->reduce_participants ||
+            (json_boolean_value(json_object_get(jsevent, "hideAttendees")) &&
+             !jmap_hasrights_mbentry(rock->req, rock->mbentry, JACL_WRITEALL))) {
+
+        getcalendarevents_reduce_participants(jsevent, req->userid, &rock->schedule_addresses);
     }
 
     if (rock->want_eventids == NULL) {
@@ -3648,6 +3727,11 @@ static const jmap_property_t event_props[] = {
     },
     {
         "mayInviteOthers",
+        JMAP_URN_CALENDARS,
+        0
+    },
+    {
+        "hideAttendees",
         JMAP_URN_CALENDARS,
         0
     },
