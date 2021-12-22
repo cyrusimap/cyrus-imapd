@@ -92,7 +92,6 @@ extern "C" {
 #define JMAPICAL_XPARAM_SEQUENCE      "X-SEQUENCE" /*used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_COMMENT       "X-COMMENT" /*used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
-#define JMAPICAL_XPARAM_ISDEFAULT     "X-IS-DEFAULT" /* Prop value is default */
 
 struct jmapical_ctx {
     jmap_req_t *req;
