@@ -17066,4 +17066,210 @@ sub test_calendarevent_set_mayinvite_preserve_caldav
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{mayInviteOthers});
 }
 
+sub test_calendarevent_set_hideattendees_itip
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event1uidlocal',
+                    title => "event1",
+                    start => "2020-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                'owner' => JSON::true,
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                        attendee1 => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:attendee1@example.com',
+                            },
+                        },
+                        attendee2 => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:attendee2@example.com',
+                            },
+                        },
+                    },
+                    hideAttendees => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
+
+    my $data = $self->{instance}->getnotify();
+
+    my $imip = {};
+    foreach my $notif (@$data) {
+        if (not $notif->{METHOD} eq 'imip') {
+            next;
+        }
+        my $msg = decode_json($notif->{MESSAGE});
+        $imip->{$msg->{recipient}} = $msg;
+    }
+
+    $self->assert_num_equals(2, scalar keys %{$imip});
+
+    $self->assert(not $imip->{'attendee1@example.com'}->{ical} =~
+        m/attendee2\@example.com/);
+    $self->assert($imip->{'attendee1@example.com'}->{ical} =~
+        m/attendee1\@example.com/);
+
+    $self->assert(not $imip->{'attendee2@example.com'}->{ical} =~
+        m/attendee1\@example.com/);
+    $self->assert($imip->{'attendee2@example.com'}->{ical} =~
+        m/attendee2\@example.com/);
+}
+
+sub test_calendarevent_set_hideattendees
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my ($shareeJmap, $shareeCalDAV) = $self->create_user('sharee');
+
+    xlog "create event and share with sharee";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event1uidlocal',
+                    title => "event1",
+                    start => "2020-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 3,
+                    }],
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                'owner' => JSON::true,
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                        sharee => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:sharee@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                        attendee1 => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:attendee1@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'accepted',
+                        },
+                    },
+                    recurrenceOverrides => {
+                        '2020-01-02T09:00:00' => {
+                            'participants/attendee2' => {
+                                roles => {
+                                    'attendee' => JSON::true,
+                                },
+                                sendTo => {
+                                    imip => 'mailto:attendee2@example.com',
+                                },
+                                expectReply => JSON::true,
+                                participationStatus => 'accepted',
+                            },
+                            'participants/attendee1/participationStatus' => 'tentative',
+                        },
+
+                    },
+                    hideAttendees => JSON::true,
+                },
+            },
+        }, 'R1'],
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        'sharee' => {
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayRSVP => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+            properties => ['hideAttendees'],
+        }, 'R3'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
+    $self->assert(exists $res->[1][1]{updated}{Default});
+    $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{hideAttendees});
+
+    xlog "get event as sharee";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => ['participants', 'hideAttendees', 'recurrenceOverrides'],
+        }, 'R1'],
+    ]);
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{hideAttendees});
+
+    $self->assert_not_null($res->[0][1]{list}[0]{participants}{cassandane});
+    $self->assert_not_null($res->[0][1]{list}[0]{participants}{sharee});
+    $self->assert_num_equals(2, scalar keys %{$res->[0][1]{list}[0]{participants}});
+    $self->assert_deep_equals({ '2020-01-02T09:00:00' => {} },
+        $res->[0][1]{list}[0]{recurrenceOverrides});
+}
+
 1;
