@@ -3968,6 +3968,34 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
+    /* Set SENT-BY property */
+    const char **hdr;
+    if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-Address"))) {
+        const char *sentby = *hdr;
+        if (!strncasecmp(sentby, "mailto:", 7)) {
+            sentby += 7;
+        }
+
+        // XXX could use SENT-BY parameter as defined in RFC5545?
+        for (comp = icalcomponent_get_first_real_component(ical);
+             comp;
+             comp = icalcomponent_get_next_component(ical,
+                 icalcomponent_isa(comp))) {
+
+            // Remove any stale SENT-BY properties
+            while ((prop = icalcomponent_get_x_property_by_name(comp,
+                            JMAPICAL_XPROP_SENTBY))) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
+
+            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
+            icalproperty_set_value(prop, icalvalue_new_text(sentby));
+            icalcomponent_add_property(comp, prop);
+        }
+    }
+
     /* Store resource at target */
     if (!ret) {
         ret = caldav_store_resource(txn, ical, mailbox, resource,

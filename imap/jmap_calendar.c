@@ -3441,7 +3441,7 @@ gotevent:
     getcalendarevents_del_utctimes(req, props, jsevent);
 
 
-    /* reduceParticipants and hideAtttendees */
+    /* reduceParticipants and hideAttendees */
     if (rock->reduce_participants ||
             (json_boolean_value(json_object_get(jsevent, "hideAttendees")) &&
              !jmap_hasrights_mbentry(rock->req, rock->mbentry, JACL_WRITEALL))) {
@@ -3673,6 +3673,11 @@ static const jmap_property_t event_props[] = {
     },
     {
         "timeZones",
+        NULL,
+        0
+    },
+    {
+        "sentBy",
         NULL,
         0
     },
