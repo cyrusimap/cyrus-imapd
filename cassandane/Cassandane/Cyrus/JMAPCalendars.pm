@@ -3720,7 +3720,7 @@ sub test_calendarevent_set_alerts_description
     $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:description[\s\S]+END:VALARM/g);
 
     $res = $jmap->Download('cassandane', $blobId3);
-    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION;X-IS-DEFAULT=TRUE:Reminder[\s\S]+END:VALARM/g);
+    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:Reminder[\s\S]+END:VALARM/g);
 }
 
 sub test_calendarevent_set_participantid
