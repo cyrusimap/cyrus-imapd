@@ -2814,9 +2814,15 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
             mailbox_rename_cleanup(&oldmailbox);
 
-#ifdef WITH_DAV
-            mailbox_add_dav(newmailbox);
+            if (mbtype_isa(mailbox_mbtype(newmailbox)) == MBTYPE_SIEVE) {
+#ifdef USE_SIEVE
+                mailbox_add_sieve(newmailbox);
 #endif
+#ifdef WITH_DAV
+            } else {
+                mailbox_add_dav(newmailbox);
+#endif
+            }
 
             mailbox_close(&newmailbox);
 
