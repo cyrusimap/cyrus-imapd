@@ -3963,7 +3963,8 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         if (r) goto done;
     }
 
-    if (mbentry && !(mbentry->mbtype & MBTYPE_DELETED)) {
+    if (mbentry && ((mbentry->mbtype & MBTYPE_LEGACY_DIRS) ||
+                    !(mbentry->mbtype & MBTYPE_DELETED))) {
          r = user_deletedata(mbentry, 1);
     }
     else {
