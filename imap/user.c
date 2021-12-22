@@ -422,11 +422,14 @@ static int user_renamesieve(const char *olduser, const char *newuser)
                  config_getstring(IMAPOPT_SIEVEDIR), hash, newuser);
     }
 
+    /* make sure newpath's directory components exist */
+    r = cyrus_mkdir(newpath, 0755 /* unused */);
+
     /* rename sieve directory
      *
      * XXX this doesn't rename sieve scripts
      */
-    r = rename(oldpath, newpath);
+    if (!r) r = rename(oldpath, newpath);
     if (r < 0) {
         if (errno == ENOENT) {
             syslog(LOG_WARNING, "error renaming %s to %s: %m",
