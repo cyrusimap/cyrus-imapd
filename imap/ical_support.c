@@ -2189,7 +2189,8 @@ EXPORTED int icalcomponent_read_usedefaultalerts(icalcomponent *comp)
 
 EXPORTED void icalcomponent_add_defaultalerts(icalcomponent *ical,
                                               icalcomponent *withtime,
-                                              icalcomponent *withdate)
+                                              icalcomponent *withdate,
+                                              int force)
 {
     if (!withtime && !withdate)
         return;
@@ -2201,7 +2202,8 @@ EXPORTED void icalcomponent_add_defaultalerts(icalcomponent *ical,
 
     /* Add default alarms */
     for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
-        if (icalcomponent_read_usedefaultalerts(comp) > 0) {
+        if (icalcomponent_read_usedefaultalerts(comp) > 0 || force) {
+
             /* Determine which default alarms to add */
             int is_date;
             if (kind == ICAL_VTODO_COMPONENT) {
@@ -2213,7 +2215,9 @@ EXPORTED void icalcomponent_add_defaultalerts(icalcomponent *ical,
                     is_date = 1;
             }
             else is_date = icalcomponent_get_dtstart(comp).is_date;
+
             icalcomponent *alerts = is_date ?  withdate : withtime;
+
             /* Remove VALARMs in component */
             icalcomponent *curr, *next = NULL;
             for (curr = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
@@ -2222,35 +2226,27 @@ EXPORTED void icalcomponent_add_defaultalerts(icalcomponent *ical,
                 icalcomponent_remove_component(comp, curr);
                 icalcomponent_free(curr);
             }
+
             /* Add default VALARMs */
             for (curr = icalcomponent_get_first_component(alerts, ICAL_VALARM_COMPONENT);
                  curr;
                  curr = icalcomponent_get_next_component(alerts, ICAL_VALARM_COMPONENT)) {
+
                 icalcomponent *alarm = icalcomponent_clone(curr);
+
                 /* Replace default description with component summary */
-                icalproperty *prop =
-                    icalcomponent_get_first_property(alarm, ICAL_DESCRIPTION_PROPERTY);
-                int is_default = 0;
-                icalparameter *param;
-                for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
-                     param;
-                     param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
-                    if (!strcasecmpsafe(icalparameter_get_xname(param), "X-IS-DEFAULT")) {
-                        if (!strcasecmpsafe(icalparameter_get_xvalue(param), "TRUE")) {
-                            is_default = 1;
-                            break;
-                        }
-                    }
-                }
-                if (is_default) {
-                    const char *desc = icalcomponent_get_summary(comp);
-                    if (desc && *desc != '\0') {
+                const char *desc = icalcomponent_get_summary(comp);
+                if (desc && *desc != '\0') {
+                    icalproperty *prop =
+                        icalcomponent_get_first_property(alarm, ICAL_DESCRIPTION_PROPERTY);
+                    if (prop) {
                         icalcomponent_remove_property(alarm, prop);
                         icalproperty_free(prop);
-                        prop = icalproperty_new_description(desc);
-                        icalcomponent_add_property(alarm, prop);
                     }
+                    prop = icalproperty_new_description(desc);
+                    icalcomponent_add_property(alarm, prop);
                 }
+
                 /* Add alarm */
                 icalcomponent_add_component(comp, alarm);
             }
