@@ -3562,8 +3562,6 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
         }
     }
 
-    // FIXME sentBy
-
     /* recurrenceRules */
     if (jmap_wantprop(props, "recurrenceRules") && !is_override) {
         json_object_set_new(event, "recurrenceRules",
@@ -3673,6 +3671,13 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props,
         const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_HIDEATTENDEES);
         if (!strcasecmpsafe(v, "true"))
             json_object_set_new(event, "hideAttendees", json_true());
+    }
+
+    /* sentBy */
+    if (jmap_wantprop(props, "sentBy")) {
+        const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_SENTBY);
+        if (v && *v)
+            json_object_set_new(event, "sentBy", json_string(v));
     }
 
     if (!is_override) {
@@ -7025,6 +7030,28 @@ static void calendarevent_to_ical(icalcomponent *comp,
     }
     else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "hideAttendees");
+    }
+
+    /* sentBy */
+    jprop = json_object_get(event, "sentBy");
+    if (json_is_string(jprop)) {
+        struct address *addr = NULL;
+        parseaddr_list(json_string_value(jprop), &addr);
+
+        if (addr && !addr->next) {
+            char *val = address_get_all(addr, 0);
+            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
+            icalproperty_set_value(prop, icalvalue_new_text(val));
+            icalcomponent_add_property(comp, prop);
+            free(val);
+        }
+        else jmap_parser_invalid(parser, "sentBy");
+
+        parseaddr_free(addr);
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "sentBy");
     }
 
     /* recurrenceOverrides - must be last to apply patches */
