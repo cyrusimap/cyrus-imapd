@@ -5377,16 +5377,17 @@ HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
 
     if (action == ICAL_ACTION_EMAIL) {
         /* ATTENDEE */
-        icalcomponent_add_property(alarm, icalproperty_new_attendee(email_recipient));
+        icalcomponent_add_property(alarm,
+                icalproperty_new_attendee(email_recipient));
 
         /* SUMMARY */
         if (summary && *summary != '\0') {
-            icalcomponent_add_property(alarm, icalproperty_new_summary(summary));
+            icalcomponent_add_property(alarm,
+                    icalproperty_new_summary(summary));
         }
         else {
-            prop = icalproperty_new_summary("Reminder");
-            icalproperty_set_xparam(prop, JMAPICAL_XPARAM_ISDEFAULT, "TRUE", 0);
-            icalcomponent_add_property(alarm, prop);
+            icalcomponent_add_property(alarm,
+                    icalproperty_new_summary("Reminder"));
         }
     }
 
@@ -5394,12 +5395,12 @@ HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
     const char *desc = summary;
     if (!desc || *desc == '\0') desc = description;
     if (!desc || *desc == '\0') {
-        prop = icalproperty_new_description("Reminder");
-        icalproperty_set_xparam(prop, JMAPICAL_XPARAM_ISDEFAULT, "TRUE", 0);
-        icalcomponent_add_property(alarm, prop);
+        icalcomponent_add_property(alarm,
+                icalproperty_new_description("Reminder"));
     }
     else {
-        icalcomponent_add_property(alarm, icalproperty_new_description(desc));
+        icalcomponent_add_property(alarm,
+                icalproperty_new_description(desc));
     }
 
     if (invalid_prop_count < json_array_size(parser->invalid)) {

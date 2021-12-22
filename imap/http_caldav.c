@@ -2527,8 +2527,10 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             icalcomponent *withdate =
                 caldav_read_calendar_icalalarms(mailbox_name(mailbox), httpd_userid,
                         CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
+
             /* Add default alarms */
-            icalcomponent_add_defaultalerts(ical, withtime, withdate);
+            icalcomponent_add_defaultalerts(ical, withtime, withdate, 0);
+
             if (withdate) icalcomponent_free(withdate);
             if (withtime) icalcomponent_free(withtime);
         }

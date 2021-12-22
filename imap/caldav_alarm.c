@@ -792,7 +792,7 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
 
         if (withtime || withdate) {
             myical = icalcomponent_clone(ical);
-            icalcomponent_add_defaultalerts(myical, withtime, withdate);
+            icalcomponent_add_defaultalerts(myical, withtime, withdate, 0);
             ical = myical;
         }
 
