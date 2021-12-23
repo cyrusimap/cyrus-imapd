@@ -314,6 +314,9 @@ static int validate_request(struct transaction_t *txn, const json_t *req,
         else if (!strcmp(s, "ietf:jmapmail")) {
             syslog(LOG_DEBUG, "old capability %s used", s);
         }
+        else if (!strcmp(s, "urn:ietf:params:jmap:calendars")) {
+            syslog(LOG_DEBUG, "future capability %s used", s);
+        }
         else if (!json_object_get(settings->server_capabilities, s))  {
             buf_printf(&txn->buf, "The Request object used capability '%s',"
                        " which is not supported by this server.", s);

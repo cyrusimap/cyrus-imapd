@@ -7858,5 +7858,21 @@ sub test_no_shared_calendar
     $self->assert_deep_equals([], $res->[3][1]{list});
 }
 
+sub test_calendarevent_get_ignore_ietf_calendars_capability
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', { }, 'R1'],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:calendars',
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{list});
+}
+
 
 1;
