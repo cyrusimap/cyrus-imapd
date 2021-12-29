@@ -999,6 +999,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/conversations.h \
 	imap/convert_code.c \
 	imap/convert_code.h \
+	imap/dav_db.c \
+	imap/dav_db.h \
 	imap/dlist.c \
 	imap/dlist.h \
 	imap/duplicate.c \
@@ -1135,8 +1137,6 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/caldav_db.h \
 	imap/carddav_db.c \
 	imap/carddav_db.h \
-	imap/dav_db.c \
-	imap/dav_db.h \
 	imap/dav_util.c \
 	imap/dav_util.h \
 	imap/ical_support.c \

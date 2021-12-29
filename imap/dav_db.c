@@ -443,16 +443,20 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
                                 config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
     if (reconstruct_db) {
         r = sqldb_begin(reconstruct_db, "reconstruct");
+#ifdef WITH_DAV
         // make all the alarm updates to go this database too
         if (!r) r = caldav_alarm_set_reconstruct(reconstruct_db);
+#endif
         // reconstruct everything
         if (!r) r = mboxlist_usermboxtree(userid, NULL,
                                           _dav_reconstruct_mb, (void *) userid, 0);
+#ifdef WITH_DAV
         // make sure all the alarms are resolved
         if (!r) r = caldav_alarm_process(0, NULL, /*dryrun*/1);
         // commit events over to ther alarm database if we're keeping them
         if (!r && !audit_tool) r = caldav_alarm_commit_reconstruct(userid);
         else caldav_alarm_rollback_reconstruct();
+#endif
         // and commit to this DB
         if (r) sqldb_rollback(reconstruct_db, "reconstruct");
         else sqldb_commit(reconstruct_db, "reconstruct");

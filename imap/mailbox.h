@@ -87,9 +87,7 @@
 #define FNAME_CACHE "/cyrus.cache"
 #define FNAME_SQUAT "/cyrus.squat"
 #define FNAME_EXPUNGE "/cyrus.expunge"
-#ifdef WITH_DAV
 #define FNAME_DAV "/cyrus.dav"
-#endif
 #define FNAME_ANNOTATIONS "/cyrus.annotations"
 
 #define CRC_INIT_BASIC 0
@@ -104,9 +102,7 @@ enum meta_filename {
   META_SQUAT,
   META_EXPUNGE,
   META_ANNOTATIONS,
-#ifdef WITH_DAV
   META_DAV,
-#endif
   META_ARCHIVECACHE  /* MUST be last for relocate.c */
 };
 
