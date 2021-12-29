@@ -51,6 +51,7 @@
 #include "acl.h"
 #include "annotate.h"
 #include "caldav_db.h"
+#include "dav_util.h"
 #include "httpd.h"
 #include "spool.h"
 #include "quota.h"
