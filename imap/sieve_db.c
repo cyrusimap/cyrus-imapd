@@ -1104,21 +1104,22 @@ EXPORTED int sievedb_upgrade(sqldb_t *db)
         { ":mailbox",   SQLITE_TEXT,    { .s = NULL } },
         { NULL,         SQLITE_NULL,    { .s = NULL } } };
     mbentry_t *mbentry = NULL;
-    int rowid, r;
+    int rowid;
+    int r = 0;
 
-    if (db->version < 12) return 0;
-    if (db->version > 13) return 0;
+    sdata.mailbox = NULL;
 
     if (db->version == 12) {
         /* Rename 'content' -> 'contentid' */
         r = sqldb_exec(db, CMD_ALTER_v12_TABLE, NULL, NULL, NULL);
-        if (r) return r;
+        if (r) goto done;
 
         /* Create an array of SHA1 for the content in each record */
         r = sqldb_exec(db, CMD_GETFIELDS, NULL, &read_cb, &rrock);
+        if (r) goto done;
 
         /* Rewrite 'contentid' columns with actual ids (SHA1) */
-        for (rowid = 1; !r && rowid < strarray_size(&sha1); rowid++) {
+        for (rowid = 1; rowid < strarray_size(&sha1); rowid++) {
             bval[0].val.i = rowid;
             bval[1].val.s = strarray_nth(&sha1, rowid);
 
@@ -1127,12 +1128,17 @@ EXPORTED int sievedb_upgrade(sqldb_t *db)
         }
     }
     else if (db->version == 13) {
+        /* Fetch mailbox name from first record */
         rrock.cb = NULL;
         sdata.mailbox = NULL;
-        r = sqldb_exec(db, CMD_GETFIELDS " WHERE rowid = 1;",
+        r = sqldb_exec(db, CMD_GETFIELDS " LIMIT 1;",
                        NULL, &read_cb, &rrock);
-        if (r || !sdata.mailbox) goto done;
+        if (r) goto done;
     }
+
+    // this will only be set if we are upgrading from v12 or v13 and there are
+    // records with a mailbox on them
+    if (!sdata.mailbox) goto done;
 
     r = mboxlist_lookup_allow_all(sdata.mailbox, &mbentry, NULL);
     if (r) goto done;
