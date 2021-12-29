@@ -63,9 +63,7 @@
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "seen.h"
-#ifdef WITH_DAV
 #include "sqldb.h"
-#endif
 #include "util.h"
 #include "user.h"
 
@@ -141,9 +139,7 @@ int main(int argc, char **argv)
         fatal(error_message(r), EX_CONFIG);
     }
 
-#ifdef WITH_DAV
     sqldb_init();
-#endif
 
     /* Normal Operation */
     if (optind == argc) {
@@ -351,7 +347,6 @@ int main(int argc, char **argv)
                                 extname, error_message(r));
                     }
                     else if (userid) {
-#ifdef WITH_DAV
                         /* Rewrite dav.db */
                         r = dav_reconstruct_user(userid, NULL);
                         if (r) {
@@ -359,7 +354,6 @@ int main(int argc, char **argv)
                                     "Failed to rewrite dav.db for %s: %s\n",
                                     userid, error_message(r));
                         }
-#endif
 
                         /* Rewrite search database */
                         r = search_upgrade(userid);
