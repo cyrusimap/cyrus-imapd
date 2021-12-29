@@ -270,6 +270,25 @@ struct sqldb_upgrade davdb_upgrade[] = {
 
 static sqldb_t *reconstruct_db;
 
+/* Create filename corresponding to DAV DB for mailbox */
+EXPORTED void dav_getpath(struct buf *fname, struct mailbox *mailbox)
+{
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+
+    if (userid) dav_getpath_byuserid(fname, userid);
+    else buf_setcstr(fname, mailbox_meta_fname(mailbox, META_DAV));
+
+    free(userid);
+}
+
+/* Create filename corresponding to DAV DB for userid */
+EXPORTED void dav_getpath_byuserid(struct buf *fname, const char *userid)
+{
+    char *path = user_hash_meta(userid, FNAME_DAVSUFFIX);
+    buf_setcstr(fname, path);
+    free(path);
+}
+
 EXPORTED sqldb_t *dav_open_userid(const char *userid)
 {
     if (reconstruct_db) return reconstruct_db;

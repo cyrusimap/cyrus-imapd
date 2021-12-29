@@ -63,26 +63,6 @@
 #include "imap/imap_err.h"
 
 
-/* Create filename corresponding to DAV DB for mailbox */
-EXPORTED void dav_getpath(struct buf *fname, struct mailbox *mailbox)
-{
-    char *userid = mboxname_to_userid(mailbox_name(mailbox));
-
-    if (userid) dav_getpath_byuserid(fname, userid);
-    else buf_setcstr(fname, mailbox_meta_fname(mailbox, META_DAV));
-
-    free(userid);
-}
-
-/* Create filename corresponding to DAV DB for userid */
-EXPORTED void dav_getpath_byuserid(struct buf *fname, const char *userid)
-{
-    char *path = user_hash_meta(userid, FNAME_DAVSUFFIX);
-    buf_setcstr(fname, path);
-    free(path);
-}
-
-
 EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
                                 const char *userid __attribute__((unused)),
                                 struct index_record *record,

@@ -55,7 +55,6 @@
 #include <sys/stat.h>
 
 #include "dav_db.h"
-#include "dav_util.h"
 #include "global.h"
 #include "ical_support.h"
 #include "ptrarray.h"
