@@ -900,6 +900,12 @@ void sync_sieve_list_free(struct sync_sieve_list **lp)
     *lp = NULL;
 }
 
+int sync_sieve_deactivate(const char *userid)
+{
+    return sync_sieve_activate(userid, NULL);
+}
+
+#ifdef USE_SIEVE
 int sync_sieve_activate(const char *userid, const char *bcname)
 {
     struct sieve_db *db = sievedb_open_userid(userid);
@@ -936,11 +942,6 @@ int sync_sieve_activate(const char *userid, const char *bcname)
     sievedb_close(db);
 
     return r;
-}
-
-int sync_sieve_deactivate(const char *userid)
-{
-    return sync_sieve_activate(userid, NULL);
 }
 
 int sync_sieve_delete(const char *userid, const char *fname)
@@ -991,6 +992,19 @@ int sync_sieve_delete(const char *userid, const char *fname)
 
     return r;
 }
+#else  /* !USE_SIEVE */
+int sync_sieve_activate(const char *userid __attribute__((unused)),
+                        const char *bcname __attribute__((unused)))
+{
+    return 0;
+}
+
+int sync_sieve_delete(const char *userid __attribute__((unused)),
+                      const char *fname __attribute__((unused)))
+{
+    return 0;
+}
+#endif  /* USE_SIEVE */
 
 /* ====================================================================== */
 

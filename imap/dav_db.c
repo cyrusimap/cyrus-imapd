@@ -256,7 +256,13 @@ struct sqldb_upgrade davdb_upgrade[] = {
   /* Don't upgrade to version 11.  We only jump to 11 on CREATE */
   /* Don't upgrade to version 12.  This was an intermediate Sieve DB version */
   /* Don't upgrade to version 13.  This was an intermediate Sieve DB version */
-  { 14, CMD_DBUPGRADEv14, &sievedb_upgrade },
+  { 14, CMD_DBUPGRADEv14,
+#ifdef USE_SIEVE
+    &sievedb_upgrade
+#else
+    NULL
+#endif
+  },
   { 0, NULL, NULL }
 };
 
