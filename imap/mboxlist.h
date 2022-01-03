@@ -130,6 +130,7 @@ typedef struct mboxlist_entry mbentry_t;
 
 typedef struct {
     char *name;
+    char *partition;
     modseq_t foldermodseq;
     time_t mtime;
 } former_name_t;

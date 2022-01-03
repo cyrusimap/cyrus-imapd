@@ -162,6 +162,7 @@ EXPORTED mbentry_t *mboxlist_entry_copy(const mbentry_t *src)
         tgt->foldermodseq = item->foldermodseq;
         tgt->mtime = item->mtime;
         tgt->name = xstrdupnull(item->name);
+        tgt->partition = xstrdupnull(item->partition);
         ptrarray_set(&copy->name_history, i, tgt);
     }
 
@@ -188,6 +189,7 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
     former_name_t *histitem;
     while ((histitem = ptrarray_pop(&mbentry->name_history))) {
         free(histitem->name);
+        free(histitem->partition);
         free(histitem);
     }
     ptrarray_fini(&mbentry->name_history);
@@ -293,9 +295,10 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
         for (i = 0; i < mbentry->name_history.count; i++) {
             former_name_t *histitem = ptrarray_nth(&mbentry->name_history, i);
             struct dlist *item = dlist_newkvlist(hl, NULL);
-            char *idbname = mboxname_to_dbname(item->name);
+            char *idbname = mboxname_to_dbname(histitem->name);
             dlist_setatom(item, "N", idbname);
             free(idbname);
+            dlist_setatom(item, "P", histitem->partition);
             dlist_setnum64(item, "F", histitem->foldermodseq);
             dlist_setnum64(item, "M", histitem->mtime);
         }
@@ -559,6 +562,9 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             }
             else if (!strcmp(key, "N")) {
                 histitem->name = mboxname_from_dbname(d->data);
+            }
+            else if (!strcmp(key, "P")) {
+                histitem->partition = xstrdupnull(d->data);
             }
         }
         else {
@@ -1190,7 +1196,8 @@ static int mboxlist_update_entry(const char *name,
                 // create a new history item for the old name if renaming
                 if (strcmp(name, oldi->name)) {
                     former_name_t *item = xzmalloc(sizeof(former_name_t));
-                    item->name = xstrdup(oldi->name);
+                    item->name = xstrdupnull(oldi->name);
+                    item->partition = xstrdupnull(oldi->partition);
                     item->mtime = oldi->mtime;
                     item->foldermodseq = oldi->foldermodseq;
                     ptrarray_append(&newi->name_history, item);
