@@ -447,7 +447,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
         if (mbentry->mtime < erock->tombstone_mark) {
             verbosep("Removing stale tombstone for %s\n", mbentry->name);
             syslog(LOG_NOTICE, "Removing stale tombstone for %s", mbentry->name);
-            mboxlist_deletelock(mbentry->name);
+            mboxlist_deletelock(mbentry);
         }
         goto done;
     }

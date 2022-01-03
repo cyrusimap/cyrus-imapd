@@ -1258,23 +1258,15 @@ static int mboxlist_update_entry(const char *name,
     return r;
 }
 
-EXPORTED int mboxlist_deletelock(const char *name)
+EXPORTED int mboxlist_delete(const mbentry_t *mbentry)
 {
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
-    int r = mboxlist_update_entry(name, NULL, NULL);
-    mboxname_release(&namespacelock);
-    return r;
+    return mboxlist_update_entry(mbentry->name, NULL, NULL);
 }
 
-EXPORTED int mboxlist_delete(const char *name)
-{
-    return mboxlist_update_entry(name, NULL, NULL);
-}
-
-EXPORTED int mboxlist_updatelock(const mbentry_t *mbentry, int localonly)
+EXPORTED int mboxlist_deletelock(const mbentry_t *mbentry)
 {
     struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
-    int r = mboxlist_update(mbentry, localonly);
+    int r = mboxlist_delete(mbentry);
     mboxname_release(&namespacelock);
     return r;
 }
@@ -1329,6 +1321,14 @@ EXPORTED int mboxlist_update(const mbentry_t *mbentry, int localonly)
                                MBOXMODSEQ_ISFOLDER);
     }
 
+    return r;
+}
+
+EXPORTED int mboxlist_updatelock(const mbentry_t *mbentry, int localonly)
+{
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
+    int r = mboxlist_update(mbentry, localonly);
+    mboxname_release(&namespacelock);
     return r;
 }
 

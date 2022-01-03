@@ -147,8 +147,8 @@ void mboxlist_entry_free(mbentry_t **mbentryptr);
 const char *mboxlist_mbtype_to_string(uint32_t mbtype);
 uint32_t mboxlist_string_to_mbtype(const char *string);
 
-int mboxlist_delete(const char *name);
-int mboxlist_deletelock(const char *name);
+int mboxlist_delete(const mbentry_t *mbentry);
+int mboxlist_deletelock(const mbentry_t *mbentry);
 /* Lookup 'name' in the mailbox list. */
 int mboxlist_lookup(const char *name, mbentry_t **mbentryptr,
                     struct txn **tid);
