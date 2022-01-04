@@ -159,9 +159,12 @@ EXPORTED mbentry_t *mboxlist_entry_copy(const mbentry_t *src)
     for (i = 0; i < numhistory; i++) {
         const former_name_t *item = ptrarray_nth(&src->name_history, i);
         former_name_t *tgt = xzmalloc(sizeof(former_name_t));
-        tgt->foldermodseq = item->foldermodseq;
-        tgt->mtime = item->mtime;
         tgt->name = xstrdupnull(item->name);
+        tgt->mtime = item->mtime;
+        tgt->uidvalidity = item->uidvalidity;
+        tgt->createdmodseq = item->createdmodseq;
+        tgt->foldermodseq = item->foldermodseq;
+        tgt->mbtype = item->mbtype;
         tgt->partition = xstrdupnull(item->partition);
         ptrarray_set(&copy->name_history, i, tgt);
     }
@@ -298,9 +301,17 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
             char *idbname = mboxname_to_dbname(histitem->name);
             dlist_setatom(item, "N", idbname);
             free(idbname);
-            dlist_setatom(item, "P", histitem->partition);
-            dlist_setnum64(item, "F", histitem->foldermodseq);
-            dlist_setnum64(item, "M", histitem->mtime);
+            if (histitem->mtime)
+                dlist_setnum64(item, "M", histitem->mtime);
+            if (histitem->uidvalidity)
+                dlist_setnum32(item, "V", histitem->uidvalidity);
+            if (histitem->createdmodseq)
+                dlist_setnum64(item, "C", histitem->createdmodseq);
+            if (histitem->foldermodseq)
+                dlist_setnum64(item, "F", histitem->foldermodseq);
+            dlist_setatom(item, "T", mboxlist_mbtype_to_string(histitem->mbtype));
+            if (histitem->partition)
+                dlist_setatom(item, "P", histitem->partition);
         }
     }
 
@@ -554,14 +565,23 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
         else if (rock->doinghistory) {
             former_name_t *histitem = ptrarray_tail(&rock->mbentry->name_history);
 
-            if (!strcmp(key, "F")) {
-                histitem->foldermodseq = atomodseq_t(d->data);
+            if (!strcmp(key, "N")) {
+                histitem->name = mboxname_from_dbname(d->data);
             }
             else if (!strcmp(key, "M")) {
                 histitem->mtime = atoi(d->data);
             }
-            else if (!strcmp(key, "N")) {
-                histitem->name = mboxname_from_dbname(d->data);
+            else if (!strcmp(key, "V")) {
+                histitem->uidvalidity = atol(d->data);
+            }
+            else if (!strcmp(key, "C")) {
+                histitem->createdmodseq = atomodseq_t(d->data);
+            }
+            else if (!strcmp(key, "F")) {
+                histitem->foldermodseq = atomodseq_t(d->data);
+            }
+            else if (!strcmp(key, "T")) {
+                histitem->mbtype = mboxlist_string_to_mbtype(d->data);
             }
             else if (!strcmp(key, "P")) {
                 histitem->partition = xstrdupnull(d->data);
@@ -1197,9 +1217,12 @@ static int mboxlist_update_entry(const char *name,
                 if (strcmp(name, oldi->name)) {
                     former_name_t *item = xzmalloc(sizeof(former_name_t));
                     item->name = xstrdupnull(oldi->name);
-                    item->partition = xstrdupnull(oldi->partition);
                     item->mtime = oldi->mtime;
+                    item->uidvalidity = oldi->uidvalidity;
                     item->foldermodseq = oldi->foldermodseq;
+                    item->createdmodseq = oldi->createdmodseq;
+                    item->mbtype = oldi->mbtype;
+                    item->partition = xstrdupnull(oldi->partition);
                     ptrarray_append(&newi->name_history, item);
                 }
                 // copy the remaining items

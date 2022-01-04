@@ -130,9 +130,12 @@ typedef struct mboxlist_entry mbentry_t;
 
 typedef struct {
     char *name;
-    char *partition;
-    modseq_t foldermodseq;
     time_t mtime;
+    uint32_t uidvalidity;
+    modseq_t createdmodseq;
+    modseq_t foldermodseq;
+    uint32_t mbtype;
+    char *partition;
 } former_name_t;
 
 mbentry_t *mboxlist_entry_create();
