@@ -243,6 +243,8 @@
 
 #define CMD_DBUPGRADEv14 CMD_CREATE_SIEVE
 
+static int sievedb_upgrade(sqldb_t *db);
+
 struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
   { 3, CMD_DBUPGRADEv3, NULL },
@@ -256,13 +258,7 @@ struct sqldb_upgrade davdb_upgrade[] = {
   /* Don't upgrade to version 11.  We only jump to 11 on CREATE */
   /* Don't upgrade to version 12.  This was an intermediate Sieve DB version */
   /* Don't upgrade to version 13.  This was an intermediate Sieve DB version */
-  { 14, CMD_DBUPGRADEv14,
-#ifdef USE_SIEVE
-    &sievedb_upgrade
-#else
-    NULL
-#endif
-  },
+  { 14, CMD_DBUPGRADEv14, &sievedb_upgrade },
   { 0, NULL, NULL }
 };
 
@@ -488,4 +484,107 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     buf_free(&fname);
 
     return 0;
+}
+
+
+struct sievedb_upgrade_rock {
+    char *mboxname;
+    strarray_t *sha1;
+};
+
+static int sievedb_upgrade_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct sievedb_upgrade_rock *srock = (struct sievedb_upgrade_rock *) rock;
+
+    if (!srock->mboxname) {
+        srock->mboxname = xstrdup((const char *) sqlite3_column_text(stmt, 0));
+    }
+
+    if (srock->sha1) {
+        const char *content = (const char *) sqlite3_column_text(stmt, 1);
+        unsigned rowid = sqlite3_column_int(stmt, 2);
+        struct message_guid uuid;
+
+        /* Generate SHA1 from content */
+        message_guid_generate(&uuid, content, strlen(content));
+
+        /* Add SHA1 to our array using rowid as the index */
+        strarray_set(srock->sha1, rowid, message_guid_encode(&uuid));
+    }
+
+    return 0;
+}
+
+#define CMD_GET_v12_ROWS                 \
+    "SELECT mailbox, content, rowid FROM sieve_scripts;"
+
+#define CMD_ALTER_v12_TABLE              \
+    "ALTER TABLE sieve_scripts RENAME COLUMN content TO contentid;"
+
+#define CMD_UPDATE_v13_ROW               \
+    "UPDATE sieve_scripts SET contentid = :contentid WHERE rowid = :rowid;"
+
+#define CMD_GET_v13_ROW1                 \
+    "SELECT mailbox FROM sieve_scripts LIMIT 1;"
+
+#define CMD_UPDATE_v13_TABLE             \
+    "UPDATE sieve_scripts SET mailbox = :mailbox;"
+
+
+/* Upgrade v12/v13 sieve_script table to v14 */
+static int sievedb_upgrade(sqldb_t *db)
+{
+    struct sievedb_upgrade_rock srock = { NULL, NULL };
+    struct sqldb_bindval bval[] = {
+        { ":rowid",     SQLITE_INTEGER, { .i = 0    } },
+        { ":contentid", SQLITE_TEXT,    { .s = NULL } },
+        { ":mailbox",   SQLITE_TEXT,    { .s = NULL } },
+        { NULL,         SQLITE_NULL,    { .s = NULL } } };
+    strarray_t sha1 = STRARRAY_INITIALIZER;
+    mbentry_t *mbentry = NULL;
+    int rowid;
+    int r = 0;
+
+    if (db->version == 12) {
+        /* Create an array of SHA1 for the content in each record */
+        srock.sha1 = &sha1;
+        r = sqldb_exec(db, CMD_GET_v12_ROWS, NULL, &sievedb_upgrade_cb, &srock);
+        if (r) goto done;
+
+        /* Rename 'content' -> 'contentid' */
+        r = sqldb_exec(db, CMD_ALTER_v12_TABLE, NULL, NULL, NULL);
+        if (r) goto done;
+
+        /* Rewrite 'contentid' columns with actual ids (SHA1) */
+        for (rowid = 1; rowid < strarray_size(&sha1); rowid++) {
+            bval[0].val.i = rowid;
+            bval[1].val.s = strarray_nth(&sha1, rowid);
+
+            r = sqldb_exec(db, CMD_UPDATE_v13_ROW, bval, NULL, NULL);
+            if (r) goto done;
+        }
+    }
+    else if (db->version == 13) {
+        /* Fetch mailbox name from first record */
+        r = sqldb_exec(db, CMD_GET_v13_ROW1, NULL, &sievedb_upgrade_cb, &srock);
+        if (r) goto done;
+    }
+
+    /* This will only be set if we are upgrading from v12 or v13
+       AND there are records in the table */
+    if (!srock.mboxname) goto done;
+
+    r = mboxlist_lookup_allow_all(srock.mboxname, &mbentry, NULL);
+    if (r) goto done;
+
+    /* Rewrite 'mailbox' columns with mboxid rather than mboxname */
+    bval[2].val.s = mbentry->uniqueid;
+    r = sqldb_exec(db, CMD_UPDATE_v13_TABLE, bval, NULL, NULL);
+
+  done:
+    mboxlist_entry_free(&mbentry);
+    strarray_fini(&sha1);
+    free(srock.mboxname);
+
+    return r;
 }
