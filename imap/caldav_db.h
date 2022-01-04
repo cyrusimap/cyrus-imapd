@@ -86,6 +86,7 @@ struct comp_flags {
     unsigned tzbyref      : 1;          /* VTIMEZONEs by reference */
     unsigned mattach      : 1;          /* Has managed ATTACHment(s) */
     unsigned shared       : 1;          /* Is shared (per-user-data stripped) */
+    unsigned reserved     : 3;          /* reserved for jmap-calendars-01 */
 };
 
 /* Status values */

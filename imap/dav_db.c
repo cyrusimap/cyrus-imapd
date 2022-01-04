@@ -243,6 +243,11 @@
 
 #define CMD_DBUPGRADEv14 CMD_CREATE_SIEVE
 
+#define CMD_DBROLLBACKv15 \
+    "DROP TABLE IF EXISTS jscal_objs;" \
+    "DROP TABLE IF EXISTS jscal_cache;" \
+    CMD_CREATE_CALCACHE
+
 struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
   { 3, CMD_DBUPGRADEv3, NULL },
@@ -257,10 +262,13 @@ struct sqldb_upgrade davdb_upgrade[] = {
   /* Don't upgrade to version 12.  This was an intermediate Sieve DB version */
   /* Don't upgrade to version 13.  This was an intermediate Sieve DB version */
   { 14, CMD_DBUPGRADEv14, &sievedb_upgrade },
+  /* Version 15 is reserved for the jmap-calendars-01 branch */
+  { 16, CMD_DBROLLBACKv15, NULL },
+
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 14
+#define DB_VERSION 16
 
 static sqldb_t *reconstruct_db;
 
