@@ -69,6 +69,19 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub slurp_file
+{
+    my ($filename) = @_;
+
+    local $/;
+    open my $f, '<', $filename
+        or die "Cannot open $filename for reading: $!\n";
+    my $str = <$f>;
+    close $f;
+
+    return $str;
+}
+
 sub _set_quotaroot
 {
     my ($self, $quotaroot) = @_;
@@ -982,6 +995,84 @@ sub test_quotarename
         message => $expected_message,
         'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
+}
+
+sub test_quota_d
+    :UnixHierarchySep :AltNamespace :VirtDomains
+{
+    my ($self) = @_;
+
+    my @users = qw(
+        alice@foo.com
+        bob@foo.com
+        chris@bar.com
+        dave@qux.com
+    );
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    foreach my $user (@users) {
+        $admintalk->create("user/$user");
+        $self->_set_limits(
+            quotaroot => "user/$user",
+            storage => 100000,
+            message => 50000,
+            'x-annotation-storage' => 10000,
+        );
+
+        my $svc = $self->{instance}->get_service('imap');
+        my $userstore = $svc->create_store(username => $user);
+        my $usertalk = $userstore->get_client();
+
+        foreach my $submbox ('Drafts', 'Junk', 'Sent', 'Trash') {
+            xlog $self, "creating $submbox...";
+            $usertalk->create($submbox);
+            $self->assert_str_equals('ok',
+                                    $usertalk->get_last_completion_response());
+        }
+
+        foreach my $mbox (qw(INBOX Drafts Sent Junk Trash)) {
+            $usertalk->select($mbox);
+            foreach (1..3) {
+                $self->make_message("msg $_ in $mbox", store => $userstore);
+            }
+        }
+    }
+
+    xlog $self, "run quota";
+    my $outfile = $self->{instance}->{basedir} . '/quota.out';
+    $self->{instance}->run_command(
+        { cyrus => 1,
+          redirects => {
+            stderr => $outfile,
+            stdout => $outfile,
+          },
+        },
+        'quota');
+
+    # should have reported quotas for all users
+    my $content = slurp_file($outfile);
+    foreach my $user (@users) {
+        $self->assert_matches(qr{$user}, $content);
+    }
+
+    xlog $self, "run quota -d foo.com";
+    $outfile = $self->{instance}->{basedir} . '/quota_d.out';
+    $self->{instance}->run_command(
+        { cyrus => 1,
+          redirects => {
+            stderr => $outfile,
+            stdout => $outfile,
+          },
+        },
+        'quota', '-d', 'foo.com');
+
+    # should not report quotas for users in other domains!
+    $content = slurp_file($outfile);
+    $self->assert_matches(qr{alice\@foo.com}, $content);
+    $self->assert_matches(qr{bob\@foo.com}, $content);
+    $self->assert_does_not_match(qr{chris\@bar.com}, $content);
+    $self->assert_does_not_match(qr{dave\@qux.com}, $content);
 }
 
 # https://github.com/cyrusimap/cyrus-imapd/issues/2877
