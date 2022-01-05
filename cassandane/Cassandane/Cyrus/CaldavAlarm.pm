@@ -489,6 +489,127 @@ EOF
     $self->assert_alarms({summary => 'Simple', start => $start});
 }
 
+sub test_update_defaultalerts
+    :min_version_3_4 :needs_component_calalarmd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    # Set defaultalerts to trigger at start of event
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-datetime>
+BEGIN:VALARM
+TRIGGER:PT0S
+ACTION:DISPLAY
+DESCRIPTION:alarm
+END:VALARM
+</C:default-alarm-vevent-datetime>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/" . $CalendarId,
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND;TZID=Australia/Sydney:$end
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART;TZID=Australia/Sydney:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+X-JMAP-USEDEFAULTALERTS;VALUE=BOOLEAN:TRUE
+X-APPLE-DEFAULT-ALARM;VALUE=BOOLEAN:TRUE
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "No alarm triggered before the event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() - 60 );
+    $self->assert_alarms();
+
+    xlog "Alarm triggered in the first minute after the event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+    $self->assert_alarms({summary => 'Simple', start => $start});
+
+    xlog "No further alarm triggered for the event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 120 );
+    $self->assert_alarms();
+
+    xlog "Change default alarms to trigger one minute after event";
+    $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-datetime>
+BEGIN:VALARM
+TRIGGER:PT1M
+ACTION:DISPLAY
+DESCRIPTION:alarm
+END:VALARM
+</C:default-alarm-vevent-datetime>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/" . $CalendarId,
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    xlog "Assert alarm gets triggered two minutes after the event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 120 );
+    $self->assert_alarms({summary => 'Simple', start => $start});
+}
+
 sub test_reschedule_later
     :min_version_3_0 :needs_component_calalarmd
 {
