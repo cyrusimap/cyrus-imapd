@@ -1231,7 +1231,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         r = setcalendars_update(req, mboxname, &props, /*ignore_acl*/1);
         if (r) {
             free(uid);
-            int rr = mboxlist_delete(mboxname);
+            int rr = mboxlist_deletemailbox(mboxname, 1, "", NULL, NULL, 0);
             if (rr) {
                 syslog(LOG_ERR, "could not delete mailbox %s: %s",
                        mboxname, error_message(rr));
