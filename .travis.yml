@@ -14,6 +14,7 @@ script:
 branches:
   only:
   - master
+  - cyrus-imapd-3.6
   - cyrus-imapd-3.4
   - cyrus-imapd-3.2
   - cyrus-imapd-3.0
