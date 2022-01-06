@@ -16300,14 +16300,16 @@ EOF
     xlog $self, "Deliver iMIP invite";
     $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 
+    xlog $self, "Assert that useDefaultAlerts is set";
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
-            properties => ['id', 'alerts']
+            properties => ['id', 'alerts', 'useDefaultAlerts']
         }, 'R1'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_deep_equals({ alert1 => $alertWithTime },
-        $res->[0][1]{list}[0]{alerts});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{useDefaultAlerts});
+    $self->assert_null($res->[0][1]{list}[0]{alerts});
+
     my $eventId = $res->[0][1]{list}[0]{id};
     $self->assert_not_null($eventId);
 
@@ -16329,12 +16331,14 @@ EOF
                     alerts => {
                         alert1 => $customAlert,
                     },
+                    useDefaultAlerts => JSON::false,
                 },
             }
         }, 'R1'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
 
+    xlog "Update event via iTIP";
     $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 10:06:18 -0400
 From: Sally Sender <sender@example.net>
@@ -16373,13 +16377,14 @@ EOF
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
-            properties => ['id', 'alerts']
+            properties => ['id', 'alerts', 'useDefaultAlerts']
         }, 'R1'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_equals(JSON::false,
+        $res->[0][1]{list}[0]{useDefaultAlerts});
     $self->assert_deep_equals({ alert1 => $customAlert },
         $res->[0][1]{list}[0]{alerts});
-
 }
 
 sub create_user
