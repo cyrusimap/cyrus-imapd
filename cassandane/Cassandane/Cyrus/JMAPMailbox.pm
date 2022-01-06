@@ -4920,4 +4920,82 @@ sub test_mailbox_set_sharewith
         $res->[0][1]{notUpdated}{$inboxId}{properties});
 }
 
+sub test_mailbox_set_sharewith_acl
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+    my $imap = $self->{store}->get_client();
+
+    $imap->create("A") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            filter => {
+                name => 'A',
+            },
+        }, 'R1'],
+    ]);
+    my $mboxId = $res->[0][1]{ids}[0];
+    $self->assert_not_null($mboxId);
+
+    $admin->create("user.sharee");
+
+    my @testCases = ({
+        rights => {
+            mayAdmin => JSON::true,
+        },
+        acl => 'kxca',
+    }, {
+        rights => {
+            mayWrite => JSON::true,
+        },
+        acl => 'switedn',
+    }, {
+        rights => {
+            mayRead => JSON::true,
+        },
+        acl => 'lr',
+    });
+
+    foreach(@testCases) {
+
+        xlog "Run test for acl $_->{acl}";
+
+        $res = $jmap->CallMethods([
+            ['Mailbox/set', {
+                update => {
+                    $mboxId => {
+                        shareWith => {
+                            sharee => $_->{rights},
+                        },
+                    },
+                },
+            }, 'R1'],
+            ['Mailbox/get', {
+                ids => [$mboxId],
+                properties => ['shareWith'],
+            }, 'R2'],
+        ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail'
+        ]) ;
+
+        $_->{wantRights} ||= $_->{rights};
+
+        my %mergedrights = ((
+            mayAdmin => JSON::false,
+            mayWrite => JSON::false,
+            mayRead => JSON::false,
+        ), %{$_->{wantRights}});
+
+        $self->assert_deep_equals(\%mergedrights,
+            $res->[1][1]{list}[0]{shareWith}{sharee});
+        my %acl = @{$admin->getacl("user.cassandane.A")};
+        $self->assert_str_equals($_->{acl}, $acl{sharee});
+    }
+}
+
+
 1;
