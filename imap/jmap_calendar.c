@@ -511,7 +511,7 @@ static json_t *calendarrights_to_jmap(int rights, int is_owner)
             "mayDelete",
             (rights & JACL_DELETE) == JACL_DELETE,
             "mayAdmin",
-            (rights & JACL_ADMIN) == JACL_ADMIN);
+            (rights & JACL_ADMIN_CALENDAR) == JACL_ADMIN_CALENDAR);
 }
 
 static json_t *calendarrights_to_sharewith(int rights)
@@ -549,7 +549,7 @@ calendar_sharewith_to_rights_iter:
         else if (!strcmp("mayDelete", name))
             mask = JACL_DELETE;
         else if (!strcmp("mayAdmin", name))
-            mask = JACL_ADMIN;
+            mask = JACL_ADMIN_CALENDAR;
         else
             continue;
 
@@ -2076,7 +2076,7 @@ static int roleupdate_plan(jmap_req_t *req,
     /* Load ACL */
     char *calhomename = caldav_mboxname(req->accountid, NULL);
     int haverights = !strcmp(req->userid, req->accountid) ||
-                     jmap_hasrights(req, calhomename, JACL_ADMIN);
+                     jmap_hasrights(req, calhomename, JACL_ADMIN_CALENDAR);
 
     /* Check if the final state of inbox updates is valid */
     ru->old_inboxid = caldav_scheddefault(req->accountid);
