@@ -2079,6 +2079,35 @@ static void _mboxset_args_parse(json_t *jargs,
         !json_is_object(args->shareWith)) {
         jmap_parser_invalid(parser, "shareWith");
     }
+    if (json_is_object(args->shareWith)) {
+        // Validate rights
+        const char *sharee;
+        json_t *jrights;
+        json_object_foreach(args->shareWith, sharee, jrights) {
+            if (json_object_size(jrights)) {
+                const char *right;
+                json_t *jval;
+                json_object_foreach(jrights, right, jval) {
+                    if (!json_is_boolean(jval) ||
+                        (strcmp(right, "mayRead") &&
+                         strcmp(right, "mayWrite") &&
+                         strcmp(right, "mayAdmin"))) {
+
+                        jmap_parser_push(parser, "shareWith");
+                        jmap_parser_push(parser, sharee);
+                        jmap_parser_invalid(parser, right);
+                        jmap_parser_pop(parser);
+                        jmap_parser_pop(parser);
+                    }
+                }
+            }
+            else if (!json_is_null(jrights)) {
+                jmap_parser_push(parser, "shareWith");
+                jmap_parser_invalid(parser, sharee);
+                jmap_parser_pop(parser);
+            }
+        }
+    }
 
     /* All of these are server-set. */
     json_t *jrights = json_object_get(jargs, "myRights");
