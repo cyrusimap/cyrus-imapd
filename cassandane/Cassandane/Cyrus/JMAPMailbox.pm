@@ -4914,6 +4914,21 @@ sub test_mailbox_set_sharewith
     $acl = $admin->getacl("user.cassandane");
     %map = @$acl;
     $self->assert_str_equals('lrswitedn', $map{sharee});
+
+    xlog $self, "Patch shareWith with unknown right";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $inboxId => {
+                    'shareWith/sharee/unknownRight' => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$inboxId}{type});
+    $self->assert_deep_equals(['shareWith/sharee/unknownRight'],
+        $res->[0][1]{notUpdated}{$inboxId}{properties});
 }
 
 1;
