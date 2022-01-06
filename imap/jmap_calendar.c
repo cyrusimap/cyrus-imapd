@@ -1321,13 +1321,46 @@ static void setcalendar_readprops(jmap_req_t *req,
             json_object_set_new(arg, "shareWith", shareWith);
         }
     }
+
     jprop = json_object_get(arg, "shareWith");
-    if (json_is_object(jprop) || json_is_null(jprop)) {
-        props->share.With = jprop;
+    if (json_object_size(jprop)) {
+        // Validate rights
+        const char *sharee;
+        json_t *jrights;
+        json_object_foreach(jprop, sharee, jrights) {
+            if (json_object_size(jrights)) {
+                const char *right;
+                json_t *jval;
+                json_object_foreach(jrights, right, jval) {
+                    if (!json_is_boolean(jval) ||
+                            (strcmp(right, "mayReadFreeBusy") &&
+                             strcmp(right, "mayReadItems") &&
+                             strcmp(right, "mayWriteAll") &&
+                             strcmp(right, "mayWriteOwn") &&
+                             strcmp(right, "mayUpdatePrivate") &&
+                             strcmp(right, "mayRSVP") &&
+                             strcmp(right, "mayAdmin") &&
+                             strcmp(right, "mayDelete"))) {
+
+                        jmap_parser_push(parser, "shareWith");
+                        jmap_parser_push(parser, "sharee");
+                        jmap_parser_invalid(parser, right);
+                        jmap_parser_pop(parser);
+                        jmap_parser_pop(parser);
+                    }
+                }
+            }
+            else if (!json_is_null(jrights)) {
+                jmap_parser_push(parser, "shareWith");
+                jmap_parser_invalid(parser, sharee);
+                jmap_parser_pop(parser);
+            }
+        }
     }
-    else if (jprop) {
+    else if JNOTNULL(jprop) {
         jmap_parser_invalid(parser, "shareWith");
     }
+    props->share.With = jprop;
 
     /* participantIdentities */
     jprop = json_object_get(arg, "participantIdentities");
