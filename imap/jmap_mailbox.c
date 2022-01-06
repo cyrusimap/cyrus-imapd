@@ -580,7 +580,7 @@ static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
             json_boolean((rights & JACL_SETKEYWORDS) == JACL_SETKEYWORDS));
     // non-standard
     json_object_set_new(jrights, "mayAdmin",
-            json_boolean((rights & JACL_ADMIN) == JACL_ADMIN));
+            json_boolean((rights & JACL_ADMIN_MAILBOX) == JACL_ADMIN_MAILBOX));
 
     int mayRename = 0;
     if (!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)) {
@@ -603,7 +603,7 @@ static json_t *_mboxrights_tosharewith(int rights)
     json_t *jrights = json_object();
     json_object_set_new(jrights, "mayRead", _json_has(rights, JACL_READITEMS));
     json_object_set_new(jrights, "mayWrite", _json_has(rights, JACL_WRITE));
-    json_object_set_new(jrights, "mayAdmin", _json_has(rights, JACL_ADMIN));
+    json_object_set_new(jrights, "mayAdmin", _json_has(rights, JACL_ADMIN_MAILBOX));
     return jrights;
 }
 
@@ -2252,7 +2252,7 @@ static int _mbox_sharewith_to_rights(int rights, json_t *jsharewith)
     json_object_foreach(jsharewith, name, jval) {
         int mask;
         if (!strcmp(name, "mayAdmin"))
-            mask = JACL_ADMIN;
+            mask = JACL_ADMIN_MAILBOX;
         else if (!strcmp(name, "mayWrite"))
             mask = JACL_WRITE;
         else if (!strcmp(name, "mayRead"))
