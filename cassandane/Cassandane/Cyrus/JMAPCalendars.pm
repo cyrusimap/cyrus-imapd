@@ -11691,9 +11691,8 @@ sub test_calendareventnotification_get
                         manifold => {
                             mayReadFreeBusy => JSON::true,
                             mayReadItems => JSON::true,
-                            mayAddItems => JSON::true,
                             mayUpdatePrivate => JSON::true,
-                            mayRemoveOwn => JSON::true,
+                            mayWriteOwn => JSON::true,
                             mayAdmin => JSON::false
                         },
                     },
@@ -11826,9 +11825,8 @@ sub test_calendareventnotification_set
                         manifold => {
                             mayReadFreeBusy => JSON::true,
                             mayReadItems => JSON::true,
-                            mayAddItems => JSON::true,
+                            mayWriteOwn => JSON::true,
                             mayUpdatePrivate => JSON::true,
-                            mayRemoveOwn => JSON::true,
                             mayAdmin => JSON::false
                         },
                     },
@@ -11944,9 +11942,8 @@ sub test_calendareventnotification_query
                         manifold => {
                             mayReadFreeBusy => JSON::true,
                             mayReadItems => JSON::true,
-                            mayAddItems => JSON::true,
                             mayUpdatePrivate => JSON::true,
-                            mayRemoveOwn => JSON::true,
+                            mayWriteOwn => JSON::true,
                             mayAdmin => JSON::false
                         },
                     },
@@ -12190,9 +12187,8 @@ sub test_calendareventnotification_changes_shared
                         manifold => {
                             mayReadFreeBusy => JSON::true,
                             mayReadItems => JSON::true,
-                            mayAddItems => JSON::true,
                             mayUpdatePrivate => JSON::true,
-                            mayRemoveOwn => JSON::true,
+                            mayWriteOwn => JSON::true,
                             mayAdmin => JSON::false
                         },
                     },
@@ -12278,9 +12274,8 @@ sub test_calendareventnotification_aclcheck
                         manifold => {
                             mayReadFreeBusy => JSON::true,
                             mayReadItems => JSON::true,
-                            mayAddItems => JSON::true,
                             mayUpdatePrivate => JSON::true,
-                            mayRemoveOwn => JSON::true,
+                            mayWriteOwn => JSON::true,
                             mayAdmin => JSON::false
                         },
                     },
@@ -12388,9 +12383,8 @@ sub test_calendareventnotification_caldav
                         manifold => {
                             mayReadFreeBusy => JSON::true,
                             mayReadItems => JSON::true,
-                            mayAddItems => JSON::true,
                             mayUpdatePrivate => JSON::true,
-                            mayRemoveOwn => JSON::true,
+                            mayWriteOwn => JSON::true,
                             mayAdmin => JSON::false
                         },
                     },
@@ -12594,9 +12588,8 @@ sub test_calendareventnotification_set_destroy
                         manifold => {
                             mayReadFreeBusy => JSON::true,
                             mayReadItems => JSON::true,
-                            mayAddItems => JSON::true,
                             mayUpdatePrivate => JSON::true,
-                            mayRemoveOwn => JSON::true,
+                            mayWriteOwn => JSON::true,
                             mayAdmin => JSON::false
                         },
                     },
@@ -17399,6 +17392,36 @@ sub test_calendarevent_set_sentby
         }, 'R3'],
     ]);
     $self->assert_str_equals('sender@example.net', $res->[1][1]{list}[0]{sentBy});
+}
+
+sub test_calendar_set_unknown_calendarright
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    $self->create_user('sharee');
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        sharee => {
+                            unknownCalendarRight => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{Default}{type});
+
+    $self->assert_deep_equals(['shareWith/sharee/unknownCalendarRight'],
+        $res->[0][1]{notUpdated}{Default}{properties});
 }
 
 1;
