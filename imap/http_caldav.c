@@ -2708,6 +2708,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     icalparameter *param;
     unsigned op, return_rep;
     strarray_t *rids = NULL;
+    struct buf buf = BUF_INITIALIZER;
     enum {
         ATTACH_ADD,
         ATTACH_UPDATE,
@@ -2900,17 +2901,20 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         wdata = increment_refcount(uid, webdavdb);
 
         /* Create new ATTACH property */
-        const char *proto = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_SCHEME);
-        const char *host = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_HOST);
-        if (!proto || !host) {
-            const char *txnproto = NULL;
-            const char *txnhost = NULL;
-            http_proto_host(txn->req_hdrs, &txnproto, &txnhost);
-            if (!proto) proto = txnproto;
-            if (!host) host = txnhost;
+        const char *baseurl = config_getstring(IMAPOPT_WEBDAV_ATTACHMENTS_BASEURL);
+        if (!baseurl) {
+            const char *proto = NULL;
+            const char *host = NULL;
+            http_proto_host(txn->req_hdrs, &proto, &host);
+            if (proto && host) {
+                buf_setcstr(&buf, proto);
+                buf_appendcstr(&buf, "://");
+                buf_appendcstr(&buf, host);
+                baseurl = buf_cstring(&buf);
+            }
         }
-        assert(!buf_len(&txn->buf));
-        caldav_attachment_url(&txn->buf, txn->req_tgt.userid, proto, host, uid);
+        buf_reset(&txn->buf);
+        caldav_attachment_url(&txn->buf, txn->req_tgt.userid, baseurl, uid);
         icalattach *attach = icalattach_new_from_url(buf_cstring(&txn->buf));
         buf_reset(&txn->buf);
 
@@ -3160,6 +3164,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     if (webdavdb) webdav_close(webdavdb);
     mailbox_close(&attachments);
     mailbox_close(&calendar);
+    buf_free(&buf);
 
     return ret;
 }

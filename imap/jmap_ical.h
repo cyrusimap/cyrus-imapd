@@ -103,9 +103,8 @@ struct jmapical_ctx {
         const char *partid;
     } icalsrc;
     struct {
-        struct buf davbaseurl;
-        const char *davproto;
-        const char *davhost;
+        struct buf url;
+        const char *baseurl;
         struct webdav_db *db;
         struct mailbox *mbox;
         int lock;

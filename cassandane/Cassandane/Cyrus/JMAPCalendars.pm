@@ -14469,8 +14469,7 @@ sub assert_rewrite_webdav_attachment_url_itip
     $self->assert_not_null($attach->[0]->parameters()->{'MANAGED-ID'});
     $self->assert_null($attach->[0]->parameters()->{VALUE});
     my $webdavAttachURI =
-       $self->{instance}->{config}->get('webdav_attachment_scheme') . '://' .
-       $self->{instance}->{config}->get('webdav_attachment_host') .
+       $self->{instance}->{config}->get('webdav_attachments_baseurl') .
        '/dav/calendars/user/cassandane/Attachments/';
     $self->assert($attach->[0]->value() =~ /^$webdavAttachURI.+/);
 }
@@ -14670,8 +14669,7 @@ EOF
     $self->assert_not_null($attach->[0]->parameters()->{'MANAGED-ID'});
     $self->assert_null($attach->[0]->parameters()->{VALUE});
     my $webdavAttachURI =
-       $self->{instance}->{config}->get('webdav_attachment_scheme') . '://' .
-       $self->{instance}->{config}->get('webdav_attachment_host') .
+       $self->{instance}->{config}->get('webdav_attachments_baseurl') .
        '/dav/calendars/user/cassandane/Attachments/';
     $self->assert($attach->[0]->value() =~ /^$webdavAttachURI.+/);
 }
