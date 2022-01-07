@@ -1066,7 +1066,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
              comp = icalcomponent_get_next_component(ical,
                  icalcomponent_isa(comp))) {
 
-            /* Remove VALARMs */
+            /* Remove VALARMs that came with iTIP message */
             icalcomponent *valarm, *nextvalarm = NULL;
             for (valarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
                     valarm; valarm = nextvalarm) {
@@ -1075,37 +1075,22 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                 icalcomponent_remove_component(comp, valarm);
                 icalcomponent_free(valarm);
             }
-
-            /* Use calendar default alarms */
-            icalproperty *prop, *nextprop;
-
-            int is_set = 0;
-            for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
-                    prop; prop = nextprop) {
-                nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
-
-                const char *propname = icalproperty_get_x_name(prop);
-                if (strcasecmp(propname, "X-APPLE-DEFAULT-ALARM"))
-                    continue;
-
-                const char *val = icalproperty_get_value_as_string(prop);
-                if (!strcasecmpsafe(val, "TRUE") && !is_set) {
-                    is_set = 1;
-                    continue;
-                }
-
-                // Remove conflicting or duplicate entries
-                icalcomponent_remove_property(comp, prop);
-                icalproperty_free(prop);
-            }
-
-            if (!is_set) {
-                prop = icalproperty_new(ICAL_X_PROPERTY);
-                icalproperty_set_x_name(prop, "X-APPLE-DEFAULT-ALARM");
-                icalproperty_set_value(prop, icalvalue_new_boolean(1));
-                icalcomponent_add_property(comp, prop);
-            }
         }
+
+        icalcomponent_set_usedefaultalerts(ical);
+
+        /* Inject default alerts as VALARMS. */
+        icalcomponent *alarms_withtime =
+            caldav_read_calendar_icalalarms(mailbox_name(mailbox), userid,
+                    CALDAV_DEFAULTALARMS_ANNOT_WITHTIME);
+        icalcomponent *alarms_withdate =
+            caldav_read_calendar_icalalarms(mailbox_name(mailbox), userid,
+                    CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
+
+        icalcomponent_add_defaultalerts(ical, alarms_withtime, alarms_withdate, 1);
+
+        if (alarms_withtime) icalcomponent_free(alarms_withtime);
+        if (alarms_withdate) icalcomponent_free(alarms_withdate);
     }
 
     /* Set SENT-BY property */
