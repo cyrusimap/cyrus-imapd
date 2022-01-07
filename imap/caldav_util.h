@@ -103,8 +103,7 @@ extern int caldav_create_defaultcalendars(const char *userid,
 extern int caldav_is_secretarymode(const char *mboxname);
 
 extern void caldav_attachment_url(struct buf *buf, const char *userid,
-                                  const char *proto, const char *host,
-                                  const char *managedid);
+                                  const char *baseurl, const char *managedid);
 
 /* Update refcounts for managed attachments owned by userid.
  * For updated events, both ical and oldical must be non-null.

@@ -309,19 +309,23 @@ static void blobid_from_href(struct jmapical_ctx *jmapctx,
                              const char *href,
                              const char *managedid)
 {
-    const struct buf *baseurl = &jmapctx->attachments.davbaseurl;
     buf_reset(blobid);
+
+    if (!buf_len(&jmapctx->attachments.url))
+        return;
 
     if (!strncasecmp(href, "data:", 5)) {
         blobid_from_data(jmapctx, blobid, href);
         return;
     }
 
-    if (strncasecmp(href, baseurl->s, baseurl->len)) {
+    const struct buf *attachments_url = &jmapctx->attachments.url;
+
+    if (strncasecmp(href, attachments_url->s, attachments_url->len)) {
         /* HREF doesn't match base url for DAV attachments */
         return;
     }
-    const char *mid = href + baseurl->len;
+    const char *mid = href + attachments_url->len;
 
     if (*mid == '\0' || (managedid && strcmp(managedid, mid))) {
         /* MANAGED-ID and resource id differ - invalid blobId */
@@ -460,6 +464,9 @@ static int attachment_from_blobid(struct jmapical_ctx *jmapctx,
     buf_reset(href);
     buf_reset(managedid);
 
+    if (!buf_len(&jmapctx->attachments.url))
+        return HTTP_SERVER_ERROR;
+
     int r = jmapical_context_open_attachments(jmapctx);
     if (r) return r;
 
@@ -489,8 +496,7 @@ static int attachment_from_blobid(struct jmapical_ctx *jmapctx,
 
     // Set the blob href and managed-id.
     caldav_attachment_url(href, req->accountid,
-            jmapctx->attachments.davproto,
-            jmapctx->attachments.davhost, buf_cstring(managedid));
+            jmapctx->attachments.baseurl, buf_cstring(managedid));
 
     return 0;
 }
@@ -506,19 +512,10 @@ HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req)
     jmapctx->attachments.lock = slash && !strcmp(slash, "/set");
 
     /* Initialize context for Link.blobId */
-    const char *davproto = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_SCHEME);
-    const char *davhost = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_HOST);
-    if (davproto && davhost) {
-        jmapctx->attachments.davproto = davproto;
-        jmapctx->attachments.davhost = davhost;
-        caldav_attachment_url(&jmapctx->attachments.davbaseurl, req->accountid,
-                jmapctx->attachments.davproto,
-                jmapctx->attachments.davhost, "");
-    }
-    else {
-        syslog(LOG_ERR, "%s: can't determine base URL for WebDAV attachments."
-                " Disabling support for Link.blobId property. Did you configure"
-                " WebDAV managed attachments in imapd.conf?", __func__);
+    const char *baseurl = config_getstring(IMAPOPT_WEBDAV_ATTACHMENTS_BASEURL);
+    if (baseurl) {
+        jmapctx->attachments.baseurl = baseurl;
+        caldav_attachment_url(&jmapctx->attachments.url, req->accountid, baseurl, "");
     }
 
     jmapctx->alert.emailrecipient = _emailalert_recipient(req->userid);
@@ -539,7 +536,7 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
     if (jmapctx->attachments.db)
         webdav_close(jmapctx->attachments.db);
 #endif // BUILD_LMTPD
-    buf_free(&jmapctx->attachments.davbaseurl);
+    buf_free(&jmapctx->attachments.url);
 
     free(jmapctx->alert.emailrecipient);
     buf_free(&jmapctx->buf);

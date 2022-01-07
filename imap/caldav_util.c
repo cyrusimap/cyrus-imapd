@@ -1865,12 +1865,17 @@ done:
 
 HIDDEN void caldav_attachment_url(struct buf *buf,
                                   const char *userid,
-                                  const char *proto,
-                                  const char *host,
+                                  const char *baseurl,
                                   const char *managedid)
 {
-    buf_printf(buf, "%s://%s%s/%s/%s/%s%s",
-            proto, host, namespace_calendar.prefix,
+    buf_setcstr(buf, baseurl);
+    if (!buf->len) return;
+
+    if (buf->s[buf->len-1] == '/')
+        buf_truncate(buf, -1);
+
+    buf_printf(buf, "%s/%s/%s/%s%s",
+            namespace_calendar.prefix,
             USER_COLLECTION_PREFIX,
             userid, MANAGED_ATTACH, managedid);
 }
