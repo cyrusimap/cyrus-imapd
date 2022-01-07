@@ -656,8 +656,7 @@ sub _generate_imapd_conf
             $davhost .= ':' . $self->{services}->{http}->port;
         }
         $self->{config}->set(
-            webdav_attachment_host => $davhost,
-            webdav_attachment_scheme => 'http',
+            webdav_attachments_baseurl => "http://$davhost"
         );
     }
 

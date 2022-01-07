@@ -3075,17 +3075,16 @@ of the incoming network interface, or if no record is found, the
 .PP
    If no unit is specified, minutes is assumed. */
 
-{ "webdav_attachment_host", NULL, STRING, "3.1.9" }
-/* The default host of WebDAV managed attachment URLs.
+{ "webdav_attachments_baseurl", NULL, STRING, "3.6.0" }
+/* The base URL for WebDAV managed attachments, excluding the
+   Cyrus-specific URL paths. Typically, this only includes the
+   HTTP scheme and host name at which DAV clients may fetch
+   managed attachments from, e.g.  "https://dav.example.com".
    If not specified, the target host of the DAV HTTP request that uploaded
-   the attachment will be used. */
+   the attachment will be used. For JMAP, the Link.blobId property of
+   JSCalendar objects will be disabled. */
 
-{ "webdav_attachment_scheme", NULL, STRING, "3.1.9" }
-/* The default scheme of WebDAV managed attachment URLs.
-   If not specified, the scheme of the DAV HTTP request that uploaded
-   the attachment will be used. */
-
-{ "webdav_attachment_max_binary_attach_size", 1024, INT, "3.6.0" }
+{ "webdav_attachments_max_binary_attach_size", 1024, INT, "3.6.0" }
 /* The maximum byte length (in kilobytes) of an ATTACH property value
    when managed attachment URIs get rewritten to BINARY during iTIP processing.
    Any attachment that exceeds this byte size keeps its managed attachment
