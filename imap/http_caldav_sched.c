@@ -2074,7 +2074,7 @@ static int has_attach(icalcomponent *ical)
 static void caldav_rewrite_attachprop_to_binary(struct mailbox *attachments,
                                                 struct webdav_db *webdavdb,
                                                 icalproperty *prop,
-                                                struct buf *baseurl,
+                                                struct buf *attachments_url,
                                                 struct buf *bufs)
 {
     struct buf *msgbuf = &bufs[0];
@@ -2093,9 +2093,9 @@ static void caldav_rewrite_attachprop_to_binary(struct mailbox *attachments,
     if (!attach || !icalattach_get_is_url(attach))
         goto done;
     const char *href = icalattach_get_url(attach);
-    if (strncmpsafe(href, buf_cstring(baseurl), buf_len(baseurl)))
+    if (strncmpsafe(href, buf_cstring(attachments_url), buf_len(attachments_url)))
         goto done;
-    const char *mid = href + buf_len(baseurl);
+    const char *mid = href + buf_len(attachments_url);
 
     // Check if entry exists in WebDAV attachments
     int r = webdav_lookup_uid(webdavdb, mid, &wdata);
@@ -2137,7 +2137,7 @@ static void caldav_rewrite_attachprop_to_binary(struct mailbox *attachments,
     }
     if (!buf_len(b64val)) goto done;
 
-    size_t max_size = config_getint(IMAPOPT_WEBDAV_ATTACHMENT_MAX_BINARY_ATTACH_SIZE);
+    size_t max_size = config_getint(IMAPOPT_WEBDAV_ATTACHMENTS_MAX_BINARY_ATTACH_SIZE);
     if (max_size && buf_len(b64val) > max_size * 1024) goto done;
 
     // Rewrite ATTACH property
@@ -2156,7 +2156,7 @@ done:
 
 HIDDEN void caldav_rewrite_attachprop_to_url(struct webdav_db *webdavdb,
                                              icalproperty *prop,
-                                             struct buf *baseurl,
+                                             struct buf *attachments_url,
                                              struct buf *bufs)
 {
     // Load base64 value
@@ -2192,7 +2192,7 @@ HIDDEN void caldav_rewrite_attachprop_to_url(struct webdav_db *webdavdb,
     // Rewrite ATTACH property
     struct buf *url = &bufs[1];
     buf_reset(url);
-    buf_copy(url, baseurl);
+    buf_copy(url, attachments_url);
     if (url->s[url->len-1] != '/')
         buf_putc(url, '/');
     buf_appendcstr(url, mid);
@@ -2217,7 +2217,7 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
     int has_newattach = newical && has_attach(newical);
     if (!has_oldattach && !has_newattach) return;
 
-    struct buf baseurl = BUF_INITIALIZER;
+    struct buf attachments_url = BUF_INITIALIZER;
     mbname_t *mbname = NULL;
     struct buf bufs[5];
     size_t i, nbufs = sizeof(bufs) / sizeof(struct buf);
@@ -2239,14 +2239,12 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
 
     // Determine base URL for managed attachments
     mbname = mbname_from_intname(mailbox_name(attachments));
-    const char *davproto = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_SCHEME);
-    if (!davproto)
-        xsyslog(LOG_ERR, "no webdav_attachment_scheme config", NULL);
-    const char *davhost = config_getstring(IMAPOPT_WEBDAV_ATTACHMENT_HOST);
-    if (!davhost)
-        xsyslog(LOG_ERR, "no webdav_attachment_host config", NULL);
-    if (!davproto || !davhost) goto done;
-    caldav_attachment_url(&baseurl, mbname_userid(mbname), davproto, davhost, "");
+    const char *baseurl = config_getstring(IMAPOPT_WEBDAV_ATTACHMENTS_BASEURL);
+    if (!baseurl) {
+        xsyslog(LOG_ERR, "no webdav_attachments_baseurl config", NULL);
+        goto done;
+    }
+    caldav_attachment_url(&attachments_url, mbname_userid(mbname), baseurl, "");
 
     // Process ATTACH properties
     if (has_oldattach) {
@@ -2261,9 +2259,9 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
                  prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
                 if (mode == caldav_attachments_to_binary)
                     caldav_rewrite_attachprop_to_binary(attachments, webdavdb, prop,
-                            &baseurl, bufs);
+                            &attachments_url, bufs);
                 else
-                    caldav_rewrite_attachprop_to_url(webdavdb, prop, &baseurl, bufs);
+                    caldav_rewrite_attachprop_to_url(webdavdb, prop, &attachments_url, bufs);
             }
         }
         if (myoldicalp) *myoldicalp = myoldical;
@@ -2280,9 +2278,9 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
                  prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
                 if (mode == caldav_attachments_to_binary)
                     caldav_rewrite_attachprop_to_binary(attachments, webdavdb, prop,
-                            &baseurl, bufs);
+                            &attachments_url, bufs);
                 else
-                    caldav_rewrite_attachprop_to_url(webdavdb, prop, &baseurl, bufs);
+                    caldav_rewrite_attachprop_to_url(webdavdb, prop, &attachments_url, bufs);
             }
         }
         if (mynewicalp) *mynewicalp = mynewical;
@@ -2293,7 +2291,7 @@ done:
     if (webdavdb) webdav_close(webdavdb);
     for (i = 0; i < nbufs; i++) buf_free(&bufs[i]);
     mbname_free(&mbname);
-    buf_free(&baseurl);
+    buf_free(&attachments_url);
 }
 
 static int get_hide_attendees(icalcomponent *ical)

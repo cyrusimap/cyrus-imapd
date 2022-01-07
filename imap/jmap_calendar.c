@@ -10985,7 +10985,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
 
                     if (!jmapical_context_open_attachments(jmapctx)) {
                         caldav_rewrite_attachprop_to_url(jmapctx->attachments.db,
-                                prop, &jmapctx->attachments.davbaseurl, rewritebufs);
+                                prop, &jmapctx->attachments.url, rewritebufs);
                         int j;
                         for (j = 0; j < CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS; j++)
                             buf_reset(&rewritebufs[j]);
