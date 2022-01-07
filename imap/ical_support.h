@@ -83,6 +83,8 @@ extern void icalproperty_set_xparam(icalproperty *prop,
    Returns -1 otherwise. */
 extern int icalcomponent_read_usedefaultalerts(icalcomponent *comp);
 
+extern void icalcomponent_set_usedefaultalerts(icalcomponent *comp);
+
 /* Adds default alerts to ical, if either the X-USE-DEFAULTALERTS property
  * is set to TRUE, or force is non-zero. */
 extern void icalcomponent_add_defaultalerts(icalcomponent *ical,
