@@ -16288,6 +16288,7 @@ SEQUENCE:0
 ORGANIZER;CN=Test User:MAILTO:foo@example.net
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo@example.net
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane@example.com
+X-APPLE-DEFAULT-ALARM;VALUE=BOOLEAN:FALSE
 BEGIN:VALARM
 UID:0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1
 TRIGGER:PT25M
@@ -16308,7 +16309,8 @@ EOF
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{useDefaultAlerts});
-    $self->assert_null($res->[0][1]{list}[0]{alerts});
+    $self->assert_deep_equals({ alert1 => $alertWithTime },
+        $res->[0][1]{list}[0]{alerts});
 
     my $eventId = $res->[0][1]{list}[0]{id};
     $self->assert_not_null($eventId);
