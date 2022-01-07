@@ -2187,6 +2187,48 @@ EXPORTED int icalcomponent_read_usedefaultalerts(icalcomponent *comp)
     return -1;
 }
 
+EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp)
+{
+    icalcomponent *ical = NULL;
+    icalcomponent_kind kind = ICAL_NO_COMPONENT;
+
+    if (icalcomponent_isa(comp) == ICAL_VCALENDAR_COMPONENT) {
+        ical = comp;
+        comp = icalcomponent_get_first_real_component(ical);
+        kind = icalcomponent_isa(comp);
+    }
+    do {
+        int has_usedefaultalerts = 0;
+
+        icalproperty *prop, *nextprop;
+        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+             prop = nextprop) {
+
+            nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+            if (strcasecmp(icalproperty_get_x_name(prop), "X-APPLE-DEFAULT-ALARM"))
+                continue;
+
+            const char *val = icalproperty_get_value_as_string(prop);
+            if (strcasecmpsafe(val, "TRUE") || has_usedefaultalerts) {
+                // Remove conflicting or duplicate entries
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
+            else has_usedefaultalerts = 1;
+        }
+
+        if (!has_usedefaultalerts) {
+            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, "X-APPLE-DEFAULT-ALARM");
+            icalproperty_set_value(prop, icalvalue_new_boolean(1));
+            icalcomponent_add_property(comp, prop);
+        }
+
+        if (ical) comp = icalcomponent_get_next_component(ical, kind);
+    } while (ical && comp);
+}
+
 EXPORTED void icalcomponent_add_defaultalerts(icalcomponent *ical,
                                               icalcomponent *withtime,
                                               icalcomponent *withdate,
@@ -2202,7 +2244,7 @@ EXPORTED void icalcomponent_add_defaultalerts(icalcomponent *ical,
 
     /* Add default alarms */
     for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
-        if (icalcomponent_read_usedefaultalerts(comp) > 0 || force) {
+        if (force || icalcomponent_read_usedefaultalerts(comp) > 0) {
 
             /* Determine which default alarms to add */
             int is_date;
