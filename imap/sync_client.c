@@ -407,7 +407,12 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
 
 done:
     free(userid);
-    if (r) *exit_rcp = 1;
+    if (r) {
+        *exit_rcp = 1;
+        // reconnect!
+        replica_disconnect();
+        replica_connect();
+    }
     return 0; // but keep going anyway
 }
 
