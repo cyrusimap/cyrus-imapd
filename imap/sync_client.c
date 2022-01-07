@@ -374,6 +374,9 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
 
     char *userid = mboxname_to_userid(mbentry->name);
 
+    // reconnect if we've been disconnected
+    if (!sync_cs.backend) replica_connect();
+
     if (userid) {
         /* skip deleted mailboxes only because the are out of order, and you would
          * otherwise have to sync the user twice thanks to our naive logic */
@@ -408,10 +411,10 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
 done:
     free(userid);
     if (r) {
-        *exit_rcp = 1;
-        // reconnect!
+        // disconnect on errors
         replica_disconnect();
-        replica_connect();
+        // remember that we had an error for the exit code
+        *exit_rcp = 1;
     }
     return 0; // but keep going anyway
 }
