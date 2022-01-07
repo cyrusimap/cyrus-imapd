@@ -46,6 +46,7 @@ use Data::Dumper;
 
 use lib '.';
 use Cassandane::Util::Log;
+use Cassandane::Util::TestUrl;
 
 my $enabled;
 my $buildinfo;
@@ -327,6 +328,14 @@ sub assert_num_lte
 
     $self->assert(($actual <= $expected),
                   "$actual is not less-than-or-equal-to $expected");
+}
+
+sub new_test_url {
+    my ($self, $content_or_app) = @_;
+
+    return Cassandane::Util::TestURL->new({
+        app => $content_or_app,
+    });
 }
 
 1;
