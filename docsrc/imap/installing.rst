@@ -76,14 +76,18 @@ Authentication with SASL
 .. include:: /assets/setup-sasl-sasldb.rst
 
 
+.. _mta_lda_delivery:
+
 Mail delivery from your MTA
 ---------------------------
 
 Your Cyrus IMAP server will want to receive the emails accepted by your
-SMTP server (ie Sendmail, Postfix, etc). In Cyrus, this happens via a
+SMTP server (ie Sendmail, Postfix, Exim). In Cyrus, this happens via a
 protocol called LMTP, which is usually supported by your SMTP server.
 
 .. include:: /assets/setup-sendmail.rst
+
+.. include:: /assets/setup-postfix.rst
 
 Protocol ports
 --------------
