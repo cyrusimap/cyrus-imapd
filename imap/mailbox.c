@@ -1021,9 +1021,9 @@ static int mailbox_open_advanced(const char *name,
     /* already open?  just use this one */
     if (listitem) {
         /* can't reuse an exclusive locked mailbox */
-        if (listitem->l->locktype == LOCK_EXCLUSIVE)
+        if (listitem->l->locktype & LOCK_EXCLUSIVE)
             return IMAP_MAILBOX_LOCKED;
-        if (locktype == LOCK_EXCLUSIVE)
+        if (locktype & LOCK_EXCLUSIVE)
             return IMAP_MAILBOX_LOCKED;
         /* can't reuse an already locked index */
         if (listitem->m.index_locktype)
@@ -1043,11 +1043,10 @@ static int mailbox_open_advanced(const char *name,
     if (userid) {
         int haslock = user_isnamespacelocked(userid);
         if (haslock) {
-            if (index_locktype != LOCK_SHARED) assert(haslock != LOCK_SHARED);
+            if (!(index_locktype & LOCK_SHARED)) assert(!(haslock & LOCK_SHARED));
         }
         else {
-            int locktype = index_locktype;
-            mailbox->local_namespacelock = user_namespacelock_full(userid, locktype);
+            mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
         }
         free(userid);
     }
