@@ -457,7 +457,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsozOAp:1")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRNumsozOAp:1")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -516,6 +516,10 @@ int main(int argc, char **argv)
             if (mode != MODE_UNKNOWN)
                 usage("sync_client", "Mutually exclusive options defined");
             mode = MODE_REPEAT;
+            break;
+
+        case 'N': // return LOCKED if this user is already sync locked
+            flags |= SYNC_FLAG_NONBLOCK;
             break;
 
         case 'A':
