@@ -1047,7 +1047,7 @@ static int mailbox_open_advanced(const char *name,
     if (userid) {
         int haslock = user_isnamespacelocked(userid);
         if (haslock) {
-            if (!(index_locktype & LOCK_SHARED)) assert(!(haslock & LOCK_SHARED));
+            if (index_locktype & LOCK_EXCLUSIVE) assert(haslock & LOCK_EXCLUSIVE);
         }
         else {
             mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
@@ -1058,7 +1058,18 @@ static int mailbox_open_advanced(const char *name,
     if (mbe) mbentry = mboxlist_entry_copy(mbe);
     else r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
 
+    /* pre-check for some conditions which mean that we don't want
+       to go ahead and open this mailbox */
     if (!r && mbentry->mbtype & MBTYPE_DELETED)
+        r = IMAP_MAILBOX_NONEXISTENT;
+
+    if (!r && mbentry->mbtype & MBTYPE_MOVING)
+        r = IMAP_MAILBOX_MOVED;
+
+    if (!r && mbentry->mbtype & MBTYPE_INTERMEDIATE)
+        r = IMAP_MAILBOX_NONEXISTENT;
+
+    if (!r && !mbentry->partition)
         r = IMAP_MAILBOX_NONEXISTENT;
 
     if (r) {
@@ -1095,21 +1106,6 @@ static int mailbox_open_advanced(const char *name,
 
     if (!mbentry->name) mbentry->name = xstrdup(name);
     mailbox->mbentry = mbentry;
-
-    if (mbentry->mbtype & MBTYPE_MOVING) {
-        r = IMAP_MAILBOX_MOVED;
-        goto done;
-    }
-
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-        r = IMAP_MAILBOX_NONEXISTENT;
-        goto done;
-    }
-
-    if (!mbentry->partition) {
-        r = IMAP_MAILBOX_NONEXISTENT;
-        goto done;
-    }
 
     if (index_locktype == LOCK_SHARED)
         mailbox->is_readonly = 1;
