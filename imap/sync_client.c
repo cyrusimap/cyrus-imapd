@@ -392,7 +392,7 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
                 syslog(LOG_ERR, "Error in do_user(%s): bailing out!", userid);
                 goto done;
             }
-            free(prev_userid);
+            xzfree(prev_userid);
             prev_userid = xstrdup(userid);
         }
     }
@@ -675,6 +675,8 @@ int main(int argc, char **argv)
 
         if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &exit_rc, 0))
             exit_rc = 1;
+
+        xzfree(prev_userid);
 
         replica_disconnect();
         break;
