@@ -384,16 +384,18 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
             goto done;
 
         /* only sync if we haven't just done the user */
-        if (strcmpsafe(userid, prev_userid)) {
-            r = sync_do_user(&sync_cs, userid, NULL);
-            if (r) {
-                if (verbose)
-                    fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
-                syslog(LOG_ERR, "Error in do_user(%s): bailing out!", userid);
-                goto done;
-            }
-            xzfree(prev_userid);
-            prev_userid = xstrdup(userid);
+        if (!strcmpsafe(userid, prev_userid))
+            goto done;
+
+        xzfree(prev_userid);
+        prev_userid = xstrdup(userid);
+
+        r = sync_do_user(&sync_cs, userid, NULL);
+        if (r) {
+            if (verbose)
+                fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
+            syslog(LOG_ERR, "Error in do_user(%s): bailing out!", userid);
+            goto done;
         }
     }
     else {
