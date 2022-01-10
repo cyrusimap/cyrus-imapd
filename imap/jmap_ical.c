@@ -5885,7 +5885,7 @@ validate_location(json_t *loc, struct jmap_parser *parser, json_t *links,
 {
     size_t invalid_cnt = json_array_size(parser->invalid);
     json_t *jprop = NULL;
-    json_t *jtype = json_object_get(links, "@type");
+    json_t *jtype = json_object_get(loc, "@type");
 
     validate_type(parser, loc, "Location");
 
