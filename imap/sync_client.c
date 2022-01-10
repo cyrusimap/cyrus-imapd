@@ -391,6 +391,11 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
         prev_userid = xstrdup(userid);
 
         r = sync_do_user(&sync_cs, userid, NULL);
+        if (r == IMAP_MAILBOX_LOCKED) {
+            if (verbose)
+                fprintf(stderr, "Skipping locked user %s\n", userid);
+            r = 0;
+        }
         if (r) {
             if (verbose)
                 fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
@@ -402,6 +407,11 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
         /* all shared mailboxes, including DELETED ones, sync alone */
         /* XXX: batch in hundreds? */
         r = do_mailbox(mbentry->name);
+        if (r == IMAP_MAILBOX_LOCKED) {
+            if (verbose)
+                fprintf(stderr, "Skipping locked mailbox %s\n", mbentry->name);
+            r = 0;
+        }
         if (r) {
             if (verbose)
                 fprintf(stderr, "Error from do_user(%s): bailing out!\n", mbentry->name);
