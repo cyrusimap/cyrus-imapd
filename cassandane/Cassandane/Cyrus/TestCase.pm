@@ -1159,10 +1159,12 @@ sub run_replication
     my $mailbox = delete $opts{mailbox};
     my $meta = delete $opts{meta};
     my $nosyncback = delete $opts{nosyncback};
+    my $allusers = delete $opts{allusers};
     $nmodes++ if $user;
     $nmodes++ if $rolling;
     $nmodes++ if $mailbox;
     $nmodes++ if $meta;
+    $nmodes++ if $allusers;
 
     # pass through run_command options
     my $handlers = delete $opts{handlers};
@@ -1191,6 +1193,7 @@ sub run_replication
     push(@cmd, '-O') if defined $nosyncback;
     push(@cmd, '-u', $user) if defined $user;
     push(@cmd, '-m', $mailbox) if defined $mailbox;
+    push(@cmd, '-A') if defined $allusers;
 
     my %run_options;
     $run_options{cyrus} = 1;
