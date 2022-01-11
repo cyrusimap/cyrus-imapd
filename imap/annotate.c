@@ -1207,7 +1207,7 @@ static int annotatemore_findall_full(const char *pattern, /* internal */
      * server annotations, which are recognised by an empty pattern by the
      * code below */
     if (!mailbox && !pattern && !*mboxname) {
-        mailbox = NULL;
+        mboxname = NULL;
         pattern = "";
     }
 
