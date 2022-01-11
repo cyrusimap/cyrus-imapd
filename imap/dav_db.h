@@ -45,9 +45,10 @@
 #define DAV_DB_H
 
 #include "sqldb.h"
-#include "dav_util.h"
 #include "mailbox.h"
 #include "util.h"
+
+#define FNAME_DAVSUFFIX "dav" /* per-user DAV DB extension */
 
 #define DB_MBOXID_VERSION 11     /* first version with records by mboxid */
 
@@ -66,6 +67,12 @@ struct dav_data {
     int alive;
     int mailbox_byname;         /* NOT stored in record - derived from db ver */
 };
+
+/* Create filename corresponding to DAV DB for mailbox */
+void dav_getpath(struct buf *fname, struct mailbox *mailbox);
+
+/* Create filename corresponding to DAV DB for userid */
+void dav_getpath_byuserid(struct buf *fname, const char *userid);
 
 /* get a database handle corresponding to mailbox */
 sqldb_t *dav_open_userid(const char *userid);

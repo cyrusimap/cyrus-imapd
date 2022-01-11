@@ -61,7 +61,7 @@
 
 #include "annotate.h"
 #ifdef WITH_DAV
-#include "dav_util.h"
+#include "dav_db.h"
 #endif
 #include "global.h"
 #include "map.h"

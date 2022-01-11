@@ -51,7 +51,6 @@
 #include <sasl/saslutil.h>
 
 #include "annotate.h"
-#include "carddav_db.h"
 #include "global.h"
 #include "hash.h"
 #include "index.h"

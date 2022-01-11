@@ -48,8 +48,6 @@
 #include "mailbox.h"
 #include "util.h"
 
-#define FNAME_DAVSUFFIX "dav" /* per-user DAV DB extension */
-
 /* Index into preconditions array */
 enum {
     /* WebDAV (RFC 4918) preconditions */
@@ -139,12 +137,6 @@ enum {
     CARDDAV_SUPP_COLLATION,
     CARDDAV_MAX_SIZE,
 };
-
-/* Create filename corresponding to DAV DB for mailbox */
-void dav_getpath(struct buf *fname, struct mailbox *mailbox);
-
-/* Create filename corresponding to DAV DB for userid */
-void dav_getpath_byuserid(struct buf *fname, const char *userid);
 
 int dav_get_validators(struct mailbox *mailbox, void *data,
                        const char *userid, struct index_record *record,

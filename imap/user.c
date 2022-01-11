@@ -70,7 +70,7 @@
 #endif
 
 #include "assert.h"
-#include "dav_util.h"
+#include "dav_db.h"
 #include "global.h"
 #include "mailbox.h"
 #include "mboxkey.h"

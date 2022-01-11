@@ -243,6 +243,8 @@
 
 #define CMD_DBUPGRADEv14 CMD_CREATE_SIEVE
 
+static int sievedb_upgrade(sqldb_t *db);
+
 struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
   { 3, CMD_DBUPGRADEv3, NULL },
@@ -263,6 +265,25 @@ struct sqldb_upgrade davdb_upgrade[] = {
 #define DB_VERSION 14
 
 static sqldb_t *reconstruct_db;
+
+/* Create filename corresponding to DAV DB for mailbox */
+EXPORTED void dav_getpath(struct buf *fname, struct mailbox *mailbox)
+{
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+
+    if (userid) dav_getpath_byuserid(fname, userid);
+    else buf_setcstr(fname, mailbox_meta_fname(mailbox, META_DAV));
+
+    free(userid);
+}
+
+/* Create filename corresponding to DAV DB for userid */
+EXPORTED void dav_getpath_byuserid(struct buf *fname, const char *userid)
+{
+    char *path = user_hash_meta(userid, FNAME_DAVSUFFIX);
+    buf_setcstr(fname, path);
+    free(path);
+}
 
 EXPORTED sqldb_t *dav_open_userid(const char *userid)
 {
@@ -418,16 +439,20 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
                                 config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
     if (reconstruct_db) {
         r = sqldb_begin(reconstruct_db, "reconstruct");
+#ifdef WITH_DAV
         // make all the alarm updates to go this database too
         if (!r) r = caldav_alarm_set_reconstruct(reconstruct_db);
+#endif
         // reconstruct everything
         if (!r) r = mboxlist_usermboxtree(userid, NULL,
                                           _dav_reconstruct_mb, (void *) userid, 0);
+#ifdef WITH_DAV
         // make sure all the alarms are resolved
         if (!r) r = caldav_alarm_process(0, NULL, /*dryrun*/1);
         // commit events over to ther alarm database if we're keeping them
         if (!r && !audit_tool) r = caldav_alarm_commit_reconstruct(userid);
         else caldav_alarm_rollback_reconstruct();
+#endif
         // and commit to this DB
         if (r) sqldb_rollback(reconstruct_db, "reconstruct");
         else sqldb_commit(reconstruct_db, "reconstruct");
@@ -459,4 +484,107 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     buf_free(&fname);
 
     return 0;
+}
+
+
+struct sievedb_upgrade_rock {
+    char *mboxname;
+    strarray_t *sha1;
+};
+
+static int sievedb_upgrade_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct sievedb_upgrade_rock *srock = (struct sievedb_upgrade_rock *) rock;
+
+    if (!srock->mboxname) {
+        srock->mboxname = xstrdup((const char *) sqlite3_column_text(stmt, 0));
+    }
+
+    if (srock->sha1) {
+        const char *content = (const char *) sqlite3_column_text(stmt, 1);
+        unsigned rowid = sqlite3_column_int(stmt, 2);
+        struct message_guid uuid;
+
+        /* Generate SHA1 from content */
+        message_guid_generate(&uuid, content, strlen(content));
+
+        /* Add SHA1 to our array using rowid as the index */
+        strarray_set(srock->sha1, rowid, message_guid_encode(&uuid));
+    }
+
+    return 0;
+}
+
+#define CMD_GET_v12_ROWS                 \
+    "SELECT mailbox, content, rowid FROM sieve_scripts;"
+
+#define CMD_ALTER_v12_TABLE              \
+    "ALTER TABLE sieve_scripts RENAME COLUMN content TO contentid;"
+
+#define CMD_UPDATE_v13_ROW               \
+    "UPDATE sieve_scripts SET contentid = :contentid WHERE rowid = :rowid;"
+
+#define CMD_GET_v13_ROW1                 \
+    "SELECT mailbox FROM sieve_scripts LIMIT 1;"
+
+#define CMD_UPDATE_v13_TABLE             \
+    "UPDATE sieve_scripts SET mailbox = :mailbox;"
+
+
+/* Upgrade v12/v13 sieve_script table to v14 */
+static int sievedb_upgrade(sqldb_t *db)
+{
+    struct sievedb_upgrade_rock srock = { NULL, NULL };
+    struct sqldb_bindval bval[] = {
+        { ":rowid",     SQLITE_INTEGER, { .i = 0    } },
+        { ":contentid", SQLITE_TEXT,    { .s = NULL } },
+        { ":mailbox",   SQLITE_TEXT,    { .s = NULL } },
+        { NULL,         SQLITE_NULL,    { .s = NULL } } };
+    strarray_t sha1 = STRARRAY_INITIALIZER;
+    mbentry_t *mbentry = NULL;
+    int rowid;
+    int r = 0;
+
+    if (db->version == 12) {
+        /* Create an array of SHA1 for the content in each record */
+        srock.sha1 = &sha1;
+        r = sqldb_exec(db, CMD_GET_v12_ROWS, NULL, &sievedb_upgrade_cb, &srock);
+        if (r) goto done;
+
+        /* Rename 'content' -> 'contentid' */
+        r = sqldb_exec(db, CMD_ALTER_v12_TABLE, NULL, NULL, NULL);
+        if (r) goto done;
+
+        /* Rewrite 'contentid' columns with actual ids (SHA1) */
+        for (rowid = 1; rowid < strarray_size(&sha1); rowid++) {
+            bval[0].val.i = rowid;
+            bval[1].val.s = strarray_nth(&sha1, rowid);
+
+            r = sqldb_exec(db, CMD_UPDATE_v13_ROW, bval, NULL, NULL);
+            if (r) goto done;
+        }
+    }
+    else if (db->version == 13) {
+        /* Fetch mailbox name from first record */
+        r = sqldb_exec(db, CMD_GET_v13_ROW1, NULL, &sievedb_upgrade_cb, &srock);
+        if (r) goto done;
+    }
+
+    /* This will only be set if we are upgrading from v12 or v13
+       AND there are records in the table */
+    if (!srock.mboxname) goto done;
+
+    r = mboxlist_lookup_allow_all(srock.mboxname, &mbentry, NULL);
+    if (r) goto done;
+
+    /* Rewrite 'mailbox' columns with mboxid rather than mboxname */
+    bval[2].val.s = mbentry->uniqueid;
+    r = sqldb_exec(db, CMD_UPDATE_v13_TABLE, bval, NULL, NULL);
+
+  done:
+    mboxlist_entry_free(&mbentry);
+    strarray_fini(&sha1);
+    free(srock.mboxname);
+
+    return r;
 }
