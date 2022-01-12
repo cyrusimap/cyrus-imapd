@@ -24,7 +24,8 @@ Description
 a Cyrus mailbox exists, that it is postable and it is under quota.  It
 accepts commands on its standard input and responds on its standard
 output.  It MUST be invoked by :cyrusman:`master(8)` with those
-descriptors attached to a remote client connection.
+descriptors attached to a remote client connection.  The service ignores
+the userdeny database.
 
 **smmapd** |default-conf-text|
 
