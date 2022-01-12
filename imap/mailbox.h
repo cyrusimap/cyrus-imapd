@@ -57,8 +57,9 @@
 #include "seqset.h"
 #include "util.h"
 
-#define MAX_MAILBOX_NAME 490
+#define MAX_MAILBOX_CREATENAME 490
 /* enough space for all possible rewrites and DELETED.* and stuff */
+#define MAX_MAILBOX_NAME 510
 #define MAX_MAILBOX_BUFFER 1024
 #define MAX_MAILBOX_PATH 4096
 
