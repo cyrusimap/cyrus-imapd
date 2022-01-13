@@ -1310,13 +1310,11 @@ EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, s
     buf_reset(buf);
 
     int need_base64 = 0;
-    if (!need_base64) {
-        const char *c;
-        for (c = eid->ical_uid; *c; c++) {
-            if (!isascii(*c) || !(isalnum(*c) || *c == '-' || *c == '_')) {
-                need_base64 = 1;
-                break;
-            }
+    const char *c;
+    for (c = eid->ical_uid; *c; c++) {
+        if (!isascii(*c) || !(isalnum(*c) || *c == '-' || *c == '_')) {
+            need_base64 = 1;
+            break;
         }
     }
 
