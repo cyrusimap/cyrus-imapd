@@ -46,6 +46,7 @@
 #include <syslog.h>
 
 #include "append.h"
+#include "dav_util.h"
 #include "caldav_util.h"
 #include "http_err.h"
 #include "imap_err.h"
