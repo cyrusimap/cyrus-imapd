@@ -969,6 +969,15 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Notifyd(8) method to use for "EVENT" notifications which are based on
    the RFC 5423.  If not set, "EVENT" notifications are disabled. */
 
+{ "expire_by_savedate", 0, SWITCH, "UNRELEASED" }
+/* If true, calculate age of messages for expiry by the savedate
+   (timestamp when the message was added to this folder) rather
+   than gmtime (date header on the message).  Default is true. */
+
+{ "expire_keep_flagged", 0, SWITCH, "UNRELEASED" }
+/* If true, don't expire messages which have the `\Flagged` IMAP
+   flag set.  Default is false. */
+
 { "expunge_mode", "delayed", ENUM("immediate", "semidelayed", "delayed"), "3.1.1" }
 /* The mode in which messages (and their corresponding cache entries)
    are expunged.  "semidelayed" mode is the old behavior in which the
