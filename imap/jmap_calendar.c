@@ -3491,7 +3491,7 @@ gotevent:
         };
         const char *id = jmap_caleventid_encode(&eid, &rock->buf);
         json_object_set_new(jsevent, "id", json_string(id));
-        json_object_set_new(jsevent, "uid", json_string(id));
+        json_object_set_new(jsevent, "uid", json_string(cdata->ical_uid));
         json_object_set_new(jsevent, "@type", json_string("Event"));
         json_array_append(rock->get->list, jsevent);
     }
