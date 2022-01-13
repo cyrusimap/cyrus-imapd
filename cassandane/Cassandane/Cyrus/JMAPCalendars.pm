@@ -1404,12 +1404,13 @@ sub test_calendarevent_get_simple
 {
     my ($self) = @_;
 
-    my ($id, $ical) = $self->icalfile('simple');
+    my ($uid, $ical) = $self->icalfile('simple');
 
-    my $event = $self->putandget_vevent($id, $ical);
+    my $event = $self->putandget_vevent($uid, $ical);
     $self->assert_not_null($event);
     $self->assert_str_equals('Event', $event->{q{@type}});
-    $self->assert_str_equals($id, $event->{uid});
+    $self->assert_str_equals(encode_eventid($uid), $event->{id});
+    $self->assert_str_equals($uid, $event->{uid});
     $self->assert_null($event->{relatedTo});
     $self->assert_str_equals("yo", $event->{title});
     $self->assert_str_equals("-//Apple Inc.//Mac OS X 10.9.5//EN", $event->{prodId});
