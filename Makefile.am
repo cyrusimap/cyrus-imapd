@@ -1680,18 +1680,31 @@ dist_man8_MANS += \
 	man/httpd.8
 endif # HTTPD
 
-if BENCH
-check_PROGRAMS += bench/cyrdbbench
-bench_cyrdbbench_SOURCES = bench/cyrdbbench.c imap/mutex_fake.c
-bench_cyrdbbench_LDADD = $(LD_BASIC_ADD)
-endif # BENCH
-
 if REPLICATION
 dist_man8_MANS += \
 	man/sync_client.8 \
 	man/sync_reset.8 \
 	man/sync_server.8
-endif
+endif # REPLICATION
+
+if MAINTAINER_MODE
+## make sure feature-dependent man pages are included in distribution
+dist_man8_MANS += \
+	man/ctl_zoneinfo.8 \
+	man/fetchnews.8 \
+	man/httpd.8 \
+	man/nntpd.8 \
+	man/squatter.8 \
+	man/sync_client.8 \
+	man/sync_reset.8 \
+	man/sync_server.8
+endif # MAINTAINER_MODE
+
+if BENCH
+check_PROGRAMS += bench/cyrdbbench
+bench_cyrdbbench_SOURCES = bench/cyrdbbench.c imap/mutex_fake.c
+bench_cyrdbbench_LDADD = $(LD_BASIC_ADD)
+endif # BENCH
 
 master_master_SOURCES = \
 	master/master.c \
