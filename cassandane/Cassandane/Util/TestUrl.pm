@@ -69,14 +69,38 @@ sub update
         };
     }
 
+    {
+      package Shutdown::Guard;
+
+      use POSIX qw(_exit);
+
+      sub new { bless {}, __PACKAGE__ }
+
+      sub DESTROY {
+          _exit(0);
+      }
+    }
+
     my $app = sub {
+        # No matter how we we leave this block, the $guard will go out
+        # of scope while in the run phase, which means it can exit Perl
+        # before any END block or object destructors are run.
+        my $guard = Shutdown::Guard->new;
+
+        # Test::TCP uses Term to stop us. We could just let that
+        # terminate Perl cleanly, but in case something has put in a
+        # signal handle or something else, let's just call exit here.
+        # This will also cause our $guard above to go out of scope
+        # in a timely manner during the run phase.
+        local $SIG{TERM} = sub { exit; };
+
         my $sock_or_port = shift;
         my $server = Plack::Loader->auto(
             host => '0.0.0.0',
             port => $sock_or_port,
         );
+
         $server->run($content_or_app);
-        exit;
     };
 
     unless ($self->_guard) {
