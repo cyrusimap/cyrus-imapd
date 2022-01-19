@@ -1079,7 +1079,7 @@ rst_prolog = """
 .. |imap_utopic_stock_version| replace:: 2.4.17+caldav~beta10-5
 .. |imap_vivid_stock_version| replace:: 2.4.17+caldav~beta10-17
 .. |imap_wily_stock_version| replace:: 2.4.17+caldav~beta10-17
-.. |sasl_current_stable_version| replace:: 2.1.27
+.. |sasl_current_stable_version| replace:: 2.1.28
 .. |imap_stable_release_notes| raw:: html
 
     <a href="3.4/x/3.4.2.html">3.4.2</a>
