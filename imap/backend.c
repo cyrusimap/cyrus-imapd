@@ -1306,12 +1306,23 @@ EXPORTED int backend_version(struct backend *be)
      * In 3.2 and earlier, this function lives in imapd.c
      */
 
-    /* It's like looking in the mirror and not suffering from schizophrenia */
+    /* identical banner? identical version! */
     if (strstr(be->banner, CYRUS_VERSION)) {
         return MAILBOX_MINOR_VERSION;
     }
 
-    /* unstable 3.5 series ranges from 17..?? */
+    /* unstable 3.7 series ranges from 17..?? */
+    if (strstr(be->banner, "Cyrus IMAP 3.7")) {
+        /* all versions of 3.7 support at least this version */
+        return 17;
+    }
+
+    /* version 3.6 is 17 */
+    if (strstr(be->banner, "Cyrus IMAP 3.6")) {
+        return 17;
+    }
+
+    /* unstable 3.5 series is 17 */
     if (strstr(be->banner, "Cyrus IMAP 3.5")) {
         /* all versions of 3.5 support at least this version */
         return 17;
