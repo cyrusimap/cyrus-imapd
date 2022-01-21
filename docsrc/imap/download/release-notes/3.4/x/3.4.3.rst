@@ -1,0 +1,57 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.4.3 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.3/cyrus-imapd-3.4.3.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.3/cyrus-imapd-3.4.3.tar.gz.sig
+
+.. _relnotes-3.4.3-changes:
+
+Changes since 3.4.2
+===================
+
+Build changes
+-------------
+
+* Fixed :issue:`3854`: miscellaneous build warnings reported by gcc 8.3.0 with
+  optimisations turned on
+* Fixed: typos in some GCC feature detection macros
+* Fixed :issue:`3769`: undefined reference when using flock locking rather
+  than fcntl (thanks Дилян Палаузов)
+* Fixed :issue:`3843`: man pages for optional features had been excluded from
+  release tarballs
+
+Bug fixes
+---------
+
+* Fixed :issue:`3605`: don't send unsolicited updates about other mailboxes in
+  response to STATUS command.  This is technically okay but can confuse
+  clients that don't expect it.
+* Fixed :issue:`3664`: flush output when starting IDLE so changes are told
+  immediately
+* Fixed :issue:`2383`: XFER of a single user or mailbox now works again
+* Fixed: XFER no longer tries to sync_restart (and hangs) when the destination
+  backend doesn't support XFER-via-replication
+* Fixed: XFER now reports an error when the name argument doesn't match
+  anything, instead of doing nothing and then reporting that it succeeded at
+  it.
+* Fixed :issue:`3597`: ignore case difference in 'mailto:' prefix when
+  comparing CalDAV ORGANIZERs
+* Fixed: compare ORGANIZER in CalDAV requests against user's schedule addresses
+* Fixed: scheduling userid now set correctly when virtdomains is disabled or
+  a defaultdomain is set
+* Fixed: use-after-free in Xapian search error logging
+* Fixed :issue:`3750`: use-after-free in JMAP Calendar/set error logging
+* Fixed :issue:`3839`: `quota -f -u [user]` no longer removes quota information
+  from other, similarly-named users
+
+Other changes
+-------------
+
+* The formerly-standalone Cassandane tool has been merged into the
+  cyrus-imapd repository, in the 'cassandane' subdirectory.
+* XFER will now recognise backends from the upcoming 3.6 and 3.7 versions
