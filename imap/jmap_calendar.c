@@ -5092,6 +5092,8 @@ static int updateevent_bump_sequence_internal(json_t *jdiff, strarray_t *rsvppro
             strcmp(prop, "alerts") &&
             strncmp(prop, "alerts/", 7) &&
             strarray_find(rsvpprops, prop, 0) < 0) {
+
+            xsyslog(LOG_DEBUG, "bumping sequence", "prop=%s", prop);
             return 1;
         }
     }
@@ -5111,9 +5113,22 @@ static void updateevent_bump_sequence(json_t *old_event,
         json_t *jparticipants = json_object_get(old_event, "participants");
         json_t *jparticipant;
         const char *participant_id;
+
+        if (config_debug) {
+            char *addrlist = strarray_join(schedule_addresses, ", ");
+            xsyslog(LOG_DEBUG, "bump sequence?",
+                    "schedule_addresses=(%s)", addrlist);
+            free(addrlist);
+        }
+
         json_object_foreach(jparticipants, participant_id, jparticipant) {
             json_t *jsendto = json_object_get(jparticipant, "sendTo");
             const char *uri = json_string_value(json_object_get(jsendto, "imip"));
+
+            xsyslog(LOG_DEBUG, "bump sequence?",
+                    "participantId='%s' uri='%s'",
+                    participant_id, uri ? uri : "");
+
             if (uri && !strncasecmp(uri, "mailto:", 7)) {
                 if (strarray_find_case(schedule_addresses, uri + 7, 0) >= 0) {
                     strarray_appendm(&rsvpprops,
