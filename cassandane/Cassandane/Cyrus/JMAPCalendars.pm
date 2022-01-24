@@ -18204,4 +18204,98 @@ EOF
     $self->assert_num_equals($n, scalar @{$res->[0][1]{list}});
 }
 
+sub test_calendarevent_get_privacy_ignore_override
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "PUT event where CLASS differs in override";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+DTSTAMP:20210923T034327Z
+DTSTART;TZID=American/New_York:20210101T153000
+DURATION:PT1H
+RRULE:FREQ=DAILY;COUNT=3
+SUMMARY:An Event
+SEQUENCE:1
+CLASS:PRIVATE
+END:VEVENT
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+RECURRENCE-ID:20210102T153000
+DTSTAMP:20210923T034327Z
+DTSTART;TZID=American/New_York:20210102T153000
+DURATION:PT1H
+SUMMARY:An event exception
+SEQUENCE:1
+CLASS:PUBLIC
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    xlog "Assert privacy of recurrence exception gets ignored";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['privacy', 'recurrenceOverrides']
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('private', $res->[0][1]{list}[0]{privacy});
+    $self->assert_deep_equals({ title => 'An event exception'},
+        $res->[0][1]{list}[0]{recurrenceOverrides}{'2021-01-02T15:30:00'});
+}
+
+sub test_calendarevent_set_privacy_ignore_override
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Ignore overriden privacy in CalendarEvent/set";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event1uidlocal',
+                    title => 'event1',
+                    start => '2020-01-01T09:00:00',
+                    timeZone => 'Europe/Vienna',
+                    duration => 'PT1H',
+                    privacy => 'private',
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 3,
+                    }],
+                    recurrenceOverrides => {
+                        '2020-01-02T09:00:00' => {
+                            title => 'event1Override',
+                            privacy => 'secret',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $xhref = $res->[0][1]{created}{event1}{'x-href'};
+    $self->assert_not_null($xhref);
+
+    $res = $caldav->Request('GET', $xhref);
+    $self->assert($res->{content} =~ m/CLASS:PRIVATE/);
+    $self->assert(not $res->{content} =~ m/CLASS:CONFIDENTIAL/);
+}
+
 1;
