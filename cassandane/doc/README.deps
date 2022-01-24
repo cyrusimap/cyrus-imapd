@@ -2,6 +2,12 @@ SOFTWARE DEPENDENCIES
 
 Cassandane needs the following software to work:
 
+ * LWP::UserAgent
+ * Plack
+ * Test::TCP
+   Used for standing up local test HTTP servers for testing various bits of
+   Cyrus callout capabilities
+
  * Mail::IMAPTalk
     This is a fully featured IMAP client package, available on CPAN.
 
