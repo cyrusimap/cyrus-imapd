@@ -5053,98 +5053,63 @@ done:
     jstimezones_free(&jstzones);
 }
 
-static int updateevent_bump_sequence_internal(json_t *jdiff, strarray_t *rsvpprops)
-{
-    const char *prop;
-    json_t *jval;
-    void *tmp;
-
-    json_object_foreach_safe(jdiff, tmp, prop, jval) {
-        if (!strcmp(prop, "recurrenceOverrides")) {
-            const char *recurid;
-            json_t *joverride;
-            json_object_foreach(jval, recurid, joverride) {
-                if (updateevent_bump_sequence_internal(joverride, rsvpprops))
-                    return 1;
-            }
-            continue;
-        }
-        else if (!strcmp(prop, "participants")) {
-            /* Patches *all* participants */
-            return 1;
-        }
-        else if (!strncmp(prop, "recurrenceOverrides/", 20)) {
-            /* Does prop point *into* an override? */
-            const char *p = strchr(prop + 21, '/');
-            if (!p) {
-                if (updateevent_bump_sequence_internal(jval, rsvpprops))
-                    return 1;
-                continue;
-            }
-            /* fall through */
-            prop = p + 1;
-        }
-
-        if (strcmp(prop, "keywords") &&
-            strcmp(prop, "color") &&
-            strcmp(prop, "freeBusyStatus") &&
-            strcmp(prop, "useDefaultAlerts") &&
-            strcmp(prop, "alerts") &&
-            strncmp(prop, "alerts/", 7) &&
-            strarray_find(rsvpprops, prop, 0) < 0) {
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
 static void updateevent_bump_sequence(json_t *old_event,
                                       json_t *new_event,
                                       json_t *update,
                                       strarray_t *schedule_addresses)
 {
-    // do not bump sequence for user updating their own RSVP
-    strarray_t rsvpprops = STRARRAY_INITIALIZER;
+    /* Bump sequence iff... */
 
-    if (schedule_addresses) {
-        json_t *jparticipants = json_object_get(old_event, "participants");
-        json_t *jparticipant;
-        const char *participant_id;
-        json_object_foreach(jparticipants, participant_id, jparticipant) {
-            json_t *jsendto = json_object_get(jparticipant, "sendTo");
-            const char *uri = json_string_value(json_object_get(jsendto, "imip"));
-            if (uri && !strncasecmp(uri, "mailto:", 7)) {
-                if (strarray_find_case(schedule_addresses, uri + 7, 0) >= 0) {
-                    strarray_appendm(&rsvpprops,
-                            strconcat("participants/",participant_id,
-                                "/participationStatus", NULL));
-                    strarray_appendm(&rsvpprops,
-                            strconcat("participants/", participant_id,
-                                "/participationComment", NULL));
-                    strarray_appendm(&rsvpprops,
-                            strconcat("participants/", participant_id,
-                                "/expectReply", NULL));
-                }
-            }
+    /* ... server is the source of the event */
+    json_t *jreplyto = json_object_get(new_event, "replyTo");
+    if (JNOTNULL(jreplyto)) {
+        const char *addr = json_string_value(json_object_get(jreplyto, "imip"));
+        if (addr && !strncasecmp(addr, "mailto:", 7) &&
+                strarray_find(schedule_addresses, addr + 7, 0) < 0) {
+            return;
         }
     }
 
+    /* ... a non per-user property got updated */
+    int updates_shared_prop = 0;
+    json_t *jpatch = jmap_patchobject_create(old_event, new_event);
+    const char *path;
+    json_t *jval;
+    void *tmp;
+    json_object_foreach_safe(jpatch, tmp, path, jval) {
+        if (!strncmp(path, "recurrenceOverrides/", 20)) {
+            path = strchr(path + 20, '/');
+            if (!path) continue;
+            path++;
+        }
 
-    json_t *jdiff = jmap_patchobject_create(old_event, new_event);
-    json_object_del(jdiff, "updated");
-    if (updateevent_bump_sequence_internal(jdiff, &rsvpprops)) {
-        json_int_t oldseq = json_integer_value(json_object_get(old_event, "sequence"));
-        json_int_t newseq = json_integer_value(json_object_get(new_event, "sequence"));
-        if (newseq <= oldseq) {
-            json_int_t newseq = oldseq + 1;
-            json_object_set_new(new_event, "sequence", json_integer(newseq));
-            json_object_set_new(update, "sequence", json_integer(newseq));
+        if (strcmp(path, "method") &&
+            strcmp(path, "keywords") && strncmp(path, "keywords/", 9) &&
+            strcmp(path, "color") &&
+            strcmp(path, "freeBusyStatus") &&
+            strcmp(path, "useDefaultAlerts") &&
+            strcmp(path, "alerts") && strncmp(path, "alerts/", 7) &&
+            strcmp(path, "calendarIds") && strncmp(path, "calendarIds/", 12) &&
+            strcmp(path, "isDraft")) {
+
+            updates_shared_prop = 1;
+            break;
         }
     }
-    json_decref(jdiff);
+    json_decref(jpatch);
+    if (!updates_shared_prop)
+        return;
 
-    strarray_fini(&rsvpprops);
+    /* ... sequence property is not updated, or <= current sequence */
+    json_int_t new_seq =
+        json_integer_value(json_object_get(new_event, "sequence"));
+    json_int_t old_seq =
+        json_integer_value(json_object_get(old_event, "sequence"));
+    if (new_seq > old_seq) return;
+
+    new_seq = old_seq + 1;
+    json_object_set_new(new_event, "sequence", json_integer(new_seq));
+    json_object_set_new(update, "sequence", json_integer(new_seq));
 }
 
 /* XXX - the argument list of this function is insane */
