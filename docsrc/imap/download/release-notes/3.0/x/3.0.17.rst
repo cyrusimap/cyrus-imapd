@@ -1,0 +1,40 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.17 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.17/cyrus-imapd-3.0.17.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.17/cyrus-imapd-3.0.17.tar.gz.sig
+
+
+.. _relnotes-3.0.17-changes:
+
+Changes Since 3.0.16
+====================
+
+Bug fixes
+---------
+
+* Fixed :issue:`2383`: XFER of a single user or mailbox now works again
+* Fixed: XFER no longer tries to sync_restart (and hangs) when the destination
+  backend doesn't support XFER-via-replication
+* Fixed: XFER now reports an error when the name argument doesn't match
+  anything, instead of doing nothing and then reporting that it succeeded at
+  it.
+
+Other changes
+-------------
+
+* The formerly-standalone Cassandane tool has been merged into the
+  cyrus-imapd repository, in the 'cassandane' subdirectory.
+* XFER will now recognise backends from the upcoming 3.6 and 3.7 versions
