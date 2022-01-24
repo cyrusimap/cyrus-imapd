@@ -6224,7 +6224,7 @@ sub test_calendarevent_set_readonly
 }
 
 sub test_calendarevent_set_rsvpsequence
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :max_version_3_4 :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -17430,6 +17430,160 @@ sub test_calendar_set_unknown_calendarright
 
     $self->assert_deep_equals(['shareWith/sharee/unknownCalendarRight'],
         $res->[0][1]{notUpdated}{Default}{properties});
+}
+
+sub test_calendarevent_itip_reply_sequence
+    :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "PUT event for invitee";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:1
+ORGANIZER;CN=Test User:MAILTO:organizer@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=cassandane:MAILTO:cassandane@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/testitip.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    xlog "Assert sequence number";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id', 'sequence']
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, $res->[0][1]{list}[0]{sequence});
+    my $eventId = $res->[0][1]{list}[0]{id};
+
+    xlog "Update invitee's participant";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            sendSchedulingMessages => JSON::true,
+            update => {
+                $eventId => {
+                    'participants/cassandane/expectReply' => JSON::false,
+                    'participants/cassandane/participationStatus' => 'accepted',
+                    'participants/cassandane/scheduleSequence' => 1,
+                    'participants/cassandane/scheduleUpdated' => '2022-01-20T14:56:36Z',
+                },
+
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_null($res->[0][1]{updated}{$eventId}{sequence});
+
+    xlog "Assert sequence number did not increase";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id', 'sequence']
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, $res->[0][1]{list}[0]{sequence});
+}
+
+sub test_calendarevent_itip_request_sequence
+    :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "PUT event for organizer";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:1
+ORGANIZER;CN=Test User:MAILTO:cassandane@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=invitee:MAILTO:invitee@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/testitip.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    xlog "Assert sequence number";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id', 'sequence']
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, $res->[0][1]{list}[0]{sequence});
+    my $eventId = $res->[0][1]{list}[0]{id};
+
+    xlog "Update per-user prop";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            sendSchedulingMessages => JSON::true,
+            update => {
+                $eventId => {
+                    color => 'blue',
+                },
+
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_null($res->[0][1]{updated}{$eventId}{sequence});
+
+    xlog "Assert sequence number did not increase";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id', 'sequence']
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, $res->[0][1]{list}[0]{sequence});
+
+    xlog "Update shared prop";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            sendSchedulingMessages => JSON::true,
+            update => {
+                $eventId => {
+                    title => 'updatedTitle',
+                },
+
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_num_equals(2, $res->[0][1]{updated}{$eventId}{sequence});
+
+    xlog "Assert sequence number did increase";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id', 'sequence']
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, $res->[0][1]{list}[0]{sequence});
 }
 
 1;
