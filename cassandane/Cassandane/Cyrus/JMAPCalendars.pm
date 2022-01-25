@@ -4031,7 +4031,6 @@ sub test_calendarevent_set_shared
         "status" => "tentative",
         "description"=> "",
         "freeBusyStatus"=> "busy",
-        "privacy" => "secret",
         "participants" => undef,
         "alerts" => {
             'foo' => {
@@ -4061,7 +4060,6 @@ sub test_calendarevent_set_shared
         "status" => "tentative",
         "description"=> "",
         "freeBusyStatus"=> "busy",
-        "privacy" => "secret",
         "participants" => undef,
         "alerts" => {
             'foo' => {
@@ -6064,7 +6062,6 @@ sub test_calendarevent_copy
         "status" => "tentative",
         "description"=> "",
         "freeBusyStatus"=> "busy",
-        "privacy" => "secret",
         "participants" => undef,
         "alerts"=> undef,
     };
@@ -18296,6 +18293,111 @@ sub test_calendarevent_set_privacy_ignore_override
     $res = $caldav->Request('GET', $xhref);
     $self->assert($res->{content} =~ m/CLASS:PRIVATE/);
     $self->assert(not $res->{content} =~ m/CLASS:CONFIDENTIAL/);
+}
+
+
+sub test_calendarevent_set_privacy_shared
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "share calendar with cassandane user";
+    my ($sharerJmap) = $self->create_user('sharer');
+    my $res = $sharerJmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        cassandane => {
+                            mayReadItems => JSON::true,
+                            mayWriteAll => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "may only create private event on owned calendar";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'sharer',
+            create => {
+                eventShared1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    title => 'eventShared1',
+                    start => '2022-01-24T09:00:00',
+                    timeZone => 'America/New_York',
+                    privacy => 'public',
+                },
+                eventShared2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    title => 'eventShared2',
+                    start => '2022-01-24T10:00:00',
+                    timeZone => 'America/New_York',
+                    privacy => 'secret',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                eventOwned1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    title => 'eventOwned1',
+                    start => '2022-01-24T11:00:00',
+                    timeZone => 'America/New_York',
+                    privacy => 'secret',
+                },
+            },
+        }, 'R2'],
+    ]);
+
+    my $eventShared1Id = $res->[0][1]{created}{eventShared1}{id};
+    $self->assert_not_null($eventShared1Id);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notCreated}{eventShared2}{type});
+    $self->assert_deep_equals(['privacy'],
+        $res->[0][1]{notCreated}{eventShared2}{properties});
+    my $eventOwned1Id = $res->[1][1]{created}{eventOwned1}{id};
+    $self->assert_not_null($eventOwned1Id);
+
+    xlog "may not change public privacy on shared calendar";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'sharer',
+            update => {
+                $eventShared1Id => {
+                    privacy => 'secret',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            update => {
+                $eventOwned1Id => {
+                    privacy => 'private',
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$eventShared1Id}{type});
+    $self->assert_deep_equals(['privacy'],
+        $res->[0][1]{notUpdated}{$eventShared1Id}{properties});
+    $self->assert(exists $res->[1][1]{updated}{$eventOwned1Id});
 }
 
 1;

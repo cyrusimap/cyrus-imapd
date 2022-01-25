@@ -4359,6 +4359,15 @@ static int createevent_toical(jmap_req_t *req,
         setcalendarevents_set_utctimes(create->jsevent, NULL, parser->invalid);
     }
 
+    // Validate privacy on shared calendars
+    if (strcmp(req->accountid, req->userid)) {
+        const char *privacy =
+            json_string_value(json_object_get(create->jsevent, "privacy"));
+        if (privacy && strcmp(privacy, "public")) {
+            jmap_parser_invalid(parser, "privacy");
+        }
+    }
+
     // Set iCalendar UID
     if (!json_object_get(create->jsevent, "uid")) {
         struct caldav_data *cdata = NULL;
@@ -5243,6 +5252,15 @@ static int updateevent_apply_patch(jmap_req_t *req,
                 myoldical, floatingtz, &new_event, invalid, err);
     }
     else {
+        // Validate privacy on shared calendars
+        if (strcmp(req->accountid, req->userid)) {
+            const char *new_privacy =
+                json_string_value(json_object_get(event_patch, "privacy"));
+            if (new_privacy && strcmp(new_privacy, "public")) {
+                json_array_append_new(invalid, json_string("privacy"));
+            }
+        }
+
         /* Update a regular event or standalone instance */
         updateevent_apply_patch_event(old_event, event_patch,
                 myoldical, floatingtz, &new_event, invalid, err);
