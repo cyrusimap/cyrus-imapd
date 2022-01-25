@@ -834,6 +834,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
     In \fIimmediate\fR mode, the mailbox is removed from the filesystem
     immediately.
+.PP
+    If planning to switch from \fIdelayed\fR mode to \fIimmediate\fR
+    mode, you should first clean up any previously-deleted mailboxes
+    using \fBcyr_expire(8)\fR.
 */
 
 { "delete_unsubscribe", 0, SWITCH, "3.0.0" }
