@@ -2513,55 +2513,66 @@ sub test_mailbox_set_destroy_removemsgs
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    my $store = $self->{store};
-    my $talk = $store->get_client();
-
-    xlog $self, "Generate a email in INBOX via IMAP";
-    $self->make_message("Email A") || die;
-
-    xlog $self, "get email list";
-    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
-    my $msgid = $res->[0][1]->{ids}[0];
-
-    xlog $self, "get inbox";
-    $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
-    my $inbox = $res->[0][1]{list}[0];
-    $self->assert_str_equals("Inbox", $inbox->{name});
-
-    my $state = $res->[0][1]{state};
-
-    xlog $self, "create mailbox";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "foo",
-                            parentId => $inbox->{id},
-                            role => undef
-             }}}, "R1"]
+    xlog "Create email in inbox and another mailbox";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', { }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mbox => {
+                    name => 'A',
+                },
+            },
+        }, 'R2'],
+        ['Email/set', {
+            create => {
+                email => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                        '#mbox' => JSON::true,
+                    },
+                    subject => 'email',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        1 => {
+                            value => 'email',
+                        }
+                    },
+                },
+            },
+        }, 'R3'],
     ]);
-    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
-    $self->assert_str_equals('R1', $res->[0][2]);
-    $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_not_null($res->[0][1]{created});
-    my $mboxid = $res->[0][1]{created}{"1"}{id};
+    my $inboxId = $res->[0][1]{ids}[0];
+    $self->assert_not_null($inboxId);
+    my $mboxId = $res->[1][1]{created}{mbox}{id};
+    $self->assert_not_null($mboxId);
+    my $emailId = $res->[2][1]{created}{email}{id};
+    $self->assert_not_null($emailId);
 
-    xlog $self, "copy email to newly created mailbox";
-    $res = $jmap->CallMethods([['Email/set', {
-        update => { $msgid => { mailboxIds => {
-            $inbox->{id} => JSON::true,
-            $mboxid => JSON::true,
-        }}},
-    }, "R1"]]);
-    $self->assert_not_null($res->[0][1]{updated});
+    $self->{instance}->getsyslog();
 
-    xlog $self, "destroy mailbox with email";
-    $res = $jmap->CallMethods([[
-        'Mailbox/set', {
-            destroy => [ $mboxid ],
-            onDestroyRemoveMessages => JSON::true,
-        }, 'R1',
-    ]]);
-    $self->assert_str_equals($mboxid, $res->[0][1]{destroyed}[0]);
+    xlog "Destroy mailbox with onDestroyRemoveEmails";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxId],
+            onDestroyRemoveEmails => JSON::true,
+        }, 'R1'],
+        ['Email/get', {
+            ids => [$emailId],
+            properties => ['mailboxIds'],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$mboxId], $res->[0][1]{destroyed});
+    $self->assert_deep_equals({ $inboxId => JSON::true },
+        $res->[1][1]{list}[0]{mailboxIds});
+
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert(grep /Destroyed mailbox: mboxid=<$mboxId> msgcount=<1>/, @lines);
+    }
 }
 
 sub test_mailbox_set_shared
