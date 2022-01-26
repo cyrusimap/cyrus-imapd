@@ -3004,6 +3004,18 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
         }
     }
 
+    /* Read message count for logging */
+    size_t msgcount = 0;
+    conv_status_t convstatus = CONV_STATUS_INIT;
+    r = conversation_getstatus(req->cstate,
+            CONV_FOLDER_KEY_MBE(req->cstate, mbentry), &convstatus);
+    if (r) {
+        xsyslog(LOG_WARNING, "could not read msgcount, will default to 0",
+                "mboxid=<%s> err=<%s>", mbentry->uniqueid, error_message(r));
+        r = 0;
+    }
+    else msgcount = convstatus.emailexists;
+
     /* Destroy mailbox. */
     int delflags = MBOXLIST_DELETE_CHECKACL | MBOXLIST_DELETE_KEEP_INTERMEDIARIES;
     if (mode == _MBOXSET_INTERIM) {
@@ -3037,6 +3049,9 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
     else if (r) {
         goto done;
     }
+
+    xsyslog(LOG_INFO, "Destroyed mailbox", "mboxid=<%s> msgcount=<%zu>",
+            mbentry->uniqueid, msgcount);
 
     /* Remove subscription */
     int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 0, 0);
