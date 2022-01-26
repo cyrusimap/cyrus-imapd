@@ -3159,9 +3159,9 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
         hash_table args_by_id = HASH_TABLE_INITIALIZER;
         hash_table parent_id_by_id = HASH_TABLE_INITIALIZER;
         construct_hash_table(&parent_id_by_id,
-                ptrarray_size(&set->create) || ptrarray_size(&set->update), 0);
+                ptrarray_size(&set->create) + ptrarray_size(&set->update), 0);
         construct_hash_table(&args_by_id,
-                ptrarray_size(&set->create) || ptrarray_size(&set->update), 0);
+                ptrarray_size(&set->create) + ptrarray_size(&set->update), 0);
 
         struct buf buf = BUF_INITIALIZER;
         for (i = 0; i < ptrarray_size(&set->create); i++) {
