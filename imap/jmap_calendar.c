@@ -2743,6 +2743,7 @@ struct getcalendarevents_rock {
     struct jmapical_datetime overrides_before;
     struct jmapical_datetime overrides_after;
     int reduce_participants;
+    int is_sharee;
     hashu64_table cache_jsevents;
     ptrarray_t *want_eventids;
     struct buf buf;
@@ -3255,6 +3256,47 @@ static void getcalendarevents_reduce_participants(json_t *jsevent,
     buf_free(&buf);
 }
 
+static void getcalendarevents_del_privateprops(json_t *jsevent)
+{
+    static json_t *publicprops = NULL;
+    if (!publicprops) {
+        publicprops = json_object();
+        json_object_set_new(publicprops, "created", json_true());
+        json_object_set_new(publicprops, "due", json_true());
+        json_object_set_new(publicprops, "duration", json_true());
+        json_object_set_new(publicprops, "estimatedDuration", json_true());
+        json_object_set_new(publicprops, "excludedRecurrenceRules", json_true());
+        json_object_set_new(publicprops, "freeBusyStatus", json_true());
+        json_object_set_new(publicprops, "id", json_true());
+        json_object_set_new(publicprops, "privacy", json_true());
+        json_object_set_new(publicprops, "recurrenceRules", json_true());
+        json_object_set_new(publicprops, "recurrenceOverrides", json_true());
+        json_object_set_new(publicprops, "sequence", json_true());
+        json_object_set_new(publicprops, "showWithoutTime", json_true());
+        json_object_set_new(publicprops, "start", json_true());
+        json_object_set_new(publicprops, "timeZone", json_true());
+        json_object_set_new(publicprops, "timeZones", json_true());
+        json_object_set_new(publicprops, "uid", json_true());
+        json_object_set_new(publicprops, "updated", json_true());
+    }
+
+    const char *key;
+    json_t *jval;
+    void *tmp;
+    json_object_foreach_safe(jsevent, tmp, key, jval) {
+        if (!json_object_get(publicprops, key)) {
+            json_object_del(jsevent, key);
+        }
+    }
+
+    json_t *joverrides = json_object_get(jsevent, "recurrenceOverrides");
+    json_object_foreach_safe(joverrides, tmp, key, jval) {
+        // this may leave the override empty, but let's
+        // include it in case it is an rdate
+        getcalendarevents_del_privateprops(jval);
+    }
+}
+
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct getcalendarevents_rock *rock = vrock;
@@ -3270,6 +3312,12 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 
     if (!cdata->dav.alive || !jscal->alive)
         return 0;
+
+    if (rock->is_sharee) {
+        // sharee must not see secret events
+        if (cdata->comp_flags.privacy == CAL_PRIVACY_SECRET)
+            return 0;
+    }
 
     /* check that it's the right type */
     if (cdata->comp_type != CAL_COMP_VEVENT)
@@ -3533,6 +3581,11 @@ gotevent:
              !jmap_hasrights_mbentry(rock->req, rock->mbentry, JACL_WRITEALL))) {
 
         getcalendarevents_reduce_participants(jsevent, req->userid, &rock->schedule_addresses);
+    }
+
+    /* Filter shared event by privacy */
+    if (rock->is_sharee && cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
+        getcalendarevents_del_privateprops(jsevent);
     }
 
     if (rock->want_eventids == NULL) {
@@ -3921,7 +3974,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         .check_acl = checkacl,
         .jmapctx = jmapctx,
         .sched_inboxname = sched_inboxname,
-        .sched_outboxname = sched_outboxname
+        .sched_outboxname = sched_outboxname,
+        .is_sharee = strcmp(req->accountid, req->userid)
     };
     construct_hashu64_table(&rock.cache_jsevents, 512, 0);
     construct_hash_table(&rock.floatingtz_by_mboxid, 64, 0);
@@ -5381,6 +5435,15 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
 
+    /* Check privacy for sharees */
+    if (strcmp(req->accountid, req->userid)) {
+        if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
+            r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
+                IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
+            goto done;
+        }
+    }
+
     /* Validate calendarId */
     const char *calendarId = NULL;
     json_t *jval = json_object_get(event_patch, "calendarIds");
@@ -5763,6 +5826,15 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         }
     }
 
+    /* Check privacy for sharees */
+    if (strcmp(req->accountid, req->userid)) {
+        if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
+            r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
+                IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
+            goto done;
+        }
+    }
+
     /* Open mailbox for writing */
     r = jmap_openmbox(req, mboxname, &mbox, 1);
     if (r) {
@@ -6124,6 +6196,7 @@ struct geteventchanges_rock {
     hash_table *mboxrights;
     char *sched_inboxname;
     char *sched_outboxname;
+    int is_sharee;
     struct buf buf;
 };
 
@@ -6184,6 +6257,10 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
         goto done;
 
 
+    // check privacy
+    if (rock->is_sharee && jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET)
+        return 0;
+
     if (jscal->cdata.comp_type != CAL_COMP_VEVENT)
         goto done;
 
@@ -6231,6 +6308,7 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
         .check_acl = strcmp(req->accountid, req->userid),
         .sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX),
         .sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX),
+        .is_sharee = strcmp(req->accountid, req->userid),
     };
     int r = 0;
 
@@ -6460,6 +6538,7 @@ struct eventquery_rock {
     ptrarray_t *matches;
     const char *sched_inboxname;
     const char *sched_outboxname;
+    int is_sharee;
 };
 
 static int eventquery_cb(void *vrock, struct caldav_jscal *jscal)
@@ -6471,6 +6550,9 @@ static int eventquery_cb(void *vrock, struct caldav_jscal *jscal)
     if (!jscal->cdata.dav.alive || jscal->cdata.comp_type != CAL_COMP_VEVENT) {
         return 0;
     }
+
+    if (rock->is_sharee && jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET)
+        return 0;
 
     mbentry_t *mbentry = jmap_mbentry_from_dav(req, &jscal->cdata.dav);
 
@@ -6604,11 +6686,16 @@ struct eventquery_textsearch_cb_rock {
     ptrarray_t *matches;
     int expandrecur;
     struct mailbox *mailbox;
+    int is_sharee;
 };
 
 static int eventquery_textsearch_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct eventquery_textsearch_cb_rock *rock = vrock;
+
+    // Check privacy
+    if (rock->is_sharee && jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET)
+        return 0;
 
     /* Check time-range */
     if (rock->icalafter && strcmp(jscal->dtend, rock->icalafter) <= 0)
@@ -6663,6 +6750,7 @@ static int eventquery_textsearch_run(jmap_req_t *req,
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct mailbox *mailbox = NULL;
     const char *wantuid = json_string_value(json_object_get(filter, "uid"));
+    int is_sharee = strcmp(req->accountid, req->userid);
 
     if (before != caldav_eternity) {
         icaltimetype t = icaltime_from_timet_with_zone(before, 0, utc);
@@ -6735,14 +6823,14 @@ static int eventquery_textsearch_run(jmap_req_t *req,
             }
         }
 
-        /* Fetch the CalDAV db records */
+        /* Fetch the CalDAV db records */ // XXX use linear scan for all MsgData
         struct caldav_jscal_filter jscal_filter = {
             .mbentry = mbentry,
             .imap_uid = md->uid,
             .ical_uid = wantuid,
         };
         struct eventquery_textsearch_cb_rock rock = {
-            req, icalbefore, icalafter, matches, expandrecur, mailbox
+            req, icalbefore, icalafter, matches, expandrecur, mailbox, is_sharee
         };
         caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, 0,
                 eventquery_textsearch_cb, &rock);
@@ -6776,6 +6864,7 @@ struct eventquery_fastpath_rock {
     struct jmap_query *query;
     const char *sched_inboxname;
     const char *sched_outboxname;
+    int is_sharee;
     struct buf buf;
 };
 
@@ -6807,6 +6896,11 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_jscal *jscal)
     int rights = jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
     mboxlist_entry_free(&mbentry);
     if (!rights) return 0;
+
+    // Check privacy
+    if (rock->is_sharee &&
+            jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET)
+        return 0;
 
     query->total++;
 
@@ -6907,6 +7001,7 @@ static int eventquery_run(jmap_req_t *req,
     size_t nsort = 0;
     char *sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
     char *sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX);
+    int is_sharee = strcmp(req->accountid, req->userid);
 
     /* Sanity check arguments */
     eventquery_read_timerange(query->filter, args, &before, &after);
@@ -6955,7 +7050,7 @@ static int eventquery_run(jmap_req_t *req,
 
     if (!have_textsearch && !args.expandrecur && query->position >= 0 && !query->anchor) {
         struct eventquery_fastpath_rock rock = {
-            req, query, sched_inboxname, sched_outboxname, BUF_INITIALIZER
+            req, query, sched_inboxname, sched_outboxname, is_sharee, BUF_INITIALIZER
         };
         const char *wantuid = json_string_value(json_object_get(query->filter, "uid"));
         struct caldav_jscal_filter jscal_filter = {
@@ -6982,13 +7077,13 @@ static int eventquery_run(jmap_req_t *req,
         /* Query and sort matches in Caldav DB. */
         struct eventquery_rock rock = {
             req, args.expandrecur, NULL, &matches,
-            sched_inboxname, sched_outboxname
+            sched_inboxname, sched_outboxname, is_sharee
         };
 
         enum caldav_sort mboxsort = CAL_SORT_MAILBOX;
         struct caldav_jscal_filter jscal_filter = {
             .after = &after,
-            .before = &before,
+            .before = &before
         };
         r = caldav_foreach_jscal(db, req->userid, &jscal_filter,
                                      args.expandrecur ? &mboxsort : sort,
@@ -7227,6 +7322,7 @@ done:
 }
 
 static void _calendarevent_copy(jmap_req_t *req,
+                                struct jmap_copy *copy,
                                 struct mailbox *notifmbox,
                                 json_t *jevent,
                                 struct caldav_db *src_db,
@@ -7281,6 +7377,27 @@ static void _calendarevent_copy(jmap_req_t *req,
         goto done;
     }
     jmap_caleventid_free(&eid);
+
+    /* Check privacy */
+    if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
+        if (strcmp(copy->from_account_id, req->userid)) {
+            // can't copy a non-public shared event anywhere
+            *set_err = json_pack("{s:s}", "type",
+                    cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
+                    "notFound" : "forbidden");
+        }
+        else {
+            // may copy own event anywhere if made public
+            const char *new_privacy =
+                json_string_value(json_object_get(jevent, "privacy"));
+            if (strcmpsafe(new_privacy, "public")) {
+                *set_err = json_pack("{s:s s:[s]}",
+                        "type", "invalidProperties",
+                        "properties", "privacy");
+            }
+        }
+        if (*set_err) goto done;
+    }
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
@@ -7383,7 +7500,7 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
         json_t *set_err = NULL;
         json_t *new_event = NULL;
 
-        _calendarevent_copy(req, notifmbox, jevent, src_db, dst_db,
+        _calendarevent_copy(req, &copy, notifmbox, jevent, src_db, dst_db,
                             &new_event, &set_err);
         if (set_err) {
             json_object_set_new(copy.not_created, creation_id, set_err);

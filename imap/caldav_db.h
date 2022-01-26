@@ -89,6 +89,7 @@ struct comp_flags {
     unsigned defaultalerts : 1;         /* Has default alerts property set */
     unsigned mayinviteself : 1;         /* Users may invite themselves */
     unsigned mayinviteothers : 1;       /* Attending users may invite others */
+    unsigned privacy      : 2;          /* Privacy of calendar object (see below) */
 };
 
 /* Status values */
@@ -97,6 +98,13 @@ enum {
     CAL_STATUS_CANCELED,
     CAL_STATUS_TENTATIVE,
     CAL_STATUS_UNAVAILABLE
+};
+
+/* Privacy values */
+enum {
+    CAL_PRIVACY_PUBLIC = 0,
+    CAL_PRIVACY_PRIVATE,
+    CAL_PRIVACY_SECRET
 };
 
 struct caldav_data {

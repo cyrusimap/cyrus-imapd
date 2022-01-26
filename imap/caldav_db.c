@@ -264,6 +264,7 @@ static void _num_to_comp_flags(struct comp_flags *flags, unsigned num)
     flags->defaultalerts = (num >> 7) & 1;
     flags->mayinviteself = (num >> 8) & 1;
     flags->mayinviteothers = (num >> 9) & 1;
+    flags->privacy = (num >> 10) & 3;
 }
 
 static unsigned _comp_flags_to_num(struct comp_flags *flags)
@@ -276,7 +277,8 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
        + ((flags->shared    & 1) << 6)
        + ((flags->defaultalerts & 1) << 7)
        + ((flags->mayinviteself & 1) << 8)
-       + ((flags->mayinviteothers & 1) << 9);
+       + ((flags->mayinviteothers & 1) << 9)
+       + ((flags->privacy   & 3) << 10);
 }
 
 #define ICALOBJS_FIELDS         \
@@ -1168,6 +1170,23 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
         }
     }
     cdata->comp_flags.transp = transp;
+
+    /* Determine privacy */
+    cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
+    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+    if (prop) {
+        switch (icalproperty_get_class(prop)) {
+            case ICAL_CLASS_CONFIDENTIAL:
+                cdata->comp_flags.privacy = CAL_PRIVACY_SECRET;
+                break;
+            case ICAL_CLASS_PRIVATE:
+            case ICAL_CLASS_X:
+                cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
+                break;
+            default:
+                ; // ignore
+        }
+    }
 
     /* Get span of component set and check for managed attachments */
     span = icalrecurrenceset_get_utc_timespan(ical, kind, NULL, &recurring,
