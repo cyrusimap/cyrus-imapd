@@ -3222,8 +3222,8 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
         }
         strarray_t tmp = STRARRAY_INITIALIZER;
         _toposort(&parent_id_by_id, &tmp); /* destroy can't be cyclic */
-        for (i = tmp.count - 1; i >= 0; i--)
-            strarray_append(ops->del, strarray_nth(&tmp, i));
+        while (strarray_size(&tmp))
+            strarray_appendm(ops->del, strarray_pop(&tmp));
         strarray_fini(&tmp);
         free_hash_table(&parent_id_by_id, free);
     }
