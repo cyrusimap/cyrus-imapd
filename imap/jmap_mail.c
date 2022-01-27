@@ -72,6 +72,7 @@
 #include "jmap_calendar.h"
 #include "jmap_mail.h"
 #include "jmap_mail_query.h"
+#include "jmap_mailbox.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mappedfile.h"
