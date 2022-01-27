@@ -375,6 +375,77 @@ sub test_sharing_samedomain
     $self->assert_num_equals(1, $Addressbooks->[1]{isReadOnly});
 }
 
+sub test_sharing_rename_sharee
+    :AllowMoves :ReverseACLs :min_version_3_7
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.foo");
+    $admintalk->setacl("user.foo", "foo", 'lrswipkxtecdan');
+
+    my $service = $self->{instance}->get_service("http");
+    my $cardtalk = Net::CardDAVTalk->new(
+        user => 'foo',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $CardDAV->NewAddressBook("Shared", name => "Shared Address Book");
+    $admintalk->setacl("user.cassandane.#addressbooks.Shared", "foo", 'lrsn');
+
+    xlog $self, "subscribe to shared calendar";
+    my $imapstore = $self->{instance}->get_service('imap')->create_store(
+                        username => "foo");
+    my $imaptalk = $imapstore->get_client();
+    $imaptalk->subscribe("user.cassandane.#addressbooks.Shared");
+
+    my $Addressbooks = $cardtalk->GetAddressBooks();
+
+    $self->assert_str_equals('personal', $Addressbooks->[0]{name});
+    $self->assert_str_equals('Default', $Addressbooks->[0]{path});
+    $self->assert_str_equals('/dav/addressbooks/user/foo/Default/', $Addressbooks->[0]{href});
+    $self->assert_num_equals(0, $Addressbooks->[0]{isReadOnly});
+
+    $self->assert_str_equals('Shared Address Book', $Addressbooks->[1]{name});
+    $self->assert_str_equals('cassandane.Shared', $Addressbooks->[1]{path});
+    $self->assert_str_equals('/dav/addressbooks/user/foo/cassandane.Shared/', $Addressbooks->[1]{href});
+    $self->assert_num_equals(1, $Addressbooks->[1]{isReadOnly});
+
+    $admintalk->rename('user.foo', 'user.bar');
+    $self->assert_str_equals('ok',
+                             $admintalk->get_last_completion_response());
+
+    $cardtalk = Net::CardDAVTalk->new(
+        user => 'bar',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $Addressbooks = $cardtalk->GetAddressBooks();
+
+    $self->assert_str_equals('personal', $Addressbooks->[0]{name});
+    $self->assert_str_equals('Default', $Addressbooks->[0]{path});
+    $self->assert_str_equals('/dav/addressbooks/user/bar/Default/', $Addressbooks->[0]{href});
+    $self->assert_num_equals(0, $Addressbooks->[0]{isReadOnly});
+
+    $self->assert_str_equals('Shared Address Book', $Addressbooks->[1]{name});
+    $self->assert_str_equals('cassandane.Shared', $Addressbooks->[1]{path});
+    $self->assert_str_equals('/dav/addressbooks/user/bar/cassandane.Shared/', $Addressbooks->[1]{href});
+    $self->assert_num_equals(1, $Addressbooks->[1]{isReadOnly});
+}
+
 sub test_sharing_crossdomain
     :VirtDomains :CrossDomains :FastMailSharing :ReverseACLs :min_version_3_0
     :needs_component_httpd
