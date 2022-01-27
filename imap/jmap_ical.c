@@ -251,6 +251,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
                                   json_t *jsevent,
                                   icalcomponent *maincomp,
                                   struct icalcomps *oldcomps,
+                                  icaltimetype now,
                                   jstimezones_t *jtzcache,
                                   struct jmapical_ctx *jmapctx);
 
@@ -6761,6 +6762,7 @@ static void overrides_to_ical(icalcomponent *comp,
                               struct jmap_parser *parser,
                               json_t *overrides,
                               struct icalcomps *oldcomps,
+                              icaltimetype now,
                               jstimezones_t *jstzones,
                               struct jmapical_ctx *jmapctx)
 {
@@ -6899,7 +6901,7 @@ static void overrides_to_ical(icalcomponent *comp,
                 jmap_parser_invalid(parser, "recurrenceId");
             }
             calendarevent_to_ical(excomp, parser, ex, comp, oldcomps,
-                    jstzones, jmapctx);
+                    now, jstzones, jmapctx);
             jmap_parser_pop(parser);
 
             /* Add the exception */
@@ -6913,6 +6915,104 @@ static void overrides_to_ical(icalcomponent *comp,
     json_decref(master);
 }
 
+static void timestamps_to_ical(icalcomponent *comp,
+                               struct jmap_parser *parser,
+                               json_t *jsevent,
+                               struct icalcomps *oldcomps,
+                               icaltimetype now,
+                               struct jmapical_ctx *jmapctx)
+{
+    size_t invalid_count = json_array_size(parser->invalid);
+    struct buf buf = BUF_INITIALIZER;
+
+    // Validate created
+    icaltimetype created = icaltime_null_time();
+    json_t *jval = json_object_get(jsevent, "created");
+    if (json_is_string(jval)) {
+        const char *val = json_string_value(jval);
+        struct jmapical_datetime t = JMAPICAL_DATETIME_INITIALIZER;
+        if (jmapical_utcdatetime_from_string(val, &t) >= 0) {
+            created = jmapical_datetime_to_icaltime(&t, now.zone);
+        }
+        else {
+            jmap_parser_invalid(parser, "created");
+        }
+    } else if (JNOTNULL(jval)) {
+        jmap_parser_invalid(parser, "created");
+    }
+
+    // Validate updated
+    icaltimetype updated = now;
+    jval = json_object_get(jsevent, "updated");
+    if (json_is_string(jval)) {
+        const char *val = json_string_value(jval);
+        struct jmapical_datetime t = JMAPICAL_DATETIME_INITIALIZER;
+        if (jmapical_utcdatetime_from_string(val, &t) >= 0) {
+            if (!jmapctx || jmapctx->to_ical.no_sanitize_timestamps) {
+                updated = jmapical_datetime_to_icaltime(&t, now.zone);
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, "updated");
+        }
+    } else if (JNOTNULL(jval)) {
+        jmap_parser_invalid(parser, "updated");
+    }
+
+    // Return early for invalid values
+    if (invalid_count < json_array_size(parser->invalid))
+        return;
+
+    // Write DTSTAMP
+    remove_icalprop(comp, ICAL_DTSTAMP_PROPERTY);
+    icalcomponent_add_property(comp, icalproperty_new_dtstamp(updated));
+    if (jmapctx) {
+        struct jmapical_datetime t = JMAPICAL_DATETIME_INITIALIZER;
+        jmapical_datetime_from_icaltime(updated, &t);
+        jmapical_utcdatetime_as_string(&t, &buf);
+        json_object_set_new(jmapctx->to_ical.serverset,
+                "updated", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+    }
+
+    // Write CREATED
+    int is_server_set = 0;
+    if (jmapctx && !jmapctx->to_ical.no_sanitize_timestamps) {
+        icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
+        if (old_comp) {
+            icalproperty *prop = icalcomponent_get_first_property(old_comp,
+                    ICAL_CREATED_PROPERTY);
+            if (prop) {
+                icaltimetype old_created = icalproperty_get_created(prop);
+                if (icaltime_compare(created, old_created)) {
+                    // can't change value of 'created'
+                    jmap_parser_invalid(parser, "created");
+                }
+            }
+        }
+        else if (icaltime_is_null_time(created) ||
+                 icaltime_compare(created, now) > 0) {
+            // clamp 'created' timestamp to server time
+            created = now;
+            is_server_set = 1;
+        }
+    }
+    if (!icaltime_is_null_time(created)) {
+        remove_icalprop(comp, ICAL_CREATED_PROPERTY);
+        icalcomponent_add_property(comp, icalproperty_new_created(created));
+        if (jmapctx && is_server_set) {
+            struct jmapical_datetime t = JMAPICAL_DATETIME_INITIALIZER;
+            jmapical_datetime_from_icaltime(created, &t);
+            jmapical_utcdatetime_as_string(&t, &buf);
+            json_object_set_new(jmapctx->to_ical.serverset,
+                    "created", json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+
+    buf_free(&buf);
+}
+
 /* Create or overwrite the iCalendar properties in VEVENT comp based on the
  * properties the JMAP calendar event. This writes a *complete* jsevent and
  * does not implement patch object semantics.
@@ -6922,11 +7022,11 @@ static void calendarevent_to_ical(icalcomponent *comp,
                                   json_t *event,
                                   icalcomponent *maincomp,
                                   struct icalcomps *oldcomps,
+                                  icaltimetype now,
                                   jstimezones_t *jstzones,
                                   struct jmapical_ctx *jmapctx)
 {
     icalproperty *prop = NULL;
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
     jstimezones_t myjstzones = JSTIMEZONES_INITIALIZER;
 
     /* Caller must set UID */
@@ -6935,7 +7035,11 @@ static void calendarevent_to_ical(icalcomponent *comp,
         jmap_parser_invalid(parser, "uid");
         return;
     }
+
     int is_exc = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY) != NULL;
+
+    /* Update 'created' and 'updated' timestamps */
+    timestamps_to_ical(comp, parser, event, oldcomps, now, jmapctx);
 
     json_t *jprop = json_object_get(event, "excluded");
     if (jprop && jprop != json_false()) {
@@ -7013,40 +7117,6 @@ static void calendarevent_to_ical(icalcomponent *comp,
         prop = icalproperty_new_prodid(prod_id);
         icalcomponent_add_property(ical, prop);
         buf_free(&buf);
-    }
-
-    /* created */
-    jprop = json_object_get(event, "created");
-    if (json_is_string(jprop)) {
-        struct jmapical_datetime tstamp = JMAPICAL_DATETIME_INITIALIZER;
-        if (jmapical_utcdatetime_from_string(json_string_value(jprop), &tstamp) >= 0) {
-            icaltimetype dt = jmapical_datetime_to_icaltime(&tstamp, utc);
-            insert_icaltimeprop(comp, dt, 1, ICAL_CREATED_PROPERTY);
-        }
-        else {
-            jmap_parser_invalid(parser, "created");
-        }
-    } else if (JNOTNULL(jprop)) {
-        jmap_parser_invalid(parser, "created");
-    }
-
-    /* updated */
-    jprop = json_object_get(event, "updated");
-    if (json_is_string(jprop)) {
-        struct jmapical_datetime tstamp = JMAPICAL_DATETIME_INITIALIZER;
-        if (jmapical_utcdatetime_from_string(json_string_value(jprop), &tstamp) >= 0) {
-            icaltimetype dt = jmapical_datetime_to_icaltime(&tstamp, utc);
-            insert_icaltimeprop(comp, dt, 1, ICAL_DTSTAMP_PROPERTY);
-        }
-        else {
-            jmap_parser_invalid(parser, "updated");
-        }
-    } else if (jprop == NULL) {
-        icaltimetype now = \
-            icaltime_current_time_with_zone(icaltimezone_get_utc_timezone());
-        insert_icaltimeprop(comp, now, 1, ICAL_DTSTAMP_PROPERTY);
-    } else {
-        jmap_parser_invalid(parser, "updated");
     }
 
     jprop = json_object_get(event, "priority");
@@ -7356,7 +7426,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     /* recurrenceOverrides - must be last to apply patches */
     jprop = json_object_get(event, "recurrenceOverrides");
     if (json_is_null(jprop) || json_is_object(jprop)) {
-        overrides_to_ical(comp, parser, jprop, oldcomps, jstzones, jmapctx);
+        overrides_to_ical(comp, parser, jprop, oldcomps, now, jstzones, jmapctx);
     } else if (jprop) {
         jmap_parser_invalid(parser, "recurrenceOverrides");
     }
@@ -7401,7 +7471,8 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical,
         if (compptr) *compptr = comp;
 
         /* Convert the JMAP calendar event to ical. */
-        calendarevent_to_ical(comp, &parser, jsevent, NULL, &oldcomps, NULL, jmapctx);
+        calendarevent_to_ical(comp, &parser, jsevent, NULL,
+                &oldcomps, now, NULL, jmapctx);
         icalcomponent_add_required_timezones(ical);
     }
     else jmap_parser_invalid(&parser, "uid");
