@@ -1,4 +1,4 @@
-/* jmap_mail.h -- Routines for handling JMAP mailboxes
+/* jmap_mailbox.h -- Routines for handling JMAP mailboxes
  *
  * Copyright (c) 1994-2022 Carnegie Mellon University.  All rights reserved.
  *
@@ -49,10 +49,10 @@
 #include "jmap_api.h"
 #include "ptrarray.h"
 
-enum mboxset_type { _MBOXSET_EMAIL, _MBOXSET_NODE };
+enum jmap_setmbox_type { JMAP_SETMBOX_MBOX, JMAP_SETMBOX_NODE };
 
-struct mboxset_args {
-    enum mboxset_type type;
+struct jmap_setmbox_args {
+    enum jmap_setmbox_type type;
     char *creation_id; // NULL for update
     char *id;
     char *name;
@@ -71,7 +71,7 @@ struct mboxset_args {
             int overwrite_acl;
             char *color;
             int show_as_label;
-        } email;
+        } mbox;
         struct {
             char *blobid; // NULL means folder
             char *type;   // NULL for folder
@@ -81,9 +81,11 @@ struct mboxset_args {
     } u;
 };
 
-enum mboxset_runmode { _MBOXSET_FAIL, _MBOXSET_SKIP, _MBOXSET_INTERIM };
+enum jmap_setmbox_runmode {
+    JMAP_SETMBOX_FAIL, JMAP_SETMBOX_SKIP, JMAP_SETMBOX_INTERIM
+};
 
-struct mboxset_result {
+struct jmap_setmbox_result {
     json_t *err;
     int skipped;
     char *old_imapname;
@@ -91,18 +93,20 @@ struct mboxset_result {
     char *tmp_imapname;
 };
 
-#define MBOXSET_RESULT_INITIALIZER { NULL, 0, NULL, NULL, NULL }
+#define JMAP_SETMBOX_RESULT_INITIALIZER { NULL, 0, NULL, NULL, NULL }
 
-struct mboxset {
+struct jmap_setmbox_ctx {
     struct jmap_set super;
     uint32_t mbtype;
-    ptrarray_t create;
-    ptrarray_t update;
-    strarray_t *destroy;
-    void (*create_cb)(jmap_req_t *, struct mboxset_args *, enum mboxset_runmode,
-                      json_t **, struct mboxset_result *, strarray_t *);
-    void (*update_cb)(jmap_req_t *, struct mboxset_args *, enum mboxset_runmode,
-                      struct mboxset_result *, strarray_t *);
+    ptrarray_t to_create;
+    ptrarray_t to_update;
+    strarray_t *to_destroy;
+    void (*create_proc)(jmap_req_t *, struct jmap_setmbox_args *,
+                        enum jmap_setmbox_runmode,
+                        json_t **, struct jmap_setmbox_result *, strarray_t *);
+    void (*update_proc)(jmap_req_t *, struct jmap_setmbox_args *,
+                        enum jmap_setmbox_runmode,
+                        struct jmap_setmbox_result *, strarray_t *);
     int on_destroy_remove_msgs;
     const char *on_destroy_move_to_mailboxid;
 };
@@ -113,6 +117,6 @@ extern void jmap_mailbox_capabilities(json_t *jcapabilities);
 extern int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
                                   char **mboxnameptr, char **uniqueid);
 
-extern void jmap_mboxset(jmap_req_t *req, struct mboxset *set);
+extern void jmap_setmbox(jmap_req_t *req, struct jmap_setmbox_ctx *set);
 
-#endif /* JMAP_MAIL_H */
+#endif /* JMAP_MAILBOX_H */
