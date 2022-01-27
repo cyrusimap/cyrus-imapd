@@ -2230,7 +2230,7 @@ struct mboxset {
     struct jmap_set super;
     ptrarray_t create;
     ptrarray_t update;
-    strarray_t destroy;
+    strarray_t *destroy;
     int on_destroy_remove_msgs;
     const char *on_destroy_move_to_mailboxid;
 };
@@ -3159,9 +3159,9 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
         hash_table args_by_id = HASH_TABLE_INITIALIZER;
         hash_table parent_id_by_id = HASH_TABLE_INITIALIZER;
         construct_hash_table(&parent_id_by_id,
-                ptrarray_size(&set->create) || ptrarray_size(&set->update), 0);
+                ptrarray_size(&set->create) + ptrarray_size(&set->update), 0);
         construct_hash_table(&args_by_id,
-                ptrarray_size(&set->create) || ptrarray_size(&set->update), 0);
+                ptrarray_size(&set->create) + ptrarray_size(&set->update), 0);
 
         struct buf buf = BUF_INITIALIZER;
         for (i = 0; i < ptrarray_size(&set->create); i++) {
@@ -3200,11 +3200,11 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
     }
 
     /* Sort delete operations, children before parent */
-    if (strarray_size(&set->destroy)) {
+    if (strarray_size(set->destroy)) {
         hash_table parent_id_by_id = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&parent_id_by_id, set->destroy.count + 1, 0);
-        for (i = 0; i < strarray_size(&set->destroy); i++) {
-            const char *mbox_id = strarray_nth(&set->destroy, i);
+        construct_hash_table(&parent_id_by_id, strarray_size(set->destroy) + 1, 0);
+        for (i = 0; i < strarray_size(set->destroy); i++) {
+            const char *mbox_id = strarray_nth(set->destroy, i);
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
             if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                 json_object_set_new(set->super.not_destroyed, mbox_id,
@@ -3222,8 +3222,8 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
         }
         strarray_t tmp = STRARRAY_INITIALIZER;
         _toposort(&parent_id_by_id, &tmp); /* destroy can't be cyclic */
-        for (i = tmp.count - 1; i >= 0; i--)
-            strarray_append(ops->del, strarray_nth(&tmp, i));
+        while (strarray_size(&tmp))
+            strarray_appendm(ops->del, strarray_pop(&tmp));
         strarray_fini(&tmp);
         free_hash_table(&parent_id_by_id, free);
     }
@@ -4032,9 +4032,13 @@ static void _mboxset_parse(jmap_req_t *req,
     }
 
     /* update */
-    json_t *will_destroy = json_object();
-    json_array_foreach(set->super.destroy, i, jarg) {
-        json_object_set_new(will_destroy, json_string_value(jarg), json_true());
+    hash_table will_destroy = HASH_TABLE_INITIALIZER;
+    size_t size = json_array_size(set->super.destroy);
+    if (size) {
+        construct_hash_table(&will_destroy, size, 0);
+        json_array_foreach(set->super.destroy, i, jarg) {
+            hash_insert(json_string_value(jarg), (void*)1, &will_destroy);
+        }
     }
     const char *mbox_id = NULL;
     json_object_foreach(set->super.update, mbox_id, jarg) {
@@ -4055,7 +4059,7 @@ static void _mboxset_parse(jmap_req_t *req,
             free(args);
             continue;
         }
-        if (json_object_get(will_destroy, args->mbox_id)) {
+        if (hash_lookup(args->mbox_id, &will_destroy)) {
             json_t *err = json_pack("{s:s}", "type", "willDestroy");
             json_object_set_new(set->super.not_updated, mbox_id, err);
             jmap_parser_fini(&myparser);
@@ -4066,12 +4070,10 @@ static void _mboxset_parse(jmap_req_t *req,
         ptrarray_append(&set->update, args);
         jmap_parser_fini(&myparser);
     }
-    json_decref(will_destroy);
 
     /* destroy */
-    json_array_foreach(set->super.destroy, i, jarg) {
-        strarray_append(&set->destroy, json_string_value(jarg));
-    }
+    set->destroy = hash_keys(&will_destroy);
+    free_hash_table(&will_destroy, NULL);
 }
 
 static void _mboxset_fini(struct mboxset *set)
@@ -4089,7 +4091,7 @@ static void _mboxset_fini(struct mboxset *set)
         free(args);
     }
     ptrarray_fini(&set->update);
-    strarray_fini(&set->destroy);
+    strarray_free(set->destroy);
 }
 
 static int jmap_mailbox_set(jmap_req_t *req)
