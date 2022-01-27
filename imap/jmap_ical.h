@@ -113,6 +113,10 @@ struct jmapical_ctx {
     struct {
         char *emailrecipient;
     } alert;
+    struct {
+        json_t *serverset;
+        int no_sanitize_timestamps;
+    } to_ical;
 };
 
 extern struct jmapical_ctx *jmapical_context_new(jmap_req_t *req);
