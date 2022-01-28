@@ -7946,6 +7946,7 @@ submboxes:
 
     /* take care of deleting old quotas */
     if (!r && rename_user) {
+        user_sharee_renameacls(&imapd_namespace, olduser, newuser);
         user_deletequotaroots(olduser);
         sync_log_unuser(olduser);
     }

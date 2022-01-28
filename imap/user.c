@@ -350,6 +350,7 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
 }
 
 struct rename_rock {
+    const struct namespace *namespace;
     const char *olduser;
     const char *newuser;
     const char *oldinbox;
@@ -484,17 +485,14 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser)
     return 0;
 }
 
-EXPORTED int user_renameacl(const struct namespace *namespace, const char *name,
-                            const char *olduser, const char *newuser)
+static int _user_renameacl(const struct namespace *namespace,
+                           const mbentry_t *mbentry,
+                           const char *olduser, const char *newuser)
 {
     int r = 0;
     char *acl;
     char *rights, *nextid;
-    mbentry_t *mbentry = NULL;
     char *aclalloc;
-
-    r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) return r;
 
     /* setacl re-calls mboxlist_lookup and will stomp on us */
     aclalloc = acl = xstrdup(mbentry->acl);
@@ -510,19 +508,54 @@ EXPORTED int user_renameacl(const struct namespace *namespace, const char *name,
 
         if (!strcmp(acl, olduser)) {
             /* copy ACL for olduser to newuser */
-            r = mboxlist_setacl(namespace, name, newuser, rights, 1, newuser, NULL);
+            r = mboxlist_setacl(namespace, mbentry->name, newuser, rights, 1, newuser, NULL);
             /* delete ACL for olduser */
             if (!r)
-                r = mboxlist_setacl(namespace, name, olduser, (char *)0, 1, newuser, NULL);
+                r = mboxlist_setacl(namespace, mbentry->name, olduser, (char *)0, 1, newuser, NULL);
         }
 
         acl = nextid;
     }
 
     free(aclalloc);
+
+    return r;
+}
+
+EXPORTED int user_renameacl(const struct namespace *namespace, const char *name,
+                            const char *olduser, const char *newuser)
+{
+    int r = 0;
+    mbentry_t *mbentry = NULL;
+
+    r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) return r;
+
+    r = _user_renameacl(namespace, mbentry, olduser, newuser);
+
     mboxlist_entry_free(&mbentry);
 
     return r;
+}
+
+static int sharee_rename_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct rename_rock *rrock = (struct rename_rock *) rock;
+
+    return _user_renameacl(rrock->namespace, mbentry,
+                           rrock->olduser, rrock->newuser);
+}
+
+EXPORTED int user_sharee_renameacls(const struct namespace *namespace,
+                                    const char *olduser, const char *newuser)
+{
+    struct rename_rock rrock = { namespace, olduser, newuser, NULL, NULL, 0 };
+
+    return mboxlist_usermboxtree(olduser, NULL, &sharee_rename_cb, &rrock,
+                                 MBOXTREE_SKIP_ROOT     |
+                                 MBOXTREE_SKIP_CHILDREN |
+                                 MBOXTREE_SKIP_PERSONAL |
+                                 MBOXTREE_PLUS_RACL);
 }
 
 EXPORTED int user_copyquotaroot(const char *oldname, const char *newname)
