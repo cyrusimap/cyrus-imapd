@@ -7132,17 +7132,45 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
     /* method */
     jprop = json_object_get(event, "method");
-    if (json_is_string(jprop)) {
-        const char *method = json_string_value(jprop);
-        icalproperty_method icalmethod = icalenum_string_to_method(method);
-        if (icalmethod != ICAL_METHOD_NONE && !is_exc) {
-            icalcomponent *ical = icalcomponent_get_parent(comp);
-            icalcomponent_set_method(ical, icalmethod);
-        }
-        else {
+    if (json_is_string(jprop) && !is_exc) {
+        const char *val = json_string_value(jprop);
+        icalproperty_method method = icalenum_string_to_method(val);
+        if (method == ICAL_METHOD_NONE) {
             jmap_parser_invalid(parser, "method");
         }
-    } else if (JNOTNULL(jprop)) {
+        else if (jmapctx && !jmapctx->to_ical.allow_method) {
+            /* JMAP Calendars requires to reject the method property.
+             *
+             * Since there might be bogus iCalendar data including
+             * the METHOD property, we silently discard the method
+             * property iff
+             * - this is an update to an existing event
+             * - the method values are left unchanged
+             */
+            int reject = 1;
+            icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
+            if (old_comp) {
+                icalcomponent *old_ical = icalcomponent_get_parent(old_comp);
+                if (old_ical &&
+                        icalcomponent_isa(old_ical) == ICAL_VCALENDAR_COMPONENT) {
+                    prop = icalcomponent_get_first_property(old_ical,
+                            ICAL_METHOD_PROPERTY);
+                    if (prop && icalproperty_get_method(prop) == method) {
+                        reject = 0; // silently ignore
+                    }
+                }
+            }
+            if (reject) {
+                jmap_parser_invalid(parser, "method");
+            }
+        }
+        else {
+            icalcomponent *ical = icalcomponent_get_parent(comp);
+            icalcomponent_set_method(ical, method);
+        }
+
+    } else if (JNOTNULL(jprop) && !is_exc) {
+        // Just ignore method in overrides, see RFC8984, section 4.3.5
         jmap_parser_invalid(parser, "method");
     }
 

@@ -3435,7 +3435,6 @@ sub test_calendarevent_set_participants
                 name => 'location2',
             },
         },
-        method => 'request',
     };
 
     my $ret = $self->createandget_event($event);
@@ -3480,7 +3479,6 @@ sub test_calendarevent_set_participants_patch
                 },
             },
         },
-        method => 'request',
     };
 
     my $ret = $self->createandget_event($event);
@@ -6333,7 +6331,6 @@ sub test_calendarevent_set_participants_recur
                 },
             },
         },
-        method => 'request',
     };
 
     my $ret = $self->createandget_event($event);
@@ -18822,6 +18819,115 @@ sub test_calendarevent_set_updated
     my $updated = $res->[1][1]{list}[0]{updated};
     $self->assert($past lt $updated);
     $self->assert_str_equals($updated, $res->[0][1]{created}{event}{updated});
+}
+
+sub test_calendarevent_set_method
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "method on main event is rejected";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => '2022-01-28T09:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    method => 'request',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        someone => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notCreated}{event}{type});
+    $self->assert_deep_equals(['method'],
+        $res->[0][1]{notCreated}{event}{properties});
+
+    xlog "method on override event is ignored"; # see RFC8984, section 4.3.5
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => '2022-01-28T09:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        someone => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                        },
+                    },
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                    }],
+                    recurrenceOverrides => {
+                        '2022-01-29T09:00:00' => {
+                            title => 'override',
+                            method => 'request',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event'],
+            properties => ['title', 'method', 'recurrenceOverrides'],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+    $self->assert_null($res->[1][1]{list}[0]{method});
+    $self->assert_deep_equals({
+        '2022-01-29T09:00:00' => {
+            title => 'override',
+        },
+    }, $res->[1][1]{list}[0]{recurrenceOverrides});
+
+    xlog "can't set method in /update either";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    method => 'request',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$eventId}{type});
+    $self->assert_deep_equals(['method'],
+        $res->[0][1]{notUpdated}{$eventId}{properties});
 }
 
 1;
