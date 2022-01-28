@@ -116,6 +116,7 @@ struct jmapical_ctx {
     struct {
         json_t *serverset;
         int no_sanitize_timestamps;
+        int allow_method;
     } to_ical;
 };
 
