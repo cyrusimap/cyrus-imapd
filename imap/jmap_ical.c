@@ -7026,7 +7026,6 @@ static void calendarevent_to_ical(icalcomponent *comp,
                                   jstimezones_t *jstzones,
                                   struct jmapical_ctx *jmapctx)
 {
-    icalproperty *prop = NULL;
     jstimezones_t myjstzones = JSTIMEZONES_INITIALIZER;
 
     /* Caller must set UID */
@@ -7114,7 +7113,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
         /* Set PRODID in the VCALENDAR */
         icalcomponent *ical = icalcomponent_get_parent(comp);
         remove_icalprop(ical, ICAL_PRODID_PROPERTY);
-        prop = icalproperty_new_prodid(prod_id);
+        icalproperty *prop = icalproperty_new_prodid(prod_id);
         icalcomponent_add_property(ical, prop);
         buf_free(&buf);
     }
@@ -7122,7 +7121,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "priority");
     if (json_integer_value(jprop) >= 0 || json_integer_value(jprop) <= 9) {
         remove_icalprop(comp, ICAL_PRIORITY_PROPERTY);
-        prop = icalproperty_new_priority(json_integer_value(jprop));
+        icalproperty *prop = icalproperty_new_priority(json_integer_value(jprop));
         icalcomponent_add_property(comp, prop);
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "priority");
@@ -7164,7 +7163,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
                 icalcomponent *old_ical = icalcomponent_get_parent(old_comp);
                 if (old_ical &&
                         icalcomponent_isa(old_ical) == ICAL_VCALENDAR_COMPONENT) {
-                    prop = icalcomponent_get_first_property(old_ical,
+                    icalproperty *prop = icalcomponent_get_first_property(old_ical,
                             ICAL_METHOD_PROPERTY);
                     if (prop && icalproperty_get_method(prop) == method) {
                         reject = 0; // silently ignore
@@ -7190,7 +7189,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     if (json_is_string(jprop)) {
         const char *val = json_string_value(jprop);
         if (strlen(val)) {
-            prop = icalproperty_new_color(val);
+            icalproperty *prop = icalproperty_new_color(val);
             icalcomponent_add_property(comp, prop);
         }
     } else if (JNOTNULL(jprop)) {
@@ -7298,7 +7297,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
             jmap_parser_invalid(parser, "freeBusyStatus");
         }
         if (v != ICAL_TRANSP_NONE) {
-            prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+            icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
             if (prop) {
                 icalproperty_set_transp(prop, v);
             } else {
@@ -7324,7 +7323,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
             jmap_parser_invalid(parser, "privacy");
         }
         if (v != ICAL_CLASS_NONE) {
-            prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+            icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
             if (prop) {
                 icalproperty_set_class(prop, v);
             } else {
@@ -7343,7 +7342,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     if (json_is_boolean(jprop)) {
         remove_icalxprop(comp, "X-APPLE-DEFAULT-ALARM");
         if (json_boolean_value(jprop)) {
-            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, "X-APPLE-DEFAULT-ALARM");
             icalproperty_set_value(prop, icalvalue_new_boolean(1));
             icalcomponent_add_property(comp, prop);
@@ -7375,7 +7374,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
             }
         }
         if (jprop == json_true()) {
-            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITESELF);
             icalproperty_set_value(prop, icalvalue_new_boolean(1));
             icalcomponent_add_property(comp, prop);
@@ -7397,7 +7396,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
             }
         }
         if (jprop == json_true()) {
-            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITEOTHERS);
             icalproperty_set_value(prop, icalvalue_new_boolean(1));
             icalcomponent_add_property(comp, prop);
@@ -7419,7 +7418,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
             }
         }
         if (jprop == json_true()) {
-            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_HIDEATTENDEES);
             icalproperty_set_value(prop, icalvalue_new_boolean(1));
             icalcomponent_add_property(comp, prop);
@@ -7437,7 +7436,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
         if (addr && !addr->next) {
             char *val = address_get_all(addr, 0);
-            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
             icalproperty_set_value(prop, icalvalue_new_text(val));
             icalcomponent_add_property(comp, prop);
