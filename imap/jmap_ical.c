@@ -512,7 +512,8 @@ static int attachment_from_blobid(struct jmapical_ctx *jmapctx,
 }
 #endif // BUILD_LMTPD
 
-HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req)
+HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
+                                                 const strarray_t *schedule_addresses)
 {
     struct jmapical_ctx *jmapctx = xzmalloc(sizeof(struct jmapical_ctx));
 
@@ -529,6 +530,18 @@ HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req)
     }
 
     jmapctx->alert.emailrecipient = _emailalert_recipient(req->userid);
+
+    if (strarray_size(schedule_addresses)) {
+        const char *imipaddr = strarray_nth(schedule_addresses, 0);
+        struct buf buf = BUF_INITIALIZER;
+        if (strncasecmp(imipaddr, "mailto:", 7)) {
+            buf_setcstr(&buf, "mailto:");
+            buf_appendcstr(&buf, imipaddr);
+            imipaddr = buf_cstring(&buf);
+        }
+        jmapctx->to_ical.replyto = json_pack("{s:s}", "imip", imipaddr);
+        buf_free(&buf);
+    }
 
     return jmapctx;
 }
@@ -547,6 +560,8 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
         webdav_close(jmapctx->attachments.db);
 #endif // BUILD_LMTPD
     buf_free(&jmapctx->attachments.url);
+
+    json_decref(jmapctx->to_ical.replyto);
 
     free(jmapctx->alert.emailrecipient);
     buf_free(&jmapctx->buf);
@@ -5096,30 +5111,48 @@ static void participants_to_ical(icalcomponent *comp,
                                  struct icalcomps *oldcomps,
                                  struct jmapical_ctx *jmapctx)
 {
-    /* Purge existing ATTENDEEs and ORGANIZER */
     remove_icalprop(comp, ICAL_ATTENDEE_PROPERTY);
     remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
 
-    /* Basic validation first */
+    hash_table oldattendees_by_caladdress = HASH_TABLE_INITIALIZER;
+    hash_table caladdress_by_participant_id = HASH_TABLE_INITIALIZER;
+    hash_table oldattendees_by_jmapid = HASH_TABLE_INITIALIZER;
+
+    /* Validate replyTo */
     json_t *replyTo = json_object_get(event, "replyTo");
-    if (JNOTNULL(replyTo) && !json_object_size(replyTo)) {
-        jmap_parser_invalid(parser, "replyTo");
+    if (JNOTNULL(replyTo)) {
+        if (json_object_size(replyTo)) {
+            jmap_parser_push(parser, "replyTo");
+            const char *method;
+            json_t *jval = NULL;
+            json_object_foreach(replyTo, method, jval) {
+                if (!is_valid_rsvpmethod(method) || !json_is_string(jval)) {
+                    jmap_parser_invalid(parser, method);
+                    continue;
+                }
+            }
+            jmap_parser_pop(parser);
+        }
+        else {
+            jmap_parser_invalid(parser, "replyTo");
+        }
     }
+
     json_t *participants = json_object_get(event, "participants");
     if (JNOTNULL(participants) && !json_object_size(participants)) {
+        // Detailed validation of participants comes later
         jmap_parser_invalid(parser, "participants");
     }
 
-    hash_table caladdress_by_participant_id = HASH_TABLE_INITIALIZER;
+    if (!(JNOTNULL(replyTo) || JNOTNULL(participants))) {
+        goto done;
+    }
+
+    /* Create helper index for participants */
     construct_hash_table(&caladdress_by_participant_id,
             json_object_size(participants)+1, 0);
-
-    /* Hash previous ATTENDEEs */
-    hash_table oldattendees_by_jmapid = HASH_TABLE_INITIALIZER;
     construct_hash_table(&oldattendees_by_jmapid,
             json_object_size(participants)+1, 0);
-
-    hash_table oldattendees_by_caladdress = HASH_TABLE_INITIALIZER;
     construct_hash_table(&oldattendees_by_caladdress,
             json_object_size(participants)+1, 0);
 
@@ -5141,8 +5174,10 @@ static void participants_to_ical(icalcomponent *comp,
         }
     }
 
-    /* iCalendar events may only contain an ORGANIZER or an ATTENDEE.
-     * We allow to update such events, but we reject them during creation. */
+    /* If this an update, then the previous iCalendar data may only contain
+     * an ORGANIZER without ATTENDEEs, or the other way round. For this case,
+     * we neither reject replyTo without participants, nor do we auto-inject
+     * a replyTo for an event with just participants. */
     int allow_organizer_attendee_only = 0;
     if (oldcomps) {
         const char *uid = icalcomponent_get_uid(comp);
@@ -5170,32 +5205,32 @@ static void participants_to_ical(icalcomponent *comp,
         }
     }
 
-    json_t *jval = NULL;
-
+    // Validate replyTo and participants
     if (!allow_organizer_attendee_only) {
-        /* If participants are set, replyTo must be set */
-        if (JNOTNULL(replyTo) != JNOTNULL(participants)) {
+        if (jmapctx && jmapctx->to_ical.replyto) {
+            if (JNOTNULL(participants) && !JNOTNULL(replyTo)) {
+                // inject server-set replyTo
+                replyTo = jmapctx->to_ical.replyto;
+                json_object_set(jmapctx->to_ical.serverset, "replyTo", replyTo);
+            }
+            else if (!JNOTNULL(participants) && JNOTNULL(replyTo)) {
+                // reject replyTo with no participants
+                jmap_parser_invalid(parser, "replyTo");
+                jmap_parser_invalid(parser, "participants");
+                goto done;
+            }
+        }
+        else if (JNOTNULL(replyTo) != JNOTNULL(participants)) {
+            // both replyTo and participants must be set
             jmap_parser_invalid(parser, "replyTo");
             jmap_parser_invalid(parser, "participants");
             goto done;
         }
     }
 
-    /* Parse replyTo */
-    if (JNOTNULL(replyTo)) {
-        jmap_parser_push(parser, "replyTo");
-        const char *method;
-        json_object_foreach(replyTo, method, jval) {
-            if (!is_valid_rsvpmethod(method) || !json_is_string(jval)) {
-                jmap_parser_invalid(parser, method);
-                continue;
-            }
-        }
-        jmap_parser_pop(parser);
-    }
-
     /* Map participant ids to their iCalendar CALADDRESS */
     const char *partid;
+    json_t *jval = NULL;
     json_object_foreach(participants, partid, jval) {
         if (!is_valid_jmapid(partid)) continue;
         char *caladdress = NULL;

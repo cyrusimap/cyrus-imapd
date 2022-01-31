@@ -1915,25 +1915,30 @@ sub test_calendarevent_attendee_noorganizer
     $self->assert(not($res->{content} =~ m/ORGANIZER/));
     $self->assert($res->{content} =~ m/ATTENDEE/);
 
-    xlog "Create event with no replyTo via JMAP (should fail)";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            create => {
-                1 => {
-                    calendarIds => {
-                        'Default' => JSON::true,
-                    },
-                    title => "title",
-                    "start"=> "2015-11-07T09:00:00",
-                    "duration"=> "PT2H",
-                    "timeZone" => "Europe/London",
-                    participants => $wantParticipants,
-                },
-            },
-        }, 'R1'],
-    ]);
-    $self->assert_deep_equals(['replyTo', 'participants'],
-        $res->[0][1]{notCreated}{1}{properties});
+
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj == 3 && $min < 7)) {
+        # versions 3.7 or higher are tested in calendarevent_set_replyto
+        xlog "Create event with no replyTo via JMAP (should fail)";
+        $res = $jmap->CallMethods([
+                ['CalendarEvent/set', {
+                        create => {
+                            1 => {
+                                calendarIds => {
+                                    'Default' => JSON::true,
+                                },
+                                title => "title",
+                                "start"=> "2015-11-07T09:00:00",
+                                "duration"=> "PT2H",
+                                "timeZone" => "Europe/London",
+                                participants => $wantParticipants,
+                            },
+                        },
+                    }, 'R1'],
+            ]);
+        $self->assert_deep_equals(['replyTo', 'participants'],
+            $res->[0][1]{notCreated}{1}{properties});
+    }
 }
 
 sub test_calendarevent_get_organizer_bogusuri
@@ -19038,6 +19043,134 @@ sub test_calendarevent_set_method
         $res->[0][1]{notUpdated}{$eventId}{type});
     $self->assert_deep_equals(['method'],
         $res->[0][1]{notUpdated}{$eventId}{properties});
+}
+
+sub test_calendarevent_set_replyto
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                eventReplyTo => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => '2022-01-28T09:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    replyTo => {
+                        imip => 'mailto:myreplyto@example.com',
+                    },
+                    participants => {
+                        someone => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                        },
+                    },
+                },
+                eventNoReplyTo => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => '2022-01-28T10:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    participants => {
+                        someone => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                        },
+                    },
+                },
+                eventReplyToNoParticipants => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => '2022-01-28T11:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                },
+                eventNoScheduling => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => '2022-01-28T12:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#eventReplyTo'],
+            properties => ['replyTo'],
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => ['#eventNoReplyTo'],
+            properties => ['replyTo'],
+        }, 'R3'],
+    ]);
+
+    xlog "Preserve client-set replyTo";
+    $self->assert_deep_equals({
+        imip => 'mailto:myreplyto@example.com',
+    }, $res->[1][1]{list}[0]{replyTo});
+
+    xlog "Use server-set replyTo if not set by client";
+    $self->assert_deep_equals({
+        imip => 'mailto:cassandane@example.com',
+    }, $res->[0][1]{created}{eventNoReplyTo}{replyTo});
+    $self->assert_deep_equals({
+        imip => 'mailto:cassandane@example.com',
+    }, $res->[2][1]{list}[0]{replyTo});
+
+    xlog "Reject event with replyTo but no participants";
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notCreated}{eventReplyToNoParticipants}{type});
+    $self->assert_deep_equals(['replyTo', 'participants'],
+        $res->[0][1]{notCreated}{eventReplyToNoParticipants}{properties});
+
+    xlog "Use server-set replyTo when participants added in update";
+    my $eventId = $res->[0][1]{created}{eventNoScheduling}{id};
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    participants => {
+                        someone => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals({
+        imip => 'mailto:cassandane@example.com',
+    }, $res->[0][1]{updated}{$eventId}{replyTo});
 }
 
 1;

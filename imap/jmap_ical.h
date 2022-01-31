@@ -117,10 +117,13 @@ struct jmapical_ctx {
         json_t *serverset;
         int no_sanitize_timestamps;
         int allow_method;
+        json_t *replyto;
     } to_ical;
 };
 
-extern struct jmapical_ctx *jmapical_context_new(jmap_req_t *req);
+extern struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
+        const strarray_t *schedule_addresses);
+
 extern void jmapical_context_free(struct jmapical_ctx**);
 
 extern int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx);
