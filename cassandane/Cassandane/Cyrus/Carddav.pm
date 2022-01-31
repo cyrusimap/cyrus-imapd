@@ -376,7 +376,7 @@ sub test_sharing_samedomain
 }
 
 sub test_sharing_rename_sharee
-    :AllowMoves :ReverseACLs :min_version_3_7
+    :AllowMoves :NoAltNamespace :ReverseACLs :min_version_3_7
     :needs_component_httpd
 {
     my ($self) = @_;
