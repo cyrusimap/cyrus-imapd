@@ -1449,7 +1449,7 @@ static void setcalendar_readprops(jmap_req_t *req,
 
     /* defaultAlertsWithTime */
     /* defaultAlertsWithoutTime */
-    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req, NULL);
     setcalendar_readalerts(parser, "defaultAlertsWithTime", arg,
             jmapctx->alert.emailrecipient, &props->defaultalerts_withtime);
     setcalendar_readalerts(parser, "defaultAlertsWithoutTime", arg,
@@ -3964,7 +3964,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     struct caldav_db *db = NULL;
     json_t *err = NULL;
     int r = 0;
-    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req, NULL);
 
     /* Build callback data */
     int checkacl = strcmp(req->accountid, req->userid);
@@ -4353,6 +4353,8 @@ struct createevent {
     char *ical_uid;
     char *ical_recurid;
     char *resourcename;
+    const char *sched_userid;
+    strarray_t schedule_addresses;
 };
 
 static int createevent_lookup_calendar(jmap_req_t *req,
@@ -4388,6 +4390,12 @@ static int createevent_lookup_calendar(jmap_req_t *req,
         jmap_parser_invalid(parser, "calendarIds");
         if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
     }
+    else {
+        create->sched_userid = caldav_is_secretarymode(mboxname) ?
+            req->accountid : req->userid;
+        get_schedule_addresses(NULL, mboxname, create->sched_userid,
+                &create->schedule_addresses);
+    }
     return r;
 }
 
@@ -4395,7 +4403,8 @@ static int createevent_toical(jmap_req_t *req,
                               struct jmap_parser *parser,
                               struct createevent *create)
 {
-    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    struct jmapical_ctx *jmapctx =
+        jmapical_context_new(req, &create->schedule_addresses);
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
 
@@ -4567,7 +4576,6 @@ static int createevent_store(jmap_req_t *req,
                              struct mailbox *notifmbox,
                              int send_itip)
 {
-    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     struct mailbox *mbox = NULL;
     struct buf buf = BUF_INITIALIZER;
     struct transaction_t txn = {
@@ -4627,12 +4635,8 @@ static int createevent_store(jmap_req_t *req,
     // Handle scheduling
     int is_draft = json_boolean_value(json_object_get(create->jsevent, "isDraft"));
     if (send_itip && !is_draft) {
-        const char *mboxname = mailbox_name(mbox);
-        const char *sched_userid = caldav_is_secretarymode(mboxname) ?
-            req->accountid : req->userid;
-        get_schedule_addresses(NULL, mboxname, sched_userid, &schedule_addresses);
-        r = setcalendarevents_schedule(sched_userid, &schedule_addresses,
-                NULL, create->ical, JMAP_CREATE);
+        r = setcalendarevents_schedule(create->sched_userid,
+                &create->schedule_addresses, NULL, create->ical, JMAP_CREATE);
         if (r) goto done;
         remove_itip_properties(create->ical);
     }
@@ -4664,7 +4668,7 @@ static int createevent_store(jmap_req_t *req,
     if (is_draft) strarray_append(&add_imapflags, "\\draft");
     r = caldav_store_resource(&txn, create->ical, mbox,
             create->resourcename, 0, create->db, PERMS_NOKEEP,
-            req->userid, &add_imapflags, NULL, &schedule_addresses);
+            req->userid, &add_imapflags, NULL, &create->schedule_addresses);
     strarray_fini(&add_imapflags);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         xsyslog(LOG_ERR, "caldav_store_resource failed",
@@ -4679,7 +4683,7 @@ static int createevent_store(jmap_req_t *req,
     jmapical_remove_peruserprops(myevent);
     r2 = jmap_create_caleventnotif(notifmbox, req->userid, req->authstate,
             mailbox_name(mbox), "created", create->ical_uid,
-            &schedule_addresses, NULL,
+            &create->schedule_addresses, NULL,
             is_draft, myevent, NULL);
     if (r2) {
         xsyslog(LOG_WARNING, "could not create notification",
@@ -4711,7 +4715,6 @@ static int createevent_store(jmap_req_t *req,
     }
 
 done:
-    strarray_fini(&schedule_addresses);
     spool_free_hdrcache(txn.req_hdrs);
     jmap_closembox(req, &mbox);
     buf_free(&txn.buf);
@@ -4776,6 +4779,7 @@ done:
     free(create.ical_uid);
     free(create.ical_recurid);
     free(create.resourcename);
+    strarray_fini(&create.schedule_addresses);
     jmap_parser_fini(&parser);
 }
 
@@ -5271,7 +5275,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
     }
 
     // Read old event
-    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req, schedule_addresses);
     jmapctx->to_ical.serverset = update;
     context_begin_cdata(jmapctx, mbentry, cdata);
     old_event = jmapical_tojmap(myoldical, NULL, jmapctx);
@@ -5851,7 +5855,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         // Read event from iCalendar data
         icalcomponent *myical = prune_vevent_instances(oldical,
                 eid->ical_recurid, 1);
-        struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+        struct jmapical_ctx *jmapctx = jmapical_context_new(req, &schedule_addresses);
         context_begin_cdata(jmapctx, mbentry, cdata);
         old_event = jmapical_tojmap(myical, NULL, jmapctx);
         jmapical_context_free(&jmapctx);
@@ -5867,7 +5871,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         newical = myical;
     }
     else {
-        struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+        struct jmapical_ctx *jmapctx = jmapical_context_new(req, &schedule_addresses);
         context_begin_cdata(jmapctx, mbentry, cdata);
         old_event = jmapical_tojmap(oldical, NULL, jmapctx);
         jmapical_context_free(&jmapctx);
@@ -7404,7 +7408,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     }
 
     /* Patch JMAP event */
-    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req, &schedule_addresses);
     jmapctx->to_ical.no_sanitize_timestamps = 1;
     context_begin_cdata(jmapctx, mbentry, cdata);
     json_t *src_event = jmapical_tojmap(src_ical, NULL, jmapctx);
@@ -8954,7 +8958,7 @@ static void principal_getavailability(jmap_req_t *req,
     struct buf buf = BUF_INITIALIZER;
     int checkacl = strcmp(req->userid, principalid);
     struct dynarray *busyperiods = dynarray_new(sizeof(struct busyperiod));
-    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req, NULL);
 
     /* Lookup busytime across calendars */
     icaltimetype icalstart = jmapical_datetime_to_icaltime(dtstart, utc);
@@ -11098,7 +11102,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
                                              const struct buf *mime)
 {
     json_t *jsevents_by_partid = json_object();
-    struct jmapical_ctx *jmapctx = jmapical_context_new(req);
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req, NULL);
     struct buf buf = BUF_INITIALIZER;
     struct buf rewritebufs[CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS];
     memset(rewritebufs, 0, sizeof(struct buf) * CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS);
