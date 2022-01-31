@@ -51,6 +51,7 @@
 
 #include "append.h"
 #include "caldav_alarm.h"
+#include "caldav_db.h"
 #include "cyrusdb.h"
 #include "httpd.h"
 #include "http_dav.h"
@@ -905,12 +906,28 @@ static int process_valarms(struct mailbox *mailbox,
                             int dryrun)
 {
     icalcomponent *ical = ical = record_to_ical(mailbox, record, NULL);
+    const char *mboxname = mailbox_name(mailbox);
 
     if (!ical) {
         syslog(LOG_ERR, "error parsing ical string mailbox %s uid %u",
-               mailbox_name(mailbox), record->uid);
-        caldav_alarm_delete_record(mailbox_name(mailbox), record->uid);
+               mboxname, record->uid);
+        caldav_alarm_delete_record(mboxname, record->uid);
         return 0;
+    }
+
+    /* ensure this record corresponds to the current version of the event */
+    struct caldav_db *db = caldav_open_mailbox(mailbox);
+    struct caldav_data *cdata;
+    if (!db ||
+        caldav_lookup_uid(db, icalcomponent_get_uid(ical), &cdata) ||
+        record->uid != cdata->dav.imap_uid ||
+        strcmp(cdata->dav.mailbox_byname ? mboxname : mailbox_uniqueid(mailbox),
+               cdata->dav.mailbox)) {
+        syslog(LOG_NOTICE, "removing bogus lastalarm check "
+               "for mailbox %s uid %u which is not current event",
+               mboxname, record->uid);
+        caldav_alarm_delete_record(mboxname, record->uid);
+        goto done_item;
     }
 
     /* check for bogus lastalarm data on record
@@ -918,8 +935,8 @@ static int process_valarms(struct mailbox *mailbox,
     if (!has_alarms(ical, mailbox, record->uid)) {
         syslog(LOG_NOTICE, "removing bogus lastalarm check "
                "for mailbox %s uid %u which has no alarms",
-               mailbox_name(mailbox), record->uid);
-        caldav_alarm_delete_record(mailbox_name(mailbox), record->uid);
+               mboxname, record->uid);
+        caldav_alarm_delete_record(mboxname, record->uid);
         goto done_item;
     }
 
@@ -928,11 +945,11 @@ static int process_valarms(struct mailbox *mailbox,
         data.lastrun = record->internaldate;
 
     /* Process VALARMs in iCalendar resource */
-    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+    char *userid = mboxname_to_userid(mboxname);
 
     syslog(LOG_DEBUG, "processing alarms in resource");
 
-    data.nextcheck = process_alarms(mailbox_name(mailbox), record->uid, userid,
+    data.nextcheck = process_alarms(mboxname, record->uid, userid,
                                     floatingtz, ical, data.lastrun, runtime, dryrun);
     free(userid);
 
@@ -950,10 +967,11 @@ static int process_valarms(struct mailbox *mailbox,
     data.lastrun = runtime;
     if (!dryrun) write_lastalarm(mailbox, record, &data);
 
-    update_alarmdb(mailbox_name(mailbox), record->uid, data.nextcheck);
+    update_alarmdb(mboxname, record->uid, data.nextcheck);
 
 done_item:
     if (ical) icalcomponent_free(ical);
+    caldav_close(db);
     return 0;
 }
 
