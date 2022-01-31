@@ -376,21 +376,10 @@ static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
     return role;
 }
 
-static char *_mbox_get_name(const char *account_id, const mbname_t *mbname)
+static char *_mbox_get_name(const char *account_id __attribute__((unused)),
+                            const mbname_t *mbname)
 {
-    struct buf attrib = BUF_INITIALIZER;
-
-    const char *annot = IMAP_ANNOT_NS "displayname";
-    int r = annotatemore_lookup(mbname_intname(mbname), annot, account_id, &attrib);
-    if (!r && attrib.len) {
-        /* We got a mailbox with a displayname annotation. Use it. */
-        return buf_release(&attrib);
-    }
-    buf_free(&attrib);
-
-    /* No displayname annotation. Most probably this mailbox was
-     * created via IMAP. In any case, determine name from the
-     * last segment of the mailboxname hierarchy. */
+    /* Determine name from the last segment of the mailboxname hierarchy. */
     char *extname;
     const strarray_t *boxes = mbname_boxes(mbname);
     if (strarray_size(boxes)) {
@@ -2134,20 +2123,6 @@ static int _mbox_set_annots(jmap_req_t *req,
     int r = 0;
     struct buf buf = BUF_INITIALIZER;
 
-    if (args->name) {
-        /* Set displayname annotation on mailbox. This is a PRIVATE annotation,
-         * on the account owner */
-        buf_setcstr(&buf, args->name);
-        static const char *displayname_annot = IMAP_ANNOT_NS "displayname";
-        r = annotatemore_write(mboxname, displayname_annot, req->accountid, &buf);
-        if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    displayname_annot, error_message(r));
-            goto done;
-        }
-        buf_reset(&buf);
-    }
-
     /* Set specialuse.  This is a PRIVATE annotation on the account owner */
     if (args->specialuse) {
         buf_setcstr(&buf, args->specialuse);
@@ -2617,8 +2592,8 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             mboxlist_entry_free(&mbparent);
             jmap_mboxlist_lookup(newparentname, &mbparent, NULL);
 
-            /* Check ACL of new parent - need WRITE to set displayname annot */
-            if (!jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD|JACL_SETKEYWORDS)) {
+            /* Check ACL of new parent */
+            if (!jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD)) {
                 jmap_parser_invalid(&parser, "parentId");
                 goto done;
             }
