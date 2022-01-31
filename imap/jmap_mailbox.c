@@ -1816,7 +1816,8 @@ done:
  * name to a IMAP mailbox name. Does not check for uniqueness.
  *
  * Return the malloced, combined name, or NULL on error. */
-static char *_mbox_newname(const char *name, const char *parentname, int is_toplevel)
+EXPORTED char *jmap_mbox_newname(const char *name,
+                                 const char *parentname, int is_toplevel)
 {
     charset_t cs = CHARSET_UNKNOWN_CHARSET;
     char *mboxname = NULL;
@@ -1847,14 +1848,15 @@ done:
     return mboxname;
 }
 
-static char *_mbox_tmpname(const char *name, const char *parentname, int is_toplevel)
+EXPORTED char *jmap_mbox_tmpname(const char *name,
+                                 const char *parentname, int is_toplevel)
 {
     int retries = 0;
     do {
         /* Make temporary name */
         struct buf buf = BUF_INITIALIZER;
         buf_printf(&buf, "tmp_%s_%s", name, makeuuid());
-        char *mboxname = _mbox_newname(buf_cstring(&buf), parentname, is_toplevel);
+        char *mboxname = jmap_mbox_newname(buf_cstring(&buf), parentname, is_toplevel);
         buf_free(&buf);
         /* Make sure no such mailbox exists */
         int r = jmap_mboxlist_lookup(mboxname, NULL, NULL);
@@ -1883,7 +1885,7 @@ static int _mbox_has_children(const char *mboxname)
     return has_child;
 }
 
-static void _mbox_setargs_fini(struct jmap_setmbox_args *args)
+EXPORTED void jmap_setmbox_args_fini(struct jmap_setmbox_args *args)
 {
     free(args->creation_id);
     free(args->id);
@@ -2306,8 +2308,7 @@ static void _mbox_create(jmap_req_t *req, struct jmap_setmbox_args *args,
     }
 
     /* Encode the mailbox name for IMAP. */
-    mboxname = _mbox_newname(args->name, mbparent->name,
-                             args->is_toplevel);
+    mboxname = jmap_mbox_newname(args->name, mbparent->name, args->is_toplevel);
     if (!mboxname) {
         syslog(LOG_ERR, "could not encode mailbox name");
         r = IMAP_INTERNAL;
@@ -2332,8 +2333,8 @@ static void _mbox_create(jmap_req_t *req, struct jmap_setmbox_args *args,
         else if (mode == JMAP_SETMBOX_INTERIM) {
             result->new_imapname = xstrdup(mboxname);
             result->old_imapname = NULL;
-            result->tmp_imapname = _mbox_tmpname(args->name, mbparent->name,
-                                                 args->is_toplevel);
+            result->tmp_imapname =
+                jmap_mbox_tmpname(args->name, mbparent->name, args->is_toplevel);
             if (!result->tmp_imapname) {
                 syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", mboxname);
                 r = IMAP_INTERNAL;
@@ -2682,7 +2683,8 @@ static void _mbox_update(jmap_req_t *req, struct jmap_setmbox_args *args,
         if (force_rename) {
 
             /* Determine the unique IMAP mailbox name. */
-            char *newmboxname = _mbox_newname(name, parentname, is_toplevel);
+            char *newmboxname =
+                jmap_mbox_newname(name, parentname, is_toplevel);
             if (!newmboxname) {
                 syslog(LOG_ERR, "_mbox_newname returns NULL: can't rename %s", mboxname);
                 r = IMAP_INTERNAL;
@@ -2699,7 +2701,8 @@ static void _mbox_update(jmap_req_t *req, struct jmap_setmbox_args *args,
                 else if (mode == JMAP_SETMBOX_INTERIM) {
                     result->new_imapname = xstrdup(newmboxname);
                     result->old_imapname = xstrdup(oldmboxname);
-                    result->tmp_imapname = _mbox_tmpname(name, parentname, is_toplevel);
+                    result->tmp_imapname =
+                        jmap_mbox_tmpname(name, parentname, is_toplevel);
                     if (!result->tmp_imapname) {
                         syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", newmboxname);
                         r = IMAP_INTERNAL;
@@ -4052,7 +4055,7 @@ static void _setmbox_parse(jmap_req_t *req,
             json_object_set(set_err, "properties", myparser.invalid);
             json_object_set_new(set->super.not_created, creation_id, set_err);
             jmap_parser_fini(&myparser);
-            _mbox_setargs_fini(args);
+            jmap_setmbox_args_fini(args);
             free(args);
             continue;
         }
@@ -4084,7 +4087,7 @@ static void _setmbox_parse(jmap_req_t *req,
             json_object_set(err, "properties", myparser.invalid);
             json_object_set_new(set->super.not_updated, mbox_id, err);
             jmap_parser_fini(&myparser);
-            _mbox_setargs_fini(args);
+            jmap_setmbox_args_fini(args);
             free(args);
             continue;
         }
@@ -4092,7 +4095,7 @@ static void _setmbox_parse(jmap_req_t *req,
             json_t *err = json_pack("{s:s}", "type", "willDestroy");
             json_object_set_new(set->super.not_updated, mbox_id, err);
             jmap_parser_fini(&myparser);
-            _mbox_setargs_fini(args);
+            jmap_setmbox_args_fini(args);
             free(args);
             continue;
         }
@@ -4105,18 +4108,18 @@ static void _setmbox_parse(jmap_req_t *req,
     free_hash_table(&will_destroy, NULL);
 }
 
-static void _setmbox_fini(struct jmap_setmbox_ctx *set)
+EXPORTED void jmap_setmbox_fini(struct jmap_setmbox_ctx *set)
 {
     jmap_set_fini(&set->super);
 
     struct jmap_setmbox_args *args = NULL;
     while ((args = ptrarray_pop(&set->to_create))) {
-        _mbox_setargs_fini(args);
+        jmap_setmbox_args_fini(args);
         free(args);
     }
     ptrarray_fini(&set->to_create);
     while ((args = ptrarray_pop(&set->to_update))) {
-        _mbox_setargs_fini(args);
+        jmap_setmbox_args_fini(args);
         free(args);
     }
     ptrarray_fini(&set->to_update);
@@ -4159,7 +4162,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
 
 done:
     jmap_parser_fini(&parser);
-    _setmbox_fini(&set);
+    jmap_setmbox_fini(&set);
     return 0;
 }
 

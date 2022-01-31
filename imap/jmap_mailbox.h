@@ -119,4 +119,14 @@ extern int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
 
 extern void jmap_setmbox(jmap_req_t *req, struct jmap_setmbox_ctx *set);
 
+extern void jmap_setmbox_fini(struct jmap_setmbox_ctx *set);
+
+extern void jmap_setmbox_args_fini(struct jmap_setmbox_args *args);
+
+extern char *jmap_mbox_newname(const char *name,
+                               const char *parentname, int is_toplevel);
+
+extern char *jmap_mbox_tmpname(const char *name,
+                               const char *parentname, int is_toplevel);
+
 #endif /* JMAP_MAILBOX_H */
