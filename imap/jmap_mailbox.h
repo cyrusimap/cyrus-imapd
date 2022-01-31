@@ -129,4 +129,9 @@ extern char *jmap_mbox_newname(const char *name,
 extern char *jmap_mbox_tmpname(const char *name,
                                const char *parentname, int is_toplevel);
 
+extern int jmap_mailbox_findparent(const char *mboxname, mbentry_t **mbentryp);
+
+extern char *jmap_mbox_get_name(const char *account_id __attribute__((unused)),
+                                const mbname_t *mbname);
+
 #endif /* JMAP_MAILBOX_H */

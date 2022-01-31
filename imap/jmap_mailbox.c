@@ -377,8 +377,8 @@ static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
     return role;
 }
 
-static char *_mbox_get_name(const char *account_id __attribute__((unused)),
-                            const mbname_t *mbname)
+EXPORTED char *jmap_mbox_get_name(const char *account_id __attribute__((unused)),
+                                  const mbname_t *mbname)
 {
     /* Determine name from the last segment of the mailboxname hierarchy. */
     char *extname;
@@ -487,7 +487,7 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
     return sort_order;
 }
 
-static int _findparent(const char *mboxname, mbentry_t **mbentryp)
+EXPORTED int jmap_mailbox_findparent(const char *mboxname, mbentry_t **mbentryp)
 {
     mbentry_t *mbentry = NULL;
     int r = mboxlist_findparent_allow_all(mboxname, &mbentry);
@@ -558,7 +558,7 @@ static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
     int rights = jmap_myrights_mbentry(req, mbentry);
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     mbentry_t *parent = NULL;
-    _findparent(mbname_intname(mbname), &parent);
+    jmap_mailbox_findparent(mbname_intname(mbname), &parent);
     int is_inbox = 0;
     _mbox_is_inbox(mbname, &is_inbox, NULL);
 
@@ -626,7 +626,7 @@ static json_t *_mbox_get(jmap_req_t *req,
 
     if (jmap_wantprop(props, "myRights") || jmap_wantprop(props, "parentId")) {
         /* Need to lookup parent mailbox */
-        _findparent(mbname_intname(mbname), &parent);
+        jmap_mailbox_findparent(mbname_intname(mbname), &parent);
     }
 
     /* Build JMAP mailbox response. */
@@ -634,7 +634,7 @@ static json_t *_mbox_get(jmap_req_t *req,
 
     json_object_set_new(obj, "id", json_string(mbentry->uniqueid));
     if (jmap_wantprop(props, "name")) {
-        char *name = _mbox_get_name(req->accountid, mbname);
+        char *name = jmap_mbox_get_name(req->accountid, mbname);
         if (!name) goto done;
         json_object_set_new(obj, "name", json_string(name));
         free(name);
@@ -1321,7 +1321,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 
     if (strarray_size(mbname_boxes(mbname)) > 1) {
         mbentry_t *mbparent = NULL;
-        r = _findparent(mbentry->name, &mbparent);
+        r = jmap_mailbox_findparent(mbentry->name, &mbparent);
         if (r && r != IMAP_MAILBOX_NONEXISTENT) {
             goto done;
         }
@@ -1342,7 +1342,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
     rec->mboxname = xstrdup(mbentry->name);
 
     if (q->need_name) {
-        rec->jmapname = _mbox_get_name(q->req->accountid, rec->mbname);
+        rec->jmapname = jmap_mbox_get_name(q->req->accountid, rec->mbname);
     }
     if (q->need_sort_order) {
         rec->sort_order = _mbox_get_sortorder(q->req, rec->mbname);
@@ -2544,7 +2544,7 @@ static void _mbox_update(jmap_req_t *req, struct jmap_setmbox_args *args,
     int is_inbox = 0;
     if (strcmp(args->id, mbinbox->uniqueid)) {
         oldmboxname = xstrdup(mbentry->name);
-        r = _findparent(oldmboxname, &mbparent);
+        r = jmap_mailbox_findparent(oldmboxname, &mbparent);
         if (r) {
             syslog(LOG_INFO, "_findparent(%s) failed: %s",
                             oldmboxname, error_message(r));
@@ -2619,7 +2619,7 @@ static void _mbox_update(jmap_req_t *req, struct jmap_setmbox_args *args,
 
         /* Reject cycles in mailbox tree. */
         char *pname = xstrdup(newparentname);
-        while (_findparent(pname, &pmbentry) == 0) {
+        while (jmap_mailbox_findparent(pname, &pmbentry) == 0) {
             if (!strcmp(args->id, pmbentry->uniqueid)) {
                 jmap_parser_invalid(&parser, "parentId");
                 free(pname);
@@ -2662,7 +2662,7 @@ static void _mbox_update(jmap_req_t *req, struct jmap_setmbox_args *args,
     /* Do we need to rename the mailbox? But only if it isn't the INBOX! */
     if (!is_inbox && (args->name || force_rename)) {
         mbname_t *mbname = mbname_from_intname(oldmboxname);
-        char *oldname = _mbox_get_name(req->accountid, mbname);
+        char *oldname = jmap_mbox_get_name(req->accountid, mbname);
         mbname_free(&mbname);
         ptrarray_append(&strpool, oldname);
         char *name = oldname;
@@ -3244,7 +3244,7 @@ static struct setmbox_ops *_setmbox_newops(jmap_req_t *req, struct jmap_setmbox_
                 continue;
             }
             mbentry_t *parent = NULL;
-            if (_findparent(mbentry->name, &parent) == 0) {
+            if (jmap_mailbox_findparent(mbentry->name, &parent) == 0) {
                 hash_insert(mbox_id, xstrdup(parent->uniqueid), &parent_id_by_id);
             }
             else {
@@ -3433,7 +3433,7 @@ static void _setmbox_state_mkentry_cb(const char *imapname, void *idptr, void *r
     /* Make entry */
     struct setmbox_entry *entry = xzmalloc(sizeof(struct setmbox_entry));
     mbname_t *mbname = mbname_from_intname(imapname);
-    entry->name = _mbox_get_name(state->req->accountid, mbname);
+    entry->name = jmap_mbox_get_name(state->req->accountid, mbname);
 
     /* Find parent */
     mbentry_t *pmbentry = NULL;
@@ -3447,7 +3447,7 @@ static void _setmbox_state_mkentry_cb(const char *imapname, void *idptr, void *r
         entry->is_toplevel = 1;
         break;
     default:
-        assert(_findparent(imapname, &pmbentry) == 0);
+        assert(jmap_mailbox_findparent(imapname, &pmbentry) == 0);
         entry->parent_id = xstrdup(pmbentry->uniqueid);
         break;
     }
