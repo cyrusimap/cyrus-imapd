@@ -4458,6 +4458,34 @@ static int createevent_toical(jmap_req_t *req,
         buf_reset(&buf);
     }
 
+    // Shared team calendars require an owner
+    if (strcmp(req->accountid, req->userid)) {
+        if (!caldav_is_secretarymode(create->mbentry->name)) {
+            if (strarray_size(&create->schedule_addresses)) {
+                const char *addr = strarray_nth(&create->schedule_addresses, 0);
+                buf_reset(&buf);
+                if (strncasecmp(addr, "mailto:", 7))
+                    buf_appendcstr(&buf, "mailto:");
+                buf_appendcstr(&buf, addr);
+
+                if (JNULL(json_object_get(create->jsevent, "participants"))) {
+                    // must add owner participant
+                    json_object_set_new(create->jsevent, "participants",
+                            json_pack("{s:{s:{s:s} s:{s:b}}}",
+                                "teamowner",
+                                "sendTo", "imip", buf_cstring(&buf),
+                                "roles", "owner", 1));
+                }
+
+                if (JNULL(json_object_get(create->jsevent, "replyTo"))) {
+                    // must add owner participant
+                    json_object_set_new(create->jsevent, "replyTo",
+                            json_pack("{s:s}", "imip", buf_cstring(&buf)));
+                }
+            }
+        }
+    }
+
     create->ical = jmapical_toical(create->jsevent, NULL, parser->invalid,
             create->serverset, &create->comp, jmapctx);
 

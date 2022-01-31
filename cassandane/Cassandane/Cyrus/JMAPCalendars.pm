@@ -3995,6 +3995,7 @@ sub test_calendarevent_set_shared
     my $caldav = $self->{caldav};
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");
+    my ($maj, $min) = Cassandane::Instance->get_version();
 
     xlog $self, "create shared account";
     $admintalk->create("user.manifold");
@@ -4100,6 +4101,10 @@ sub test_calendarevent_set_shared
                     ids => [$id]},
     "R1"]]);
     my $ret = $res->[0][1]{list}[0];
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        delete($ret->{replyTo});
+        delete($ret->{participants});
+    }
     $self->assert_normalized_event_equals($event, $ret);
 
     xlog $self, "update event";
@@ -4121,6 +4126,10 @@ sub test_calendarevent_set_shared
                     ids => [$id]},
     "R1"]]);
     $ret = $res->[0][1]{list}[0];
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        delete($ret->{replyTo});
+        delete($ret->{participants});
+    }
     $self->assert_normalized_event_equals($event2, $ret);
 
     xlog $self, "share $CalendarId1 read-only to user";
@@ -19062,5 +19071,166 @@ sub test_calendarevent_set_replyto
         imip => 'mailto:cassandane@example.com',
     }, $res->[0][1]{updated}{$eventId}{replyTo});
 }
+
+sub test_calendarevent_set_teamcalendar_create
+    :min_version_3_7 :needs_component_jmap :ReverseACLs :NoAltnameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create sharee";
+    my ($shareeJmap, $shareeCaldav) = $self->create_user('sharee');
+
+    xlog "share calendar with sharee";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteAll => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "sharees act as self";
+    my $getCalendarCapas = sub {
+        my ($account) = @_;
+        my $RawRequest = {
+            headers => {
+                'Authorization' => $jmap->auth_header(),
+            },
+            content => '',
+        };
+        my $RawResponse = $shareeJmap->ua->get($jmap->uri(), $RawRequest);
+        if ($ENV{DEBUGJMAP}) {
+            warn "JMAP " . Dumper($RawRequest, $RawResponse);
+        }
+        $self->assert_str_equals('200', $RawResponse->{status});
+        my $session = eval { decode_json($RawResponse->{content}) };
+        $self->assert_not_null($session);
+        return $session->{accounts}{$account}{accountCapabilities}{'urn:ietf:params:jmap:calendars'};
+    };
+    my $capas = $getCalendarCapas->('cassandane');
+    $self->assert_str_equals('self', $capas->{shareesActAs});
+
+    xlog "Sharee creates event without participants";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            create => {
+                event1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => '2022-01-28T09:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event1',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => ['#event1'],
+            properties => ['replyTo', 'participants'],
+        }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{event1});
+
+    xlog "server must have set owner and participants of sharee";
+    $self->assert_deep_equals({
+        imip => 'mailto:sharee@example.com',
+    }, $res->[1][1]{list}[0]{replyTo});
+    $self->assert_num_equals(1, scalar keys %{$res->[1][1]{list}[0]{participants}});
+    $self->assert_deep_equals({
+        sendTo => {
+            imip => 'mailto:sharee@example.com',
+        },
+        roles => {
+            owner => JSON::true,
+        },
+        # default values
+        '@type' => 'Participant',
+        participationStatus => 'needs-action',
+        expectReply => JSON::false,
+    }, (values %{$res->[1][1]{list}[0]{participants}})[0]);
+
+    xlog "Calendar owner creates event without participants";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => '2022-01-28T09:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event2',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => 'sharer',
+            ids => ['#event2'],
+            properties => ['replyTo', 'participants'],
+        }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{event2});
+
+    xlog "server must not have set owner and participants";
+    $self->assert_null($res->[1][1]{list}[0]{replyTo});
+    $self->assert_null($res->[1][1]{list}[0]{participants});
+
+    xlog 'Set shared calendar to secretary mode';
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:JMAP="urn:ietf:params:jmap:calendars">
+  <D:set>
+    <D:prop>
+      <JMAP:sharees-act-as>secretary</JMAP:sharees-act-as>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/calendars/user/cassandane", $xml,
+        'Content-Type' => 'text/xml');
+
+    xlog "Sharee creates event without participants";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            create => {
+                event3 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => '2022-01-28T09:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event3',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => 'sharer',
+            ids => ['#event3'],
+            properties => ['replyTo', 'participants'],
+        }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{event3});
+
+    xlog "server must not have set owner and participants";
+    $self->assert_null($res->[1][1]{list}[0]{replyTo});
+    $self->assert_null($res->[1][1]{list}[0]{participants});
+}
+
 
 1;
