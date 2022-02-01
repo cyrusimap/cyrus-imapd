@@ -107,8 +107,7 @@ struct jmap_setmbox_ctx {
     void (*update_proc)(jmap_req_t *, struct jmap_setmbox_args *,
                         enum jmap_setmbox_runmode,
                         struct jmap_setmbox_result *, strarray_t *);
-    int on_destroy_remove_msgs;
-    const char *on_destroy_move_to_mailboxid;
+    void *rock;  // type-specific arguments/context
 };
 
 extern void jmap_mailbox_init(jmap_settings_t *settings);
