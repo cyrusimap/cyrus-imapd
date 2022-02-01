@@ -2041,6 +2041,11 @@ link_from_ical(icalproperty *prop, struct jmapical_ctx *jmapctx)
         json_object_set_new(link, "display", json_string(s));
     }
 
+    if (!json_object_size(link)) {
+        json_decref(link);
+        link = NULL;
+    }
+
     buf_free(&datauri);
     return link;
 }
@@ -2049,74 +2054,68 @@ static json_t* linksbyprop_from_ical(icalcomponent *comp,
                                      struct jmapical_ctx *jmapctx)
 {
     icalproperty* prop;
-    json_t *ret = json_object();
+    json_t *jlinks = json_object();
 
-    /* Read iCalendar ATTACH properties */
-    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
+    // Gather all links the event, organized by the JSCalendar property
+    // that embeds them. This can either be the top-level property
+    // "links", or the embedding properties "locations" and "participants".
+    // For "locations" and "participants", organize the map of Link objects
+    // by the Location or Participant, respectively.
 
-        const char *propname = get_icalxparam_value(prop, JMAPICAL_XPARAM_PARENTPROP);
-        if (!propname) propname = "links";
-        json_t *jlinks = json_object_get(ret, propname);
-        if (!jlinks) {
-            jlinks = json_object();
-            json_object_set_new(ret, propname, jlinks);
-        }
+    icalproperty_kind kinds[] = { ICAL_ATTACH_PROPERTY, ICAL_URL_PROPERTY };
 
-        const char *parentid = get_icalxparam_value(prop, JMAPICAL_XPARAM_PARENTID);
-        if (parentid) {
-            json_t *jproplinks = json_object_get(jlinks, parentid);
-            if (!jproplinks) {
-                jproplinks = json_object();
-                json_object_set_new(jlinks, parentid, jproplinks);
+    size_t i;
+    for (i = 0; i < sizeof(kinds)/sizeof(kinds[0]); i++) {
+        icalproperty_kind kind = kinds[i];
+
+        for (prop = icalcomponent_get_first_property(comp, kind);
+             prop;
+             prop = icalcomponent_get_next_property(comp, kind)) {
+
+            const char *propname = get_icalxparam_value(prop, JMAPICAL_XPARAM_PARENTPROP);
+            if (!propname) propname = "links";
+
+            json_t *jlinks_propname = json_object_get(jlinks, propname);
+            if (!jlinks_propname) {
+                jlinks_propname = json_object();
+                json_object_set_new(jlinks, propname, jlinks_propname);
             }
-            jlinks = jproplinks;
-        }
 
-        const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
-        char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
-        if (!id) id = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
-        json_t *link = link_from_ical(prop, jmapctx);
-        if (link) json_object_set_new(jlinks, id, link);
-    }
-
-    /* Read iCalendar URL property. Should only be one. */
-    for (prop = icalcomponent_get_first_property(comp, ICAL_URL_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(comp, ICAL_URL_PROPERTY)) {
-
-        const char *propname = get_icalxparam_value(prop, JMAPICAL_XPARAM_PARENTPROP);
-        if (!propname) propname = "links";
-        json_t *jlinks = json_object_get(ret, propname);
-        if (!jlinks) {
-            jlinks = json_object();
-            json_object_set_new(ret, propname, jlinks);
-        }
-
-        const char *parentid = get_icalxparam_value(prop, JMAPICAL_XPARAM_PARENTID);
-        if (parentid) {
-            json_t *jproplinks = json_object_get(jlinks, parentid);
-            if (!jproplinks) {
-                jproplinks = json_object();
-                json_object_set_new(jlinks, parentid, jproplinks);
+            const char *propid = get_icalxparam_value(prop, JMAPICAL_XPARAM_PARENTID);
+            json_t *jlinks_propid = NULL;
+            if (propid) {
+                jlinks_propid = json_object_get(jlinks_propname, propid);
+                if (!jlinks_propid) {
+                    jlinks_propid = json_object();
+                    json_object_set_new(jlinks_propname, propid, jlinks_propid);
+                }
             }
-            jlinks = jproplinks;
+
+            const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
+            char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+            if (!id) id = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
+            json_t *link = link_from_ical(prop, jmapctx);
+            if (json_object_size(link)) {
+                json_object_set_new(jlinks_propid ?
+                        jlinks_propid : jlinks_propname, id, link);
+            }
+
+            // do not leave empty link objects lingering around
+            if (propid && !json_object_size(jlinks_propid)) {
+                json_object_del(jlinks_propname, propid);
+            }
+            if (!json_object_size(jlinks_propname)) {
+                json_object_del(jlinks, propname);
+            }
         }
-
-        const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
-        char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
-        if (!id) id = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
-        json_t *link = link_from_ical(prop, jmapctx);
-        if (link) json_object_set_new(jlinks, id, link);
     }
 
-    if (!json_object_size(ret)) {
-        json_decref(ret);
-        ret = json_null();
+    if (!json_object_size(jlinks)) {
+        json_decref(jlinks);
+        jlinks = json_null();
     }
 
-    return ret;
+    return jlinks;
 }
 
 static json_t *participant_from_ical(icalproperty *prop,
