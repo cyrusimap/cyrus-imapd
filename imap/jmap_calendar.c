@@ -5136,6 +5136,19 @@ static int updateevent_apply_patch(jmap_req_t *req,
         calendarevent_get_floatingtz(mbentry, req->userid,
                 &floatingtz_is_malloced);
 
+    if (eid->ical_recurid && !is_standalone) {
+        // XXX caldav.db version 15 stores standalone instances by their
+        // recurrence id. But until the DAV databases got reconstructed,
+        // we might encounter db records with an empty recurid column.
+        icalcomponent *comp;
+        for (comp = icalcomponent_get_first_real_component(oldical);
+             comp && icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+             comp = icalcomponent_get_next_component(oldical,
+                 icalcomponent_isa(comp))) { }
+
+        is_standalone = !comp;
+    }
+
     // prepare iCalendar data
     icalcomponent *myoldical = oldical;
     if (is_standalone) {
