@@ -17687,4 +17687,63 @@ EOF
     $self->assert_deep_equals($locations, $res->[0][1]{list}[0]{locations});
 }
 
+sub test_calendareventnotification_expire_slow
+    :min_version_3_7 :needs_component_jmap :JmapNotifExpire1s
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my ($shareeJmap, $shareCaldav) = $self->create_user('sharee');
+
+    xlog "Share calendar with sharee and create event";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    title => 'event1',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    start => '2011-01-01T04:05:06',
+                    duration => 'PT1H',
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+    $self->assert_not_null($res->[1][1]{created}{event1});
+
+    xlog "Sharee sees event notification";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    sleep(2);
+
+    xlog $self, "Run cyr_expire for sharee";
+    $self->{instance}->run_command({cyrus => 1}, 'cyr_expire', '-v', '-E', '10');
+
+    xlog "Notifications are now expired";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+}
+
 1;

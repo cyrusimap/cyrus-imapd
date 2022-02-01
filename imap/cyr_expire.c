@@ -481,6 +481,10 @@ static int expire(const mbentry_t *mbentry, void *rock)
                      mbentry->name,
                      ((double)expire_seconds/SECS_IN_A_DAY));
 
+            verbosep("expiring messages in %s older than %d seconds\n",
+                     mbentry->name,
+                     (expire_seconds));
+
             r = mailbox_expunge(mailbox, expire_cb, erock, NULL,
                                 EVENT_MESSAGE_EXPIRE);
             if (r)
