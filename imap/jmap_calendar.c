@@ -9342,7 +9342,6 @@ static void notif_set(struct jmap_req *req,
                       const mbentry_t *notifmb,
                       int set_seen,
                       modseq_t statemodseq,
-                      time_t expunge_all_before,
                       json_t **err)
 {
     struct mailbox *notifmbox = NULL;
@@ -9463,21 +9462,6 @@ static void notif_set(struct jmap_req *req,
         }
         /* seen.db won't bump the modseq, so force that here */
         mboxname_nextmodseq(notifmb->name, statemodseq, MBTYPE_JMAPNOTIFY, 0);
-    }
-
-    if (expunge_all_before) {
-        struct mailbox_iter *iter = mailbox_iter_init(notifmbox, 0, 0);
-        message_t *msg;
-        while ((msg = (message_t *) mailbox_iter_step(iter))) {
-            struct index_record record = *msg_record(msg);
-            if (record.internaldate < expunge_all_before &&
-                !(record.system_flags & FLAG_DELETED) &&
-                !(record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-                    record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-                    mailbox_rewrite_index_record(notifmbox, &record);
-            }
-        }
-        mailbox_iter_done(&iter);
     }
 
 done:
@@ -9871,7 +9855,7 @@ static int jmap_sharenotification_set(struct jmap_req *req)
         goto done;
     }
 
-    notif_set(req, &set, notifmb, 0, req->counters.davnotificationmodseq, 0, &err);
+    notif_set(req, &set, notifmb, 0, req->counters.davnotificationmodseq, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -10642,9 +10626,7 @@ static int jmap_calendareventnotification_set(struct jmap_req *req)
         goto done;
     }
 
-    time_t expunge_all_before = time(NULL) - 60 * 60 * 24 * 30; // TODO add config option?
-    notif_set(req, &set, notifmb, 1, req->counters.jmapnotificationmodseq,
-            expunge_all_before, &err);
+    notif_set(req, &set, notifmb, 1, req->counters.jmapnotificationmodseq, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

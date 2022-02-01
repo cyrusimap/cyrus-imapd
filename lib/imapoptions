@@ -1285,6 +1285,17 @@ Blank lines and lines beginning with ``#'' are ignored.
    property of the JMAP \"urn:ietf:params:jmap:mail\" capabilities object. The Cyrus
    JMAP implementation does not enforce this size limit. Default is 10 Mb.*/
 
+{ "jmap_notifications_expire", "30d", DURATION, "UNRELEASED" }
+/* The maximum age after which notifications in the JMAP notifications mailbox
+   should be expired. The minimum value is 1 second. A value of 0 disables
+   expiration.
+.PP
+   WARNING: changing this value only takes effect on newly created
+   JMAP notification mailboxes. To change for existing mailboxes,
+   one must update the /vendor/cmu/cyrus-imapd/expire mailbox annotation. */
+.PP
+   If no unit is specified, seconds is assumed. */
+
 { "jmap_nonstandard_extensions", 0, SWITCH, "3.1.9" }
 /* If enabled, support non-standard JMAP extensions.  If not enabled,
    only IETF standard JMAP functionality is supported. */

@@ -1,0 +1,21 @@
+Description:
+
+Sets the #jmapnotifications mailbox to auto-expire messages.
+
+Config changes:
+
+jmap_notifications_expire
+
+
+Upgrade instructions:
+
+This changes only applies to #jmapnotification mailboxes that
+are created after this patch is applied. Installations that
+want to enable this change on existing #jmapnotification mailboxes
+must set the "/vendor/cmu/cyrus-imapd/expire" mailbox annotation
+with value "30d" (or any other expire age).
+
+
+GitHub issue:
+
+None

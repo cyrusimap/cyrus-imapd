@@ -308,6 +308,9 @@ magic(NoMunge8Bit => sub {
 magic(RFC2047_UTF8 => sub {
     shift->config_set(rfc2047_utf8 => 'yes');
 });
+magic(JMAPNotifExpire1s => sub {
+    shift->config_set('jmap_notifications_expire' => '1s');
+});
 magic(JMAPSearchDBLegacy => sub {
     # XXX Needed for JMAPEmail.email_query_..._legacy (3.1-3.4).
     # XXX Don't use in newer tests, and remove this someday when 3.4 is

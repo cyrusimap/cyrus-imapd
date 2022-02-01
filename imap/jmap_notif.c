@@ -70,11 +70,13 @@ HIDDEN int jmap_create_notify_collection(const char *userid, mbentry_t **mbentry
 {
     /* notifications collection */
     char *notifmboxname = jmap_notifmboxname(userid);
+    struct mailbox *notifmbox = NULL;
+    struct mboxlock *namespacelock = NULL;
 
     int r = mboxlist_lookup(notifmboxname, mbentryptr, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* lock the namespace lock and try again */
-        struct mboxlock *namespacelock = user_namespacelock(userid);
+        namespacelock = user_namespacelock(userid);
 
         mbentry_t mbentry = MBENTRY_INITIALIZER;
         mbentry.name = notifmboxname;
@@ -89,9 +91,51 @@ HIDDEN int jmap_create_notify_collection(const char *userid, mbentry_t **mbentry
                       notifmboxname, error_message(r));
 
         r = mboxlist_lookup(notifmboxname, mbentryptr, NULL);
-        mboxname_release(&namespacelock);
+        if (r) {
+            xsyslog(LOG_ERR, "can not lookup notification mailbox",
+                    "mboxname=<%s> err=<%s>", notifmboxname, error_message(r));
+            goto done;
+        }
+
+        int expire = config_getduration(IMAPOPT_JMAP_NOTIFICATIONS_EXPIRE, 'd');
+
+        if (expire > 0) {
+            /* now set it to auto-expire old notifications */
+            r = mailbox_open_iwl(notifmboxname, &notifmbox);
+            if (r) {
+                xsyslog(LOG_ERR, "failed to open notification mailbox",
+                        "mboxname=<%s> err=<%s>",
+                        notifmboxname, error_message(r));
+                goto done;
+            }
+
+            annotate_state_t *astate = NULL;
+            r = mailbox_get_annotate_state(notifmbox, 0, &astate);
+            if (r) {
+                xsyslog(LOG_ERR, "can not open annotate state",
+                        "mboxname=<%s> err=<%s>",
+                        notifmboxname, error_message(r));
+                goto done;
+            }
+
+            static const char *expire_annot = IMAP_ANNOT_NS "expire";
+            struct buf val = BUF_INITIALIZER;
+            buf_printf(&val, "%ds", expire);
+            r = annotate_state_writemask(astate, expire_annot, "", &val);
+            buf_free(&val);
+            if (r) {
+                xsyslog(LOG_ERR, "failed to write annotation",
+                        "annot=<%s> mboxname=<%s> err=<%s>",
+                        expire_annot, notifmboxname, error_message(r));
+                goto done;
+            }
+        }
     }
 
+done:
+    mailbox_close(&notifmbox);
+    if (namespacelock)
+        mboxname_release(&namespacelock);
     free(notifmboxname);
     return r;
 }
