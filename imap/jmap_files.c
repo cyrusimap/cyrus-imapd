@@ -409,30 +409,28 @@ static int jmap_files_get(jmap_req_t *req)
         const char *id = json_string_value(jval);
         struct webdav_data *wdata = NULL;
         mbentry_t *mbentry = NULL;
-        int r;
+        int r = 0;
 
         if (!strcmp(id, "root")) {
             /* root */
-            r = mboxlist_lookup(root, &mbentry, NULL);
+            r = jmap_mboxlist_lookup(root, &mbentry, NULL);
         }
-        else if (webdav_lookup_uid(db, id, &wdata)) {
-            /* folder */
-            r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
+        else if (webdav_lookup_uid(db, id, &wdata) == 0) {
+            /* file */
+            mbentry = jmap_mbentry_from_dav(req, &wdata->dav);
         }
         else {
-            /* file */
-            if (wdata->dav.mailbox_byname) {
-                r = mboxlist_lookup(wdata->dav.mailbox, &mbentry, NULL);
-            }
-            else {
-                r = mboxlist_lookup_by_uniqueid(wdata->dav.mailbox, &mbentry, NULL);
-            }
+            /* folder */
+            mbentry = jmap_mbentry_by_uniqueid_copy(req, id);
+            r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
         }
 
         if (!r && mbentry &&
             /* Only DAV drive collections... */
             mboxname_isdavdrivemailbox(mbentry->name, mbentry->mbtype) &&
-            /* ...which are at least readable or visible... */
+            /* ...that are NOT deleted... */
+            !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
+            /* ...and which are at least readable or visible... */
             jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
 
             if (wdata && wdata->dav.rowid) {
