@@ -427,8 +427,13 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
         else {
             /* Translate any separators in mailboxname */
             char *intname = mboxname_from_external(mboxnames[i], &squat_namespace, NULL);
-            int flags = recursive_flag ? 0 : MBOXTREE_SKIP_CHILDREN;
-            mboxlist_mboxtree(intname, addmbox, sa, flags);
+            if (!intname || *intname == '\0') {
+                fprintf(stderr, "Mailbox %s: %s\n",
+                        mboxnames[i], error_message(IMAP_MAILBOX_BADNAME));
+            } else {
+                int flags = recursive_flag ? 0 : MBOXTREE_SKIP_CHILDREN;
+                mboxlist_mboxtree(intname, addmbox, sa, flags);
+            }
             free(intname);
         }
 
