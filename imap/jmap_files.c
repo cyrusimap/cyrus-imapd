@@ -60,11 +60,13 @@
 #include "hash.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
+#include "jmap_mailbox.h"
 #include "jmap_util.h"
 #include "json_support.h"
 #include "proxy.h"
 #include "stristr.h"
 #include "sync_support.h"
+#include "user.h"
 #include "util.h"
 #include "webdav_db.h"
 
@@ -467,226 +469,719 @@ done:
     return 0;
 }
 
-static json_t *jmap_error_message(int r)
+static void _set_args_parse(json_t *jargs,
+                            struct jmap_parser *parser,
+                            struct jmap_setmbox_args *args,
+                            int is_create)
 {
-    json_t *err = NULL;
+    /* Initialize arguments */
+    memset(args, 0, sizeof(struct jmap_setmbox_args));
+    args->type = JMAP_SETMBOX_NODE;
+    args->jargs = json_incref(jargs);
 
-    switch (r) {
-    case HTTP_FORBIDDEN:
-    case IMAP_PERMISSION_DENIED:
-        err = json_pack("{s:s}", "type", "forbidden");
-        break;
-    case IMAP_QUOTA_EXCEEDED:
-        err = json_pack("{s:s}", "type", "overQuota");
-        break;
-    case IMAP_MESSAGE_TOO_LARGE:
-        err = json_pack("{s:s}", "type", "tooLarge");
-        break;
-    default:
-        err = jmap_server_error(r);
+    /* id */
+    json_t *jid = json_object_get(jargs, "id");
+    if (json_is_string(jid) && !is_create) {
+        args->id = xstrdup(json_string_value(jid));
+    }
+    else if (JNOTNULL(jid) && is_create) {
+        jmap_parser_invalid(parser, "id");
     }
 
-    return err;
+    /* name */
+    json_t *jname = json_object_get(jargs, "name");
+    if (json_is_string(jname)) {
+        char *name = charset_utf8_normalize(json_string_value(jname));
+        size_t len = strlen(name);
+        int is_valid = 0;
+        size_t i;
+        for (i = 0; i < len; i++) {
+            if (iscntrl(name[i])) {
+                is_valid = 0;
+                break;
+            }
+            else if (!isspace(name[i])) {
+                is_valid = 1;
+            }
+        }
+        if (is_valid) {
+            args->name = name;
+        }
+        else {
+            /* Empty string, bogus characters or just whitespace */
+            jmap_parser_invalid(parser, "name");
+            free(name);
+        }
+    }
+    else if (is_create) {
+        jmap_parser_invalid(parser, "name");
+    }
+
+    /* parentId */
+    json_t *jparentId = json_object_get(jargs, "parentId");
+    if (json_is_string(jparentId)) {
+        const char *parent_id = json_string_value(jparentId);
+        if (parent_id && (*parent_id != '#' || *(parent_id + 1))) {
+            args->parent_id = xstrdup(parent_id);
+        }
+        if (!args->parent_id) {
+            jmap_parser_invalid(parser, "parentId");
+        }
+    }
+    else if (jparentId) {
+        jmap_parser_invalid(parser, "parentId");
+    }
+
+    /* blobId */
+    json_t *jblobId = json_object_get(jargs, "blobId");
+    if (json_is_string(jblobId)) {
+        const char *blobid = json_string_value(jblobId);
+        if (blobid && (*blobid != '#' || *(blobid + 1))) {
+            args->u.node.blobid = xstrdup(blobid);
+        }
+        if (!args->u.node.blobid) {
+            jmap_parser_invalid(parser, "blobId");
+        }
+    } else if (JNOTNULL(jblobId)) {
+        jmap_parser_invalid(parser, "blobId");
+    }
+
+    /* type */
+    json_t *jtype = json_object_get(jargs, "type");
+    if (json_is_string(jtype) && args->u.node.blobid) {
+        args->u.node.type = xstrdup(json_string_value(jtype));
+    } else if (JNOTNULL(jtype)) {
+        jmap_parser_invalid(parser, "blobId");
+    }
+
+    if (!is_create) {
+        /* Is shareWith overwritten or patched? */
+        json_t *shareWith = NULL;
+        jmap_parse_sharewith_patch(jargs, &shareWith);
+        if (shareWith) {
+            args->u.mbox.overwrite_acl = 0;
+            json_object_set_new(jargs, "shareWith", shareWith);
+        }
+    }
+
+    /* shareWith */
+    args->shareWith = json_object_get(jargs, "shareWith");
+    if (args->shareWith && JNOTNULL(args->shareWith) &&
+        !json_is_object(args->shareWith)) {
+        jmap_parser_invalid(parser, "shareWith");
+    }
+
+    /* All of these are server-set. */
+    json_t *jrights = json_object_get(jargs, "myRights");
+    if (json_is_object(jrights) && !is_create) {
+        /* Update allows clients to set myRights, as long as
+         * it doesn't change their values. Don't bother with
+         * that during parsing, just make sure that it is
+         * syntactically valid. */
+        const char *right;
+        json_t *jval;
+        jmap_parser_push(parser, "myRights");
+        json_object_foreach(jrights, right, jval) {
+            if (!json_is_boolean(jval))
+                jmap_parser_invalid(parser, right);
+        }
+        jmap_parser_pop(parser);
+    }
+    else if (JNOTNULL(jrights)) {
+        jmap_parser_invalid(parser, "myRights");
+    }
+
+    if (json_object_get(jargs, "size") && is_create)
+        jmap_parser_invalid(parser, "size");
+    if (json_object_get(jargs, "width") && is_create)
+        jmap_parser_invalid(parser, "width");
+    if (json_object_get(jargs, "height") && is_create)
+        jmap_parser_invalid(parser, "height");
+    if (json_object_get(jargs, "orientation") && is_create)
+        jmap_parser_invalid(parser, "orientation");
+
+}
+
+static void _set_parse(jmap_req_t *req,
+                       struct jmap_parser *parser,
+                       struct jmap_setmbox_ctx *set,
+                       json_t **err)
+{
+    json_t *jarg;
+    size_t i;
+
+    jmap_set_parse(req, parser, files_props, NULL, NULL, &set->super, err);
+
+    /* create */
+    const char *creation_id = NULL;
+    json_object_foreach(set->super.create, creation_id, jarg) {
+        struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
+        struct jmap_setmbox_args *args = xzmalloc(sizeof(struct jmap_setmbox_args));
+        json_t *set_err = NULL;
+
+        _set_args_parse(jarg, &myparser, args, /*is_create*/1);
+        args->creation_id = xstrdup(creation_id);
+        if (json_array_size(myparser.invalid)) {
+            set_err = json_pack("{s:s}", "type", "invalidProperties");
+            json_object_set(set_err, "properties", myparser.invalid);
+            json_object_set_new(set->super.not_created, creation_id, set_err);
+            jmap_parser_fini(&myparser);
+            jmap_setmbox_args_fini(args);
+            free(args);
+            continue;
+        }
+        ptrarray_append(&set->to_create, args);
+        jmap_parser_fini(&myparser);
+    }
+
+    /* update */
+    hash_table will_destroy = HASH_TABLE_INITIALIZER;
+    size_t size = json_array_size(set->super.destroy);
+    if (size) {
+        construct_hash_table(&will_destroy, size, 0);
+        json_array_foreach(set->super.destroy, i, jarg) {
+            hash_insert(json_string_value(jarg), (void*)1, &will_destroy);
+        }
+    }
+    const char *mbox_id = NULL;
+    json_object_foreach(set->super.update, mbox_id, jarg) {
+        /* Parse Mailbox/set arguments  */
+        struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
+        struct jmap_setmbox_args *args = xzmalloc(sizeof(struct jmap_setmbox_args));
+        _set_args_parse(jarg, &myparser, args, /*is_create*/0);
+        if (args->id && strcmp(args->id, mbox_id)) {
+            jmap_parser_invalid(&myparser, "id");
+        }
+        if (!args->id) args->id = xstrdup(mbox_id);
+        if (json_array_size(myparser.invalid)) {
+            json_t *err = json_pack("{s:s}", "type", "invalidProperties");
+            json_object_set(err, "properties", myparser.invalid);
+            json_object_set_new(set->super.not_updated, mbox_id, err);
+            jmap_parser_fini(&myparser);
+            jmap_setmbox_args_fini(args);
+            free(args);
+            continue;
+        }
+        if (hash_lookup(args->id, &will_destroy)) {
+            json_t *err = json_pack("{s:s}", "type", "willDestroy");
+            json_object_set_new(set->super.not_updated, mbox_id, err);
+            jmap_parser_fini(&myparser);
+            jmap_setmbox_args_fini(args);
+            free(args);
+            continue;
+        }
+        ptrarray_append(&set->to_update, args);
+        jmap_parser_fini(&myparser);
+    }
+
+    /* destroy */
+    set->to_destroy = hash_keys(&will_destroy);
+    free_hash_table(&will_destroy, NULL);
+}
+
+static void _set_create_folder(jmap_req_t *req, struct jmap_setmbox_args *args,
+                               enum jmap_setmbox_runmode mode,
+                               json_t **mbox, struct jmap_setmbox_result *result,
+                               strarray_t *update_intermediaries)
+{
+    char *mboxname = NULL;
+    int r = 0;
+    mbentry_t *mbroot = NULL, *mbentry = NULL;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct mailbox *mailbox = NULL;
+
+    char *root = webdav_mboxname(req->accountid, NULL);
+    jmap_mboxlist_lookup(root, &mbroot, NULL);
+    free(root);
+
+    /* Lookup parent creation id, if any. This also deals with
+     * bogus File/set operations that attempt to create
+     * cycles in the mailbox tree: they'll all fail due to
+     * unresolvable parentIds. */
+    const char *parent_id = args->parent_id;
+    if (!strcmp("root", parent_id)) {
+        parent_id = mbroot->uniqueid;
+    }
+    else if (*parent_id == '#') {
+        parent_id = jmap_lookup_id(req, parent_id + 1);
+        if (!parent_id) {
+            if (mode == JMAP_SETMBOX_SKIP) {
+                result->skipped = 1;
+            }
+            else {
+                jmap_parser_invalid(&parser, "parentId");
+            }
+            goto done;
+        }
+    }
+
+    /* Check parent exists and has the proper ACL. */
+    const mbentry_t *mbparent = jmap_mbentry_by_uniqueid(req, parent_id);
+    if (!mbparent || !jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD)) {
+        jmap_parser_invalid(&parser, "parentId");
+        goto done;
+    }
+
+    /* Encode the mailbox name for IMAP. */
+    mboxname = jmap_mbox_newname(args->name, mbparent->name, 0);
+    if (!mboxname) {
+        syslog(LOG_ERR, "could not encode mailbox name");
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Check if a mailbox with this name exists */
+    r = jmap_mboxlist_lookup(mboxname, NULL, NULL);
+    if (r == 0) {
+        if (mode == JMAP_SETMBOX_SKIP) {
+            result->skipped = 1;
+            goto done;
+        }
+        else if (mode == JMAP_SETMBOX_INTERIM) {
+            result->new_imapname = xstrdup(mboxname);
+            result->old_imapname = NULL;
+            result->tmp_imapname = jmap_mbox_tmpname(args->name, mbparent->name, 0);
+            if (!result->tmp_imapname) {
+                syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", mboxname);
+                r = IMAP_INTERNAL;
+                goto done;
+            }
+            free(mboxname);
+            mboxname = xstrdup(result->tmp_imapname);
+            /* Keep on processing with tmpname */
+        }
+        else {
+            syslog(LOG_ERR, "jmap: mailbox already exists: %s", mboxname);
+            jmap_parser_invalid(&parser, "name");
+            goto done;
+        }
+    }
+    else if (r != IMAP_MAILBOX_NONEXISTENT) {
+        goto done;
+    }
+    r = 0;
+
+    /* Create mailbox */
+    mbentry_t newmbentry = MBENTRY_INITIALIZER;
+    newmbentry.name = mboxname;
+    newmbentry.mbtype = MBTYPE_COLLECTION;
+
+    r = mboxlist_createmailbox(&newmbentry, 0/*options*/, 0/*highestmodseq*/,
+                               0/*isadmin*/, req->userid, req->authstate,
+                               MBOXLIST_CREATE_KEEP_INTERMEDIARIES,
+                               args->shareWith ? &mailbox : NULL);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                mboxname, error_message(r));
+        goto done;
+    }
+    strarray_add(update_intermediaries, mboxname);
+
+     /* invalidate ACL cache */
+    jmap_myrights_delete(req, mboxname);
+    jmap_mbentry_cache_free(req);
+
+    /* shareWith */
+    if (args->shareWith) {
+        r = jmap_set_sharewith(mailbox, args->shareWith, args->u.mbox.overwrite_acl);
+        mailbox_close(&mailbox);
+    }
+    if (r) goto done;
+
+    /* Write annotations */
+//    r = _mbox_set_annots(req, args, mboxname);
+    if (r) goto done;
+
+    /* Lookup and return the new mailbox id */
+    r = jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (r) goto done;
+    *mbox = json_pack("{s:s}", "id", mbentry->uniqueid);
+    /* Set server defaults */
+//    if (args->u.mbox.is_subscribed < 0) {
+//        json_object_set_new(*mbox, "isSubscribed", json_false());
+//    }
+
+done:
+    if (json_array_size(parser.invalid)) {
+        result->err = json_pack("{s:s}", "type", "invalidProperties");
+        json_object_set(result->err, "properties", parser.invalid);
+    }
+    else if (r) {
+        result->err = jmap_server_error(r);
+    }
+    free(mboxname);
+    mboxlist_entry_free(&mbroot);
+    mboxlist_entry_free(&mbentry);
+    jmap_parser_fini(&parser);
+}
+
+static void _set_create(jmap_req_t *req, struct jmap_setmbox_args *args,
+                        enum jmap_setmbox_runmode mode,
+                        json_t **mbox, struct jmap_setmbox_result *result,
+                        strarray_t *update_intermediaries)
+{
+    if (args->u.node.blobid) {
+    }
+
+    return _set_create_folder(req, args, mode,
+                              mbox, result, update_intermediaries);
+}
+
+static void _set_update_folder(jmap_req_t *req, struct jmap_setmbox_args *args,
+                               enum jmap_setmbox_runmode mode,
+                               struct jmap_setmbox_result *result,
+                               strarray_t *update_intermediaries)
+{
+    /* So many names... manage them in our own string pool */
+    ptrarray_t strpool = PTRARRAY_INITIALIZER;
+    int r = 0;
+    mbentry_t *mbroot = NULL, *mbparent = NULL, *mbentry = NULL;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+
+    char *root = webdav_mboxname(req->accountid, NULL);
+    jmap_mboxlist_lookup(root, &mbroot, NULL);
+    free(root);
+
+    const char *parent_id = args->parent_id;
+    if (!strcmpnull("root", parent_id)) {
+        parent_id = mbroot->uniqueid;
+    }
+    else if (parent_id && *parent_id == '#') {
+        parent_id = jmap_lookup_id(req, parent_id + 1);
+        if (!parent_id) {
+            if (mode == JMAP_SETMBOX_SKIP) {
+                result->skipped = 1;
+            }
+            else {
+                jmap_parser_invalid(&parser, "parentId");
+            }
+            goto done;
+        }
+    }
+
+    /* Lookup current mailbox entry */
+    mbentry = jmap_mbentry_by_uniqueid_copy(req, args->id);
+    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
+        mboxlist_entry_free(&mbentry);
+        result->err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+
+    /* Validate server-set properties */
+//    _mbox_update_validate_serverset(req, args, &parser, mbentry);
+
+    /* Determine current mailbox and parent names */
+    char *oldmboxname = NULL;
+    char *oldparentname = NULL;
+    int was_toplevel = 0;
+    int is_inbox = 0;
+    if (strcmp(args->id, mbroot->uniqueid)) {
+        oldmboxname = xstrdup(mbentry->name);
+        r = jmap_mailbox_findparent(oldmboxname, &mbparent);
+        if (r) {
+            syslog(LOG_INFO, "_findparent(%s) failed: %s",
+                            oldmboxname, error_message(r));
+            goto done;
+        }
+        oldparentname = xstrdup(mbparent->name);
+        ptrarray_append(&strpool, oldparentname);
+
+        // calculate whether mailbox is toplevel
+        mbname_t *mbname = mbname_from_intname(oldmboxname);
+        was_toplevel = strarray_size(mbname_boxes(mbname)) == 1;
+        mbname_free(&mbname);
+    }
+    else {
+        if (parent_id || args->is_toplevel) {
+            // thou shalt not move INBOX
+           jmap_parser_invalid(&parser, "parentId");
+           goto done;
+        }
+        is_inbox = 1;
+
+        oldmboxname = xstrdup(mbroot->name);
+    }
+    ptrarray_append(&strpool, oldmboxname);
+
+    /* Now parent_id always has a proper mailbox id */
+    parent_id = args->is_toplevel ? mbroot->uniqueid : parent_id;
+
+    /* Do we need to move this mailbox to a new parent? */
+    const char *parentname = oldparentname;
+    int is_toplevel = was_toplevel;
+    int force_rename = 0;
+
+    if (!is_inbox && (parent_id || args->is_toplevel)) {
+        /* Compare old parent with new parent. */
+        char *newparentname = NULL;
+
+        mbentry_t *pmbentry = jmap_mbentry_by_uniqueid_copy(req, parent_id);
+        if (pmbentry && jmap_hasrights_mbentry(req, pmbentry, JACL_LOOKUP)) {
+            newparentname = xstrdup(pmbentry->name);
+        }
+        mboxlist_entry_free(&pmbentry);
+
+        int new_toplevel = args->is_toplevel;
+        if (!newparentname) {
+            jmap_parser_invalid(&parser, "parentId");
+            goto done;
+        }
+        ptrarray_append(&strpool, newparentname);
+
+        /* Reject cycles in mailbox tree. */
+        char *pname = xstrdup(newparentname);
+        while (jmap_mailbox_findparent(pname, &pmbentry) == 0) {
+            if (!strcmp(args->id, pmbentry->uniqueid)) {
+                jmap_parser_invalid(&parser, "parentId");
+                free(pname);
+                mboxlist_entry_free(&pmbentry);
+                goto done;
+            }
+            free(pname);
+            pname = xstrdup(pmbentry->name);
+            mboxlist_entry_free(&pmbentry);
+        }
+        mboxlist_entry_free(&pmbentry);
+        free(pname);
+
+        /* Is this a move to a new parent? */
+        if (strcmpsafe(oldparentname, newparentname) || was_toplevel != new_toplevel) {
+            /* Check ACL of mailbox */
+            if (!jmap_hasrights(req, oldparentname, JACL_DELETE)) {
+                result->err = json_pack("{s:s}", "type", "forbidden");
+                goto done;
+            }
+
+            /* Reset pointers to parent */
+            mboxlist_entry_free(&mbparent);
+            jmap_mboxlist_lookup(newparentname, &mbparent, NULL);
+
+            /* Check ACL of new parent - need WRITE to set displayname annot */
+            if (!jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD|JACL_SETKEYWORDS)) {
+                jmap_parser_invalid(&parser, "parentId");
+                goto done;
+            }
+
+            force_rename = 1;
+            parentname = newparentname;
+            is_toplevel = new_toplevel;
+        }
+    }
+
+    const char *mboxname = oldmboxname;
+
+    /* Do we need to rename the mailbox? But only if it isn't the INBOX! */
+    if (!is_inbox && (args->name || force_rename)) {
+        mbname_t *mbname = mbname_from_intname(oldmboxname);
+        char *oldname = jmap_mbox_get_name(req->accountid, mbname);
+        mbname_free(&mbname);
+        ptrarray_append(&strpool, oldname);
+        char *name = oldname;
+        if (args->name && strcmp(name, args->name)) {
+            name = args->name;
+            force_rename = 1;
+        }
+
+        if (is_toplevel && !strcasecmp(name, "inbox")) {
+            /* you can't write a top-level mailbox called "INBOX" in any case.  If the old
+             * name wasn't "inbox" then the name is bad, otherwise it's the NULL parentId
+             * that is the problem */
+            jmap_parser_invalid(&parser, strcasecmp(oldname, "inbox") ? "name" : "parentId");
+            goto done;
+        }
+
+        /* Do old and new mailbox names differ? */
+        if (force_rename) {
+
+            /* Determine the unique IMAP mailbox name. */
+            char *newmboxname =
+                jmap_mbox_newname(name, parentname, is_toplevel);
+            if (!newmboxname) {
+                syslog(LOG_ERR, "_mbox_newname returns NULL: can't rename %s", mboxname);
+                r = IMAP_INTERNAL;
+                goto done;
+            }
+            ptrarray_append(&strpool, newmboxname);
+
+            r = jmap_mboxlist_lookup(newmboxname, NULL, NULL);
+            if (r == 0) {
+                if (mode == JMAP_SETMBOX_SKIP) {
+                    result->skipped = 1;
+                    goto done;
+                }
+                else if (mode == JMAP_SETMBOX_INTERIM) {
+                    result->new_imapname = xstrdup(newmboxname);
+                    result->old_imapname = xstrdup(oldmboxname);
+                    result->tmp_imapname =
+                        jmap_mbox_tmpname(name, parentname, is_toplevel);
+                    if (!result->tmp_imapname) {
+                        syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", newmboxname);
+                        r = IMAP_INTERNAL;
+                        goto done;
+                    }
+                    newmboxname = xstrdup(result->tmp_imapname);
+                    ptrarray_append(&strpool, newmboxname);
+                    /* Keep on processing with tmpname */
+                }
+                else {
+                    syslog(LOG_ERR, "jmap: mailbox already exists: %s", newmboxname);
+                    jmap_parser_invalid(&parser, "name");
+                    goto done;
+                }
+            }
+            else if (r != IMAP_MAILBOX_NONEXISTENT) {
+                goto done;
+            }
+            r = 0;
+
+            /* Rename the mailbox. */
+            if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                r = mboxlist_promote_intermediary(oldmboxname);
+                if (r) goto done;
+            }
+            struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
+            r = mboxlist_renametree(oldmboxname, newmboxname,
+                    NULL /* partition */, 0 /* uidvalidity */,
+                    httpd_userisadmin, req->userid, httpd_authstate,
+                    mboxevent,
+                    0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */,
+                    1 /* keep_intermediaries */, 1 /* move_subscription */);
+            mboxevent_free(&mboxevent);
+            mboxlist_entry_free(&mbentry);
+            jmap_mboxlist_lookup(newmboxname, &mbentry, NULL);
+            strarray_add(update_intermediaries, oldmboxname);
+            strarray_add(update_intermediaries, newmboxname);
+
+            /* Keep track of old IMAP name */
+            if (!result->old_imapname)
+                result->old_imapname = xstrdup(oldmboxname);
+
+            /* invalidate ACL cache */
+            jmap_myrights_delete(req, oldmboxname);
+            jmap_myrights_delete(req, newmboxname);
+            jmap_mbentry_cache_free(req);
+
+            if (r) {
+                syslog(LOG_ERR, "mboxlist_renametree(old=%s new=%s): %s",
+                        oldmboxname, newmboxname, error_message(r));
+                goto done;
+            }
+            mboxname = newmboxname;  // cheap and nasty change!
+        }
+    }
+
+    /* Write annotations */
+
+    int set_annots = 0;
+#if 0
+    if (args->name || args->u.mbox.specialuse) {
+        // these set for everyone
+        if (!jmap_hasrights_mbentry(req, mbentry, JACL_SETKEYWORDS)) {
+            mboxlist_entry_free(&mbentry);
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+        set_annots = 1;
+    }
+    if (args->u.mbox.sortorder >= 0 ||
+        args->u.mbox.color || args->u.mbox.show_as_label >= 0) {
+        // these are per-user, so you just need READ access
+        if (!jmap_hasrights_mbentry(req, mbentry, ACL_READ)) {
+            mboxlist_entry_free(&mbentry);
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+        set_annots = 1;
+    }
+#endif
+    if (set_annots) {
+        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            r = mboxlist_promote_intermediary(mbentry->name);
+            if (r) goto done;
+            mboxlist_entry_free(&mbentry);
+            jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
+        }
+//        if (!r) r = _mbox_set_annots(req, args, mboxname);
+    }
+
+    if (!r && args->shareWith) {
+        struct mailbox *mbox = NULL;
+
+        r = jmap_openmbox(req, mboxname, &mbox, 1);
+        if (r) goto done;
+
+        r = jmap_set_sharewith(mbox, args->shareWith, 1);
+
+        jmap_closembox(req, &mbox);
+    }
+    if (r) goto done;
+
+done:
+    if (json_array_size(parser.invalid)) {
+        result->err = json_pack("{s:s}", "type", "invalidProperties");
+        json_object_set(result->err, "properties", parser.invalid);
+    }
+    else if (r && result->err == NULL) {
+        result->err = jmap_server_error(r);
+    }
+    jmap_parser_fini(&parser);
+    while (strpool.count) free(ptrarray_pop(&strpool));
+    ptrarray_fini(&strpool);
+    mboxlist_entry_free(&mbroot);
+    mboxlist_entry_free(&mbparent);
+    mboxlist_entry_free(&mbentry);
+}
+
+static void _set_update(jmap_req_t *req, struct jmap_setmbox_args *args,
+                        enum jmap_setmbox_runmode mode,
+                        struct jmap_setmbox_result *result,
+                        strarray_t *update_intermediaries)
+{
+    if (args->u.node.blobid) {
+    }
+
+    return _set_update_folder(req, args, mode, result, update_intermediaries);
 }
 
 static int jmap_files_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
-    struct mailbox *mailbox = NULL;
-    json_t *err = NULL;
-    int r = 0;
+    struct jmap_setmbox_ctx set;
 
-    struct webdav_db *db = webdav_open_userid(req->accountid);
-    if (!db) {
-        r = IMAP_INTERNAL;
+    memset(&set, 0, sizeof(struct jmap_setmbox_ctx));
+    set.mbtype = MBTYPE_COLLECTION;
+    set.create_proc = &_set_create;
+    set.update_proc = &_set_update;
+
+    /* Parse arguments */
+    json_t *arg_err = NULL;
+    _set_parse(req, &parser, &set, &arg_err);
+    if (arg_err) {
+        jmap_error(req, arg_err);
         goto done;
     }
-
-    /* Parse request */
-    jmap_set_parse(req, &parser, files_props, NULL, NULL, &set, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
-    }
-
-    if (json_array_size(parser.invalid)) {
-        err = json_pack("{s:s}", "type", "invalidProperties");
-        json_object_set(err, "properties", parser.invalid);
-        jmap_error(req, err);
-        goto done;
-    }
-
-    if (set.if_in_state) {
-        /* TODO rewrite state function to use char* not json_t* */
-        json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_COLLECTION)) {
+    if (set.super.if_in_state) {
+        json_t *jstate = json_string(set.super.if_in_state);
+        if (jmap_cmpstate(req, jstate, MBTYPE_EMAIL)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-            json_decref(jstate);
             goto done;
         }
         json_decref(jstate);
-        set.old_state = xstrdup(set.if_in_state);
+        set.super.old_state = xstrdup(set.super.if_in_state);
     }
     else {
         json_t *jstate = jmap_getstate(req, MBTYPE_COLLECTION, /*refresh*/0);
-        set.old_state = xstrdup(json_string_value(jstate));
+        set.super.old_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
-    
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+    jmap_setmbox(req, &set);
+    mboxname_release(&namespacelock);
+    jmap_ok(req, jmap_set_reply(&set.super));
 
-    /* create */
-    const char *key;
-    json_t *arg;
-    json_object_foreach(set.create, key, arg) {
-        json_t *invalid = json_array();
-        json_t *item = json_object();
-
-//        r = _file_set_create(req, arg, NULL, &mailbox, item, &errors);
-
-        if (r) {
-            json_t *err = jmap_error_message(r);
-
-            json_object_set_new(set.not_created, key, err);
-            json_decref(item);
-            json_decref(invalid);
-            r = 0;
-            continue;
-        }
-        if (json_array_size(invalid)) {
-            json_t *err = json_pack("{s:s s:o}",
-                                    "type", "invalidProperties",
-                                    "properties", invalid);
-            json_object_set_new(set.not_created, key, err);
-            json_decref(item);
-            continue;
-        }
-        json_decref(invalid);
-
-        /* Report file as created. */
-        json_object_set_new(set.created, key, item);
-
-        /* Register creation id */
-        jmap_add_id(req, key, json_string_value(json_object_get(item, "id")));
-    }
-
-
-
-    /* update */
-    const char *uid;
-    json_object_foreach(set.update, uid, arg) {
-        struct webdav_data *wdata = NULL;
-
-        r = webdav_lookup_uid(db, uid, &wdata);
-
-        /* is it a valid contact? */
-        if (r || !wdata || !wdata->dav.imap_uid) {
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_updated, uid, err);
-            r = 0;
-            continue;
-        }
-
-        json_t *item = json_object();
-        json_t *invalid = json_array();
-//        r = _file_set_update(req, arg, NULL, &mailbox, item, &errors);
-
-        if (r) {
-            json_t *err = jmap_error_message(r);
-
-            json_object_set_new(set.not_updated, uid, err);
-            json_decref(item);
-            json_decref(invalid);
-            r = 0;
-            continue;
-        }
-        if (json_array_size(invalid)) {
-            json_t *err = json_pack("{s:s s:O}",
-                                    "type", "invalidProperties",
-                                    "properties", invalid);
-            json_object_set_new(set.not_updated, uid, err);
-            json_decref(item);
-            continue;
-        }
-        json_decref(invalid);
-
-        /* Report file as updated. */
-        json_object_set_new(set.updated, uid, item);
-    }
-
-
-    /* destroy */
-    size_t index;
-    for (index = 0; index < json_array_size(set.destroy); index++) {
-        mbentry_t *mbentry = NULL;
-        struct webdav_data *wdata = NULL;
-        uint32_t olduid;
-        const char *uid = json_array_get_string(set.destroy, index);
-
-        if (!uid) {
-            json_t *err = json_pack("{s:s}", "type", "invalidArguments");
-            json_object_set_new(set.not_destroyed, uid, err);
-            continue;
-        }
-
-        r = webdav_lookup_uid(db, uid, &wdata);
-
-        /* is it a valid file? */
-        if (r || !wdata || !wdata->dav.imap_uid) {
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_destroyed, uid, err);
-            r = 0;
-            continue;
-        }
-
-        olduid = wdata->dav.imap_uid;
-        mbentry = jmap_mbentry_from_dav(req, &wdata->dav);
-
-        if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEITEMS)) {
-            int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
-            json_t *err = json_pack("{s:s}", "type",
-                                    rights & JACL_READITEMS ?
-                                    "accountReadOnly" : "notFound");
-            json_object_set_new(set.not_destroyed, uid, err);
-            mboxlist_entry_free(&mbentry);
-            continue;
-        }
-
-        if (!mailbox || strcmp(mailbox_name(mailbox), mbentry->name)) {
-            jmap_closembox(req, &mailbox);
-            r = jmap_openmbox(req, mbentry->name, &mailbox, 1);
-        }
-        mboxlist_entry_free(&mbentry);
-        if (r) goto done;
-
-        syslog(LOG_NOTICE, "jmap: remove file %s/%s", req->accountid, uid);
-        r = dav_remove_resource(mailbox, olduid, /*isreplace*/0, req->userid);
-        if (r) {
-            xsyslog(LOG_ERR, "IOERROR: webdav remove failed",
-                    "mailbox=<%s> olduid=<%u>", mailbox_name(mailbox), olduid);
-            goto done;
-        }
-
-        json_array_append_new(set.destroyed, json_string(uid));
-    }
-
-    /* force modseq to stable */
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
-
-    /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_COLLECTION, /*refresh*/1);
-    set.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
-    jmap_ok(req, jmap_set_reply(&set));
-    r = 0;
-
-done:
-    if (r) jmap_error(req, jmap_server_error(r));
+  done:
     jmap_parser_fini(&parser);
-    jmap_set_fini(&set);
-    jmap_closembox(req, &mailbox);
-    webdav_close(db);
-
+    jmap_setmbox_fini(&set);
     return 0;
 }
 
