@@ -235,6 +235,77 @@ EOF
     $self->assert_alarms({summary => 'Simple', start => $start, timezone => 'Australia/Sydney'});
 }
 
+sub test_recurring_absolute_trigger
+    :min_version_3_7 :needs_component_calalarmd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%SZ');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%SZ');
+
+    # set the trigger to notify us at the start of the event
+    my $triggerdt = $startdt->clone();
+    $triggerdt->add(DateTime::Duration->new(hours => -11));
+    my $trigger = $triggerdt->strftime('%Y%m%dT%H%M%SZ');
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND:$end
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+RRULE:FREQ=DAILY
+BEGIN:VALARM
+TRIGGER;VALUE=DATE-TIME:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() - 60 );
+
+    $self->assert_alarms();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    $self->assert_alarms({summary => 'Simple', start => $start});
+}
+
 sub test_simple_reconstruct
     :min_version_3_0 :needs_component_calalarmd
 {
