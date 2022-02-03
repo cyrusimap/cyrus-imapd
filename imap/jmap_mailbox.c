@@ -2859,11 +2859,6 @@ static int in_otherfolder_cb(const conv_guidrec_t *rec, void *rock)
     return 0;
 }
 
-struct mbox_req_args {
-    int on_destroy_remove_msgs;
-    const char *on_destroy_move_to_mailboxid;
-};
-
 static int _mbox_on_destroy_move(jmap_req_t *req,
                                  struct jmap_setmbox_ctx *set,
                                  const mbentry_t *src_mbentry,
@@ -2872,15 +2867,14 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
     struct mailbox *src_mbox = NULL;
     struct mailbox *dst_mbox = NULL;
     ptrarray_t move_msgrecs = PTRARRAY_INITIALIZER;
-    struct mbox_req_args *args = (struct mbox_req_args *) set->rock;
     int r = 0;
 
     /* Open mailboxes */
     const mbentry_t *dst_mbentry =
-        jmap_mbentry_by_uniqueid(req, args->on_destroy_move_to_mailboxid);
+        jmap_mbentry_by_uniqueid(req, set->on_destroy_move_to_mailboxid);
     if (!dst_mbentry) {
         syslog(LOG_ERR, "%s: can't find mailbox id %s", __func__,
-                        args->on_destroy_move_to_mailboxid);
+                        set->on_destroy_move_to_mailboxid);
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -3020,14 +3014,12 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
     }
 
     if (!is_intermediate) {
-        struct mbox_req_args *args = (struct mbox_req_args *) set->rock;
-
-        if (args->on_destroy_move_to_mailboxid) {
+        if (set->on_destroy_move_to_mailboxid) {
             /* Move messages if not in any other mailbox */
             _mbox_on_destroy_move(req, set, mbentry, result);
             if (result->err) goto done;
         }
-        else if (!args->on_destroy_remove_msgs) {
+        else if (!set->on_destroy_remove_msgs) {
             /* Check if the mailbox has any messages */
             struct mailbox *mbox = NULL;
             struct mailbox_iter *iter = NULL;
@@ -3977,18 +3969,17 @@ static int _setmbox_req_parse(jmap_req_t *req,
                                void *rock)
 {
     struct jmap_setmbox_ctx *set = (struct jmap_setmbox_ctx *) rock;
-    struct mbox_req_args *args = (struct mbox_req_args *) set->rock;
     int r = 0;
 
     if ((!strcmp(key, "onDestroyRemoveMessages") ||
          !strcmp(key, "onDestroyRemoveEmails")) && json_is_boolean(arg)) {
-        args->on_destroy_remove_msgs = json_boolean_value(arg);
+        set->on_destroy_remove_msgs = json_boolean_value(arg);
         r = 1;
     }
     else if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
         if (!strcmp(key, "onDestroyMoveToMailboxIfNoMailbox")) {
             if (json_is_string(arg) || json_is_null(arg)) {
-                args->on_destroy_move_to_mailboxid = json_string_value(arg);
+                set->on_destroy_move_to_mailboxid = json_string_value(arg);
                 r = 1;
             }
         }
@@ -4002,16 +3993,16 @@ static void _setmbox_parse(jmap_req_t *req,
                            struct jmap_setmbox_ctx *set,
                            json_t **err)
 {
-    struct mbox_req_args *args = (struct mbox_req_args *) set->rock;
     json_t *jarg;
     size_t i;
+    memset(set, 0, sizeof(struct jmap_setmbox_ctx));
 
     jmap_set_parse(req, parser, mailbox_props, &_setmbox_req_parse,
                    set, &set->super, err);
 
     /* Validate onDestroyMoveToMailboxIfNoMailbox */
-    if (*err == NULL && args->on_destroy_move_to_mailboxid) {
-        const char *dst_mboxid = args->on_destroy_move_to_mailboxid;
+    if (*err == NULL && set->on_destroy_move_to_mailboxid) {
+        const char *dst_mboxid = set->on_destroy_move_to_mailboxid;
         const char *error_desc = NULL;
         int rights = jmap_myrights_mboxid(req, dst_mboxid);
 
@@ -4139,13 +4130,6 @@ static int jmap_mailbox_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_setmbox_ctx set;
-    struct mbox_req_args args = { 0, NULL };
-
-    memset(&set, 0, sizeof(struct jmap_setmbox_ctx));
-    set.mbtype = MBTYPE_EMAIL;
-    set.create_proc = &_mbox_create;
-    set.update_proc = &_mbox_update;
-    set.rock = &args;
 
     /* Parse arguments */
     json_t *arg_err = NULL;
@@ -4169,6 +4153,9 @@ static int jmap_mailbox_set(jmap_req_t *req)
         json_decref(jstate);
     }
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+    set.mbtype = MBTYPE_EMAIL;
+    set.create_proc = &_mbox_create;
+    set.update_proc = &_mbox_update;
     jmap_setmbox(req, &set);
     mboxname_release(&namespacelock);
     jmap_ok(req, jmap_set_reply(&set.super));
