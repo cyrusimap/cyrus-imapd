@@ -234,8 +234,29 @@ sub test_files_set
 
     my $jmap = $self->{jmap};
 
+    my $file1 = <<EOF;
+foo
+EOF
+    my $type1 = 'text/plain';
+
+    my $file2 = <<EOF;
+<html>
+<head>
+<title>bar</title>
+</head>
+</html>
+EOF
+    my $type2 = 'text/html';
+
+    xlog $self, "upload file content";
+    my $res = $jmap->Upload($file1, $type1);
+    my $blobid1 = $res->{blobId};
+
+    $res = $jmap->Upload($file2, $type2);
+    my $blobid2 = $res->{blobId};
+
     xlog $self, "get unfiltered list";
-    my $res = $jmap->CallMethods([ ['StorageNode/query', { }, "R1"] ]);
+    $res = $jmap->CallMethods([ ['StorageNode/query', { }, "R1"] ]);
 
     my $state = $res->[0][1]{queryState};
 
@@ -243,6 +264,10 @@ sub test_files_set
     $res = $jmap->CallMethods([
         ['StorageNode/set', {
             create => {
+                "1" => { name => "foo", parentId => 'root',
+                         blobId => $blobid1, type => $type1 },
+                "2" => { name => "bar", parentId => '#C',
+                         blobId => $blobid2, type => $type2 },
                 "C" => { name => "C", parentId => '#B' },
                 "B" => { name => "B", parentId => '#A' },
                 "A" => { name => "A", parentId => 'root' }
@@ -286,7 +311,7 @@ sub test_files_set
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert(exists $res->[0][1]{updated}{$idA});
 
-    xlog $self, "get folder $idA";
+    xlog $self, "get folder $idA and $idC";
     $res = $jmap->CallMethods([['StorageNode/get',
                                 { ids => [$idA, $idC] }, "R1"]]);
     $mbox = $res->[0][1]{list}[0];
@@ -307,7 +332,7 @@ sub test_files_set
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_str_equals($idA, $res->[0][1]{destroyed}[2]);
 
-    xlog $self, "get folder $idC";
+    xlog $self, "get folders";
     $res = $jmap->CallMethods([['StorageNode/get',
                                 { ids => [$idA, $idB, $idC] }, "R1"]]);
     $self->assert_str_equals($idA, $res->[0][1]{notFound}[0]);
