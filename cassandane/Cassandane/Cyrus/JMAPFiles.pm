@@ -268,6 +268,7 @@ EOF
                          blobId => $blobid1, type => $type1 },
                 "2" => { name => "bar", parentId => '#C',
                          blobId => $blobid2, type => $type2 },
+                "D" => { name => "D", parentId => '#C' },
                 "C" => { name => "C", parentId => '#B' },
                 "B" => { name => "B", parentId => '#A' },
                 "A" => { name => "A", parentId => 'root' }
@@ -281,6 +282,9 @@ EOF
     my $idA = $res->[0][1]{created}{"A"}{id};
     my $idB = $res->[0][1]{created}{"B"}{id};
     my $idC = $res->[0][1]{created}{"C"}{id};
+    my $idD = $res->[0][1]{created}{"D"}{id};
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog $self, "get folder $idC";
     $res = $jmap->CallMethods([['StorageNode/get', { ids => [$idC] }, "R1"]]);
@@ -313,7 +317,7 @@ EOF
 
     xlog $self, "get folder $idA and $idC";
     $res = $jmap->CallMethods([['StorageNode/get',
-                                { ids => [$idA, $idC] }, "R1"]]);
+                                { ids => [$idA, $idC, $idD] }, "R1"]]);
     $mbox = $res->[0][1]{list}[0];
     $self->assert_str_equals($idA, $mbox->{id});
     $self->assert_str_equals("AAA", $mbox->{name});
@@ -323,21 +327,32 @@ EOF
     $self->assert_str_equals($idC, $mbox->{id});
     $self->assert_str_equals($idA, $mbox->{parentId});
 
-    xlog $self, "destroy folders";
+    $mbox = $res->[0][1]{list}[2];
+    $self->assert_str_equals($idD, $mbox->{id});
+    $self->assert_str_equals($idC, $mbox->{parentId});
+
+    # destroy everything listing parent -> child order to make sure we reorder
+    xlog $self, "destroy everything";
     $res = $jmap->CallMethods([
-            ['StorageNode/set', { destroy => [ $idA, $idB, $idC ] }, "R1"]
+        ['StorageNode/set', {
+            destroy => [ $idA, $idB, $idC, $idD, $id1, $id2 ]
+         }, "R1"]
     ]);
     $self->assert_str_equals('StorageNode/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_str_equals($idA, $res->[0][1]{destroyed}[2]);
+    $self->assert_str_equals($idA, $res->[0][1]{destroyed}[5]);
 
-    xlog $self, "get folders";
+    xlog $self, "get everything";
     $res = $jmap->CallMethods([['StorageNode/get',
-                                { ids => [$idA, $idB, $idC] }, "R1"]]);
+                                { ids => [$idA, $idB, $idC, $idD, $id1, $id2] },
+                                "R1"]]);
     $self->assert_str_equals($idA, $res->[0][1]{notFound}[0]);
     $self->assert_str_equals($idB, $res->[0][1]{notFound}[1]);
     $self->assert_str_equals($idC, $res->[0][1]{notFound}[2]);
+    $self->assert_str_equals($idD, $res->[0][1]{notFound}[3]);
+    $self->assert_str_equals($id1, $res->[0][1]{notFound}[4]);
+    $self->assert_str_equals($id2, $res->[0][1]{notFound}[5]);
 }
 
 1;
