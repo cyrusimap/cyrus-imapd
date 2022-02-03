@@ -609,6 +609,7 @@ static void _set_parse(jmap_req_t *req,
     json_t *jarg;
     size_t i;
 
+    memset(set, 0, sizeof(struct jmap_setmbox_ctx));
     jmap_set_parse(req, parser, files_props, NULL, NULL, &set->super, err);
 
     /* create */
@@ -1269,15 +1270,102 @@ static void _set_update(jmap_req_t *req, struct jmap_setmbox_args *args,
     return _set_update_folder(req, args, mode, result, update_intermediaries);
 }
 
+struct destroy_msg {
+    char *jmap_id;
+    uint32_t imap_uid;
+};
+
+static void _set_destroy_files(jmap_req_t *req __attribute__((unused)),
+                               struct jmap_setmbox_ctx *set,
+                               struct webdav_db *db)
+{
+    int size = strarray_size(set->to_destroy);
+
+    if (!size) return;
+
+    /* Create a hash table of mailbox ids and a list of message UIDs */
+    hash_table uids_by_mboxid = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&uids_by_mboxid, size, 0);
+
+    int i = 0;
+    while (i < strarray_size(set->to_destroy)) {
+        struct webdav_data *wdata = NULL;
+
+        /* Is this a file? */
+        int r = webdav_lookup_uid(db, strarray_nth(set->to_destroy, i), &wdata);
+
+        if (!r && wdata && wdata->dav.imap_uid) {
+            /* Remove this id from mailboxes list */
+            char *id = strarray_remove(set->to_destroy, i);
+
+            /* Add this msg to mboxid bucket */
+            ptrarray_t *msgs = hash_lookup(wdata->dav.mailbox, &uids_by_mboxid);
+
+            if (!msgs) {
+                msgs = ptrarray_new();
+                hash_insert(wdata->dav.mailbox, msgs, &uids_by_mboxid);
+            }
+
+            struct destroy_msg *msg = xmalloc(sizeof(struct destroy_msg));
+            msg->jmap_id = id;
+            msg->imap_uid = wdata->dav.imap_uid;
+            ptrarray_append(msgs, msg);
+
+        }
+        else {
+            /* Skip to next id */
+            i++;
+        }
+    }
+
+    /* Now delete files on a per-mailbox basis */
+    const char *mboxid;
+    hash_iter *iter = hash_table_iter(&uids_by_mboxid);
+    while ((mboxid = hash_iter_next(iter))) {
+        const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+        ptrarray_t *msgs = hash_iter_val(iter);
+        struct mailbox *mailbox = NULL;
+        int r = 0;
+
+        if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEITEMS)) {
+            r = IMAP_PERMISSION_DENIED;
+        }
+        else {
+            r = jmap_openmbox_by_uniqueid(req, mboxid, &mailbox, 1);
+        }
+
+        while (ptrarray_size(msgs)) {
+            struct destroy_msg *msg = ptrarray_pop(msgs);
+
+            if (!r && mailbox) {
+                r = dav_remove_resource(mailbox, msg->imap_uid, 0, req->accountid);
+            }
+
+            if (r) {
+                json_object_set_new(set->super.not_destroyed, msg->jmap_id,
+                                    jmap_server_error(r));
+            }
+            else {
+                json_array_append_new(set->super.destroyed,
+                                      json_string(msg->jmap_id));
+            }
+
+            free(msg->jmap_id);
+            free(msg);
+        }
+        jmap_closembox(req, &mailbox);
+        ptrarray_free(msgs);
+    }
+
+    hash_iter_free(&iter);
+    free_hash_table(&uids_by_mboxid, NULL);
+}
+
 static int jmap_files_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_setmbox_ctx set;
-
-    memset(&set, 0, sizeof(struct jmap_setmbox_ctx));
-    set.mbtype = MBTYPE_COLLECTION;
-    set.create_proc = &_set_create;
-    set.update_proc = &_set_update;
+    struct webdav_db *db;
 
     /* Parse arguments */
     json_t *arg_err = NULL;
@@ -1300,10 +1388,30 @@ static int jmap_files_set(jmap_req_t *req)
         set.super.old_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
+
+    db = webdav_open_userid(req->accountid);
+    if (!db) {
+        syslog(LOG_ERR,
+               "webdav_open_mailbox failed for user %s", req->accountid);
+        jmap_error(req, jmap_server_error(IMAP_INTERNAL));
+        goto done;
+    }
+
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+
+    /* Destroy files first */
+    _set_destroy_files(req, &set, db);
+
+    /* Now do the rest of the create/update/destroy */
+    set.mbtype = MBTYPE_COLLECTION;
+    set.create_proc = &_set_create;
+    set.update_proc = &_set_update;
     jmap_setmbox(req, &set);
+
     mboxname_release(&namespacelock);
     jmap_ok(req, jmap_set_reply(&set.super));
+
+    webdav_close(db);
 
   done:
     jmap_parser_fini(&parser);
