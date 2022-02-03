@@ -424,7 +424,6 @@ static int jmap_files_get(jmap_req_t *req)
         else {
             /* folder */
             mbentry = jmap_mbentry_by_uniqueid_copy(req, id);
-            r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
         }
 
         if (!r && mbentry &&
@@ -679,6 +678,132 @@ static void _set_parse(jmap_req_t *req,
     free_hash_table(&will_destroy, NULL);
 }
 
+static const char *_findblob(struct jmap_req *req, const char *id,
+                             struct buf *buf, json_t **err)
+{
+    struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
+    const char *orig_id = id;
+    const char *content = NULL;
+    int r = IMAP_NOTFOUND;
+
+    if (id[0] == '#') {
+        id = jmap_lookup_id(req, id + 1);
+    }
+
+    if (id) {
+        r = jmap_findblob(req, NULL/*accountid*/, id, &mbox, &mr, NULL, NULL, buf);
+    }
+
+    if (r == IMAP_NOTFOUND) {
+        *err = json_pack("{s:s s:[s]}", "type", "blobNotFound", "Id", orig_id);
+    }
+    else if (r) {
+        *err = jmap_server_error(r);
+    }
+    else {
+        content = buf_cstring(buf);
+
+        if (mr) {
+            /* Need to skip over header of rfc822 wrapper */
+            struct index_record record;
+
+            msgrecord_get_index_record(mr, &record);
+            content += record.header_size;
+
+            msgrecord_unref(&mr);
+            jmap_closembox(req, &mbox);
+        }
+    }
+
+    return content;
+}
+
+static void _set_create_file(jmap_req_t *req, struct jmap_setmbox_args *args,
+                             enum jmap_setmbox_runmode mode __attribute__((unused)),
+                             json_t **file,
+                             struct jmap_setmbox_result *result )
+{
+    json_t *err = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    const char *content = _findblob(req, args->u.node.blobid, &buf, &err);
+    int size = buf_base(&buf) + buf_len(&buf) - content;
+    const char *id = makeuuid();
+    struct mailbox *mailbox = NULL;
+    mbentry_t *mbentry = NULL;
+    int r = 0;
+
+    /* XXX  Look for conflicting name */
+
+    if (!strcmp("root", args->parent_id)) {
+        char *root = webdav_mboxname(req->accountid, NULL);
+        r = jmap_mboxlist_lookup(root, &mbentry, NULL);
+        free(root);
+    }
+    else {
+        const char *parent_id = args->parent_id;
+
+        if (*parent_id == '#') {
+            parent_id = jmap_lookup_id(req, parent_id + 1);
+        }
+        if (parent_id) {
+            mbentry = jmap_mbentry_by_uniqueid_copy(req, parent_id);
+        }
+    }
+
+    if (r || !mbentry ||
+        !jmap_hasrights_mbentry(req, mbentry, JACL_ADDITEMS)) {
+        result->err = json_pack("{s:s}", "type", "forbidden");
+        goto done;
+    }
+
+    r = jmap_openmbox(req, mbentry->name, &mailbox, 1);
+    if (r) goto done;
+
+    /* Create and cache RFC 5322 header fields for resource */
+    spool_replace_header(xstrdup("Subject"),
+                         xstrdup(args->name), req->txn->req_hdrs);
+
+    json_t *jdesc = json_pack("{ s:s s:s }",
+                              "uid", id, "filename", args->name);
+    spool_replace_header(xstrdup("Content-Description"),
+                         json_dumps(jdesc, JSON_COMPACT), req->txn->req_hdrs);
+    json_decref(jdesc);
+
+    buf_printf(&req->txn->buf, "<%s@%s>", id, config_servername);
+    spool_replace_header(xstrdup("Message-ID"),
+                         buf_release(&req->txn->buf), req->txn->req_hdrs);
+
+    buf_printf(&req->txn->buf, "attachment;\r\n\tfilename=\"%s\"", args->name);
+    spool_replace_header(xstrdup("Content-Disposition"),
+                         buf_release(&req->txn->buf), req->txn->req_hdrs);
+
+    /* Store the resource */
+    r = dav_store_resource(req->txn, content, size, mailbox, NULL, 0, NULL);
+    switch (r) {
+    case 0:
+    case HTTP_CREATED:
+        r = 0;
+        break;
+    default:
+        goto done;
+    }
+
+    *file = json_pack("{s:s}", "id", id);
+
+    /* Set server defaults */
+    json_object_set_new(*file, "size", json_integer(size));
+
+  done:
+    if (r && result->err == NULL) {
+        result->err = jmap_server_error(r);
+    }
+
+    jmap_closembox(req, &mailbox);
+    mboxlist_entry_free(&mbentry);
+    buf_free(&buf);
+}
+
 static void _set_create_folder(jmap_req_t *req, struct jmap_setmbox_args *args,
                                enum jmap_setmbox_runmode mode,
                                json_t **mbox, struct jmap_setmbox_result *result,
@@ -821,6 +946,7 @@ static void _set_create(jmap_req_t *req, struct jmap_setmbox_args *args,
                         strarray_t *update_intermediaries)
 {
     if (args->u.node.blobid) {
+        return _set_create_file(req, args, mode, mbox, result);
     }
 
     return _set_create_folder(req, args, mode,
