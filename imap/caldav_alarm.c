@@ -476,7 +476,8 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
         /* XXX validate trigger */
 
         icaltimetype alarmtime = icaltime_null_time();
-        if (icalvalue_isa(val) == ICAL_DURATION_VALUE) {
+        unsigned is_duration = (icalvalue_isa(val) == ICAL_DURATION_VALUE);
+        if (is_duration) {
             icalparameter *param =
                 icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
             icaltimetype base = start;
@@ -534,6 +535,12 @@ static int process_alarm_cb(icalcomponent *comp, icaltimetype start,
             time_t next = data->now + 86400*30;
             if (!data->nextcheck || next < data->nextcheck)
                 data->nextcheck = next;
+            return 0;
+        }
+        else if (!is_duration) {
+            /* alarms with absolute triggers can only fire once,
+               so stop recurrence expansion */
+            syslog(LOG_DEBUG, "XXX  absolute trigger - stop recurrence expansion");
             return 0;
         }
     }
