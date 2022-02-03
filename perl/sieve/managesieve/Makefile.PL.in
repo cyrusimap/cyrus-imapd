@@ -72,9 +72,9 @@ WriteMakefile(
     'LIBS'	=> ["$LIB_SASL @SSL_LIBS@ @LIB_UUID@ @LIB_REGEX@ @ZLIB@ @SQLITE_LIBADD@ @MYSQL_LIBADD@ @PGSQL_LIBADD@"],
     'CCFLAGS'	=> '@GCOV_CFLAGS@',
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "-I@top_srcdir@/lib -I@top_srcdir@/perl/sieve -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @SSL_CPPFLAGS@",
+    'INC'	=> "-I@top_srcdir@/lib -I@top_srcdir@/perl/sieve -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @SSL_CPPFLAGS@ @CFLAGS@ @CPPFLAGS@",
     'OBJECT'    => 'managesieve.o',
-    'LD'	=> $Config{ld} . ' @GCOV_LDFLAGS@',
+    'LD'	=> $Config{ld} . ' @GCOV_LDFLAGS@ @LDFLAGS@',
     # This is a disgusting hack to effectively disable the stupid
     # behaviour of the generated Makefile which moves itself aside
     # on a 'make clean' instead of on 'make distclean'.

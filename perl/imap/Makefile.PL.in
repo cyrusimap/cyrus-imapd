@@ -88,12 +88,12 @@ WriteMakefile(
 		    'IMCLIENT_LIBS' => '',	# hack
 		},
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
-    'LD'       => $Config{ld} . ' @GCOV_LDFLAGS@',
+    'LD'       => $Config{ld} . ' @GCOV_LDFLAGS@ @LDFLAGS@',
     'OBJECT'    => 'IMAP.o',
     'MYEXTLIB'  => '@top_builddir@/perl/.libs/libcyrus.a @top_builddir@/perl/.libs/libcyrus_min.a',
     'LIBS'	=> [ "$LIB_SASL @SSL_LIBS@ @LIB_UUID@ @ZLIB@ @GCOV_LIBS@ @LIBCAP_LIBS@"],
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING'
-    'INC'	=> "-I@top_srcdir@ -I@top_srcdir@/com_err/et @SASLFLAGS@ @SSL_CPPFLAGS@ @GCOV_CFLAGS@ -I@top_srcdir@/perl/imap",
+    'INC'	=> "-I@top_srcdir@ -I@top_srcdir@/com_err/et @SASLFLAGS@ @SSL_CPPFLAGS@ @CFLAGS@ @CPPFLAGS@ @GCOV_CFLAGS@ -I@top_srcdir@/perl/imap",
     'EXE_FILES' => [cyradm],
     # This is a disgusting hack to effectively disable the stupid
     # behaviour of the generated Makefile which moves itself aside
