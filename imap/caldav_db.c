@@ -1037,7 +1037,8 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
         int cmp = strcmp(old_jscal->ical_recurid, new_jscal->ical_recurid);
 
         if (!cmp) {
-            if (strcmp(old_jscal->ical_guid, new_jscal->ical_guid)) {
+            if (strcmp(old_jscal->ical_guid, new_jscal->ical_guid) ||
+                old_jscal->alive != new_jscal->alive) {
                 // instance or main event got updated
                 ptrarray_append(&update, new_jscal);
             }
