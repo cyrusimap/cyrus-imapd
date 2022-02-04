@@ -17737,4 +17737,104 @@ EOF
         $res->[0][1]{list}[0]{recurrenceId});
 }
 
+sub test_calendarevent_get_ignore_dead_standalone_instance
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+PRODID:-//Fastmail/2020.5/EN
+BEGIN:VEVENT
+CATEGORIES:CONFERENCE
+DESCRIPTION:Be there or be square
+DTEND:19960920T220000Z
+DTSTAMP:19960704T120000Z
+DTSTART:19960919T143000Z
+ORGANIZER:MAILTO:jsmith@example.com
+RECURRENCE-ID:19960919T143000
+SEQUENCE:0
+SUMMARY:Partyx
+TRANSP:OPAQUE
+UID:889i-uid1@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['title', 'recurrenceOverrides'],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+PRODID:-//Fastmail/2020.5/EN
+BEGIN:VEVENT
+CATEGORIES:CONFERENCE
+DESCRIPTION:Be there or be square
+DTEND:19960920T220000Z
+DTSTAMP:19960704T120000Z
+DTSTART:19960918T143000Z
+ORGANIZER:MAILTO:jsmith@example.com
+RRULE:FREQ=DAILY
+SEQUENCE:0
+SUMMARY:Party
+TRANSP:OPAQUE
+UID:889i-uid1@example.com
+END:VEVENT
+BEGIN:VEVENT
+CATEGORIES:CONFERENCE
+DESCRIPTION:Be there or be square
+DTEND:19960920T220000Z
+DTSTAMP:19960704T120000Z
+DTSTART:19960918T143000Z
+ORGANIZER:MAILTO:jsmith@example.com
+RECURRENCE-ID:19960919T143000Z
+SEQUENCE:1
+SUMMARY:Partyx
+TRANSP:OPAQUE
+UID:889i-uid1@example.com
+END:VEVENT
+BEGIN:VEVENT
+CATEGORIES:CONFERENCE
+DESCRIPTION:Be there or be square
+DTEND:19960920T220000Z
+DTSTAMP:19960704T120000Z
+DTSTART:19960918T143000Z
+ORGANIZER:MAILTO:jsmith@example.com
+RECURRENCE-ID:19960923T143000Z
+SEQUENCE:1
+SUMMARY:Partyx
+TRANSP:OPAQUE
+UID:889i-uid1@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['title', 'recurrenceOverrides'],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals('Party', $res->[0][1]{list}[0]{title});
+    $self->assert_num_equals(2, scalar keys %{$res->[0][1]{list}[0]{recurrenceOverrides}});
+    $self->assert_not_null($res->[0][1]{list}[0]{recurrenceOverrides}{'1996-09-19T14:30:00'});
+    $self->assert_not_null($res->[0][1]{list}[0]{recurrenceOverrides}{'1996-09-23T14:30:00'});
+}
+
 1;

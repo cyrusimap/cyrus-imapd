@@ -3227,7 +3227,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
     struct jmapical_ctx *jmapctx = rock->jmapctx;
     struct caldav_data *cdata = &jscal->cdata;
 
-    if (!cdata->dav.alive)
+    if (!cdata->dav.alive || !jscal->alive)
         return 0;
 
     /* check that it's the right type */
