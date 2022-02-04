@@ -53,6 +53,7 @@
 #include "caldav_db.h"
 #include "cyrusdb.h"
 #include "dynarray.h"
+#include "hashset.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"
@@ -680,15 +681,23 @@ static void check_mattach_cb(icalcomponent *comp, void *rock)
 }
 
 
-#define CMD_INSERT_JSCALOBJS                                            \
+#define CMD_UPSERT_JSCALOBJS                                            \
     "INSERT INTO jscal_objs ("                                          \
     "  rowid, ical_recurid, alive, modseq, createdmodseq,"              \
     "  dtstart, dtend, ical_guid )"                                     \
     " VALUES ("                                                         \
     "  :rowid, :ical_recurid, :alive, :modseq, :createdmodseq,"         \
-    "  :dtstart, :dtend, :ical_guid );"
+    "  :dtstart, :dtend, :ical_guid )"                                  \
+    " ON CONFLICT (rowid, ical_recurid) DO"                             \
+    " UPDATE SET"                                                       \
+    "  alive        = :alive,"                                          \
+    "  modseq       = :modseq,"                                         \
+    "  createdmodseq = :createdmodseq,"                                 \
+    "  dtstart      = :dtstart,"                                        \
+    "  dtend        = :dtend,"                                          \
+    "  ical_guid    = :ical_guid;"                                      \
 
-static int caldav_insert_jscal(struct caldav_db *caldavdb,
+static int caldav_upsert_jscal(struct caldav_db *caldavdb,
                                  struct caldav_jscal *jscal)
 {
     struct sqldb_bindval bvalinst[] = {
@@ -702,34 +711,7 @@ static int caldav_insert_jscal(struct caldav_db *caldavdb,
         { ":ical_guid",     SQLITE_TEXT,     { .s = jscal->ical_guid } },
         { NULL,             SQLITE_NULL,     { .s = NULL } } };
 
-    return sqldb_exec(caldavdb->db, CMD_INSERT_JSCALOBJS, bvalinst, NULL, NULL);
-}
-
-#define CMD_UPDATE_JSCALOBJS            \
-    "UPDATE jscal_objs SET"             \
-    "  alive        = :alive,"          \
-    "  modseq       = :modseq,"         \
-    "  createdmodseq = :createdmodseq," \
-    "  dtstart      = :dtstart,"        \
-    "  dtend        = :dtend,"          \
-    "  ical_guid    = :ical_guid"       \
-    " WHERE rowid = :rowid AND ical_recurid = :ical_recurid;"
-
-static int caldav_update_jscal(struct caldav_db *caldavdb,
-                                 struct caldav_jscal *jscal)
-{
-    struct sqldb_bindval bvalinst[] = {
-        { ":rowid",         SQLITE_INTEGER,  { .i = jscal->cdata.dav.rowid } },
-        { ":ical_recurid",  SQLITE_TEXT,     { .s = jscal->ical_recurid } },
-        { ":alive",         SQLITE_INTEGER,  { .i = jscal->alive } },
-        { ":modseq",        SQLITE_INTEGER,  { .i = jscal->modseq  } },
-        { ":createdmodseq", SQLITE_INTEGER,  { .i = jscal->createdmodseq } },
-        { ":dtstart",       SQLITE_TEXT,     { .s = jscal->dtstart } },
-        { ":dtend",         SQLITE_TEXT,     { .s = jscal->dtend } },
-        { ":ical_guid",     SQLITE_TEXT,     { .s = jscal->ical_guid } },
-        { NULL,             SQLITE_NULL,     { .s = NULL } } };
-
-    return sqldb_exec(caldavdb->db, CMD_UPDATE_JSCALOBJS, bvalinst, NULL, NULL);
+    return sqldb_exec(caldavdb->db, CMD_UPSERT_JSCALOBJS, bvalinst, NULL, NULL);
 }
 
 #define CMD_SELJSCALOBJS                                          \
@@ -970,6 +952,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
     if (r) goto done;
 
     /* Determine new JMAP objects, ordered ascending by recurid */
+    struct hashset *seen_recurids = hashset_new(sizeof(struct icaltimetype));
     icalcomponent_kind kind;
     for (comp = icalcomponent_get_first_real_component(ical);
          comp;
@@ -1003,8 +986,16 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
         }
 
         /* Found recurrence instance */
-        if (!utc) utc = icaltimezone_get_utc_timezone();
         icaltimetype recurid = icalproperty_get_recurrenceid(prop);
+
+        /* Resolve duplicate recurrence ids by picking the first */
+        icaltimetype hash_recurid = recurid;
+        hash_recurid.zone = NULL; // don't hash timezone pointers
+        if (!hashset_add(seen_recurids, &hash_recurid)) {
+            continue;
+        }
+
+        if (!utc) utc = icaltimezone_get_utc_timezone();
         icaltimetype dtstart = icalcomponent_get_dtstart(comp);
         dtstart = icaltime_convert_to_zone(dtstart, utc);
         icaltimetype dtend = icalcomponent_get_dtend(comp);
@@ -1022,12 +1013,12 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
         };
         dynarray_append(&new_jscals, &jscal);
     }
+    hashset_free(&seen_recurids);
     qsort(new_jscals.data, new_jscals.count,
             sizeof(struct caldav_jscal), jscal_cmp_ical_recurid);
 
     /* Determine which rows to insert and update. We never delete here. */
-    ptrarray_t update = PTRARRAY_INITIALIZER;
-    ptrarray_t insert = PTRARRAY_INITIALIZER;
+    ptrarray_t upsert = PTRARRAY_INITIALIZER;
     int old_i = 0;
     int new_i = 0;
     while (old_i < dynarray_size(&old_jscals) &&
@@ -1040,7 +1031,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
             if (strcmp(old_jscal->ical_guid, new_jscal->ical_guid) ||
                 old_jscal->alive != new_jscal->alive) {
                 // instance or main event got updated
-                ptrarray_append(&update, new_jscal);
+                ptrarray_append(&upsert, new_jscal);
             }
             old_i++;
             new_i++;
@@ -1049,7 +1040,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
 
         if (!new_jscal->ical_recurid[0]) {
             // old standalone instances got replaced with main event
-            ptrarray_append(&insert, new_jscal);
+            ptrarray_append(&upsert, new_jscal);
             new_i++;
         }
         else if (cmp < 0) {
@@ -1057,47 +1048,44 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
             if (old_jscal->alive) {
                 old_jscal->alive = 0;
                 old_jscal->modseq = cdata->dav.modseq;
-                ptrarray_append(&update, old_jscal);
+                ptrarray_append(&upsert, old_jscal);
             }
             old_i++;
         }
         else {
             // new standalone instance got added
             new_jscal->createdmodseq = cdata->dav.modseq;
-            ptrarray_append(&insert, new_jscal);
+            ptrarray_append(&upsert, new_jscal);
             new_i++;
         }
     }
     for ( ; old_i < dynarray_size(&old_jscals); old_i++) {
+        // any old entry for which no new entry exists is not alive
         struct caldav_jscal *old_jscal = dynarray_nth(&old_jscals, old_i);
         if (old_jscal->alive) {
             old_jscal->alive = 0;
             old_jscal->modseq = cdata->dav.modseq;
-            ptrarray_append(&update, old_jscal);
+            ptrarray_append(&upsert, old_jscal);
         }
     }
     for ( ; new_i < dynarray_size(&new_jscals); new_i++) {
+        // any new entry for which no old entry exists it newly created
         struct caldav_jscal *new_jscal = dynarray_nth(&new_jscals, new_i);
         new_jscal->createdmodseq = cdata->dav.modseq;
-        ptrarray_append(&insert, new_jscal);
+        ptrarray_append(&upsert, new_jscal);
     }
 
     /* Write changes */
     int i;
-    for (i = 0; i < ptrarray_size(&insert); i++) {
-        r = caldav_insert_jscal(caldavdb, ptrarray_nth(&insert, i));
-        if (r) goto done;
-    }
-    for (i = 0; i < ptrarray_size(&update); i++) {
-        r = caldav_update_jscal(caldavdb, ptrarray_nth(&update, i));
+    for (i = 0; i < ptrarray_size(&upsert); i++) {
+        r = caldav_upsert_jscal(caldavdb, ptrarray_nth(&upsert, i));
         if (r) goto done;
     }
 
 done:
     dynarray_fini(&old_jscals);
     dynarray_fini(&new_jscals);
-    ptrarray_fini(&insert);
-    ptrarray_fini(&update);
+    ptrarray_fini(&upsert);
     strarray_fini(&strpool);
     return r;
 }
