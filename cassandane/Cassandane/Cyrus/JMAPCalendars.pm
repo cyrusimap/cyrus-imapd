@@ -7732,12 +7732,12 @@ EOF
 
     $self->assert_str_equals("jsgroup", $res->[1][1]{parsed}{"#ical2"}{"\@type"});
     $self->assert_num_equals(2, scalar @{$res->[1][1]{parsed}{"#ical2"}{entries}});
-    $self->assert_str_equals($id2, $res->[1][1]{parsed}{"#ical2"}{entries}[0]{uid});
-    $self->assert_str_equals("Event #2", $res->[1][1]{parsed}{"#ical2"}{entries}[0]{title});
-    $self->assert_not_null($res->[1][1]{parsed}{"#ical2"}{entries}[0]{recurrenceRules});
-    $self->assert_not_null($res->[1][1]{parsed}{"#ical2"}{entries}[0]{recurrenceOverrides});
-    $self->assert_str_equals($id1, $res->[1][1]{parsed}{"#ical2"}{entries}[1]{uid});
-    $self->assert_str_equals("foo", $res->[1][1]{parsed}{"#ical2"}{entries}[1]{title});
+    $self->assert_str_equals($id2, $res->[1][1]{parsed}{"#ical2"}{entries}[1]{uid});
+    $self->assert_str_equals("Event #2", $res->[1][1]{parsed}{"#ical2"}{entries}[1]{title});
+    $self->assert_not_null($res->[1][1]{parsed}{"#ical2"}{entries}[1]{recurrenceRules});
+    $self->assert_not_null($res->[1][1]{parsed}{"#ical2"}{entries}[1]{recurrenceOverrides});
+    $self->assert_str_equals($id1, $res->[1][1]{parsed}{"#ical2"}{entries}[0]{uid});
+    $self->assert_str_equals("foo", $res->[1][1]{parsed}{"#ical2"}{entries}[0]{title});
 
     $self->assert_str_equals("#junk", $res->[1][1]{notParsable}[0]);
     $self->assert_str_equals("foo", $res->[1][1]{notFound}[0]);

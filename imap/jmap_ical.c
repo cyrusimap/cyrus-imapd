@@ -3739,84 +3739,115 @@ EXPORTED json_t*
 jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
                     struct jmapical_ctx *jmapctx)
 {
-    icalcomponent* comp;
-    int has_overrides = 0;
-    hash_table overrides_by_uid = HASH_TABLE_INITIALIZER;
+    icalcomponent *comp;
+    size_t ncomps = 0;
 
-    /* Locate all main VEVENTs. */
-    ptrarray_t todo = PTRARRAY_INITIALIZER;
-    icalcomponent *firstcomp =
-        icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-    for (comp = firstcomp;
+    // Count the total number of components
+    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+             ncomps++;
+    }
+
+    if (ncomps < 2) {
+        // Fast-path: There's at most one component in the VCALENDAR
+        json_t *jsevents = json_array();
+        if (ncomps) {
+            comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+            json_array_append_new(jsevents, calendarevent_from_ical(comp,
+                        props, 0, NULL, NULL, jmapctx));
+        }
+        return jsevents;
+    }
+
+    /* Group VEVENTs by UID. At most one VEVENT may be the main component,
+     * all other VEVENTs with the same UID must have a recurrence id. */
+    hash_table comps_by_uid = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&comps_by_uid, ncomps, 0);
+
+    hash_table seen_uidrecurid = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&seen_uidrecurid, ncomps, 0);
+
+    strarray_t uids = STRARRAY_INITIALIZER;
+
+    struct buf buf = BUF_INITIALIZER;
+
+    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
          comp;
          comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
 
-        if (!icalcomponent_get_uid(comp)) continue;
+        const char *uid = icalcomponent_get_uid(comp);
+        if (!uid) continue;
 
-        if (icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
-            has_overrides = 1;
+        const char *recurid = NULL;
+        icalproperty *prop = icalcomponent_get_first_property(comp,
+                ICAL_RECURRENCEID_PROPERTY);
+        if (prop) recurid = icalproperty_get_value_as_string(prop);
+
+        // Ignore duplicates
+        buf_reset(&buf);
+        charset_encode(&buf, uid, strlen(uid), ENCODING_BASE64URL);
+        if (recurid) {
+            buf_putc(&buf, ',');
+            buf_appendcstr(&buf, recurid);
+        }
+        if (hash_lookup(buf_cstring(&buf), &seen_uidrecurid)) {
             continue;
         }
+        hash_insert(buf_cstring(&buf), (void*)0x1, &seen_uidrecurid);
 
-        ptrarray_append(&todo, comp);
+        ptrarray_t *comps = hash_lookup(uid, &comps_by_uid);
+        if (!comps) {
+            comps = ptrarray_new();
+            hash_insert(uid, comps, &comps_by_uid);
+            strarray_append(&uids, uid);
+            ptrarray_append(comps, comp);
+        }
+        else if (recurid) {
+            // Append recurrence instance
+            ptrarray_append(comps, comp);
+        }
+        else {
+            // Push main component to front
+            ptrarray_unshift(comps, comp);
+        }
     }
-    /* magic promote to toplevel for the first item */
-    if (firstcomp && !ptrarray_size(&todo)) {
-        ptrarray_append(&todo, firstcomp);
-    }
-    else if (!ptrarray_size(&todo)) {
-        return json_array();
-    }
 
-    if (has_overrides) {
-        /* Map overrides by UID */
-        construct_hash_table(&overrides_by_uid, ptrarray_size(&todo), 0);
+    // Convert events by order of appearance in the VCALENDAR.
 
-        for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-             comp;
-             comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+    json_t *jsevents = json_array();
 
-            const char *uid = icalcomponent_get_uid(comp);
-            if (!uid) continue;
+    int i;
+    for (i = 0; i < strarray_size(&uids); i++) {
+        ptrarray_t *comps = hash_del(strarray_nth(&uids, i), &comps_by_uid);
+        icalcomponent *comp = ptrarray_nth(comps, 0);
 
-            if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
-                continue;
+        if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+            // Convert main component, remaining components are overrides
+            ptrarray_shift(comps);
+            json_array_append_new(jsevents,
+                    calendarevent_from_ical(comp, props, 0,
+                        ptrarray_size(comps) ? comps : NULL, NULL, jmapctx));
+        }
+        else {
+            // No main component, convert each instance one by one
+            int j;
+            for (j = 0; j < ptrarray_size(comps); j++) {
+                comp = ptrarray_nth(comps, j);
+                json_array_append_new(jsevents,
+                        calendarevent_from_ical(comp, props, 0, NULL, NULL, jmapctx));
             }
-
-            ptrarray_t *overrides = hash_lookup(uid, &overrides_by_uid);
-            if (!overrides) {
-                overrides = ptrarray_new();
-                hash_insert(uid, overrides, &overrides_by_uid);
-            }
-            ptrarray_append(overrides, comp);
         }
+
+        ptrarray_free(comps);
     }
 
-    /* Convert the VEVENTs to JMAP. */
-    json_t *events = json_array();
-    while ((comp = ptrarray_pop(&todo))) {
-        ptrarray_t *overrides = NULL;
-        if (has_overrides) {
-            const char *uid = icalcomponent_get_uid(comp);
-            overrides = hash_lookup(uid, &overrides_by_uid);
-        }
-        json_t *jsevent = calendarevent_from_ical(comp,
-                props, 0, overrides, NULL, jmapctx);
-        if (jsevent) json_array_append_new(events, jsevent);
-    }
+    free_hash_table(&comps_by_uid, NULL);
+    free_hash_table(&seen_uidrecurid, NULL);
+    strarray_fini(&uids);
+    buf_free(&buf);
 
-    if (has_overrides) {
-        hash_iter *hit = hash_table_iter(&overrides_by_uid);
-        while (hash_iter_next(hit)) {
-            ptrarray_t *overrides = hash_iter_val(hit);
-            ptrarray_free(overrides);
-        }
-        hash_iter_free(&hit);
-        free_hash_table(&overrides_by_uid, NULL);
-    }
-    ptrarray_fini(&todo);
-
-    return events;
+    return jsevents;
 }
 
 EXPORTED json_t*
