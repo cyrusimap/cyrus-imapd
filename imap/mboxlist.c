@@ -225,9 +225,6 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
     case MBTYPE_ADDRESSBOOK:
         buf_putc(&buf, 'a');
         break;
-    case MBTYPE_JMAPNOTIFY:
-        buf_putc(&buf, 'j');
-        break;
     case MBTYPE_JMAPSUBMIT:
         buf_putc(&buf, 's');
         break;
@@ -468,9 +465,6 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
         break;
     case 'e':
         mbtype = MBTYPE_EMAIL;
-        break;
-    case 'j':
-        mbtype = MBTYPE_JMAPNOTIFY;
         break;
     case 'n':
         mbtype = MBTYPE_NETNEWS;
