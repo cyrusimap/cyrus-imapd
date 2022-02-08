@@ -924,7 +924,7 @@ static const jmap_property_t calendar_props[] = {
     },
     {
         "x-href",
-        JMAP_CALENDARS_EXTENSION,
+        JMAP_DEBUG_EXTENSION,
         JMAP_PROP_SERVER_SET
     },
 

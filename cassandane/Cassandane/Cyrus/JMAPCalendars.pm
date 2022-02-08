@@ -113,6 +113,7 @@ sub set_up
         'urn:ietf:params:jmap:calendars',
         'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/debug',
     ]);
 }
 
