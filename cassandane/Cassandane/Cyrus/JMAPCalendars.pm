@@ -7236,6 +7236,28 @@ sub test_calendarevent_blobid
     $res = $jmap->Download('other', $cassBlobId);
     $self->assert_str_equals("BEGIN:VCALENDAR", substr($res->{content}, 0, 15));
     $self->assert_num_not_equals(-1, index($res->{content}, 'TRIGGER:-PT10M'));
+
+    xlog $self, "update event";
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'other',
+            update => {
+                $eventId => {
+                    title => 'updatedTitle',
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => 'other',
+            ids => [$eventId],
+            properties => ['blobId'],
+        }, 'R1'],
+
+    ]);
+    $self->assert_str_equals($res->[0][1]{updated}{$eventId}{blobId},
+        $res->[1][1]{list}[0]{blobId});
+    $self->assert_str_not_equals($cassBlobId, $res->[1][1]{list}[0]{blobId});
 }
 
 sub test_calendarevent_debugblobid
@@ -7327,7 +7349,7 @@ sub test_calendarevent_debugblobid
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
 
-    xlog $self, "get debugBlobId as regular user (should fail)";
+    xlog $self, "get debugBlobId as regular user";
 
     my $using = [
         'urn:ietf:params:jmap:core',
@@ -7343,7 +7365,20 @@ sub test_calendarevent_debugblobid
             properties => ['debugBlobId'],
         }, 'R1']
     ], $using);
-    $self->assert_null($res->[0][1]{list}[0]{debugBlobId});
+    my $debugBlobId = $res->[0][1]{list}[0]{debugBlobId};
+    $self->assert_not_null($debugBlobId);
+
+    xlog $self, "attempt to download debugBlob as non-admin (should fail)";
+
+    my $downloadUri = $jmap->downloaduri('other', $debugBlobId);
+    my %Headers = (
+        'Authorization' => $jmap->auth_header(),
+    );
+    my $RawResponse = $jmap->ua->get($downloadUri, { headers => \%Headers });
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawResponse);
+    }
+    $self->assert_str_equals('404', $RawResponse->{status});
 
     xlog $self, "get debugBlobId as admin user";
 
@@ -7362,7 +7397,7 @@ sub test_calendarevent_debugblobid
             properties => ['debugBlobId'],
         }, 'R1']
     ], $using);
-    my $debugBlobId = $res->[0][1]{list}[0]{debugBlobId};
+    $debugBlobId = $res->[0][1]{list}[0]{debugBlobId};
     $self->assert_not_null($debugBlobId);
 
     xlog $self, "download debugBlob with userdata";
@@ -7370,18 +7405,6 @@ sub test_calendarevent_debugblobid
     $res = $adminJmap->Download('other', $debugBlobId);
     $self->assert_str_equals("multipart/mixed", substr($res->{headers}{'content-type'}, 0, 15));
     $self->assert_num_not_equals(-1, index($res->{content}, 'SUMMARY:event1'));
-
-    xlog $self, "attempt to download debugBlob as non-admin";
-
-    my $downloadUri = $jmap->downloaduri('other', $debugBlobId);
-    my %Headers = (
-        'Authorization' => $jmap->auth_header(),
-    );
-    my $RawResponse = $jmap->ua->get($downloadUri, { headers => \%Headers });
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($RawResponse);
-    }
-    $self->assert_str_equals('404', $RawResponse->{status});
 }
 
 sub test_crasher20191227
