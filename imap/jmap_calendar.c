@@ -3827,12 +3827,12 @@ static const jmap_property_t event_props[] = {
     {
         "blobId",
         JMAP_CALENDARS_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
+        JMAP_PROP_SERVER_SET
     },
     {
         "debugBlobId",
         JMAP_DEBUG_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
+        JMAP_PROP_SERVER_SET
     },
     { NULL, NULL, 0 }
 };

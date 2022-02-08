@@ -1344,6 +1344,8 @@ sub normalize_event
     $event->{"x-href"} = undef;
     $event->{sequence} = 0;
     $event->{prodId} = undef;
+    delete($event->{blobId});
+    delete($event->{debugBlobId});
 }
 
 sub assert_normalized_event_equals
