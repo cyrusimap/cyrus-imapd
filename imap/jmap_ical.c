@@ -4057,7 +4057,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser,
         return;
 
     /* Check sanity of recurrence properties */
-    if (JNOTNULL(json_object_get(event, "recurrenceId")) !=
+    if (JNULL(json_object_get(event, "recurrenceId")) &&
         JNOTNULL(json_object_get(event, "recurrenceIdTimeZone"))) {
         jmap_parser_invalid(parser, "recurrenceId");
         jmap_parser_invalid(parser, "recurrenceIdTimeZone");
