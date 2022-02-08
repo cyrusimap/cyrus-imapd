@@ -117,6 +117,16 @@ extern icalcomponent *busytime_query_local(struct transaction_t *txn,
                                            const char *organizer,
                                            const char *attendee);
 
+extern int busytime_add_resource(struct mailbox *mailbox,
+                                 struct freebusy_filter *fbfilter,
+                                 struct caldav_data *cdata);
+
+extern icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
+                                       icalproperty_method method,
+                                       const char *uid,
+                                       const char *organizer,
+                                       const char *attendee);
+
 extern int isched_send(struct caldav_sched_param *sparam, const char *recipient,
                        icalcomponent *ical, xmlNodePtr *xml);
 

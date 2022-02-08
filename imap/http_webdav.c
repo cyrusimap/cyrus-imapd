@@ -702,7 +702,8 @@ static int webdav_put(struct transaction_t *txn, void *obj,
 
     /* Store the resource */
     return dav_store_resource(txn, buf_base(buf), buf_len(buf),
-                              mailbox, oldrecord, wdata->dav.createdmodseq, NULL);
+                              mailbox, oldrecord, wdata->dav.createdmodseq,
+                              NULL, NULL);
 }
 
 

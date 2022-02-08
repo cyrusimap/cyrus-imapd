@@ -194,7 +194,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
                                          unsigned char *buf);
 
 #ifdef WITH_DAV
-static struct webdav_db *mailbox_open_webdav(struct mailbox *);
+EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *);
 static int mailbox_commit_dav(struct mailbox *mailbox);
 static int mailbox_abort_dav(struct mailbox *mailbox);
 #endif
@@ -2393,7 +2393,7 @@ HIDDEN struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox)
     return mailbox->local_carddav;
 }
 
-static struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
+EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
 {
     if (!mailbox->local_webdav) {
         mailbox->local_webdav = webdav_open_mailbox(mailbox);
@@ -3663,7 +3663,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         else if (!new->silentupdate) {
             /* make sure record is up to date - see add below for description of
              * why we don't touch silent records */
-            caldav_alarm_touch_record(mailbox, new);
+            caldav_alarm_touch_record(mailbox, new, 0);
         }
 
         /* just a flags update to an existing record */
@@ -3707,7 +3707,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
             if (r) goto alarmdone;
         }
 
-        r = caldav_writeentry(caldavdb, cdata, ical);
+        r = caldav_writeical(caldavdb, cdata, ical);
 
      alarmdone:
         icalcomponent_free(ical);
@@ -3748,6 +3748,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
             resource = param->value;
         }
     }
+    if (!resource) resource = message_guid_encode(&body->content_guid);
 
     webdavdb = mailbox_open_webdav(mailbox);
 
@@ -3915,7 +3916,7 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
 
     /* touch or create otherwise */
     else if (old && (old->uid == new->uid)) {
-        r = caldav_alarm_touch_record(mailbox, new);
+        r = caldav_alarm_touch_record(mailbox, new, 0);
     }
     else {
         r = caldav_alarm_add_record(mailbox, new, NULL);

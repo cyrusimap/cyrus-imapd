@@ -56,6 +56,7 @@
 #include "strhash.h"
 #include "stristr.h"
 #include "util.h"
+#include "icu_wrap.h"
 
 #ifdef HAVE_ICAL
 
@@ -216,6 +217,31 @@ icalproperty_get_datetimeperiod(icalproperty *prop)
     return ret;
 }
 
+EXPORTED icaltimezone *icaltimezone_get_cyrus_timezone_from_tzid(const char *tzid)
+{
+    if (!tzid)
+        return NULL;
+
+    /* Use UTC singleton for Etc/UTC */
+    if (!strcmp(tzid, "Etc/UTC") || !strcmp(tzid, "UTC"))
+        return icaltimezone_get_utc_timezone();
+
+    icaltimezone *tz = icaltimezone_get_builtin_timezone(tzid);
+    if (tz == NULL)
+        tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+    if (tz == NULL) {
+        /* see if its a MS Windows TZID */
+        char *icutzid = icu_getIDForWindowsID(tzid);
+        if (icutzid) {
+            tz = icaltimezone_get_builtin_timezone(icutzid);
+            if (tz == NULL)
+                tz = icaltimezone_get_builtin_timezone_from_tzid(icutzid);
+            free(icutzid);
+        }
+    }
+    return tz;
+}
+
 static struct icaltimetype icalcomponent_get_mydatetime(icalcomponent *comp, icalproperty *prop)
 {
     icalcomponent *c;
@@ -226,37 +252,17 @@ static struct icaltimetype icalcomponent_get_mydatetime(icalcomponent *comp, ica
 
     if ((param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER)) != NULL) {
         const char *tzid = icalparameter_get_tzid(param);
-        if (!strcmpsafe(tzid, "Etc/UTC") || !strcmpsafe(tzid, "UTC")) {
-            /* Use UTC singleton for Etc/UTC */
-            ret = icaltime_set_timezone(&ret, icaltimezone_get_utc_timezone());
-        }
-        else {
-            /* Use Cyrus-internal timezone */
-            icaltimezone *mytz = icaltimezone_get_builtin_timezone(tzid);
-            if (mytz == NULL)
-                mytz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
-            if (mytz == NULL) {
-                /* see if its a MS Windows TZID */
-                char *icutzid = icu_getIDForWindowsID(tzid);
-                if (icutzid)
-                    mytz = icaltimezone_get_builtin_timezone_from_tzid(icutzid);
-                free(icutzid);
-            }
-            if (mytz != NULL) {
-                ret = icaltime_set_timezone(&ret, mytz);
-            }
-            else {
-                /* Use embedded VTIMEZONE */
-                icaltimezone *tz = NULL;
-                for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
-                    tz = icalcomponent_get_timezone(c, tzid);
-                    if (tz != NULL)
-                        break;
-                }
+        icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+        if (tz == NULL) {
+            /* Use embedded VTIMEZONE */
+            for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
+                tz = icalcomponent_get_timezone(c, tzid);
                 if (tz != NULL)
-                    ret =icaltime_set_timezone(&ret, tz);
+                    break;
             }
         }
+        if (tz != NULL)
+            ret = icaltime_set_timezone(&ret, tz);
     }
 
     return ret;
@@ -370,12 +376,116 @@ static int span_compare_range(icaltime_span *span, icaltime_span *range)
     return 0; /* span overlaps range */
 }
 
+struct multirrule_iterator_entry {
+    struct icaltimetype next;
+    icalrecur_iterator *icaliter;
+};
+
+struct multirrule_iterator {
+    struct multirrule_iterator_entry *entries;
+    size_t nentries;
+    size_t nalloced;
+};
+
+static void multirrule_iterator_fini(struct multirrule_iterator *iter)
+{
+    if (!iter) return;
+
+    size_t i;
+    for (i = 0; i < iter->nentries; i++) {
+        icalrecur_iterator_free(iter->entries[i].icaliter);
+    }
+    free(iter->entries);
+    iter->entries = NULL;
+    iter->nentries = 0;
+    iter->nalloced = 0;
+}
+
+static void multirrule_iterator_add(struct multirrule_iterator *iter,
+                                    struct icalrecurrencetype recur,
+                                    icaltimetype dtstart,
+                                    icaltimetype range_start)
+{
+    icalrecur_iterator *icaliter = icalrecur_iterator_new(recur, dtstart);
+    if (!icaliter) return;
+    if (recur.count > 0) {
+        icalrecur_iterator_set_start(icaliter, range_start);
+    }
+
+    iter->nentries++;
+    if (iter->nentries > iter->nalloced) {
+        iter->nalloced = iter->nalloced ? iter->nalloced * 2 : 4;
+        iter->entries = xrealloc(iter->entries,
+                iter->nalloced * sizeof(struct multirrule_iterator_entry));
+    }
+
+    struct multirrule_iterator_entry *entry = iter->entries + iter->nentries - 1;
+    entry->icaliter = icaliter;
+    entry->next = icalrecur_iterator_next(entry->icaliter);
+}
+
+static icaltimetype multirrule_iterator_next(struct multirrule_iterator *iter)
+{
+    if (!iter->nentries) return icaltime_null_time();
+
+    // XXX if linear search turns out to be too slow use a priority queue
+    icaltimetype next = iter->entries[0].next;
+    size_t i, min = 0;
+    for (i = 1; i < iter->nentries; i++) {
+        struct multirrule_iterator_entry *entry = iter->entries + i;
+        if (icaltime_is_null_time(entry->next)) {
+            continue;
+        }
+        if (icaltime_is_null_time(next) || icaltime_compare(next, entry->next) > 0) {
+            min = i;
+            next = entry->next;
+        }
+    }
+    iter->entries[min].next = icalrecur_iterator_next(iter->entries[min].icaliter);
+    return next;
+}
+
+static struct multirrule_iterator
+multirrule_iterator_for_range(icalcomponent *comp,
+                              struct icalperiodtype range,
+                              icaltime_span range_span,
+                              icaltimetype dtstart,
+                              const icaltimezone *floatingtz,
+                              icalproperty_kind kind)
+{
+    struct multirrule_iterator iter = { NULL, 0, 0 };
+    if (!comp) return iter;
+
+    icalproperty *rrule;
+    for (rrule = icalcomponent_get_first_property(comp, kind);
+         rrule;
+         rrule = icalcomponent_get_next_property(comp, kind)) {
+
+        struct icalrecurrencetype recur = kind == ICAL_EXRULE_PROPERTY ?
+            icalproperty_get_exrule(rrule) : icalproperty_get_rrule(rrule);
+
+        /* check if span of RRULE overlaps range */
+        icaltime_span recur_span = {
+            icaltime_to_timet(dtstart, floatingtz),
+            icaltime_to_timet(recur.until, NULL), 0 /* is_busy */
+        };
+        if (!recur_span.end) recur_span.end = eternity;
+
+        if (!span_compare_range(&recur_span, &range_span)) {
+            multirrule_iterator_add(&iter, recur, dtstart, range.start);
+        }
+    }
+
+    return iter;
+}
+
 EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
                                    struct icalperiodtype range,
                                    const icaltimezone *floatingtz,
                                    int (*callback) (icalcomponent *comp,
                                                     icaltimetype start,
                                                     icaltimetype end,
+                                                    icaltimetype recurid,
                                                     void *data),
                                    void *callback_data)
 {
@@ -496,52 +606,39 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
     icalarray_sort(overrides, sort_overrides);
 
     /* now we can do the RRULE, because we have all overrides */
-    icalrecur_iterator *rrule_itr = NULL;
-    if (mastercomp) {
-        icalproperty *rrule =
-            icalcomponent_get_first_property(mastercomp, ICAL_RRULE_PROPERTY);
-        if (rrule) {
-            struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
-
-            /* check if span of RRULE overlaps range */
-            icaltime_span recur_span = {
-                icaltime_to_timet(dtstart, floatingtz),
-                icaltime_to_timet(recur.until, NULL), 0 /* is_busy */
-            };
-            if (!recur_span.end) recur_span.end = eternity;
-
-            if (!span_compare_range(&recur_span, &range_span)) {
-                rrule_itr = icalrecur_iterator_new(recur, dtstart);
-                if (rrule_itr && (recur.count > 0)) {
-                    icalrecur_iterator_set_start(rrule_itr, range.start);
-                }
-            }
-        }
-    }
+    struct multirrule_iterator rrule_itr = multirrule_iterator_for_range(mastercomp,
+            range, range_span, dtstart, floatingtz, ICAL_RRULE_PROPERTY);
+    struct multirrule_iterator exrule_itr = multirrule_iterator_for_range(mastercomp,
+            range, range_span, dtstart, floatingtz, ICAL_EXRULE_PROPERTY);
 
     size_t onum = 0;
     struct recurrence_data *data = overrides->num_elements ?
         icalarray_element_at(overrides, onum) : NULL;
-    struct icaltimetype ritem = rrule_itr ?
-        icalrecur_iterator_next(rrule_itr) : dtstart;
+    struct icaltimetype ritem = rrule_itr.nentries ?
+        multirrule_iterator_next(&rrule_itr) : dtstart;
+    struct icaltimetype xitem = exrule_itr.nentries ?
+        multirrule_iterator_next(&exrule_itr) : icaltime_null_time();
+
+    int has_rrule = !!icalcomponent_get_first_property(mastercomp, ICAL_RRULE_PROPERTY);
 
     while (data || !icaltime_is_null_time(ritem)) {
         time_t otime = data ? data->span.start : eternity;
         time_t rtime = icaltime_to_timet(ritem, floatingtz);
 
         if (icaltime_is_null_time(ritem) || (data && otime <= rtime)) {
+            icaltimetype recurid = icalcomponent_get_recurrenceid(data->comp);
             /* an overridden recurrence */
             if (data->comp &&
                 !span_compare_range(&data->span, &range_span) &&
-                !callback(data->comp, data->dtstart, data->dtend, callback_data))
+                !callback(data->comp, data->dtstart, data->dtend, recurid, callback_data))
                 goto done;
 
             /* if they're both the same time, it's a precisely overridden
              * recurrence, so increment both */
             if (rtime == otime) {
                 /* incr recurrences */
-                ritem = rrule_itr ?
-                    icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
+                ritem = rrule_itr.nentries ?
+                    multirrule_iterator_next(&rrule_itr) : icaltime_null_time();
             }
 
             /* incr overrides */
@@ -551,24 +648,40 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
         }
         else {
             /* a non-overridden recurrence */
-            struct icaltimetype thisend = icaltime_add(ritem, event_length);
-            icaltime_span this_span = {
-                rtime, icaltime_to_timet(thisend, floatingtz), 0 /* is_busy */
-            };
-            int r = span_compare_range(&this_span, &range_span);
 
-            if (r > 0 || /* gone past the end of range */
-                (!r && !callback(mastercomp, ritem, thisend, callback_data)))
-                goto done;
+            /* check if this recurrence-id is excluded */
+            while (!icaltime_is_null_time(xitem) && icaltime_compare(xitem, ritem) < 0) {
+                xitem = multirrule_iterator_next(&exrule_itr);
+            }
+            if (icaltime_compare(xitem, ritem)) {
+                /* not excluded - process this recurrence-id */
+                struct icaltimetype thisend = icaltime_add(ritem, event_length);
+                icaltime_span this_span = {
+                    rtime, icaltime_to_timet(thisend, floatingtz), 0 /* is_busy */
+                };
+
+                int r = span_compare_range(&this_span, &range_span);
+                if (r > 0)
+                    goto done; /* gone past the end of range */
+
+                if (!r) {
+                    icaltimetype recurid = ritem;
+                    recurid.zone = dtstart.zone;
+                    r = callback(mastercomp, ritem, thisend, has_rrule ?
+                            recurid : icaltime_null_time(), callback_data);
+                    if (!r) goto done;
+                }
+            }
 
             /* incr recurrences */
-            ritem = rrule_itr ?
-                icalrecur_iterator_next(rrule_itr) : icaltime_null_time();
+            ritem = rrule_itr.nentries ?
+                multirrule_iterator_next(&rrule_itr) : icaltime_null_time();
         }
     }
 
  done:
-    if (rrule_itr) icalrecur_iterator_free(rrule_itr);
+    multirrule_iterator_fini(&exrule_itr);
+    multirrule_iterator_fini(&rrule_itr);
 
     icalarray_free(overrides);
 
@@ -1037,6 +1150,7 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
     do {
         struct icalperiodtype period;
         icalproperty *rrule;
+        ptrarray_t detached_rrules = PTRARRAY_INITIALIZER;
 
         /* Get base dtstart and dtend */
         period = icalcomponent_get_utc_timespan(comp, kind, floating_tz);
@@ -1050,31 +1164,37 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
             unsigned expand = recurring = 1;
 
             if (rrule) {
-                struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
+                do {
+                    struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
+                    if (!icaltime_is_null_time(recur.until)) {
+                        /* Recurrence ends - calculate dtend of last recurrence */
+                        struct icaldurationtype duration;
+                        icaltimezone *utc = icaltimezone_get_utc_timezone();
 
-                if (!icaltime_is_null_time(recur.until)) {
-                    /* Recurrence ends - calculate dtend of last recurrence */
-                    struct icaldurationtype duration;
-                    icaltimezone *utc = icaltimezone_get_utc_timezone();
+                        duration = icaltime_subtract(period.end, period.start);
+                        icaltimetype end =
+                            icaltime_add(icaltime_convert_to_zone(recur.until, utc),
+                                    duration);
 
-                    duration = icaltime_subtract(period.end, period.start);
-                    period.end =
-                        icaltime_add(icaltime_convert_to_zone(recur.until, utc),
-                                duration);
+                        if (icaltime_compare(period.end, end) < 0)
+                            period.end = end;
 
-                    /* Do RDATE expansion only */
-                    /* Temporarily remove RRULE to allow for expansion of
-                     * remaining recurrences. */
-                    icalcomponent_remove_property(comp, rrule);
-                }
-                else if (!recur.count) {
-                    /* Recurrence never ends - set end of span to eternity */
-                    span.end =
-                        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+                        /* Do RDATE expansion only */
+                        /* Temporarily remove RRULE to allow for expansion of
+                         * remaining recurrences. */
+                        icalcomponent_remove_property(comp, rrule);
+                        ptrarray_append(&detached_rrules, rrule);
+                    }
+                    else if (!recur.count) {
+                        /* Recurrence never ends - set end of span to eternity */
+                        span.end =
+                            icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
 
-                    /* Skip RRULE & RDATE expansion */
-                    expand = 0;
-                }
+                        /* Skip RRULE & RDATE expansion */
+                        expand = 0;
+                    }
+                    rrule = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
+                } while (expand && rrule);
             }
 
             /* Expand (remaining) recurrences */
@@ -1084,12 +1204,25 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                         icaltime_from_timet_with_zone(caldav_epoch, 0, NULL),
                         icaltime_from_timet_with_zone(caldav_eternity, 0, NULL),
                         utc_timespan_cb, &span);
+            }
 
-                /* Add RRULE back, if we had removed it before. */
-                if (rrule && !icalproperty_get_parent(rrule)) {
+            /* Add RRULEs back, if we had removed them before. */
+            if (ptrarray_size(&detached_rrules)) {
+                /* Detach any remaining RRULEs, then add them in order */
+                for (rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+                     rrule;
+                     rrule = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+                    icalcomponent_remove_property(comp, rrule);
+                    ptrarray_append(&detached_rrules, rrule);
+                }
+                int i;
+                for (i = 0; i < ptrarray_size(&detached_rrules); i++) {
+                    rrule = ptrarray_nth(&detached_rrules, i);
                     icalcomponent_add_property(comp, rrule);
                 }
             }
+
+            ptrarray_fini(&detached_rrules);
         }
 
         /* Check our dtstart and dtend against span */
@@ -2026,6 +2159,794 @@ EXPORTED void icalproperty_set_xparam(icalproperty *prop,
     icalparameter_set_xname(param, name);
     icalparameter_set_xvalue(param, val);
     icalproperty_add_parameter(prop, param);
+}
+
+EXPORTED int icalcomponent_read_usedefaultalerts(icalcomponent *comp)
+{
+    icalcomponent *ical = NULL;
+    icalcomponent_kind kind = ICAL_NO_COMPONENT;
+
+    if (icalcomponent_isa(comp) == ICAL_VCALENDAR_COMPONENT) {
+        ical = comp;
+        comp = icalcomponent_get_first_real_component(ical);
+        kind = icalcomponent_isa(comp);
+    }
+    do {
+        icalproperty *prop;
+        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
+            const char *propname = icalproperty_get_x_name(prop);
+            if (!strcasecmp(propname, "X-APPLE-DEFAULT-ALARM")) {
+                const char *val = icalproperty_get_value_as_string(prop);
+                return !strcasecmpsafe(val, "TRUE");
+            }
+        }
+        if (ical) comp = icalcomponent_get_next_component(ical, kind);
+    } while (ical && comp);
+
+    return -1;
+}
+
+EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp)
+{
+    icalcomponent *ical = NULL;
+    icalcomponent_kind kind = ICAL_NO_COMPONENT;
+
+    if (icalcomponent_isa(comp) == ICAL_VCALENDAR_COMPONENT) {
+        ical = comp;
+        comp = icalcomponent_get_first_real_component(ical);
+        kind = icalcomponent_isa(comp);
+    }
+    do {
+        int has_usedefaultalerts = 0;
+
+        icalproperty *prop, *nextprop;
+        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+             prop = nextprop) {
+
+            nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+            if (strcasecmp(icalproperty_get_x_name(prop), "X-APPLE-DEFAULT-ALARM"))
+                continue;
+
+            const char *val = icalproperty_get_value_as_string(prop);
+            if (strcasecmpsafe(val, "TRUE") || has_usedefaultalerts) {
+                // Remove conflicting or duplicate entries
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
+            else has_usedefaultalerts = 1;
+        }
+
+        if (!has_usedefaultalerts) {
+            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, "X-APPLE-DEFAULT-ALARM");
+            icalproperty_set_value(prop, icalvalue_new_boolean(1));
+            icalcomponent_add_property(comp, prop);
+        }
+
+        if (ical) comp = icalcomponent_get_next_component(ical, kind);
+    } while (ical && comp);
+}
+
+EXPORTED void icalcomponent_add_defaultalerts(icalcomponent *ical,
+                                              icalcomponent *withtime,
+                                              icalcomponent *withdate,
+                                              int force)
+{
+    if (!withtime && !withdate)
+        return;
+
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    if (kind != ICAL_VEVENT_COMPONENT && kind != ICAL_VTODO_COMPONENT)
+        return;
+
+    /* Add default alarms */
+    for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        if (force || icalcomponent_read_usedefaultalerts(comp) > 0) {
+
+            /* Determine which default alarms to add */
+            int is_date;
+            if (kind == ICAL_VTODO_COMPONENT) {
+                if (icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))
+                    is_date = icalcomponent_get_dtstart(comp).is_date;
+                else if (icalcomponent_get_first_property(comp, ICAL_DUE_PROPERTY))
+                    is_date = icalcomponent_get_due(comp).is_date;
+                else
+                    is_date = 1;
+            }
+            else is_date = icalcomponent_get_dtstart(comp).is_date;
+
+            icalcomponent *alerts = is_date ?  withdate : withtime;
+
+            /* Remove VALARMs in component */
+            icalcomponent *curr, *next = NULL;
+            for (curr = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+                    curr; curr = next) {
+                next = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
+                icalcomponent_remove_component(comp, curr);
+                icalcomponent_free(curr);
+            }
+
+            /* Add default VALARMs */
+            for (curr = icalcomponent_get_first_component(alerts, ICAL_VALARM_COMPONENT);
+                 curr;
+                 curr = icalcomponent_get_next_component(alerts, ICAL_VALARM_COMPONENT)) {
+
+                icalcomponent *alarm = icalcomponent_clone(curr);
+
+                /* Replace default description with component summary */
+                const char *desc = icalcomponent_get_summary(comp);
+                if (desc && *desc != '\0') {
+                    icalproperty *prop =
+                        icalcomponent_get_first_property(alarm, ICAL_DESCRIPTION_PROPERTY);
+                    if (prop) {
+                        icalcomponent_remove_property(alarm, prop);
+                        icalproperty_free(prop);
+                    }
+                    prop = icalproperty_new_description(desc);
+                    icalcomponent_add_property(alarm, prop);
+                }
+
+                /* Add alarm */
+                icalcomponent_add_component(comp, alarm);
+            }
+        }
+    }
+}
+
+static void check_tombstone(struct observance *tombstone,
+                            struct observance *obs)
+{
+    if (icaltime_compare(obs->onset, tombstone->onset) > 0) {
+        /* onset is closer to cutoff than existing tombstone */
+        tombstone->name = icalmemory_tmp_copy(obs->name);
+        tombstone->offset_from = tombstone->offset_to = obs->offset_to;
+        tombstone->is_daylight = obs->is_daylight;
+        tombstone->onset = obs->onset;
+    }
+}
+
+struct rdate {
+    icalproperty *prop;
+    struct icaldatetimeperiodtype date;
+};
+
+static int rdate_compare(const void *rdate1, const void *rdate2)
+{
+    return icaltime_compare(((struct rdate *) rdate1)->date.time,
+                            ((struct rdate *) rdate2)->date.time);
+}
+
+static int observance_compare(const void *obs1, const void *obs2)
+{
+    return icaltime_compare(((struct observance *) obs1)->onset,
+                            ((struct observance *) obs2)->onset);
+}
+
+static void icalproperty_get_isstd_isgmt(icalproperty *prop,
+                                         struct observance *obs)
+{
+    const char *time_type =
+        icalproperty_get_parameter_as_string(prop, "X-OBSERVED-AT");
+
+    if (!time_type) time_type = "W";
+
+    switch (time_type[0]) {
+    case 'G': case 'g':
+    case 'U': case 'u':
+    case 'Z': case 'z':
+        obs->is_gmt = obs->is_std = 1;
+        break;
+    case 'S': case 's':
+        obs->is_gmt = 0;
+        obs->is_std = 1;
+        break;
+    case 'W': case 'w':
+    default:
+        obs->is_gmt = obs->is_std = 0;
+        break;
+    }
+}
+
+EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
+                                                       icaltimetype *startp, icaltimetype *endp,
+                                                       icalarray *obsarray,
+                                                       struct observance **proleptic,
+                                                       icalcomponent **eternal_std,
+                                                       icalcomponent **eternal_dst,
+                                                       icaltimetype *last_dtstart,
+                                                       int ms_compatible)
+{
+    icaltimetype start = *startp, end = *endp;
+    icalcomponent *comp, *nextc, *tomb_std = NULL, *tomb_day = NULL;
+    icalproperty *prop, *proleptic_prop = NULL;
+    struct observance tombstone;
+    unsigned need_tomb = !icaltime_is_null_time(start);
+    unsigned adjust_start = !icaltime_is_null_time(start);
+    unsigned adjust_end = !icaltime_is_null_time(end);
+
+    if (last_dtstart) *last_dtstart = icaltime_null_time();
+
+    /* See if we have a proleptic tzname in VTIMEZONE */
+    for (prop = icalcomponent_get_first_property(vtz, ICAL_X_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(vtz, ICAL_X_PROPERTY)) {
+        if (!strcmp("X-PROLEPTIC-TZNAME", icalproperty_get_x_name(prop))) {
+            proleptic_prop = prop;
+            break;
+        }
+    }
+
+    memset(&tombstone, 0, sizeof(struct observance));
+    tombstone.name = icalmemory_tmp_copy(proleptic_prop ?
+                                         icalproperty_get_x(proleptic_prop) :
+                                         "LMT");
+    if (!proleptic_prop ||
+        !icalproperty_get_parameter_as_string(prop, "X-NO-BIG-BANG"))
+      tombstone.onset.year = -1;
+
+    /* Process each VTMEZONE STANDARD/DAYLIGHT subcomponent */
+    for (comp = icalcomponent_get_first_component(vtz, ICAL_ANY_COMPONENT);
+         comp; comp = nextc) {
+        icalproperty *dtstart_prop = NULL, *rrule_prop = NULL;
+        icalarray *rdate_array = icalarray_new(sizeof(struct rdate), 10);
+        icaltimetype dtstart;
+        struct observance obs;
+        unsigned n, trunc_dtstart = 0;
+        int r;
+
+        nextc = icalcomponent_get_next_component(vtz, ICAL_ANY_COMPONENT);
+
+        memset(&obs, 0, sizeof(struct observance));
+        obs.offset_from = obs.offset_to = INT_MAX;
+        obs.is_daylight = (icalcomponent_isa(comp) == ICAL_XDAYLIGHT_COMPONENT);
+
+        /* Grab the properties that we require to expand recurrences */
+        for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY)) {
+
+            switch (icalproperty_isa(prop)) {
+            case ICAL_TZNAME_PROPERTY:
+                obs.name = icalproperty_get_tzname(prop);
+                break;
+
+            case ICAL_DTSTART_PROPERTY:
+                dtstart_prop = prop;
+                obs.onset = dtstart = icalproperty_get_dtstart(prop);
+                icalproperty_get_isstd_isgmt(prop, &obs);
+                if (last_dtstart && icaltime_compare(dtstart, *last_dtstart))
+                    *last_dtstart = dtstart;
+                break;
+
+            case ICAL_TZOFFSETFROM_PROPERTY:
+                obs.offset_from = icalproperty_get_tzoffsetfrom(prop);
+                break;
+
+            case ICAL_TZOFFSETTO_PROPERTY:
+                obs.offset_to = icalproperty_get_tzoffsetto(prop);
+                break;
+
+            case ICAL_RRULE_PROPERTY:
+                rrule_prop = prop;
+                break;
+
+            case ICAL_RDATE_PROPERTY: {
+                struct rdate rdate = { prop, icalproperty_get_rdate(prop) };
+
+                icalarray_append(rdate_array, &rdate);
+                break;
+            }
+
+            default:
+                /* ignore all other properties */
+                break;
+            }
+        }
+
+        /* We MUST have DTSTART, TZNAME, TZOFFSETFROM, and TZOFFSETTO */
+        if (!dtstart_prop || !obs.name ||
+            obs.offset_from == INT_MAX || obs.offset_to == INT_MAX) {
+            icalarray_free(rdate_array);
+            continue;
+        }
+
+        /* Adjust DTSTART observance to UTC */
+        icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
+        icaltime_set_utc(&obs.onset, 1);
+
+        /* Check DTSTART vs window close */
+        if (!icaltime_is_null_time(end) &&
+            icaltime_compare(obs.onset, end) >= 0) {
+            /* All observances occur on/after window close - remove component */
+            icalcomponent_remove_component(vtz, comp);
+            icalcomponent_free(comp);
+
+            /* Actual range end == request range end */
+            adjust_end = 0;
+
+            /* Nothing else to do */
+            icalarray_free(rdate_array);
+            continue;
+        }
+
+        /* Check DTSTART vs window open */
+        r = icaltime_compare(obs.onset, start);
+        if (r < 0) {
+            /* DTSTART is prior to our window open - check it vs tombstone */
+            if (need_tomb) check_tombstone(&tombstone, &obs);
+
+            /* Adjust it */
+            trunc_dtstart = 1;
+
+            /* Actual range start == request range start */
+            adjust_start = 0;
+        }
+        else {
+            /* DTSTART is on/after our window open */
+            if (r == 0) need_tomb = 0;
+
+            if (obsarray && !rrule_prop) {
+                /* Add the DTSTART observance to our array */
+                icalarray_append(obsarray, &obs);
+            }
+        }
+
+        if (rrule_prop) {
+            struct icalrecurrencetype rrule =
+                icalproperty_get_rrule(rrule_prop);
+            icalrecur_iterator *ritr = NULL;
+            unsigned eternal = icaltime_is_null_time(rrule.until);
+            unsigned trunc_until = 0;
+
+            if (eternal) {
+                if (obs.is_daylight) {
+                    if (eternal_dst) *eternal_dst = comp;
+                }
+                else if (eternal_std) *eternal_std = comp;
+            }
+
+            /* Check RRULE duration */
+            if (!eternal && icaltime_compare(rrule.until, start) < 0) {
+                /* RRULE ends prior to our window open -
+                   check UNTIL vs tombstone */
+                obs.onset = rrule.until;
+                if (need_tomb) check_tombstone(&tombstone, &obs);
+
+                /* Remove RRULE */
+                icalcomponent_remove_property(comp, rrule_prop);
+                icalproperty_free(rrule_prop);
+            }
+            else {
+                /* RRULE ends on/after our window open */
+                if (!icaltime_is_null_time(end) &&
+                    (eternal || icaltime_compare(rrule.until, end) >= 0)) {
+                    /* RRULE ends after our window close - need to adjust it */
+                    trunc_until = 1;
+                }
+
+                if (!eternal) {
+                    /* Adjust UNTIL to local time (for iterator) */
+                    icaltime_adjust(&rrule.until, 0, 0, 0, obs.offset_from);
+                    icaltime_set_utc(&rrule.until, 0);
+                }
+
+                if (trunc_dtstart) {
+                    /* Bump RRULE start to 1 year prior to our window open */
+                    dtstart.year = start.year - 1;
+                    dtstart.month = start.month;
+                    dtstart.day = start.day;
+                    icaltime_normalize(dtstart);
+                }
+
+                ritr = icalrecur_iterator_new(rrule, dtstart);
+            }
+
+            /* Process any RRULE observances within our window */
+            if (ritr) {
+                icaltimetype recur, prev_onset;
+
+                /* Mark original DTSTART (UTC) */
+                dtstart = obs.onset;
+
+                while (!icaltime_is_null_time(obs.onset = recur =
+                                              icalrecur_iterator_next(ritr))) {
+                    unsigned ydiff;
+
+                    /* Adjust observance to UTC */
+                    icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
+                    icaltime_set_utc(&obs.onset, 1);
+
+                    if (trunc_until && icaltime_compare(obs.onset, end) >= 0) {
+                        /* Observance is on/after window close */
+
+                        /* Actual range end == request range end */
+                        adjust_end = 0;
+
+                        /* Check if DSTART is within 1yr of prev onset */
+                        ydiff = prev_onset.year - dtstart.year;
+                        if (ydiff <= 1) {
+                            /* Remove RRULE */
+                            icalcomponent_remove_property(comp, rrule_prop);
+                            icalproperty_free(rrule_prop);
+
+                            if (ydiff) {
+                                /* Add previous onset as RDATE */
+                                struct icaldatetimeperiodtype rdate = {
+                                    prev_onset,
+                                    icalperiodtype_null_period()
+                                };
+                                prop = icalproperty_new_rdate(rdate);
+                                icalcomponent_add_property(comp, prop);
+                            }
+                        }
+                        else if (!eternal) {
+                            /* Set UNTIL to previous onset */
+                            rrule.until = prev_onset;
+                            icalproperty_set_rrule(rrule_prop, rrule);
+                        }
+
+                        /* We're done */
+                        break;
+                    }
+
+                    /* Check observance vs our window open */
+                    r = icaltime_compare(obs.onset, start);
+                    if (r < 0) {
+                        /* Observance is prior to our window open -
+                           check it vs tombstone */
+                        if (ms_compatible) {
+                            /* XXX  We don't want to move DTSTART of the RRULE
+                               as Outlook/Exchange doesn't appear to like
+                               truncating the frontend of RRULEs */
+                            need_tomb = 0;
+                            trunc_dtstart = 0;
+                            if (proleptic_prop) {
+                                icalcomponent_remove_property(vtz,
+                                                              proleptic_prop);
+                                icalproperty_free(proleptic_prop);
+                                proleptic_prop = NULL;
+                            }
+                        }
+                        if (need_tomb) check_tombstone(&tombstone, &obs);
+                    }
+                    else {
+                        /* Observance is on/after our window open */
+                        if (r == 0) need_tomb = 0;
+
+                        if (trunc_dtstart) {
+                            /* Make this observance the new DTSTART */
+                            icalproperty_set_dtstart(dtstart_prop, recur);
+                            dtstart = obs.onset;
+                            trunc_dtstart = 0;
+
+                            if (last_dtstart &&
+                                icaltime_compare(dtstart, *last_dtstart) > 0) {
+                                *last_dtstart = dtstart;
+                            }
+
+                            /* Check if new DSTART is within 1yr of UNTIL */
+                            ydiff = rrule.until.year - recur.year;
+                            if (!trunc_until && ydiff <= 1) {
+                                /* Remove RRULE */
+                                icalcomponent_remove_property(comp, rrule_prop);
+                                icalproperty_free(rrule_prop);
+
+                                if (ydiff) {
+                                    /* Add UNTIL as RDATE */
+                                    struct icaldatetimeperiodtype rdate = {
+                                        rrule.until,
+                                        icalperiodtype_null_period()
+                                    };
+                                    prop = icalproperty_new_rdate(rdate);
+                                    icalcomponent_add_property(comp, prop);
+                                }
+                            }
+                        }
+
+                        if (obsarray) {
+                            /* Add the observance to our array */
+                            icalarray_append(obsarray, &obs);
+                        }
+                        else if (!trunc_until) {
+                            /* We're done */
+                            break;
+                        }
+                    }
+                    prev_onset = obs.onset;
+                }
+                icalrecur_iterator_free(ritr);
+            }
+        }
+
+        /* Sort the RDATEs by onset */
+        icalarray_sort(rdate_array, &rdate_compare);
+
+        /* Check RDATEs */
+        for (n = 0; n < rdate_array->num_elements; n++) {
+            struct rdate *rdate = icalarray_element_at(rdate_array, n);
+
+            if (n == 0 && icaltime_compare(rdate->date.time, dtstart) == 0) {
+                /* RDATE is same as DTSTART - remove it */
+                icalcomponent_remove_property(comp, rdate->prop);
+                icalproperty_free(rdate->prop);
+                continue;
+            }
+
+            obs.onset = rdate->date.time;
+            icalproperty_get_isstd_isgmt(rdate->prop, &obs);
+
+            /* Adjust observance to UTC */
+            icaltime_adjust(&obs.onset, 0, 0, 0, -obs.offset_from);
+            icaltime_set_utc(&obs.onset, 1);
+
+            if (!icaltime_is_null_time(end) &&
+                icaltime_compare(obs.onset, end) >= 0) {
+                /* RDATE is after our window close - remove it */
+                icalcomponent_remove_property(comp, rdate->prop);
+                icalproperty_free(rdate->prop);
+
+                /* Actual range end == request range end */
+                adjust_end = 0;
+
+                continue;
+            }
+
+            r = icaltime_compare(obs.onset, start);
+            if (r < 0) {
+                /* RDATE is prior to window open - check it vs tombstone */
+                if (need_tomb) check_tombstone(&tombstone, &obs);
+
+                /* Remove it */
+                icalcomponent_remove_property(comp, rdate->prop);
+                icalproperty_free(rdate->prop);
+
+                /* Actual range start == request range start */
+                adjust_start = 0;
+            }
+            else {
+                /* RDATE is on/after our window open */
+                if (r == 0) need_tomb = 0;
+
+                if (trunc_dtstart) {
+                    /* Make this RDATE the new DTSTART */
+                    icalproperty_set_dtstart(dtstart_prop,
+                                             rdate->date.time);
+                    trunc_dtstart = 0;
+
+                    icalcomponent_remove_property(comp, rdate->prop);
+                    icalproperty_free(rdate->prop);
+                }
+
+                if (obsarray) {
+                    /* Add the observance to our array */
+                    icalarray_append(obsarray, &obs);
+                }
+            }
+        }
+        icalarray_free(rdate_array);
+
+        /* Final check */
+        if (trunc_dtstart) {
+            /* All observances in comp occur prior to window open, remove it
+               unless we haven't saved a tombstone comp of this type yet */
+            if (icalcomponent_isa(comp) == ICAL_XDAYLIGHT_COMPONENT) {
+                if (!tomb_day) {
+                    tomb_day = comp;
+                    comp = NULL;
+                }
+            }
+            else if (!tomb_std) {
+                tomb_std = comp;
+                comp = NULL;
+            }
+
+            if (comp) {
+                icalcomponent_remove_component(vtz, comp);
+                icalcomponent_free(comp);
+            }
+        }
+    }
+
+    if (need_tomb && !icaltime_is_null_time(tombstone.onset)) {
+        /* Need to add tombstone component/observance starting at window open
+           as long as its not prior to start of TZ data */
+        icalcomponent *tomb;
+        icalproperty *prop, *nextp;
+
+        if (obsarray) {
+            /* Add the tombstone to our array */
+            tombstone.onset = start;
+            tombstone.is_gmt = tombstone.is_std = 1;
+            icalarray_append(obsarray, &tombstone);
+        }
+
+        /* Determine which tombstone component we need */
+        if (tombstone.is_daylight) {
+            tomb = tomb_day;
+            tomb_day = NULL;
+        }
+        else {
+            tomb = tomb_std;
+            tomb_std = NULL;
+        }
+
+        /* Set property values on our tombstone */
+        for (prop = icalcomponent_get_first_property(tomb, ICAL_ANY_PROPERTY);
+             prop; prop = nextp) {
+
+            nextp = icalcomponent_get_next_property(tomb, ICAL_ANY_PROPERTY);
+
+            switch (icalproperty_isa(prop)) {
+            case ICAL_TZNAME_PROPERTY:
+                icalproperty_set_tzname(prop, tombstone.name);
+                break;
+            case ICAL_TZOFFSETFROM_PROPERTY:
+                icalproperty_set_tzoffsetfrom(prop, tombstone.offset_from);
+                break;
+            case ICAL_TZOFFSETTO_PROPERTY:
+                icalproperty_set_tzoffsetto(prop, tombstone.offset_to);
+                break;
+            case ICAL_DTSTART_PROPERTY:
+                /* Adjust window open to local time */
+                icaltime_adjust(&start, 0, 0, 0, tombstone.offset_from);
+                icaltime_set_utc(&start, 0);
+
+                icalproperty_set_dtstart(prop, start);
+                break;
+            default:
+                icalcomponent_remove_property(tomb, prop);
+                icalproperty_free(prop);
+                break;
+            }
+        }
+
+        /* Remove X-PROLEPTIC-TZNAME as it no longer applies */
+        if (proleptic_prop) {
+            icalcomponent_remove_property(vtz, proleptic_prop);
+            icalproperty_free(proleptic_prop);
+        }
+    }
+
+    /* Remove any unused tombstone components */
+    if (tomb_std) {
+        icalcomponent_remove_component(vtz, tomb_std);
+        icalcomponent_free(tomb_std);
+    }
+    if (tomb_day) {
+        icalcomponent_remove_component(vtz, tomb_day);
+        icalcomponent_free(tomb_day);
+    }
+
+    if (obsarray) {
+        struct observance *obs;
+
+        /* Sort the observances by onset */
+        icalarray_sort(obsarray, &observance_compare);
+
+        /* Set offset_to for tombstone, if necessary */
+        obs = icalarray_element_at(obsarray, 0);
+        if (!tombstone.offset_to) tombstone.offset_to = obs->offset_from;
+
+        /* Adjust actual range if necessary */
+        if (adjust_start) {
+            *startp = obs->onset;
+        }
+        if (adjust_end) {
+            obs = icalarray_element_at(obsarray, obsarray->num_elements-1);
+            *endp = obs->onset;
+            icaltime_adjust(endp, 0, 0, 0, 1);
+        }
+    }
+
+    if (proleptic) *proleptic = &tombstone;
+}
+
+static icaltimezone *tz_from_tzid(const char *tzid)
+{
+    if (!tzid)
+        return NULL;
+
+    /* libical doesn't return the UTC singleton for Etc/UTC */
+    if (!strcmp(tzid, "Etc/UTC") || !strcmp(tzid, "UTC"))
+        return icaltimezone_get_utc_timezone();
+
+    return icaltimezone_get_builtin_timezone(tzid);
+}
+
+static void collect_timezones_cb(icalparameter *param, void *data)
+{
+    ptrarray_t *tzs = (ptrarray_t*) data;
+    int i;
+    icaltimezone *tz;
+
+    tz = tz_from_tzid(icalparameter_get_tzid(param));
+    if (!tz) {
+        return;
+    }
+    for (i = 0; i < tzs->count; i++) {
+        if (ptrarray_nth(tzs, i) == tz) {
+            return;
+        }
+    }
+    ptrarray_push(tzs, tz);
+}
+
+EXPORTED void icalcomponent_add_required_timezones(icalcomponent *ical)
+{
+    icalcomponent *comp, *tzcomp, *next;
+    icalproperty *prop;
+    struct icalperiodtype span;
+    ptrarray_t tzs = PTRARRAY_INITIALIZER;
+
+    /* Determine recurrence span. */
+    comp = icalcomponent_get_first_real_component(ical);
+    span = icalrecurrenceset_get_utc_timespan(ical, icalcomponent_isa(comp),
+                                              NULL, NULL, NULL, NULL);
+
+    /* Remove all VTIMEZONE components for known TZIDs. This operation is
+     * a bit hairy: we could expunge a timezone which is in use by an ical
+     * property that is unknown to us. But since we don't know what to
+     * look for, we can't make sure to preserve these timezones. */
+    for (tzcomp = icalcomponent_get_first_component(ical,
+                                                    ICAL_VTIMEZONE_COMPONENT);
+         tzcomp;
+         tzcomp = next) {
+
+        next = icalcomponent_get_next_component(ical,
+                ICAL_VTIMEZONE_COMPONENT);
+
+        prop = icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
+        if (prop) {
+            const char *tzid = icalproperty_get_tzid(prop);
+            if (tzid && tz_from_tzid(tzid)) {
+                icalcomponent_remove_component(ical, tzcomp);
+                icalcomponent_free(tzcomp);
+            }
+        }
+    }
+
+    /* Collect timezones by TZID */
+    icalcomponent_foreach_tzid(ical, collect_timezones_cb, &tzs);
+
+    /* Now add each timezone, truncated by this events span. */
+    int i;
+    for (i = 0; i < tzs.count; i++) {
+        icaltimezone *tz = ptrarray_nth(&tzs, i);
+
+        /* Clone tz to overwrite its TZID property. */
+        icalcomponent *tzcomp =
+            icalcomponent_clone(icaltimezone_get_component(tz));
+        icalproperty *tzprop =
+            icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
+        icalproperty_set_tzid(tzprop, icaltimezone_get_location(tz));
+
+        /* Truncate the timezone to the events timespan. */
+        icaltimezone_truncate_vtimezone_advanced(tzcomp, &span.start, &span.end,
+                NULL, NULL, NULL, NULL, NULL, 1 /* ms_compatible */);
+
+        if (icaltime_as_timet_with_zone(span.end, NULL) < caldav_eternity) {
+            /* Add TZUNTIL to timezone */
+            icalproperty *tzuntil = icalproperty_new_tzuntil(span.end);
+            icalcomponent_add_property(tzcomp, tzuntil);
+        }
+
+        /* Strip any COMMENT property */
+        /* XXX  These were added by KSM in a previous version of vzic,
+           but libical doesn't allow them in its restrictions checks */
+        tzprop = icalcomponent_get_first_property(tzcomp, ICAL_COMMENT_PROPERTY);
+        if (tzprop) {
+            icalcomponent_remove_property(tzcomp, tzprop);
+            icalproperty_free(tzprop);
+        }
+
+        /* Add the truncated timezone. */
+        icalcomponent_add_component(ical, tzcomp);
+    }
+
+    ptrarray_fini(&tzs);
 }
 
 #endif /* HAVE_ICAL */

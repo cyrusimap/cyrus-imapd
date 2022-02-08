@@ -66,19 +66,6 @@
 #define SCHED_DEFAULT   "Default/"
 #define MANAGED_ATTACH  "Attachments/"
 
-/* XML namespace URIs */
-#define XML_NS_DAV      "DAV:"
-#define XML_NS_CALDAV   "urn:ietf:params:xml:ns:caldav"
-#define XML_NS_CARDDAV  "urn:ietf:params:xml:ns:carddav"
-#define XML_NS_ISCHED   "urn:ietf:params:xml:ns:ischedule"
-#define XML_NS_CS       "http://calendarserver.org/ns/"
-#define XML_NS_MECOM    "http://me.com/_namespace/"
-#define XML_NS_MOBME    "urn:mobileme:davservices"
-#define XML_NS_APPLE    "http://apple.com/ns/ical/"
-#define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
-#define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
-#define XML_NS_DAVMOUNT "http://purl.org/NET/webdav/mount/"
-
 #define USER_COLLECTION_PREFIX  "user"
 #define GROUP_COLLECTION_PREFIX "group"
 
@@ -98,8 +85,11 @@ enum {
     NS_MECOM,
     NS_MOBME,
     NS_CYRUS,
+    NS_JMAPCAL,
+    NS_USERFLAG,
+    NS_SYSFLAG
 };
-#define NUM_NAMESPACE 8
+#define NUM_NAMESPACE 9
 
 /* Cyrus-specific privileges */
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */
@@ -112,6 +102,10 @@ enum {
 #define DACL_ADMIN      ACL_ADMIN       /* CY:admin (aggregates
                                            DAV:read-acl, DAV:write-acl,
                                            DAV:unlock and DAV:share) */
+
+/* JMAP-specific privileges */
+#define DACL_WRITEOWNRSRC  ACL_USER6   /* CY:update-own-resource - used for JMAP */
+#define DACL_UPDATEPRIVATE ACL_USER5
 
 /* WebDAV (RFC 3744) privileges */
 #define DACL_READ       (ACL_READ\
@@ -281,7 +275,6 @@ struct propfind_ctx {
     xmlBufferPtr xmlbuf;                /* Buffer for dumping XML nodes */
 };
 
-
 /* Context for patching (writing) properties */
 struct proppatch_ctx {
     struct transaction_t *txn;          /* request transaction */
@@ -293,8 +286,10 @@ struct proppatch_ctx {
     struct txn *tid;                    /* Transaction ID for annot writes */
     int *ret;                           /* Return code to pass up to caller */
     struct buf buf;                     /* Working buffer */
+    ptrarray_t postprocs;               /* Post-processors after patching */
 };
-
+/* Post processor function after properties are patched */
+typedef void (*pctx_postproc_t)(struct proppatch_ctx *);
 
 /* Structure for property status */
 struct propstat {
@@ -816,5 +811,9 @@ int proppatch_todb(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
                    struct propstat propstat[], void *rock);
 int proppatch_restype(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
                       struct propstat propstat[], void *rock);
+
+/* Parse request-target path in DAV principals namespace */
+int principal_parse_path(const char *path, struct request_target_t *tgt,
+                         const char **resultstr);
 
 #endif /* HTTP_DAV_H */

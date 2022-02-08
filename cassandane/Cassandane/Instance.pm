@@ -650,6 +650,16 @@ sub _generate_imapd_conf
 {
     my ($self) = @_;
 
+    if (defined $self->{services}->{http}) {
+        my $davhost = $self->{services}->{http}->host;
+        if (defined $self->{services}->{http}->port) {
+            $davhost .= ':' . $self->{services}->{http}->port;
+        }
+        $self->{config}->set(
+            webdav_attachments_baseurl => "http://$davhost"
+        );
+    }
+
     my ($cyrus_major_version, $cyrus_minor_version) =
         Cassandane::Instance->get_version($self->{installation});
 

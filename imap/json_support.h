@@ -51,6 +51,7 @@
 #include "util.h"
 
 #define JNOTNULL(item)          ((item) ? (json_is_null(item) == 0) : 0)
+#define JNULL(item)             ((item) ? (json_is_null(item)) : 1)
 
 /* jansson replacement functions for those missing in older versions */
 

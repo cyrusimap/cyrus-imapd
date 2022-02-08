@@ -701,6 +701,10 @@ sub _setup_http_service_objects
     my ($self) = @_;
 
     # nothing to do if no http service
+    require Mail::JMAPTalk;
+    require Net::CalDAVTalk;
+    require Net::CardDAVTalk;
+
     my $service = $self->{instance}->get_service("http");
     return if !$service;
 

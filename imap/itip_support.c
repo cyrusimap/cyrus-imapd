@@ -574,6 +574,14 @@ static int deliver_merge_request(const char *attendee,
                                            icalproperty_clone(prop));
             }
 
+            /* Copy over VALARMs */
+            icalcomponent *alarm;
+            for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+                 alarm;
+                 alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
+                icalcomponent_add_component(new_comp, icalcomponent_clone(alarm));
+            }
+
             /* Copy over any ORGANIZER;SCHEDULE-STATUS */
             /* XXX  Do we only do this iff PARTSTAT!=NEEDS-ACTION */
             prop =
@@ -719,6 +727,7 @@ static int deliver_merge_cancel(const char *recipient,
 HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                                                       const char *sender,
                                                       const char *recipient,
+                                                      struct address *mailfrom,
                                                       struct caldav_sched_param *sparam,
                                                       struct sched_data *sched_data,
                                                       struct auth_state *authstate,
@@ -734,12 +743,17 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     struct caldav_db *caldavdb = NULL;
     struct caldav_data *cdata;
     icalcomponent *ical = NULL;
+    icalcomponent *oldical = NULL;
+    icalcomponent *itip = icalcomponent_clone(sched_data->itip);
     icalproperty_method method;
     icalcomponent_kind kind;
     icalcomponent *comp;
     icalproperty *prop;
     struct transaction_t txn;
     enum sched_deliver_outcome result = SCHED_DELIVER_ERROR;
+    strarray_t recipient_addresses = STRARRAY_INITIALIZER;
+
+    strarray_append(&recipient_addresses, recipient);
 
     syslog(LOG_DEBUG, "sched_deliver_local(%s, %s, %X)",
            sender, recipient, sparam->flags);
@@ -754,6 +768,18 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     /* Create header cache */
     txn.req_hdrs = spool_new_hdrcache();
     if (!txn.req_hdrs) goto done;
+
+    /* Set scheduling headers for JMAP CalendarEventNotification */
+    char *sched_sender_address = NULL;
+    if (mailfrom && mailfrom->mailbox)
+        sched_sender_address = address_get_all(mailfrom, 0);
+    if (!sched_sender_address)
+        sched_sender_address = xstrdup(sender);
+    spool_append_header(xstrdup("Schedule-Sender-Address"),
+            sched_sender_address, txn.req_hdrs);
+    if (mailfrom && mailfrom->name)
+        spool_append_header(xstrdup("Schedule-Sender-Name"),
+                xstrdup(mailfrom->name), txn.req_hdrs);
 
     /* Check ACL of sender on recipient's Scheduling Inbox */
     mailboxname = caldav_mboxname(sparam->userid, SCHED_INBOX);
@@ -789,7 +815,20 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     mailboxname = NULL;
 
     /* Get METHOD of the iTIP message */
-    method = icalcomponent_get_method(sched_data->itip);
+    method = icalcomponent_get_method(itip);
+
+    /* Strip VALARMs from VEVENTs */
+    for (comp = icalcomponent_get_first_component(itip, ICAL_VEVENT_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(itip, ICAL_VEVENT_COMPONENT)) {
+        icalcomponent *alarm, *nextalarm;
+        for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+                alarm; alarm = nextalarm) {
+            nextalarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
+            icalcomponent_remove_component(comp, alarm);
+            icalcomponent_free(alarm);
+        }
+    }
 
     /* Search for iCal UID in recipient's calendars */
     caldavdb = caldav_open_userid(sparam->userid);
@@ -798,8 +837,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         goto done;
     }
 
-    caldav_lookup_uid(caldavdb,
-                      icalcomponent_get_uid(sched_data->itip), &cdata);
+    caldav_lookup_uid(caldavdb, icalcomponent_get_uid(itip), &cdata);
 
     if (cdata->dav.mailbox) {
         if (SCHED_INVITES_ONLY(sched_data)) {
@@ -852,25 +890,21 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         }
         buf_reset(&resource);
         /* XXX - sanitize the uid? */
-        buf_printf(&resource, "%s.ics",
-                   icalcomponent_get_uid(sched_data->itip));
+        buf_printf(&resource, "%s.ics", icalcomponent_get_uid(itip));
 
         /* Create new attendee object */
         ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT, 0);
 
         /* Copy over VERSION property */
-        prop = icalcomponent_get_first_property(sched_data->itip,
-                                                ICAL_VERSION_PROPERTY);
+        prop = icalcomponent_get_first_property(itip, ICAL_VERSION_PROPERTY);
         icalcomponent_add_property(ical, icalproperty_clone(prop));
 
         /* Copy over PRODID property */
-        prop = icalcomponent_get_first_property(sched_data->itip,
-                                                ICAL_PRODID_PROPERTY);
+        prop = icalcomponent_get_first_property(itip, ICAL_PRODID_PROPERTY);
         icalcomponent_add_property(ical, icalproperty_clone(prop));
 
         /* Copy over any CALSCALE property */
-        prop = icalcomponent_get_first_property(sched_data->itip,
-                                                ICAL_CALSCALE_PROPERTY);
+        prop = icalcomponent_get_first_property(itip, ICAL_CALSCALE_PROPERTY);
         if (prop) {
             icalcomponent_add_property(ical,
                                        icalproperty_clone(prop));
@@ -888,13 +922,12 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     if (cdata->dav.imap_uid) {
         /* Load message containing the resource and parse iCal data */
-        ical = caldav_record_to_ical(mailbox, cdata, NULL, NULL);
+        oldical = caldav_record_to_ical(mailbox, cdata, NULL, NULL);
+        ical = icalcomponent_clone(oldical);
 
-        for (comp = icalcomponent_get_first_component(sched_data->itip,
-                                                      ICAL_ANY_COMPONENT);
+        for (comp = icalcomponent_get_first_component(itip, ICAL_ANY_COMPONENT);
              comp;
-             comp = icalcomponent_get_next_component(sched_data->itip,
-                                                     ICAL_ANY_COMPONENT)) {
+             comp = icalcomponent_get_next_component(itip, ICAL_ANY_COMPONENT)) {
             /* Don't allow component type to be changed */
             int reject = 0;
             kind = icalcomponent_isa(comp);
@@ -945,8 +978,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     switch (method) {
     case ICAL_METHOD_CANCEL: {
-        int entire_comp = deliver_merge_cancel(recipient,
-                                               ical, sched_data->itip);
+        int entire_comp = deliver_merge_cancel(recipient, ical, itip);
 
         if (entire_comp && SCHED_DELETE_CANCELED(sched_data)) {
             /* Expunge the resource */
@@ -982,6 +1014,21 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                     result = SCHED_DELIVER_DELETED;
                 }
 
+#ifdef WITH_JMAP
+                if (!r) {
+                    comp = icalcomponent_get_first_real_component(ical);
+                    if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+                        int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
+                                mailbox_name(mailbox), icalcomponent_get_uid(itip),
+                                &recipient_addresses, 0, oldical, NULL);
+                        if (r2) {
+                            xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
+                                    "error=%s", error_message(r2));
+                        }
+                    }
+                }
+#endif
+
                 mboxevent_free(&mboxevent);
             }
 
@@ -991,17 +1038,16 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     }
 
     case ICAL_METHOD_REPLY:
-        attendee = deliver_merge_reply(ical, sched_data->itip);
+        attendee = deliver_merge_reply(ical, itip);
         if (attendeep) *attendeep = attendee;
         break;
 
     case ICAL_METHOD_REQUEST:
-        deliver_inbox = deliver_merge_request(recipient,
-                                              ical, sched_data->itip);
+        deliver_inbox = deliver_merge_request(recipient, ical, itip);
         break;
 
     case ICAL_METHOD_POLLSTATUS:
-        deliver_inbox = deliver_merge_pollstatus(ical, sched_data->itip);
+        deliver_inbox = deliver_merge_pollstatus(ical, itip);
         break;
 
     default:
@@ -1013,13 +1059,86 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         goto inbox;
     }
 
+    /* Use default alarms for new VEVENTs */
+    if (!oldical && ical) {
+        for (comp = icalcomponent_get_first_real_component(ical);
+             comp;
+             comp = icalcomponent_get_next_component(ical,
+                 icalcomponent_isa(comp))) {
+
+            /* Remove VALARMs that came with iTIP message */
+            icalcomponent *valarm, *nextvalarm = NULL;
+            for (valarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+                    valarm; valarm = nextvalarm) {
+                nextvalarm =
+                    icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
+                icalcomponent_remove_component(comp, valarm);
+                icalcomponent_free(valarm);
+            }
+        }
+
+        icalcomponent_set_usedefaultalerts(ical);
+
+        /* Inject default alerts as VALARMS. */
+        icalcomponent *alarms_withtime =
+            caldav_read_calendar_icalalarms(mailbox_name(mailbox), userid,
+                    CALDAV_DEFAULTALARMS_ANNOT_WITHTIME);
+        icalcomponent *alarms_withdate =
+            caldav_read_calendar_icalalarms(mailbox_name(mailbox), userid,
+                    CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
+
+        icalcomponent_add_defaultalerts(ical, alarms_withtime, alarms_withdate, 1);
+
+        if (alarms_withtime) icalcomponent_free(alarms_withtime);
+        if (alarms_withdate) icalcomponent_free(alarms_withdate);
+    }
+
+    /* Set SENT-BY property */
+    if (mailfrom && ical) {
+        char *val = address_get_all(mailfrom, 0);
+
+        // XXX could use SENT-BY parameter as defined in RFC5545?
+        for (comp = icalcomponent_get_first_real_component(ical);
+             comp;
+             comp = icalcomponent_get_next_component(ical,
+                 icalcomponent_isa(comp))) {
+
+            // Remove any stale SENT-BY properties
+            while ((prop = icalcomponent_get_x_property_by_name(comp,
+                            JMAPICAL_XPROP_SENTBY))) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
+
+            prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
+            icalproperty_set_value(prop, icalvalue_new_text(val));
+            icalcomponent_add_property(comp, prop);
+        }
+
+        free(val);
+    }
+
     /* Store the (updated) object in the recipients's calendar */
-    strarray_t recipient_addresses = STRARRAY_INITIALIZER;
-    strarray_append(&recipient_addresses, recipient);
     r = caldav_store_resource(&txn, ical, mailbox,
                               buf_cstring(&resource), cdata->dav.createdmodseq,
-                              caldavdb, NEW_STAG, sparam->userid, &recipient_addresses);
-    strarray_fini(&recipient_addresses);
+                              caldavdb, NEW_STAG, sparam->userid,
+                              NULL, NULL, &recipient_addresses);
+
+#ifdef WITH_JMAP
+    if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
+        comp = icalcomponent_get_first_real_component(ical);
+        if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+            int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
+                    mailbox_name(mailbox), icalcomponent_get_uid(itip),
+                    &recipient_addresses, 0, oldical, ical);
+            if (r2) {
+                xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
+                        "error=%s", error_message(r2));
+            }
+        }
+    }
+#endif
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
         SCHED_STATUS(sched_data, REQSTAT_SUCCESS, SCHEDSTAT_DELIVERED);
@@ -1040,14 +1159,18 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         buf_printf(&resource, "%s.ics", makeuuid());
 
         /* Store the message in the recipient's Inbox */
-        r = caldav_store_resource(&txn, sched_data->itip, inbox,
-                                  buf_cstring(&resource), 0, caldavdb, 0, NULL, NULL);
+        r = caldav_store_resource(&txn, itip, inbox,
+                                  buf_cstring(&resource), 0, caldavdb, 0,
+                                  NULL, NULL, NULL, NULL);
         /* XXX  What do we do if storing to Inbox fails? */
     }
 
   done:
+    strarray_fini(&recipient_addresses);
     if (icalp) *icalp = ical;
     else if (ical) icalcomponent_free(ical);
+    if (oldical) icalcomponent_free(oldical);
+    if (itip) icalcomponent_free(itip);
     mailbox_close(&inbox);
     mailbox_close(&mailbox);
     if (caldavdb) caldav_close(caldavdb);

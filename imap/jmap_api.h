@@ -63,6 +63,8 @@
 #define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
 #define JMAP_URN_MDN        "urn:ietf:params:jmap:mdn"
+#define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
+#define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 
 #define JMAP_BLOB_EXTENSION          "https://cyrusimap.org/ns/jmap/blob"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -103,21 +105,30 @@ enum {
 /* JMAP Calendar (draft-ietf-jmap-calendars) privileges */
 #define JACL_READFB         ACL_USER9      /* Keep sync'd with DACL_READFB */
 #define JACL_RSVP           ACL_USER7      /* Keep sync'd with DACL_REPLY */
-#define JACL_UPDATEPRIVATE  
-#define JACL_UPDATEOWN
-#define JACL_UPDATEALL
-#define JACL_REMOVEOWN
-#define JACL_REMOVEALL
+#define JACL_WRITEOWN       ACL_USER6
+#define JACL_UPDATEPRIVATE  ACL_USER5
+#define JACL_WRITEALL       (JACL_ADDITEMS|JACL_UPDATEITEMS|JACL_SETSEEN|JACL_SETMETADATA|JACL_REMOVEITEMS)
 
 /* Cyrus-specific privileges */
 #define JACL_LOOKUP         ACL_LOOKUP
-#define JACL_ADMIN          ACL_ADMIN
+#define JACL_ADMIN_MAILBOX   (ACL_ADMIN|JACL_DELETE|JACL_CREATECHILD)
+#define JACL_ADMIN_CALENDAR ACL_ADMIN
 #define JACL_SETPROPERTIES  ACL_ANNOTATEMSG
 #define JACL_UPDATEITEMS    (JACL_ADDITEMS|JACL_REMOVEITEMS)
 #define JACL_SETMETADATA    (JACL_SETKEYWORDS|JACL_SETPROPERTIES)
 #define JACL_WRITE          (JACL_UPDATEITEMS|JACL_SETSEEN|JACL_SETMETADATA)
 #define JACL_ALL            (JACL_READITEMS|JACL_WRITE|JACL_RENAME|JACL_SUBMIT\
-                             |JACL_ADMIN|JACL_READFB|JACL_RSVP)
+                             |ACL_ADMIN|JACL_DELETE|JACL_CREATECHILD|JACL_READFB|JACL_RSVP)
+
+
+typedef struct {
+    hash_table methods;
+    json_t *server_capabilities;
+    long limits[JMAP_NUM_LIMITS];
+    // internal state
+    ptrarray_t getblob_handlers; // array of jmap_getblob_handler
+    ptrarray_t event_handlers; // array of (malloced) jmap_handlers
+} jmap_settings_t;
 
 typedef struct jmap_req {
     const char           *method;
@@ -130,6 +141,7 @@ typedef struct jmap_req {
     const char           *tag;
     struct transaction_t *txn;
     struct mboxname_counters counters;
+    jmap_settings_t      *settings;
 
     double real_start;
     double user_start;
@@ -188,16 +200,6 @@ void jmap_getblob_ctx_fini(jmap_getblob_context_t *ctx);
 
 typedef int jmap_getblob_handler(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-typedef struct {
-    hash_table methods;
-    json_t *server_capabilities;
-    long limits[JMAP_NUM_LIMITS];
-    // internal state
-    ptrarray_t getblob_handlers; // array of jmap_getblob_handler
-    ptrarray_t event_handlers; // array of (malloced) jmap_handlers
-} jmap_settings_t;
-
-
 enum jmap_handler_event {
     JMAP_HANDLE_SHUTDOWN      = (1 << 0), /* executed when httpd is shutdown. req is NULL */
     JMAP_HANDLE_CLOSE_CONN    = (1 << 1), /* executed when connection is closed. req is NULL */
@@ -251,7 +253,10 @@ extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
 extern void jmap_mdn_capabilities(json_t *account_capabilities);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_contact_capabilities(json_t *account_capabilities);
-extern void jmap_calendar_capabilities(json_t *account_capabilities);
+extern void jmap_calendar_capabilities(json_t *account_capabilities,
+                                       struct auth_state *authstate,
+                                       const char *authuserid,
+                                       const char *accountid);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_backup_capabilities(json_t *account_capabilities);
 extern void jmap_notes_capabilities(json_t *account_capabilities);
@@ -574,9 +579,10 @@ extern void jmap_parse_fini(struct jmap_parse *parse);
 extern json_t *jmap_parse_reply(struct jmap_parse *parse);
 
 
-extern json_t *jmap_get_sharewith(const mbentry_t *mbentry);
+extern json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights));
 extern int jmap_set_sharewith(struct mailbox *mbox,
-                              json_t *shareWith, int overwrite);
+                              json_t *shareWith, int overwrite,
+                              int (*patchrights)(int, json_t*));
 extern void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith);
 
 extern void jmap_mbentry_cache_free(jmap_req_t *req);

@@ -580,7 +580,7 @@ static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
             json_boolean((rights & JACL_SETKEYWORDS) == JACL_SETKEYWORDS));
     // non-standard
     json_object_set_new(jrights, "mayAdmin",
-            json_boolean((rights & JACL_ADMIN) == JACL_ADMIN));
+            json_boolean((rights & JACL_ADMIN_MAILBOX) == JACL_ADMIN_MAILBOX));
 
     int mayRename = 0;
     if (!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)) {
@@ -590,6 +590,20 @@ static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 
     mboxlist_entry_free(&parent);
     mbname_free(&mbname);
+    return jrights;
+}
+
+static json_t *_json_has(int rights, int need)
+{
+  return (((rights & need) == need) ? json_true() : json_false());
+}
+
+static json_t *_mboxrights_tosharewith(int rights)
+{
+    json_t *jrights = json_object();
+    json_object_set_new(jrights, "mayRead", _json_has(rights, JACL_READITEMS));
+    json_object_set_new(jrights, "mayWrite", _json_has(rights, JACL_WRITE));
+    json_object_set_new(jrights, "mayAdmin", _json_has(rights, JACL_ADMIN_MAILBOX));
     return jrights;
 }
 
@@ -645,7 +659,8 @@ static json_t *_mbox_get(jmap_req_t *req,
     }
 
     if (jmap_wantprop(props, "shareWith")) {
-        json_t *sharewith = jmap_get_sharewith(mbentry);
+        json_t *sharewith = jmap_get_sharewith(mbentry,
+                _mboxrights_tosharewith);
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
@@ -2064,6 +2079,35 @@ static void _mboxset_args_parse(json_t *jargs,
         !json_is_object(args->shareWith)) {
         jmap_parser_invalid(parser, "shareWith");
     }
+    if (json_is_object(args->shareWith)) {
+        // Validate rights
+        const char *sharee;
+        json_t *jrights;
+        json_object_foreach(args->shareWith, sharee, jrights) {
+            if (json_object_size(jrights)) {
+                const char *right;
+                json_t *jval;
+                json_object_foreach(jrights, right, jval) {
+                    if (!json_is_boolean(jval) ||
+                        (strcmp(right, "mayRead") &&
+                         strcmp(right, "mayWrite") &&
+                         strcmp(right, "mayAdmin"))) {
+
+                        jmap_parser_push(parser, "shareWith");
+                        jmap_parser_push(parser, sharee);
+                        jmap_parser_invalid(parser, right);
+                        jmap_parser_pop(parser);
+                        jmap_parser_pop(parser);
+                    }
+                }
+            }
+            else if (!json_is_null(jrights)) {
+                jmap_parser_push(parser, "shareWith");
+                jmap_parser_invalid(parser, sharee);
+                jmap_parser_pop(parser);
+            }
+        }
+    }
 
     /* All of these are server-set. */
     json_t *jrights = json_object_get(jargs, "myRights");
@@ -2199,6 +2243,32 @@ static void _mboxset_result_fini(struct mboxset_result *result)
     free(result->tmp_imapname);
 }
 
+static int _mbox_sharewith_to_rights(int rights, json_t *jsharewith)
+{
+    int newrights = rights;
+    const char *name;
+    json_t *jval;
+
+    json_object_foreach(jsharewith, name, jval) {
+        int mask;
+        if (!strcmp(name, "mayAdmin"))
+            mask = JACL_ADMIN_MAILBOX;
+        else if (!strcmp(name, "mayWrite"))
+            mask = JACL_WRITE;
+        else if (!strcmp(name, "mayRead"))
+            mask = JACL_READITEMS;
+        else
+            continue;
+
+        if (json_boolean_value(jval))
+            newrights |= mask;
+        else
+            newrights &= ~mask;
+    }
+
+    return newrights;
+}
+
 #define MBOXSET_RESULT_INITIALIZER { NULL, 0, NULL, NULL, NULL }
 
 struct mboxset {
@@ -2331,7 +2401,8 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 
     /* shareWith */
     if (args->shareWith) {
-        r = jmap_set_sharewith(mailbox, args->shareWith, args->overwrite_acl);
+        r = jmap_set_sharewith(mailbox, args->shareWith, args->overwrite_acl,
+                _mbox_sharewith_to_rights);
         mailbox_close(&mailbox);
     }
     if (r) goto done;
@@ -2747,7 +2818,8 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         if (r) goto done;
 
         if (args->shareWith) {
-            r = jmap_set_sharewith(mbox, args->shareWith, args->overwrite_acl);
+            r = jmap_set_sharewith(mbox, args->shareWith, args->overwrite_acl,
+                    _mbox_sharewith_to_rights);
         }
 
         if (!r && args->is_seenshared >= 0) {

@@ -51,13 +51,19 @@
 #include <sasl/saslutil.h>
 
 #include "annotate.h"
+#include "append.h"
+#include "caldav_util.h"
+#include "carddav_db.h"
 #include "global.h"
 #include "hash.h"
+#include "http_err.h"
 #include "index.h"
+#include "jmap_ical.h"
 #include "jmap_util.h"
 #include "json_support.h"
 #include "search_query.h"
 #include "times.h"
+#include "user.h"
 #include "xapian_wrap.h"
 
 #ifdef HAVE_LIBCHARDET
@@ -415,6 +421,7 @@ HIDDEN void jmap_parser_fini(struct jmap_parser *parser)
 {
     strarray_fini(&parser->path);
     json_decref(parser->invalid);
+    json_decref(parser->serverset);
     buf_free(&parser->buf);
 }
 
@@ -483,19 +490,33 @@ HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
         jmap_parser_pop(parser);
 }
 
+HIDDEN void jmap_parser_serverset(struct jmap_parser *parser,
+                                  const char *prop, json_t *val)
+{
+    if (prop)
+        jmap_parser_push(parser, prop);
+
+    json_object_set_new(parser->serverset,
+            jmap_parser_path(parser, &parser->buf), val);
+
+    if (prop)
+        jmap_parser_pop(parser);
+}
+
 HIDDEN json_t *jmap_server_error(int r)
 {
     switch (r) {
-    case IMAP_PERMISSION_DENIED:
-        return json_pack("{s:s}", "type", "forbidden");
-    case IMAP_CONVERSATION_GUIDLIMIT:
-        return json_pack("{s:s}", "type", "tooManyMailboxes");
-    case IMAP_QUOTA_EXCEEDED:
-        return json_pack("{s:s}", "type", "overQuota");
-    default:
-        return json_pack("{s:s, s:s}",
-                         "type", "serverFail",
-                         "description", error_message(r));
+        case IMAP_INVALID_RIGHTS:
+        case IMAP_PERMISSION_DENIED:
+            return json_pack("{s:s}", "type", "forbidden");
+        case IMAP_CONVERSATION_GUIDLIMIT:
+            return json_pack("{s:s}", "type", "tooManyMailboxes");
+        case IMAP_QUOTA_EXCEEDED:
+            return json_pack("{s:s}", "type", "overQuota");
+        default:
+            return json_pack("{s:s, s:s}",
+                    "type", "serverFail",
+                    "description", error_message(r));
     }
 }
 
@@ -510,6 +531,20 @@ HIDDEN char *jmap_encode_base64_nopad(const char *data, size_t len)
         free(b64);
         return NULL;
     }
+
+    /* Convert to URL-safe Base64 (see rfc4648#section-5) */
+    char *c;
+    for (c = b64; *c; c++) {
+        if (*c == '+') {
+            *c = '-';
+            continue;
+        }
+        if (*c == '/') {
+            *c = '_';
+            continue;
+        }
+    }
+
     /* Remove padding */
     char *end = b64 + strlen(b64) - 1;
     while (*end == '=') {
@@ -548,6 +583,20 @@ HIDDEN char *jmap_decode_base64_nopad(const char *b64, size_t b64len)
         default:
             ; // do nothing
     }
+
+    /* Convert from URL-safe Base64 (see rfc4648#section-5) */
+    char *c;
+    for (c = myb64; *c; c++) {
+        if (*c == '-') {
+            *c = '+';
+            continue;
+        }
+        if (*c == '_') {
+            *c = '/';
+            continue;
+        }
+    }
+
     /* Decode data. */
     size_t datalen = ((4 * myb64len / 3) + 3) & ~3;
     char *data = xzmalloc(datalen + 1);
@@ -728,16 +777,24 @@ done:
 /*
  * The blobId syntax for raw message data is:
  *
- * <mailbox id> "_" <message UID> [ "_" <userid> [ "_" <subpart> [ "_" <SHA1> ]]]
+ * <prefix>
  *
- * <userid> is currently used to personalize iCalendar data and may be empty
- * <subpart> is currently used to target vCard/iCalendar properties
- *   with data: URI values (e.g. vCard PHOTO/LOGO/SOUND or iCalendar IMAGE)
- * <SHA1> is used to target a <subpart> having a specific value
+ * followed by URL-safe Base64 (RFC 4648):
+ *
+ * "M" <mailbox id> ":" <message UID>["[" <partid> "]"]
+ *   [ "U" "<" <userid> ">"]
+ *   [ "S" <subpart> [ "[" <SHA1> "]" ] ]
+ *
+ * <partid> targets a specific IMAP message part number
+ * <userid> personalizes data
+ * <subpart> is targets vCard/iCalendar properties
+ *           (e.g. vCard PHOTO/LOGO/SOUND or iCalendar IMAGE)
+ * <SHA1> targets a <subpart> having a specific value
  */
 EXPORTED const char *jmap_encode_rawdata_blobid(const char prefix,
                                                 const char *mboxid,
                                                 uint32_t uid,
+                                                const char *partid,
                                                 const char *userid,
                                                 const char *subpart,
                                                 struct message_guid *guid,
@@ -745,47 +802,45 @@ EXPORTED const char *jmap_encode_rawdata_blobid(const char prefix,
 {
     buf_reset(dst);
 
-    /* Set smart blob prefix */
-    buf_putc(dst, prefix);
-
-    /* Encode mailbox id */
+    /* Write mailbox id */
+    buf_putc(dst, 'M');
     buf_appendcstr(dst, mboxid);
-    
-    /* Encode message UID */
-    buf_printf(dst, "_%u", uid);
 
-    /* Encode user id */
-    if (userid || subpart) {
-        char *b64 = NULL;
+    /* Write message UID */
+    buf_printf(dst, ":%u", uid);
 
-        buf_putc(dst, '_');
-        if (userid) {
-            b64 = jmap_encode_base64_nopad(userid, strlen(userid));
-            if (!b64) {
-                buf_reset(dst);
-                return NULL;
-            }
-            buf_appendcstr(dst, b64);
-            free(b64);
-        }
+    /* Write partid */
+    if (partid) {
+        buf_putc(dst, '[');
+        buf_appendcstr(dst, partid);
+        buf_putc(dst, ']');
+    }
 
-        /* Encode subpart */
-        if (subpart) {
-            buf_putc(dst, '_');
-            b64 = jmap_encode_base64_nopad(subpart, strlen(subpart));
-            if (!b64) {
-                buf_reset(dst);
-                return NULL;
-            }
-            buf_appendcstr(dst, b64);
-            free(b64);
+    /* Write user id */
+    if (userid) {
+        buf_putc(dst, 'U');
+        buf_putc(dst, '<');
+        buf_appendcstr(dst, userid);
+        buf_putc(dst, '>');
+    }
 
-            if (guid) {
-                /* Encode subpart data GUID */
-                buf_printf(dst, "_%s", message_guid_encode(guid));
-            }
+    /* Write subpart */
+    if (subpart) {
+        buf_putc(dst, 'S');
+        buf_appendcstr(dst, subpart);
+        if (guid) {
+            buf_putc(dst, '[');
+            buf_appendcstr(dst, message_guid_encode(guid));
+            buf_putc(dst, ']');
         }
     }
+
+    /* Encode blobId */
+    char *b64 = jmap_encode_base64_nopad(buf_base(dst), buf_len(dst));
+    buf_reset(dst);
+    buf_putc(dst, prefix);
+    buf_appendcstr(dst, b64);
+    free(b64);
 
     return buf_cstring(dst);
 }
@@ -793,87 +848,77 @@ EXPORTED const char *jmap_encode_rawdata_blobid(const char prefix,
 EXPORTED int jmap_decode_rawdata_blobid(const char *blobid,
                                         char **mboxidptr,
                                         uint32_t *uidptr,
+                                        char **partidptr,
                                         char **useridptr,
                                         char **subpartptr,
                                         struct message_guid *guidptr)
 {
-    char *mboxid = NULL;
-    uint32_t uid = 0;
-    char *userid = NULL;
-    char *subpart = NULL;
-    struct message_guid guid;
     int is_valid = 0;
+    char *val = NULL;
+    char *dec = NULL;
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!blobid[0] || !blobid[1]) goto done;
+    dec = jmap_decode_base64_nopad(blobid + 1, strlen(blobid + 1));
+    if (!dec) goto done;
+    val = dec;
 
     /* Decode mailbox id */
-    const char *base = blobid+1;
-    const char *p = strchr(base, '_');
-    if (!p) goto done;
-    mboxid = xstrndup(base, p-base);
-    if (!*mboxid) goto done;
-    base = p + 1;
+    if (val[0] != 'M') goto done;
+    val++;
+    char *c = strchr(val, ':');
+    if (!c || c == val) goto done;
+    *mboxidptr = xstrndup(val, c - val);
+    val = c + 1;
 
     /* Decode message UID */
-    if (*base == '\0') goto done;
     char *endptr = NULL;
     errno = 0;
-    uid = strtoul(base, &endptr, 10);
-    if (errno == ERANGE || (*endptr && *endptr != '_')) {
-        goto done;
+    *uidptr = strtoul(val, &endptr, 10);
+    if (errno == ERANGE || endptr == val) goto done;
+    val = endptr;
+    if (val[0] == '[') {
+        val++;
+        c = strchr(val, ']');
+        if (!c || c == val) goto done;
+        *partidptr = xstrndup(val, c - val);
+        val = c + 1;
     }
-    base = endptr;
 
     /* Decode userid */
-    if (*base == '_') {
-        base += 1;
-        p = strchr(base, '_');
-        size_t len = p ? (size_t) (p - base) : strlen(base);
-        if (len) {
-            userid = jmap_decode_base64_nopad(base, len);
-            if (!userid) goto done;
+    if (val[0] == 'U') {
+        if (val[1] != '<') goto done;
+        val += 2;
+        c = strchr(val, '>');
+        if (!c || c == val) goto done;
+        *useridptr = xstrndup(val, c - val);
+        val = c + 1;
+    }
+
+    /* Decode subpart */
+    if (val[0] == 'S') {
+        val++;
+        c = strchr(val, '[');
+        size_t len = c ? (size_t) (c - val) : strlen(val);
+        *subpartptr = xstrndup(val, len);
+        val += len;
+        /* Decode guid */
+        if (val[0] == '[') {
+            val++;
+            c = strchr(val, ']');
+            if (!c || c == val) goto done;
+            buf_setmap(&buf, val, c - val);
+            if (!message_guid_decode(guidptr, buf_cstring(&buf))) goto done;
+            buf_reset(&buf);
+            val = c + 1;
         }
-        base += len;
-
-        /* Decode subpart */
-        if (*base == '_') {
-            base += 1;
-            p = strchr(base, '_');
-            len = p ? (size_t) (p - base) : strlen(base);
-            if (len) {
-                subpart = jmap_decode_base64_nopad(base, p-base);
-                if (!subpart) goto done;
-            }
-            base += len;
-
-            /* Decode subpart data GUID */
-            if (*base == '_') {
-                base += 1;
-                if (!message_guid_decode(&guid, base)) goto done;
-            }
-        }
     }
 
-    /* All done */
-    *uidptr = uid;
-    *mboxidptr = mboxid;
-    mboxid = NULL;
-    if (useridptr) {
-        *useridptr = userid;
-        userid = NULL;
-    }
-    if (subpartptr) {
-        *subpartptr = subpart;
-        subpart = NULL;
-    }
-    if (guidptr) message_guid_copy(guidptr, &guid);
-    is_valid = 1;
+    is_valid = !val[0];
 
 done:
-    free(mboxid);
-    free(userid);
-    free(subpart);
-    if (!is_valid) {
-        if (guidptr) message_guid_set_null(guidptr);
-    }
+    free(dec);
+    buf_free(&buf);
     return is_valid;
 }
 
@@ -1187,4 +1232,114 @@ EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)
     buf[0] = 'T';
     memcpy(buf+1, conversation_id_encode(cid), JMAP_THREADID_SIZE-2);
     buf[JMAP_THREADID_SIZE-1] = 0;
+}
+
+EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
+{
+    struct jmap_caleventid *eid = xzmalloc(sizeof(struct jmap_caleventid));
+    eid->raw = id;
+
+    int has_recurid = 0;
+    int is_base64 = 0;
+    const char *p = id;
+
+    // read prefix
+    if (*p != 'E')
+        goto done;
+    p++;
+    if (*p == 'R') {
+        has_recurid = 1;
+        p++;
+    }
+    if (*p == 'B') {
+        is_base64 = 1;
+        p++;
+    }
+    if (*p != '-')
+        goto done;
+    p++;
+
+    // read recurid
+    if (has_recurid) {
+        const char *dash = strchr(p, '-');
+        if (dash) {
+            struct buf buf = BUF_INITIALIZER;
+            buf_setmap(&buf, p, dash - p);
+            icaltimetype t = icaltime_from_string(buf_cstring(&buf));
+            if (!icaltime_is_null_time(t)) {
+                eid->ical_recurid = eid->_alloced[1] = buf_release(&buf);
+            }
+            buf_free(&buf);
+            p = dash + 1;
+        }
+
+        if (!eid->ical_recurid) {
+            goto done;
+        }
+    }
+
+    // read uid
+    eid->ical_uid = eid->_alloced[0] = is_base64 ?
+        jmap_decode_base64_nopad(p, strlen(p)) : xstrdup(p);
+
+done:
+    if (!eid->ical_uid) {
+        // fall back to verbatim uid
+        xzfree(eid->_alloced[0]);
+        xzfree(eid->_alloced[1]);
+        eid->ical_recurid = NULL;
+        eid->ical_uid = eid->_alloced[0] = xstrdup(id);
+    }
+
+    return eid;
+}
+
+EXPORTED void jmap_caleventid_free(struct jmap_caleventid **eidptr)
+{
+    if (eidptr == NULL || *eidptr == NULL) return;
+
+    struct jmap_caleventid *eid = *eidptr;
+    free(eid->_alloced[0]);
+    free(eid->_alloced[1]);
+    free(eid);
+    *eidptr = NULL;
+}
+
+EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf)
+{
+    buf_reset(buf);
+
+    int need_base64 = 0;
+    const char *c;
+    for (c = eid->ical_uid; *c; c++) {
+        if (!isascii(*c) || !(isalnum(*c) || *c == '-' || *c == '_')) {
+            need_base64 = 1;
+            break;
+        }
+    }
+
+    int has_recurid = eid->ical_recurid && eid->ical_recurid[0];
+
+    buf_putc(buf, 'E');
+    if (has_recurid)
+        buf_putc(buf, 'R');
+    if (need_base64)
+        buf_putc(buf, 'B');
+    buf_putc(buf, '-');
+
+    if (has_recurid) {
+        buf_appendcstr(buf, eid->ical_recurid);
+        buf_putc(buf, '-');
+    }
+
+    if (need_base64) {
+        char *tmp = jmap_encode_base64_nopad(eid->ical_uid, strlen(eid->ical_uid));
+        buf_appendcstr(buf, tmp);
+        free(tmp);
+    }
+    else {
+        buf_appendcstr(buf, eid->ical_uid);
+    }
+
+    return buf_cstring(buf);
 }

@@ -254,6 +254,8 @@ enum {
 typedef int (*parse_path_t)(const char *path, struct request_target_t *tgt,
                             const char **resultstr);
 
+void request_target_fini(struct request_target_t *tgt);
+
 /* Auth challenge context */
 struct auth_challenge_t {
     struct auth_scheme_t *scheme;       /* Selected AUTH scheme */

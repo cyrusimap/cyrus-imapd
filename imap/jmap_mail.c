@@ -69,7 +69,7 @@
 #include "http_dav.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
-#include "jmap_ical.h"
+#include "jmap_calendar.h"
 #include "jmap_mail.h"
 #include "jmap_mail_query.h"
 #include "json_support.h"
@@ -7288,52 +7288,62 @@ static int _email_get_bodies(jmap_req_t *req,
 
     /* calendarEvents -- non-standard */
     if (jmap_wantprop(props, "calendarEvents")) {
-        json_t *calendar_events = json_object();
+        hash_table icsbody_by_partid = HASH_TABLE_INITIALIZER;
+        // Some MUAs send the same iTIP message both as a text/calendar
+        // and as a base64-encoded application/ics body. Deduplicate these.
+        struct hashset *icsguids = hashset_new(sizeof(struct message_guid));
+
         int i;
         for (i = 0; i < bodies.attslist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.attslist, i);
-            /* Process text/calendar attachments and files ending with .ics */
-            if (strcmp(part->type, "TEXT") || strcmp(part->subtype, "CALENDAR")) {
-                int has_ics_attachment = 0;
+            int is_icsbody = 0;
+
+            /* Process calendar attachments and files ending with .ics */
+            if ((!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "CALENDAR")) ||
+                (!strcmp(part->type, "APPLICATION") && !strcmp(part->subtype, "ICS"))) {
+                is_icsbody = 1;
+            }
+            else {
                 struct param *param = part->disposition_params;
                 while (param) {
-                    if (!strcasecmp(param->attribute, "FILENAME")) {
+                    if (!strcasecmp(param->attribute, "FILENAME") ||
+                        !strcasecmp(param->attribute, "NAME")) {
                         size_t len = strlen(param->value);
                         if (len > 4 && !strcasecmp(param->value + len-4, ".ICS")) {
-                            has_ics_attachment = 1;
+                            is_icsbody = 1;
+                            break;
                         }
                     }
                     param = param->next;
                 }
-                if (!has_ics_attachment)
-                    continue;
             }
-            /* Parse decoded data to iCalendar object */
+
+            if (is_icsbody && hashset_add(icsguids, &part->content_guid)) {
+                if (!icsbody_by_partid.size) {
+                    construct_hash_table(&icsbody_by_partid, 32, 0);
+                }
+                hash_insert(part->part_id, part, &icsbody_by_partid);
+            }
+        }
+
+        json_t *events = json_null();
+        if (hash_numrecords(&icsbody_by_partid)) {
             r = _cyrusmsg_need_mime(msg);
             if (r) goto done;
-            char *decbuf = NULL;
-            size_t declen = 0;
-            const char *rawical = charset_decode_mimebody(msg->mime->s + part->content_offset,
-                    part->content_size, part->charset_enc, &decbuf, &declen);
-            if (!rawical) continue;
-            struct buf buf = BUF_INITIALIZER;
-            buf_setmap(&buf, rawical, declen);
-            icalcomponent *ical = ical_string_as_icalcomponent(&buf);
-            buf_free(&buf);
-            free(decbuf);
-            if (!ical) continue;
-            /* Parse iCalendar object to JSCalendar */
-            json_t *jsevents = jmapical_tojmap_all(ical, NULL);
-            if (json_array_size(jsevents)) {
-                json_object_set_new(calendar_events, part->part_id, jsevents);
+            struct mailbox *mbox = NULL;
+            uint32_t uid = 0;
+            if (msg->mr) {
+                msgrecord_get_mailbox(msg->mr, &mbox);
+                msgrecord_get_uid(msg->mr, &uid);
             }
-            icalcomponent_free(ical);
+            events = jmap_calendar_events_from_msg(req,
+                    mbox ? mailbox_uniqueid(mbox) : NULL, uid,
+                    &icsbody_by_partid, msg->mime);
         }
-        if (!json_object_size(calendar_events)) {
-            json_decref(calendar_events);
-            calendar_events = json_null();
-        }
-        json_object_set_new(email, "calendarEvents", calendar_events);
+        json_object_set_new(email, "calendarEvents", events);
+
+        if (icsbody_by_partid.size) free_hash_table(&icsbody_by_partid, NULL);
+        hashset_free(&icsguids);
     }
 
     /* previousCalendarEvent -- non-standard */

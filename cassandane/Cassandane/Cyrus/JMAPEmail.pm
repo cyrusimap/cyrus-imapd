@@ -50,6 +50,7 @@ use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
 use Cwd qw(abs_path getcwd);
 use URI;
+use URI::Escape;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -62,12 +63,17 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_realm => 'Cassandane',
+    $config->set(caldav_historical_age => -1,
+                 caldav_realm => 'Cassandane',
                  conversations => 'yes',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
-                 jmapsubmission_deleteonsend => 'no',
+                 defaultdomain => 'example.com',
+                 httpallowcompress => 'no',
                  httpmodules => 'carddav caldav jmap',
-                 httpallowcompress => 'no');
+                 icalendar_max_size => 100000,
+                 jmap_nonstandard_extensions => 'yes',
+                 jmapsubmission_deleteonsend => 'no',
+                 sync_log => 'yes');
 
     # setup sieve
     my ($maj, $min) = Cassandane::Instance->get_version();
@@ -12672,7 +12678,7 @@ sub test_email_get_calendarevents_utc
     $self->assert_not_null($jsevent1);
     $self->assert_str_equals("Foo", $jsevent1->{title});
     $self->assert_str_equals('2018-05-18T09:00:00', $jsevent1->{start});
-    $self->assert_str_equals('UTC', $jsevent1->{timeZone});
+    $self->assert_str_equals('Etc/UTC', $jsevent1->{timeZone});
     $self->assert_str_equals('PT1H', $jsevent1->{duration});
 }
 
@@ -17366,6 +17372,7 @@ sub test_email_query_guidsearch_keywords
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
@@ -17804,6 +17811,7 @@ sub test_email_query_guidsearch_only_email_mailboxes
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
@@ -17842,7 +17850,9 @@ sub test_email_query_guidsearch_only_email_mailboxes
         ['CalendarEvent/set', {
             create => {
                 '2' => {
-                    calendarId => 'Default',
+                    calendarIds => {
+                        Default => JSON::true
+                    },
                     start => '2020-02-25T11:00:00',
                     timeZone => 'Australia/Melbourne',
                     title => 'test',
@@ -22897,6 +22907,481 @@ sub test_email_query_convflags_seen_in_trash
         $res->[2][1]{performance}{details}{isGuidSearch});
     $self->assert_equals(JSON::true,
         $res->[3][1]{performance}{details}{isGuidSearch});
+}
+
+sub test_email_get_calendarevents_links_blobid
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+ORGANIZER:cassandane@example.com
+ATTENDEE:attendee@local
+UID:123456789
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
+        'Content-Type' => 'text/calendar');
+    my $eventHref = '/dav/calendars/user/cassandane/Default/test.ics';
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "Add attachment via CalDAV";
+    my $url = $caldav->request_url($eventHref) . '?action=attachment-add';
+    my $caldavResponse = $caldav->ua->post($url, {
+        headers => {
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment;filename=test',
+            'Prefer' => 'return=representation',
+            'Authorization' => $caldav->auth_header(),
+        },
+        content => 'someblob',
+    });
+    $self->assert_str_equals('201', $caldavResponse->{status});
+
+    xlog "Get updated VEVENT via CalDAV";
+    $caldavResponse = $caldav->Request('GET', $eventHref);
+    my $veventWithManagedAttachUrl = $caldavResponse->{content};
+    $self->assert_not_null($veventWithManagedAttachUrl);
+
+    xlog "Get updated VEVENT via iTIP";
+    my $notif = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$notif;
+    my $payload = decode_json($imip->{MESSAGE});
+    my $veventWithManagedAttachBinary = $payload->{ical};
+    $self->assert_not_null($veventWithManagedAttachBinary);
+
+    xlog "Embed VEVENT in email";
+    $self->make_message('test',
+        mime_type => 'multipart/related',
+        mime_boundary => 'boundary',
+        body => ""
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "test"
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/calendar;charset=utf-8\r\n"
+          . "\r\n"
+          . $veventWithManagedAttachUrl
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/calendar;charset=utf-8\r\n"
+          . "\r\n"
+          . $veventWithManagedAttachBinary
+          . "\r\n--boundary--\r\n"
+    ) || die;
+
+    xlog "Fetch email via JMAP";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['calendarEvents'],
+        }, 'R2' ],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    xlog "Assert both events have the same blobId";
+    my @linksFromUrl = values %{$res->[1][1]{list}[0]{calendarEvents}{2}[0]{links}};
+    $self->assert_num_equals(1, scalar @linksFromUrl);
+    my @linksFromBinary = values %{$res->[1][1]{list}[0]{calendarEvents}{3}[0]{links}};
+    $self->assert_num_equals(1, scalar @linksFromBinary);
+    $self->assert_str_equals($linksFromUrl[0]->{blobId}, $linksFromBinary[0]->{blobId});
+}
+
+sub test_email_get_calendarevents_links_blobid_attachbinary
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+ATTACH;VALUE=BINARY;ENCODING=BASE64;FMTTYPE=text/plain:aGVsbG8=
+ORGANIZER:cassandane@example.com
+ATTENDEE:attendee@local
+UID:123456789
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+    $rawIcal =~ s/\r?\n/\r\n/gs;
+
+    xlog "Make email";
+    $self->make_message('test',
+        mime_type => 'multipart/related',
+        mime_boundary => 'boundary',
+        body => ""
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "test"
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/calendar;charset=utf-8\r\n"
+          . "\r\n"
+          . $rawIcal
+          . "\r\n--boundary--\r\n"
+    ) || die;
+
+    xlog "Fetch email via JMAP";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['calendarEvents'],
+        }, 'R2' ],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $link = (values %{$res->[1][1]{list}[0]{calendarEvents}{2}[0]{links}})[0];
+    $self->assert_not_null($link);
+    $self->assert_not_null($link->{blobId});
+    $res = $jmap->Download('cassandane', uri_escape($link->{blobId}));
+    $self->assert_str_equals("hello", $res->{content});
+}
+
+sub test_email_get_calendarevents_itip_reply
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # calendarEvents property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my @testCases = ({
+        ical => <<'EOF',
+BEGIN:VCALENDAR
+PRODID:-//Google Inc//Google Calendar 70.9054//EN
+VERSION:2.0
+CALSCALE:GREGORIAN
+METHOD:REPLY
+BEGIN:VEVENT
+DTSTART:20210807T130000Z
+DTEND:20210807T140000Z
+DTSTAMP:20210802T032234Z
+ORGANIZER;CN=Test User:mailto:organizer@local
+UID:a4294f2a-cafb-407b-951b-67684ed0ba54
+ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=TENTATIVE;
+ X-NUM-GUESTS=0;X-RESPONSE-COMMENT="Hello\, World!":mailto:attendee@local
+CREATED:20210802T032207Z
+DESCRIPTION:
+LAST-MODIFIED:20210802T032234Z
+LOCATION:
+SEQUENCE:3
+STATUS:CONFIRMED
+SUMMARY:iTIP REPLY
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR
+EOF
+        wantScheduleUpdated => '2021-08-02T03:22:34Z',
+        wantScheduleSequence => 3,
+        wantParticipationComment => 'Hello, World!',
+    }, {
+        ical => <<'EOF',
+BEGIN:VCALENDAR
+METHOD:REPLY
+PRODID:Microsoft Exchange Server 2010
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Greenwich Standard Time
+BEGIN:STANDARD
+DTSTART:16010101T000000
+TZOFFSETFROM:+0000
+TZOFFSETTO:+0000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T000000
+TZOFFSETFROM:+0000
+TZOFFSETTO:+0000
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+ATTENDEE;PARTSTAT=ACCEPTED;CN=Opera Tester:mailto:attendee@local
+COMMENT;LANGUAGE=en-GB:A comment.\n
+UID:a4294f2a-cafb-407b-951b-67684ed0ab56
+SUMMARY;LANGUAGE=en-GB:Accepted: iTIP REPLY test
+DTSTART;TZID=Greenwich Standard Time:20210807T090000
+DTEND;TZID=Greenwich Standard Time:20210807T100000
+CLASS:PUBLIC
+PRIORITY:5
+DTSTAMP:20210802T032446Z
+TRANSP:OPAQUE
+STATUS:CONFIRMED
+SEQUENCE:5
+X-MICROSOFT-CDO-APPT-SEQUENCE:1
+X-MICROSOFT-CDO-OWNERAPPTID:0
+X-MICROSOFT-CDO-BUSYSTATUS:BUSY
+X-MICROSOFT-CDO-INTENDEDSTATUS:BUSY
+X-MICROSOFT-CDO-ALLDAYEVENT:FALSE
+X-MICROSOFT-CDO-IMPORTANCE:1
+X-MICROSOFT-CDO-INSTTYPE:0
+X-MICROSOFT-DONOTFORWARDMEETING:FALSE
+X-MICROSOFT-DISALLOW-COUNTER:FALSE
+END:VEVENT
+END:VCALENDAR
+EOF
+        wantScheduleUpdated => '2021-08-02T03:24:46Z',
+        wantScheduleSequence => 5,
+        wantParticipationComment => "A comment.\n",
+    });
+
+    foreach my $i (0 .. $#testCases) {
+        my $tc = $testCases[$i];
+        $tc->{ical} =~ s/\r?\n/\r\n/gs;
+        $self->make_message("test$i",
+            mime_type => 'multipart/related',
+            mime_boundary => 'boundary',
+            body => ""
+            . "\r\n--boundary\r\n"
+            . "Content-Type: text/plain\r\n"
+            . "\r\n"
+            . "test"
+            . "\r\n--boundary\r\n"
+            . "Content-Type: text/calendar;charset=utf-8\r\n"
+            . "\r\n"
+            . $tc->{ical}
+            . "\r\n--boundary--\r\n"
+        ) || die;
+        $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+        my $res = $jmap->CallMethods([
+            ['Email/query', {
+                sort => [{
+                    property => 'subject',
+                    isAscending => JSON::false,
+                }],
+                limit => 1,
+            }, "R1"],
+            ['Email/get', {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name => 'Email/query',
+                    path => '/ids'
+                },
+                properties => ['calendarEvents'],
+            }, 'R2' ],
+        ]);
+
+        my $event = (values %{$res->[1][1]{list}[0]{calendarEvents}})[0][0];
+        $self->assert_not_null($event);
+        $self->assert_str_equals('reply', $event->{method});
+
+        my @attendees = grep { exists $_->{roles}{attendee} } values %{$event->{participants}};
+        $self->assert_num_equals(1, scalar @attendees);
+        $self->assert_str_equals($tc->{wantScheduleUpdated},
+            $attendees[0]->{scheduleUpdated});
+        $self->assert_num_equals($tc->{wantScheduleSequence},
+            $attendees[0]->{scheduleSequence});
+        $self->assert_str_equals($tc->{wantParticipationComment},
+            $attendees[0]->{participationComment});
+    }
+}
+
+sub test_email_get_calendarevents_deduplicate
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event via CalDAV";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:123456789
+SUMMARY:test
+DTSTART:20160831T153000Z
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+    $ical =~ s/\r?\n/\r\n/gs;
+    my $b64Ical = encode_base64($ical);
+    $b64Ical =~ s/\r?\n/\r\n/gs;
+
+    $self->make_message('test',
+        mime_type => 'multipart/related',
+        mime_boundary => 'boundary',
+        body => ""
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "test"
+          . "\r\n--boundary\r\n"
+          . "Content-Type: text/calendar;charset=\"utf-8\"; method=REPLY\r\n"
+          . "Content-Transfer-Encoding: 7bit\r\n"
+          . "\r\n"
+          . $ical
+          . "\r\n--boundary\r\n"
+          . "Content-Type: application/ics; name=\"test.ics\"\r\n"
+          . "Content-Disposition: attachment; filename=\"test.ics\"\r\n"
+          . "Content-Transfer-Encoding: base64\r\n"
+          . "\r\n"
+          . $b64Ical
+          . "\r\n--boundary--\r\n"
+    ) || die;
+
+    xlog "Fetch email via JMAP";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['calendarEvents'],
+        }, 'R2' ],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my @eventMimeParts = values %{$res->[1][1]{list}[0]{calendarEvents}};
+    $self->assert_num_equals(1, scalar @eventMimeParts);
+    $self->assert_num_equals(1, scalar @{$eventMimeParts[0]});
+}
+
+sub test_email_get_calendarevents_standalone_instances
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $body = <<'EOF';
+--boundary_1
+Content-Type: text/plain
+
+body
+--boundary_1
+Content-Type: text/calendar
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=America/New_York:20210101T060000
+DTSTART;TZID=Europe/Berlin:20210101T120000
+DURATION:PT1H
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:instance1
+SEQUENCE:0
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=America/New_York:20210301T060000
+DTSTART;TZID=America/New_York:20210301T080000
+DURATION:PT1H
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:instance2
+SEQUENCE:0
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+--boundary_1--
+EOF
+    $body =~ s/\r?\n/\r\n/gs;
+
+    $self->make_message('test', mime_type => 'multipart/related',
+        mime_boundary => 'boundary_1', body => $body) or die;
+
+    xlog $self, 'get email';
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [
+                'attachments', 'calendarEvents'
+            ],
+        }, 'R2'],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    $self->assert_num_equals(2,
+        scalar @{$res->[1][1]{list}[0]{calendarEvents}{2}});
+    $self->assert_str_equals('instance1',
+        $res->[1][1]{list}[0]{calendarEvents}{2}[0]{title});
+    $self->assert_str_equals('instance2',
+        $res->[1][1]{list}[0]{calendarEvents}{2}[1]{title});
 }
 
 1;

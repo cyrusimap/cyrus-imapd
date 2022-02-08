@@ -3078,6 +3078,22 @@ of the incoming network interface, or if no record is found, the
 .PP
    If no unit is specified, minutes is assumed. */
 
+{ "webdav_attachments_baseurl", NULL, STRING, "3.6.0" }
+/* The base URL for WebDAV managed attachments, excluding the
+   Cyrus-specific URL paths. Typically, this only includes the
+   HTTP scheme and host name at which DAV clients may fetch
+   managed attachments from, e.g.  "https://dav.example.com".
+   If not specified, the target host of the DAV HTTP request that uploaded
+   the attachment will be used. For JMAP, the Link.blobId property of
+   JSCalendar objects will be disabled. */
+
+{ "webdav_attachments_max_binary_attach_size", 1024, INT, "3.6.0" }
+/* The maximum byte length (in kilobytes) of an ATTACH property value
+   when managed attachment URIs get rewritten to BINARY during iTIP processing.
+   Any attachment that exceeds this byte size keeps its managed attachment
+   URI as ATTACH value. A zero size limit causes attachments of any size
+   be rewritten as BINARY. */
+
 { "xbackup_enabled", 0, SWITCH, "3.0.0" }
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin
    users can use this command to provoke a replication of specified users

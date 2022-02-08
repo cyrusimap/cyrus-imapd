@@ -86,6 +86,9 @@ struct comp_flags {
     unsigned tzbyref      : 1;          /* VTIMEZONEs by reference */
     unsigned mattach      : 1;          /* Has managed ATTACHment(s) */
     unsigned shared       : 1;          /* Is shared (per-user-data stripped) */
+    unsigned defaultalerts : 1;         /* Has default alerts property set */
+    unsigned mayinviteself : 1;         /* Users may invite themselves */
+    unsigned mayinviteothers : 1;       /* Attending users may invite others */
 };
 
 /* Status values */
@@ -105,8 +108,6 @@ struct caldav_data {
     const char *dtend;
     struct comp_flags comp_flags;
     const char *sched_tag;
-    int jmapversion;
-    const char *jmapdata;
 };
 
 typedef int caldav_cb_t(void *rock, struct caldav_data *cdata);
@@ -149,28 +150,18 @@ int caldav_foreach(struct caldav_db *caldavdb, const mbentry_t *mbentry,
 
 enum caldav_sort {
     CAL_SORT_NONE = 0,
-    CAL_SORT_UID,
+    CAL_SORT_ICAL_UID,
     CAL_SORT_START,
     CAL_SORT_MAILBOX,
+    CAL_SORT_IMAP_UID,
+    CAL_SORT_MODSEQ,
     CAL_SORT_DESC  = 0x80 /* bit-flag for descending sort */
 };
 
-/* process each entry for 'mailbox' in 'caldavdb' with cb()
- * which last recurrence ends after 'after' and first
- * recurrence starts before 'before'. The largest possible
- * timerange spans from caldav_epoch to caldav_eternity.
- * The callback is called in order of sort, or by an
- * arbitrary order if no sort is specified. */
-int caldav_foreach_timerange(struct caldav_db *caldavdb,
-                             const mbentry_t *mbentry,
-                             time_t after, time_t before,
-                             enum caldav_sort* sort, size_t nsort,
-                             caldav_cb_t *cb, void *rock);
-
 /* write an entry to 'caldavdb' */
 int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata);
-int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *cdata,
-                      icalcomponent *ical);
+int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cdata,
+                     icalcomponent *ical);
 
 /* delete an entry from 'caldavdb' */
 int caldav_delete(struct caldav_db *caldavdb, unsigned rowid);
@@ -189,14 +180,6 @@ int caldav_abort(struct caldav_db *caldavdb);
 
 char *caldav_mboxname(const char *userid, const char *name);
 
-int caldav_get_events(struct caldav_db *caldavdb, const char *asuserid,
-                      const mbentry_t *mbentry, const char *ical_uid,
-                      caldav_cb_t *cb, void *rock);
-
-int caldav_write_jmapcache(struct caldav_db *caldavdb, int rowid,
-                           const char *userid, int version, const char *data);
-
-
 /* Process each entry for 'caldavdb' with a modseq higher than oldmodseq,
  * in ascending order of modseq.
  * If mailbox is not NULL, only process entries of this mailbox.
@@ -208,5 +191,44 @@ int caldav_get_updates(struct caldav_db *caldavdb,
 
 /* Update all the share ACLs */
 int caldav_update_shareacls(const char *userid);
+
+/* JSCalendar object API */
+
+struct caldav_jscal {
+    struct caldav_data cdata;
+    const char *ical_recurid; // main events have empty string
+    const char *dtstart;
+    const char *dtend;
+    int alive;
+    modseq_t modseq;
+    modseq_t createdmodseq;
+    const char *ical_guid;
+    int cacheversion;
+    const char *cachedata;
+};
+
+struct caldav_jscal_filter {
+    const mbentry_t *mbentry;
+    const char *ical_uid;
+    const char *ical_recurid;
+    uint32_t imap_uid;
+    const time_t *after;
+    const time_t *before;
+    modseq_t aftermodseq;
+    int tombstones;
+    size_t maxcount;
+};
+
+typedef int caldav_jscal_cb_t(void *rock, struct caldav_jscal *jscal);
+
+int caldav_foreach_jscal(struct caldav_db *caldavdb,
+                         const char *cache_userid,
+                         struct caldav_jscal_filter *filter,
+                         enum caldav_sort* sort, size_t nsort,
+                         caldav_jscal_cb_t *cb, void *rock);
+
+int caldav_write_jscalcache(struct caldav_db *caldavdb, int rowid,
+                            const char *recurid, const char *userid,
+                            int version, const char *data);
 
 #endif /* CALDAV_DB_H */

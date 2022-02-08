@@ -576,7 +576,7 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_emailsubmission_capabilities(capas);
         jmap_mdn_capabilities(capas);
         jmap_contact_capabilities(capas);
-        jmap_calendar_capabilities(capas);
+        jmap_calendar_capabilities(capas, authstate, authuserid, accountid);
         jmap_backup_capabilities(capas);
         jmap_notes_capabilities(capas);
 #ifdef USE_SIEVE
@@ -602,7 +602,7 @@ static json_t *lookup_capabilities(const char *accountid,
                 jmap_contact_capabilities(capas);
             }
             if (rock.has_calendars) {
-                jmap_calendar_capabilities(capas);
+                jmap_calendar_capabilities(capas, authstate, authuserid, accountid);
             }
             // should we offer Backup/restoreXxx for shared accounts?
         }
@@ -813,6 +813,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         req.method_calls = &method_calls;
         req.using_capabilities = &using_capabilities;
         req.inmemory_blobs = &inmemory_blobs;
+        req.settings = settings;
 
         if (do_perf) {
             struct rusage usage;
@@ -1006,8 +1007,11 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     free_hash_table(&mboxrights, free);
 
     json_t *jprimary = json_string(httpd_userid);
+
     json_object_set(primary_accounts, JMAP_URN_MAIL, jprimary);
     json_object_set(primary_accounts, JMAP_URN_SUBMISSION, jprimary);
+    json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);
+    json_object_set(primary_accounts, JMAP_URN_CALENDARS, jprimary);
     json_object_set(primary_accounts, JMAP_CONTACTS_EXTENSION, jprimary);
     json_object_set(primary_accounts, JMAP_CALENDARS_EXTENSION, jprimary);
     json_object_set(primary_accounts, JMAP_BACKUP_EXTENSION, jprimary);
@@ -1015,6 +1019,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);
     json_object_set(primary_accounts, JMAP_SIEVE_EXTENSION, jprimary);
 #endif
+    json_object_set(primary_accounts, JMAP_URN_PRINCIPALS, jprimary);
     json_decref(jprimary);
 
     /* Clean up */
@@ -2755,16 +2760,10 @@ HIDDEN json_t *jmap_parse_reply(struct jmap_parse *parse)
 }
 
 
-static json_t *_json_has(int rights, int need)
-{
-  return (((rights & need) == need) ? json_true() : json_false());
-}
-
-HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
+HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights))
 {
     char *aclstr = xstrdupnull(mbentry->acl);
     char *owner = mboxname_to_userid(mbentry->name);
-    int iscalendar = mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR;
 
     json_t *sharewith = json_null();
 
@@ -2788,22 +2787,14 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
         if (is_system_user(userid)) continue;
         if (!strcmp(userid, owner)) continue;
 
+        json_t *jrights = tojmap(rights);
+        if (!jrights) continue;
+
         // we've got one! Create the object if this is the first
         if (!JNOTNULL(sharewith))
             sharewith = json_object();
 
-        json_t *obj = json_object();
-        json_object_set_new(sharewith, userid, obj);
-
-        if (iscalendar)
-            json_object_set_new(obj, "mayReadFreeBusy",
-                                _json_has(rights, JACL_READFB));
-        json_object_set_new(obj, "mayRead",
-                            _json_has(rights, JACL_READITEMS));
-        json_object_set_new(obj, "mayWrite",
-                                _json_has(rights, JACL_WRITE));
-        json_object_set_new(obj, "mayAdmin",
-                                _json_has(rights, JACL_ADMIN));
+        json_object_set_new(sharewith, userid, jrights);
     }
 
     free(aclstr);
@@ -2812,17 +2803,9 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
     return sharewith;
 }
 
-struct acl_item {
-    unsigned int mayAdmin:1;
-    unsigned int mayWrite:1;
-    unsigned int mayPost:1;
-    unsigned int mayRead:1;
-    unsigned int mayReadFreeBusy:1;
-};
-
 struct acl_change {
-    struct acl_item old;
-    struct acl_item new;
+    int oldrights;
+    int newrights;
 };
 
 struct invite_rock {
@@ -2835,37 +2818,19 @@ struct invite_rock {
     const struct prop_entry *live_props;
 };
 
-static unsigned access_from_acl_item(struct acl_item *item)
-{
-    unsigned access = 0;
-
-    if (item->mayReadFreeBusy)
-        access |= JACL_READFB;
-    if (item->mayRead)
-        access |= JACL_READITEMS|JACL_SETSEEN;
-    if (item->mayWrite)
-        access |= JACL_WRITE;
-    if (item->mayPost)
-        access |= JACL_SUBMIT;
-    if (item->mayAdmin)
-        access |= JACL_ADMIN|JACL_RENAME;
-
-    return access;
-}
-
 /* Create and send a sharing invite */
 static void send_dav_invite(const char *userid, void *val, void *rock)
 {
     struct acl_change *change = (struct acl_change *) val;
     struct invite_rock *irock = (struct invite_rock *) rock;
-    long old = access_from_acl_item(&change->old);
-    long new = access_from_acl_item(&change->new);
+    long old = change->oldrights;
+    long new = change->newrights;
 
     if (old != new) {
         int access, r = 0;
 
         if (!new) access = SHARE_NONE;
-        else if (change->new.mayWrite) access = SHARE_READWRITE;
+        else if ((new & JACL_WRITE) == new) access = SHARE_READWRITE;
         else access = SHARE_READONLY;
 
         if (!old || !new) {
@@ -2901,8 +2866,14 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
                        strhash(irock->tgt.mbentry->name),
                        strhash(userid));
 
-            r = dav_send_notification(irock->notify->doc,
-                                      userid, buf_cstring(&irock->resource));
+            struct dlist *extradata = dlist_newkvlist(NULL, "ACL");
+            char rights[100];
+            cyrus_acl_masktostr(change->oldrights, rights);
+            dlist_setatom(extradata, "OLD", rights);
+            cyrus_acl_masktostr(change->newrights, rights);
+            dlist_setatom(extradata, "NEW", rights);
+            r = dav_send_notification(irock->notify->doc, extradata,
+                    userid, buf_cstring(&irock->resource));
         }
     }
 }
@@ -2911,11 +2882,7 @@ static void add_useracls(const char *userid, void *val, void *rock)
 {
     struct acl_change *change = val;
     char **aclptr = rock;
-
-    unsigned access = access_from_acl_item(&change->new);
-
-    if (access)
-        cyrus_acl_set(aclptr, userid, ACL_MODE_SET, access, NULL, NULL);
+    cyrus_acl_set(aclptr, userid, ACL_MODE_SET, change->newrights, NULL, NULL);
 }
 
 struct shared_rock {
@@ -3029,7 +2996,8 @@ static int set_upload_rights(const char *accountid)
 }
 
 HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
-                              json_t *shareWith, int overwrite)
+                              json_t *shareWith, int overwrite,
+                              int (*patchrights)(int, json_t*))
 {
     hash_table user_access = HASH_TABLE_INITIALIZER;
     int isdav = mbtypes_dav(mailbox_mbtype(mbox));
@@ -3062,24 +3030,12 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
 
         /* Is this a shareable user? (not owner or admin) */
         if (strcmp(userid, owner) && !is_system_user(userid)) {
-            int oldrights;
-            cyrus_acl_strtomask(rightstr, &oldrights);
-
             /* Add regular user to our table */
             change = xzmalloc(sizeof(struct acl_change));
-
-            if (oldrights & JACL_READFB)
-                change->old.mayReadFreeBusy = 1;
-            if (oldrights & JACL_READITEMS)
-                change->old.mayRead = 1;
-            if ((oldrights & JACL_WRITE) == JACL_WRITE)
-                change->old.mayWrite = 1;
-            if (oldrights & JACL_ADMIN)
-                change->old.mayAdmin = 1;
-            if (isdav) change->old.mayPost = change->old.mayWrite;
+            cyrus_acl_strtomask(rightstr, &change->oldrights);
 
             /* unless we're overwriting, we start with the existing state */
-            if (!overwrite) change->new = change->old;
+            if (!overwrite) change->newrights = change->oldrights;
 
             hash_insert(userid, (void *) change, &user_access);
         }
@@ -3099,9 +3055,6 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
 
     /* Patch the ACL from shareWith */
     json_object_foreach(shareWith, userid, rights) {
-        const char *right;
-        json_t *val;
-
         /* Validate user id and rights */
         if (!(strlen(userid) && rights &&
               (json_is_object(rights) || json_is_null(rights)))) {
@@ -3120,24 +3073,11 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
 
         if (json_is_null(rights)) {
             /* remove user from ACL */
-            struct acl_item zero = {0,0,0,0,0};
-            if (change) change->new = zero;
+            change->newrights = 0;
         }
         else {
-            /* accumulate rights be granted and denied */
-            json_object_foreach(rights, right, val) {
-                unsigned set = json_boolean_value(val);
-
-                if (!strcmp(right, "mayAdmin"))
-                    change->new.mayAdmin = set;
-                else if (!strcmp(right, "mayWrite"))
-                    change->new.mayWrite = set;
-                else if (!strcmp(right, "mayRead"))
-                    change->new.mayRead = set;
-                else if (iscalendar && !strcmp(right, "mayReadFreeBusy"))
-                    change->new.mayReadFreeBusy = set;
-            }
-            if (isdav) change->new.mayPost = change->new.mayWrite;
+            /* patch rights */
+            change->newrights = patchrights(change->newrights, rights);
         }
     }
 

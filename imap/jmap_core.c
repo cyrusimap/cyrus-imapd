@@ -708,7 +708,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
         else if (*blob_id == 'I' || *blob_id == 'V') {
             char *uniqueid = NULL;
             uint32_t uid;
-            if (jmap_decode_rawdata_blobid(blob_id, &uniqueid, &uid, NULL, NULL, NULL)) {
+            if (jmap_decode_rawdata_blobid(blob_id, &uniqueid, &uid, NULL, NULL, NULL, NULL)) {
                 struct getblob_rec *getblob = xzmalloc(sizeof(struct getblob_rec));
                 getblob->blob_id = blob_id;
                 getblob->uid = uid;

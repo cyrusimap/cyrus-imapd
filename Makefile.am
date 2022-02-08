@@ -584,6 +584,12 @@ AM_CPPFLAGS += $(JANSSON_CFLAGS)
 LD_SERVER_ADD += $(JANSSON_LIBS)
 endif
 
+if HAVE_GUESSTZ
+AM_LDFLAGS += $(GUESSTZ_LIBS)
+AM_CPPFLAGS += $(GUESSTZ_CFLAGS)
+LD_SERVER_ADD += $(GUESSTZ_LIBS)
+endif
+
 if CUNIT
 
 CUNIT_PROJECT = cunit/default.cunit
@@ -658,6 +664,10 @@ cunit_TESTS += \
 	cunit/vparse.testc \
 	cunit/dynarray.testc \
 	cunit/xsha1.testc
+
+if HTTPD
+cunit_TESTS += cunit/ical_support.testc
+endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 		imap/mutex_fake.c imap/spool.c
@@ -1187,6 +1197,8 @@ imap_lmtpd_SOURCES = \
 
 nodist_imap_lmtpd_SOURCES = imap/lmtp_err.c
 
+imap_lmtpd_CFLAGS = -DBUILD_LMTPD $(CFLAGS)
+
 if AUTOCREATE
 imap_lmtpd_SOURCES += \
 	imap/autocreate.c \
@@ -1199,7 +1211,8 @@ imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
 if JMAP
 imap_lmtpd_SOURCES += \
 	imap/jmap_util.c imap/jmap_mail_query.c imap/jmap_mail_query_parse.c \
-	imap/caldav_util.c imap/dav_util.c imap/itip_support.c imap/zoneinfo_db.c
+	imap/caldav_util.c imap/dav_util.c imap/itip_support.c imap/zoneinfo_db.c \
+	imap/jmap_notif.c imap/jmap_ical.c
 endif # JMAP
 
 endif # SIEVE
@@ -1330,6 +1343,8 @@ imap_httpd_SOURCES += \
 	imap/jmap_mailbox.c \
 	imap/jmap_mdn.c \
 	imap/jmap_notes.c \
+	imap/jmap_notif.c \
+	imap/jmap_notif.h \
 	imap/jmap_push.c \
 	imap/jmap_push.h \
 	imap/jmap_util.c \

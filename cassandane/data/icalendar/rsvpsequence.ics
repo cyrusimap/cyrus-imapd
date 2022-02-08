@@ -14,7 +14,7 @@ DESCRIPTION:
 SUMMARY:test
 SEQUENCE:1
 LAST-MODIFIED:20150928T132434Z
-ATTENDEE;RSVP=yes:mailto:cassandane@example.com
+ATTENDEE;X-JMAP-ID=me;RSVP=yes:mailto:cassandane@example.com
 ORGANIZER:mailto:organizer@local
 BEGIN:VALARM
 UID:alert1
@@ -35,7 +35,7 @@ DESCRIPTION:
 SUMMARY:test
 SEQUENCE:1
 LAST-MODIFIED:20150928T132434Z
-ATTENDEE;RSVP=yes:mailto:cassandane@example.com
+ATTENDEE;X-JMAP-ID=me;RSVP=yes:mailto:cassandane@example.com
 ORGANIZER:mailto:organizer@local
 END:VEVENT
 END:VCALENDAR

@@ -5009,4 +5009,186 @@ EOF
     $self->assert_null($ical->{entries}[3]{properties}{rrule});
 }
 
+sub test_defaultalarms
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    # For JMAP calendars, we refactored CalDAV default alarm property
+    # handling from a regular dead DAV property to a structured value.
+    # This test asserts that CalDAV clients won't notice the difference.
+
+    my $rawAlarmDateTime = <<EOF;
+BEGIN:VALARM
+TRIGGER:-PT5M
+ACTION:DISPLAY
+DESCRIPTION:alarmTime1
+END:VALARM
+BEGIN:VALARM
+TRIGGER:PT0M
+ACTION:DISPLAY
+DESCRIPTION:alarmTime2
+END:VALARM
+EOF
+
+    my $rawAlarmDate = <<EOF;
+BEGIN:VALARM
+TRIGGER:PT0S
+ACTION:DISPLAY
+DESCRIPTION:alarmDate1
+END:VALARM
+EOF
+
+    xlog "Set alarms";
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-datetime>
+$rawAlarmDateTime
+</C:default-alarm-vevent-datetime>
+    </D:prop>
+  </D:set>
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-date>
+$rawAlarmDate
+</C:default-alarm-vevent-date>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/Default",
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    xlog "Get alarms";
+    my $propfindXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+     <C:default-alarm-vevent-datetime/>
+     <C:default-alarm-vevent-date/>
+  </D:prop>
+</D:propfind>
+EOF
+    my $Response = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/Default",
+        $propfindXml, 'Content-Type' => 'text/xml');
+
+    xlog "Assert alarm values";
+    my $assert_propval = sub {
+        my ($Response, $propname, $wantVal, $wantStatus) = @_;
+        my $propStat = $Response->{'{DAV:}response'}[0]->{'{DAV:}propstat'}[0];
+        my $prop = $propStat->{'{DAV:}prop'};
+        $wantVal =~ s/^\s+|\s+$//g;
+        my $got = $prop->{'{urn:ietf:params:xml:ns:caldav}'. $propname}->{content};
+        $got =~ s/^\s+|\s+$//g;
+        $self->assert_str_equals($wantVal, $got);
+        my $status = $propStat->{'{DAV:}status'};
+        $self->assert_str_equals($wantStatus, $status->{content});
+    };
+    $assert_propval->($Response, 'default-alarm-vevent-datetime',
+                      $rawAlarmDateTime, 'HTTP/1.1 200 OK');
+    $assert_propval->($Response, 'default-alarm-vevent-date',
+                      $rawAlarmDate, 'HTTP/1.1 200 OK');
+
+    xlog "Remove alarms";
+    $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:remove>
+    <D:prop>
+        <C:default-alarm-vevent-datetime/>
+        <C:default-alarm-vevent-date/>
+    </D:prop>
+  </D:remove>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/Default",
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    xlog "Get alarms";
+    $propfindXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+     <C:default-alarm-vevent-datetime/>
+     <C:default-alarm-vevent-date/>
+  </D:prop>
+</D:propfind>
+EOF
+    $Response = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/Default",
+        $propfindXml, 'Content-Type' => 'text/xml');
+
+    xlog "Assert alarm values do not exist";
+    $assert_propval->($Response, 'default-alarm-vevent-datetime',
+                      '', 'HTTP/1.1 404 Not Found');
+    $assert_propval->($Response, 'default-alarm-vevent-date',
+                      '', 'HTTP/1.1 404 Not Found');
+}
+
+sub test_put_strip_scheduleforcesend
+    :VirtDomains :min_version_3_0 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "Default/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;\r
+ SCHEDULE-FORCE-SEND=REQUEST\r
+ :MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+    my $response = $CalDAV->Request('GET', $href);
+    $self->assert(not ($response->{content} =~ m/SCHEDULE-FORCE-SEND/));
+}
+
 1;

@@ -48,6 +48,22 @@
 #include "mailbox.h"
 #include "util.h"
 
+#define FNAME_DAVSUFFIX "dav" /* per-user DAV DB extension */
+
+/* XML namespace URIs */
+#define XML_NS_DAV      "DAV:"
+#define XML_NS_CALDAV   "urn:ietf:params:xml:ns:caldav"
+#define XML_NS_CARDDAV  "urn:ietf:params:xml:ns:carddav"
+#define XML_NS_ISCHED   "urn:ietf:params:xml:ns:ischedule"
+#define XML_NS_CS       "http://calendarserver.org/ns/"
+#define XML_NS_MECOM    "http://me.com/_namespace/"
+#define XML_NS_MOBME    "urn:mobileme:davservices"
+#define XML_NS_APPLE    "http://apple.com/ns/ical/"
+#define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
+#define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
+#define XML_NS_DAVMOUNT "http://purl.org/NET/webdav/mount/"
+#define XML_NS_JMAPCAL  "urn:ietf:params:jmap:calendars"
+
 /* Index into preconditions array */
 enum {
     /* WebDAV (RFC 4918) preconditions */
@@ -145,6 +161,8 @@ int dav_get_validators(struct mailbox *mailbox, void *data,
 int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,
                        struct mailbox *mailbox, struct index_record *oldrecord,
-                       modseq_t createdmodseq, strarray_t *imapflags);
+                       modseq_t createdmodseq,
+                       const strarray_t *add_imapflags,
+                       const strarray_t *del_imapflags);
 
 #endif /* DAV_UTIL_H */

@@ -47,7 +47,9 @@
 #include <jansson.h>
 
 #include "hash.h"
+#include "ical_support.h"
 #include "message.h"
+#include "mboxlist.h"
 #include "parseaddr.h"
 #include "smtpclient.h"
 
@@ -96,9 +98,15 @@ struct jmap_parser {
     struct buf buf;
     strarray_t path;
     json_t *invalid;
+    json_t *serverset;
 };
 
-#define JMAP_PARSER_INITIALIZER { BUF_INITIALIZER, STRARRAY_INITIALIZER, json_array() }
+#define JMAP_PARSER_INITIALIZER { \
+    BUF_INITIALIZER, \
+    STRARRAY_INITIALIZER, \
+    json_array(), \
+    json_object() \
+}
 
 extern void jmap_parser_fini(struct jmap_parser *parser);
 extern void jmap_parser_push(struct jmap_parser *parser, const char *prop);
@@ -107,6 +115,7 @@ extern void jmap_parser_push_index(struct jmap_parser *parser,
 extern void jmap_parser_pop(struct jmap_parser *parser);
 extern const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf);
 extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
+extern void jmap_parser_serverset(struct jmap_parser *parser, const char *prop, json_t *val);
 
 extern json_t *jmap_server_error(int r);
 
@@ -139,6 +148,7 @@ extern void jmap_decode_to_utf8(const char *charset, int encoding,
 extern const char *jmap_encode_rawdata_blobid(const char prefix,
                                               const char *mboxid,
                                               uint32_t uid,
+                                              const char *partid,
                                               const char *userid,
                                               const char *subpart,
                                               struct message_guid *guid,
@@ -146,6 +156,7 @@ extern const char *jmap_encode_rawdata_blobid(const char prefix,
 extern int jmap_decode_rawdata_blobid(const char *blobid,
                                       char **mboxidptr,
                                       uint32_t *uidptr,
+                                      char **partidptr,
                                       char **useridptr,
                                       char **subpartptr,
                                       struct message_guid *guid);
@@ -179,5 +190,47 @@ extern void jmap_set_emailid(const struct message_guid *guid, char *buf);
 
 #define JMAP_THREADID_SIZE 18
 extern void jmap_set_threadid(conversation_id_t cid, char *buf);
+
+struct jmap_caleventid {
+    const char *raw; /* as requested by client */
+    const char *ical_uid;
+    const char *ical_recurid;
+    char *_alloced[2];
+};
+
+extern struct jmap_caleventid *jmap_caleventid_decode(const char *id);
+
+extern const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf);
+
+extern void jmap_caleventid_free(struct jmap_caleventid **eidptr);
+
+#define JMAP_NOTIF_CALENDAREVENT "jmap-notif-calendarevent"
+
+extern char *jmap_notifmboxname(const char *userid);
+extern int jmap_create_notify_collection(const char *userid, mbentry_t **mbentryptr);
+extern char *jmap_caleventnotif_format_fromheader(const char *userid);
+extern int jmap_create_caleventnotif(struct mailbox *notifmbox,
+                                     const char *userid,
+                                     const struct auth_state *authstate,
+                                     const char *calmboxname,
+                                     const char *type,
+                                     const char *ical_uid,
+                                     const strarray_t *schedule_addresses,
+                                     const char *comment,
+                                     int is_draft,
+                                     json_t *jevent,
+                                     json_t *jpatch);
+
+typedef struct transaction_t txn_t; // defined in httpd.h
+
+extern int jmap_create_caldaveventnotif(struct transaction_t *txn,
+                                        const char *userid,
+                                        const struct auth_state *authstate,
+                                        const char *calmboxname,
+                                        const char *ical_uid,
+                                        const strarray_t *schedule_addresses,
+                                        int is_draft,
+                                        icalcomponent *oldical,
+                                        icalcomponent *newical);
 
 #endif /* JMAP_UTIL_H */

@@ -46,9 +46,11 @@
 #include <string.h>
 
 #include "acl.h"
+#include "caldav_alarm.h"
 #include "caldav_db.h"
 #include "caldav_util.h"
 #include "http_dav.h"
+#include "jmap_ical.h"
 #include "mailbox.h"
 #include "proxy.h"
 #include "strarray.h"
@@ -131,6 +133,120 @@ EXPORTED void strip_vtimezones(icalcomponent *ical)
     free_hash_table(&tzid_table, free);
 }
 
+EXPORTED void add_personal_data_from_dl(icalcomponent *ical, struct dlist *dl)
+{
+    const char *icalstr;
+    icalcomponent *vpatch;
+
+    /* Parse the value and fetch the patch */
+    dlist_getatom(dl, "VPATCH", &icalstr);
+    vpatch = icalparser_parse_string(icalstr);
+
+    /* Apply the patch to the "base" resource */
+    icalcomponent_apply_vpatch(ical, vpatch, NULL, NULL);
+
+    icalcomponent_free(vpatch);
+}
+
+EXPORTED void add_personal_data(icalcomponent *ical, struct buf *userdata)
+{
+    struct dlist *dl;
+    dlist_parsemap(&dl, 1, 0, buf_base(userdata), buf_len(userdata));
+    add_personal_data_from_dl(ical, dl);
+    dlist_free(&dl);
+}
+
+EXPORTED int caldav_read_usedefaultalerts(struct dlist *dl,
+                                          struct mailbox *mailbox,
+                                          const struct index_record *record,
+                                          icalcomponent **icalp)
+{
+    /* Read from annotation */
+    if (dl) {
+        const char *val = NULL;
+        if (dlist_getatom(dl, "USEDEFAULTALERTS", &val)) {
+            return !strcasecmp(val, "YES");
+        }
+        if (dlist_getatom(dl, "VPATCH", &val)) {
+            icalcomponent *vpatch = icalparser_parse_string(val);
+            if (vpatch) {
+                int ret = icalcomponent_read_usedefaultalerts(vpatch);
+                icalcomponent_free(vpatch);
+                if (ret >= 0) return ret;
+            }
+        }
+    }
+
+    /* Read from client-supplied iCalendar data */
+    if (icalp && *icalp) {
+        int ret = icalcomponent_read_usedefaultalerts(*icalp);
+        if (ret >= 0) return ret;
+    }
+
+    /* Read from record */
+    if (!mailbox || !record) return 0;
+
+    icalcomponent *myical = record_to_ical(mailbox, record, NULL);
+    int ret = 0;
+
+    if (dl) add_personal_data_from_dl(myical, dl);
+    ret = icalcomponent_read_usedefaultalerts(myical);
+    if (icalp) {
+        *icalp = myical;
+    }
+    else icalcomponent_free(myical);
+
+    return ret >= 0 ? ret : 0;
+}
+
+static void caldav_read_defaultalarms_guid(const char *mboxname,
+                                           const char *userid,
+                                           const char *annot,
+                                           struct message_guid *guid)
+{
+    struct buf buf = BUF_INITIALIZER;
+    message_guid_set_null(guid);
+    struct dlist *dl = NULL;
+
+    annotatemore_lookupmask(mboxname, annot, userid, &buf);
+    if (buf_len(&buf)) {
+        /* Attempt to read guid from dlist */
+        if (dlist_parsemap(&dl, 1, 0, buf.s, buf.len) == 0) {
+            const char *guidrep = NULL;
+            dlist_getatom(dl, "GUID", &guidrep);
+            if (guidrep) {
+                message_guid_decode(guid, guidrep);
+                goto done;
+            }
+        }
+        /* Fallback to generating guid from iCalendar data */
+        message_guid_generate(guid, buf.s, buf.len);
+    }
+
+done:
+    dlist_free(&dl);
+    buf_free(&buf);
+}
+
+static void add_defaultalarm_guid(const char *mboxname, const char *userid,
+                                  char *buf, size_t *buflen)
+{
+    struct message_guid withtime_guid;
+    caldav_read_defaultalarms_guid(mboxname, userid,
+            CALDAV_DEFAULTALARMS_ANNOT_WITHTIME, &withtime_guid);
+    if (!message_guid_isnull(&withtime_guid)) {
+        message_guid_export(&withtime_guid, buf + (*buflen));
+        *buflen += MESSAGE_GUID_SIZE;
+    }
+
+    struct message_guid withdate_guid;
+    caldav_read_defaultalarms_guid(mboxname, userid,
+            CALDAV_DEFAULTALARMS_ANNOT_WITHTIME, &withdate_guid);
+    if (!message_guid_isnull(&withdate_guid)) {
+        message_guid_export(&withdate_guid, buf + (*buflen));
+        *buflen += MESSAGE_GUID_SIZE;
+    }
+}
 
 EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
                                    const char *userid, struct index_record *record,
@@ -152,7 +268,8 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
         dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
 
         if (etag) {
-            char buf[2*MESSAGE_GUID_SIZE];
+            char buf[4*MESSAGE_GUID_SIZE];
+            size_t buf_len = 2*MESSAGE_GUID_SIZE;
             struct message_guid *user_guid;
 
             dlist_getguid(dl, "GUID", &user_guid);
@@ -160,7 +277,17 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
             /* Per-user ETag is GUID of concatenated GUIDs */
             message_guid_export(&record->guid, buf);
             message_guid_export(user_guid, buf+MESSAGE_GUID_SIZE);
-            message_guid_generate(user_guid, buf, sizeof(buf));
+
+            /* Read default alarm GUID from per-user data */
+            icalcomponent *ical = NULL;
+            int defaultalerts = caldav_read_usedefaultalerts(dl, mailbox, record, &ical);
+            if (defaultalerts) {
+                add_defaultalarm_guid(mailbox_name(mailbox), userid, buf, &buf_len);
+            }
+            icalcomponent_free(ical);
+
+            /* Generate ETag */
+            message_guid_generate(user_guid, buf, buf_len);
             *etag = message_guid_encode(user_guid);
         }
         if (lastmod) {
@@ -175,13 +302,30 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
         dlist_free(&dl);
         buf_free(&userdata);
     }
+    else if (cdata->comp_flags.defaultalerts) {
+        char buf[4*MESSAGE_GUID_SIZE];
+        size_t buf_len = MESSAGE_GUID_SIZE;
+
+        message_guid_export(&record->guid, buf);
+        add_defaultalarm_guid(mailbox_name(mailbox), userid, buf, &buf_len);
+
+        struct message_guid guid;
+        message_guid_generate(&guid, buf, buf_len);
+        *etag = message_guid_encode(&guid);
+    }
 
     return 0;
 }
 
 
+/* Strip per-user data to personalize iCalendar resource.
+ *
+ * COLOR and CATEGORIES properties are not stripped.
+ * Instead, they are added to the per-user VPATCH when the
+ * user overwrites them in their copy of the resource.
+ */
 #define STRIP_OWNER_CAL_DATA              \
-    "CALDATA %(VPATCH {248+}\r\n"         \
+    "CALDATA %(VPATCH {285+}\r\n"         \
     "BEGIN:VPATCH\r\n"                    \
     "VERSION:1\r\n"                       \
     "DTSTAMP:19760401T005545Z\r\n"        \
@@ -192,6 +336,7 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
     "PATCH-DELETE:#TRANSP\r\n"            \
     "PATCH-DELETE:#X-MOZ-LASTACK\r\n"     \
     "PATCH-DELETE:#X-MOZ-SNOOZE-TIME\r\n" \
+    "PATCH-DELETE:#X-APPLE-DEFAULT-ALARM\r\n" \
     "END:PATCH\r\n"                       \
     "END:VPATCH\r\n)"
 
@@ -201,6 +346,8 @@ EXPORTED int caldav_is_personalized(struct mailbox *mailbox,
                                     const char *userid,
                                     struct buf *userdata)
 {
+    if (caldav_is_secretarymode(mailbox_name(mailbox))) return 0;
+
     if (cdata->comp_flags.shared) {
         /* Lookup per-user calendar data */
         int r = mailbox_get_annotate_state(mailbox, cdata->dav.imap_uid, NULL);
@@ -231,26 +378,6 @@ EXPORTED int caldav_is_personalized(struct mailbox *mailbox,
     return 0;
 }
 
-
-EXPORTED void add_personal_data(icalcomponent *ical, struct buf *userdata)
-{
-    struct dlist *dl;
-    const char *icalstr;
-    icalcomponent *vpatch;
-
-    /* Parse the value and fetch the patch */
-    dlist_parsemap(&dl, 1, 0, buf_base(userdata), buf_len(userdata));
-    dlist_getatom(dl, "VPATCH", &icalstr);
-    vpatch = icalparser_parse_string(icalstr);
-    dlist_free(&dl);
-
-    /* Apply the patch to the "base" resource */
-    icalcomponent_apply_vpatch(ical, vpatch, NULL, NULL);
-
-    icalcomponent_free(vpatch);
-}
-
-
 EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
                                               const struct caldav_data *cdata,
                                               const char *userid,
@@ -279,15 +406,89 @@ EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
     return ical;
 }
 
+static int compare_properties(icalproperty *propa, icalproperty *propb)
+{
+    int cmp = 0;
+
+    if (strcmp(icalproperty_as_ical_string(propa),
+                icalproperty_as_ical_string(propb))) {
+        icalproperty *mypropa = icalproperty_clone(propa);
+        icalproperty *mypropb = icalproperty_clone(propb);
+
+        icalproperty_remove_parameter_by_name(mypropa, "X-JMAP-ID");
+        icalproperty_remove_parameter_by_name(mypropb, "X-JMAP-ID");
+        cmp = strcmp(icalproperty_as_ical_string(mypropa),
+                     icalproperty_as_ical_string(mypropb));
+
+        icalproperty_free(mypropa);
+        icalproperty_free(mypropb);
+    }
+
+    return cmp;
+}
+
+enum propupdate {
+    propupdate_shared       = (1 << 0),
+    propupdate_private      = (1 << 1),
+    propupdate_rsvp         = (1 << 2),
+    propupdate_inviteself   = (1 << 3),
+    propupdate_inviteothers = (1 << 4)
+};
+
+static enum propupdate propupdate_all = ~0;
+
+static int validate_mayinvite(icalproperty *prop,
+                              enum propupdate allow_propupdates,
+                              const strarray_t *sched_addrs)
+{
+    if (allow_propupdates == propupdate_all)
+        return 0;
+
+    const char *uri = icalproperty_get_attendee(prop);
+    if (uri &&!strncasecmp(uri, "mailto:", 7) && sched_addrs &&
+            strarray_find(sched_addrs, uri + 7, 0) >= 0) {
+        /* User adds their own ATTENDEE */
+        if (!(allow_propupdates & propupdate_inviteself))
+            return HTTP_FORBIDDEN;
+    }
+    else if (!(allow_propupdates & propupdate_inviteothers)) {
+        /* User adds another ATTENDEE */
+        return HTTP_FORBIDDEN;
+    }
+
+    // Assert no ROLE is set
+    if (icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER))
+        return HTTP_FORBIDDEN;
+
+    // Assert JSCalendar role only contains 'attendee'
+    icalparameter *param;
+    for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
+         param;
+         param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
+
+        if (!strcmpsafe(icalparameter_get_xname(param), JMAPICAL_XPARAM_ROLE)) {
+            const char *val = icalparameter_get_value_as_string(param);
+
+            if (strcasecmpsafe(val, "attendee"))
+                return HTTP_FORBIDDEN;
+        }
+    }
+
+    return 0;
+}
+
 
 /*
  * Compare two components and extract per-user data (alarms, transparency).
  *
  * NOTE: This function assumes that both components has been normalized
  */
-static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
-                                 icalcomponent *vpatch, struct buf *path,
-                                 int read_only, unsigned *num_changes)
+static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
+                               int personalize,
+                               icalcomponent *vpatch, struct buf *path,
+                               enum propupdate allow_propupdates,
+                               const strarray_t *sched_addrs,
+                               unsigned *num_changes)
 {
     icalcomponent *comp, *nextcomp, *oldcomp = NULL, *patch = NULL;
     icalproperty *prop, *nextprop, *oldprop = NULL;
@@ -332,6 +533,11 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 oldxname = icalproperty_get_x_name(oldprop);
                 r = strcmp(xname, oldxname);
             }
+            else if (kind == ICAL_ATTENDEE_PROPERTY) {
+                /* Compare ATTENDEE by calendar address */
+                r = strcmpnull(icalproperty_get_attendee(prop),
+                        icalproperty_get_attendee(oldprop));
+            }
             else r = 0;
         }
         else {
@@ -349,6 +555,30 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 /* Ok to modify these - ignore */
                 break;
 
+            case ICAL_ATTENDEE_PROPERTY:
+                {
+                    const char *uri = icalproperty_get_attendee(prop);
+                    if (uri && !strncasecmp(uri, "mailto:", 7) && sched_addrs &&
+                            strarray_find(sched_addrs, uri + 7, 0) >= 0) {
+                        /* User updates their own ATTENDEE */
+                        if (!(allow_propupdates & propupdate_rsvp))
+                            return HTTP_FORBIDDEN;
+                        if (num_changes) (*num_changes)++;
+                    }
+                    else if (compare_properties(prop, oldprop)) {
+                        if (!(allow_propupdates & propupdate_shared))
+                            return HTTP_FORBIDDEN;
+                        if (num_changes) (*num_changes)++;
+                    }
+                    break;
+                }
+
+            case ICAL_SEQUENCE_PROPERTY:
+                if (!(allow_propupdates & ~propupdate_private))
+                    return HTTP_FORBIDDEN;
+                if (num_changes) (*num_changes)++;
+                break;
+
             case ICAL_X_PROPERTY:
                 if (!strcmpsafe(xname, "X-MOZ-GENERATION")) {
                     /* Ok to modify these - ignore */
@@ -358,14 +588,15 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 GCC_FALLTHROUGH
 
             default:
-                /* Compare entire properties (names, values, parameters) */
-                if (strcmp(icalproperty_as_ical_string(prop),
-                           icalproperty_as_ical_string(oldprop))) {
-                    /* Property has been updated in ical */
-                    if (read_only) return HTTP_FORBIDDEN;
-                    if (num_changes) (*num_changes)++;
+                {
+                    if (compare_properties(prop, oldprop)) {
+                        /* Property has been updated in ical */
+                        if (!(allow_propupdates & propupdate_shared))
+                            return HTTP_FORBIDDEN;
+                        if (num_changes) (*num_changes)++;
+                    }
+                    break;
                 }
-                break;
             }
         }
         else if (r < 0) {
@@ -380,32 +611,53 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
 
             case ICAL_X_PROPERTY:
                 xname = icalproperty_get_x_name(prop);
-                if (strncmp(xname, "X-MOZ-", 6) ||
-                    (strcmp(xname+6, "LASTACK") &&
-                     strcmp(xname+6, "SNOOZE-TIME"))) {
-                    if (read_only) return HTTP_FORBIDDEN;
+                if (strcmp(xname, "X-APPLE-DEFAULT-ALARM") &&
+                    (strncmp(xname, "X-MOZ-", 6) ||
+                     (strcmp(xname+6, "LASTACK") &&
+                      strcmp(xname+6, "SNOOZE-TIME")))) {
+                    if (!(allow_propupdates & propupdate_shared))
+                        return HTTP_FORBIDDEN;
                     if (num_changes) (*num_changes)++;
                     break;
+
                 }
 
                 GCC_FALLTHROUGH
 
             case ICAL_TRANSP_PROPERTY:
-                /* Add per-user property to VPATCH */
-                if (!patch) {
-                    patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
-                                                icalproperty_new_patchtarget(
-                                                    buf_cstring(path)),
-                                                0);
-                    icalcomponent_add_component(vpatch, patch);
-                }
+            case ICAL_COLOR_PROPERTY:
+            case ICAL_CATEGORIES_PROPERTY:
+                if (vpatch) {
+                    /* Add per-user property to VPATCH */
+                    if (!patch) {
+                        patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
+                                icalproperty_new_patchtarget(
+                                    buf_cstring(path)),
+                                0);
+                        icalcomponent_add_component(vpatch, patch);
+                    }
 
-                icalcomponent_remove_property(ical, prop);
-                icalcomponent_add_property(patch, prop);
+                    icalcomponent_remove_property(ical, prop);
+                    icalcomponent_add_property(patch, prop);
+                }
+                break;
+
+            case ICAL_ATTENDEE_PROPERTY:
+                r = validate_mayinvite(prop, allow_propupdates, sched_addrs);
+                if (r) return r;
+
+                if (num_changes) (*num_changes)++;
+                break;
+
+            case ICAL_SEQUENCE_PROPERTY:
+                if (!(allow_propupdates & ~propupdate_private))
+                    return HTTP_FORBIDDEN;
+                if (num_changes) (*num_changes)++;
                 break;
 
             default:
-                if (read_only) return HTTP_FORBIDDEN;
+                if (!(allow_propupdates & propupdate_shared))
+                    return HTTP_FORBIDDEN;
                 if (num_changes) (*num_changes)++;
                 break;
             }
@@ -423,7 +675,8 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                 break;
 
             default:
-                if (read_only) return HTTP_FORBIDDEN;
+                if (!(allow_propupdates & propupdate_shared))
+                    return HTTP_FORBIDDEN;
                 if (num_changes) (*num_changes)++;
                 break;
             }
@@ -460,40 +713,47 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
         }
 
         if (r == 0) {
-            r = extract_personal_data(comp, oldcomp, vpatch,
-                                      path, read_only, num_changes);
+            r = validate_propupdates(comp, oldcomp,
+                                      personalize, vpatch,
+                                      path, allow_propupdates,
+                                      sched_addrs, num_changes);
             if (r) return r;
         }
         else if (r < 0) {
             /* Component has been added to ical */
             switch (kind) {
             case ICAL_VALARM_COMPONENT:
-                /* Add per-user component to VPATCH */
-                if (!patch) {
-                    patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
-                                                icalproperty_new_patchtarget(
-                                                    buf_cstring(path)),
-                                                0);
-                    icalcomponent_add_component(vpatch, patch);
-                }
+                if (vpatch) {
+                    /* Add per-user component to VPATCH */
+                    if (!patch) {
+                        patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
+                                icalproperty_new_patchtarget(
+                                    buf_cstring(path)),
+                                0);
+                        icalcomponent_add_component(vpatch, patch);
+                    }
 
-                icalcomponent_remove_component(ical, comp);
-                icalcomponent_add_component(patch, comp);
+                    icalcomponent_remove_component(ical, comp);
+                    icalcomponent_add_component(patch, comp);
+                }
                 break;
 
             default:
-                if (read_only) return HTTP_FORBIDDEN;
+                if (!(allow_propupdates & propupdate_shared))
+                    return HTTP_FORBIDDEN;
                 if (num_changes) (*num_changes)++;
 
-                r = extract_personal_data(comp, oldcomp, vpatch,
-                                          path, read_only, num_changes);
+                r = validate_propupdates(comp, oldcomp,
+                                          personalize, vpatch,
+                                          path, allow_propupdates,
+                                          sched_addrs, num_changes);
                 if (r) return r;
                 break;
             }
 
             continue;  /* Do NOT increment to next old component */
         }
-        else if (read_only) {
+        else if (!(allow_propupdates & propupdate_shared)) {
             return HTTP_FORBIDDEN;
         }
         else {
@@ -515,6 +775,7 @@ static int write_personal_data(const char *userid,
                                struct mailbox *mailbox,
                                uint32_t uid,
                                modseq_t modseq,
+                               int usedefaultalerts,
                                icalcomponent *vpatch)
 {
     struct message_guid guid;
@@ -531,6 +792,7 @@ static int write_personal_data(const char *userid,
     message_guid_generate(&guid, icalstr, strlen(icalstr));
     dlist_setguid(dl, "GUID", &guid);
     dlist_setatom(dl, "VPATCH", icalstr);
+    dlist_setatom(dl, "USEDEFAULTALERTS", usedefaultalerts ? "YES" : "NO");
     dlist_printbuf(dl, 1, &value);
     dlist_free(&dl);
 
@@ -541,9 +803,33 @@ static int write_personal_data(const char *userid,
     return ret;
 }
 
+static int includes_attendee(icalcomponent *ical, const strarray_t *sched_addrs)
+{
+    if (!ical || !sched_addrs) return 0;
+
+    icalcomponent *comp;
+    for (comp = icalcomponent_get_first_real_component(ical);
+         comp;
+         comp = icalcomponent_get_next_component(ical, icalcomponent_isa(comp))) {
+
+        icalproperty *prop;
+        for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+
+            const char *uri = icalproperty_get_attendee(prop);
+            if (uri && !strncasecmp(uri, "mailto:", 7) &&
+                    strarray_find(sched_addrs, uri + 7, 0) >= 0)
+                return 1;
+        }
+    }
+
+    return 0;
+}
 
 /*
- * Handle stripping per-user data from existing and/or new shared resource.
+ * Enforce per-property permissions in iCalendar data and optionally
+ * handle stripping per-user data from existing and/or new shared resource.
  *
  * Logic is as follows:
  * 
@@ -566,21 +852,25 @@ static int write_personal_data(const char *userid,
  *   SU = Store User Resource
  *   PD = Permission Denied
  */
-static int personalize_resource(struct transaction_t *txn,
-                                struct mailbox *mailbox,
-                                icalcomponent *ical,
-                                struct caldav_data *cdata,
-                                const char *userid,
-                                icalcomponent **store_me,
-                                icalcomponent **userdata)
+static int caldav_store_preprocess(struct transaction_t *txn,
+                                   struct mailbox *mailbox,
+                                   icalcomponent *ical,
+                                   struct caldav_data *cdata,
+                                   const char *userid,
+                                   icalcomponent **store_me,
+                                   int personalize,
+                                   icalcomponent **userdata,
+                                   const strarray_t *schedule_addresses)
+
 {
-    int is_owner, rights, read_only, ret = 0;
+    int is_owner, rights, ret = 0;
     mbname_t *mbname;
     const char *owner;
     icalcomponent *oldical = NULL;
     unsigned num_changes = 0;
     struct auth_state *authstate = auth_newstate(userid);
     char *resource = xstrdupnull(cdata->dav.resource);
+    enum propupdate allow_propupdates = 0;
 
     *store_me = ical;
 
@@ -596,14 +886,45 @@ static int personalize_resource(struct transaction_t *txn,
 
     if (rights & DACL_WRITECONT) {
         /* User has read-write access */
-        read_only = 0;
+        allow_propupdates = propupdate_all;
     }
-    else if (cdata->dav.imap_uid &&
-             !(mailbox->i.options & OPT_IMAP_SHAREDSEEN)) {
-        /* User has read-only access to existing resource */
-        read_only = 1;
+    else if (cdata->dav.imap_uid && (rights & DACL_WRITEOWNRSRC) &&
+            (!cdata->organizer ||
+             (schedule_addresses &&
+              strarray_find(schedule_addresses, cdata->organizer, 0) >= 0))) {
+        /* User may update resource whey they are organizer */
+        allow_propupdates = propupdate_all;
     }
     else {
+        if (rights & DACL_UPDATEPRIVATE) {
+            /* User may only update their per-user properties */
+            allow_propupdates |= propupdate_private;
+        }
+
+        if (rights & DACL_REPLY) {
+            /* User may update their own ATTENDEE */
+            allow_propupdates |= propupdate_rsvp;
+
+            if (cdata->dav.imap_uid && cdata->comp_flags.mayinviteself) {
+                /* User may add their own ATTENDEE */
+                allow_propupdates |= propupdate_inviteself;
+            }
+
+            if (cdata->dav.imap_uid && cdata->comp_flags.mayinviteothers &&
+                    includes_attendee(ical, schedule_addresses)) {
+                /* User may add add other ATTENDEEs */
+                allow_propupdates |= propupdate_inviteothers;
+            }
+        }
+
+        if (cdata->dav.imap_uid &&
+                !(mailbox->i.options & OPT_IMAP_SHAREDSEEN)) {
+            /* User has read-only access to existing resource */
+            allow_propupdates |= propupdate_private;
+        }
+    }
+
+    if (!allow_propupdates) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
@@ -613,7 +934,7 @@ static int personalize_resource(struct transaction_t *txn,
     }
 
     if (cdata->dav.imap_uid &&
-        (!is_owner || read_only || cdata->comp_flags.shared)) {
+        (!is_owner || allow_propupdates != propupdate_all || cdata->comp_flags.shared)) {
         syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
 
         /* Load message containing the existing resource and parse iCal data */
@@ -623,9 +944,18 @@ static int personalize_resource(struct transaction_t *txn,
             ret = HTTP_SERVER_ERROR;
             goto done;
         }
+
+        if (!personalize) {
+            // just enforce per-property permissions
+            ret = validate_propupdates(ical, oldical, 0, NULL,
+                    &txn->buf /* path */, allow_propupdates,
+                    schedule_addresses, NULL);
+            goto done;
+        }
     }
 
-    if (cdata->dav.imap_uid && !is_owner && !cdata->comp_flags.shared) {
+    if (personalize && cdata->dav.imap_uid &&
+            !is_owner && !cdata->comp_flags.shared) {
         /* Split owner's personal data from resource */
 
         /* Create UID for owner VPATCH */
@@ -645,17 +975,19 @@ static int personalize_resource(struct transaction_t *txn,
         buf_reset(&txn->buf);
 
         /* Extract personal info from owner's resource and create vpatch */
-        ret = extract_personal_data(oldical, NULL, *userdata,
-                                    &txn->buf /* path */, 0 /* read_only */,
-                                    &num_changes);
+        int usedefaultalerts = icalcomponent_read_usedefaultalerts(oldical) > 0;
+        ret = validate_propupdates(oldical, NULL, personalize, *userdata,
+                                    &txn->buf /* path */, propupdate_all,
+                                    schedule_addresses, &num_changes);
         buf_reset(&txn->buf);
 
         if (!ret) ret = write_personal_data(owner, mailbox, cdata->dav.imap_uid,
-                                            cdata->dav.modseq, *userdata);
+                                            cdata->dav.modseq, usedefaultalerts,
+                                            *userdata);
 
         if (ret) goto done;
 
-        if (read_only) {
+        if (allow_propupdates == propupdate_private) {
             /* Resource to store is the existing resource just stripped */
             *store_me = oldical;
         }
@@ -664,8 +996,8 @@ static int personalize_resource(struct transaction_t *txn,
         *userdata = NULL;
     }
 
-    if (!is_owner || read_only ||
-        (cdata->dav.imap_uid && cdata->comp_flags.shared)) {
+    if (personalize && (!is_owner || allow_propupdates != propupdate_all ||
+        (cdata->dav.imap_uid && cdata->comp_flags.shared))) {
         /* Extract personal info from user's resource and create vpatch */
         if (oldical) {
             /* Normalize existing resource for comparison */
@@ -694,18 +1026,20 @@ static int personalize_resource(struct transaction_t *txn,
         /* Extract personal info from new resource and add to vpatch */
         /* XXX  DO NOT reinitialize num_changes.  We need the changes
            from rewriting owner resource to force storage of that resource */
-        ret = extract_personal_data(ical, oldical, *userdata,
-                                    &txn->buf /* path */, read_only,
-                                    &num_changes);
+        ret = validate_propupdates(ical, oldical, personalize, *userdata,
+                                    &txn->buf /* path */, allow_propupdates,
+                                    schedule_addresses, &num_changes);
         buf_reset(&txn->buf);
 
         if (ret) goto done;
 
-        if (cdata->dav.imap_uid && !num_changes) {
-            /* No resource to store (per-user data change only) */
-            ret = HTTP_NO_CONTENT;
-            *store_me = NULL;
-            goto done;
+        if (cdata->dav.imap_uid) {
+            if (!num_changes) {
+                /* No resource to store (per-user data change only) */
+                ret = HTTP_NO_CONTENT;
+                *store_me = NULL;
+                goto done;
+            }
         }
 
         cdata->comp_flags.shared = 1;
@@ -719,6 +1053,98 @@ static int personalize_resource(struct transaction_t *txn,
     return ret;
 }
 
+HIDDEN int caldav_is_secretarymode(const char *mboxname)
+{
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    int is_secretarymode = 0;
+
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0))) {
+        mbname_truncate_boxes(mbname, 1);
+        static const char *annot =
+            DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">sharees-act-as";
+        struct buf val = BUF_INITIALIZER;
+        annotatemore_lookup(mbname_intname(mbname), annot, "", &val);
+        is_secretarymode = !strcmp(buf_cstring(&val), "secretary");
+        buf_free(&val);
+    }
+
+    mbname_free(&mbname);
+    return is_secretarymode;
+}
+
+static void strip_schedule_params(icalcomponent *ical)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    if (!comp) return;
+
+    /* Only remove SCHEDULE-FORCE-SEND */
+
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    for (comp = icalcomponent_get_first_component(ical, kind);
+            comp;
+            comp = icalcomponent_get_next_component(ical, kind)) {
+
+        /* Grab the organizer */
+        icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+
+        /* Remove CalDAV Scheduling parameters from organizer */
+        icalproperty_remove_parameter_by_name(prop, "SCHEDULE-FORCE-SEND");
+
+        /* Remove CalDAV Scheduling parameters from attendees */
+        for (prop = icalcomponent_get_first_invitee(comp);
+                prop;
+                prop = icalcomponent_get_next_invitee(comp)) {
+            icalproperty_remove_parameter_by_name(prop, "SCHEDULE-FORCE-SEND");
+        }
+    }
+}
+
+static void preserve_jmap_permissions(icalcomponent *ical,
+                                      icalcomponent_kind kind,
+                                      struct caldav_data *cdata)
+{
+    icalcomponent *comp;
+
+    /* Remove any JMAP permissions */
+    for (comp = icalcomponent_get_first_component(ical, kind);
+         comp;
+         comp = icalcomponent_get_next_component(ical, kind)) {
+
+        icalproperty *prop, *nextprop;
+
+        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+                prop; prop = nextprop) {
+
+            nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+            if (!strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_MAYINVITESELF) ||
+                !strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_MAYINVITEOTHERS))
+                icalcomponent_remove_property(comp, prop);
+        }
+    }
+
+    /* Insert existing JMAP permissions */
+    for (comp = icalcomponent_get_first_component(ical, kind);
+         comp;
+         comp = icalcomponent_get_next_component(ical, kind)) {
+
+        if (cdata->comp_flags.mayinviteself) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITESELF);
+            icalproperty_set_value(prop, icalvalue_new_boolean(1));
+            icalcomponent_add_property(comp, prop);
+        }
+
+        if (cdata->comp_flags.mayinviteothers) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITEOTHERS);
+            icalproperty_set_value(prop, icalvalue_new_boolean(1));
+            icalcomponent_add_property(comp, prop);
+        }
+    }
+}
 
 /* Store the iCal data in the specified calendar/resource */
 EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
@@ -726,6 +1152,8 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
                                    modseq_t createdmodseq,
                                    struct caldav_db *caldavdb,
                                    unsigned flags, const char *userid,
+                                   const strarray_t *add_imapflags,
+                                   const strarray_t *del_imapflags,
                                    const strarray_t *schedule_addresses)
 {
     int ret;
@@ -744,7 +1172,13 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     char datestr[80], *mimehdr;
     const char *sched_tag;
     uint32_t newuid = 0;
-    strarray_t imapflags = STRARRAY_INITIALIZER;
+    strarray_t myimapflags = STRARRAY_INITIALIZER;
+    int usedefaultalerts = 0; // for per-user data
+    int is_secretarymode = caldav_is_secretarymode(mailbox_name(mailbox));
+    int personalize = 0;
+
+    /* Copy add_imapflags, we might need to add some flags */
+    if (add_imapflags) strarray_cat(&myimapflags, add_imapflags);
 
     if (!utc_zone) utc_zone = icaltimezone_get_utc_timezone();
 
@@ -805,6 +1239,10 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
         }
     }
 
+    if (cdata->dav.imap_uid && (flags & PERMS_NOKEEP) == 0) {
+        preserve_jmap_permissions(ical, kind, cdata);
+    }
+
     /* Remove all X-LIC-ERROR properties */
     icalcomponent_strip_errors(ical);
 
@@ -813,6 +1251,9 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
         strip_vtimezones(ical);
         tzbyref = 1;
     }
+
+    /* Remove schedule parameters */
+    strip_schedule_params(ical);
 
     /* Set Schedule-Tag, if any */
     if (flags & NEW_STAG) {
@@ -823,13 +1264,18 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     else sched_tag = cdata->sched_tag = NULL;
 
     /* If we are just stripping VTIMEZONEs from resource, flag it */
-    if (flags & TZ_STRIP) strarray_append(&imapflags, DFLAG_UNCHANGED);
+    if (flags & TZ_STRIP) strarray_append(&myimapflags, DFLAG_UNCHANGED);
     else if (mailbox->i.options & OPT_IMAP_SHAREDSEEN) {
         cdata->comp_flags.shared = 0;
     }
-    else if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
-        ret = personalize_resource(txn, mailbox, ical,
-                                   cdata, userid, &store_ical, &userdata);
+    else if (userid && (namespace_calendar.allow & ALLOW_USERDATA) && !is_secretarymode) {
+        usedefaultalerts = icalcomponent_read_usedefaultalerts(ical) > 0;
+        personalize = 1;
+    }
+
+    if (userid) {
+        ret = caldav_store_preprocess(txn, mailbox, ical, cdata, userid,
+                &store_ical, personalize, &userdata, schedule_addresses);
         if (ret) goto done;
 
         if (store_ical != ical) {
@@ -906,8 +1352,9 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
 
     /* Store the resource */
     ret = dav_store_resource(txn, icalcomponent_as_ical_string(store_ical), 0,
-                             mailbox, oldrecord, createdmodseq, &imapflags);
-    strarray_fini(&imapflags);
+                             mailbox, oldrecord, createdmodseq, &myimapflags,
+                             del_imapflags);
+    strarray_fini(&myimapflags);
 
     newuid = mailbox->i.last_uid;
 
@@ -938,17 +1385,20 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
                                   mailbox, newuid, NULL);
             }
 
-            int r = write_personal_data(userid, mailbox, newuid,
-                                        mailbox->i.highestmodseq+1, userdata);
-            if (r) {
-                /* XXX  We have already written the stripped resource
-                   so we're pretty screwed.  All message annotations
-                   need to be handled (properly) in append_fromstage()
-                   so storing resource and annotations is atomic.
-                */
-                txn->error.desc = error_message(r);
-                ret = HTTP_SERVER_ERROR;
-                goto done;
+            if (!is_secretarymode) {
+                int r = write_personal_data(userid, mailbox, newuid,
+                        mailbox->i.highestmodseq+1,
+                        usedefaultalerts, userdata);
+                if (r) {
+                    /* XXX  We have already written the stripped resource
+                       so we're pretty screwed.  All message annotations
+                       need to be handled (properly) in append_fromstage()
+                       so storing resource and annotations is atomic.
+                       */
+                    txn->error.desc = error_message(r);
+                    ret = HTTP_SERVER_ERROR;
+                    goto done;
+                }
             }
 
             if (store_ical) {
@@ -1177,3 +1627,256 @@ EXPORTED int caldav_create_defaultcalendars(const char *userid,
     if (namespacelock) mboxname_release(&namespacelock);
     return r;
 }
+
+static int caldav_read_defaultalarms(const char *mboxname,
+                                     const char *userid,
+                                     const char *annot,
+                                     struct buf *buf)
+{
+    struct buf mybuf = BUF_INITIALIZER;
+    annotatemore_lookupmask(mboxname, annot, userid, &mybuf);
+    if (buf_len(&mybuf)) {
+        struct dlist *dl = NULL;
+        if (dlist_parsemap(&dl, 1, 0, buf_base(&mybuf), buf_len(&mybuf)) == 0) {
+            const char *content = NULL;
+            if (dlist_getatom(dl, "CONTENT", &content)) {
+                buf_setcstr(buf, content);
+            }
+        }
+        if (!buf_len(buf)) {
+            buf_copy(buf, &mybuf);
+        }
+        dlist_free(&dl);
+    }
+    buf_free(&mybuf);
+    return 0;
+}
+
+EXPORTED icalcomponent *caldav_read_calendar_icalalarms(const char *mboxname,
+                                                        const char *userid,
+                                                        const char *annot)
+{
+    icalcomponent *ical = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    caldav_read_defaultalarms(mboxname, userid, annot, &buf);
+    if (buf_len(&buf)) {
+        ical = icalparser_parse_string(buf_cstring(&buf));
+        if (ical) {
+            if (icalcomponent_isa(ical) == ICAL_VALARM_COMPONENT) {
+                /* libical wraps multiple VALARMs in a XROOT component,
+                 * so also wrap a single VALARM for consistency */
+                icalcomponent *root = icalcomponent_new(ICAL_XROOT_COMPONENT);
+                icalcomponent_add_component(root, ical);
+                ical = root;
+            }
+        }
+    }
+    buf_free(&buf);
+    return ical;
+}
+
+EXPORTED void caldav_format_defaultalarms_annot(struct buf *dst, const char *icalstr)
+{
+    struct dlist *dl = dlist_newkvlist(NULL, "DEFAULTALARMS");
+    struct message_guid guid;
+    message_guid_generate(&guid, icalstr, strlen(icalstr));
+    dlist_setatom(dl, "CONTENT", icalstr);
+    dlist_setatom(dl, "GUID", message_guid_encode(&guid));
+    dlist_printbuf(dl, 1, dst);
+    dlist_free(&dl);
+}
+
+
+EXPORTED int caldav_write_defaultalarms(struct mailbox *mailbox,
+                                        const char *userid,
+                                        const char *annot,
+                                        icalcomponent *ical)
+{
+    annotate_state_t *astate;
+    int r = mailbox_get_annotate_state(mailbox, 0, &astate);
+    if (r) return r;
+
+    struct buf val = BUF_INITIALIZER;
+    if (ical) {
+        struct buf raw = BUF_INITIALIZER;
+
+        if (icalcomponent_isa(ical) != ICAL_VALARM_COMPONENT) {
+            icalcomponent *comp;
+            for (comp = icalcomponent_get_first_component(ical, ICAL_VALARM_COMPONENT);
+                 comp;
+                 comp = icalcomponent_get_next_component(ical, ICAL_VALARM_COMPONENT)) {
+                buf_appendcstr(&raw, icalcomponent_as_ical_string(comp));
+            }
+        }
+        else buf_setcstr(&raw, icalcomponent_as_ical_string(ical));
+
+        caldav_format_defaultalarms_annot(&val, buf_cstring(&raw));
+        buf_free(&raw);
+    }
+
+    r = annotate_state_writemask(astate, annot, userid, &val);
+    buf_free(&val);
+
+    return r;
+}
+
+
+struct bumpdefaultalarms_data {
+    bitvector_t bump;
+    bitvector_t shared;
+};
+
+static int bumpdefaultalarms_cb(void *rock, struct caldav_data *cdata)
+{
+    struct bumpdefaultalarms_data *data = rock;
+
+    if (cdata->comp_flags.defaultalerts) {
+        /* Definitely bump this record */
+        bv_set(&data->bump, cdata->dav.imap_uid);
+    }
+    if (cdata->comp_flags.shared) {
+        /* Inspect per-user data later */
+        bv_set(&data->shared, cdata->dav.imap_uid);
+    }
+
+    return 0;
+}
+
+EXPORTED int caldav_bump_defaultalarms(struct mailbox *mailbox)
+{
+    struct mailbox_iter *iter = NULL;
+    mbentry_t *mbentry = NULL;
+    struct caldav_db *db = NULL;
+    int r = 0;
+
+    struct bumpdefaultalarms_data data = { BV_INITIALIZER, BV_INITIALIZER };
+
+    /* Gather record uids of events with default alerts */
+    db = caldav_open_mailbox(mailbox);
+    if (!db) {
+        syslog(LOG_ERR, "%s: can't open caldav.db for %s",
+                __func__, mailbox_name(mailbox));
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    r = mboxlist_lookup_by_uniqueid(mailbox_uniqueid(mailbox), &mbentry, NULL);
+    if (r) {
+        syslog(LOG_ERR, "%s: failed to lookup mbentry %s: %s",
+                __func__, mailbox_uniqueid(mailbox), error_message(r));
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+    r = caldav_foreach(db, mbentry, bumpdefaultalarms_cb, &data);
+    if (r) {
+        syslog(LOG_ERR, "%s: failed to iterate caldav.db %s: %s",
+                __func__, mailbox_name(mailbox), error_message(r));
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+    if ((bv_first_set(&data.bump) < 0) && (bv_first_set(&data.shared) < 0)) {
+        goto done;
+    }
+
+    /* Bump modseqs of calendar event records */
+    iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    if (!iter) {
+        syslog(LOG_ERR, "%s: can't open mailbox iterator for %s",
+                __func__, mailbox_name(mailbox));
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Need to switch to message scope */
+    if (mailbox->annot_state) {
+        int annot_scope = annotate_state_scope(mailbox->annot_state);
+        if (annot_scope != ANNOTATION_SCOPE_MESSAGE) {
+            annotate_state_commit(&mailbox->annot_state);
+        }
+    }
+
+    /* Iterate records */
+    const message_t *msg;
+    struct buf userdata = BUF_INITIALIZER;
+    struct dlist *dl = NULL; // parsed user data
+
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        struct index_record copyrecord = *record;
+        buf_reset(&userdata);
+        dlist_free(&dl);
+
+        if (!bv_isset(&data.bump, record->uid) && bv_isset(&data.shared, record->uid)) {
+            /* Check per-user data */
+            mailbox_annotation_lookup(mailbox, record->uid, PER_USER_CAL_DATA,
+                                      httpd_userid, &userdata);
+            if (buf_len(&userdata)) {
+                /* Parse the userdata and fetch the validators */
+                dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+                if (caldav_read_usedefaultalerts(dl, mailbox, record, NULL)) {
+                    bv_set(&data.bump, record->uid);
+                }
+            }
+        }
+
+        if (!bv_isset(&data.bump, record->uid)) {
+            continue;
+        }
+
+        /* Bump record */
+        r = mailbox_rewrite_index_record(mailbox, &copyrecord);
+        if (r) {
+            syslog(LOG_ERR, "%s: rewrite index record %s:%d: %s",
+                    __func__, mailbox_name(mailbox), record->uid, error_message(r));
+            continue;
+        }
+        if (dl) {
+            /* Update modseq in the per-user data */
+            dlist_updatedate(dl, "LASTMOD", copyrecord.last_updated);
+            dlist_updatenum64(dl, "MODSEQ", copyrecord.modseq);
+            buf_reset(&userdata);
+            dlist_printbuf(dl, 1, &userdata);
+            r = annotate_state_write(mailbox->annot_state, PER_USER_CAL_DATA,
+                                     httpd_userid, &userdata);
+            if (r) {
+                syslog(LOG_ERR, "%s: can't update per-user modseq for record %s:%d: %s",
+                        __func__, mailbox_name(mailbox), record->uid, error_message(r));
+                continue;
+            }
+        }
+        r = caldav_alarm_touch_record(mailbox, record, /*force*/1);
+        if (r) {
+            syslog(LOG_ERR, "%s: touch alarms for index record %s:%d: %s",
+                    __func__, mailbox_name(mailbox), record->uid, error_message(r));
+            continue;
+        }
+    }
+    buf_free(&userdata);
+    dlist_free(&dl);
+
+done:
+    bv_fini(&data.shared);
+    bv_fini(&data.bump);
+    mailbox_iter_done(&iter);
+    mboxlist_entry_free(&mbentry);
+    caldav_close(db);
+    return r;
+}
+
+HIDDEN void caldav_attachment_url(struct buf *buf,
+                                  const char *userid,
+                                  const char *baseurl,
+                                  const char *managedid)
+{
+    buf_setcstr(buf, baseurl);
+    if (!buf->len) return;
+
+    if (buf->s[buf->len-1] == '/')
+        buf_truncate(buf, -1);
+
+    buf_printf(buf, "%s/%s/%s/%s%s",
+            namespace_calendar.prefix,
+            USER_COLLECTION_PREFIX,
+            userid, MANAGED_ATTACH, managedid);
+}
+
