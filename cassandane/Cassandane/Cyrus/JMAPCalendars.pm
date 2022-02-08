@@ -17837,4 +17837,69 @@ EOF
     $self->assert_not_null($res->[0][1]{list}[0]{recurrenceOverrides}{'1996-09-23T14:30:00'});
 }
 
+sub test_calendarevent_set_standalone_instance_floatingtz
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+PRODID:-//Fastmail/2020.5/EN
+BEGIN:VEVENT
+CATEGORIES:CONFERENCE
+DESCRIPTION:Be there or be square
+DTSTAMP:19960704T120000Z
+DTSTART:19960919T143000
+DURATION:PT1H
+RECURRENCE-ID:19960919T143000
+SEQUENCE:0
+SUMMARY:Partyx
+TRANSP:OPAQUE
+UID:889i-uid1@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => [
+                'recurrenceId',
+                'recurrenceIdTimeZone',
+            ],
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{list}[0]{recurrenceId});
+    $self->assert_null($res->[0][1]{list}[0]{recurrenceIdTimeZone});
+    my $eventId = $res->[0][1]{list}[0]{id};
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => 'xxx',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => [
+                'recurrenceId',
+                'recurrenceIdTimeZone'],
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{list}[0]{recurrenceId});
+    $self->assert_null($res->[0][1]{list}[0]{recurrenceIdTimeZone});
+}
+
+
 1;
