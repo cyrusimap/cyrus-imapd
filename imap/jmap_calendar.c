@@ -622,15 +622,6 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         free(xhref);
     }
 
-    if (jmap_wantprop(rock->get->props, "role")) {
-        const char *role = NULL;
-        char *defaultname = caldav_scheddefault(rock->req->accountid);
-        if (!strcmpsafe(id, defaultname)) role = "inbox";
-        free(defaultname);
-        json_object_set_new(obj, "role",
-                            role ? json_string(role) : json_null());
-    }
-
     if (jmap_wantprop(rock->get->props, "name")) {
         buf_reset(&attrib);
         static const char *displayname_annot =
@@ -819,11 +810,6 @@ static const jmap_property_t calendar_props[] = {
         "id",
         NULL,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "role",
-        NULL,
-        0
     },
     {
         "name",
@@ -1455,12 +1441,6 @@ static void setcalendar_readprops(jmap_req_t *req,
     setcalendar_readalerts(parser, "defaultAlertsWithoutTime", arg,
             jmapctx->alert.emailrecipient, &props->defaultalerts_withouttime);
     jmapical_context_free(&jmapctx);
-
-    /* role - just make sure its valid */
-    jprop = json_object_get(arg, "role");
-    if (JNOTNULL(jprop) && strcmpsafe(json_string_value(jprop), "inbox")) {
-        jmap_parser_invalid(parser, "role");
-    }
 }
 
 /* Write  the calendar properties in the calendar mailbox named mboxname.
@@ -2021,258 +2001,10 @@ static int setcalendars_parse_args(jmap_req_t *req __attribute__((unused)),
     return 0;
 }
 
-struct roleupdate {
-    int updates_inbox;
-    char *old_inboxid;
-    char *new_inboxid;
-};
-
-#define JMAP_CALENDARS_ROLEUPDATE_INITIALIZER { 0, NULL, NULL }
-
-static void roleupdate_fini(struct roleupdate *ru)
-{
-    free(ru->old_inboxid);
-    free(ru->new_inboxid);
-}
-
-static int roleupdate_plan(jmap_req_t *req,
-                           struct jmap_set *set,
-                           struct roleupdate *ru)
-{
-    const char *key;
-    json_t *jarg;
-    size_t i;
-
-    /* Does this request update the inbox? */
-    ru->updates_inbox = json_array_size(set->destroy) > 0; // could destroy inbox
-    if (!ru->updates_inbox) {
-        json_object_foreach(set->create, key, jarg) {
-            if (json_object_get(jarg, "role")) {
-                ru->updates_inbox = 1;
-                break;
-            }
-        }
-    }
-    if (!ru->updates_inbox) {
-        json_object_foreach(set->update, key, jarg) {
-            if (json_object_get(jarg, "role")) {
-                ru->updates_inbox = 1;
-                break;
-            }
-        }
-    }
-    if (!ru->updates_inbox) {
-        return 0;
-    }
-
-    /* XXX - moving the inbox role from one calendar to the other
-     * is prone to race conditions. We would like to prevent these
-     * by locking the calendar home for the duration of the request.
-     * We can't because the code we share with CalDAV has no access
-     * to our request-scoped JMAP mailbox cache. So we need to make
-     * sure the calendar home mailbox is closed, before we e.g. try
-     * to destroy a calendar. */
-
-    /* Load ACL */
-    char *calhomename = caldav_mboxname(req->accountid, NULL);
-    int haverights = !strcmp(req->userid, req->accountid) ||
-                     jmap_hasrights(req, calhomename, JACL_ADMIN_CALENDAR);
-
-    /* Check if the final state of inbox updates is valid */
-    ru->old_inboxid = caldav_scheddefault(req->accountid);
-    strarray_t inboxes = STRARRAY_INITIALIZER;
-    strarray_append(&inboxes, ru->old_inboxid);
-    json_object_foreach(set->create, key, jarg) {
-        json_t *jval = json_object_get(jarg, "role");
-        if (!strcmpsafe("inbox", json_string_value(jval))) {
-            if (haverights) {
-                strarray_appendm(&inboxes, strconcat("#", key, NULL));
-            }
-            else {
-                json_object_set_new(set->not_created, key,
-                        json_pack("{s:s}", "type", "forbidden"));
-            }
-        }
-    }
-    json_object_foreach(set->update, key, jarg) {
-        json_t *jval = json_object_get(jarg, "role");
-        if (!strcmpsafe("inbox", json_string_value(jval))) {
-            if (haverights) {
-                strarray_append(&inboxes, key);
-            }
-            else {
-                json_object_set_new(set->not_updated, key,
-                        json_pack("{s:s}", "type", "forbidden"));
-            }
-        }
-        else if (json_is_null(jval)) {
-            if (haverights) {
-                strarray_remove_all(&inboxes, key);
-            }
-            else {
-                json_object_set_new(set->not_updated, key,
-                        json_pack("{s:s}", "type", "forbidden"));
-            }
-        }
-    }
-    json_array_foreach(set->destroy, i, jarg) {
-        if (!strcmpsafe(ru->old_inboxid, json_string_value(jarg))) {
-            if (haverights) {
-                strarray_remove_all(&inboxes, ru->old_inboxid);
-            }
-            else {
-                json_object_set_new(set->not_destroyed, key,
-                        json_pack("{s:s}", "type", "forbidden"));
-            }
-        }
-    }
-
-    if (strarray_size(&inboxes) > 1) {
-        json_object_foreach(set->create, key, jarg) {
-            if (json_object_get(set->not_created, key)) {
-                continue;
-            }
-            json_t *jval = json_object_get(jarg, "role");
-            if (!strcmpsafe("inbox", json_string_value(jval))) {
-                json_object_set_new(set->not_created, key,
-                        json_pack("{s:s s:[s]}",
-                            "type", "invalidProperties", "properties", "role"));
-            }
-        }
-        json_object_foreach(set->update, key, jarg) {
-            if (json_object_get(set->not_updated, key)) {
-                continue;
-            }
-            json_t *jval = json_object_get(jarg, "role");
-            if (!strcmpsafe("inbox", json_string_value(jval))) {
-                json_object_set_new(set->not_updated, key,
-                        json_pack("{s:s s:[s]}",
-                            "type", "invalidProperties", "properties", "role"));
-            }
-        }
-    }
-    else if (strarray_size(&inboxes) == 1) {
-        ru->new_inboxid = strarray_pop(&inboxes);
-        if (!strcmp(ru->old_inboxid, ru->new_inboxid)) {
-            free(ru->new_inboxid);
-            ru->new_inboxid = NULL;
-        }
-    }
-    strarray_fini(&inboxes);
-
-    free(calhomename);
-    return 0;
-}
-
-static int roleupdate_pickany_inboxid_cb(const mbentry_t *mbentry, void *rock)
-{
-    int r = 0;
-    if (mbentry->mbtype & MBTYPE_CALENDAR) {
-        mbname_t *mbname = mbname_from_intname(mbentry->name);
-        if (!jmap_calendar_isspecial(mbname)) {
-            char **new_inboxidptr = rock;
-            *new_inboxidptr = mbname_pop_boxes(mbname);
-            r = CYRUSDB_DONE;
-        }
-        mbname_free(&mbname);
-    }
-    return r;
-}
-
-static int roleupdate_exec(jmap_req_t *req,
-                           struct jmap_set *set,
-                           struct roleupdate *ru)
-{
-    if (!ru->old_inboxid) return 0;
-
-    /* Lock calendar home */
-    struct mailbox *calhome = NULL;
-    int r = 0;
-    {
-        char *calhomename = caldav_mboxname(req->accountid, NULL);
-        r = jmap_openmbox(req, calhomename, &calhome, 1);
-        free(calhomename);
-    }
-    if (r) return r;
-
-    char *new_inboxid = xstrdupnull(ru->new_inboxid);
-
-    if (new_inboxid) {
-        if (new_inboxid[0] == '#') {
-            const char *tmp = jmap_lookup_id(req, new_inboxid + 1);
-            free(new_inboxid);
-            new_inboxid = xstrdupnull(tmp);
-        }
-        else if (!json_object_get(set->updated, new_inboxid)) {
-            free(new_inboxid);
-            new_inboxid = NULL;
-        }
-    }
-
-    if (!new_inboxid) {
-        /* Try to keep the old inbox */
-        char *mboxname = caldav_mboxname(req->accountid, ru->old_inboxid);
-        mbentry_t *mbentry = NULL;
-        if (!mboxlist_lookup(mboxname, &mbentry, NULL) && mbentry->mbtype != MBTYPE_DELETED) {
-            mbname_t *mbname = mbname_from_intname(mbentry->name);
-            new_inboxid = mbname_pop_boxes(mbname);
-            mbname_free(&mbname);
-        }
-        mboxlist_entry_free(&mbentry);
-        free(mboxname);
-    }
-    if (!new_inboxid) {
-        /* Try to use the Cyrus default */
-        char *mboxname = caldav_mboxname(req->accountid, SCHED_DEFAULT);
-        mbentry_t *mbentry = NULL;
-        if (!mboxlist_lookup(mboxname, &mbentry, NULL) && mbentry->mbtype != MBTYPE_DELETED) {
-            mbname_t *mbname = mbname_from_intname(mbentry->name);
-            new_inboxid = mbname_pop_boxes(mbname);
-            mbname_free(&mbname);
-        }
-        mboxlist_entry_free(&mbentry);
-        free(mboxname);
-    }
-    if (!new_inboxid) {
-        /* Pick any */
-        mboxlist_mboxtree(mailbox_name(calhome), roleupdate_pickany_inboxid_cb,
-                          &new_inboxid, MBOXTREE_SKIP_ROOT);
-    }
-    if (!new_inboxid) {
-        xsyslog(LOG_WARNING, "cannot pick new scheduling default", "user=<%s>",
-                req->accountid);
-        r = 0;
-        goto done;
-    }
-
-    const char *annotname =
-        DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
-
-    annotate_state_t *calhomeastate = NULL;
-    r = mailbox_get_annotate_state(calhome, 0, &calhomeastate);
-    if (!r) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_setcstr(&buf, new_inboxid);
-        r = annotate_state_writemask(calhomeastate, annotname, req->userid, &buf);
-        buf_free(&buf);
-    }
-    if (r) {
-        syslog(LOG_ERR, "IOERROR: %s: failed to set scheduling default %s for %s: %s",
-                __FILE__, new_inboxid, req->accountid, error_message(r));
-        goto done;
-    }
-
-done:
-    jmap_closembox(req, &calhome);
-    free(new_inboxid);
-    return r;
-}
-
 static int jmap_calendar_set(struct jmap_req *req)
 {
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
-    struct roleupdate roleupdate = JMAP_CALENDARS_ROLEUPDATE_INITIALIZER;
     struct jmap_set set;
     int on_destroy_remove_events = 0;
     json_t *err = NULL;
@@ -2316,9 +2048,6 @@ static int jmap_calendar_set(struct jmap_req *req)
     if (r) {
         goto done;
     }
-
-    r = roleupdate_plan(req, &set, &roleupdate);
-    if (r) goto done;
 
     /* create */
     const char *key;
@@ -2395,9 +2124,6 @@ static int jmap_calendar_set(struct jmap_req *req)
         else json_object_set_new(set.not_destroyed, id, err);
     }
 
-    r = roleupdate_exec(req, &set, &roleupdate);
-    if (r) goto done;
-
     // TODO refactor jmap_getstate to return a string, once
     // all code has been migrated to the new JMAP parser.
     json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1);
@@ -2407,7 +2133,6 @@ static int jmap_calendar_set(struct jmap_req *req)
     jmap_ok(req, jmap_set_reply(&set));
 
 done:
-    roleupdate_fini(&roleupdate);
     mboxname_release(&namespacelock);
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
