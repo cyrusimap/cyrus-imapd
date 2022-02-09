@@ -103,7 +103,7 @@ are listed with ``<none>''.
 
 # OPTIONS
 
-{ "acl_admin_implies_write", 0, SWITCH, "3.5.2" }
+{ "acl_admin_implies_write", 0, SWITCH, "3.6.0" }
 /* If enabled, any user with the admin ACL on a mailbox implicitly
    gets the ability to write to that mailbox as well. */
 
@@ -560,7 +560,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    layers of MIME structure.  The default of 1000 is much higher
    than any sane message should have. */
 
-{ "caldav_accept_invalid_rrules", 0, SWITCH, "UNRELEASED" }
+{ "caldav_accept_invalid_rrules", 0, SWITCH, "3.6.0" }
 /* Accept invalid RRULEs (e.g. FREQ=WEEKLY;BYMONTHDAY=15)
   rather than rejecting them as errors. */
 
@@ -782,7 +782,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    is the pid (integer) and the third is the service ID.
    Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d */
 
-{ "debug_writefail_guid", NULL, STRING, "UNRELEASED" }
+{ "debug_writefail_guid", NULL, STRING, "3.6.0" }
 /* If set, any arriving message with this guid will fail as if the underlying
    disk write had failed, pretending to be a disk full condition.  This is
    mainly useful for regression testing certain edge case handling.
@@ -912,7 +912,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Don't send event notification for folder with given special-use attributes.
    Set ALL for any folder */
 
-{ "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.unseenMessages", "vnd.cmu.envelope", "vnd.cmu.sessionId", "vnd.cmu.mailboxACL", "vnd.cmu.mbtype", "vnd.cmu.davFilename", "vnd.cmu.davUid", "vnd.fastmail.clientId", "vnd.fastmail.sessionId", "vnd.fastmail.convExists", "vnd.fastmail.convUnseen", "vnd.fastmail.cid", "vnd.fastmail.counters", "vnd.fastmail.jmapEmail", "vnd.fastmail.jmapStates", "vnd.cmu.emailid", "vnd.cmu.threadid"), "3.1.6" }
+{ "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.unseenMessages", "vnd.cmu.envelope", "vnd.cmu.sessionId", "vnd.cmu.mailboxACL", "vnd.cmu.mbtype", "vnd.cmu.davFilename", "vnd.cmu.davUid", "vnd.fastmail.clientId", "vnd.fastmail.sessionId", "vnd.fastmail.convExists", "vnd.fastmail.convUnseen", "vnd.fastmail.cid", "vnd.fastmail.counters", "vnd.fastmail.jmapEmail", "vnd.fastmail.jmapStates", "vnd.cmu.emailid", "vnd.cmu.threadid"), "3.6.0" }
 /* Space-separated list of extra parameters to add to any appropriated event. */
 
 { "event_groups", "message mailbox", BITFIELD("message", "quota", "flags", "access", "mailbox", "subscription", "calendar", "applepushservice" ), "3.0.0" }
@@ -1071,11 +1071,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backwards compatibility, if no unit is specified, minutes
    is assumed. */
 
-{ "http_h2_altsvc", NULL, STRING, "UNRELEASED" }
-/* If set, HTTP/2 (over TLS) will be advertised as being available on the specifed
-   [host]:port. */
+{ "http_h2_altsvc", NULL, STRING, "3.6.0" }
+/* If set, HTTP/2 (over TLS) will be advertised as being available on the
+   specified [host]:port. */
 
-{ "http_jwt_key_dir", NULL, STRING, "UNRELEASED" }
+{ "http_jwt_key_dir", NULL, STRING, "3.6.0" }
 /* The absolute path to a directory containing one or more key files
    to authenticate JSON Web Tokens (RFC 7519) for HTTP connections.
    Keys for the following JWS algorithms are supported: "HS256",
@@ -1098,7 +1098,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    A payload with any other claim is rejected.
 */
 
-{ "http_jwt_max_age", "0s", DURATION, "UNRELEASED" }
+{ "http_jwt_max_age", "0s", DURATION, "3.6.0" }
 /* Defines the timespan in which a JSON Web Token is valid
    (see \fIhttp_jwt_key\fR). The value must be zero or positive.
 
@@ -1111,7 +1111,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    The zero value disables validation of the "iat" JWS claim.
 */
 
-{ "icalendar_max_size", 0, INT, "UNRELEASED" }
+{ "icalendar_max_size", 0, INT, "3.6.0" }
 /* Maximum allowed iCalendar size.
    If non-zero, CalDAV and JMAP will reject storage of resources whose
    iCalendar representation is larger than \fIicalendar_max_size\fR bytes.
@@ -1169,18 +1169,21 @@ Blank lines and lines beginning with ``#'' are ignored.
    the same has to be done (cyr_dbtool) for each subscription database
    See improved_mboxlist_sort.html.*/
 
-{ "jmap_emailsearch_db_path", NULL, STRING, "3.1.6", "UNRELEASED" }
+{ "jmap_emailsearch_db_path", NULL, STRING, "3.1.6", "3.6.0" }
 /* The absolute path to the JMAP email search cache file.  If not
    specified, JMAP Email/query and Email/queryChanges will not
    cache email search results. */
 
-{ "jmap_querycache_max_age", "0m", DURATION, "UNRELEASED" }
+{ "jmap_querycache_max_age", "0m", DURATION, "3.6.0" }
 /* The duration after which unused cached JMAP query results
    must be evicted from process memory. If non-zero, then the
    full result of the last query (before windowing) is stored
    in-memory. Subsequent queries with the same expression and
    query state can then page through the cached result.
    A zero value disables query result caching.
+.PP
+   If no unit is specified, minutes is assumed.
+.PP
    This feature currently only is enabled for Email/query. */
 
 { "jmap_preview_annot", NULL, STRING, "3.1.1" }
@@ -1219,7 +1222,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The maximum byte length of dynamically generated message previews. Previews
    stored in jmap_preview_annot take precedence. */
 
-{ "jmap_max_catenate_items", 100, INT, "3.5.0" }
+{ "jmap_max_catenate_items", 100, INT, "3.6.0" }
 /* The maximum number of items that can be catenated together by
    a JMAP Blob/set action.  Returned as the maxCatenateItems property
    value of the JMAP \"urn:ietf:params:jmap:blob\" capabilities object.
@@ -1289,7 +1292,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, support non-standard JMAP extensions.  If not enabled,
    only IETF standard JMAP functionality is supported. */
 
-{ "jmap_pushpoll", "60s", DURATION, "UNRELEASED" }
+{ "jmap_pushpoll", "60s", DURATION, "3.6.0" }
 /* The interval for polling for changes on an EventSource connection or
    when push has been ennabled on a WebSocket channel.
    The minimum value is 1 second. A value of 0 will disable push.
@@ -1598,7 +1601,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    that fills the entire 128 available slots.  Default is NULL, which is
    no flags.  Example: $Label1 $Label2 $Label3 NotSpam Spam */
 
-{ "mailbox_legacy_dirs", 0, SWITCH, "3.5.2" }
+{ "mailbox_legacy_dirs", 0, SWITCH, "3.6.0" }
 /* if enabled, new mailboxes without parents will be created with legacy paths.
    sub mailboxes of users will still inherit the parent legacy setting */
 
@@ -2153,7 +2156,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* At startup time, ctl_cyrusdb -r will check this value and it
    will either add or remove reverse ACL pointers from mailboxes.db */
 
-{ "reverseuniqueids", 1, SWITCH, "UNRELEASED", "UNRELEASED" }
+{ "reverseuniqueids", 1, SWITCH, "3.6.0", "3.6.0" }
 /* Deprecated. No longer used */
 
 { "rfc2046_strict", 0, SWITCH, "2.3.17" }
@@ -2340,7 +2343,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The maximum number of seconds to run a search for before aborting.  Default
    of no value means search "forever" until other timeouts. */
 
-{ "search_maxsize", 4096, INT, "3.5.0" }
+{ "search_maxsize", 4096, INT, "3.6.0" }
 /* The maximum size in kilobytes to index for each message part. Message
    contents that occur after this byte offset will not be indexed or
    search snippets generated from.
@@ -2488,7 +2491,7 @@ product version in the capabilities
    assumed. */
 */
 
-{ "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery vnd.cyrus.imip snooze", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze"), "UNRELEASED" }
+{ "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery vnd.cyrus.imip snooze", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze"), "3.6.0" }
 /* Space-separated list of Sieve extensions allowed to be used in
    sieve scripts, enforced at submission by timsieved(8).  Any
    previously installed script will be unaffected by this option and
@@ -2496,7 +2499,7 @@ product version in the capabilities
    option has no effect on options that are disabled at compile time
    (e.g., "regex"). */
 
-{ "sieve_folder", "#sieve", STRING, "UNRELEASED" }
+{ "sieve_folder", "#sieve", STRING, "3.6.0" }
 /* The name of the folder for storing Sieve scripts (#sieve) */
 
 { "sieve_maxscriptsize", 32, INT, "2.3.17" }
@@ -2633,7 +2636,7 @@ product version in the capabilities
    extending that list in the future or adding your own
    if needed. */
 
-{ "specialuse_nochildren", NULL, STRING, "3.3.2" }
+{ "specialuse_nochildren", NULL, STRING, "3.6.0" }
 /* Whitespace separated list of special-use attributes that may not contain
    child folders.  If set, mailboxes with any of these attributes may not
    have child folders created, and these attributes cannot be added to
@@ -2777,7 +2780,7 @@ product version in the capabilities
 /* The authentication realm to use when authenticating to a sync server.
    Prefix with a channel name to only apply for that channel */
 
-{ "sync_reconnect_maxwait", "20m", DURATION, "UNRELEASED" }
+{ "sync_reconnect_maxwait", "20m", DURATION, "3.6.0" }
 /* When a rolling sync_client cannot connect to the replica, it enters
    a retry loop with an exponential backoff between attempts.  This
    option sets the upper limit on that exponential backoff: no matter
@@ -3028,7 +3031,7 @@ product version in the capabilities
    character '.'. Note that with the newnews separator, no dots may
    occur in mailbox names.  The default switched in 3.0 from off to on. */
 
-{ "vcard_max_size", 0, INT, "UNRELEASED" }
+{ "vcard_max_size", 0, INT, "3.6.0" }
 /* Maximum allowed vCard size.
    If non-zero, CardDAV and JMAP will reject storage of contacts whose
    vCard representation is larger than \fIvcard_max_size\fR bytes.
@@ -3067,7 +3070,7 @@ of the incoming network interface, or if no record is found, the
    See \fBcyr_virusscan(8)\fR for specification of the format of this file.
    If not specified, the builtin default template will be used. */
 
-{ "websocket_timeout", "30m", DURATION, "UNRELEASED" }
+{ "websocket_timeout", "30m", DURATION, "3.6.0" }
 /* Set the length of the HTTP server's inactivity autologout timer
    when a WebSocket channel has been established.
    The default is 30 minutes.  The minimum value is 0, which will
