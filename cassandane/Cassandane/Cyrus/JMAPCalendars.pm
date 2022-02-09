@@ -6470,7 +6470,7 @@ sub test_rscale_in_jmap_hidden_in_caldav
             count => 12,
             frequency => 'monthly',
         },
-        $events->[0]->{recurrenceRules},
+        $events->[0]->{recurrenceRule},
     );
 }
 
