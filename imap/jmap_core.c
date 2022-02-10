@@ -666,12 +666,32 @@ static void _free_found(void *data)
     free(values);
 }
 
+struct caleventid_rock {
+    struct buf *buf;
+    strarray_t *ids;
+};
+
+static int caleventid_cb(void *vrock, struct caldav_jscal *jscal)
+{
+    struct caleventid_rock *rock = vrock;
+
+    struct jmap_caleventid eid = {
+        .ical_uid = jscal->cdata.ical_uid,
+        .ical_recurid = jscal->ical_recurid,
+    };
+    strarray_append(rock->ids, jmap_caleventid_encode(&eid, rock->buf));
+
+    buf_reset(rock->buf);
+    return 0;
+}
+
 static int jmap_blob_lookup(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
     int32_t datatypes = 0;
     json_t *err = NULL;
+    struct buf buf = BUF_INITIALIZER;
     json_t *jval;
     size_t i;
 
@@ -839,9 +859,14 @@ static int jmap_blob_lookup(jmap_req_t *req)
                     break;
 
                 case DATATYPE_CALENDAREVENT: {
-                    struct caldav_data *cdata = NULL;
-                    caldav_lookup_imapuid(caldav_db, mbentry, getblob->uid, &cdata, 0);
-                    if (cdata) strarray_add(ids, cdata->ical_uid);
+                    struct caldav_jscal_filter filter = {
+                        .mbentry = mbentry,
+                        .imap_uid = getblob->uid,
+                    };
+                    struct caleventid_rock rock = { &buf, ids };
+                    caldav_foreach_jscal(caldav_db, req->accountid, &filter,
+                            NULL, 0, caleventid_cb, &rock);
+                    buf_reset(&buf);
                     break;
                     }
                 }
@@ -903,6 +928,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
 done:
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
+    buf_free(&buf);
     return 0;
 }
 
