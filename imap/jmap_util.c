@@ -868,7 +868,9 @@ EXPORTED int jmap_decode_rawdata_blobid(const char *blobid,
     val++;
     char *c = strchr(val, ':');
     if (!c || c == val) goto done;
-    *mboxidptr = xstrndup(val, c - val);
+    if (mboxidptr) {
+        *mboxidptr = xstrndup(val, c - val);
+    }
     val = c + 1;
 
     /* Decode message UID */
@@ -881,7 +883,9 @@ EXPORTED int jmap_decode_rawdata_blobid(const char *blobid,
         val++;
         c = strchr(val, ']');
         if (!c || c == val) goto done;
-        *partidptr = xstrndup(val, c - val);
+        if (partidptr) {
+            *partidptr = xstrndup(val, c - val);
+        }
         val = c + 1;
     }
 
@@ -891,7 +895,9 @@ EXPORTED int jmap_decode_rawdata_blobid(const char *blobid,
         val += 2;
         c = strchr(val, '>');
         if (!c || c == val) goto done;
-        *useridptr = xstrndup(val, c - val);
+        if (useridptr) {
+            *useridptr = xstrndup(val, c - val);
+        }
         val = c + 1;
     }
 
@@ -900,7 +906,9 @@ EXPORTED int jmap_decode_rawdata_blobid(const char *blobid,
         val++;
         c = strchr(val, '[');
         size_t len = c ? (size_t) (c - val) : strlen(val);
-        *subpartptr = xstrndup(val, len);
+        if (subpartptr) {
+            *subpartptr = xstrndup(val, len);
+        }
         val += len;
         /* Decode guid */
         if (val[0] == '[') {
@@ -908,7 +916,9 @@ EXPORTED int jmap_decode_rawdata_blobid(const char *blobid,
             c = strchr(val, ']');
             if (!c || c == val) goto done;
             buf_setmap(&buf, val, c - val);
-            if (!message_guid_decode(guidptr, buf_cstring(&buf))) goto done;
+            if (guidptr) {
+                if (!message_guid_decode(guidptr, buf_cstring(&buf))) goto done;
+            }
             buf_reset(&buf);
             val = c + 1;
         }
