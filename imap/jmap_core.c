@@ -659,7 +659,7 @@ static void _free_found(void *data)
 {
     int i;
     strarray_t *values = data;
-    for (i = 0; i < NUM_DATATYPES; i++) {
+    for (i = 0; i < NUM_DATATYPES + 1; i++) {
         strarray_t *ids = values + i;
         strarray_fini(ids);
     }
@@ -799,7 +799,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
                  * one item for this blobid */
                 strarray_t *values = hash_lookup(getblob->blob_id, &found);
                 if (!values) {
-                    values = xzmalloc(sizeof(strarray_t) * NUM_DATATYPES);
+                    values = xzmalloc(sizeof(strarray_t) * (NUM_DATATYPES + 1));
                     hash_insert(getblob->blob_id, values, &found);
                 }
                 strarray_t *ids = values + i;
