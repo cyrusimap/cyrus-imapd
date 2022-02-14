@@ -6065,6 +6065,8 @@ struct geteventchanges_rock {
     modseq_t highestmodseq;
     int check_acl;
     hash_table *mboxrights;
+    char *sched_inboxname;
+    char *sched_outboxname;
     struct buf buf;
 };
 
@@ -6114,17 +6116,24 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
 
     /* Check permissions */
     int rights = mbentry ? jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS) : 0;
-    mboxlist_entry_free(&mbentry);
     if (!rights)
-        return 0;
+        goto done;
+
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR)
+        goto done;
+
+    if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
+        !strcmpsafe(mbentry->name, rock->sched_outboxname))
+        goto done;
+
 
     if (jscal->cdata.comp_type != CAL_COMP_VEVENT)
-        return 0;
+        goto done;
 
     /* Count, but don't process items that exceed the maximum record count. */
     if (changes->max_changes && ++(rock->seen_records) > changes->max_changes) {
         changes->has_more_changes = 1;
-        return 0;
+        goto done;
     }
 
     struct jmap_caleventid eid = {
@@ -6148,6 +6157,8 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
         rock->highestmodseq = jscal->modseq;
     }
 
+done:
+    mboxlist_entry_free(&mbentry);
     return 0;
 }
 
@@ -6160,7 +6171,9 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
     struct geteventchanges_rock rock = {
         .req = req,
         .changes = &changes,
-        .check_acl = strcmp(req->accountid, req->userid)
+        .check_acl = strcmp(req->accountid, req->userid),
+        .sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX),
+        .sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX),
     };
     int r = 0;
 
@@ -6205,6 +6218,8 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
         free_hash_table(rock.mboxrights, free);
         free(rock.mboxrights);
     }
+    free(rock.sched_inboxname);
+    free(rock.sched_outboxname);
     buf_free(&rock.buf);
     if (db) caldav_close(db);
     if (r) {
