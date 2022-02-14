@@ -937,6 +937,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
     dynarray_init(&new_jscals, sizeof(struct caldav_jscal));
 
     strarray_t strpool = STRARRAY_INITIALIZER;
+    ptrarray_t upsert = PTRARRAY_INITIALIZER;
     icalcomponent *comp;
     icaltimezone *utc = NULL;
     int r = 0;
@@ -1018,7 +1019,6 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
             sizeof(struct caldav_jscal), jscal_cmp_ical_recurid);
 
     /* Determine which rows to insert and update. We never delete here. */
-    ptrarray_t upsert = PTRARRAY_INITIALIZER;
     int old_i = 0;
     int new_i = 0;
     while (old_i < dynarray_size(&old_jscals) &&
