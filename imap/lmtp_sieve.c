@@ -1533,6 +1533,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
         case ICAL_METHOD_REQUEST:
             originator = organizer;
 
+#if 0
             /* Find invitee that matches owner of script */
             for (prop = icalcomponent_get_first_invitee(comp); prop;
                  prop = icalcomponent_get_next_invitee(comp)) {
@@ -1544,6 +1545,10 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
                     break;
                 }
             }
+#else
+            /* XXX  For now, assume an invitee matches owner of script */
+            recipient = strarray_nth(&sched_addresses, 0);
+#endif
             if (!recipient) {
                 buf_setcstr(&imip->outcome, "error");
                 buf_setcstr(&imip->errstr,
@@ -1561,8 +1566,13 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
                 goto done;
             }
 
-            /* Organizer better match owner of script */
+#if 0
+            /* TODO: Organizer better match owner of script */
             recipient = organizer;
+#else
+            /* XXX  For now, assume organizer matches owner of script */
+            recipient = strarray_nth(&sched_addresses, 0);
+#endif
             prop = icalcomponent_get_first_invitee(comp);
             if (!prop) {
                 buf_setcstr(&imip->outcome, "error");
