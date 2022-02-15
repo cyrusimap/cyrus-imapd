@@ -429,6 +429,9 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
 {
     jmap_req_t *req = jmapctx->req;
 
+    if (jmapctx->attachments.err)
+        return jmapctx->attachments.err;
+
     if (!jmapctx->attachments.mbox) {
         char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
         int r = jmap_openmbox(req, mboxname, &jmapctx->attachments.mbox,
@@ -438,7 +441,10 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
                     "mboxname=<%s> err<%s>", mboxname, error_message(r));
         }
         free(mboxname);
-        if (r) return r;
+        if (r) {
+            jmapctx->attachments.err = r;
+            return jmapctx->attachments.err;
+        }
     }
     if (!jmapctx->attachments.db) {
         jmapctx->attachments.db = webdav_open_mailbox(jmapctx->attachments.mbox);
@@ -447,7 +453,8 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
                     "attachments=<%s>", mailbox_name(jmapctx->attachments.mbox));
             jmap_closembox(req, &jmapctx->attachments.mbox);
             jmapctx->attachments.db = NULL;
-            return IMAP_INTERNAL;
+            jmapctx->attachments.err = IMAP_INTERNAL;
+            return jmapctx->attachments.err;
         }
     }
 

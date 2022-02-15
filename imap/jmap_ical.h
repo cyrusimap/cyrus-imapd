@@ -108,6 +108,7 @@ struct jmapical_ctx {
         struct webdav_db *db;
         struct mailbox *mbox;
         int lock;
+        int err;
     } attachments;
     struct {
         char *emailrecipient;
