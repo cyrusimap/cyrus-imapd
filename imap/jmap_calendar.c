@@ -2717,6 +2717,11 @@ struct getcalendarevents_rock {
     mbentry_t *mbentry;
     mbname_t *mbname;
     strarray_t schedule_addresses;
+
+    /* Event-scoped context */
+    uint32_t imap_uid;
+    icalcomponent *ical;
+    int is_draft;
 };
 
 struct recurid_instanceof_rock {
@@ -3218,7 +3223,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct getcalendarevents_rock *rock = vrock;
     int r = 0;
-    icalcomponent* ical = NULL;
+    icalcomponent* myical = NULL;
     json_t *jsevent = NULL;
     jmap_req_t *req = rock->req;
     hash_table *props = rock->get->props;
@@ -3289,48 +3294,81 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         if (jsevent) goto gotevent;
     }
 
-    /* Open calendar mailbox. */
-    if (!rock->mailbox || strcmp(mailbox_uniqueid(rock->mailbox), rock->mbentry->uniqueid)) {
-        jmap_closembox(req, &rock->mailbox);
-        r = jmap_openmbox_by_uniqueid(req, rock->mbentry->uniqueid, &rock->mailbox, 0);
-        if (r) goto done;
-    }
+    if ((rock->imap_uid != cdata->dav.imap_uid) || !rock->ical) {
+        /* Reset iterator state */
+        if (rock->ical) {
+            icalcomponent_free(rock->ical);
+            rock->ical = NULL;
+        }
+        rock->imap_uid = cdata->dav.imap_uid;
+        rock->is_draft = 0;
 
-    /* Load message containing the resource and parse iCal data */
-    ical = caldav_record_to_ical(rock->mailbox, cdata, req->userid, NULL);
-    if (!ical) {
-        syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
-                cdata->dav.imap_uid, mailbox_name(rock->mailbox));
-        r = IMAP_INTERNAL;
-        goto done;
+        /* Open calendar mailbox. */
+        if (!rock->mailbox || strcmp(mailbox_uniqueid(rock->mailbox), rock->mbentry->uniqueid)) {
+            jmap_closembox(req, &rock->mailbox);
+            r = jmap_openmbox_by_uniqueid(req, rock->mbentry->uniqueid, &rock->mailbox, 0);
+            if (r) goto done;
+        }
+
+        /* Load message containing the resource and parse iCal data */
+        rock->ical = caldav_record_to_ical(rock->mailbox, cdata, req->userid, NULL);
+        if (!rock->ical) {
+            syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
+                    cdata->dav.imap_uid, mailbox_name(rock->mailbox));
+            r = IMAP_INTERNAL;
+            rock->imap_uid = 0;
+            goto done;
+        }
+
+        /* Determine is event is a draft */
+        mr = msgrecord_from_uid(rock->mailbox, cdata->dav.imap_uid);
+        if (!mr) {
+            syslog(LOG_ERR, "msgrecord_from_uid failed for %s:%d",
+                    mailbox_name(rock->mailbox), cdata->dav.imap_uid);
+            r = IMAP_INTERNAL;
+            goto done;
+        }
+        uint32_t system_flags = 0;
+        r = msgrecord_get_systemflags(mr, &system_flags);
+        if (r) {
+            syslog(LOG_ERR, "msgrecord_get_systemflags failed for %s:%d: %s",
+                    mailbox_name(rock->mailbox), cdata->dav.imap_uid, error_message(r));
+            goto done;
+        }
+        rock->is_draft = system_flags & FLAG_DRAFT;
     }
 
     if (jscal->ical_recurid[0]) {
+        myical = icalcomponent_clone(rock->ical);
+
         /* Prune all components but this standalone instance */
         icalcomponent *nextcomp, *comp;
         icalcomponent_kind kind;
-        for (comp = icalcomponent_get_first_real_component(ical);
-             comp;
-             comp = nextcomp) {
+        for (comp = icalcomponent_get_first_real_component(myical);
+                comp; comp = nextcomp) {
 
             kind = icalcomponent_isa(comp);
-            nextcomp = icalcomponent_get_next_component(ical, kind);
+            nextcomp = icalcomponent_get_next_component(myical, kind);
 
             const char *recurid = NULL;
             icalproperty *prop =
                 icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
             if (prop) recurid = icalproperty_get_value_as_string(prop);
             if (strcmpsafe(recurid, jscal->ical_recurid)) {
-                icalcomponent_remove_component(ical, comp);
+                icalcomponent_remove_component(myical, comp);
                 icalcomponent_free(comp);
             }
         }
     }
-    jstzones = jstimezones_new(ical);
+    else {
+        myical = rock->ical;
+    }
+
+    jstzones = jstimezones_new(myical);
 
     /* Convert to JMAP */
     context_begin_cdata(jmapctx, rock->mbentry, cdata);
-    jsevent = jmapical_tojmap(ical, NULL, jmapctx);
+    jsevent = jmapical_tojmap(myical, NULL, jmapctx);
     context_end_cdata(jmapctx);
     if (!jsevent) {
         syslog(LOG_ERR, "jmapical_tojson: can't convert %u:%s",
@@ -3338,25 +3376,9 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         r = IMAP_INTERNAL;
         goto done;
     }
-    icalcomponent_free(ical);
-    ical = NULL;
 
     /* Add isDraft to cached event, we remove it later if not requested */
-    mr = msgrecord_from_uid(rock->mailbox, cdata->dav.imap_uid);
-    if (!mr) {
-        syslog(LOG_ERR, "msgrecord_from_uid failed for %s:%d",
-                mailbox_name(rock->mailbox), cdata->dav.imap_uid);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-    uint32_t system_flags = 0;
-    r = msgrecord_get_systemflags(mr, &system_flags);
-    if (r) {
-        syslog(LOG_ERR, "msgrecord_get_systemflags failed for %s:%d: %s",
-                mailbox_name(rock->mailbox), cdata->dav.imap_uid, error_message(r));
-        goto done;
-    }
-    json_object_set_new(jsevent, "isDraft", json_boolean(system_flags & FLAG_DRAFT));
+    json_object_set_new(jsevent, "isDraft", json_boolean(rock->is_draft));
 
     /* Set utcStart and utcEnd */
     getcalendarevents_get_utctimes(jsevent, jstzones, floatingtz);
@@ -3517,7 +3539,7 @@ gotevent:
         }
         if (!jscal->ical_recurid[0]) {
             /* Expand instances, if requested */
-            r = getcalendarevents_getinstances(jsevent, cdata, ical,
+            r = getcalendarevents_getinstances(jsevent, cdata, myical,
                     jstzones, floatingtz, rock);
             if (r) goto done;
         }
@@ -3525,7 +3547,8 @@ gotevent:
 
 done:
     jstimezones_free(&jstzones);
-    if (ical) icalcomponent_free(ical);
+    if (myical && myical != rock->ical)
+        icalcomponent_free(myical);
     json_decref(jsevent);
     msgrecord_unref(&mr);
     return r;
@@ -3988,6 +4011,7 @@ done:
     if (rock.mailbox) jmap_closembox(req, &rock.mailbox);
     if (rock.mbentry) mboxlist_entry_free(&rock.mbentry);
     if (rock.mbname) mbname_free(&rock.mbname);
+    if (rock.ical) icalcomponent_free(rock.ical);
     free_hashu64_table(&rock.cache_jsevents, (void(*)(void*))json_decref);
     free_hash_table(&rock.floatingtz_by_mboxid, NULL); /* values owned by libical */
     if (ptrarray_size(&rock.malloced_fallbacktzs)) {

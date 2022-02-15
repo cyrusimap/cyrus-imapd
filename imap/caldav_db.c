@@ -1004,14 +1004,21 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
 
         struct caldav_jscal jscal = {
             .cdata.dav.rowid = cdata->dav.rowid,
-            .ical_recurid = icaltime_as_ical_string(recurid),
-            .dtstart = icaltime_as_ical_string(dtstart),
-            .dtend = icaltime_as_ical_string(dtend),
             .alive = cdata->dav.alive,
             .modseq = cdata->dav.modseq,
             .createdmodseq = cdata->dav.createdmodseq,
             .ical_guid = ical_guid,
         };
+
+        strarray_append(&strpool, icaltime_as_ical_string(recurid));
+        jscal.ical_recurid = strarray_nth(&strpool, -1);
+
+        strarray_append(&strpool, icaltime_as_ical_string(dtstart));
+        jscal.dtstart = strarray_nth(&strpool, -1);
+
+        strarray_append(&strpool, icaltime_as_ical_string(dtend));
+        jscal.dtend = strarray_nth(&strpool, -1);
+
         dynarray_append(&new_jscals, &jscal);
     }
     hashset_free(&seen_recurids);

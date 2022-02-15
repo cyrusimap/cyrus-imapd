@@ -377,6 +377,9 @@ magic(HttpJWTAuthRSA => sub {
     $self->config_set(http_jwt_key_dir => '@basedir@/conf/certs/http_jwt');
     $self->want('install_certificates');
 });
+magic(iCalendarMaxSize10k => sub {
+    shift->config_set(icalendar_max_size => 100000);
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
