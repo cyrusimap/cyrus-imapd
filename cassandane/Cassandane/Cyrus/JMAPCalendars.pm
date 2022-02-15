@@ -70,7 +70,6 @@ sub new
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
                  sync_log => 'yes',
-                 icalendar_max_size => 100000,
                  jmap_nonstandard_extensions => 'yes',
                  defaultdomain => 'example.com');
 
@@ -7744,7 +7743,7 @@ EOF
 }
 
 sub test_calendarevent_set_too_large
-    :min_version_3_5 :needs_component_jmap
+    :min_version_3_5 :needs_component_jmap :iCalendarMaxSize10k
 {
     my ($self) = @_;
 
@@ -18122,6 +18121,61 @@ EOF
         }, 'R1'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+}
+
+sub test_calendarevent_get_standalone_instances_slow
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Etc/UTC');
+    my $dtstamp = $now->strftime('%Y%m%dT%H%M%SZ');
+    $now->set_time_zone('Australia/Sydney');
+
+    my $n = 700;
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+EOF
+
+    for (my $i = 0; $i < $n; $i++) {
+        my $t = $now->clone();
+        $t->add(DateTime::Duration->new(days => $i));
+        my $recurid = $t->strftime('%Y%m%dT%H%M%S');
+
+        $ical .= <<EOF;
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=Australia/Sydney:$recurid
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+DURATION:PT1H
+SUMMARY:event$i
+DTSTART;TZID=Australia/Sydney:$recurid
+CREATED:$dtstamp
+DTSTAMP:$dtstamp
+END:VEVENT
+EOF
+    }
+
+    $ical .= <<EOF;
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['recurrenceId'],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals($n, scalar @{$res->[0][1]{list}});
 }
 
 1;
