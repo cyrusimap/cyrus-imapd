@@ -151,7 +151,7 @@ extern const char *jmap_encode_rawdata_blobid(const char prefix,
                                               const char *partid,
                                               const char *userid,
                                               const char *subpart,
-                                              struct message_guid *guid,
+                                              const struct message_guid *guid,
                                               struct buf *dst);
 extern int jmap_decode_rawdata_blobid(const char *blobid,
                                       char **mboxidptr,
