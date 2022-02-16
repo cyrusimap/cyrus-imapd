@@ -797,7 +797,7 @@ EXPORTED const char *jmap_encode_rawdata_blobid(const char prefix,
                                                 const char *partid,
                                                 const char *userid,
                                                 const char *subpart,
-                                                struct message_guid *guid,
+                                                const struct message_guid *guid,
                                                 struct buf *dst)
 {
     buf_reset(dst);
