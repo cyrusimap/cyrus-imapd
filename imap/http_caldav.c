@@ -3635,7 +3635,7 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
 }
 
 
-static int validate_end_props(icalcomponent *comp, struct error_t *error)
+static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
 {
     icalproperty *prop;
 
@@ -3753,7 +3753,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
 
     /* Make sure DTEND/DURATION are sane */
-    ret = validate_end_props(comp, &txn->error);
+    ret = validate_dtend_duration(comp, &txn->error);
     if (ret) goto done;
 
     while ((nextcomp =
@@ -3784,7 +3784,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         }
 
         /* Make sure DTEND/DURATION are sane */
-        ret = validate_end_props(nextcomp, &txn->error);
+        ret = validate_dtend_duration(nextcomp, &txn->error);
         if (ret) goto done;
 
         if (rscale_calendars && !rrule) {
