@@ -2704,6 +2704,31 @@ done:
     return res;
 }
 
+static void add_calendarevent_blobids(json_t *jsevent,
+                                      const char *mboxid,
+                                      uint32_t imap_uid,
+                                      const char *userid,
+                                      const struct message_guid *guid)
+{
+    struct buf blobid = BUF_INITIALIZER;
+
+    json_t *jblobid = json_null();
+    if (jmap_encode_rawdata_blobid('I', mboxid, imap_uid, NULL,
+                userid, "G", guid, &blobid)) {
+        jblobid = json_string(buf_cstring(&blobid));
+    }
+    json_object_set_new(jsevent, "blobId", jblobid);
+
+    jblobid = json_null();
+    if (jmap_encode_rawdata_blobid('I', mboxid, imap_uid, NULL,
+                NULL, "G", guid, &blobid)) {
+        jblobid = json_string(buf_cstring(&blobid));
+    }
+    json_object_set_new(jsevent, "debugBlobId", jblobid);
+
+    buf_free(&blobid);
+}
+
 struct getcalendarevents_rock {
     /* Request-scoped context */
     struct caldav_db *db;
@@ -3407,23 +3432,8 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 
     // Set blobId and debugBlobId
     if (!message_guid_isnull(&rock->guid)) {
-        struct buf blobid = BUF_INITIALIZER;
-
-        json_t *jblobid = json_null();
-        if (jmap_encode_rawdata_blobid('I', rock->mbentry->uniqueid,
-                    cdata->dav.imap_uid, NULL, req->userid, "G", &rock->guid, &blobid)) {
-            jblobid = json_string(buf_cstring(&blobid));
-        }
-        json_object_set_new(jsevent, "blobId", jblobid);
-
-        jblobid = json_null();
-        if (jmap_encode_rawdata_blobid('I', rock->mbentry->uniqueid,
-                    cdata->dav.imap_uid, NULL, NULL, "G", &rock->guid, &blobid)) {
-            jblobid = json_string(buf_cstring(&blobid));
-        }
-        json_object_set_new(jsevent, "debugBlobId", jblobid);
-
-        buf_free(&blobid);
+        add_calendarevent_blobids(jsevent, rock->mbentry->uniqueid,
+                cdata->dav.imap_uid, req->userid, &rock->guid);
     }
 
     /* Add to cache */
@@ -4650,22 +4660,8 @@ static int createevent_store(jmap_req_t *req,
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         struct index_record record;
         if (!mailbox_find_index_record(mbox, mbox->i.last_uid, &record)) {
-            struct buf blobid = BUF_INITIALIZER;
-
-            if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox),
-                        mbox->i.last_uid, NULL, req->userid,
-                        "G", &record.guid, &blobid)) {
-                json_object_set_new(create->serverset, "blobId",
-                        json_string(buf_cstring(&blobid)));
-            }
-            buf_reset(&blobid);
-            if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox),
-                        mbox->i.last_uid, NULL, NULL,
-                        "G", &record.guid, &blobid)) {
-                json_object_set_new(create->serverset, "debugBlobId",
-                        json_string(buf_cstring(&blobid)));
-            }
-            buf_free(&blobid);
+            add_calendarevent_blobids(create->serverset, mailbox_uniqueid(mbox),
+                    mbox->i.last_uid, req->userid, &record.guid);
         }
     }
 
@@ -5575,21 +5571,8 @@ static void setcalendarevents_update(jmap_req_t *req,
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         struct index_record record;
         if (!mailbox_find_index_record(mbox, mbox->i.last_uid, &record)) {
-            struct buf blobid = BUF_INITIALIZER;
-            if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox),
-                        mbox->i.last_uid, NULL, req->userid,
-                        "G", &record.guid, &blobid)) {
-                json_object_set_new(update, "blobId",
-                        json_string(buf_cstring(&blobid)));
-            }
-            buf_reset(&blobid);
-            if (jmap_encode_rawdata_blobid('I', mailbox_uniqueid(mbox),
-                        mbox->i.last_uid, NULL, NULL,
-                        "G", &record.guid, &blobid)) {
-                json_object_set_new(update, "debugBlobId",
-                        json_string(buf_cstring(&blobid)));
-            }
-            buf_free(&blobid);
+            add_calendarevent_blobids(update, mailbox_uniqueid(mbox),
+                    mbox->i.last_uid, req->userid, &record.guid);
         }
     }
 
