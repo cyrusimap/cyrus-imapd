@@ -3635,6 +3635,45 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
 }
 
 
+static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
+{
+    icalproperty *prop;
+
+    prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+    if (prop) {
+        /* Make sure DTEND > DTSTART, and both values have value same type */
+        icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+        icaltimetype dtend =
+            icalproperty_get_datetime_with_component(prop, comp);
+
+        if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
+            error->desc = "DTSTART and DTEND must have same value type";
+            error->precond = CALDAV_VALID_DATA;
+            return HTTP_FORBIDDEN;
+        }
+        if (icaltime_compare(dtend, dtstart) < 1) {
+            error->desc = "DTEND must occur after DTSTART";
+            error->precond = CALDAV_VALID_DATA;
+            return HTTP_FORBIDDEN;
+        }
+    }
+    else {
+        /* Make sure DURATION > 0 */
+        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+        if (prop) {
+            struct icaldurationtype duration = icalproperty_get_duration(prop);
+
+            if (icaldurationtype_as_int(duration) < 1) {
+                error->desc = "DURATION must be postive";
+                error->precond = CALDAV_VALID_DATA;
+                return HTTP_FORBIDDEN;
+            }
+        }
+    }
+
+    return 0;
+}
+
 /* Perform a PUT request
  *
  * preconditions:
@@ -3660,7 +3699,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent *myoldical = NULL;
     icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
-    icaltimetype dtstart, dtend;
     icalproperty *prop, *rrule = NULL;
     const char *uid, *organizer = NULL;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
@@ -3714,24 +3752,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         if (organizer && !strncasecmp(organizer, "mailto:", 7)) organizer += 7;
     }
 
-    /* Also make sure DTEND > DTSTART, and both values have value same type */
-    dtend = icalcomponent_get_dtend(comp);
-    if (!icaltime_is_null_time(dtend)) {
-        dtstart = icalcomponent_get_dtstart(comp);
-
-        if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
-            txn->error.desc = "DTSTART and DTEND must have same value type";
-            txn->error.precond = CALDAV_VALID_DATA;
-            ret = HTTP_FORBIDDEN;
-            goto done;
-        }
-        if (icaltime_compare(dtend, dtstart) < 1) {
-            txn->error.desc = "DTEND must occur after DTSTART";
-            txn->error.precond = CALDAV_VALID_DATA;
-            ret = HTTP_FORBIDDEN;
-            goto done;
-        }
-    }
+    /* Make sure DTEND/DURATION are sane */
+    ret = validate_dtend_duration(comp, &txn->error);
+    if (ret) goto done;
 
     while ((nextcomp =
             icalcomponent_get_next_component(ical, kind))) {
@@ -3760,23 +3783,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             goto done;
         }
 
-        dtend = icalcomponent_get_dtend(nextcomp);
-        if (!icaltime_is_null_time(dtend)) {
-            dtstart = icalcomponent_get_dtstart(nextcomp);
-
-            if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
-                txn->error.desc = "DTSTART and DTEND must have same value type";
-                txn->error.precond = CALDAV_VALID_DATA;
-                ret = HTTP_FORBIDDEN;
-                goto done;
-            }
-            if (icaltime_compare(dtend, dtstart) < 1) {
-                txn->error.desc = "DTEND must occur after DTSTART";
-                txn->error.precond = CALDAV_VALID_OBJECT;
-                ret = HTTP_FORBIDDEN;
-                goto done;
-            }
-        }
+        /* Make sure DTEND/DURATION are sane */
+        ret = validate_dtend_duration(nextcomp, &txn->error);
+        if (ret) goto done;
 
         if (rscale_calendars && !rrule) {
             /* Grab RRULE to check RSCALE */
