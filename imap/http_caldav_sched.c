@@ -1612,11 +1612,8 @@ static int check_changes(icalcomponent *old, icalcomponent *comp, const char *at
         icalproperty *prop = find_attendee(comp, attendee);
         if (prop) {
             icalparameter *param =
-                icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
-            if (!param || icalparameter_get_partstat(param) == ICAL_PARTSTAT_NONE) {
-                icalproperty_set_parameter(prop,
-                        icalparameter_new_partstat(ICAL_PARTSTAT_NEEDSACTION));
-            }
+                icalparameter_new_partstat(ICAL_PARTSTAT_NEEDSACTION);
+            icalproperty_set_parameter(prop, param);
         }
     }
     return res;
