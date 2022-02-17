@@ -286,7 +286,8 @@ static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
             json_object_set_new(obj, "name", jmap_utf8string(propval));
         }
 
-        else if (!strcasecmp(name, "x-addressbookserver-member")) {
+        else if (!strcasecmp(name, "member") ||
+                 !strcasecmp(name, "x-addressbookserver-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             json_array_append_new(contactids, json_string(propval+9));
         }
