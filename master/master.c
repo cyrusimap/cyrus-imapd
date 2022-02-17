@@ -2393,7 +2393,7 @@ static void add_event(const char *name, struct entry *e, void *rock)
     }
     evt->period = period;
 
-    evt->exec = strarray_splitm(cmd, NULL, 0);
+    evt->exec = strarray_splitm(NULL, cmd, NULL, 0);
 
     schedule_event(evt);
 }
