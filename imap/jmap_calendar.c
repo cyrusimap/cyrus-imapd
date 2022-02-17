@@ -118,6 +118,8 @@ static int jmap_sharenotification_set(struct jmap_req *req);
 static int jmap_sharenotification_changes(struct jmap_req *req);
 static int jmap_sharenotification_query(struct jmap_req *req);
 static int jmap_sharenotification_querychanges(struct jmap_req *req);
+static int jmap_calendarpreferences_get(struct jmap_req *req);
+static int jmap_calendarpreferences_set(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
@@ -292,6 +294,18 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         &jmap_sharenotification_querychanges,
         JMAP_NEED_CSTATE
     },
+    {
+        "CalendarPreferences/get",
+        JMAP_URN_CALENDAR_PREFERENCES,
+        &jmap_calendarpreferences_get,
+        0
+    },
+    {
+        "CalendarPreferences/set",
+        JMAP_URN_CALENDAR_PREFERENCES,
+        &jmap_calendarpreferences_set,
+        JMAP_READ_WRITE
+    },
     { NULL, NULL, NULL, 0}
 };
 
@@ -312,6 +326,9 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_PRINCIPALS, json_object());
+
+    json_object_set_new(settings->server_capabilities,
+            JMAP_URN_CALENDAR_PREFERENCES, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
 
@@ -425,6 +442,9 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
             json_string(accountid));
     json_object_set_new(account_capabilities,
            "urn:ietf:params:jmap:principals:owner", ownercap);
+
+    json_object_set_new(account_capabilities,
+            JMAP_URN_CALENDAR_PREFERENCES, json_object());
 
     free(calhomename);
     mboxlist_entry_free(&mbentry);
@@ -1534,23 +1554,38 @@ static int setcalendar_writeprops(jmap_req_t *req,
 
     /* participantIdentities */
     if (!r && json_is_array(props->participant_identities)) {
-        static const char *annot =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+        struct caldav_caluseraddr new = CALDAV_CALUSERADDR_INITIALIZER;
+
+        struct caldav_caluseraddr old = CALDAV_CALUSERADDR_INITIALIZER;
+        caldav_caluseraddr_read(mailbox_name(mbox), req->userid, &old);
+
         size_t i;
         json_t *jpid;
         json_array_foreach(props->participant_identities, i, jpid) {
             const char *uri = json_string_value(json_object_get(jpid, "uri"));
             if (!uri) continue;
-            buf_appendcstr(&val, uri);
-            if (i < json_array_size(props->participant_identities)-1)
-                buf_putc(&val, ',');
+            strarray_append(&new.uris, uri);
         }
-        r = annotate_state_writemask(astate, annot, req->userid, &val);
+
+        // Preserve old preferred address, if still available
+        new.pref = strarray_size(&new.uris);
+        if (strarray_size(&old.uris)) {
+            const char *olduri = strarray_nth(&old.uris, old.pref);
+            if (olduri) {
+                new.pref = strarray_find(&new.uris, olduri, 0);
+                if (new.pref < 0)
+                    new.pref = strarray_size(&new.uris);
+            }
+        }
+
+        r = caldav_caluseraddr_write(mbox, req->userid, &new);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                   annot, error_message(r));
+            xsyslog(LOG_ERR, "failed to write participant identities",
+                    "err=<%s>", error_message(r));
         }
-        buf_reset(&val);
+
+        caldav_caluseraddr_fini(&new);
+        caldav_caluseraddr_fini(&old);
     }
 
     /* isSubscribed */
@@ -1700,7 +1735,7 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
                                  int destroy_events, json_t **err)
 {
     char *mboxname = caldav_mboxname(req->accountid, calid);
-    char *defaultname = caldav_scheddefault(req->accountid);
+    char *defaultname = caldav_scheddefault(req->accountid, 0);
     mbname_t *mbname = mbname_from_intname(mboxname);
     mbentry_t *mbentry = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -1722,6 +1757,14 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
     }
     else if (!jmap_hasrights_mbentry(req, mbentry, JACL_DELETE)) {
         *err = json_pack("{s:s}", "type", "accountReadOnly");
+        goto done;
+    }
+
+    if (!strcmpsafe(defaultname, calid)) {
+        *err = json_pack("{s:s s:s}",
+                "type", "forbidden",
+                "description",
+                "is CalendarPreferences.defaultCalendarId");
         goto done;
     }
 
@@ -10688,6 +10731,16 @@ static const jmap_property_t participantidentity_props[] = {
     { NULL, NULL, 0 }
 };
 
+static void encode_participantidentity_id(struct buf *buf, const char *addr)
+{
+    char idbuf[2*SHA1_DIGEST_LENGTH+1];
+    unsigned char sha1buf[SHA1_DIGEST_LENGTH];
+    xsha1((const unsigned char *) addr, strlen(addr), sha1buf);
+    bin_to_hex(sha1buf, SHA1_DIGEST_LENGTH, idbuf, BH_LOWER);
+    idbuf[2*SHA1_DIGEST_LENGTH] = '\0';
+    buf_setcstr(buf, idbuf);
+}
+
 static int jmap_participantidentity_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -10695,6 +10748,7 @@ static int jmap_participantidentity_get(struct jmap_req *req)
     json_t *err = NULL;
     int r = 0;
     struct buf buf = BUF_INITIALIZER;
+    struct buf idbuf = BUF_INITIALIZER;
 
     if (!has_calendars(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
@@ -10724,12 +10778,9 @@ static int jmap_participantidentity_get(struct jmap_req *req)
         json_t *jpartid = json_object();
 
         /* id */
-        char idbuf[2*SHA1_DIGEST_LENGTH+1];
-        unsigned char sha1buf[SHA1_DIGEST_LENGTH];
-        xsha1((const unsigned char *) addr, strlen(addr), sha1buf);
-        bin_to_hex(sha1buf, SHA1_DIGEST_LENGTH, idbuf, BH_LOWER);
-        idbuf[2*SHA1_DIGEST_LENGTH] = '\0';
-        json_object_set_new(jpartid, "id", json_string(idbuf));
+        encode_participantidentity_id(&idbuf, addr);
+        json_object_set_new(jpartid, "id",
+                json_string(buf_cstring(&idbuf)));
 
         if (jmap_wantprop(get.props, "name")) {
             json_object_set_new(jpartid, "name", json_string(""));
@@ -10744,7 +10795,8 @@ static int jmap_participantidentity_get(struct jmap_req *req)
             buf_reset(&buf);
         }
 
-        json_object_set_new(jpartidsbyid, idbuf, jpartid);
+        json_object_set_new(jpartidsbyid, buf_cstring(&idbuf), jpartid);
+        buf_reset(&idbuf);
     }
 
     if (JNOTNULL(get.ids)) {
@@ -10781,6 +10833,7 @@ static int jmap_participantidentity_get(struct jmap_req *req)
 done:
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
+    buf_free(&idbuf);
     buf_free(&buf);
     return r;
 }
@@ -10929,4 +10982,364 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
         buf_free(&rewritebufs[j]);
     buf_free(&buf);
     return jsevents_by_partid;
+}
+
+static const jmap_property_t calendarpreferences_props[] = {
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "defaultCalendarId",
+        NULL,
+        0
+    },
+    {
+        "defaultParticipantIdentityId",
+        NULL,
+        0
+    },
+    { NULL, NULL, 0 }
+};
+
+static int jmap_calendarpreferences_get(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    mbentry_t *mbcalhome = NULL;
+    int r = 0;
+
+    if (!has_calendars(req)) {
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
+        return 0;
+    }
+
+    /* Parse request */
+    jmap_get_parse(req, &parser, calendarpreferences_props, 1,
+                   NULL, NULL, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Check ACL */
+    char *calhomename = caldav_mboxname(req->accountid, NULL);
+    r = mboxlist_lookup(calhomename, &mbcalhome, NULL);
+    free(calhomename);
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        xsyslog(LOG_INFO, "cannot lookup calendar home",
+                "calname=<%s> err=<%s>", calhomename, error_message(r));
+        r = 0;
+        goto done;
+    }
+    if (!jmap_hasrights_mbentry(req, mbcalhome, JACL_LOOKUP)) {
+        jmap_error(req, json_pack("{s:s}", "type", "forbidden"));
+        goto done;
+    }
+
+    int want_singleton = 1;
+    if (json_array_size(get.ids)) {
+        want_singleton = 0;
+        size_t i;
+        for (i = 0; i < json_array_size(get.ids); i++) {
+            const char *id = json_string_value(json_array_get(get.ids, i));
+            if (strcmp(id, "singleton")) {
+                json_array_append_new(get.not_found, json_string(id));
+            }
+            else want_singleton = 1;
+        }
+    }
+
+    if (want_singleton) {
+        json_t *jprefs = json_object();
+        json_object_set_new(jprefs, "id", json_string("singleton"));
+
+        if (jmap_wantprop(get.props, "defaultCalendarId")) {
+            json_t *jid = json_null();
+            char *scheddefault = caldav_scheddefault(req->accountid, 0);
+            if (scheddefault) {
+                jid = json_string(scheddefault);
+            }
+            json_object_set_new(jprefs, "defaultCalendarId", jid);
+            free(scheddefault);
+        }
+
+        if (jmap_wantprop(get.props, "defaultParticipantIdentityId")) {
+            json_t *jpartid = json_null();
+
+            struct caldav_caluseraddr caluseraddr = CALDAV_CALUSERADDR_INITIALIZER;
+            if (!caldav_caluseraddr_read(mbcalhome->name, req->accountid, &caluseraddr)) {
+                const char *addr = strarray_nth(&caluseraddr.uris, caluseraddr.pref);
+                if (addr) {
+                    if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
+                    encode_participantidentity_id(&buf, addr);
+                    jpartid = json_string(buf_cstring(&buf));
+                }
+            }
+            caldav_caluseraddr_fini(&caluseraddr);
+
+            json_object_set_new(jprefs, "defaultParticipantIdentityId", jpartid);
+        }
+
+        json_array_append_new(get.list, jprefs);
+    }
+
+    buf_printf(&buf, MODSEQ_FMT, mbcalhome->foldermodseq);
+    get.state = buf_release(&buf);
+    jmap_ok(req, jmap_get_reply(&get));
+
+done:
+    mboxlist_entry_free(&mbcalhome);
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    buf_free(&buf);
+    return r;
+}
+
+static void calendarpreferences_set(struct jmap_req *req,
+                                    struct jmap_parser *parser,
+                                    json_t *jprefs,
+                                    mbentry_t *mbcalhome,
+                                    json_t **err)
+{
+    json_t *jcalid = NULL;
+    json_t *jpartid = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    int r = 0;
+
+    struct mailbox *calhomembox = NULL;
+    annotate_state_t *astate = NULL;
+
+    /* Validate properties */
+    const char *prop;
+    json_t *jval;
+    json_object_foreach(jprefs, prop, jval) {
+        if (!strcmp(prop, "id")) {
+            const char *id = json_string_value(jval);
+            if ((id && strcmp(id, "singleton")) || !id) {
+                jmap_parser_invalid(parser, "id");
+            }
+        }
+        else if (!strcmp(prop, "defaultCalendarId")) {
+            if (json_is_string(jval) || json_is_null(jval)) {
+                jcalid = jval;
+            }
+            else {
+                jmap_parser_invalid(parser, "defaultCalendarId");
+            }
+        }
+        else if (!strcmp(prop, "defaultParticipantIdentityId")) {
+            if (json_is_string(jval) || json_is_null(jval)) {
+                jpartid = jval;
+            }
+            else {
+                jmap_parser_invalid(parser, "defaultParticipantIdentityId");
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, prop);
+        }
+    }
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s, s:O}",
+                    "type", "invalidProperties",
+                    "properties", parser->invalid);
+        return;
+    }
+
+    r = jmap_openmbox(req, mbcalhome->name, &calhomembox, 1);
+    if (r) {
+        xsyslog(LOG_ERR, "can not open calendar home mailbox",
+                "err=<%s>", error_message(r));
+        goto done;
+    }
+    r = mailbox_get_annotate_state(calhomembox, 0, &astate);
+    if (r) {
+        xsyslog(LOG_ERR, "can not open get annotation state",
+                "err=<%s>", error_message(r));
+        goto done;
+    }
+
+    /* Set default calendar */
+    if (jcalid) {
+        const char *calid = json_string_value(jcalid);
+        buf_setcstr(&buf, calid ? calid : "");
+
+        const char *annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+
+        if (calid) {
+            // lock mailbox
+            struct mailbox *mbox = NULL;
+            char *mboxname = caldav_mboxname(req->accountid, calid);
+            r = jmap_openmbox(req, mboxname, &mbox, 1);
+            if (r) {
+                if (r == IMAP_MAILBOX_NONEXISTENT) {
+                    jmap_parser_invalid(parser, "defaultCalendarId");
+                    r = 0;
+                }
+            }
+            else {
+                r = annotate_state_writemask(astate, annot, "", &buf);
+            }
+            jmap_closembox(req, &mbox);
+            free(mboxname);
+        }
+        else {
+            r = annotate_state_writemask(astate, annot, "", &buf);
+        }
+        buf_reset(&buf);
+
+        if (r) {
+            xsyslog(LOG_ERR, "can not write schedule default calendar",
+                    "err=<%s>", error_message(r));
+            goto done;
+        }
+    }
+
+    /* Set default participant identity */
+    if (jpartid) {
+        const char *partid = json_string_value(jpartid);
+
+        struct caldav_caluseraddr caluseraddr = CALDAV_CALUSERADDR_INITIALIZER;
+        r = caldav_caluseraddr_read(mbcalhome->name, req->userid, &caluseraddr);
+        if (!r) {
+            if (partid) {
+                int i;
+                for (i = 0; i < strarray_size(&caluseraddr.uris); i++) {
+                    const char *addr = strarray_nth(&caluseraddr.uris, i);
+                    if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
+                    encode_participantidentity_id(&buf, addr);
+                    if (!strcmp(partid, buf_cstring(&buf))) {
+                        break;
+                    }
+                }
+                if (i < strarray_size(&caluseraddr.uris)) {
+                    // move preferred address to first position, as Apple
+                    // and Mozilla CalDAV clients expect it there
+                    caluseraddr.pref = 0;
+                    if (i > 0) {
+                        char *val = strarray_remove(&caluseraddr.uris, i);
+                        strarray_unshiftm(&caluseraddr.uris, val);
+                    }
+                    r = caldav_caluseraddr_write(calhomembox, req->userid, &caluseraddr);
+                }
+                else {
+                    jmap_parser_invalid(parser, "defaultParticipantIdentityId");
+                }
+            }
+            else {
+                caluseraddr.pref = strarray_size(&caluseraddr.uris);
+                r = caldav_caluseraddr_write(calhomembox, req->userid, &caluseraddr);
+            }
+        }
+        caldav_caluseraddr_fini(&caluseraddr);
+
+        if (r) {
+            xsyslog(LOG_ERR, "can not set schedule addresses",
+                    "err=<%s>", error_message(r));
+            goto done;
+        }
+    }
+
+done:
+    if (r && *err == NULL) {
+        *err = jmap_server_error(r);
+    }
+    jmap_closembox(req, &calhomembox);
+    buf_free(&buf);
+}
+
+static int jmap_calendarpreferences_set(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set;
+    json_t *err = NULL;
+    int r = 0;
+
+    struct buf buf = BUF_INITIALIZER;
+    char *calhomename = caldav_mboxname(req->accountid, NULL);
+    mbentry_t *mbcalhome = NULL;
+
+    jmap_set_parse(req, &parser, calendarpreferences_props,
+                   NULL, NULL, &set, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Check ACL */
+    r = mboxlist_lookup(calhomename, &mbcalhome, NULL);
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        xsyslog(LOG_INFO, "cannot lookup calendar home",
+                "calname=<%s> err=<%s>", calhomename, error_message(r));
+        r = 0;
+        goto done;
+    }
+    if (!jmap_hasrights_mbentry(req, mbcalhome, JACL_LOOKUP|JACL_SETKEYWORDS)) {
+        jmap_error(req, json_pack("{s:s}", "type", "forbidden"));
+        goto done;
+    }
+
+    /* Check state */
+    buf_printf(&buf, MODSEQ_FMT, mbcalhome->foldermodseq);
+    if (set.if_in_state && strcmp(set.if_in_state, buf_cstring(&buf))) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
+    }
+    set.old_state = buf_release(&buf);
+
+    /* Reject invalid operations */
+    const char *key;
+    json_t *jarg;
+    json_object_foreach(set.create, key, jarg) {
+        json_object_set_new(set.not_created, key,
+                json_pack("{s:s}", "type", "forbidden"));
+    }
+    json_object_foreach(set.update, key, jarg) {
+        if (strcmp(key, "singleton")) {
+            json_object_set_new(set.not_updated, key,
+                    json_pack("{s:s}", "type", "notFound"));
+        }
+    }
+    size_t i;
+    json_array_foreach(set.destroy, i, jarg) {
+        json_object_set_new(set.not_destroyed,
+                json_string_value(jarg),
+                json_pack("{s:s}", "type",
+                    strcmp(key, "singleton") ? "notFound" : "forbidden"));
+    }
+
+    json_t *jprefs = json_object_get(set.update, "singleton");
+    if (JNOTNULL(jprefs)) {
+        json_t *err = NULL;
+        calendarpreferences_set(req, &parser, jprefs, mbcalhome, &err);
+        if (err) {
+            json_object_set_new(set.not_updated, "singleton", err);
+        }
+        else {
+            json_object_set_new(set.updated, "singleton", json_null());
+        }
+    }
+
+    // Reload foldermodseq
+    mboxlist_entry_free(&mbcalhome);
+    mboxlist_lookup(calhomename, &mbcalhome, NULL);
+    buf_printf(&buf, MODSEQ_FMT, mbcalhome->foldermodseq);
+    set.new_state = buf_release(&buf);
+
+    jmap_ok(req, jmap_set_reply(&set));
+
+done:
+    mboxlist_entry_free(&mbcalhome);
+    free(calhomename);
+    jmap_parser_fini(&parser);
+    jmap_set_fini(&set);
+    return r;
 }

@@ -380,6 +380,11 @@ magic(HttpJWTAuthRSA => sub {
 magic(iCalendarMaxSize10k => sub {
     shift->config_set(icalendar_max_size => 100000);
 });
+magic(CalDAVNoDefaultCalendar => sub {
+    shift->config_set(
+        caldav_create_default => 'no',
+    );
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
