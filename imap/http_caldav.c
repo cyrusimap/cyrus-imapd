@@ -976,17 +976,15 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
     char *href = NULL;
     mbname_t *mbname = NULL;
 
-    if (prop->children && !prop->children->next) {
-        xmlNodePtr cur = prop->children;
-        if (cur->type == XML_ELEMENT_NODE) {
-            if (!xmlStrcmp(cur->name, BAD_CAST "href")) {
-                href = (char*) xmlNodeGetContent(cur);
-                if (href && *href) {
-                    /* Strip trailing '/' character */
-                    size_t len = strlen(href);
-                    if (len > 1 && href[len-1] == '/') {
-                        href[len-1] = '\0';
-                    }
+    xmlNodePtr node = xmlFirstElementChild(prop);
+    if (node) {
+        if (!xmlStrcmp(node->name, BAD_CAST "href")) {
+            href = (char*) xmlNodeGetContent(node);
+            if (href && *href) {
+                /* Strip trailing '/' character */
+                size_t len = strlen(href);
+                if (len > 1 && href[len-1] == '/') {
+                    href[len-1] = '\0';
                 }
             }
         }
@@ -1067,14 +1065,16 @@ static int caldav_check_precond(struct transaction_t *txn,
     if (txn->meth == METH_DELETE) {
         if (!cdata) {
             /* Must not delete default scheduling calendar */
-            char *defaultname = caldav_scheddefault(httpd_userid);
-            char *defaultmboxname = caldav_mboxname(httpd_userid, defaultname);
-            if (!strcmp(mailbox_name(mailbox), defaultmboxname)) {
-                precond = HTTP_FORBIDDEN;
-                txn->error.precond = CALDAV_DEFAULT_NEEDED;
+            char *defaultname = caldav_scheddefault(httpd_userid, 0);
+            if (defaultname) {
+                char *defaultmboxname = caldav_mboxname(httpd_userid, defaultname);
+                if (!strcmp(mailbox_name(mailbox), defaultmboxname)) {
+                    precond = HTTP_FORBIDDEN;
+                    txn->error.precond = CALDAV_DEFAULT_NEEDED;
+                }
+                free(defaultmboxname);
+                free(defaultname);
             }
-            free(defaultmboxname);
-            free(defaultname);
             if (precond) return precond;
         }
         else {
@@ -2030,7 +2030,7 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
 
     /* Is this the default calendar? */
     if (len == lrock->defaultlen &&
-            !strncmp(shortname, lrock->scheddefault, lrock->defaultlen)) {
+            !strncmpsafe(shortname, lrock->scheddefault, lrock->defaultlen)) {
         cal->flags |= CAL_IS_DEFAULT;
     }
 
@@ -2270,7 +2270,7 @@ static int list_calendars(struct transaction_t *txn)
     buf_printf(&txn->buf, "%s://%s%s", proto, host, txn->req_tgt.path);
 
     memset(&lrock, 0, sizeof(struct list_cal_rock));
-    lrock.scheddefault = caldav_scheddefault(httpd_userid);
+    lrock.scheddefault = caldav_scheddefault(httpd_userid, 0);
     lrock.defaultlen = strlen(lrock.scheddefault);
     mboxlist_mboxtree(txn->req_tgt.mbentry->name,
                       list_cal_cb, &lrock, MBOXTREE_SKIP_ROOT);
@@ -5716,8 +5716,6 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
                          void *rock __attribute__((unused)),
                          int isemail)
 {
-    const char *annotname =
-        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
     xmlNodePtr node;
     int r, ret = HTTP_NOT_FOUND;
 
@@ -5725,33 +5723,31 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
         return HTTP_NOT_FOUND;
 
     if (fctx->req_tgt->namespace->id == URL_NS_PRINCIPAL) {
-        char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
 
         node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                             name, ns, NULL, 0);
 
-        buf_reset(&fctx->buf);
-        r = annotatemore_lookupmask(mailboxname, annotname,
-                                    fctx->req_tgt->userid, &fctx->buf);
-        free(mailboxname);
-        if (!r && fctx->buf.len) {
-            strarray_t *items = strarray_split(buf_cstring(&fctx->buf), ",", STRARRAY_TRIM);
+        struct caldav_caluseraddr addr = CALDAV_CALUSERADDR_INITIALIZER;
+
+        char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
+
+        r = caldav_caluseraddr_read(mailboxname, fctx->req_tgt->userid, &addr);
+        if (!r && strarray_size(&addr.uris)) {
             if (isemail) {
-                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, 0));
+                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(&addr.uris, 0));
             }
             else {
                 int i;
-                for (i = strarray_size(items); i; i--) {
-                    xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i-1));
+                for (i = strarray_size(&addr.uris); i; i--) {
+                    const char *uri = strarray_nth(&addr.uris, i - 1);
+                    xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], uri);
                     /* apple will use the alphabetically first href, and Thunderbird will use the
                      * last one in order, so we set preferred for Apple, and put the preferred one
                      * last for Thunderbird (and maybe others) */
                     if (i == 1) xmlNewProp(href, BAD_CAST "preferred", BAD_CAST "1");
                 }
             }
-            strarray_free(items);
         }
-
         /* XXX  This needs to be done via an LDAP/DB lookup */
         else if (strchr(fctx->req_tgt->userid, '@')) {
             buf_reset(&fctx->buf);
@@ -5777,25 +5773,27 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
             }
         }
 
+        caldav_caluseraddr_fini(&addr);
+        free(mailboxname);
         ret = 0;
     }
     else {
-        buf_reset(&fctx->buf);
-        r = annotatemore_lookupmask(fctx->mbentry->name, annotname,
-                                    fctx->req_tgt->userid, &fctx->buf);
-        if (!r && fctx->buf.len) {
-            strarray_t *addr =
-                strarray_split(buf_cstring(&fctx->buf), ",", STRARRAY_TRIM);
+        struct caldav_caluseraddr addr = CALDAV_CALUSERADDR_INITIALIZER;
 
+        buf_reset(&fctx->buf);
+
+        r = caldav_caluseraddr_read(fctx->mbentry->name, fctx->req_tgt->userid, &addr);
+        if (!r && strarray_size(&addr.uris)) {
             node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                 &propstat[PROPSTAT_OK], name, ns, NULL, 0);
             int i;
-            for (i = strarray_size(addr); i; i--) {
-                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(addr, i-1));
+            for (i = strarray_size(&addr.uris); i; i--) {
+                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(&addr.uris, i-1));
             }
-            strarray_free(addr);
             ret = 0;
         }
+
+        caldav_caluseraddr_fini(&addr);
     }
 
     return ret;
@@ -5863,7 +5861,12 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
         *pctx->ret = HTTP_FORBIDDEN;
     }
     else {
-        char *value = NULL;
+        buf_reset(&pctx->buf);
+
+        struct caldav_caluseraddr old = CALDAV_CALUSERADDR_INITIALIZER;
+        caldav_caluseraddr_read(mailbox_name(pctx->mailbox), httpd_userid, &old);
+
+        struct caldav_caluseraddr new = CALDAV_CALUSERADDR_INITIALIZER;
 
         if (set) {
             xmlNodePtr node = xmlFirstElementChild(prop);
@@ -5871,12 +5874,12 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
             /* Find the value */
             if (!node) {
                 /* single text value */
-                value = (char *) xmlNodeGetContent(prop);
+                char *value = (char *) xmlNodeGetContent(prop);
+                if (value)
+                    strarray_appendm(&new.uris, value);
             }
             else {
                 /* href(s) */
-                strarray_t addr = STRARRAY_INITIALIZER;
-
                 for (; node; node = xmlNextElementSibling(node)) {
                     /* Make sure it is a value we understand */
                     if (!xmlStrcmp(node->name, BAD_CAST "href")) {
@@ -5884,7 +5887,7 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
                          * but we want it first in the internal data structure because that
                          * makes iterating to look for matches more sensible, so reverse it
                          * right here! */
-                        strarray_unshiftm(&addr, (char *) xmlNodeGetContent(node));
+                        strarray_unshiftm(&new.uris, (char *) xmlNodeGetContent(node));
                     }
                     else {
                         /* Unknown value */
@@ -5892,20 +5895,40 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
                                      &propstat[PROPSTAT_CONFLICT],
                                      prop->name, prop->ns, NULL, 0);
 
-                        strarray_fini(&addr);
                         *pctx->ret = HTTP_FORBIDDEN;
 
                         return 0;
                     }
                 }
-
-                value = strarray_join(&addr, ",");
-                strarray_fini(&addr);
             }
         }
 
-        proppatch_todb(prop, set, pctx, propstat, (void *) value);
-        free(value);
+        // Preserve old preferred address, if still available
+        new.pref = strarray_size(&new.uris);
+        if (strarray_size(&old.uris)) {
+            const char *olduri = strarray_nth(&old.uris, old.pref);
+            if (olduri) {
+                new.pref = strarray_find(&new.uris, olduri, 0);
+                if (new.pref < 0)
+                    new.pref = strarray_size(&new.uris);
+            }
+        }
+
+        // Write schedule addresses
+        int r = caldav_caluseraddr_write(pctx->mailbox, httpd_userid, &new);
+        if (r) {
+            xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
+                    &propstat[PROPSTAT_ERROR],
+                    prop->name, prop->ns, NULL, 0);
+
+            *pctx->ret = HTTP_SERVER_ERROR;
+
+            xsyslog(LOG_ERR, "could not write schedule addresses",
+                    "err=<%s>", error_message(r));
+        }
+
+        caldav_caluseraddr_fini(&new);
+        caldav_caluseraddr_fini(&old);
     }
 
     if (calhomeset) {

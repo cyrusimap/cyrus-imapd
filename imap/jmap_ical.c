@@ -257,19 +257,16 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
 static char *_emailalert_recipient(const char *userid)
 {
-    const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-    char *mailboxname = caldav_mboxname(userid, NULL);
-    struct buf buf = BUF_INITIALIZER;
-    int r = annotatemore_lookupmask(mailboxname, annotname, userid, &buf);
-
+    struct caldav_caluseraddr caluseraddr = CALDAV_CALUSERADDR_INITIALIZER;
+    char *mboxname = caldav_mboxname(userid, NULL);
     char *recipient = NULL;
 
-    if (!r && buf_len(&buf)) {
-        strarray_t *values = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
-        const char *item = strarray_nth(values, 0);
-        if (!strncasecmp(item, "mailto:", 7)) item += 7;
-        recipient = strconcat("mailto:", item, NULL);
-        strarray_free(values);
+    if (!caldav_caluseraddr_read(mboxname, userid, &caluseraddr)) {
+        if (strarray_size(&caluseraddr.uris)) {
+            const char *item = strarray_nth(&caluseraddr.uris, 0);
+            if (!strncasecmp(item, "mailto:", 7)) item += 7;
+            recipient = strconcat("mailto:", item, NULL);
+        }
     }
     else if (strchr(userid, '@')) {
         recipient = strconcat("mailto:", userid, NULL);
@@ -278,8 +275,8 @@ static char *_emailalert_recipient(const char *userid)
         recipient = strconcat("mailto:", userid, "@", config_defdomain, NULL);
     }
 
-    buf_free(&buf);
-    free(mailboxname);
+    free(mboxname);
+    caldav_caluseraddr_fini(&caluseraddr);
     return recipient;
 }
 
