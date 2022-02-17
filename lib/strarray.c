@@ -359,12 +359,13 @@ EXPORTED char *strarray_join(const strarray_t *sa, const char *sep)
     return buf;
 }
 
-EXPORTED strarray_t *strarray_splitm(char *buf, const char *sep, int flags)
+EXPORTED strarray_t *strarray_splitm(strarray_t *sa, char *buf, const char *sep, int flags)
 {
-    strarray_t *sa = strarray_new();
     char *p, *q;
 
     if (!buf) return sa;
+
+    if (!sa) sa = strarray_new();
 
     if (!sep)
         sep = " \t\r\n";
@@ -382,21 +383,24 @@ EXPORTED strarray_t *strarray_splitm(char *buf, const char *sep, int flags)
     }
 
     free(buf);
+
     return sa;
 }
 
 EXPORTED strarray_t *strarray_split(const char *line, const char *sep, int flags)
 {
-    if (!line)
-        return strarray_new();
-    return strarray_splitm(xstrdup(line), sep, flags);
+    strarray_t *sa = strarray_new();
+    if (line)
+        strarray_splitm(sa, xstrdup(line), sep, flags);
+    return sa;
 }
 
 EXPORTED strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags)
 {
-    if (!len)
-        return strarray_new();
-    return strarray_splitm(xstrndup(buf, len), sep, flags);
+    strarray_t *sa = strarray_new();
+    if (len)
+        strarray_splitm(sa, xstrndup(buf, len), sep, flags);
+    return sa;
 }
 
 EXPORTED char **strarray_takevf(strarray_t *sa)
