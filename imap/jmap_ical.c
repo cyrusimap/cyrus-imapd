@@ -2522,16 +2522,7 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
 
     int schedule_sequence = icalcomponent_get_sequence(comp);
 
-    const char *comment = icalcomponent_get_comment(comp);
-    if (!comment) {
-        /* Look for Google Calendar comment */
-        comment = get_icalxparam_value(prop, "X-RESPONSE-COMMENT");
-        if (comment) {
-            unescape_ical_text(&buf, comment);
-            comment = buf_cstring(&buf);
-        }
-    }
-    char *schedule_comment = xstrdupnull(comment);
+    char *schedule_comment = xstrdupnull(icalcomponent_get_comment(comp));
 
     /* Map ATTENDEE to JSCalendar */
 
@@ -2555,9 +2546,20 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
             json_object_set_new(p, "scheduleSequence",
                     json_integer(schedule_sequence));
 
-            if (schedule_comment)
+            const char *comment = schedule_comment;
+            if (!comment) {
+                /* Look for Google Calendar comment */
+                comment = get_icalxparam_value(prop, "X-RESPONSE-COMMENT");
+                if (comment) {
+                    unescape_ical_text(&buf, comment);
+                    comment = buf_cstring(&buf);
+                }
+            }
+            if (comment) {
                 json_object_set_new(p, "participationComment",
-                        json_string(schedule_comment));
+                        json_string(comment));
+            }
+            buf_reset(&buf);
         }
         json_object_set_new(participants, id, p);
         free(uri);
