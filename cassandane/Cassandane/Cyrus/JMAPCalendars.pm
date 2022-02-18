@@ -13898,7 +13898,7 @@ sub test_calendar_set_sharewith_acl
 }
 
 sub test_calendarevent_set_writeown
-    :min_version_3_5 :needs_component_jmap
+    :needs_component_jmap :min_version_0_0 :max_version_0_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16348,7 +16348,7 @@ sub create_user
 }
 
 sub test_calendarevent_set_mayrsvp
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+    :needs_component_jmap :JMAPExtensions :NoAltNameSpace :min_version_0_0 :max_version_0_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16459,7 +16459,7 @@ sub test_calendarevent_set_mayrsvp
 }
 
 sub test_calendarevent_set_mayinviteself
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+    :needs_component_jmap :JMAPExtensions :NoAltNameSpace :min_version_0_0 :max_version_0_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16679,7 +16679,7 @@ sub test_calendarevent_set_mayinviteself
 }
 
 sub test_calendarevent_set_mayinviteothers
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+    :needs_component_jmap :JMAPExtensions :NoAltNameSpace :min_version_0_0 :max_version_0_0
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -16989,7 +16989,7 @@ sub test_calendarevent_set_mayinvite_preserve_caldav
 }
 
 sub test_calendarevent_set_hideattendees_itip
-    :min_version_3_5 :needs_component_jmap
+    :needs_component_jmap :min_version_0_0 :max_version_0_0
 {
     my ($self) = @_;
 
@@ -17074,7 +17074,7 @@ sub test_calendarevent_set_hideattendees_itip
 }
 
 sub test_calendarevent_set_hideattendees
-    :min_version_3_5 :needs_component_jmap
+    :needs_component_jmap :min_version_0_0 :max_version_0_0
 {
     my ($self) = @_;
 
