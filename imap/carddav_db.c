@@ -230,9 +230,14 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     cdata->dav.creationdate = sqlite3_column_int(stmt, 1);
     cdata->dav.imap_uid = sqlite3_column_int(stmt, 4);
     cdata->dav.lock_expire = sqlite3_column_int(stmt, 8);
-    cdata->version = sqlite3_column_int(stmt, 9);
     cdata->kind = sqlite3_column_int(stmt, 11);
     cdata->jmapversion = sqlite3_column_int(stmt, 18);
+
+    cdata->version = sqlite3_column_int(stmt, 9);
+    if (cdata->version == 0) {
+        /* Default to v3 for records stored before we actually set the version */
+        cdata->version = 3;
+    }
 
     if (rrock->cb) {
         /* We can use the column data directly for the callback */
