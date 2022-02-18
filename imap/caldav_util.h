@@ -173,4 +173,21 @@ extern icaltimezone *caldav_get_calendar_tz(const char *mboxname, const char *us
 
 extern int caldav_is_secretarymode(const char *mboxname);
 
+#define CALDAV_CALUSERADDR_INITIALIZER { STRARRAY_INITIALIZER, 0 }
+
+struct caldav_caluseraddr {
+    strarray_t uris;
+    int pref;
+};
+
+extern int caldav_caluseraddr_read(const char *mboxname,
+                                   const char *userid,
+                                   struct caldav_caluseraddr *addrs);
+
+extern int caldav_caluseraddr_write(struct mailbox *mbox,
+                                    const char *userid,
+                                    const struct caldav_caluseraddr *addrs);
+
+extern void caldav_caluseraddr_fini(struct caldav_caluseraddr *addr);
+
 #endif /* HTTP_CALDAV_H */

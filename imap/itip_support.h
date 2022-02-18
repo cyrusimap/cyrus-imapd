@@ -141,7 +141,13 @@ struct caldav_sched_param {
 
 extern void sched_param_fini(struct caldav_sched_param *sparam);
 
-extern char *caldav_scheddefault(const char *userid);
+/* Returns the calendar collection name to use as scheduling default.
+ * This is just the *last* part of the complete path without trailing
+ * path separator, e.g. 'Default'. If no default calendar is set,
+ * then optionally return a fallback calendar where to store scheduling
+ * messages.
+ * Returns NULL, if no calendar is set and none could be guessed. */
+extern char *caldav_scheddefault(const char *userid, int fallback);
 
 extern icalproperty *find_attendee(icalcomponent *comp, const char *match);
 extern const char *get_organizer(icalcomponent *comp);

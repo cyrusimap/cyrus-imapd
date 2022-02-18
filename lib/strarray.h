@@ -95,7 +95,7 @@ void strarray_subtract_complement(strarray_t *sa, const strarray_t *sb);
 char *strarray_join(const strarray_t *, const char *sep);
 #define STRARRAY_TRIM (1<<0)
 #define STRARRAY_LCASE (1<<1)
-strarray_t *strarray_splitm(char *buf, const char *sep, int flags);
+strarray_t *strarray_splitm(strarray_t *sa, char *buf, const char *sep, int flags);
 strarray_t *strarray_split(const char *buf, const char *sep, int flags);
 strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags);
 

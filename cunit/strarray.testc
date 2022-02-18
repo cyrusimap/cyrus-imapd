@@ -598,7 +598,8 @@ static void test_split(void)
     strarray_free(sa);
 
     /* splitm - takes ownership of a strdup()d argument */
-    sa = strarray_splitm(xstrdup(WORD0" "WORD1" "WORD2" "WORD3" "WORD4), " ", 0);
+    sa = strarray_new();
+    strarray_splitm(sa, xstrdup(WORD0" "WORD1" "WORD2" "WORD3" "WORD4), " ", 0);
     CU_ASSERT_PTR_NOT_NULL(sa);
     CU_ASSERT_EQUAL(sa->count, 5);
     CU_ASSERT(sa->alloc >= sa->count);
@@ -714,7 +715,8 @@ static void test_split_lcase(void)
     strarray_free(sa);
 
     /* splitm - takes ownership of a strdup()d argument */
-    sa = strarray_splitm(xstrdup(WORD0" "WORD1" "WORD2" "WORD3" "WORD4),
+    sa = strarray_new();
+    strarray_splitm(sa, xstrdup(WORD0" "WORD1" "WORD2" "WORD3" "WORD4),
                          " ", STRARRAY_LCASE);
     CU_ASSERT_PTR_NOT_NULL(sa);
     CU_ASSERT_EQUAL(sa->count, 5);

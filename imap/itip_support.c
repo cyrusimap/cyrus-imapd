@@ -131,32 +131,89 @@ HIDDEN int partstat_changed(icalcomponent *oldcomp,
     return (get_partstat(oldcomp, attendee) != get_partstat(newcomp, attendee));
 }
 
-/* Returns the calendar collection name to use as scheduling default.
- * This is just the *last* part of the complete path without trailing
- * path separator, e.g. 'Default' */
-HIDDEN char *caldav_scheddefault(const char *userid)
+struct pick_scheddefault_rock {
+    strarray_t ignore;
+    char *collname;
+};
+
+static int pick_scheddefault_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct pick_scheddefault_rock *rock = vrock;
+    mbname_t *mbname = NULL;
+    int r = 0;
+
+    if (mbentry->mbtype & MBTYPE_CALENDAR) {
+        mbname = mbname_from_intname(mbentry->name);
+        const char *collname = strarray_nth(mbname_boxes(mbname), -1);
+        if (strarray_find(&rock->ignore, collname, 0) < 0) {
+            rock->collname = xstrdup(collname);
+            r = CYRUSDB_DONE;
+        }
+    }
+
+    mbname_free(&mbname);
+    return r;
+}
+
+HIDDEN char *caldav_scheddefault(const char *userid, int fallback)
 {
     const char *annotname =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
 
     char *calhomename = caldav_mboxname(userid, NULL);
-    char *defaultname = NULL;
-    struct buf attrib = BUF_INITIALIZER;
+    char *collname = NULL;
+    struct buf buf = BUF_INITIALIZER;
 
-    int r = annotatemore_lookupmask(calhomename, annotname, userid, &attrib);
-    if (!r && attrib.len) {
-        defaultname = buf_release(&attrib);
+    int r = annotatemore_lookupmask(calhomename, annotname, userid, &buf);
+    if (!r && buf.len) {
+        // use scheduling default
+        collname = buf_release(&buf);
     }
-    else defaultname = xstrdup(SCHED_DEFAULT);
+    else if (fallback) {
+        // attempt to fallback using SCHED_DEFAULT
+        collname = xstrdup(SCHED_DEFAULT);
+        mbentry_t *mbentry = NULL;
+        char *mboxname = caldav_mboxname(userid, collname);
+        if (mboxlist_lookup(mboxname, &mbentry, NULL)) {
+            // attempt to pick any other calendar
+            xzfree(collname);
+            struct pick_scheddefault_rock rock = { 0 };
 
-    size_t len = strlen(defaultname);
-    if (defaultname[len-1] == '/') defaultname[len-1] = '\0';
+            buf_setcstr(&buf, SCHED_INBOX);
+            if (buf.len && buf.s[buf.len-1] == '/')
+                buf_truncate(&buf, -1);
+            strarray_append(&rock.ignore, buf_cstring(&buf));
 
-    buf_free(&attrib);
+            buf_setcstr(&buf, SCHED_OUTBOX);
+            if (buf.len && buf.s[buf.len-1] == '/')
+                buf_truncate(&buf, -1);
+            strarray_append(&rock.ignore, buf_cstring(&buf));
+
+            buf_setcstr(&buf, MANAGED_ATTACH);
+            if (buf.len && buf.s[buf.len-1] == '/')
+                buf_truncate(&buf, -1);
+            strarray_append(&rock.ignore, buf_cstring(&buf));
+
+            mboxlist_mboxtree(calhomename, pick_scheddefault_cb,
+                    &rock, MBOXTREE_SKIP_ROOT);
+
+            strarray_fini(&rock.ignore);
+            collname = rock.collname;
+        }
+        mboxlist_entry_free(&mbentry);
+        free(mboxname);
+    }
+
+    if (collname) {
+        size_t len = strlen(collname);
+        if (collname[len-1] == '/')
+            collname[len-1] = '\0';
+    }
+
+    buf_free(&buf);
     free(calhomename);
-    return defaultname;
+    return collname;
 }
-
 
 /*
  * deliver_merge_reply() helper function
@@ -884,9 +941,16 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             mailboxname = caldav_mboxname(sparam->userid, sched_data->calendarid);
         }
         else {
-            char *scheddefault = caldav_scheddefault(sparam->userid);
-            mailboxname = caldav_mboxname(sparam->userid, scheddefault);
-            free(scheddefault);
+            char *scheddefault = caldav_scheddefault(sparam->userid, 1);
+            if (scheddefault) {
+                mailboxname = caldav_mboxname(sparam->userid, scheddefault);
+                free(scheddefault);
+            }
+            else {
+                xsyslog(LOG_ERR, "could not find default calendar", NULL);
+                SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
+                goto done;
+            }
         }
         buf_reset(&resource);
         /* XXX - sanitize the uid? */

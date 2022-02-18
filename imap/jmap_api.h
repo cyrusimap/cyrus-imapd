@@ -65,6 +65,7 @@
 #define JMAP_URN_MDN        "urn:ietf:params:jmap:mdn"
 #define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
+#define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
 
 #define JMAP_BLOB_EXTENSION          "https://cyrusimap.org/ns/jmap/blob"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"

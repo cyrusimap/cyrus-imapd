@@ -1880,3 +1880,81 @@ HIDDEN void caldav_attachment_url(struct buf *buf,
             userid, MANAGED_ATTACH, managedid);
 }
 
+HIDDEN int caldav_caluseraddr_read(const char *mboxname,
+                                   const char *userid,
+                                   struct caldav_caluseraddr *addr)
+{
+    static const char *annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+
+    struct buf buf = BUF_INITIALIZER;
+
+    int r = annotatemore_lookupmask(mboxname, annot, userid, &buf);
+    if (r || !buf.len) {
+        buf_free(&buf);
+        return r ? r : IMAP_NOTFOUND;
+    }
+
+    size_t len = buf_len(&buf);
+    char *val = buf_release(&buf);
+    char *sep = val;
+    long lpref = strtol(val, &sep, 10);
+    if (sep != val && *sep == ';') {
+        // splitm frees the buffer, so make the string
+        // value start without the 'pref' field
+        size_t i, j;
+        for (i = sep + 1 - val, j = 0; i < len; i++, j++) {
+            val[j] = val[i];
+        }
+        val[j] = '\0';
+    }
+    else lpref = INT_MAX;
+
+    strarray_fini(&addr->uris);
+    strarray_splitm(&addr->uris, val, ",", STRARRAY_TRIM);
+
+    if (lpref < 0 || lpref > strarray_size(&addr->uris))
+        addr->pref = strarray_size(&addr->uris);
+    else
+        addr->pref = (int)lpref;
+
+    return 0;
+}
+
+HIDDEN int caldav_caluseraddr_write(struct mailbox *mbox,
+                                    const char *userid,
+                                    const struct caldav_caluseraddr *addr)
+{
+    static const char *annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+
+    annotate_state_t *astate = NULL;
+    struct buf buf = BUF_INITIALIZER;
+
+    int r = mailbox_get_annotate_state(mbox, 0, &astate);
+    if (r) goto done;
+
+    if (strarray_size(&addr->uris)) {
+        // format: (<pref>";")?addrs[0](","addrs[1..n-1])*
+        buf_printf(&buf, "%d;", addr->pref);
+        int i;
+        for (i = 0; i < strarray_size(&addr->uris); i++) {
+            if (i) buf_putc(&buf, ',');
+            buf_appendcstr(&buf, strarray_nth(&addr->uris, i));
+        }
+    }
+
+    r = annotate_state_writemask(astate, annot, userid, &buf);
+
+done:
+    buf_free(&buf);
+    return r;
+}
+
+HIDDEN void caldav_caluseraddr_fini(struct caldav_caluseraddr *addr)
+{
+    if (addr) {
+        strarray_fini(&addr->uris);
+        addr->pref = 0;
+    }
+}

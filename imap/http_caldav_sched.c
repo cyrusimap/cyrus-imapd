@@ -2811,31 +2811,23 @@ void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
     }
     else {
         /* find schedule address based on the destination calendar's user */
+        struct caldav_caluseraddr caluseraddr = CALDAV_CALUSERADDR_INITIALIZER;
 
         /* check calendar-user-address-set for target user's mailbox */
-        const char *annotname =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-        int r = annotatemore_lookupmask(mboxname, annotname,
-                                        userid, &buf);
-        if (r || !buf.len) {
-            /* check calendar-user-address-set for target user's principal */
-            char *calhomeset = caldav_mboxname(userid, NULL);
-            buf_reset(&buf);
-            r = annotatemore_lookupmask(calhomeset, annotname,
-                                        userid, &buf);
-            free(calhomeset);
+        int r = caldav_caluseraddr_read(mboxname, userid, &caluseraddr);
+        if (r) {
+            char *calhome = caldav_mboxname(userid, NULL);
+            r = caldav_caluseraddr_read(calhome, userid, &caluseraddr);
+            free(calhome);
         }
 
-        if (!r && buf.len) {
-            strarray_t *values =
-                strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
+        if (!r && strarray_size(&caluseraddr.uris)) {
             int i;
-            for (i = 0; i < strarray_size(values); i++) {
-                const char *item = strarray_nth(values, i);
+            for (i = 0; i < strarray_size(&caluseraddr.uris); i++) {
+                const char *item = strarray_nth(&caluseraddr.uris, i);
                 if (!strncasecmp(item, "mailto:", 7)) item += 7;
                 strarray_add(addresses, item);
             }
-            strarray_free(values);
         }
         else if (strchr(userid, '@')) {
             /* userid corresponding to target */
@@ -2852,6 +2844,8 @@ void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
                 strarray_add(addresses, buf_cstring(&buf));
             }
         }
+
+        caldav_caluseraddr_fini(&caluseraddr);
     }
 
     buf_free(&buf);
