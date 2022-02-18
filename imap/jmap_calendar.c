@@ -3108,8 +3108,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         mbname_free(&rock->mbname);
         rock->mbname = mbname_from_intname(rock->mbentry->name);
 
-        const char *sched_userid = caldav_is_secretarymode(rock->mbentry->name) ?
-            req->accountid : req->userid;
+        const char *sched_userid = req->accountid;
         strarray_truncate(&rock->schedule_addresses, 0);
         get_schedule_addresses(NULL, rock->mbentry->name, sched_userid,
                 &rock->schedule_addresses);
@@ -4159,8 +4158,7 @@ static int createevent_lookup_calendar(jmap_req_t *req,
         if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
     }
     else {
-        create->sched_userid = caldav_is_secretarymode(mboxname) ?
-            req->accountid : req->userid;
+        create->sched_userid = req->accountid;
         get_schedule_addresses(NULL, mboxname, create->sched_userid,
                 &create->schedule_addresses);
     }
@@ -5254,8 +5252,7 @@ static void setcalendarevents_update(jmap_req_t *req,
         else if (r) goto done;
     }
 
-    const char *sched_userid = caldav_is_secretarymode(mailbox_name(mbox)) ?
-        req->accountid : req->userid;
+    const char *sched_userid = req->accountid;
     get_schedule_addresses(NULL, mbentry->name, sched_userid, &schedule_addresses);
 
     if (dstmbentry) {
@@ -5567,8 +5564,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     mboxname = xstrdup(mbentry->name);
     resource = xstrdup(cdata->dav.resource);
 
-    const char *sched_userid = caldav_is_secretarymode(mboxname) ?
-        req->accountid : req->userid;
+    const char *sched_userid = req->accountid;
     get_schedule_addresses(NULL, mboxname, sched_userid, &schedule_addresses);
 
     /* Check permissions. */
