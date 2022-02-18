@@ -3912,5 +3912,50 @@ sub test_contact_set_reject_duplicate_uid
         $res->[0][1]{notCreated}{contactB}{properties});
 }
 
+sub test_contactgroup_get_v4
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+UID:$id
+KIND:group
+MEMBER:urn:uuid:60f60d95-1f33-480c-bfd6-02b93a07aefc
+MEMBER:urn:uuid:3e7cfbaf-3199-41bd-8749-38b8d1c89605
+FN:Test
+REV:20220217T152253Z
+N:Test
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['ContactGroup/get', {
+        }, 'R1']
+    ]);
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals('Test', $res->[0][1]{list}[0]{name});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}[0]{contactIds}});
+}
+
 
 1;
