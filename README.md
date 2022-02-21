@@ -6,7 +6,7 @@
 Welcome
 =======
 
-This is the Cyrus IMAP Server, developer version 3.5.  This version is under
+This is the Cyrus IMAP Server, developer version 3.7.  This version is under
 active development, and is not considered "stable".
 
 The current stable series is 3.4.
