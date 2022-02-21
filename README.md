@@ -1,17 +1,14 @@
 <sup>master: </sup>[![Build Status:master](https://api.travis-ci.com/cyrusimap/cyrus-imapd.svg?branch=master)](https://travis-ci.com/cyrusimap/cyrus-imapd)
-<sup> stable(3.4): </sup>[![Build Status:3.4](https://api.travis-ci.com/cyrusimap/cyrus-imapd.svg?branch=cyrus-imapd-3.4)](https://travis-ci.com/cyrusimap/cyrus-imapd)
+<sup> stable(3.6): </sup>[![Build Status:3.6](https://api.travis-ci.com/cyrusimap/cyrus-imapd.svg?branch=cyrus-imapd-3.6)](https://travis-ci.com/cyrusimap/cyrus-imapd)
 
 -----
 
 Welcome
 =======
 
-This is the Cyrus IMAP Server, developer version 3.5.  This version is under
-active development, and is not considered "stable".
+This is the Cyrus IMAP Server, stable version 3.6.
 
-The current stable series is 3.4.
-
-Versions 3.0 and 3.2 still receive security updates, and some non-security
+Versions 3.0 to 3.4 still receive security updates, and some non-security
 bug fixes.
 
 What is Cyrus
@@ -93,7 +90,7 @@ from source (see next section).
 The latest development code is on the branch called 'master',
 and the latest code destined for the stable release is on
 the branch 'cyrus-imapd-$major.$minor'.  So the current
-stable release is called cyrus-imapd-3.4
+stable release is called cyrus-imapd-3.6
 
 Unlike releases, the git repository doesn't have a pre-built
 ./configure script.  You need to generate it with autoreconf:
