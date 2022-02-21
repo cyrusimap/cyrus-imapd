@@ -43,6 +43,7 @@
 
 #include <config.h>
 
+#include <errno.h>
 #include <string.h>
 
 #include "acl.h"
@@ -1176,6 +1177,8 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     int usedefaultalerts = 0; // for per-user data
     int is_secretarymode = caldav_is_secretarymode(mailbox_name(mailbox));
     int personalize = 0;
+
+    errno = 0;
 
     /* Copy add_imapflags, we might need to add some flags */
     if (add_imapflags) strarray_cat(&myimapflags, add_imapflags);
