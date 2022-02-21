@@ -4497,13 +4497,14 @@ static void setcalendarevents_create(jmap_req_t *req,
                                      json_t **errptr)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct createevent create;
     int r;
 
-    struct createevent create = {
-        .jsevent = jsevent,
-        .db = db,
-        .serverset = serverset
-    };
+    memset(&create, 0, sizeof(struct createevent));
+
+    create.jsevent = jsevent;
+    create.db = db;
+    create.serverset = serverset;
 
     r = createevent_lookup_calendar(req, &parser, &create);
     if (r || json_array_size(parser.invalid)) goto done;
