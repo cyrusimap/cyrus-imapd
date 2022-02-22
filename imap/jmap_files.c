@@ -780,7 +780,7 @@ static void _set_create_file(jmap_req_t *req, struct jmap_setmbox_args *args,
                          buf_release(&req->txn->buf), req->txn->req_hdrs);
 
     /* Store the resource */
-    r = dav_store_resource(req->txn, content, size, mailbox, NULL, 0, NULL);
+    r = dav_store_resource(req->txn, content, size, mailbox, NULL, 0, NULL, NULL);
     switch (r) {
     case 0:
     case HTTP_CREATED:
@@ -909,7 +909,9 @@ static void _set_create_folder(jmap_req_t *req, struct jmap_setmbox_args *args,
 
     /* shareWith */
     if (args->shareWith) {
-        r = jmap_set_sharewith(mailbox, args->shareWith, args->u.mbox.overwrite_acl);
+        r = jmap_set_sharewith(mailbox, args->shareWith,
+                               args->u.mbox.overwrite_acl,
+                               jmap_mbox_sharewith_to_rights);
         mailbox_close(&mailbox);
     }
     if (r) goto done;
@@ -1237,7 +1239,8 @@ static void _set_update_folder(jmap_req_t *req, struct jmap_setmbox_args *args,
         r = jmap_openmbox(req, mboxname, &mbox, 1);
         if (r) goto done;
 
-        r = jmap_set_sharewith(mbox, args->shareWith, 1);
+        r = jmap_set_sharewith(mbox, args->shareWith, 1,
+                               jmap_mbox_sharewith_to_rights);
 
         jmap_closembox(req, &mbox);
     }
