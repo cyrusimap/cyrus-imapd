@@ -265,13 +265,13 @@
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_object_imapuid ON dav_objs ( mailbox, imap_uid );" \
     "DROP INDEX IF EXISTS idx_res_uid;"
 
+#define CMD_DBUPGRADEv14 CMD_CREATE_SIEVE
+
 #define CMD_DBUPGRADEv15 \
     "DROP TABLE ical_jmapcache;" \
     CMD_CREATE_JSCALOBJS CMD_CREATE_JSCALCACHE \
     "INSERT INTO jscal_objs" \
     " SELECT rowid, '', modseq, createdmodseq, dtstart, dtend, alive, '' FROM ical_objs;"
-
-#define CMD_DBUPGRADEv14 CMD_CREATE_SIEVE
 
 static int sievedb_upgrade(sqldb_t *db);
 
