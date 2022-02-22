@@ -134,4 +134,6 @@ extern int jmap_mailbox_findparent(const char *mboxname, mbentry_t **mbentryp);
 extern char *jmap_mbox_get_name(const char *account_id __attribute__((unused)),
                                 const mbname_t *mbname);
 
+extern int jmap_mbox_sharewith_to_rights(int rights, json_t *jsharewith);
+
 #endif /* JMAP_MAILBOX_H */

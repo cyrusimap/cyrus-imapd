@@ -2234,7 +2234,7 @@ static void _setmbox_result_fini(struct jmap_setmbox_result *result)
     free(result->tmp_imapname);
 }
 
-static int _mbox_sharewith_to_rights(int rights, json_t *jsharewith)
+HIDDEN int jmap_mbox_sharewith_to_rights(int rights, json_t *jsharewith)
 {
     int newrights = rights;
     const char *name;
@@ -2382,8 +2382,9 @@ static void _mbox_create(jmap_req_t *req, struct jmap_setmbox_args *args,
 
     /* shareWith */
     if (args->shareWith) {
-        r = jmap_set_sharewith(mailbox, args->shareWith, args->u.mbox.overwrite_acl,
-                _mbox_sharewith_to_rights);
+        r = jmap_set_sharewith(mailbox, args->shareWith,
+                               args->u.mbox.overwrite_acl,
+                               jmap_mbox_sharewith_to_rights);
         mailbox_close(&mailbox);
     }
     if (r) goto done;
@@ -2803,8 +2804,9 @@ static void _mbox_update(jmap_req_t *req, struct jmap_setmbox_args *args,
         if (r) goto done;
 
         if (args->shareWith) {
-            r = jmap_set_sharewith(mbox, args->shareWith, args->u.mbox.overwrite_acl,
-                    _mbox_sharewith_to_rights);
+            r = jmap_set_sharewith(mbox, args->shareWith,
+                                   args->u.mbox.overwrite_acl,
+                                   jmap_mbox_sharewith_to_rights);
         }
 
         if (!r && args->u.mbox.is_seenshared >= 0) {
