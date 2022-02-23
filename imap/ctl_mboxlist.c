@@ -97,11 +97,11 @@ enum mboxop { DUMP,
               NONE };
 
 struct dumprock {
-    enum mboxop op;
-
     const char *partition;
     int purge;
+};
 
+struct popmupdaterock {
     mupdate_handle *h;
 };
 
@@ -169,53 +169,130 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
     return 0;
 }
 
-static int dump_cb(const mbentry_t *mbentry, void *rockp)
+static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
 {
-    struct dumprock *d = (struct dumprock *) rockp;
+    struct popmupdaterock *rock = (struct popmupdaterock *) rockp;
     int r = 0;
 
-    switch (d->op) {
-    case DUMP:
-        if (!d->partition || !strcmpsafe(d->partition, mbentry->partition)) {
-            printf("%s\t%d ", mbentry->name, mbentry->mbtype);
-            if (mbentry->server) printf("%s!", mbentry->server);
-            printf("%s %s>%s " TIME_T_FMT " %" PRIu32 " %llu %llu %s\n",
-                mbentry->partition, mbentry->acl,
-                mbentry->uniqueid, mbentry->mtime, mbentry->uidvalidity,
-                mbentry->foldermodseq, mbentry->createdmodseq,
-                mbentry->legacy_specialuse);
-            if (d->purge) {
-                mboxlist_deletelock(mbentry);
+    if (mbentry->mbtype & MBTYPE_DELETED)
+        return 0;
+
+    /* realpart is 'hostname!partition' */
+    char *realpart =
+        strconcat(config_servername, "!", mbentry->partition, (char *)NULL);
+    int skip_flag = 0;
+
+    /* If it is marked MBTYPE_MOVING, and it DOES match the entry,
+     * we need to unmark it.  If it does not match the entry in our
+     * list, then we assume that it successfully made the move and
+     * we delete it from the local disk */
+
+    /* If they match, then we should check that we actually need
+     * to update it.  If they *don't* match, then we believe that we
+     * need to send fresh data.  There will be no point at which something
+     * is in the act_head list that we do not have locally, because that
+     * is a condition of being in the act_head list */
+    if (act_head && !strcmp(mbentry->name, act_head->mailbox)) {
+        struct mb_node *tmp;
+
+        /* If this mailbox was moving, we want to unmark the movingness,
+         * since the MUPDATE server agreed that it lives here. */
+        /* (and later also force an mupdate push) */
+        if (mbentry->mbtype & MBTYPE_MOVING) {
+            struct mb_node *next;
+
+            syslog(LOG_WARNING, "Remove remote flag on: %s", mbentry->name);
+
+            if (warn_only) {
+                printf("Remove remote flag on: %s\n", mbentry->name);
+            } else {
+                next = xzmalloc(sizeof(struct mb_node));
+                strlcpy(next->mailbox, mbentry->name, sizeof(next->mailbox));
+                next->next = unflag_head;
+                unflag_head = next;
+            }
+
+            /* No need to update mupdate NOW, we'll get it when we
+             * untag the mailbox */
+            skip_flag = 1;
+        } else if (act_head->acl) {
+            if (
+                    !strcmp(realpart, act_head->location) &&
+                    !strcmp(mbentry->acl, act_head->acl)
+                ) {
+
+                /* Do not update if location does match, and there is an acl,
+                 * and the acl matches */
+
+                skip_flag = 1;
             }
         }
-        break;
-    case M_POPULATE:
-    {
-        if (mbentry->mbtype & MBTYPE_DELETED)
-            return 0;
 
-        /* realpart is 'hostname!partition' */
-        char *realpart =
-            strconcat(config_servername, "!", mbentry->partition, (char *)NULL);
-        int skip_flag = 0;
+        /* in any case, free the node. */
+        if (act_head->acl) free(act_head->acl);
+        tmp = act_head;
+        act_head = act_head->next;
+        if (tmp) free(tmp);
+    } else {
+        /* if they do not match, do an explicit MUPDATE find on the
+         * mailbox, and if it is living somewhere else, delete the local
+         * data, if it is NOT living somewhere else, recreate it in
+         * mupdate */
+        struct mupdate_mailboxdata *mdata;
 
-        /* If it is marked MBTYPE_MOVING, and it DOES match the entry,
-         * we need to unmark it.  If it does not match the entry in our
-         * list, then we assume that it successfully made the move and
-         * we delete it from the local disk */
+        /* if this is okay, we found it (so it is on another host, since
+         * it wasn't in our list in this position) */
+        if (!local_authoritative &&
+            !mupdate_find(rock->h, mbentry->name, &mdata)) {
+            /* since it lives on another server, schedule it for a wipe */
+            struct mb_node *next;
 
-        /* If they match, then we should check that we actually need
-         * to update it.  If they *don't* match, then we believe that we
-         * need to send fresh data.  There will be no point at which something
-         * is in the act_head list that we do not have locally, because that
-         * is a condition of being in the act_head list */
-        if (act_head && !strcmp(mbentry->name, act_head->mailbox)) {
-            struct mb_node *tmp;
+            /*
+             * Verify that what we found points at another host,
+             * not back to this host.  Good idea, since if our assumption
+             * if wrong, we'll end up removing the authoritative
+             * mailbox.
+             */
+            if (strcmp(realpart, mdata->location) == 0 ) {
+                if ( act_head ) {
+                    fprintf( stderr, "mupdate said: %s %s %s\n",
+                        act_head->mailbox, act_head->location, act_head->acl );
+                }
+                fprintf( stderr, "mailboxes.db said: %s %s %s\n",
+                        mbentry->name, realpart, mbentry->acl );
+                fprintf( stderr, "mupdate says: %s %s %s\n",
+                        mdata->mailbox, mdata->location, mdata->acl );
+                fatal("mupdate said not us before it said us", EX_SOFTWARE);
+            }
 
-            /* If this mailbox was moving, we want to unmark the movingness,
-             * since the MUPDATE server agreed that it lives here. */
-            /* (and later also force an mupdate push) */
+            /*
+             * Where does "unified" murder fit into ctl_mboxlist?
+             * 1. Only check locally hosted mailboxes.
+             * 2. Check everything.
+             * Either way, this check is just wrong!
+             */
+            if (config_mupdate_config !=
+                IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
+                /* But not for a unified configuration */
+
+                syslog(LOG_WARNING, "Remove Local Mailbox: %s", mbentry->name);
+
+                if (warn_only) {
+                    printf("Remove Local Mailbox: %s\n", mbentry->name);
+                } else {
+                    next = xzmalloc(sizeof(struct mb_node));
+                    strlcpy(next->mailbox, mbentry->name, sizeof(next->mailbox));
+                    next->next = wipe_head;
+                    wipe_head = next;
+                }
+            }
+
+            skip_flag = 1;
+        } else {
+            /* Check that it isn't flagged moving */
             if (mbentry->mbtype & MBTYPE_MOVING) {
+                /* it's flagged moving, we'll fix it later (and
+                 * push it then too) */
                 struct mb_node *next;
 
                 syslog(LOG_WARNING, "Remove remote flag on: %s", mbentry->name);
@@ -229,149 +306,47 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
                     unflag_head = next;
                 }
 
-                /* No need to update mupdate NOW, we'll get it when we
+                /* No need to update mupdate now, we'll get it when we
                  * untag the mailbox */
                 skip_flag = 1;
-            } else if (act_head->acl) {
-                if (
-                        !strcmp(realpart, act_head->location) &&
-                        !strcmp(mbentry->acl, act_head->acl)
-                    ) {
-
-                    /* Do not update if location does match, and there is an acl,
-                     * and the acl matches */
-
-                    skip_flag = 1;
-                }
-            }
-
-            /* in any case, free the node. */
-            if (act_head->acl) free(act_head->acl);
-            tmp = act_head;
-            act_head = act_head->next;
-            if (tmp) free(tmp);
-        } else {
-            /* if they do not match, do an explicit MUPDATE find on the
-             * mailbox, and if it is living somewhere else, delete the local
-             * data, if it is NOT living somewhere else, recreate it in
-             * mupdate */
-            struct mupdate_mailboxdata *mdata;
-
-            /* if this is okay, we found it (so it is on another host, since
-             * it wasn't in our list in this position) */
-            if (!local_authoritative &&
-               !mupdate_find(d->h, mbentry->name, &mdata)) {
-                /* since it lives on another server, schedule it for a wipe */
-                struct mb_node *next;
-
-                /*
-                 * Verify that what we found points at another host,
-                 * not back to this host.  Good idea, since if our assumption
-                 * if wrong, we'll end up removing the authoritative
-                 * mailbox.
-                 */
-                if (strcmp(realpart, mdata->location) == 0 ) {
-                    if ( act_head ) {
-                        fprintf( stderr, "mupdate said: %s %s %s\n",
-                            act_head->mailbox, act_head->location, act_head->acl );
-                    }
-                    fprintf( stderr, "mailboxes.db said: %s %s %s\n",
-                            mbentry->name, realpart, mbentry->acl );
-                    fprintf( stderr, "mupdate says: %s %s %s\n",
-                            mdata->mailbox, mdata->location, mdata->acl );
-                    fatal("mupdate said not us before it said us", EX_SOFTWARE);
-                }
-
-                /*
-                 * Where does "unified" murder fit into ctl_mboxlist?
-                 * 1. Only check locally hosted mailboxes.
-                 * 2. Check everything.
-                 * Either way, this check is just wrong!
-                 */
-                if (config_mupdate_config !=
-                    IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
-                    /* But not for a unified configuration */
-
-                    syslog(LOG_WARNING, "Remove Local Mailbox: %s", mbentry->name);
-
-                    if (warn_only) {
-                        printf("Remove Local Mailbox: %s\n", mbentry->name);
-                    } else {
-                        next = xzmalloc(sizeof(struct mb_node));
-                        strlcpy(next->mailbox, mbentry->name, sizeof(next->mailbox));
-                        next->next = wipe_head;
-                        wipe_head = next;
-                    }
-                }
-
-                skip_flag = 1;
-            } else {
-                /* Check that it isn't flagged moving */
-                if (mbentry->mbtype & MBTYPE_MOVING) {
-                    /* it's flagged moving, we'll fix it later (and
-                     * push it then too) */
-                    struct mb_node *next;
-
-                    syslog(LOG_WARNING, "Remove remote flag on: %s", mbentry->name);
-
-                    if (warn_only) {
-                        printf("Remove remote flag on: %s\n", mbentry->name);
-                    } else {
-                        next = xzmalloc(sizeof(struct mb_node));
-                        strlcpy(next->mailbox, mbentry->name, sizeof(next->mailbox));
-                        next->next = unflag_head;
-                        unflag_head = next;
-                    }
-
-                    /* No need to update mupdate now, we'll get it when we
-                     * untag the mailbox */
-                    skip_flag = 1;
-                }
             }
         }
+    }
 
-        if (skip_flag) {
-            free(realpart);
-            break;
-        }
-
-        syslog(LOG_WARNING, "Force Activate: %s", mbentry->name);
-
-        if (warn_only) {
-            printf("Force Activate: %s\n", mbentry->name);
-            free(realpart);
-            break;
-        }
-
-        r = mupdate_activate(d->h, mbentry->name, realpart, mbentry->acl);
-
-        if (r == MUPDATE_NOCONN) {
-            fprintf(stderr, "permanent failure storing '%s'\n", mbentry->name);
-            r = IMAP_IOERROR;
-        } else if (r == MUPDATE_FAIL) {
-            fprintf(stderr,
-                    "temporary failure storing '%s' (update continuing)\n",
-                    mbentry->name);
-            r = 0;
-       } else if (r) {
-           fprintf(
-                   stderr,
-                   "error storing '%s' (update continuing): %s\n",
-                   mbentry->name,
-                   error_message(r)
-               );
-           r = 0;
-        }
-
+    if (skip_flag) {
         free(realpart);
-
-        break;
+        return 0;
     }
 
-    default: /* yikes ! */
-        abort();
-        break;
+    syslog(LOG_WARNING, "Force Activate: %s", mbentry->name);
+
+    if (warn_only) {
+        printf("Force Activate: %s\n", mbentry->name);
+        free(realpart);
+        return 0;
     }
+
+    r = mupdate_activate(rock->h, mbentry->name, realpart, mbentry->acl);
+
+    if (r == MUPDATE_NOCONN) {
+        fprintf(stderr, "permanent failure storing '%s'\n", mbentry->name);
+        r = IMAP_IOERROR;
+    } else if (r == MUPDATE_FAIL) {
+        fprintf(stderr,
+                "temporary failure storing '%s' (update continuing)\n",
+                mbentry->name);
+        r = 0;
+    } else if (r) {
+        fprintf(
+                stderr,
+                "error storing '%s' (update continuing): %s\n",
+                mbentry->name,
+                error_message(r)
+            );
+        r = 0;
+    }
+
+    free(realpart);
 
     return r;
 }
@@ -408,155 +383,170 @@ static int yes(void)
  * If it is not local and present on mupdate for this host, delete it from
  *    mupdate.
  */
-
-static void do_dump(enum mboxop op, const char *part, int purge, int intermediary)
+static void do_pop_mupdate(void)
 {
-    struct dumprock d;
+    struct popmupdaterock popmupdaterock = {0};
     int ret;
     char buf[8192];
 
-    assert(op == DUMP || op == M_POPULATE);
-    assert(op == DUMP || !purge);
-    assert(op == DUMP || !part);
+    ret = mupdate_connect(NULL, NULL, &(popmupdaterock.h), NULL);
+    if (ret) {
+        fprintf(stderr, "couldn't connect to mupdate server\n");
+        exit(1);
+    }
 
-    d.op = op;
-    d.partition = part;
-    d.purge = purge;
+    /* now we need a list of what the remote thinks we have
+        * To generate it, ask for a prefix of '<our hostname>!',
+        * (to ensure we get exactly our hostname) */
+    snprintf(buf, sizeof(buf), "%s!", config_servername);
+    ret = mupdate_list(popmupdaterock.h, mupdate_list_cb, buf, NULL);
+    if (ret) {
+        fprintf(stderr, "couldn't do LIST command on mupdate server\n");
+        exit(1);
+    }
 
-    if (op == M_POPULATE) {
-        ret = mupdate_connect(NULL, NULL, &(d.h), NULL);
-        if (ret) {
-            fprintf(stderr, "couldn't connect to mupdate server\n");
-            exit(1);
-        }
+    /* Run pending mupdate deletes */
+    while (del_head) {
+        struct mb_node *me = del_head;
+        del_head = del_head->next;
 
-        /* now we need a list of what the remote thinks we have
-         * To generate it, ask for a prefix of '<our hostname>!',
-         * (to ensure we get exactly our hostname) */
-        snprintf(buf, sizeof(buf), "%s!", config_servername);
-        ret = mupdate_list(d.h, mupdate_list_cb, buf, NULL);
-        if (ret) {
-            fprintf(stderr, "couldn't do LIST command on mupdate server\n");
-            exit(1);
-        }
+        syslog(LOG_WARNING, "Remove from MUPDATE: %s", me->mailbox);
 
-        /* Run pending mupdate deletes */
-        while (del_head) {
-            struct mb_node *me = del_head;
-            del_head = del_head->next;
-
-            syslog(LOG_WARNING, "Remove from MUPDATE: %s", me->mailbox);
-
-            if (warn_only) {
-                printf("Remove from MUPDATE: %s\n", me->mailbox);
-            } else {
-                ret = mupdate_delete(d.h, me->mailbox);
-                if (ret) {
-                    fprintf(stderr,
-                            "couldn't mupdate delete %s\n", me->mailbox);
-                    exit(1);
-                }
+        if (warn_only) {
+            printf("Remove from MUPDATE: %s\n", me->mailbox);
+        } else {
+            ret = mupdate_delete(popmupdaterock.h, me->mailbox);
+            if (ret) {
+                fprintf(stderr,
+                        "couldn't mupdate delete %s\n", me->mailbox);
+                exit(1);
             }
+        }
 
-            free(me);
+        free(me);
+    }
+
+    /* Run callback for mailboxes */
+    int flags = MBOXTREE_TOMBSTONES;
+    mboxlist_allmbox("", &pop_mupdate_cb, &popmupdaterock, flags);
+
+    /* Remove MBTYPE_MOVING flags (unflag_head) */
+    while (unflag_head) {
+        mbentry_t *mbentry = NULL;
+        struct mb_node *me = unflag_head;
+
+        unflag_head = unflag_head->next;
+
+        ret = mboxlist_lookup(me->mailbox, &mbentry, NULL);
+        if (ret) {
+            fprintf(stderr,
+                    "couldn't perform lookup to un-remote-flag %s\n",
+                    me->mailbox);
+            exit(1);
+        }
+
+        /* Reset the partition! */
+        free(mbentry->server);
+        mbentry->server = NULL;
+        mbentry->mbtype &= ~(MBTYPE_MOVING|MBTYPE_REMOTE);
+        ret = mboxlist_updatelock(mbentry, 1);
+        if (ret) {
+            fprintf(stderr,
+                    "couldn't perform update to un-remote-flag %s\n",
+                    me->mailbox);
+            exit(1);
+        }
+
+        /* force a push to mupdate */
+        snprintf(buf, sizeof(buf), "%s!%s", config_servername, mbentry->partition);
+        ret = mupdate_activate(popmupdaterock.h, me->mailbox, buf, mbentry->acl);
+        if (ret) {
+            fprintf(stderr,
+                    "couldn't perform mupdatepush to un-remote-flag %s\n",
+                    me->mailbox);
+            exit(1);
+        }
+
+        mboxlist_entry_free(&mbentry);
+        free(me);
+    }
+
+    /* Delete local mailboxes where needed (wipe_head) */
+    if (interactive) {
+        int count = 0;
+        struct mb_node *me;
+
+        for (me = wipe_head; me != NULL; me = me->next) count++;
+
+        if ( count > 0 ) {
+            fprintf(stderr, "OK to delete %d local mailboxes? ", count);
+            if (!yes()) {
+                fprintf(stderr, "Cancelled!\n");
+                exit(1);
+            }
         }
     }
+
+    while (wipe_head) {
+        struct mb_node *me = wipe_head;
+        wipe_head = wipe_head->next;
+
+        struct mboxlock *namespacelock = mboxname_usernamespacelock(me->mailbox);
+
+        if (!mboxlist_delayed_delete_isenabled() ||
+            mboxname_isdeletedmailbox(me->mailbox, NULL)) {
+            ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL,
+                    MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
+        } else {
+            ret = mboxlist_delayed_deletemailbox(me->mailbox, 1, "", NULL, NULL,
+                    MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
+        }
+
+        mboxname_release(&namespacelock);
+
+        if (ret) {
+            fprintf(stderr, "couldn't delete defunct mailbox %s\n",
+                    me->mailbox);
+            exit(1);
+        }
+
+        free(me);
+    }
+
+    /* Done with mupdate */
+    mupdate_disconnect(&(popmupdaterock.h));
+    sasl_done();
+}
+
+static int dump_cb(const mbentry_t *mbentry, void *rockp)
+{
+    struct dumprock *d = (struct dumprock *) rockp;
+    int r = 0;
+
+    if (!d->partition || !strcmpsafe(d->partition, mbentry->partition)) {
+        printf("%s\t%d ", mbentry->name, mbentry->mbtype);
+        if (mbentry->server) printf("%s!", mbentry->server);
+        printf("%s %s>%s " TIME_T_FMT " %" PRIu32 " %llu %llu %s\n",
+               mbentry->partition, mbentry->acl,
+               mbentry->uniqueid, mbentry->mtime, mbentry->uidvalidity,
+               mbentry->foldermodseq, mbentry->createdmodseq,
+               mbentry->legacy_specialuse);
+        if (d->purge) {
+            mboxlist_deletelock(mbentry);
+        }
+    }
+
+    return r;
+}
+
+static void do_dump(const char *part, int purge, int intermediary)
+{
+    struct dumprock d = { part, purge };
 
     /* Dump Database */
     int flags = MBOXTREE_TOMBSTONES;
     if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
     mboxlist_allmbox("", &dump_cb, &d, flags);
-
-    if (op == M_POPULATE) {
-        /* Remove MBTYPE_MOVING flags (unflag_head) */
-        while (unflag_head) {
-            mbentry_t *mbentry = NULL;
-            struct mb_node *me = unflag_head;
-
-            unflag_head = unflag_head->next;
-
-            ret = mboxlist_lookup(me->mailbox, &mbentry, NULL);
-            if (ret) {
-                fprintf(stderr,
-                        "couldn't perform lookup to un-remote-flag %s\n",
-                        me->mailbox);
-                exit(1);
-            }
-
-            /* Reset the partition! */
-            free(mbentry->server);
-            mbentry->server = NULL;
-            mbentry->mbtype &= ~(MBTYPE_MOVING|MBTYPE_REMOTE);
-            ret = mboxlist_updatelock(mbentry, 1);
-            if (ret) {
-                fprintf(stderr,
-                        "couldn't perform update to un-remote-flag %s\n",
-                        me->mailbox);
-                exit(1);
-            }
-
-            /* force a push to mupdate */
-            snprintf(buf, sizeof(buf), "%s!%s", config_servername, mbentry->partition);
-            ret = mupdate_activate(d.h, me->mailbox, buf, mbentry->acl);
-            if (ret) {
-                fprintf(stderr,
-                        "couldn't perform mupdatepush to un-remote-flag %s\n",
-                        me->mailbox);
-                exit(1);
-            }
-
-            mboxlist_entry_free(&mbentry);
-            free(me);
-        }
-
-        /* Delete local mailboxes where needed (wipe_head) */
-        if (interactive) {
-            int count = 0;
-            struct mb_node *me;
-
-            for (me = wipe_head; me != NULL; me = me->next) count++;
-
-            if ( count > 0 ) {
-                fprintf(stderr, "OK to delete %d local mailboxes? ", count);
-                if (!yes()) {
-                    fprintf(stderr, "Cancelled!\n");
-                    exit(1);
-                }
-            }
-        }
-
-        while (wipe_head) {
-            struct mb_node *me = wipe_head;
-            wipe_head = wipe_head->next;
-
-            struct mboxlock *namespacelock = mboxname_usernamespacelock(me->mailbox);
-
-            if (!mboxlist_delayed_delete_isenabled() ||
-                mboxname_isdeletedmailbox(me->mailbox, NULL)) {
-                ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL,
-                        MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
-            } else {
-                ret = mboxlist_delayed_deletemailbox(me->mailbox, 1, "", NULL, NULL,
-                        MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
-            }
-
-            mboxname_release(&namespacelock);
-
-            if (ret) {
-                fprintf(stderr, "couldn't delete defunct mailbox %s\n",
-                        me->mailbox);
-                exit(1);
-            }
-
-            free(me);
-        }
-
-        /* Done with mupdate */
-        mupdate_disconnect(&(d.h));
-        sasl_done();
-    }
-
-    return;
 }
 
 static void do_undump(void)
@@ -973,21 +963,26 @@ int main(int argc, char *argv[])
     switch (op) {
     case M_POPULATE:
         syslog(LOG_NOTICE, "%spopulating mupdate", warn_only ? "test " : "");
-        GCC_FALLTHROUGH
+        mboxlist_init(0);
+        mboxlist_open(mboxdb_fname);
+
+        do_pop_mupdate();
+
+        mboxlist_close();
+        mboxlist_done();
+
+        syslog(LOG_NOTICE, "done %spopulating mupdate", warn_only ? "test " : "");
+        break;
 
     case DUMP:
         mboxlist_init(0);
         mboxlist_open(mboxdb_fname);
 
-        do_dump(op, partition, dopurge, dointermediary);
+        do_dump(partition, dopurge, dointermediary);
 
         mboxlist_close();
         mboxlist_done();
 
-        if (op == M_POPULATE) {
-            syslog(LOG_NOTICE,
-                   "done %spopulating mupdate", warn_only ? "test " : "");
-        }
         break;
 
     case UNDUMP:
