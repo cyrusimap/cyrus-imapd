@@ -42,11 +42,7 @@ Options
 
 .. option:: -d
 
-    Dump the contents of the database to standard output in a portable
-    flat-text format.  NOTE: In Cyrus versions 2.2.13 and earlier, the
-    dump format did not include the mailbox type flags, breaking remote
-    mailboxes (frontends, mupdate master, unified backends) when
-    undumped.
+    Dump the contents of the database to standard output in JSON format.
 
 .. option:: -x
 
@@ -119,24 +115,7 @@ Examples
 
 ..
 
-        Dump the mailboxes list in portable text format.
-
-.. only:: html
-
-    ::
-
-        tech	0 default anyone	lrsp	group:tech	lrswipkxtecda
-        tech.support	0 default johnsmith	lrswipkxtea	group:tech	lrswipkxtecda	anyone	lrsp
-        tech.support.rancid	0 default johnsmith	lrswipkxtea	group:tech	lrswipkxtecda	anyone	lrsp
-        tech.support.commits	0 default johnsmith	lrswipkxtea	group:tech	lrswipkxtecda	anyone	lrsp
-        tech.support.abuse	0 default johnsmith	lrswipkxtea	group:tech	lrswipkxtecda	anyone	lrsp
-        tech.systems	0 default anyone	lrsp	group:tech	lrswipkxtecda
-        tech.systems.box	0 default anyone	lrsp	group:tech	lrswipkxtecda
-        tech.systems.switch	0 default anyone	lrsp	group:tech	lrswipkxtecda
-        tech.systems.files	0 default anyone	lrsp	group:tech	lrswipkxtecda
-        tech.systems.printer	0 default anyone	lrsp	group:tech	lrswipkxtecda
-        tech.technet	0 default anyone	lrsp	group:tech	lrswipkxtecda
-..
+        Dump the mailboxes list to standard output in JSON format
 
 .. parsed-literal::
 

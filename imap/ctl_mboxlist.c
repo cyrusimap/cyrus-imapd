@@ -65,6 +65,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <inttypes.h>
 #include <sysexits.h>
 #include <syslog.h>
 #include <stdlib.h>
@@ -75,6 +76,7 @@
 #include "annotate.h"
 #include "dlist.h"
 #include "global.h"
+#include "json_support.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "mupdate.h"
@@ -99,6 +101,7 @@ enum mboxop { DUMP,
 struct dumprock {
     const char *partition;
     int purge;
+    const char *sep;
 };
 
 struct popmupdaterock {
@@ -521,19 +524,118 @@ static void do_pop_mupdate(void)
 static int dump_cb(const mbentry_t *mbentry, void *rockp)
 {
     struct dumprock *d = (struct dumprock *) rockp;
-    int r = 0;
+    int i, r = 0;
+    json_t *jparent, *jobj, *jname_history;
+    char *output = NULL;
+    static struct buf buf = BUF_INITIALIZER;
 
-    if (!d->partition || !strcmpsafe(d->partition, mbentry->partition)) {
-        printf("%s\t%d ", mbentry->name, mbentry->mbtype);
-        if (mbentry->server) printf("%s!", mbentry->server);
-        printf("%s %s>%s " TIME_T_FMT " %" PRIu32 " %llu %llu %s\n",
-               mbentry->partition, mbentry->acl,
-               mbentry->uniqueid, mbentry->mtime, mbentry->uidvalidity,
-               mbentry->foldermodseq, mbentry->createdmodseq,
-               mbentry->legacy_specialuse);
-        if (d->purge) {
-            mboxlist_deletelock(mbentry);
-        }
+    /* skip if we're limiting by partition and this one doesn't match */
+    if (d->partition && strcmpsafe(d->partition, mbentry->partition))
+        return 0;
+
+    jobj = json_object();
+
+    /* char *name; */
+    json_object_set_new(jobj, "name", json_string(mbentry->name));
+
+    /* char *ext_name
+     * this field is a place to cache a calculated value, not
+     * a real value in mailboxes.db, so don't output it.
+     */
+
+    /* time_t mtime; */
+    buf_reset(&buf);
+    buf_printf(&buf, TIME_T_FMT, mbentry->mtime);
+    json_object_set_new(jobj, "mtime", json_string(buf_cstring(&buf)));
+
+    /* uint32_t uidvalidity; */
+    buf_reset(&buf);
+    buf_printf(&buf, "%" PRIu32, mbentry->uidvalidity);
+    json_object_set_new(jobj, "uidvalidity", json_string(buf_cstring(&buf)));
+
+    /* modseq_t createdmodseq; */
+    buf_reset(&buf);
+    buf_printf(&buf, MODSEQ_FMT, mbentry->createdmodseq);
+    json_object_set_new(jobj, "createdmodseq", json_string(buf_cstring(&buf)));
+
+    /* modseq_t foldermodseq; */
+    buf_reset(&buf);
+    buf_printf(&buf, MODSEQ_FMT, mbentry->foldermodseq);
+    json_object_set_new(jobj, "foldermodseq", json_string(buf_cstring(&buf)));
+
+    /* uint32_t mbtype; */
+    json_object_set_new(jobj, "mbtype",
+        json_string(mboxlist_mbtype_to_string(mbentry->mbtype)));
+
+    /* char *partition; */
+    json_object_set_new(jobj, "partition", json_string(mbentry->partition));
+
+    /* char *server; */
+    json_object_set_new(jobj, "server", json_string(mbentry->server));
+
+    /* char *acl; */
+    /* XXX expand acl? */
+    json_object_set_new(jobj, "acl", json_string(mbentry->acl));
+
+    /* char *uniqueid; */
+    json_object_set_new(jobj, "uniqueid", json_string(mbentry->uniqueid));
+
+    /* char *legacy_specialuse; */
+    json_object_set_new(jobj, "legacy_specialuse",
+                              json_string(mbentry->legacy_specialuse));
+
+    /* ptrarray_t name_history; */
+    jname_history = json_array();
+    for (i = 0; i < mbentry->name_history.count; i++) {
+        former_name_t *histitem = ptrarray_nth(&mbentry->name_history, i);
+        json_t *jhistitem = json_object();
+
+        json_object_set_new(jhistitem, "name", json_string(histitem->name));
+        buf_reset(&buf);
+        buf_printf(&buf, TIME_T_FMT, histitem->mtime);
+        json_object_set_new(jhistitem, "mtime",
+                                       json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+        buf_printf(&buf, "%" PRIu32, histitem->uidvalidity);
+        json_object_set_new(jhistitem, "uidvalidity",
+                                       json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+        buf_printf(&buf, MODSEQ_FMT, histitem->createdmodseq);
+        json_object_set_new(jhistitem, "createdmodseq",
+                                       json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
+        buf_printf(&buf, MODSEQ_FMT, histitem->foldermodseq);
+        json_object_set_new(jhistitem, "foldermodseq",
+                                       json_string(buf_cstring(&buf)));
+        json_object_set_new(jhistitem, "mbtype",
+            json_string(mboxlist_mbtype_to_string(histitem->mbtype)));
+        json_object_set_new(jhistitem, "partition",
+                                       json_string(histitem->partition));
+
+        json_array_append_new(jname_history, jhistitem);
+    }
+    json_object_set_new(jobj, "name_history", jname_history);
+
+    jparent = json_object();
+    json_object_set_new(jparent, mbentry->name, jobj);
+
+    output = json_dumps(jparent, JSON_EMBED);
+    if (!output) {
+        xsyslog(LOG_ERR, "unable to stringify json object",
+                         "mboxname=<%s>", mbentry->name);
+        return IMAP_INTERNAL;
+    }
+
+    printf("%s%s", d->sep, output);
+
+    if (d->sep && !*d->sep)
+        d->sep = ",\n";
+
+    free(output);
+    json_decref(jparent);
+
+    if (d->purge) {
+        mboxlist_deletelock(mbentry);
     }
 
     return r;
@@ -541,12 +643,15 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
 
 static void do_dump(const char *part, int purge, int intermediary)
 {
-    struct dumprock d = { part, purge };
+    struct dumprock d = { part, purge, "" };
 
     /* Dump Database */
     int flags = MBOXTREE_TOMBSTONES;
     if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
+
+    puts("{");
     mboxlist_allmbox("", &dump_cb, &d, flags);
+    puts("\n}");
 }
 
 static void do_undump(void)
