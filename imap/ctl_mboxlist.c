@@ -92,8 +92,6 @@ extern char *optarg;
 
 enum mboxop { DUMP,
               M_POPULATE,
-              RECOVER,
-              CHECKPOINT,
               UNDUMP,
               VERIFY,
               NONE };
@@ -906,26 +904,6 @@ int main(int argc, char *argv[])
             alt_config = optarg;
             break;
 
-        case 'r':
-            /* deprecated, but we still support it */
-            fprintf(stderr, "ctl_mboxlist -r is deprecated: "
-                    "use ctl_cyrusdb -r instead\n");
-            syslog(LOG_WARNING, "ctl_mboxlist -r is deprecated: "
-                   "use ctl_cyrusdb -r instead");
-            if (op == NONE) op = RECOVER;
-            else usage();
-            break;
-
-        case 'c':
-            /* deprecated, but we still support it */
-            fprintf(stderr, "ctl_mboxlist -c is deprecated: "
-                    "use ctl_cyrusdb -c instead\n");
-            syslog(LOG_WARNING, "ctl_mboxlist -c is deprecated: "
-                   "use ctl_cyrusdb -c instead");
-            if (op == NONE) op = CHECKPOINT;
-            else usage();
-            break;
-
         case 'f':
             if (!mboxdb_fname) {
                 mboxdb_fname = optarg;
@@ -989,29 +967,10 @@ int main(int argc, char *argv[])
     if (op != DUMP && dopurge) usage();
     if (op != DUMP && dointermediary) usage();
 
-    if (op == RECOVER) {
-        syslog(LOG_NOTICE, "running mboxlist recovery");
-        libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
-    }
-
     cyrus_init(alt_config, "ctl_mboxlist", 0, 0);
     global_sasl_init(1,0,NULL);
 
     switch (op) {
-    case RECOVER:
-        /* this was done by the call to cyrus_init via libcyrus */
-        syslog(LOG_NOTICE, "done running mboxlist recovery");
-        break;
-
-    case CHECKPOINT:
-        syslog(LOG_NOTICE, "checkpointing mboxlist");
-        mboxlist_init(MBOXLIST_SYNC);
-        mboxlist_open(NULL);
-        mboxlist_close();
-        mboxlist_done();
-        syslog(LOG_NOTICE, "done checkpointing mboxlist");
-        break;
-
     case M_POPULATE:
         syslog(LOG_NOTICE, "%spopulating mupdate", warn_only ? "test " : "");
         GCC_FALLTHROUGH
