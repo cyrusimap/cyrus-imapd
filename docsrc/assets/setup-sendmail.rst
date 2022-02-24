@@ -43,7 +43,7 @@ Create the file cf/feature/anfi_vcyrus.m4:
   dnl
   dnl     Contributed by Andrzej Filip and Dilyan Palauzov
   LOCAL_CONFIG
-  # cyrus - map for checking cyrus maibox presence
+  # cyrus - map for checking cyrus mailbox presence
   Kcyrus socket -T<TMPF> -a<OK> local:/var/imap/socket/smmapd
   
   LOCAL_RULESETS

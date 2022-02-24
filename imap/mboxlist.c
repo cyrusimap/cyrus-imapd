@@ -2992,7 +2992,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                 if (mboxevent->type == EVENT_MAILBOX_DELETE)
                     mboxevent_extract_mailbox(mboxevent, oldmailbox);
                 else {
-                    /* New maibox is the same as old, except for the name */
+                    /* New mailbox is the same as old, except for the name */
                     char *name = oldmailbox->mbentry->name;
                     oldmailbox->mbentry->name = (char *) newname;
                     mboxevent_extract_mailbox(mboxevent, oldmailbox);
