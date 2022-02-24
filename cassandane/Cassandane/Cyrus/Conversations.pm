@@ -1025,4 +1025,39 @@ sub test_guid_duplicate_expunges
     }
 }
 
+# Test APPEND of two messages, the second of which has a different subject,
+# and would otherwise have threaded, but also has an X-ME-Message-ID header
+# and make sure they don't thread
+#
+sub test_x_me_message_id_nomatch_threading
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->{gen}->generate(subject => 'Message A');
+    $exp{A}->set_headers('Message-ID', '<fake1700@example.com>');
+    $exp{A}->set_attribute(cid => $exp{A}->make_cid());
+
+    $self->{store}->write_begin();
+    $self->{store}->write_message($exp{A});
+    $self->{store}->write_end();
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating message B";
+    $exp{B} = $exp{A}->clone();
+    $exp{B}->set_headers('Message-ID', '<fake1701@example.com>');
+    $exp{B}->set_headers('In-Reply-To', '<fake1700@example.com>');
+    $exp{B}->set_headers('X-ME-Message-ID', '<unknown-id@example.com>');
+    $exp{B}->set_headers('Subject', 'Message B');
+    $exp{B}->set_body("Completely different text here\r\n");
+    $exp{B}->set_attribute(cid => $exp{B}->make_cid());
+
+    $self->{store}->write_begin();
+    $self->{store}->write_message($exp{B});
+    $self->{store}->write_end();
+    $self->check_messages(\%exp);
+}
+
 1;
