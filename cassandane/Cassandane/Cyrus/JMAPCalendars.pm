@@ -9460,6 +9460,38 @@ sub test_calendar_set_defaultalerts
     $self->assert_deep_equals($defaultAlertsWithoutTime,
         $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
 
+    my $alert4 = {
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => '-PT30M',
+        },
+        action => 'display',
+    };
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarId => {
+                    'defaultAlertsWithTime/alert1' => undef,
+                    'defaultAlertsWithTime/alert4' => $alert4,
+                    'defaultAlertsWithoutTime/alert3/trigger/offset' => '-PT5M',
+                }
+            }
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => [$calendarId],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R2']
+                              ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarId});
+    $self->assert_null($res->[1][1]{list}[0]{defaultAlertsWithTime}{alert1});
+    $self->assert_deep_equals($alert4,
+        $res->[1][1]{list}[0]{defaultAlertsWithTime}{alert4});
+    $self->assert_equals('-PT5M',
+                         $res->[1][1]{list}[0]{defaultAlertsWithoutTime}{alert3}{trigger}{offset});
+
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
