@@ -1275,7 +1275,12 @@ static void setcalendar_apply_defaultalerts_patch(json_t *arg,
 
         /* Add patched defaultAlerts to /set args */
         json_object_foreach(new, field, jval) {
-            json_object_set(arg, field, jval);
+            if (json_object_size(jval)) {
+                json_object_set(arg, field, jval);
+            }
+            else {
+                json_object_set_new(arg, field, json_null());
+            }
         }
 
         json_decref(cur);
