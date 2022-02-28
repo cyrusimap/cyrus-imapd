@@ -1226,12 +1226,78 @@ static void setcalendar_readalerts(struct jmap_parser *parser,
     *alertsp = alerts;
 }
 
+static void setcalendar_apply_defaultalerts_patch(json_t *arg,
+                                                  const char *userid,
+                                                  const char *mboxname,
+                                                  json_t *invalid)
+{
+    json_t *patches = json_object();  /* Container for defaultAlerts patches */
+    unsigned withTime = 0, withoutTime = 0;
+    const char *field = NULL;
+    json_t *jval;
+
+    json_object_foreach(arg, field, jval) {
+        if (!strncmp(field, "defaultAlertsWithTime/", 22))  {
+            withTime++;
+        }
+        else if (!strncmp(field, "defaultAlertsWithoutTime/", 25))  {
+            withoutTime++;
+        }
+        else {
+            continue;
+        }
+
+        /* Add this patch to container */
+        json_object_set(patches, field, jval);
+    }
+
+    if (withTime || withoutTime) {
+        json_t *cur = json_object();  /* Container for current defaultAlerts */
+
+        if (withTime) {
+            /* Add current defaultAlertsWithTime to container */
+            static const char *annot =
+                DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-datetime";
+
+            json_object_set_new(cur, "defaultAlertsWithTime",
+                                getcalendar_defaultalerts(userid, mboxname, annot));
+        }
+        if (withoutTime) {
+            /* Add current defaultAlertsWithoutTime to container */
+            static const char *annot =
+                DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-date";
+
+            json_object_set_new(cur, "defaultAlertsWithoutTime",
+                                getcalendar_defaultalerts(userid, mboxname, annot));
+        }
+
+        json_t *new = jmap_patchobject_apply(cur, patches, invalid);
+
+        /* Add patched defaultAlerts to /set args */
+        json_object_foreach(new, field, jval) {
+            if (json_object_size(jval)) {
+                json_object_set(arg, field, jval);
+            }
+            else {
+                json_object_set_new(arg, field, json_null());
+            }
+        }
+
+        json_decref(cur);
+        json_decref(new);
+    }
+
+    json_decref(patches);
+}
+
 static void setcalendar_readprops(jmap_req_t *req,
                                   struct jmap_parser *parser,
                                   struct setcalendar_props *props,
                                   json_t *arg,
-                                  int is_create)
+                                  const char *mboxname)
 {
+    int is_create = (mboxname == NULL);
+
     memset(props, 0, sizeof(struct setcalendar_props));
 
     if (is_create) {
@@ -1455,6 +1521,11 @@ static void setcalendar_readprops(jmap_req_t *req,
 
     /* defaultAlertsWithTime */
     /* defaultAlertsWithoutTime */
+    if (!is_create) {
+        setcalendar_apply_defaultalerts_patch(arg, req->userid,
+                                              mboxname, parser->invalid);
+    }
+
     struct jmapical_ctx *jmapctx = jmapical_context_new(req, NULL);
     setcalendar_readalerts(parser, "defaultAlertsWithTime", arg,
             jmapctx->alert.emailrecipient, &props->defaultalerts_withtime);
@@ -1895,7 +1966,7 @@ static void setcalendars_create(struct jmap_req *req,
     int r = 0;
 
     /* Parse and validate properties. */
-    setcalendar_readprops(req, &parser, &props, arg, /*is_create*/1);
+    setcalendar_readprops(req, &parser, &props, arg, /*is_create*/NULL);
     if (props.share.With) {
         if (!jmap_hasrights(req, parentname, ACL_ADMIN)) {
             jmap_parser_invalid(&parser, "shareWith");
@@ -1988,7 +2059,7 @@ static void setcalendars_update(jmap_req_t *req,
 
     /* Parse and validate properties. */
     struct setcalendar_props props;
-    setcalendar_readprops(req, &parser, &props, arg, /*is_create*/0);
+    setcalendar_readprops(req, &parser, &props, arg, mboxname);
     if (props.share.With) {
         if (!jmap_hasrights(req, mboxname, ACL_ADMIN)) {
             jmap_parser_invalid(&parser, "shareWith");
