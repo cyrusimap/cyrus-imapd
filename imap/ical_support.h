@@ -67,6 +67,12 @@
 #define icalparameter_clone           icalparameter_new_clone
 #endif
 
+#ifndef HAVE_GET_COMPONENT_NAME
+/* This should never match anything in the wild
+   which means that we can't patch X- components */
+#define icalcomponent_get_component_name(comp)  "X-CYR-"
+#endif
+
 /* Initialize libical timezones. */
 extern void ical_support_init(void);
 

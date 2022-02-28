@@ -1659,6 +1659,11 @@ dnl
                 AC_DEFINE(HAVE_INVALID_RRULE_HANDLING,[],
                         [Do we have support for controlling invalid RRULE handline?]))
 
+        dnl icalcomponent_get_component_name will be new in libical 3.1.0
+        AC_CHECK_LIB(ical, icalcomponent_get_component_name,
+                AC_DEFINE(HAVE_GET_COMPONENT_NAME,[],
+                        [Do we have support for fetching X- component names?]))
+
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
 dnl                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
