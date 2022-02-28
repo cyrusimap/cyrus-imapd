@@ -1640,6 +1640,10 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
                buf_cstring(&imip->errstr));
 
   done:
+    syslog(LOG_DEBUG, "sieve iMIP: %s: %s (%s)",
+           m->id ? m->id : "<nomsgid>",
+           buf_cstring(&imip->outcome), buf_cstring(&imip->errstr));
+
     strarray_fini(&sched_addresses);
     if (parts) {
         struct bodypart **part;

@@ -4205,6 +4205,153 @@ EOF
     $self->assert_str_equals('2021-09-24T14:00:00', $events->[0]{start});
 }
 
+sub test_imip_override
+    :needs_component_sieve :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+
+    my $IMAP = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $IMAP->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Create calendar user";
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = 'Default';
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "updated" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-0\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid-0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+RRULE:FREQ=WEEKLY
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP invite";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 1,
+                        flags => [ '\\Recent', '\\Flagged' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Expunge the message";
+    $IMAP->store('1', '+flags', '(\\Deleted)');
+    $IMAP->expunge();
+
+    xlog $self, "Check that the event made it to calendar";
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('An Event', $events->[0]{title});
+    $self->assert_str_equals('2021-09-23T15:30:00', $events->[0]{start});
+
+    xlog $self, "Get the event, set per-user data, and add an alarm";
+    my $alarm = <<EOF;
+BEGIN:VALARM
+UID:myalarm
+TRIGGER;RELATED=START:PT0S
+ACTION:DISPLAY
+DESCRIPTION:CYR-140
+END:VALARM
+EOF
+    my $href = $events->[0]{href};
+    my $response = $CalDAV->Request('GET', $href);
+    my $ical = $response->{content};
+    $ical =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
+    $ical =~ s/OPAQUE/TRANSPARENT/;
+    $ical =~ s/END:VEVENT/${alarm}END:VEVENT/;
+
+    $CalDAV->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+
+    $imip = <<EOF;
+Date: Thu, 24 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-1\@example.net>
+Content-Type: text/calendar; method=CANCEL; component=VEVENT
+X-Cassandane-Unique: $uuid-1
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Overridden Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210924T034327Z
+SEQUENCE:0
+RECURRENCE-ID;TZID=American/New_York:20210923T153000
+LOCATION:location2
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP update";
+    $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 2,
+                        flags => [ '\\Recent', '\\Flagged' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Check that the updated event made it to calendar";
+    $events = $CalDAV->GetEvents($CalendarId);
+
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('An Overridden Event', $events->[0]{recurrenceOverrides}{'2021-09-23T15:30:00'}{title});
+    $self->assert_str_equals('location2', $events->[0]{recurrenceOverrides}{'2021-09-23T15:30:00'}{locations}{location}{name});
+
+    xlog $self, "Make sure that per-user data remains";
+    $self->assert_equals(JSON::true, $events->[0]{showAsFree});
+    $self->assert_not_null($events->[0]{alerts}{myalarm});
+    $self->assert_str_equals('accepted', $events->[0]{participants}{'cassandane@example.com'}{scheduleStatus});    
+}
+
 sub test_imip_cancel
     :needs_component_sieve :needs_component_httpd :min_version_3_5
 {
