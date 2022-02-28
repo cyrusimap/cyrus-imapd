@@ -776,6 +776,9 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
     const char *data;
     int r;
 
+    /* make sure we don't leak old data */
+    arrayu64_truncate(cids, 0);
+
     r = check_msgid(msgid, 0, &keylen);
     if (r)
         return r;
@@ -787,9 +790,6 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
 
     if (r == CYRUSDB_NOTFOUND)
         return 0; /* not an error, but nothing more to do */
-
-    /* make sure we don't leak old data */
-    arrayu64_truncate(cids, 0);
 
     if (!r) r = _conversations_parse(data, datalen, cids, NULL);
 
