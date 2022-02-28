@@ -6800,6 +6800,47 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     return r;
 }
 
+
+static void emailbodypart_read_name(struct buf *buf, const struct body *part)
+{
+    const char *fname = NULL;
+    int is_extended = 0;
+
+    /* Lookup name parameter. Disposition header has precedence */
+    const struct param *param;
+    for (param = part->disposition_params; param; param = param->next) {
+        if (!strncasecmp(param->attribute, "filename", 8)) {
+            is_extended = param->attribute[8] == '*';
+            fname = param->value;
+            break;
+        }
+    }
+    /* Lookup Content-Type parameters */
+    if (!fname) {
+        for (param = part->params; param; param = param->next) {
+            if (!strncasecmp(param->attribute, "name", 4)) {
+                is_extended = param->attribute[4] == '*';
+                fname = param->value;
+                break;
+            }
+        }
+    }
+
+    /* Decode header value */
+    char *val = NULL;
+    if (fname && is_extended) {
+        val = charset_parse_mimexvalue(fname, NULL);
+    }
+    if (fname && !val) {
+        val = charset_parse_mimeheader(fname, CHARSET_KEEPCASE|CHARSET_MIME_UTF8);
+    }
+    if (val) {
+        buf_setcstr(buf, val);
+        buf_cstring(buf);
+    }
+    free(val);
+}
+
 static json_t *_email_get_bodypart(jmap_req_t *req,
                                    struct email_getargs *args,
                                    struct cyrusmsg *msg,
@@ -6887,40 +6928,10 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
 
     /* name */
     if (jmap_wantprop(bodyprops, "name")) {
-        const char *fname = NULL;
-        char *val = NULL;
-        int is_extended = 0;
-        const struct param *param;
-
-        /* Lookup name parameter. Disposition header has precedence */
-        for (param = part->disposition_params; param; param = param->next) {
-            if (!strncasecmp(param->attribute, "filename", 8)) {
-                is_extended = param->attribute[8] == '*';
-                fname = param->value;
-                break;
-            }
-        }
-        /* Lookup Content-Type parameters */
-        if (!fname) {
-            for (param = part->params; param; param = param->next) {
-                if (!strncasecmp(param->attribute, "name", 4)) {
-                    is_extended = param->attribute[4] == '*';
-                    fname = param->value;
-                    break;
-                }
-            }
-        }
-
-        /* Decode header value */
-        if (fname && is_extended) {
-            val = charset_parse_mimexvalue(fname, NULL);
-        }
-        if (fname && !val) {
-            val = charset_parse_mimeheader(fname, CHARSET_KEEPCASE|CHARSET_MIME_UTF8);
-        }
-        json_object_set_new(jbodypart, "name", val ?
-                json_string(val) : json_null());
-        free(val);
+        emailbodypart_read_name(&buf, part);
+        json_object_set_new(jbodypart, "name", buf_len(&buf) ?
+                json_string(buf_cstring(&buf)) : json_null());
+        buf_reset(&buf);
     }
 
     /* type */
@@ -7304,18 +7315,13 @@ static int _email_get_bodies(jmap_req_t *req,
                 is_icsbody = 1;
             }
             else {
-                struct param *param = part->disposition_params;
-                while (param) {
-                    if (!strcasecmp(param->attribute, "FILENAME") ||
-                        !strcasecmp(param->attribute, "NAME")) {
-                        size_t len = strlen(param->value);
-                        if (len > 4 && !strcasecmp(param->value + len-4, ".ICS")) {
-                            is_icsbody = 1;
-                            break;
-                        }
-                    }
-                    param = param->next;
+                struct buf buf = BUF_INITIALIZER;
+                emailbodypart_read_name(&buf, part);
+                if (buf_len(&buf) > 4 &&
+                        !strcasecmp(buf_cstring(&buf) + buf_len(&buf)-4, ".ICS")) {
+                    is_icsbody = 1;
                 }
+                buf_free(&buf);
             }
 
             if (is_icsbody && hashset_add(icsguids, &part->content_guid)) {
