@@ -874,10 +874,11 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     /* Get METHOD of the iTIP message */
     method = icalcomponent_get_method(itip);
 
-    /* Strip VALARMs from VEVENTs */
-    for (comp = icalcomponent_get_first_component(itip, ICAL_VEVENT_COMPONENT);
-         comp;
-         comp = icalcomponent_get_next_component(itip, ICAL_VEVENT_COMPONENT)) {
+    comp = icalcomponent_get_first_real_component(itip);
+    kind = icalcomponent_isa(comp);
+
+    /* Strip VALARMs and TRANSP */
+    for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
         icalcomponent *alarm, *nextalarm;
         for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
                 alarm; alarm = nextalarm) {
@@ -885,6 +886,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             icalcomponent_remove_component(comp, alarm);
             icalcomponent_free(alarm);
         }
+
+        prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
+        if (prop) icalcomponent_remove_property(comp, prop);
     }
 
     /* Search for iCal UID in recipient's calendars */
@@ -989,12 +993,11 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         oldical = caldav_record_to_ical(mailbox, cdata, NULL, NULL);
         ical = icalcomponent_clone(oldical);
 
-        for (comp = icalcomponent_get_first_component(itip, ICAL_ANY_COMPONENT);
+        for (comp = icalcomponent_get_first_component(itip, kind);
              comp;
-             comp = icalcomponent_get_next_component(itip, ICAL_ANY_COMPONENT)) {
+             comp = icalcomponent_get_next_component(itip, kind)) {
             /* Don't allow component type to be changed */
             int reject = 0;
-            kind = icalcomponent_isa(comp);
             switch (kind) {
             case ICAL_VEVENT_COMPONENT:
                 if (cdata->comp_type != CAL_COMP_VEVENT) reject = 1;
