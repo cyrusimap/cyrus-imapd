@@ -19694,4 +19694,217 @@ EOF
         $res->[0][1]{list}[0]{participants}{plusuri}{participationStatus});
 }
 
+sub test_calendarevent_set_standalone_itip
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Clear notification cache";
+    $self->{instance}->getnotify();
+
+    xlog "Create scheduled standalone instance";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T01:01:01',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                    replyTo => {
+                        imip => 'mailto:organizer@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                            participationStatus => 'tentative',
+                            expectReply => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $instance1Id = $res->[0][1]{created}{instance1}{id};
+    $self->assert_not_null($instance1Id);
+
+    xlog "Assert that iTIP notification is sent";
+    my $data = $self->{instance}->getnotify();
+    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($notif);
+    my $itip = decode_json($notif->{MESSAGE})->{ical};
+    my $ical = Data::ICal->new(data => $itip);
+
+    my @vevents = grep { $_->ical_entry_type() eq 'VEVENT' } @{$ical->entries()};
+    $self->assert_num_equals(1, scalar @vevents);
+
+    my $recurid = $vevents[0]->property('RECURRENCE-ID');
+    $self->assert_num_equals(1, scalar @{$recurid});
+    $self->assert_str_equals('20210101T010101', $recurid->[0]->value());
+
+    my $attendees = $vevents[0]->property('ATTENDEE');
+    $self->assert_num_equals(1, scalar @{$attendees});
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $attendees->[0]->value());
+    $self->assert_str_equals('TENTATIVE',
+        $attendees->[0]->parameters()->{'PARTSTAT'});
+
+    xlog "Clear notification cache";
+    $self->{instance}->getnotify();
+
+    xlog "Create another standalone instance for that UID";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2022-02-02T02:02:02',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2022-02-02T02:02:02',
+                    recurrenceIdTimeZone => 'Europe/London',
+                    replyTo => {
+                        imip => 'mailto:organizer@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                            participationStatus => 'accepted',
+                            expectReply => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $instance2Id = $res->[0][1]{created}{instance2}{id};
+    $self->assert_not_null($instance2Id);
+
+    xlog "Assert iTIP notification just gets sent for new instance";
+    $data = $self->{instance}->getnotify();
+    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($notif);
+    $itip = decode_json($notif->{MESSAGE})->{ical};
+    $ical = Data::ICal->new(data => $itip);
+
+    @vevents = grep { $_->ical_entry_type() eq 'VEVENT' } @{$ical->entries()};
+    $self->assert_num_equals(1, scalar @vevents);
+
+    $recurid = $vevents[0]->property('RECURRENCE-ID');
+    $self->assert_num_equals(1, scalar @{$recurid});
+    $self->assert_str_equals('20220202T020202', $recurid->[0]->value());
+
+    $attendees = $vevents[0]->property('ATTENDEE');
+    $self->assert_num_equals(1, scalar @{$attendees});
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $attendees->[0]->value());
+    $self->assert_str_equals('ACCEPTED',
+        $attendees->[0]->parameters()->{'PARTSTAT'});
+
+    xlog "Clear notification cache";
+    $self->{instance}->getnotify();
+
+    xlog "Update partstat in a standalone instance";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $instance2Id => {
+                    'participants/cassandane/participationStatus' => 'declined',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$instance2Id});
+
+    xlog "Assert iTIP notification only is sent for updated instance";
+    $data = $self->{instance}->getnotify();
+    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($notif);
+    $itip = decode_json($notif->{MESSAGE})->{ical};
+    $ical = Data::ICal->new(data => $itip);
+
+    @vevents = grep { $_->ical_entry_type() eq 'VEVENT' } @{$ical->entries()};
+    $self->assert_num_equals(1, scalar @vevents);
+
+    $recurid = $vevents[0]->property('RECURRENCE-ID');
+    $self->assert_num_equals(1, scalar @{$recurid});
+    $self->assert_str_equals('20220202T020202', $recurid->[0]->value());
+
+    $attendees = $vevents[0]->property('ATTENDEE');
+    $self->assert_num_equals(1, scalar @{$attendees});
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $attendees->[0]->value());
+    $self->assert_str_equals('DECLINED',
+        $attendees->[0]->parameters()->{'PARTSTAT'});
+
+    xlog "Clear notification cache";
+    $self->{instance}->getnotify();
+
+    xlog "Create another standalone instance where PARTSTAT=NEEDS-ACTION";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance3',
+                    start => '2022-03-03T03:03:03',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2022-03-03T03:03:03',
+                    recurrenceIdTimeZone => 'Europe/London',
+                    replyTo => {
+                        imip => 'mailto:organizer@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                            participationStatus => 'needs-action',
+                            expectReply => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $instance3Id = $res->[0][1]{created}{instance2}{id};
+    $self->assert_not_null($instance2Id);
+
+    xlog "Assert no iTIP notification is sent";
+    $data = $self->{instance}->getnotify();
+    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_null($notif);
+}
+
 1;

@@ -4193,6 +4193,7 @@ struct createevent {
     char *resourcename;
     const char *sched_userid;
     strarray_t schedule_addresses;
+    icalcomponent *ical_standalone;
 };
 
 static int createevent_lookup_calendar(jmap_req_t *req,
@@ -4375,6 +4376,9 @@ static int createevent_load_ical(jmap_req_t *req,
             struct mailbox *srcmbox = NULL;
             struct caldav_data *cdata = NULL;
 
+            // Keep pruned standalone instance for iTIP
+            create->ical_standalone = icalcomponent_clone(create->ical);
+
             r = jmap_openmbox_by_uniqueid(req, rock.uniqueid, &srcmbox, 0);
             if (r) goto done;
 
@@ -4472,8 +4476,10 @@ static int createevent_store(jmap_req_t *req,
     // Handle scheduling
     int is_draft = json_boolean_value(json_object_get(create->jsevent, "isDraft"));
     if (send_itip && !is_draft) {
+        icalcomponent *sched_ical = create->ical_standalone ?
+            create->ical_standalone : create->ical;
         r = setcalendarevents_schedule(create->sched_userid,
-                &create->schedule_addresses, NULL, create->ical, JMAP_CREATE);
+                &create->schedule_addresses, NULL, sched_ical, JMAP_CREATE);
         if (r) goto done;
         remove_itip_properties(create->ical);
     }
@@ -4612,6 +4618,10 @@ done:
     if (create.ical) {
         icalcomponent_free(create.ical);
         create.ical = NULL;
+    }
+    if (create.ical_standalone) {
+        icalcomponent_free(create.ical_standalone);
+        create.ical_standalone = NULL;
     }
     free(create.ical_uid);
     free(create.ical_recurid);
