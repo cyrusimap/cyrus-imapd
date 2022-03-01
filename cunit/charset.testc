@@ -1469,4 +1469,18 @@ static void test_encode_mimebody(void)
 #undef TESTCASE
 }
 
+static void test_decode_percent(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    int r = charset_decode_percent(&buf, "%21%23%24%25%26%27%28%29%2A%2B%2C%2F%3A%3B%3D%3F%40%5B%5D");
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_STRING_EQUAL("!#$%&'()*+,/:;=?@[]", buf_cstring(&buf));
+
+    // leave bogus percent encodings as-is
+    r = charset_decode_percent(&buf, "a%21b%2xc%24d");
+    CU_ASSERT_EQUAL(-1, r);
+    CU_ASSERT_STRING_EQUAL("a!b%2xc$d", buf_cstring(&buf));
+}
+
 /* vim: set ft=c: */

@@ -19592,4 +19592,106 @@ EOF
     $self->assert_null($res->[0][1]{list}[0]{defaultParticipantIdentityId});
 }
 
+sub test_calendarevent_encode_imip_uri
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :deletecanceled :outcome "outcome";
+}
+EOF
+    );
+
+    $self->{instance}->getnotify();
+
+    xlog "Create event with percent-encoded participant uri";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => 'event1',
+                    start => '2020-01-01T09:00:00',
+                    timeZone => 'Europe/Vienna',
+                    duration => 'PT1H',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        plusuri => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:plus%2Buri@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                    },
+                },
+            },
+            sendSchedulingMessages => JSON::true,
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            properties => ['participants'],
+        }, 'R2'],
+    ]);
+
+    xlog "Assert the Participant uri is encoded";
+    $self->assert_str_equals('mailto:plus%2Buri@example.com',
+        $res->[1][1]{list}[0]{participants}{plusuri}{sendTo}{imip});
+
+    xlog "Assert the iCalendar data has the encoded URI";
+    my $blobId = $res->[0][1]{created}{event1}{blobId};
+    $res = $jmap->Download('cassandane', $blobId);
+    my $ical = $res->{content};
+    $self->assert($ical =~ /mailto:plus%2Buri\@example\.com/g);
+
+    xlog "Assert the iMIP notification has the decoded recipient";
+    my $data = $self->{instance}->getnotify();
+    my ($imipnotif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my $payload = decode_json($imipnotif->{MESSAGE});
+    $self->assert_str_equals('plus+uri@example.com', $payload->{recipient});
+
+    xlog "Assert the iTIP message has the encoded URI";
+    my $itip = $payload->{ical};
+    $self->assert($itip =~ /mailto:plus%2Buri\@example\.com/g);
+    $self->assert($itip =~ "METHOD:REQUEST");
+
+    xlog "Deliver iTIP REPLY for participant";
+    $itip =~ s/METHOD:REQUEST/METHOD:REPLY/g;
+    $itip =~ s/NEEDS-ACTION/ACCEPTED/g;
+
+    my $imip = <<"EOF";
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sally Sender <sender\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <6de280c9-edff-4019-8ebd-cfebc73f8201\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: 6de280c9-edff-4019-8ebd-cfebc73f8201
+
+$itip
+EOF
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    xlog "Assert the participant status got updated";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['participants'],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('mailto:plus%2Buri@example.com',
+        $res->[0][1]{list}[0]{participants}{plusuri}{sendTo}{imip});
+    $self->assert_str_equals('accepted',
+        $res->[0][1]{list}[0]{participants}{plusuri}{participationStatus});
+}
+
 1;
