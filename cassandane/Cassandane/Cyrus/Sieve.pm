@@ -4294,8 +4294,7 @@ EOF
     my $response = $CalDAV->Request('GET', $href);
     my $ical = $response->{content};
     $ical =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
-    $ical =~ s/OPAQUE/TRANSPARENT/;
-    $ical =~ s/END:VEVENT/${alarm}END:VEVENT/;
+    $ical =~ s/END:VEVENT/TRANSP:TRANSPARENT\n${alarm}END:VEVENT/;
 
     $CalDAV->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
 
