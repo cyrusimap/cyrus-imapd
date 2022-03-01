@@ -525,7 +525,7 @@ static int deliver_merge_request(const char *attendee,
 {
     int deliver_inbox = 0;
     struct hash_table comp_table;
-    icalcomponent *comp, *itip;
+    icalcomponent *comp, *itip, *master = NULL;
     icalcomponent_kind kind = ICAL_NO_COMPONENT;
     icalproperty *prop;
     icalparameter *param;
@@ -580,7 +580,10 @@ static int deliver_merge_request(const char *attendee,
         prop =
             icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
         if (prop) recurid = icalproperty_get_value_as_string(prop);
-        else recurid = "";
+        else {
+            recurid = "";
+            master = comp;
+        }
 
         hash_insert(recurid, comp, &comp_table);
     }
@@ -659,6 +662,23 @@ static int deliver_merge_request(const char *attendee,
         else {
             /* New component */
             deliver_inbox = 1;
+
+            if (master) {
+                /* Inherit VALARMs and TRANSP property from master */
+                icalcomponent *alarm;
+                for (alarm = icalcomponent_get_first_component(master, ICAL_VALARM_COMPONENT);
+                     alarm;
+                     alarm = icalcomponent_get_next_component(master, ICAL_VALARM_COMPONENT)) {
+                    icalcomponent_add_component(new_comp, icalcomponent_clone(alarm));
+                }
+
+                prop = icalcomponent_get_first_property(master,
+                                                        ICAL_TRANSP_PROPERTY);
+                if (prop) {
+                    icalcomponent_add_property(new_comp,
+                                               icalproperty_clone(prop));
+                }
+            }
         }
 
         if (config_getenum(IMAPOPT_CALDAV_ALLOWSCHEDULING)
