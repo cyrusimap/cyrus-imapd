@@ -153,6 +153,8 @@ extern int charset_encode(struct buf *dst, const char *src, size_t len, int enco
 
 extern int charset_decode_sha1(uint8_t dest[SHA1_DIGEST_LENGTH], size_t *decodedlen, const char *src, size_t len, int encoding);
 
+extern int charset_decode_percent(struct buf *dst, const char *val);
+
 /* Extract the body text contained in 'data' and with character encoding
  * 'charset' and body-part encoding 'encoding'. The 'subtype' argument
  * defines the MIME subtype (assuming that the main type is 'text').

@@ -591,17 +591,22 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
 
 /* Send an iMIP request for attendees in 'ical' */
 static int imip_send(const char *userid, struct sched_data *sched_data,
-                     const char *sender, const char *recipient)
+                     const char *sender, const char *encoded_recipient)
 {
     const char *notifier = config_getstring(IMAPOPT_IMIPNOTIFIER);
+    int r = 0;
 
-    syslog(LOG_DEBUG, "imip_send(%s)", recipient);
+    struct buf recipient = BUF_INITIALIZER;
+    charset_decode_percent(&recipient, encoded_recipient);
+
+    syslog(LOG_DEBUG, "imip_send(%s)", buf_cstring(&recipient));
 
     /* if no notifier, fall back to sendmail */
     if (!notifier) {
-        return imip_send_sendmail(userid, sched_data->itip,
-                                  sender, recipient,
+        r = imip_send_sendmail(userid, sched_data->itip,
+                                  sender, buf_cstring(&recipient),
                                   SCHED_IS_UPDATE(sched_data));
+        goto done;
     }
 
     json_t *jsevent, *patch;
@@ -634,10 +639,10 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
 
     /* Don't send a bogus message - check late to not allocate our own copy */
     const char *ical_str = icalcomponent_as_ical_string(sched_data->itip);
-    if (!ical_str) return 0;
+    if (!ical_str) goto done;
 
     json_t *val = json_pack("{s:s s:s s:s s:o s:o s:b}",
-                            "recipient", recipient,
+                            "recipient", buf_cstring(&recipient),
                             "sender", sender,
                             "ical", ical_str,
                             "jsevent", jsevent,
@@ -648,7 +653,9 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
     free(serial);
     json_decref(val);
 
-    return 0;
+done:
+    buf_free(&recipient);
+    return r;
 }
 
 
