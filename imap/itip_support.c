@@ -888,7 +888,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         }
 
         prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
-        if (prop) icalcomponent_remove_property(comp, prop);
+        if (prop) {
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+        }
     }
 
     /* Search for iCal UID in recipient's calendars */
