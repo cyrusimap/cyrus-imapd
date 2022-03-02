@@ -1169,7 +1169,7 @@ EXPORTED void vparse_delete_params(struct vparse_entry *entry, const char *name)
     }
 }
 
-static const struct {
+static const struct restriction {
     const char *name;  /* property name */
     struct {
         unsigned min;  /* mandatory minimum number of occurrences */
@@ -1186,10 +1186,13 @@ static const struct {
     { "N",           { { 1,  1 }, { 1,  1 }, { 0,  1 } } },
     { "PRODID",      { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
     { "REV",         { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
-    { "UID",         { { 0,  1 }, { 0,  1 }, { 0,  1 } } }
+    { "UID",         { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
+    { "BIRTHPLACE",  { { 0,  1 }, { 0,  1 }, { 0,  1 } } },  /* RFC 6474 */
+    { "DEATHPLACE",  { { 0,  1 }, { 0,  1 }, { 0,  1 } } },  /* RFC 6474 */
+    { "DEATHDATE",   { { 0,  1 }, { 0,  1 }, { 0,  1 } } },  /* RFC 6474 */
 };
 
-#define NUM_CHECK_PROPS 10
+#define NUM_CHECK_PROPS (sizeof(restrictions) / sizeof(struct restriction))
 
 EXPORTED int vparse_restriction_check(struct vparse_card *card)
 {
