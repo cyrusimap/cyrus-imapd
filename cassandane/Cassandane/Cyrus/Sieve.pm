@@ -4349,6 +4349,13 @@ EOF
     $self->assert_equals(JSON::true, $events->[0]{showAsFree});
     $self->assert_not_null($events->[0]{alerts}{myalarm});
     $self->assert_str_equals('accepted', $events->[0]{participants}{'cassandane@example.com'}{scheduleStatus});    
+
+    $response = $CalDAV->Request('GET', $href);
+    $ical = Data::ICal->new(data => $response->{content});
+    $self->assert_str_equals('TRANSPARENT', $ical->{entries}[0]{properties}{transp}[0]{value});
+    $self->assert_str_equals('DISPLAY', $ical->{entries}[0]{entries}[0]{properties}{action}[0]{value});
+    $self->assert_str_equals('TRANSPARENT', $ical->{entries}[1]{properties}{transp}[0]{value});
+    $self->assert_str_equals('DISPLAY', $ical->{entries}[1]{entries}[0]{properties}{action}[0]{value});
 }
 
 sub test_imip_cancel
