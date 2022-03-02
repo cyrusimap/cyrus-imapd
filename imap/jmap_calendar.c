@@ -2575,8 +2575,6 @@ struct getcalendarevents_rock {
     struct jmap_get *get;
     struct jmapical_ctx *jmapctx;
     int check_acl;
-    const char *sched_inboxname;
-    const char *sched_outboxname;
     hash_table floatingtz_by_mboxid;
     ptrarray_t malloced_fallbacktzs;
     struct jmapical_datetime overrides_before;
@@ -3191,9 +3189,6 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         r = 0;
         goto done;
     }
-    if (!strcmpsafe(rock->mbentry->name, rock->sched_inboxname) ||
-        !strcmpsafe(rock->mbentry->name, rock->sched_outboxname))
-        goto done;
 
     /* Lookup fall-back time zone on calendar collection */
     icaltimezone *floatingtz = hash_lookup(rock->mbentry->uniqueid,
@@ -3796,8 +3791,6 @@ static int getcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
 static int jmap_calendarevent_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    char *sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
-    char *sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX);
     struct jmap_get get;
     struct caldav_db *db = NULL;
     json_t *err = NULL;
@@ -3811,8 +3804,6 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         .get = &get,
         .check_acl = checkacl,
         .jmapctx = jmapctx,
-        .sched_inboxname = sched_inboxname,
-        .sched_outboxname = sched_outboxname,
         .is_sharee = strcmp(req->accountid, req->userid)
     };
     construct_hashu64_table(&rock.cache_jsevents, 512, 0);
@@ -3928,8 +3919,6 @@ done:
     jmapical_context_free(&jmapctx);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
-    free(sched_inboxname);
-    free(sched_outboxname);
     if (db) caldav_close(db);
     if (rock.mailbox) jmap_closembox(req, &rock.mailbox);
     if (rock.mbentry) mboxlist_entry_free(&rock.mbentry);
@@ -6046,8 +6035,6 @@ struct geteventchanges_rock {
     modseq_t highestmodseq;
     int check_acl;
     hash_table *mboxrights;
-    char *sched_inboxname;
-    char *sched_outboxname;
     int is_sharee;
     struct buf buf;
 };
@@ -6104,11 +6091,6 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
     if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR)
         goto done;
 
-    if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
-        !strcmpsafe(mbentry->name, rock->sched_outboxname))
-        goto done;
-
-
     // check privacy
     if (rock->is_sharee && jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET)
         return 0;
@@ -6158,8 +6140,6 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
         .req = req,
         .changes = &changes,
         .check_acl = strcmp(req->accountid, req->userid),
-        .sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX),
-        .sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX),
         .is_sharee = strcmp(req->accountid, req->userid),
     };
     int r = 0;
@@ -6205,8 +6185,6 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
         free_hash_table(rock.mboxrights, free);
         free(rock.mboxrights);
     }
-    free(rock.sched_inboxname);
-    free(rock.sched_outboxname);
     buf_free(&rock.buf);
     if (db) caldav_close(db);
     if (r) {
@@ -6388,8 +6366,6 @@ struct eventquery_rock {
     int expandrecur;
     struct mailbox *mailbox;
     ptrarray_t *matches;
-    const char *sched_inboxname;
-    const char *sched_outboxname;
     int is_sharee;
 };
 
@@ -6411,10 +6387,6 @@ static int eventquery_cb(void *vrock, struct caldav_jscal *jscal)
     /* Check permissions */
     int rights = mbentry ? jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS) : 0;
     if (!rights) goto done;
-
-    if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
-        !strcmpsafe(mbentry->name, rock->sched_outboxname))
-        goto done;
 
     struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
     match->ical_uid = xstrdup(jscal->cdata.ical_uid);
@@ -6586,8 +6558,6 @@ static int eventquery_textsearch_run(jmap_req_t *req,
                                  enum caldav_sort *sort,
                                  size_t nsort,
                                  int expandrecur,
-                                 const char *sched_inboxname,
-                                 const char *sched_outboxname,
                                  ptrarray_t *matches)
 {
     int r, i;
@@ -6603,6 +6573,7 @@ static int eventquery_textsearch_run(jmap_req_t *req,
     struct mailbox *mailbox = NULL;
     const char *wantuid = json_string_value(json_object_get(filter, "uid"));
     int is_sharee = strcmp(req->accountid, req->userid);
+    char *sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
 
     if (before != caldav_eternity) {
         icaltimetype t = icaltime_from_timet_with_zone(before, 0, utc);
@@ -6661,8 +6632,7 @@ static int eventquery_textsearch_run(jmap_req_t *req,
         }
 
         /* don't include the scheduling magic calendars */
-        if (!strcmpsafe(mbentry->name, sched_inboxname) ||
-                !strcmpsafe(mbentry->name, sched_outboxname)) {
+        if (!strcmpsafe(mbentry->name, sched_inboxname)) {
             mboxlist_entry_free(&mbentry);
             continue;
         }
@@ -6705,6 +6675,7 @@ done:
     if (sortcrit) freesortcrit(sortcrit);
     if (query) search_query_free(query);
     jmap_closembox(req, &mailbox);
+    free(sched_inboxname);
     free(icalbefore);
     free(icalafter);
     buf_free(&buf);
@@ -6714,8 +6685,6 @@ done:
 struct eventquery_fastpath_rock {
     jmap_req_t *req;
     struct jmap_query *query;
-    const char *sched_inboxname;
-    const char *sched_outboxname;
     int is_sharee;
     struct buf buf;
 };
@@ -6736,13 +6705,6 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_jscal *jscal)
 
     mbentry_t *mbentry = jmap_mbentry_from_dav(req, &jscal->cdata.dav);
     if (!mbentry) return 0;
-
-    /* don't include the scheduling magic calendars */
-    if (!strcmpsafe(mbentry->name, rock->sched_inboxname) ||
-        !strcmpsafe(mbentry->name, rock->sched_outboxname)) {
-        mboxlist_entry_free(&mbentry);
-        return 0;
-    }
 
     /* Check permissions */
     int rights = jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
@@ -6851,8 +6813,6 @@ static int eventquery_run(jmap_req_t *req,
     enum caldav_sort *sort = NULL;
     struct buf buf = BUF_INITIALIZER;
     size_t nsort = 0;
-    char *sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
-    char *sched_outboxname = caldav_mboxname(req->accountid, SCHED_OUTBOX);
     int is_sharee = strcmp(req->accountid, req->userid);
 
     /* Sanity check arguments */
@@ -6902,7 +6862,7 @@ static int eventquery_run(jmap_req_t *req,
 
     if (!have_textsearch && !args.expandrecur && query->position >= 0 && !query->anchor) {
         struct eventquery_fastpath_rock rock = {
-            req, query, sched_inboxname, sched_outboxname, is_sharee, BUF_INITIALIZER
+            req, query, is_sharee, BUF_INITIALIZER
         };
         const char *wantuid = json_string_value(json_object_get(query->filter, "uid"));
         struct caldav_jscal_filter jscal_filter = {
@@ -6921,15 +6881,13 @@ static int eventquery_run(jmap_req_t *req,
     if (have_textsearch) {
         /* Query and sort matches in search backend. */
         r = eventquery_textsearch_run(req, query->filter, db, before, after,
-                sort, nsort, args.expandrecur,
-                sched_inboxname, sched_outboxname, &matches);
+                sort, nsort, args.expandrecur,&matches);
         if (r) goto done;
     }
     else {
         /* Query and sort matches in Caldav DB. */
         struct eventquery_rock rock = {
-            req, args.expandrecur, NULL, &matches,
-            sched_inboxname, sched_outboxname, is_sharee
+            req, args.expandrecur, NULL, &matches, is_sharee
         };
 
         enum caldav_sort mboxsort = CAL_SORT_MAILBOX;
@@ -7048,8 +7006,6 @@ done:
             eventquery_match_free(&match);
         }
     }
-    free(sched_inboxname);
-    free(sched_outboxname);
     ptrarray_fini(&matches);
     buf_free(&buf);
     free(sort);

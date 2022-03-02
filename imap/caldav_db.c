@@ -828,14 +828,16 @@ EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
         { ":cache_userid", SQLITE_TEXT,    { .s = cache_userid } },
         { ":aftermodseq",  SQLITE_INTEGER, { .i = 0 } },
         { ":maxcount",     SQLITE_INTEGER, { .i = 0 } },
+        { ":inbox",        SQLITE_TEXT,    { .s = caldavdb->sched_inbox } },
         { NULL,            SQLITE_NULL,    { .s = NULL } } };
 
     struct buf stmt = BUF_INITIALIZER;
     buf_setcstr(&stmt, cache_userid ?
             CMD_READFIELDS_JSCALOBJS : CMD_READFIELDS_JSCALOBJS_NOCACHE);
 
+    buf_appendcstr(&stmt, " WHERE mailbox != :inbox");
+
     if (filter) {
-        buf_appendcstr(&stmt, " WHERE 1 = 1");
         if (filter->mbentry) {
             buf_appendcstr(&stmt, " AND mailbox = :mailbox");
             bval[0].val.s = caldavdb->db->version >= DB_MBOXID_VERSION ?
