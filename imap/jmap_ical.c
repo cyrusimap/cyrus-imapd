@@ -4031,7 +4031,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser,
             jmap_parser_push(parser, id);
             endzone_location_id = id;
             const char *jstzid = json_string_value(json_object_get(jval, "timeZone"));
-            if (timezone) {
+            if (jstzid) {
                 tzend = jstimezones_lookup_jstzid(jstzones, jstzid);
                 if (!tzend || !tzstart) {
                     jmap_parser_invalid(parser, "timeZone");
