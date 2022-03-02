@@ -23384,4 +23384,68 @@ EOF
         $res->[1][1]{list}[0]{calendarEvents}{2}[1]{title});
 }
 
+sub test_email_get_calendarevents_extended_filename
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $body = <<'EOF';
+--boundary_1
+Content-Type: text/plain
+
+body
+--boundary_1
+Content-Type: text/calendar;name*0=some;an*1=xpara;name*2=m.ics\r\n".
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Berlin:20210101T120000
+DURATION:PT1H
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:test
+SEQUENCE:0
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+--boundary_1--
+EOF
+    $body =~ s/\r?\n/\r\n/gs;
+
+    $self->make_message('test', mime_type => 'multipart/related',
+        mime_boundary => 'boundary_1', body => $body) or die;
+
+    xlog $self, 'get email';
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [
+                'calendarEvents', 'bodyStructure',
+            ],
+        }, 'R2'],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    $self->assert_num_equals(1,
+        scalar @{$res->[1][1]{list}[0]{calendarEvents}{2}});
+    $self->assert_str_equals('test',
+        $res->[1][1]{list}[0]{calendarEvents}{2}[0]{title});
+}
+
 1;
