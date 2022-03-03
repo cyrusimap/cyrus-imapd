@@ -1274,39 +1274,6 @@ done:
     return r;
 }
 
-EXPORTED int carddav_remove(struct mailbox *mailbox,
-                            uint32_t olduid, int isreplace, const char *userid)
-{
-
-    int userflag;
-    int r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
-    struct index_record oldrecord;
-
-    init_internal();
-
-    if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
-    if (!r && !(oldrecord.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-        if (isreplace) oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
-        oldrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-
-        r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-
-        /* Report mailbox event. */
-        struct mboxevent *mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
-        mboxevent_extract_record(mboxevent, mailbox, &oldrecord);
-        mboxevent_extract_mailbox(mboxevent, mailbox);
-        mboxevent_set_numunseen(mboxevent, mailbox, -1);
-        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox_name(mailbox), 0);
-        mboxevent_notify(&mboxevent);
-        mboxevent_free(&mboxevent);
-    }
-    if (r) {
-        syslog(LOG_ERR, "expunging record (%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
-    }
-    return r;
-}
-
 EXPORTED char *carddav_mboxname(const char *userid, const char *name)
 {
     struct buf boxbuf = BUF_INITIALIZER;

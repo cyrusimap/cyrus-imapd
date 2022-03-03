@@ -65,6 +65,7 @@ static const struct datatype_t {
     { "Contact",         offsetof(struct mboxname_counters, carddavmodseq)       },
     { "Note",            offsetof(struct mboxname_counters, notesmodseq)         },
     { "SieveScript",     offsetof(struct mboxname_counters, sievemodseq)         },
+    { "StorageNode",     offsetof(struct mboxname_counters, filesmodseq)         },
     { NULL,              0 }
 };
 

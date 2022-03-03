@@ -77,6 +77,7 @@
 #define JMAP_BACKUP_EXTENSION        "https://cyrusimap.org/ns/jmap/backup"
 #define JMAP_NOTES_EXTENSION         "https://cyrusimap.org/ns/jmap/notes"
 #define JMAP_SIEVE_EXTENSION         "https://cyrusimap.org/ns/jmap/sieve"
+#define JMAP_FILES_EXTENSION         "https://cyrusimap.org/ns/jmap/files"
 #define JMAP_USERCOUNTERS_EXTENSION  "https://cyrusimap.org/ns/jmap/usercounters"
 
 enum {
@@ -246,6 +247,7 @@ extern void jmap_calendar_init(jmap_settings_t *settings);
 extern void jmap_vacation_init(jmap_settings_t *settings);
 extern void jmap_backup_init(jmap_settings_t *settings);
 extern void jmap_notes_init(jmap_settings_t *settings);
+extern void jmap_files_init(jmap_settings_t *settings);
 extern void jmap_sieve_init(jmap_settings_t *settings);
 
 extern void jmap_core_capabilities(json_t *account_capabilities);
@@ -261,6 +263,7 @@ extern void jmap_calendar_capabilities(json_t *account_capabilities,
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_backup_capabilities(json_t *account_capabilities);
 extern void jmap_notes_capabilities(json_t *account_capabilities);
+extern void jmap_files_capabilities(json_t *account_capabilities);
 extern void jmap_sieve_capabilities(json_t *account_capabilities);
 
 extern void jmap_accounts(json_t *accounts, json_t *primary_accounts);
@@ -484,11 +487,12 @@ typedef struct jmap_filter {
     ptrarray_t conditions;
 } jmap_filter;
 
-typedef void* jmap_buildfilter_cb(json_t* arg);
+typedef void* jmap_buildfilter_cb(json_t* arg, void* rock);
 typedef int   jmap_filtermatch_cb(void* cond, void* rock);
 typedef void  jmap_filterfree_cb(void* cond);
 
-extern jmap_filter *jmap_buildfilter(json_t *arg, jmap_buildfilter_cb *parse);
+extern jmap_filter *jmap_buildfilter(json_t *arg,
+                                     jmap_buildfilter_cb *parse, void *rock);
 extern int jmap_filter_match(jmap_filter *f,
                              jmap_filtermatch_cb *match, void *rock);
 extern void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond);

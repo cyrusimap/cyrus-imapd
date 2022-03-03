@@ -55,6 +55,7 @@
 #include "annotate.h"
 #include "carddav_db.h"
 #include "cyr_qsort_r.h"
+#include "dav_util.h"
 #include "global.h"
 #include "hash.h"
 #include "http_carddav.h"
@@ -702,14 +703,6 @@ static int jmap_contactgroup_get(struct jmap_req *req)
     return _contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP);
 }
 
-static const char *_json_array_get_string(const json_t *obj, size_t index)
-{
-    const json_t *jval = json_array_get(obj, index);
-    if (!jval) return NULL;
-    const char *val = json_string_value(jval);
-    return val;
-}
-
 
 static int getchanges_cb(void *rock, struct carddav_data *cdata)
 {
@@ -835,7 +828,7 @@ static int _add_group_entries(struct jmap_req *req,
     struct buf buf = BUF_INITIALIZER;
 
     for (index = 0; index < json_array_size(members); index++) {
-        const char *item = _json_array_get_string(members, index);
+        const char *item = json_array_get_string(members, index);
         const char *uid = _resolve_contactid(req, item);
         if (!item || !uid) {
             buf_printf(&buf, "contactIds[%zu]", index);
@@ -1252,8 +1245,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                     property_blob_free(&blob);
                 }
 
-                r = carddav_remove(mailbox, olduid,
-                                   /*isreplace*/!newmailbox, req->userid);
+                r = dav_remove_resource(mailbox, olduid,
+                                        /*isreplace*/!newmailbox, req->userid);
             }
         }
 
@@ -1314,7 +1307,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
     /* destroy */
     size_t index;
     for (index = 0; index < json_array_size(set.destroy); index++) {
-        const char *uid = _json_array_get_string(set.destroy, index);
+        const char *uid = json_array_get_string(set.destroy, index);
         if (!uid) {
             json_t *err = json_pack("{s:s}", "type", "invalidArguments");
             json_object_set_new(set.not_destroyed, uid, err);
@@ -1357,7 +1350,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                "jmap: remove %s %s/%s",
                kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                req->accountid, uid);
-        r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
+        r = dav_remove_resource(mailbox, olduid, /*isreplace*/0, req->userid);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
                              "kind=<%s> mailbox=<%s> olduid=<%u>",
@@ -2559,7 +2552,8 @@ static void contact_filter_free(void *vf)
 /* Parse the JMAP Contact FilterCondition in arg.
  * Report any invalid properties in invalid, prefixed by prefix.
  * Return NULL on error. */
-static void *contact_filter_parse(json_t *arg)
+static void *contact_filter_parse(json_t *arg,
+                                  void *rock __attribute__((unused)))
 {
     struct contact_filter *f =
         (struct contact_filter *) xzmalloc(sizeof(struct contact_filter));
@@ -2800,7 +2794,8 @@ static void contactgroup_filter_free(void *vf)
     free(vf);
 }
 
-static void *contactgroup_filter_parse(json_t *arg)
+static void *contactgroup_filter_parse(json_t *arg,
+                                       void *rock __attribute__((unused)))
 {
     struct contactgroup_filter *f =
         (struct contactgroup_filter *) xzmalloc(sizeof(struct contactgroup_filter));
@@ -3139,7 +3134,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind)
     if (JNOTNULL(filter)) {
         parsed_filter = jmap_buildfilter(filter,
                 kind == CARDDAV_KIND_GROUP ?
-                    contactgroup_filter_parse : contact_filter_parse);
+                    contactgroup_filter_parse : contact_filter_parse, NULL);
         wantuid = json_string_value(json_object_get(filter, "uid"));
     }
 

@@ -67,6 +67,7 @@ struct webdav_data {
     const char *filename;
     const char *type;
     const char *subtype;
+    const char *contentid;
     const char *res_uid;
     unsigned ref_count;
 };
@@ -95,6 +96,12 @@ int webdav_lookup_imapuid(struct webdav_db *webdavdb,
                           const mbentry_t *mbentry, int uid,
                           struct webdav_data **result,
                           int tombstones);
+
+/* lookup an entry from 'webdavdb' by mailbox and resource content id
+   (optionally inside a transaction for updates) */
+int webdav_lookup_cid(struct webdav_db *webdavdb,
+                      const mbentry_t *mbentry, const char *contentid,
+                      struct webdav_data **result);
 
 /* lookup an entry from 'webdavdb' by resource UID
    (optionally inside a transaction for updates) */
@@ -132,6 +139,8 @@ int webdav_abort(struct webdav_db *webdavdb);
 int webdav_get_updates(struct webdav_db *webdavdb,
                        modseq_t oldmodseq, const mbentry_t *mbentry, int kind,
                        int max_records, webdav_cb_t *cb, void *rock);
+
+char *webdav_mboxname(const char *userid, const char *name);
 
 #endif /* WITH_DAV */
 

@@ -1725,7 +1725,8 @@ typedef struct submission_filter {
 /* Parse the JMAP EmailSubmission FilterCondition in arg.
  * Report any invalid properties in invalid, prefixed by prefix.
  * Return NULL on error. */
-static void *submission_filter_build(json_t *arg)
+static void *submission_filter_build(json_t *arg,
+                                     void *rock __attribute__((unused)))
 {
     submission_filter *f =
         (submission_filter *) xzmalloc(sizeof(struct submission_filter));
@@ -2022,7 +2023,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     /* Build filter */
     json_t *filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        parsed_filter = jmap_buildfilter(filter, submission_filter_build);
+        parsed_filter = jmap_buildfilter(filter, submission_filter_build, NULL);
     }
 
     /* Build sortcrit */

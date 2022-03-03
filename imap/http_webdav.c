@@ -77,7 +77,7 @@ static int webdav_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct mime_type_t *mime);
 static int webdav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
-                      void *davdb, unsigned flags);
+                      const char *uid, void *davdb, unsigned flags);
 
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
@@ -630,7 +630,8 @@ static int webdav_get(struct transaction_t *txn,
 /* Perform a PUT request on a WebDAV resource */
 static int webdav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
-                      void *destdb, unsigned flags __attribute__((unused)))
+                      const char *uid, void *destdb,
+                      unsigned flags __attribute__((unused)))
 {
     struct webdav_db *db = (struct webdav_db *)destdb;
     struct buf *buf = (struct buf *) obj;
@@ -684,12 +685,15 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     else filename = (char *) resource;
 
     /* Create and cache RFC 5322 header fields for resource */
+    json_t *jdesc = json_pack("{ s:s }", "uid", uid ? uid : makeuuid());
     if (filename) {
+        json_object_set_new(jdesc, "filename", json_string(filename));
         spool_replace_header(xstrdup("Subject"),
                              xstrdup(filename), txn->req_hdrs);
-        spool_replace_header(xstrdup("Content-Description"),
-                             xstrdup(filename), txn->req_hdrs);
     }
+    spool_replace_header(xstrdup("Content-Description"),
+                         json_dumps(jdesc, JSON_COMPACT), txn->req_hdrs);
+    json_decref(jdesc);
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "<%s@%s>", resource, config_servername);

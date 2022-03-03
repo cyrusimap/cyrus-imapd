@@ -579,6 +579,7 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_calendar_capabilities(capas, authstate, authuserid, accountid);
         jmap_backup_capabilities(capas);
         jmap_notes_capabilities(capas);
+        jmap_files_capabilities(capas);
 #ifdef USE_SIEVE
         jmap_sieve_capabilities(capas);
         jmap_vacation_capabilities(capas);
@@ -1019,6 +1020,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);
     json_object_set(primary_accounts, JMAP_SIEVE_EXTENSION, jprimary);
 #endif
+    json_object_set(primary_accounts, JMAP_FILES_EXTENSION, jprimary);
     json_object_set(primary_accounts, JMAP_URN_PRINCIPALS, jprimary);
     json_decref(jprimary);
 
@@ -1373,6 +1375,9 @@ HIDDEN int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
          case MBTYPE_SIEVE:
              server_modseq = req->counters.sievemodseq;
              break;
+         case MBTYPE_COLLECTION:
+             server_modseq = req->counters.filesmodseq;
+             break;
          default:
              server_modseq = req->counters.mailmodseq;
         }
@@ -1403,6 +1408,9 @@ HIDDEN modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
             break;
         case MBTYPE_SIEVE:
             modseq = req->counters.sievemodseq;
+            break;
+        case MBTYPE_COLLECTION:
+            modseq = req->counters.filesmodseq;
             break;
         case MBTYPE_EMAIL:
             modseq = req->counters.mailmodseq;
@@ -2223,7 +2231,8 @@ HIDDEN json_t *jmap_copy_reply(struct jmap_copy *copy)
 
 /* Foo/query */
 
-HIDDEN jmap_filter *jmap_buildfilter(json_t *arg, jmap_buildfilter_cb *parse)
+HIDDEN jmap_filter *jmap_buildfilter(json_t *arg,
+                                     jmap_buildfilter_cb *parse, void *rock)
 {
     jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
     int pe;
@@ -2249,12 +2258,12 @@ HIDDEN jmap_filter *jmap_buildfilter(json_t *arg, jmap_buildfilter_cb *parse)
         size_t i, n_conditions = json_array_size(conds);
         for (i = 0; i < n_conditions; i++) {
             json_t *cond = json_array_get(conds, i);
-            ptrarray_push(&f->conditions, jmap_buildfilter(cond, parse));
+            ptrarray_push(&f->conditions, jmap_buildfilter(cond, parse, rock));
         }
     }
 
     if (iscond) {
-        ptrarray_push(&f->conditions, parse(arg));
+        ptrarray_push(&f->conditions, parse(arg, rock));
     }
 
     return f;

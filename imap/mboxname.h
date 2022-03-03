@@ -218,6 +218,9 @@ int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype);
  */
 int mboxname_issievemailbox(const char *name, int mbtype);
 
+#define mboxname_isfilesmailbox(name, mbtype) \
+    mboxname_isdavdrivemailbox(name, mbtype)
+
 #define mboxname_isnonimapmailbox(name, mbtype)            \
     (mboxname_iscalendarmailbox(name, mbtype)              \
      || mboxname_isaddressbookmailbox(name, mbtype)        \
@@ -353,6 +356,10 @@ struct mboxname_counters {
     modseq_t sievedeletedmodseq;
     modseq_t sievefoldersmodseq;
     modseq_t sievefoldersdeletedmodseq;
+    modseq_t filesmodseq;
+    modseq_t filesdeletedmodseq;
+    modseq_t filesfoldersmodseq;
+    modseq_t filesfoldersdeletedmodseq;
     uint32_t uidvalidity;
 };
 

@@ -4759,7 +4759,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     /* Store the resource at destination */
     ret = cparams->copy.proc(txn, obj,
-                             dest_mbox, dest_tgt.resource, dest_davdb, 0);
+                             dest_mbox, dest_tgt.resource, NULL, dest_davdb, 0);
 
     if (dest_mbox != src_mbox) {
         /* Done with destination mailbox */
@@ -6999,7 +6999,7 @@ int meth_patch(struct transaction_t *txn, void *params)
             ret = patch_doc->proc(txn, obj);
             if (!ret) {
                 ret = pparams->put.proc(txn, obj, mailbox,
-                                        txn->req_tgt.resource, davdb, flags);
+                                        txn->req_tgt.resource, NULL, davdb, flags);
                 if (ret == HTTP_FORBIDDEN) ret = HTTP_UNPROCESSABLE;
             }
         }
@@ -7243,7 +7243,7 @@ int meth_put(struct transaction_t *txn, void *params)
         /* Parse, validate, and store the resource */
         obj = mime->to_object(&txn->req_body.payload);
         ret = pparams->put.proc(txn, obj, mailbox,
-                                txn->req_tgt.resource, davdb, flags);
+                                txn->req_tgt.resource, NULL, davdb, flags);
         break;
 
     case HTTP_PRECOND_FAILED:

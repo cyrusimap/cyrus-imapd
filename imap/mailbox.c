@@ -3778,6 +3778,9 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     else {
         struct buf msg_buf = BUF_INITIALIZER;
         struct message_guid guid;
+        const char *uid = NULL, *filename = NULL;
+        json_t *jdesc = NULL;
+        json_error_t jerr;
 
         /* Load message containing the resource */
         r = mailbox_map_record(mailbox, new, &msg_buf);
@@ -3788,18 +3791,33 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
                               buf_len(&msg_buf) - new->header_size);
         buf_free(&msg_buf);
 
+        /* Extract uid and filename from json in Content-Description */
+        jdesc = json_loads(body->description, 0, &jerr);
+        if (jdesc) {
+            uid = json_string_value(json_object_get(jdesc, "uid"));
+            filename = json_string_value(json_object_get(jdesc, "filename"));
+        }
+        else {
+            /* Legacy resource */
+            uid = message_guid_encode(&guid);
+            filename = body->description;
+        }
+
         wdata->dav.creationdate = new->internaldate;
         wdata->dav.imap_uid = new->uid;
         wdata->dav.modseq = new->modseq;
         wdata->dav.createdmodseq = new->createdmodseq;
         wdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         wdata->ref_count *= wdata->dav.alive;
-        wdata->filename = body->description;
+        wdata->filename = filename;
         wdata->type = lcase(body->type);
         wdata->subtype = lcase(body->subtype);
-        wdata->res_uid = message_guid_encode(&guid);
+        wdata->contentid = message_guid_encode(&guid);
+        wdata->res_uid = uid;
 
         r = webdav_write(webdavdb, wdata);
+
+        json_decref(jdesc);
     }
 
 done:

@@ -58,6 +58,7 @@
 #include "cyr_qsort_r.h"
 #include "http_jmap.h"
 #include "jmap_mail.h"
+#include "jmap_mailbox.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mappedfile.h"
@@ -376,8 +377,8 @@ static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
     return role;
 }
 
-static char *_mbox_get_name(const char *account_id __attribute__((unused)),
-                            const mbname_t *mbname)
+EXPORTED char *jmap_mbox_get_name(const char *account_id __attribute__((unused)),
+                                  const mbname_t *mbname)
 {
     /* Determine name from the last segment of the mailboxname hierarchy. */
     char *extname;
@@ -486,7 +487,7 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
     return sort_order;
 }
 
-static int _findparent(const char *mboxname, mbentry_t **mbentryp)
+EXPORTED int jmap_mailbox_findparent(const char *mboxname, mbentry_t **mbentryp)
 {
     mbentry_t *mbentry = NULL;
     int r = mboxlist_findparent_allow_all(mboxname, &mbentry);
@@ -557,7 +558,7 @@ static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
     int rights = jmap_myrights_mbentry(req, mbentry);
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     mbentry_t *parent = NULL;
-    _findparent(mbname_intname(mbname), &parent);
+    jmap_mailbox_findparent(mbname_intname(mbname), &parent);
     int is_inbox = 0;
     _mbox_is_inbox(mbname, &is_inbox, NULL);
 
@@ -625,7 +626,7 @@ static json_t *_mbox_get(jmap_req_t *req,
 
     if (jmap_wantprop(props, "myRights") || jmap_wantprop(props, "parentId")) {
         /* Need to lookup parent mailbox */
-        _findparent(mbname_intname(mbname), &parent);
+        jmap_mailbox_findparent(mbname_intname(mbname), &parent);
     }
 
     /* Build JMAP mailbox response. */
@@ -633,7 +634,7 @@ static json_t *_mbox_get(jmap_req_t *req,
 
     json_object_set_new(obj, "id", json_string(mbentry->uniqueid));
     if (jmap_wantprop(props, "name")) {
-        char *name = _mbox_get_name(req->accountid, mbname);
+        char *name = jmap_mbox_get_name(req->accountid, mbname);
         if (!name) goto done;
         json_object_set_new(obj, "name", json_string(name));
         free(name);
@@ -1320,7 +1321,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 
     if (strarray_size(mbname_boxes(mbname)) > 1) {
         mbentry_t *mbparent = NULL;
-        r = _findparent(mbentry->name, &mbparent);
+        r = jmap_mailbox_findparent(mbentry->name, &mbparent);
         if (r && r != IMAP_MAILBOX_NONEXISTENT) {
             goto done;
         }
@@ -1341,7 +1342,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
     rec->mboxname = xstrdup(mbentry->name);
 
     if (q->need_name) {
-        rec->jmapname = _mbox_get_name(q->req->accountid, rec->mbname);
+        rec->jmapname = jmap_mbox_get_name(q->req->accountid, rec->mbname);
     }
     if (q->need_sort_order) {
         rec->sort_order = _mbox_get_sortorder(q->req, rec->mbname);
@@ -1815,7 +1816,8 @@ done:
  * name to a IMAP mailbox name. Does not check for uniqueness.
  *
  * Return the malloced, combined name, or NULL on error. */
-static char *_mbox_newname(const char *name, const char *parentname, int is_toplevel)
+EXPORTED char *jmap_mbox_newname(const char *name,
+                                 const char *parentname, int is_toplevel)
 {
     charset_t cs = CHARSET_UNKNOWN_CHARSET;
     char *mboxname = NULL;
@@ -1846,14 +1848,15 @@ done:
     return mboxname;
 }
 
-static char *_mbox_tmpname(const char *name, const char *parentname, int is_toplevel)
+EXPORTED char *jmap_mbox_tmpname(const char *name,
+                                 const char *parentname, int is_toplevel)
 {
     int retries = 0;
     do {
         /* Make temporary name */
         struct buf buf = BUF_INITIALIZER;
         buf_printf(&buf, "tmp_%s_%s", name, makeuuid());
-        char *mboxname = _mbox_newname(buf_cstring(&buf), parentname, is_toplevel);
+        char *mboxname = jmap_mbox_newname(buf_cstring(&buf), parentname, is_toplevel);
         buf_free(&buf);
         /* Make sure no such mailbox exists */
         int r = jmap_mboxlist_lookup(mboxname, NULL, NULL);
@@ -1882,31 +1885,27 @@ static int _mbox_has_children(const char *mboxname)
     return has_child;
 }
 
-struct mboxset_args {
-    char *creation_id;
-    char *mbox_id;
-    char *name;
-    char *parent_id;
-    char *specialuse; // empty string means delete
-    int is_subscribed; /* -1 if not set */
-    int is_seenshared; /* -1 if not set */
-    int is_toplevel;
-    int sortorder;
-    json_t *shareWith; /* NULL if not set */
-    int overwrite_acl;
-    char *color;
-    int show_as_label;
-    json_t *jargs; // original JSON arguments
-};
-
-static void _mbox_setargs_fini(struct mboxset_args *args)
+EXPORTED void jmap_setmbox_args_fini(struct jmap_setmbox_args *args)
 {
     free(args->creation_id);
-    free(args->mbox_id);
+    free(args->id);
     free(args->parent_id);
     free(args->name);
-    free(args->specialuse);
-    free(args->color);
+
+    switch (args->type) {
+    case JMAP_SETMBOX_MBOX:
+        free(args->u.mbox.specialuse);
+        free(args->u.mbox.color);
+        break;
+
+    case JMAP_SETMBOX_NODE:
+        free(args->u.node.blobid);
+        free(args->u.node.type);
+        free(args->u.node.title);
+        free(args->u.node.comment);
+        break;
+    }
+
     json_decref(args->jargs);
 }
 
@@ -1935,22 +1934,23 @@ EXPORTED int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
     return r;
 }
 
-static void _mboxset_args_parse(json_t *jargs,
+static void _setmbox_args_parse(json_t *jargs,
                                 struct jmap_parser *parser,
-                                struct mboxset_args *args,
+                                struct jmap_setmbox_args *args,
                                 jmap_req_t *req,
                                 int is_create)
 {
     /* Initialize arguments */
-    memset(args, 0, sizeof(struct mboxset_args));
-    args->sortorder = -1;
-    args->overwrite_acl = 1;
+    memset(args, 0, sizeof(struct jmap_setmbox_args));
+    args->type = JMAP_SETMBOX_MBOX;
+    args->u.mbox.sortorder = -1;
+    args->u.mbox.overwrite_acl = 1;
     args->jargs = json_incref(jargs);
 
     /* id */
     json_t *jid = json_object_get(jargs, "id");
     if (json_is_string(jid) && !is_create) {
-        args->mbox_id = xstrdup(json_string_value(jid));
+        args->id = xstrdup(json_string_value(jid));
     }
     else if (JNOTNULL(jid) && is_create) {
         jmap_parser_invalid(parser, "id");
@@ -2012,7 +2012,7 @@ static void _mboxset_args_parse(json_t *jargs,
             struct buf buf = BUF_INITIALIZER;
             int r = specialuse_validate(NULL, req->userid, specialuse, &buf, 1);
             if (r) is_valid = 0;
-            else args->specialuse = buf_release(&buf);
+            else args->u.mbox.specialuse = buf_release(&buf);
             free(specialuse);
             buf_free(&buf);
         }
@@ -2021,7 +2021,7 @@ static void _mboxset_args_parse(json_t *jargs,
         }
     }
     else if (jrole == json_null()) {
-        args->specialuse = xstrdup("");
+        args->u.mbox.specialuse = xstrdup("");
     }
     else if (JNOTNULL(jrole)) {
         jmap_parser_invalid(parser, "role");
@@ -2030,8 +2030,8 @@ static void _mboxset_args_parse(json_t *jargs,
     /* sortOrder */
     json_t *jsortOrder = json_object_get(jargs, "sortOrder");
     if (json_is_integer(jsortOrder)) {
-        args->sortorder = json_integer_value(jsortOrder);
-        if (args->sortorder < 0 || args->sortorder >= INT_MAX) {
+        args->u.mbox.sortorder = json_integer_value(jsortOrder);
+        if (args->u.mbox.sortorder < 0 || args->u.mbox.sortorder >= INT_MAX) {
             jmap_parser_invalid(parser, "sortOrder");
         }
     }
@@ -2042,25 +2042,25 @@ static void _mboxset_args_parse(json_t *jargs,
     /* isSubscribed */
     json_t *jisSubscribed = json_object_get(jargs, "isSubscribed");
     if (json_is_boolean(jisSubscribed)) {
-        args->is_subscribed = json_boolean_value(jisSubscribed);
+        args->u.mbox.is_subscribed = json_boolean_value(jisSubscribed);
     }
     else if (jisSubscribed) {
         jmap_parser_invalid(parser, "isSubscribed");
     }
     else {
-        args->is_subscribed = -1;
+        args->u.mbox.is_subscribed = -1;
     }
 
     /* isSeenShared */
     json_t *jisSeenShared = json_object_get(jargs, "isSeenShared");
     if (json_is_boolean(jisSeenShared)) {
-        args->is_seenshared = json_boolean_value(jisSeenShared);
+        args->u.mbox.is_seenshared = json_boolean_value(jisSeenShared);
     }
     else if (jisSeenShared) {
         jmap_parser_invalid(parser, "isSeenShared");
     }
     else {
-        args->is_seenshared = -1;
+        args->u.mbox.is_seenshared = -1;
     }
 
     if (!is_create) {
@@ -2068,7 +2068,7 @@ static void _mboxset_args_parse(json_t *jargs,
         json_t *shareWith = NULL;
         jmap_parse_sharewith_patch(jargs, &shareWith);
         if (shareWith) {
-            args->overwrite_acl = 0;
+            args->u.mbox.overwrite_acl = 0;
             json_object_set_new(jargs, "shareWith", shareWith);
         }
     }
@@ -2141,7 +2141,8 @@ static void _mboxset_args_parse(json_t *jargs,
     /* color */
     json_t *jcolor = json_object_get(jargs, "color");
     if (json_is_string(jcolor) || jcolor == json_null()) {
-        args->color = (jcolor == json_null()) ? xstrdup("") : xstrdup(json_string_value(jcolor));
+        args->u.mbox.color =
+            (jcolor == json_null()) ? xstrdup("") : xstrdup(json_string_value(jcolor));
     }
     else if (JNOTNULL(jcolor)) {
         jmap_parser_invalid(parser, "color");
@@ -2150,26 +2151,26 @@ static void _mboxset_args_parse(json_t *jargs,
     /* showAsLabel */
     json_t *jshowAsLabel = json_object_get(jargs, "showAsLabel");
     if (json_is_boolean(jshowAsLabel)) {
-        args->show_as_label = json_boolean_value(jshowAsLabel);
+        args->u.mbox.show_as_label = json_boolean_value(jshowAsLabel);
     }
     else if (jshowAsLabel) {
         jmap_parser_invalid(parser, "showAsLabel");
     }
     else {
-        args->show_as_label = -1;
+        args->u.mbox.show_as_label = -1;
     }
 }
 
 static int _mbox_set_annots(jmap_req_t *req,
-                            struct mboxset_args *args,
+                            struct jmap_setmbox_args *args,
                             const char *mboxname)
 {
     int r = 0;
     struct buf buf = BUF_INITIALIZER;
 
     /* Set specialuse.  This is a PRIVATE annotation on the account owner */
-    if (args->specialuse) {
-        buf_setcstr(&buf, args->specialuse);
+    if (args->u.mbox.specialuse) {
+        buf_setcstr(&buf, args->u.mbox.specialuse);
         static const char *annot = "/specialuse";
         r = annotatemore_write(mboxname, annot, req->accountid, &buf);
         if (r) {
@@ -2180,10 +2181,10 @@ static int _mbox_set_annots(jmap_req_t *req,
         buf_reset(&buf);
     }
 
-    if (args->sortorder >= 0) {
+    if (args->u.mbox.sortorder >= 0) {
         /* Set sortOrder annotation on mailbox.  This is a masked private annotation
          * for the authenticated user */
-        buf_printf(&buf, "%d", args->sortorder);
+        buf_printf(&buf, "%d", args->u.mbox.sortorder);
         static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
         r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &buf);
         if (r) {
@@ -2193,10 +2194,10 @@ static int _mbox_set_annots(jmap_req_t *req,
         }
     }
 
-    if (args->color) {
+    if (args->u.mbox.color) {
         /* Set color annotation on mailbox.  This is a masked private annotation
          * for the authenticated user */
-        buf_setcstr(&buf, args->color);
+        buf_setcstr(&buf, args->u.mbox.color);
         static const char *annot = IMAP_ANNOT_NS "color";
         r = annotatemore_writemask(mboxname, annot, httpd_userid, &buf);
         if (r) {
@@ -2207,10 +2208,10 @@ static int _mbox_set_annots(jmap_req_t *req,
         buf_reset(&buf);
     }
 
-    if (args->show_as_label >= 0) {
+    if (args->u.mbox.show_as_label >= 0) {
         /* Set showAsLabel annotation on mailbox.  This is a masked private annotation
          * for the authenticated user */
-        buf_printf(&buf, "%d", args->show_as_label);
+        buf_printf(&buf, "%d", args->u.mbox.show_as_label);
         static const char *annot = IMAP_ANNOT_NS "showaslabel";
         r = annotatemore_writemask(mboxname, annot, httpd_userid, &buf);
         if (r) {
@@ -2225,17 +2226,7 @@ done:
     return r;
 }
 
-enum mboxset_runmode { _MBOXSET_FAIL, _MBOXSET_SKIP, _MBOXSET_INTERIM };
-
-struct mboxset_result {
-    json_t *err;
-    int skipped;
-    char *old_imapname;
-    char *new_imapname;
-    char *tmp_imapname;
-};
-
-static void _mboxset_result_fini(struct mboxset_result *result)
+static void _setmbox_result_fini(struct jmap_setmbox_result *result)
 {
     json_decref(result->err);
     free(result->old_imapname);
@@ -2243,7 +2234,7 @@ static void _mboxset_result_fini(struct mboxset_result *result)
     free(result->tmp_imapname);
 }
 
-static int _mbox_sharewith_to_rights(int rights, json_t *jsharewith)
+HIDDEN int jmap_mbox_sharewith_to_rights(int rights, json_t *jsharewith)
 {
     int newrights = rights;
     const char *name;
@@ -2269,20 +2260,9 @@ static int _mbox_sharewith_to_rights(int rights, json_t *jsharewith)
     return newrights;
 }
 
-#define MBOXSET_RESULT_INITIALIZER { NULL, 0, NULL, NULL, NULL }
-
-struct mboxset {
-    struct jmap_set super;
-    ptrarray_t create;
-    ptrarray_t update;
-    strarray_t *destroy;
-    int on_destroy_remove_msgs;
-    const char *on_destroy_move_to_mailboxid;
-};
-
-static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
-                         enum mboxset_runmode mode,
-                         json_t **mbox, struct mboxset_result *result,
+static void _mbox_create(jmap_req_t *req, struct jmap_setmbox_args *args,
+                         enum jmap_setmbox_runmode mode,
+                         json_t **mbox, struct jmap_setmbox_result *result,
                          strarray_t *update_intermediaries)
 {
     char *mboxname = NULL;
@@ -2303,7 +2283,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     if (parent_id && *parent_id == '#') {
         parent_id = jmap_lookup_id(req, parent_id + 1);
         if (!parent_id) {
-            if (mode == _MBOXSET_SKIP) {
+            if (mode == JMAP_SETMBOX_SKIP) {
                 result->skipped = 1;
             }
             else {
@@ -2328,7 +2308,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
 
     /* Encode the mailbox name for IMAP. */
-    mboxname = _mbox_newname(args->name, mbparent->name, args->is_toplevel);
+    mboxname = jmap_mbox_newname(args->name, mbparent->name, args->is_toplevel);
     if (!mboxname) {
         syslog(LOG_ERR, "could not encode mailbox name");
         r = IMAP_INTERNAL;
@@ -2336,8 +2316,8 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
 
     /* Skip role updates in first iteration */
-    if (args->specialuse && *args->specialuse) {
-        if (mode == _MBOXSET_SKIP) {
+    if (args->u.mbox.specialuse && *args->u.mbox.specialuse) {
+        if (mode == JMAP_SETMBOX_SKIP) {
             result->skipped = 1;
             goto done;
         }
@@ -2346,14 +2326,15 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     /* Check if a mailbox with this name exists */
     r = jmap_mboxlist_lookup(mboxname, NULL, NULL);
     if (r == 0) {
-        if (mode == _MBOXSET_SKIP) {
+        if (mode == JMAP_SETMBOX_SKIP) {
             result->skipped = 1;
             goto done;
         }
-        else if (mode == _MBOXSET_INTERIM) {
+        else if (mode == JMAP_SETMBOX_INTERIM) {
             result->new_imapname = xstrdup(mboxname);
             result->old_imapname = NULL;
-            result->tmp_imapname = _mbox_tmpname(args->name, mbparent->name, args->is_toplevel);
+            result->tmp_imapname =
+                jmap_mbox_tmpname(args->name, mbparent->name, args->is_toplevel);
             if (!result->tmp_imapname) {
                 syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", mboxname);
                 r = IMAP_INTERNAL;
@@ -2380,8 +2361,8 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     newmbentry.mbtype = MBTYPE_EMAIL;
 
     uint32_t options = 0;
-    if (args->is_seenshared > 0) options |= OPT_IMAP_SHAREDSEEN;
-    if (args->specialuse && !strcmp("\\Snoozed", args->specialuse))
+    if (args->u.mbox.is_seenshared > 0) options |= OPT_IMAP_SHAREDSEEN;
+    if (args->u.mbox.specialuse && !strcmp("\\Snoozed", args->u.mbox.specialuse))
         options |= OPT_IMAP_HAS_ALARMS;
 
     r = mboxlist_createmailbox(&newmbentry, options, 0/*highestmodseq*/,
@@ -2401,15 +2382,16 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 
     /* shareWith */
     if (args->shareWith) {
-        r = jmap_set_sharewith(mailbox, args->shareWith, args->overwrite_acl,
-                _mbox_sharewith_to_rights);
+        r = jmap_set_sharewith(mailbox, args->shareWith,
+                               args->u.mbox.overwrite_acl,
+                               jmap_mbox_sharewith_to_rights);
         mailbox_close(&mailbox);
     }
     if (r) goto done;
 
     /* Write annotations and isSubscribed */
     r = _mbox_set_annots(req, args, mboxname);
-    if (!r && args->is_subscribed > 0) {
+    if (!r && args->u.mbox.is_subscribed > 0) {
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate, 1, 0, 0);
     }
     if (r) goto done;
@@ -2419,19 +2401,20 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     if (r) goto done;
     *mbox = json_pack("{s:s}", "id", mbentry->uniqueid);
     /* Set server defaults */
-    if (args->is_subscribed < 0) {
+    if (args->u.mbox.is_subscribed < 0) {
         json_object_set_new(*mbox, "isSubscribed", json_false());
     }
-    if (args->is_seenshared < 0) {
+    if (args->u.mbox.is_seenshared < 0) {
         json_object_set_new(*mbox, "isSeenShared", json_false());
     }
-    if (args->sortorder < 0) {
+    if (args->u.mbox.sortorder < 0) {
         mbname_t *mbname = mbname_from_intname(mboxname);
         json_object_set_new(*mbox, "sortOrder", json_integer(_mbox_get_sortorder(req, mbname)));
         mbname_free(&mbname);
     }
-    if (args->show_as_label < 0) {
-        json_object_set_new(*mbox, "showAsLabel", args->specialuse ? json_false() : json_true());
+    if (args->u.mbox.show_as_label < 0) {
+        json_object_set_new(*mbox, "showAsLabel",
+                            args->u.mbox.specialuse ? json_false() : json_true());
     }
 
 done:
@@ -2449,7 +2432,7 @@ done:
 }
 
 static int _mbox_update_validate_serverset(jmap_req_t *req,
-                                           struct mboxset_args *args,
+                                           struct jmap_setmbox_args *args,
                                            struct jmap_parser *parser,
                                            mbentry_t *mbentry)
 {
@@ -2515,9 +2498,9 @@ static int _mbox_update_validate_serverset(jmap_req_t *req,
     return 0;
 }
 
-static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
-                         enum mboxset_runmode mode,
-                         struct mboxset_result *result,
+static void _mbox_update(jmap_req_t *req, struct jmap_setmbox_args *args,
+                         enum jmap_setmbox_runmode mode,
+                         struct jmap_setmbox_result *result,
                          strarray_t *update_intermediaries)
 {
     /* So many names... manage them in our own string pool */
@@ -2534,7 +2517,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     if (parent_id && *parent_id == '#') {
         parent_id = jmap_lookup_id(req, parent_id + 1);
         if (!parent_id) {
-            if (mode == _MBOXSET_SKIP) {
+            if (mode == JMAP_SETMBOX_SKIP) {
                 result->skipped = 1;
             }
             else {
@@ -2545,7 +2528,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     }
 
     /* Lookup current mailbox entry */
-    mbentry = jmap_mbentry_by_uniqueid_copy(req, args->mbox_id);
+    mbentry = jmap_mbentry_by_uniqueid_copy(req, args->id);
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
         mboxlist_entry_free(&mbentry);
         result->err = json_pack("{s:s}", "type", "notFound");
@@ -2560,9 +2543,9 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     char *oldparentname = NULL;
     int was_toplevel = 0;
     int is_inbox = 0;
-    if (strcmp(args->mbox_id, mbinbox->uniqueid)) {
+    if (strcmp(args->id, mbinbox->uniqueid)) {
         oldmboxname = xstrdup(mbentry->name);
-        r = _findparent(oldmboxname, &mbparent);
+        r = jmap_mailbox_findparent(oldmboxname, &mbparent);
         if (r) {
             syslog(LOG_INFO, "_findparent(%s) failed: %s",
                             oldmboxname, error_message(r));
@@ -2589,14 +2572,14 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     ptrarray_append(&strpool, oldmboxname);
 
     /* Must not set role on inbox */
-    if (args->specialuse && is_inbox) {
+    if (args->u.mbox.specialuse && is_inbox) {
         jmap_parser_invalid(&parser, "role");
         goto done;
     }
 
     /* Skip role updates in first iteration */
-    if (mode == _MBOXSET_SKIP) {
-        if (args->specialuse && *args->specialuse) {
+    if (mode == JMAP_SETMBOX_SKIP) {
+        if (args->u.mbox.specialuse && *args->u.mbox.specialuse) {
             result->skipped = 1;
         }
         if (!result->skipped) {
@@ -2637,8 +2620,8 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
         /* Reject cycles in mailbox tree. */
         char *pname = xstrdup(newparentname);
-        while (_findparent(pname, &pmbentry) == 0) {
-            if (!strcmp(args->mbox_id, pmbentry->uniqueid)) {
+        while (jmap_mailbox_findparent(pname, &pmbentry) == 0) {
+            if (!strcmp(args->id, pmbentry->uniqueid)) {
                 jmap_parser_invalid(&parser, "parentId");
                 free(pname);
                 mboxlist_entry_free(&pmbentry);
@@ -2680,7 +2663,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     /* Do we need to rename the mailbox? But only if it isn't the INBOX! */
     if (!is_inbox && (args->name || force_rename)) {
         mbname_t *mbname = mbname_from_intname(oldmboxname);
-        char *oldname = _mbox_get_name(req->accountid, mbname);
+        char *oldname = jmap_mbox_get_name(req->accountid, mbname);
         mbname_free(&mbname);
         ptrarray_append(&strpool, oldname);
         char *name = oldname;
@@ -2701,7 +2684,8 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         if (force_rename) {
 
             /* Determine the unique IMAP mailbox name. */
-            char *newmboxname = _mbox_newname(name, parentname, is_toplevel);
+            char *newmboxname =
+                jmap_mbox_newname(name, parentname, is_toplevel);
             if (!newmboxname) {
                 syslog(LOG_ERR, "_mbox_newname returns NULL: can't rename %s", mboxname);
                 r = IMAP_INTERNAL;
@@ -2711,14 +2695,15 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
             r = jmap_mboxlist_lookup(newmboxname, NULL, NULL);
             if (r == 0) {
-                if (mode == _MBOXSET_SKIP) {
+                if (mode == JMAP_SETMBOX_SKIP) {
                     result->skipped = 1;
                     goto done;
                 }
-                else if (mode == _MBOXSET_INTERIM) {
+                else if (mode == JMAP_SETMBOX_INTERIM) {
                     result->new_imapname = xstrdup(newmboxname);
                     result->old_imapname = xstrdup(oldmboxname);
-                    result->tmp_imapname = _mbox_tmpname(name, parentname, is_toplevel);
+                    result->tmp_imapname =
+                        jmap_mbox_tmpname(name, parentname, is_toplevel);
                     if (!result->tmp_imapname) {
                         syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", newmboxname);
                         r = IMAP_INTERNAL;
@@ -2778,7 +2763,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     /* Write annotations and isSubscribed */
 
     int set_annots = 0;
-    if (args->name || args->specialuse) {
+    if (args->name || args->u.mbox.specialuse) {
         // these set for everyone
         if (!jmap_hasrights_mbentry(req, mbentry, JACL_SETKEYWORDS)) {
             mboxlist_entry_free(&mbentry);
@@ -2787,7 +2772,8 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         }
         set_annots = 1;
     }
-    if (args->sortorder >= 0 || args->color || args->show_as_label >= 0) {
+    if (args->u.mbox.sortorder >= 0 ||
+        args->u.mbox.color || args->u.mbox.show_as_label >= 0) {
         // these are per-user, so you just need READ access
         if (!jmap_hasrights_mbentry(req, mbentry, ACL_READ)) {
             mboxlist_entry_free(&mbentry);
@@ -2806,11 +2792,11 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         if (!r) r = _mbox_set_annots(req, args, mboxname);
     }
 
-    if (!r && args->is_subscribed >= 0) {
+    if (!r && args->u.mbox.is_subscribed >= 0) {
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
-                               args->is_subscribed, 0, 0);
+                               args->u.mbox.is_subscribed, 0, 0);
     }
-    if (!r && (args->shareWith || args->is_seenshared >= 0)) {
+    if (!r && (args->shareWith || args->u.mbox.is_seenshared >= 0)) {
         struct mailbox *mbox = NULL;
         uint32_t newopts;
 
@@ -2818,13 +2804,14 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         if (r) goto done;
 
         if (args->shareWith) {
-            r = jmap_set_sharewith(mbox, args->shareWith, args->overwrite_acl,
-                    _mbox_sharewith_to_rights);
+            r = jmap_set_sharewith(mbox, args->shareWith,
+                                   args->u.mbox.overwrite_acl,
+                                   jmap_mbox_sharewith_to_rights);
         }
 
-        if (!r && args->is_seenshared >= 0) {
+        if (!r && args->u.mbox.is_seenshared >= 0) {
             newopts = mbox->i.options;
-            if (args->is_seenshared) newopts |= OPT_IMAP_SHAREDSEEN;
+            if (args->u.mbox.is_seenshared) newopts |= OPT_IMAP_SHAREDSEEN;
             else newopts &= ~OPT_IMAP_SHAREDSEEN;
 
             /* only mark dirty if there's been a change */
@@ -2875,9 +2862,9 @@ static int in_otherfolder_cb(const conv_guidrec_t *rec, void *rock)
 }
 
 static int _mbox_on_destroy_move(jmap_req_t *req,
-                                 struct mboxset *set,
+                                 struct jmap_setmbox_ctx *set,
                                  const mbentry_t *src_mbentry,
-                                 struct mboxset_result *result)
+                                 struct jmap_setmbox_result *result)
 {
     struct mailbox *src_mbox = NULL;
     struct mailbox *dst_mbox = NULL;
@@ -2972,9 +2959,9 @@ done:
 }
 
 static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
-                          struct mboxset *set,
-                          enum mboxset_runmode mode,
-                          struct mboxset_result *result,
+                          struct jmap_setmbox_ctx *set,
+                          enum jmap_setmbox_runmode mode,
+                          struct jmap_setmbox_result *result,
                           strarray_t *update_intermediaries)
 {
     int r = 0;
@@ -3008,7 +2995,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
 
     /* Check if the mailbox has any children. */
     if (_mbox_has_children(mbentry->name)) {
-        if (mode == _MBOXSET_SKIP) {
+        if (mode == JMAP_SETMBOX_SKIP) {
             result->skipped = 1;
         }
         else {
@@ -3018,7 +3005,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
     }
 
     /* Skip role updates in first iteration */
-    if (mode == _MBOXSET_SKIP) {
+    if (mode == JMAP_SETMBOX_SKIP) {
         struct buf val = BUF_INITIALIZER;
         annotatemore_lookup_mbe(mbentry, "/specialuse", req->accountid, &val);
         if (buf_len(&val)) {
@@ -3065,7 +3052,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
 
     /* Destroy mailbox. */
     int delflags = MBOXLIST_DELETE_CHECKACL | MBOXLIST_DELETE_KEEP_INTERMEDIARIES;
-    if (mode == _MBOXSET_INTERIM) {
+    if (mode == JMAP_SETMBOX_INTERIM) {
         delflags |= MBOXLIST_DELETE_UNPROTECT_SPECIALUSE;
     }
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
@@ -3180,39 +3167,38 @@ static int _toposort(hash_table *parent_id_by_id, strarray_t *dst)
     return topo.is_cyclic ? -1 : 0;
 }
 
-struct mboxset_ops {
+struct setmbox_ops {
     ptrarray_t *put;
     strarray_t *del;
     int is_cyclic;
 };
 
-static void _mboxset_ops_free(struct mboxset_ops *ops)
+static void _setmbox_ops_free(struct setmbox_ops *ops)
 {
     ptrarray_free(ops->put);
     strarray_free(ops->del);
     free(ops);
 }
 
-static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
+static struct setmbox_ops *_setmbox_newops(jmap_req_t *req, struct jmap_setmbox_ctx *set)
 {
     int i;
 
-    struct mboxset_ops *ops = xzmalloc(sizeof(struct mboxset_ops));
+    struct setmbox_ops *ops = xzmalloc(sizeof(struct setmbox_ops));
     ops->put = ptrarray_new();
     ops->del = strarray_new();
 
     /* Sort create and update operations, parent before child */
-    if (ptrarray_size(&set->create) || ptrarray_size(&set->update)) {
+    int put_size = ptrarray_size(&set->to_create) + ptrarray_size(&set->to_update);
+    if (put_size) {
         hash_table args_by_id = HASH_TABLE_INITIALIZER;
         hash_table parent_id_by_id = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&parent_id_by_id,
-                ptrarray_size(&set->create) + ptrarray_size(&set->update), 0);
-        construct_hash_table(&args_by_id,
-                ptrarray_size(&set->create) + ptrarray_size(&set->update), 0);
+        construct_hash_table(&parent_id_by_id, put_size, 0);
+        construct_hash_table(&args_by_id, put_size, 0);
 
         struct buf buf = BUF_INITIALIZER;
-        for (i = 0; i < ptrarray_size(&set->create); i++) {
-            struct mboxset_args *args = ptrarray_nth(&set->create, i);
+        for (i = 0; i < ptrarray_size(&set->to_create); i++) {
+            struct jmap_setmbox_args *args = ptrarray_nth(&set->to_create, i);
             if (!args->parent_id) {
                 ptrarray_append(ops->put, args);
                 continue;
@@ -3224,14 +3210,14 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
             buf_reset(&buf);
         }
         buf_free(&buf);
-        for (i = 0; i < ptrarray_size(&set->update); i++) {
-            struct mboxset_args *args = ptrarray_nth(&set->update, i);
+        for (i = 0; i < ptrarray_size(&set->to_update); i++) {
+            struct jmap_setmbox_args *args = ptrarray_nth(&set->to_update, i);
             if (!args->parent_id) {
                 ptrarray_append(ops->put, args);
                 continue;
             }
-            hash_insert(args->mbox_id, args->parent_id, &parent_id_by_id);
-            hash_insert(args->mbox_id, args, &args_by_id);
+            hash_insert(args->id, args->parent_id, &parent_id_by_id);
+            hash_insert(args->id, args, &args_by_id);
         }
         strarray_t tmp = STRARRAY_INITIALIZER;
         if (_toposort(&parent_id_by_id, &tmp) < 0) {
@@ -3247,11 +3233,12 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
     }
 
     /* Sort delete operations, children before parent */
-    if (strarray_size(set->destroy)) {
+    int destroy_size = strarray_size(set->to_destroy);
+    if (destroy_size) {
         hash_table parent_id_by_id = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&parent_id_by_id, strarray_size(set->destroy) + 1, 0);
-        for (i = 0; i < strarray_size(set->destroy); i++) {
-            const char *mbox_id = strarray_nth(set->destroy, i);
+        construct_hash_table(&parent_id_by_id, destroy_size + 1, 0);
+        for (i = 0; i < destroy_size; i++) {
+            const char *mbox_id = strarray_nth(set->to_destroy, i);
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
             if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                 json_object_set_new(set->super.not_destroyed, mbox_id,
@@ -3259,7 +3246,7 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
                 continue;
             }
             mbentry_t *parent = NULL;
-            if (_findparent(mbentry->name, &parent) == 0) {
+            if (jmap_mailbox_findparent(mbentry->name, &parent) == 0) {
                 hash_insert(mbox_id, xstrdup(parent->uniqueid), &parent_id_by_id);
             }
             else {
@@ -3278,9 +3265,9 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
     return ops;
 }
 
-static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
-                         struct mboxset_ops *ops,
-                         enum mboxset_runmode mode,
+static void _setmbox_run(jmap_req_t *req, struct jmap_setmbox_ctx *set,
+                         struct setmbox_ops *ops,
+                         enum jmap_setmbox_runmode mode,
                          strarray_t *update_intermediaries)
 {
     int i;
@@ -3295,12 +3282,12 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
 
     /* Run create and update operations */
     for (i = 0; i < ptrarray_size(ops->put); i++) {
-        struct mboxset_args *args = ptrarray_nth(ops->put, i);
+        struct jmap_setmbox_args *args = ptrarray_nth(ops->put, i);
         /* Create */
         if (args->creation_id) {
             json_t *mbox = NULL;
-            struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
-            _mbox_create(req, args, mode, &mbox, &result, update_intermediaries);
+            struct jmap_setmbox_result result = JMAP_SETMBOX_RESULT_INITIALIZER;
+            set->create_proc(req, args, mode, &mbox, &result, update_intermediaries);
             if (result.err) {
                 json_object_set(set->super.not_created,
                         args->creation_id, result.err);
@@ -3320,21 +3307,21 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                     ptrarray_append(&tmp_renames, tmp);
                 }
             }
-            _mboxset_result_fini(&result);
+            _setmbox_result_fini(&result);
         }
         /* Update */
         else {
-            struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
-            _mbox_update(req, args, mode, &result, update_intermediaries);
+            struct jmap_setmbox_result result = JMAP_SETMBOX_RESULT_INITIALIZER;
+            set->update_proc(req, args, mode, &result, update_intermediaries);
             if (result.err) {
                 json_object_set(set->super.not_updated,
-                        args->mbox_id, result.err);
+                        args->id, result.err);
             }
             else if (result.skipped) {
                 ptrarray_append(&skipped_put, args);
             }
             else {
-                json_object_set(set->super.updated, args->mbox_id, json_null());
+                json_object_set(set->super.updated, args->id, json_null());
                 if (result.tmp_imapname) {
                     struct tmp_rename *tmp = xzmalloc(sizeof(struct tmp_rename));
                     tmp->old_imapname = xstrdupnull(result.old_imapname);
@@ -3343,7 +3330,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                     ptrarray_append(&tmp_renames, tmp);
                 }
             }
-            _mboxset_result_fini(&result);
+            _setmbox_result_fini(&result);
         }
     }
     ptrarray_truncate(ops->put, 0);
@@ -3353,7 +3340,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
     /* Run destroy operations */
     for (i = 0; i < strarray_size(ops->del); i++) {
         const char *mbox_id = strarray_nth(ops->del, i);
-        struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
+        struct jmap_setmbox_result result = JMAP_SETMBOX_RESULT_INITIALIZER;
         _mbox_destroy(req, mbox_id, set, mode, &result, update_intermediaries);
         if (result.err) {
             json_object_set(set->super.not_destroyed, mbox_id, result.err);
@@ -3364,7 +3351,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         else {
             json_array_append_new(set->super.destroyed, json_string(mbox_id));
         }
-        _mboxset_result_fini(&result);
+        _setmbox_result_fini(&result);
     }
     strarray_truncate(ops->del, 0);
     for (i = 0; i < strarray_size(&skipped_del); i++)
@@ -3404,7 +3391,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
     ptrarray_fini(&tmp_renames);
 }
 
-struct mboxset_entry {
+struct setmbox_entry {
     char *parent_id;
     char *name;
     int changed_parent;
@@ -3413,15 +3400,15 @@ struct mboxset_entry {
     int is_deleted;
 };
 
-static void _mboxset_entry_free(void *entryp)
+static void _setmbox_entry_free(void *entryp)
 {
-    struct mboxset_entry *entry = entryp;
+    struct setmbox_entry *entry = entryp;
     free(entry->parent_id);
     free(entry->name);
     free(entryp);
 }
 
-struct mboxset_state {
+struct setmbox_state {
     jmap_req_t *req;
     int has_conflict;
     hash_table *id_by_imapname;
@@ -3430,9 +3417,9 @@ struct mboxset_state {
     hash_table *specialuses_by_id;
 };
 
-static int _mboxset_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
+static int _setmbox_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
 {
-    struct mboxset_state *state = rock;
+    struct setmbox_state *state = rock;
 
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
         hash_insert(mbentry->name, xstrdup(mbentry->uniqueid), state->id_by_imapname);
@@ -3440,15 +3427,15 @@ static int _mboxset_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static void _mboxset_state_mkentry_cb(const char *imapname, void *idptr, void *rock)
+static void _setmbox_state_mkentry_cb(const char *imapname, void *idptr, void *rock)
 {
-    struct mboxset_state *state = rock;
+    struct setmbox_state *state = rock;
     char *mbox_id = idptr;
 
     /* Make entry */
-    struct mboxset_entry *entry = xzmalloc(sizeof(struct mboxset_entry));
+    struct setmbox_entry *entry = xzmalloc(sizeof(struct setmbox_entry));
     mbname_t *mbname = mbname_from_intname(imapname);
-    entry->name = _mbox_get_name(state->req->accountid, mbname);
+    entry->name = jmap_mbox_get_name(state->req->accountid, mbname);
 
     /* Find parent */
     mbentry_t *pmbentry = NULL;
@@ -3462,7 +3449,7 @@ static void _mboxset_state_mkentry_cb(const char *imapname, void *idptr, void *r
         entry->is_toplevel = 1;
         break;
     default:
-        assert(_findparent(imapname, &pmbentry) == 0);
+        assert(jmap_mailbox_findparent(imapname, &pmbentry) == 0);
         entry->parent_id = xstrdup(pmbentry->uniqueid);
         break;
     }
@@ -3474,10 +3461,10 @@ static void _mboxset_state_mkentry_cb(const char *imapname, void *idptr, void *r
     mbname_free(&mbname);
 }
 
-static void _mboxset_state_conflict_cb(const char *id, void *data, void *rock)
+static void _setmbox_state_conflict_cb(const char *id, void *data, void *rock)
 {
-    struct mboxset_state *state = rock;
-    struct mboxset_entry *entry = data;
+    struct setmbox_state *state = rock;
+    struct setmbox_entry *entry = data;
 
     if (state->has_conflict || entry->is_deleted) {
         return;
@@ -3487,7 +3474,7 @@ static void _mboxset_state_conflict_cb(const char *id, void *data, void *rock)
         return;
     }
     if (entry->parent_id) {
-        struct mboxset_entry *parent = hash_lookup(entry->parent_id, state->entry_by_id);
+        struct setmbox_entry *parent = hash_lookup(entry->parent_id, state->entry_by_id);
         if (!parent) {
             /* This is an internal error in the state. It can't be valid. */
             state->has_conflict = 1;
@@ -3524,25 +3511,25 @@ static void _mboxset_state_conflict_cb(const char *id, void *data, void *rock)
             state->has_conflict = 1;
             return;
         }
-        struct mboxset_entry *parent_entry = hash_lookup(parent_id, state->entry_by_id);
+        struct setmbox_entry *parent_entry = hash_lookup(parent_id, state->entry_by_id);
         if (!parent_entry || parent_entry->is_deleted) break;
         parent_id = parent_entry->parent_id;
     }
 }
 
-static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
-                                           struct mboxset *set __attribute__((unused)),
-                                           struct mboxset_ops *ops)
+static void _setmbox_state_update_mboxtree(struct setmbox_state *state,
+                                           struct jmap_setmbox_ctx *set __attribute__((unused)),
+                                           struct setmbox_ops *ops)
 {
     struct buf buf = BUF_INITIALIZER;
 
     /* Apply create and update */
     int i;
     for (i = 0; i < ptrarray_size(ops->put); i++) {
-        struct mboxset_args *args = ptrarray_nth(ops->put, i);
+        struct jmap_setmbox_args *args = ptrarray_nth(ops->put, i);
         if (args->creation_id) {
             /* Create entry for in-memory mailbox tree */
-            struct mboxset_entry *entry = xzmalloc(sizeof(struct mboxset_entry));
+            struct setmbox_entry *entry = xzmalloc(sizeof(struct setmbox_entry));
             // it's gotta have one or the other!
             if (args->is_toplevel)
                 entry->is_toplevel = 1;
@@ -3556,7 +3543,7 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
         }
         else {
             /* Update entry in in-memory mailbox tree */
-            struct mboxset_entry *entry = hash_lookup(args->mbox_id, state->entry_by_id);
+            struct setmbox_entry *entry = hash_lookup(args->id, state->entry_by_id);
             if (!entry) {
                 state->has_conflict = 1;
                 break;
@@ -3585,7 +3572,7 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
     /* Apply destroy */
     for (i = 0; i < strarray_size(ops->del); i++) {
         const char *mbox_id = strarray_nth(ops->del, i);
-        struct mboxset_entry *entry = hash_lookup(mbox_id, state->entry_by_id);
+        struct setmbox_entry *entry = hash_lookup(mbox_id, state->entry_by_id);
         if (!entry) {
             state->has_conflict = 1;
             break;
@@ -3595,15 +3582,15 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
 
     /* Check state for mailbox tree conflicts. */
     if (!state->has_conflict) {
-        hash_enumerate(state->entry_by_id, _mboxset_state_conflict_cb, state);
+        hash_enumerate(state->entry_by_id, _setmbox_state_conflict_cb, state);
     }
 
     buf_free(&buf);
 }
 
-static void _mboxset_state_update_specialuse(struct mboxset_state *state,
-                                             struct mboxset *set __attribute__((unused)),
-                                             struct mboxset_ops *ops)
+static void _setmbox_state_update_specialuse(struct setmbox_state *state,
+                                             struct jmap_setmbox_ctx *set __attribute__((unused)),
+                                             struct setmbox_ops *ops)
 {
     strarray_t have_specialuses = STRARRAY_INITIALIZER;
     strarray_t want_protected = STRARRAY_INITIALIZER;
@@ -3639,11 +3626,11 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
         strarray_t *protected_uses = strarray_split(str, NULL, STRARRAY_TRIM);
         /* Validate: no protected moved to other parent */
         for (i = 0; i < ptrarray_size(ops->put); i++) {
-            struct mboxset_args *args = ptrarray_nth(ops->put, i);
-            if (!args->mbox_id) {
+            struct jmap_setmbox_args *args = ptrarray_nth(ops->put, i);
+            if (!args->id) {
                 continue;
             }
-            strarray_t *specialuses = hash_lookup(args->mbox_id, state->specialuses_by_id);
+            strarray_t *specialuses = hash_lookup(args->id, state->specialuses_by_id);
             if (!specialuses) {
                 continue;
             }
@@ -3653,13 +3640,13 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
                 if (strarray_find(protected_uses, specialuse, 0) < 0) {
                     continue;
                 }
-                struct mboxset_entry *entry = hash_lookup(args->mbox_id, state->entry_by_id);
+                struct setmbox_entry *entry = hash_lookup(args->id, state->entry_by_id);
                 if (entry->changed_parent) {
                     state->has_conflict = 1;
                     buf_printf(&conflict_desc,
                             "\nMailbox %s has protected specialuse %s. "
                             "It must no be moved to another parentId",
-                            args->mbox_id, specialuse);
+                            args->id, specialuse);
                 }
                 strarray_add(&want_protected, specialuse);
             }
@@ -3682,31 +3669,31 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
 
     /* Apply create and update */
     for (i = 0; i < ptrarray_size(ops->put); i++) {
-        struct mboxset_args *args = ptrarray_nth(ops->put, i);
-        if (!args->specialuse) {
+        struct jmap_setmbox_args *args = ptrarray_nth(ops->put, i);
+        if (!args->u.mbox.specialuse) {
             continue;
         }
         if (args->creation_id) {
-            if (args->specialuse[0]) {
+            if (args->u.mbox.specialuse[0]) {
                 strarray_t *specialuses = strarray_new();
-                strarray_append(specialuses, args->specialuse);
+                strarray_append(specialuses, args->u.mbox.specialuse);
                 hash_insert(args->creation_id, specialuses, state->specialuses_by_id);
             }
         }
         else {
-            if (args->specialuse[0]) {
+            if (args->u.mbox.specialuse[0]) {
                 /* _mbox_set_annots replaces any existing specialuse annotation,
                  * so emulate the same here */
-                strarray_t *specialuses = hash_lookup(args->mbox_id, state->specialuses_by_id);
+                strarray_t *specialuses = hash_lookup(args->id, state->specialuses_by_id);
                 if (!specialuses) {
                     specialuses = strarray_new();
-                    hash_insert(args->mbox_id, specialuses, state->specialuses_by_id);
+                    hash_insert(args->id, specialuses, state->specialuses_by_id);
                 }
                 else strarray_truncate(specialuses, 0);
-                strarray_append(specialuses, args->specialuse);
+                strarray_append(specialuses, args->u.mbox.specialuse);
             }
             else {
-                strarray_t *specialuses = hash_lookup(args->mbox_id, state->specialuses_by_id);
+                strarray_t *specialuses = hash_lookup(args->id, state->specialuses_by_id);
                 if (specialuses) strarray_truncate(specialuses, 0);
             }
         }
@@ -3769,14 +3756,14 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
 
         /* Reject all operations that alter roles */
         for (i = 0; i < ptrarray_size(ops->put); i++) {
-            struct mboxset_args *args = ptrarray_nth(ops->put, i);
-            if (args->specialuse ||
+            struct jmap_setmbox_args *args = ptrarray_nth(ops->put, i);
+            if (args->u.mbox.specialuse ||
                     (args->parent_id &&
-                     hash_lookup(args->mbox_id, state->specialuses_by_id))) {
+                     hash_lookup(args->id, state->specialuses_by_id))) {
                 json_t *errfield = args->creation_id ?
                     set->super.not_created : set->super.not_updated;
                 const char *errkey = args->creation_id ?
-                    args->creation_id : args->mbox_id;
+                    args->creation_id : args->id;
 
                 json_object_set_new(errfield, errkey,
                         json_pack("{s:s s:[s] s:s}",
@@ -3804,7 +3791,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
     strarray_fini(&want_protected);
 }
 
-static int _mboxset_state_find_specialuse_cb(const char *mboxname,
+static int _setmbox_state_find_specialuse_cb(const char *mboxname,
                                              uint32_t uid __attribute__((unused)),
                                              const char *entry __attribute__((unused)),
                                              const char *userid __attribute__((unused)),
@@ -3812,7 +3799,7 @@ static int _mboxset_state_find_specialuse_cb(const char *mboxname,
                                              const struct annotate_metadata *mdata __attribute__((unused)),
                                              void *rock)
 {
-    struct mboxset_state *state = rock;
+    struct setmbox_state *state = rock;
     jmap_req_t *req = state->req;
 
     if (!strcmpsafe(userid, req->accountid)) { // FIXME userid or accountid?
@@ -3829,14 +3816,14 @@ static int _mboxset_state_find_specialuse_cb(const char *mboxname,
 }
 
 
-static int _mboxset_state_validate(jmap_req_t *req,
-                                   struct mboxset *set,
-                                   struct mboxset_ops *ops)
+static int _setmbox_state_validate(jmap_req_t *req,
+                                   struct jmap_setmbox_ctx *set,
+                                   struct setmbox_ops *ops)
 {
     int is_valid = 0;
 
     /* Create in-memory mailbox tree */
-    struct mboxset_state *state = xzmalloc(sizeof(struct mboxset_state));
+    struct setmbox_state *state = xzmalloc(sizeof(struct setmbox_state));
     state->req = req;
 
     hash_table id_by_imapname = HASH_TABLE_INITIALIZER;
@@ -3851,9 +3838,9 @@ static int _mboxset_state_validate(jmap_req_t *req,
     construct_hash_table(&siblings_by_parent_id, 1024, 0);
     state->siblings_by_parent_id = &siblings_by_parent_id;
 
-    mboxlist_usermboxtree(req->accountid, NULL, _mboxset_state_mboxlist_cb, state,
+    mboxlist_usermboxtree(req->accountid, NULL, _setmbox_state_mboxlist_cb, state,
                           MBOXTREE_INTERMEDIATES);
-    hash_enumerate(&id_by_imapname, _mboxset_state_mkentry_cb, state);
+    hash_enumerate(&id_by_imapname, _setmbox_state_mkentry_cb, state);
 
     /* Create specialuse entries */
     hash_table specialuses_by_id = HASH_TABLE_INITIALIZER;
@@ -3863,21 +3850,21 @@ static int _mboxset_state_validate(jmap_req_t *req,
     buf_initmcstr(&pattern, mboxname_user_mbox(req->accountid, NULL));
     buf_putc(&pattern, '*');
     annotatemore_findall_pattern(buf_cstring(&pattern), 0, "/specialuse", 0,
-                                 _mboxset_state_find_specialuse_cb, state, 0);
+                                 _setmbox_state_find_specialuse_cb, state, 0);
     buf_free(&pattern);
 
     /* Apply changes */
     if (!state->has_conflict) {
-        _mboxset_state_update_mboxtree(state, set, ops);
+        _setmbox_state_update_mboxtree(state, set, ops);
     }
     /* Check mailbox roles */
     if (!state->has_conflict) {
-        _mboxset_state_update_specialuse(state, set, ops);
+        _setmbox_state_update_specialuse(state, set, ops);
     }
     is_valid = !state->has_conflict;
 
     /* Clean up state */
-    free_hash_table(&entry_by_id, _mboxset_entry_free);
+    free_hash_table(&entry_by_id, _setmbox_entry_free);
     free_hash_table(&id_by_imapname, free);
     free_hash_table(&siblings_by_parent_id, (void(*)(void*))strarray_free);
     free_hash_table(&specialuses_by_id, (void(*)(void*))strarray_free);
@@ -3887,7 +3874,7 @@ static int _mboxset_state_validate(jmap_req_t *req,
 }
 
 
-static void _mboxset(jmap_req_t *req, struct mboxset *set)
+EXPORTED void jmap_setmbox(jmap_req_t *req, struct jmap_setmbox_ctx *set)
 {
     /* Mailbox/set operations are allowed to introduce inconsistencies in the
      * mailbox tree, as long as they are resolved after applying all operations
@@ -3932,30 +3919,30 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
      * All operations must now have either resulted in success or a permanent
      * error.
      */
-    struct mboxset_ops *ops = _mboxset_newops(req, set);
+    struct setmbox_ops *ops = _setmbox_newops(req, set);
     strarray_t update_intermediaries = STRARRAY_INITIALIZER;
 
     /* Apply Mailbox/set operations */
     if (ops->is_cyclic) {
         /* Fail for any invalid state */
-        _mboxset_run(req, set, ops, _MBOXSET_FAIL, &update_intermediaries);
+        _setmbox_run(req, set, ops, JMAP_SETMBOX_FAIL, &update_intermediaries);
     }
     else {
-        _mboxset_run(req, set, ops, _MBOXSET_SKIP, &update_intermediaries);
+        _setmbox_run(req, set, ops, JMAP_SETMBOX_SKIP, &update_intermediaries);
         if (ptrarray_size(ops->put) || strarray_size(ops->del)) {
-            if (_mboxset_state_validate(req, set, ops)) {
+            if (_setmbox_state_validate(req, set, ops)) {
                 /* Allow invalid interim state */
-                _mboxset_run(req, set, ops, _MBOXSET_INTERIM, &update_intermediaries);
+                _setmbox_run(req, set, ops, JMAP_SETMBOX_INTERIM, &update_intermediaries);
             }
             else {
                 /* Fail for any invalid state */
-                _mboxset_run(req, set, ops, _MBOXSET_FAIL, &update_intermediaries);
+                _setmbox_run(req, set, ops, JMAP_SETMBOX_FAIL, &update_intermediaries);
             }
         }
     }
 
     /* Fetch mailbox state */
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
+    json_t *jstate = jmap_getstate(req, set->mbtype, /*refresh*/1);
     set->super.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -3967,23 +3954,23 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
         const char *old_imapname = strarray_nth(&update_intermediaries, i);
         /* XXX - we know these are mailboxes, so mbtype 0 is OK, but it's not an
          * ideal interface */
-        mboxlist_update_intermediaries(old_imapname, 0, 0);
+        mboxlist_update_intermediaries(old_imapname, set->mbtype, 0);
         /* XXX error handling? */
     }
 
     assert(ptrarray_size(ops->put) == 0);
     assert(strarray_size(ops->del) == 0);
-    _mboxset_ops_free(ops);
+    _setmbox_ops_free(ops);
     strarray_fini(&update_intermediaries);
 }
 
-static int _mboxset_req_parse(jmap_req_t *req,
+static int _setmbox_req_parse(jmap_req_t *req,
                                struct jmap_parser *parser __attribute__((unused)),
                                const char *key,
                                json_t *arg,
                                void *rock)
 {
-    struct mboxset *set = (struct mboxset *) rock;
+    struct jmap_setmbox_ctx *set = (struct jmap_setmbox_ctx *) rock;
     int r = 0;
 
     if ((!strcmp(key, "onDestroyRemoveMessages") ||
@@ -4003,16 +3990,16 @@ static int _mboxset_req_parse(jmap_req_t *req,
     return r;
 }
 
-static void _mboxset_parse(jmap_req_t *req,
+static void _setmbox_parse(jmap_req_t *req,
                            struct jmap_parser *parser,
-                           struct mboxset *set,
+                           struct jmap_setmbox_ctx *set,
                            json_t **err)
 {
     json_t *jarg;
     size_t i;
-    memset(set, 0, sizeof(struct mboxset));
+    memset(set, 0, sizeof(struct jmap_setmbox_ctx));
 
-    jmap_set_parse(req, parser, mailbox_props, &_mboxset_req_parse,
+    jmap_set_parse(req, parser, mailbox_props, &_setmbox_req_parse,
                    set, &set->super, err);
 
     /* Validate onDestroyMoveToMailboxIfNoMailbox */
@@ -4060,21 +4047,21 @@ static void _mboxset_parse(jmap_req_t *req,
     const char *creation_id = NULL;
     json_object_foreach(set->super.create, creation_id, jarg) {
         struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
-        struct mboxset_args *args = xzmalloc(sizeof(struct mboxset_args));
+        struct jmap_setmbox_args *args = xzmalloc(sizeof(struct jmap_setmbox_args));
         json_t *set_err = NULL;
 
-        _mboxset_args_parse(jarg, &myparser, args, req, /*is_create*/1);
+        _setmbox_args_parse(jarg, &myparser, args, req, /*is_create*/1);
         args->creation_id = xstrdup(creation_id);
         if (json_array_size(myparser.invalid)) {
             set_err = json_pack("{s:s}", "type", "invalidProperties");
             json_object_set(set_err, "properties", myparser.invalid);
             json_object_set_new(set->super.not_created, creation_id, set_err);
             jmap_parser_fini(&myparser);
-            _mbox_setargs_fini(args);
+            jmap_setmbox_args_fini(args);
             free(args);
             continue;
         }
-        ptrarray_append(&set->create, args);
+        ptrarray_append(&set->to_create, args);
         jmap_parser_fini(&myparser);
     }
 
@@ -4091,64 +4078,64 @@ static void _mboxset_parse(jmap_req_t *req,
     json_object_foreach(set->super.update, mbox_id, jarg) {
         /* Parse Mailbox/set arguments  */
         struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
-        struct mboxset_args *args = xzmalloc(sizeof(struct mboxset_args));
-        _mboxset_args_parse(jarg, &myparser, args, req, /*is_create*/0);
-        if (args->mbox_id && strcmp(args->mbox_id, mbox_id)) {
+        struct jmap_setmbox_args *args = xzmalloc(sizeof(struct jmap_setmbox_args));
+        _setmbox_args_parse(jarg, &myparser, args, req, /*is_create*/0);
+        if (args->id && strcmp(args->id, mbox_id)) {
             jmap_parser_invalid(&myparser, "id");
         }
-        if (!args->mbox_id) args->mbox_id = xstrdup(mbox_id);
+        if (!args->id) args->id = xstrdup(mbox_id);
         if (json_array_size(myparser.invalid)) {
             json_t *err = json_pack("{s:s}", "type", "invalidProperties");
             json_object_set(err, "properties", myparser.invalid);
             json_object_set_new(set->super.not_updated, mbox_id, err);
             jmap_parser_fini(&myparser);
-            _mbox_setargs_fini(args);
+            jmap_setmbox_args_fini(args);
             free(args);
             continue;
         }
-        if (hash_lookup(args->mbox_id, &will_destroy)) {
+        if (hash_lookup(args->id, &will_destroy)) {
             json_t *err = json_pack("{s:s}", "type", "willDestroy");
             json_object_set_new(set->super.not_updated, mbox_id, err);
             jmap_parser_fini(&myparser);
-            _mbox_setargs_fini(args);
+            jmap_setmbox_args_fini(args);
             free(args);
             continue;
         }
-        ptrarray_append(&set->update, args);
+        ptrarray_append(&set->to_update, args);
         jmap_parser_fini(&myparser);
     }
 
     /* destroy */
-    set->destroy = hash_keys(&will_destroy);
+    set->to_destroy = hash_keys(&will_destroy);
     free_hash_table(&will_destroy, NULL);
 }
 
-static void _mboxset_fini(struct mboxset *set)
+EXPORTED void jmap_setmbox_fini(struct jmap_setmbox_ctx *set)
 {
     jmap_set_fini(&set->super);
 
-    struct mboxset_args *args = NULL;
-    while ((args = ptrarray_pop(&set->create))) {
-        _mbox_setargs_fini(args);
+    struct jmap_setmbox_args *args = NULL;
+    while ((args = ptrarray_pop(&set->to_create))) {
+        jmap_setmbox_args_fini(args);
         free(args);
     }
-    ptrarray_fini(&set->create);
-    while ((args = ptrarray_pop(&set->update))) {
-        _mbox_setargs_fini(args);
+    ptrarray_fini(&set->to_create);
+    while ((args = ptrarray_pop(&set->to_update))) {
+        jmap_setmbox_args_fini(args);
         free(args);
     }
-    ptrarray_fini(&set->update);
-    strarray_free(set->destroy);
+    ptrarray_fini(&set->to_update);
+    strarray_free(set->to_destroy);
 }
 
 static int jmap_mailbox_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct mboxset set;
+    struct jmap_setmbox_ctx set;
 
     /* Parse arguments */
     json_t *arg_err = NULL;
-    _mboxset_parse(req, &parser, &set, &arg_err);
+    _setmbox_parse(req, &parser, &set, &arg_err);
     if (arg_err) {
         jmap_error(req, arg_err);
         goto done;
@@ -4168,13 +4155,16 @@ static int jmap_mailbox_set(jmap_req_t *req)
         json_decref(jstate);
     }
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
-    _mboxset(req, &set);
+    set.mbtype = MBTYPE_EMAIL;
+    set.create_proc = &_mbox_create;
+    set.update_proc = &_mbox_update;
+    jmap_setmbox(req, &set);
     mboxname_release(&namespacelock);
     jmap_ok(req, jmap_set_reply(&set.super));
 
 done:
     jmap_parser_fini(&parser);
-    _mboxset_fini(&set);
+    jmap_setmbox_fini(&set);
     return 0;
 }
 

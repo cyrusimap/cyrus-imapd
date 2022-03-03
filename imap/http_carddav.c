@@ -102,7 +102,7 @@ static int carddav_parse_path(const char *path, struct request_target_t *tgt,
 
 static int carddav_copy(struct transaction_t *txn, void *obj,
                         struct mailbox *mailbox, const char *resource,
-                        void *destdb, unsigned flags);
+                        const char *uid, void *destdb, unsigned flags);
 
 static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
                        struct index_record *record, void *data, void **obj,
@@ -110,7 +110,7 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
-                       void *destdb, unsigned flags);
+                       const char *uid, void *destdb, unsigned flags);
 
 static int carddav_import(struct transaction_t *txn, void *obj,
                           struct mailbox *mailbox, void *destdb,
@@ -656,6 +656,7 @@ static int carddav_store_resource(struct transaction_t *txn,
 
 static int carddav_copy(struct transaction_t *txn, void *obj,
                         struct mailbox *mailbox, const char *resource,
+                        const char *uid __attribute__((unused)),
                         void *destdb, unsigned flags __attribute__((unused)))
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
@@ -1165,7 +1166,8 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
  */
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
-                       void *destdb, unsigned flags __attribute__((unused)))
+                       const char *uid, void *destdb,
+                       unsigned flags __attribute__((unused)))
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     struct vparse_card *vcard = (struct vparse_card *)obj;
@@ -1252,7 +1254,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 
     /* Sanity check vCard data */
     struct vparse_entry *ventry;
-    const char *uid = NULL, *fullname = NULL;
+    const char *fullname = NULL;
     for (ventry = vcard->objects->properties; ventry; ventry = ventry->next) {
         const char *name = ventry->name;
         const char *propval = ventry->v.value;
@@ -1398,7 +1400,7 @@ static int carddav_import(struct transaction_t *txn, void *obj,
                      "%s.vcf", resource);
 
         r = carddav_put(txn, vcard, mailbox,
-                       txn->req_tgt.resource, destdb, flags);
+                        txn->req_tgt.resource, uid, destdb, flags);
 
         switch (r) {
         case HTTP_OK:

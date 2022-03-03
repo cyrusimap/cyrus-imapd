@@ -61,10 +61,4 @@ extern int jmap_email_get_with_props(jmap_req_t *req, hash_table *props,
 extern void jmap_emailsubmission_init(jmap_settings_t *settings);
 extern void jmap_emailsubmission_capabilities(json_t *jcapabilities);
 
-extern void jmap_mailbox_init(jmap_settings_t *settings);
-extern void jmap_mailbox_capabilities(json_t *jcapabilities);
-
-extern int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
-                                  char **mboxnameptr, char **uniqueid);
-
 #endif /* JMAP_MAIL_H */

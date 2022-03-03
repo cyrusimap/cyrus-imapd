@@ -166,7 +166,7 @@ static int caldav_check_precond(struct transaction_t *txn,
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
 static int caldav_copy(struct transaction_t *txn, void *obj,
                        struct mailbox *dest_mbox, const char *dest_rsrc,
-                       void *destdb, unsigned flags);
+                       const char *uid, void *destdb, unsigned flags);
 static int caldav_delete_cal(struct transaction_t *txn,
                              struct mailbox *mailbox,
                              struct index_record *record, void *data);
@@ -179,7 +179,7 @@ static int caldav_post(struct transaction_t *txn);
 static int caldav_patch(struct transaction_t *txn, void *obj);
 static int caldav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
-                      void *destdb, unsigned flags);
+                      const char *uid, void *destdb, unsigned flags);
 static int caldav_import(struct transaction_t *txn, void *obj,
                          struct mailbox *mailbox, void *destdb,
                          xmlNodePtr root, xmlNsPtr *ns, unsigned flags);
@@ -1246,6 +1246,7 @@ static int _scheduling_enabled(struct transaction_t *txn,
  */
 static int caldav_copy(struct transaction_t *txn, void *obj,
                        struct mailbox *dest_mbox, const char *dest_rsrc,
+                       const char *uid __attribute__((unused)),
                        void *destdb, unsigned flags)
 {
     int r;
@@ -1281,6 +1282,7 @@ static void decrement_refcount(const char *managed_id,
                                struct mailbox *attachments,
                                struct webdav_db *webdavdb);
 static struct webdav_data *increment_refcount(const char *managed_id,
+                                              struct mailbox *attachments,
                                               struct webdav_db *webdavdb);
 
 enum {
@@ -1303,7 +1305,7 @@ static void update_refcount(const char *mid, short *op,
         break;
 
     case REFCNT_INC:
-        increment_refcount(mid, urock->webdavdb);
+        increment_refcount(mid, urock->attachments, urock->webdavdb);
         break;
     }
 }
@@ -1387,6 +1389,13 @@ HIDDEN int caldav_manage_attachments(const char *userid,
                 /* Find DAV record for the attachment with this managed-id */
                 mid = icalparameter_get_managedid(param);
                 webdav_lookup_uid(webdavdb, mid, &wdata);
+
+                if (!wdata->dav.rowid) {
+                    /* Check managed-id as contentid
+                       (legacy record prior to res_uid being unique) */
+                    webdav_lookup_cid(webdavdb,
+                                      attachments->mbentry, mid, &wdata);
+                }
 
                 if (!wdata->dav.rowid) {
                     ret = HTTP_NOT_FOUND;
@@ -2635,6 +2644,12 @@ static void decrement_refcount(const char *managed_id,
     /* Find DAV record for the attachment with this managed-id */
     webdav_lookup_uid(webdavdb, managed_id, &wdata);
 
+    if (!wdata->dav.rowid) {
+        /* Check managed-id as contentid
+           (legacy record prior to res_uid being unique) */
+        webdav_lookup_cid(webdavdb, attachments->mbentry, managed_id, &wdata);
+    }
+
     if (!wdata->dav.rowid) return;
 
     if (!--wdata->ref_count) {
@@ -2664,6 +2679,7 @@ static void decrement_refcount(const char *managed_id,
 
 /* Increment reference count on a managed attachment resource */
 static struct webdav_data *increment_refcount(const char *managed_id,
+                                              struct mailbox *attachments,
                                               struct webdav_db *webdavdb)
 {
     int r;
@@ -2671,6 +2687,12 @@ static struct webdav_data *increment_refcount(const char *managed_id,
 
     /* Find DAV record for the attachment with this managed-id */
     webdav_lookup_uid(webdavdb, managed_id, &wdata);
+
+    if (!wdata->dav.rowid) {
+        /* Check managed-id as contentid
+           (legacy record prior to res_uid being unique) */
+        webdav_lookup_cid(webdavdb, attachments->mbentry, managed_id, &wdata);
+    }
 
     if (wdata->dav.rowid) {
         /* Update reference count on WebDAV record */
@@ -2857,9 +2879,8 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
     if (op == ATTACH_REMOVE) aprop = NULL;
     else {
-        /* SHA1 of content used as resource UID, resource name, & managed-id */
-        static char uid[2*MESSAGE_GUID_SIZE+1];
-        struct message_guid guid;
+        /* UUID used as resource UID, resource name, & managed-id */
+        const char *uid = makeuuid();
 
         /* Read body */
         txn->req_body.flags |= BODY_DECODE;
@@ -2876,14 +2897,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
             goto done;
         }
 
-        /* Generate UID of body content */
-        message_guid_generate(&guid, buf_base(&txn->req_body.payload),
-                              buf_len(&txn->req_body.payload));
-        strcpy(uid, message_guid_encode(&guid));
-
         /* Store the new/updated attachment using WebDAV callback */
         ret = webdav_params.put.proc(txn, &txn->req_body.payload,
-                                     attachments, uid, webdavdb, 0);
+                                     attachments, uid, uid, webdavdb, 0);
 
         switch (ret) {
         case HTTP_CREATED:
@@ -2898,7 +2914,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         }
 
         /* Update reference count */
-        wdata = increment_refcount(uid, webdavdb);
+        wdata = increment_refcount(uid, attachments, webdavdb);
 
         /* Create new ATTACH property */
         const char *baseurl = config_getstring(IMAPOPT_WEBDAV_ATTACHMENTS_BASEURL);
@@ -3349,7 +3365,7 @@ static void import_resource(const char *uid, void *data, void *rock)
                  "%s.ics", makeuuid());
 
     r = caldav_put(txn, newical, irock->mailbox,
-                   txn->req_tgt.resource, irock->caldavdb, irock->flags);
+                   txn->req_tgt.resource, NULL, irock->caldavdb, irock->flags);
 
     switch (r) {
     case HTTP_OK:
@@ -3689,7 +3705,7 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
  */
 static int caldav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
-                      void *destdb, unsigned flags)
+                      const char *uid, void *destdb, unsigned flags)
 {
     int ret = 0;
     struct caldav_db *db = (struct caldav_db *)destdb;
@@ -3700,7 +3716,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent *comp, *nextcomp;
     icalcomponent_kind kind;
     icalproperty *prop, *rrule = NULL;
-    const char *uid, *organizer = NULL;
+    const char *organizer = NULL;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct caldav_data *cdata;

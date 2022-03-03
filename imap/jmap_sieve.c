@@ -924,7 +924,7 @@ typedef struct filter {
     int isactive;
 } filter;
 
-static void *filter_build(json_t *arg)
+static void *filter_build(json_t *arg, void *rock __attribute__((unused)))
 {
     filter *f = (filter *) xzmalloc(sizeof(struct filter));
 
@@ -1071,7 +1071,7 @@ static int jmap_sieve_query(jmap_req_t *req)
 
     /* Build filter */
     if (JNOTNULL(query.filter)) {
-        parsed_filter = jmap_buildfilter(query.filter, filter_build);
+        parsed_filter = jmap_buildfilter(query.filter, filter_build, NULL);
     }
 
     /* Build sort */

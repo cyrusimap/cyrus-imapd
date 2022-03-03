@@ -428,7 +428,7 @@ enum {
 /* meth_put() parameters */
 typedef int (*put_proc_t)(struct transaction_t *txn, void *obj,
                           struct mailbox *mailbox, const char *resource,
-                          void *davdb, unsigned flags);
+                          const char *uid, void *davdb, unsigned flags);
 
 struct copy_params {
     unsigned uid_conf_precond;          /* precond code for UID conflict */

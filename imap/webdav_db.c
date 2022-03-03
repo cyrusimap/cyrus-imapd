@@ -84,6 +84,7 @@ struct webdav_db {
     struct buf filename;
     struct buf type;
     struct buf subtype;
+    struct buf contentid;
     struct buf res_uid;
     unsigned ref_count;
 };
@@ -171,6 +172,7 @@ EXPORTED int webdav_close(struct webdav_db *webdavdb)
     buf_free(&webdavdb->filename);
     buf_free(&webdavdb->type);
     buf_free(&webdavdb->subtype);
+    buf_free(&webdavdb->contentid);
     buf_free(&webdavdb->res_uid);
 
     r = dav_close(&webdavdb->db);
@@ -248,6 +250,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         wdata->type = (const char *) sqlite3_column_text(stmt, 10);
         wdata->subtype = (const char *) sqlite3_column_text(stmt, 11);
         wdata->res_uid = (const char *) sqlite3_column_text(stmt, 12);
+        wdata->contentid = (const char *) sqlite3_column_text(stmt, 17);
         r = rrock->cb(rrock->rock, wdata);
     }
     else {
@@ -281,6 +284,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         wdata->res_uid =
             column_text_to_buf((const char *) sqlite3_column_text(stmt, 12),
                                &db->res_uid);
+        wdata->contentid =
+            column_text_to_buf((const char *) sqlite3_column_text(stmt, 17),
+                               &db->contentid);
     }
 
     return r;
@@ -290,7 +296,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"          \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  filename, type, subtype, res_uid, ref_count, alive,"             \
-    "  modseq, createdmodseq"                                           \
+    "  modseq, createdmodseq, contentid"                                \
     " FROM dav_objs"                                                    \
 
 
@@ -357,6 +363,33 @@ EXPORTED int webdav_lookup_imapuid(struct webdav_db *webdavdb,
 }
 
 
+#define CMD_SELCID CMD_GETFIELDS \
+    " WHERE mailbox = :mailbox AND contentid = :contentid;"
+
+EXPORTED int webdav_lookup_cid(struct webdav_db *webdavdb,
+                               const mbentry_t *mbentry,
+                               const char *contentid,
+                               struct webdav_data **result)
+{
+    const char *mailbox = (webdavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",   SQLITE_TEXT, { .s = mailbox       } },
+        { ":contentid", SQLITE_TEXT, { .s = contentid     } },
+        { NULL,         SQLITE_NULL, { .s = NULL          } } };
+    static struct webdav_data wdata;
+    struct read_rock rrock = { webdavdb, &wdata, 0, NULL, NULL };
+    int r;
+
+    *result = memset(&wdata, 0, sizeof(struct webdav_data));
+
+    r = sqldb_exec(webdavdb->db, CMD_SELCID, bval, &read_cb, &rrock);
+    if (!r && !wdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+
+    return r;
+}
+
+
 #define CMD_SELUID CMD_GETFIELDS                                        \
     " WHERE res_uid = :res_uid AND alive = 1;"
 
@@ -403,12 +436,14 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const mbentry_t *mbentry
     "  creationdate, mailbox, resource, imap_uid, modseq,"              \
     "  createdmodseq,"                                                  \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
-    "  filename, type, subtype, res_uid, ref_count, alive )"            \
+    "  filename, type, subtype,"                                        \
+    "  contentid, res_uid, ref_count, alive )"                          \
     " VALUES ("                                                         \
     "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"         \
     "  :createdmodseq,"                                                 \
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"          \
-    "  :filename, :type, :subtype, :res_uid, :ref_count, :alive );"
+    "  :filename, :type, :subtype,"                                     \
+    "  :contentid, :res_uid, :ref_count, :alive );"
 
 #define CMD_UPDATE                      \
     "UPDATE dav_objs SET"               \
@@ -422,7 +457,7 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const mbentry_t *mbentry
     "  filename     = :filename,"       \
     "  type         = :type,"           \
     "  subtype      = :subtype,"        \
-    "  res_uid      = :res_uid,"        \
+    "  contentid    = :contentid,"      \
     "  ref_count    = :ref_count,"      \
     "  alive        = :alive"           \
     " WHERE rowid = :rowid;"
@@ -440,9 +475,10 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata)
         { ":filename",     SQLITE_TEXT,    { .s = wdata->filename         } },
         { ":type",         SQLITE_TEXT,    { .s = wdata->type             } },
         { ":subtype",      SQLITE_TEXT,    { .s = wdata->subtype          } },
-        { ":res_uid",      SQLITE_TEXT,    { .s = wdata->res_uid          } },
+        { ":contentid",    SQLITE_TEXT,    { .s = wdata->contentid        } },
         { ":ref_count",    SQLITE_INTEGER, { .i = wdata->ref_count        } },
         { ":alive",        SQLITE_INTEGER, { .i = wdata->dav.alive        } },
+        { NULL,            SQLITE_NULL,    { .s = NULL                    } },
         { NULL,            SQLITE_NULL,    { .s = NULL                    } },
         { NULL,            SQLITE_NULL,    { .s = NULL                    } },
         { NULL,            SQLITE_NULL,    { .s = NULL                    } },
@@ -469,6 +505,9 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata)
         bval[15].name = ":resource";
         bval[15].type = SQLITE_TEXT;
         bval[15].val.s = wdata->dav.resource;
+        bval[16].name = ":res_uid";
+        bval[16].type = SQLITE_TEXT;
+        bval[16].val.s = wdata->res_uid;
     }
 
     r = sqldb_exec(webdavdb->db, cmd, bval, NULL, NULL);
@@ -541,6 +580,26 @@ EXPORTED int webdav_get_updates(struct webdav_db *webdavdb,
         syslog(LOG_ERR, "webdav error %s", error_message(r));
     }
     return r;
+}
+
+EXPORTED char *webdav_mboxname(const char *userid, const char *name)
+{
+    struct buf boxbuf = BUF_INITIALIZER;
+    char *res = NULL;
+
+    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
+
+    if (name) {
+        size_t len = strcspn(name, "/");
+        buf_putc(&boxbuf, '.');
+        buf_appendmap(&boxbuf, name, len);
+    }
+
+    res = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+
+    buf_free(&boxbuf);
+
+    return res;
 }
 
 #else
