@@ -4358,6 +4358,163 @@ EOF
     $self->assert_str_equals('DISPLAY', $ical->{entries}[1]{entries}[0]{properties}{action}[0]{value});
 }
 
+sub test_imip_preserve_alerts
+    :needs_component_sieve :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+
+    my $IMAP = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $IMAP->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Create calendar user";
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = 'Default';
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "updated" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-0\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid-0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+RRULE:FREQ=WEEKLY
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver initial iMIP invite";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $self->{instance}->deliver($msg);
+
+    $imip = <<EOF;
+Date: Thu, 24 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-1\@example.net>
+Content-Type: text/calendar; method=CANCEL; component=VEVENT
+X-Cassandane-Unique: $uuid-1
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Overridden Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210924T034327Z
+SEQUENCE:0
+RECURRENCE-ID;TZID=American/New_York:20210923T153000
+LOCATION:location2
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:bar\@example.net
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Add another attendee to a single instance";
+    $msg = Cassandane::Message->new(raw => $imip);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Get the event and add an alarm";
+    my $alarm = <<EOF;
+BEGIN:VALARM
+UID:myalarm
+TRIGGER;RELATED=START:PT0S
+ACTION:DISPLAY
+DESCRIPTION:CYR-140
+END:VALARM
+EOF
+
+    my $events = $CalDAV->GetEvents($CalendarId);
+    my $href = $events->[0]{href};
+    my $response = $CalDAV->Request('GET', $href);
+    my $ical = $response->{content};
+    $ical =~ s/END:VEVENT/${alarm}END:VEVENT/g;
+
+    $CalDAV->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+
+    $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-0\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid-2
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210925T034327Z
+SEQUENCE:0
+RRULE:FREQ=WEEKLY
+LOCATION:location2
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:bar\@example.net
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Update the master to include the other user";
+    $msg = Cassandane::Message->new(raw => $imip);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Make sure that alarms remain";
+    $events = $CalDAV->GetEvents($CalendarId);
+
+    $response = $CalDAV->Request('GET', $href);
+    $ical = Data::ICal->new(data => $response->{content});
+    $self->assert_str_equals('DISPLAY', $ical->{entries}[0]{entries}[0]{properties}{action}[0]{value});
+    $self->assert_str_equals('DISPLAY', $ical->{entries}[1]{entries}[0]{properties}{action}[0]{value});
+}
+
 sub test_imip_cancel
     :needs_component_sieve :needs_component_httpd :min_version_3_5
 {
