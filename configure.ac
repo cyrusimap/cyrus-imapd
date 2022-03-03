@@ -2322,6 +2322,15 @@ AH_BOTTOM([
 # endif
 #endif
 
+/* time.h declares a `timezone` global which causes stupid problems
+ * when we accidentally use it as a local name too, but mess up the
+ * scoping.  So, make sure we can not use it as a local name too,
+ * except very carefully!
+ */
+#ifndef REALLY_USE_LIBC_TIMEZONE
+#define timezone /* dont call things this! */
+#endif
+
 /* com_err.h, as needed */
 #ifndef IN_COM_ERR
 #ifdef HAVE_ET_COM_ERR_H
