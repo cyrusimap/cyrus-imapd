@@ -2818,9 +2818,9 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links,
     }
 
     /* timeZone */
-    const char *timezone = get_icalxparam_value(prop, JMAPICAL_XPARAM_TZID);
-    if (jstimezones_lookup_jstzid(jstzones, timezone)) {
-        json_object_set_new(loc, "timeZone", json_string(timezone));
+    const char *tz = get_icalxparam_value(prop, JMAPICAL_XPARAM_TZID);
+    if (jstimezones_lookup_jstzid(jstzones, tz)) {
+        json_object_set_new(loc, "timeZone", json_string(tz));
     }
 
     /* coordinates */

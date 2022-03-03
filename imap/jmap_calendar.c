@@ -7910,7 +7910,7 @@ struct principalfilter_expr {
     xapian_query_t *name;
     xapian_query_t *text;
     const char *type;
-    const char *timezone;
+    const char *tz;
 };
 
 struct principalfilter {
@@ -7973,7 +7973,7 @@ static struct principalfilter_expr *principalfilter_buildexpr(json_t *jfilter,
         }
         if ((s = json_string_value(json_object_get(jfilter, "timeZone")))) {
             hash_insert("timeZone", (void*)0x1, &filter->props);
-            expr->timezone = s;
+            expr->tz = s;
         }
     }
 
@@ -8099,9 +8099,9 @@ static int principalfilter_matchexpr(json_t *jp,
                 return 0;
             }
         }
-        if (expr->timezone) {
+        if (expr->tz) {
             const char *s = json_string_value(json_object_get(jp, "timeZone"));
-            if (strcmpsafe(expr->timezone, s)) {
+            if (strcmpsafe(expr->tz, s)) {
                 return 0;
             }
         }

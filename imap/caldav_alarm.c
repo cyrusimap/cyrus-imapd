@@ -384,17 +384,17 @@ static int send_alarm(struct get_alarm_rock *rock,
     FILL_STRING_PARAM(event, EVENT_CALENDAR_ORGANIZER,
                       xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
 
-    const char *timezone = NULL;
+    const char *tz = NULL;
     if (!icaltime_is_date(start) && icaltime_is_utc(start))
-        timezone = "UTC";
+        tz = "UTC";
     else if (icaltime_get_timezone(start))
-        timezone = icaltime_get_location_tzid(start);
+        tz = icaltime_get_location_tzid(start);
     else if (rock->floatingtz)
-        timezone = icaltimezone_get_location_tzid(rock->floatingtz);
+        tz = icaltimezone_get_location_tzid(rock->floatingtz);
     else
-        timezone = "[floating]";
+        tz = "[floating]";
     FILL_STRING_PARAM(event, EVENT_CALENDAR_TIMEZONE,
-                      xstrdupsafe(timezone));
+                      xstrdupsafe(tz));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_START,
                       xstrdup(icaltime_as_ical_string(start)));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_END,
