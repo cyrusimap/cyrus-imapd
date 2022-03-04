@@ -53,51 +53,12 @@
 #define JNOTNULL(item)          ((item) ? (json_is_null(item) == 0) : 0)
 
 /* jansson replacement functions for those missing in older versions */
+/* ... none at present! */
 
-#ifndef json_boolean
-#define json_boolean(val)       ((val) ? json_true() : json_false())
-#endif /* json_boolean */
-
-#ifndef json_boolean_value
-#define json_boolean_value(val) ((val) == json_true() ? 1 : 0)
-#endif /* json_boolean_value */
-
-#ifndef json_object_foreach
-#define json_object_foreach(obj, key, val)                      \
-     void *_iter_;                                              \
-     for (_iter_ = json_object_iter(obj);                       \
-          _iter_                                                \
-              && (key = json_object_iter_key(_iter_))           \
-              && (val = json_object_iter_value(_iter_));        \
-          _iter_ = json_object_iter_next(obj, _iter_))
-#endif /* json_object_foreach */
-
-#ifndef json_object_foreach_safe
-#define json_object_foreach_safe(object, n, key, value)     \
-    for(key = json_object_iter_key(json_object_iter(object)), \
-            n = json_object_iter_next(object, json_object_key_to_iter(key)); \
-        key && (value = json_object_iter_value(json_object_key_to_iter(key))); \
-        key = json_object_iter_key(n), \
-n = json_object_iter_next(object, json_object_key_to_iter(key)))
-#endif /* json_object_foreach_safe */
-
-#ifndef json_array_foreach
-#define json_array_foreach(array, index, value)                 \
-    for (index = 0;                                             \
-         index < json_array_size(array)                         \
-             && (value = json_array_get(array, index));         \
-         index++)
-#endif /* json_array_foreach */
-
+/* utility functions not present in any libjansson */
 EXPORTED int json_is_date(json_t *json);
 EXPORTED int json_is_utcdate(json_t *json);
 
 EXPORTED int json_array_find(json_t *array, const char *needle);
-
-#ifdef NEED_JANSSON_JSON_DUMPB
-/* https://jansson.readthedocs.io/en/2.11/apiref.html#c.json_dumpb */
-EXPORTED size_t json_dumpb(const json_t *json,
-                           char *buffer, size_t size, size_t flags);
-#endif
 
 #endif /* JSON_SUPPORT_H */

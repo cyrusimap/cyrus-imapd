@@ -98,28 +98,3 @@ int json_array_find(json_t *array, const char *needle)
 
     return -1;
 }
-
-#ifdef NEED_JANSSON_JSON_DUMPB
-/* https://jansson.readthedocs.io/en/2.11/apiref.html#c.json_dumpb */
-EXPORTED size_t json_dumpb(const json_t *json,
-                           char *buffer, size_t size, size_t flags)
-{
-    char *s;
-    size_t slen;
-
-    s = json_dumps(json, flags);
-    if (!s) return 0;
-    slen = strlen(s);
-
-    if (slen > size) {
-        free(s);
-        return slen;
-    }
-
-    /* n.b. json_dumpb() does NOT nul-terminate the buffer! */
-    memcpy(buffer, s, slen);
-    free(s);
-
-    return slen;
-}
-#endif
