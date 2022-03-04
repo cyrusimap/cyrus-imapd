@@ -8115,6 +8115,9 @@ EXPORTED int mailbox_crceq(struct synccrcs a, struct synccrcs b)
     return 1;
 }
 
+/* XXX should this be moved to lib/acl.c? not easily, because
+ * XXX acl is in libcyrus but struct dlist is in libcyrus_imap!
+ */
 EXPORTED struct dlist *mailbox_acl_to_dlist(const char *aclstr)
 {
     const char *p, *q;

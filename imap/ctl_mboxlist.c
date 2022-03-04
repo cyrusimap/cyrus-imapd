@@ -521,6 +521,40 @@ static void do_pop_mupdate(void)
     sasl_done();
 }
 
+/* XXX based on mailbox_acl_to_dlist. this should probably be in lib/acl.c! */
+static json_t *acl_to_json(const char *aclstr)
+{
+    const char *p, *q;
+    json_t *jacl = json_object();
+
+    p = aclstr;
+
+    while (p && *p) {
+        char *name, *val;
+
+        q = strchr(p, '\t');
+        if (!q) break;
+
+        name = xstrndup(p, q-p);
+        q++;
+
+        p = strchr(q, '\t');
+        if (p) {
+            val = xstrndup(q, p-q);
+            p++;
+        }
+        else
+            val = xstrdup(q);
+
+        json_object_set_new(jacl, name, json_string(val));
+
+        free(name);
+        free(val);
+    }
+
+    return jacl;
+}
+
 static int dump_cb(const mbentry_t *mbentry, void *rockp)
 {
     struct dumprock *d = (struct dumprock *) rockp;
@@ -574,8 +608,7 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
     json_object_set_new(jobj, "server", json_string(mbentry->server));
 
     /* char *acl; */
-    /* XXX expand acl? */
-    json_object_set_new(jobj, "acl", json_string(mbentry->acl));
+    json_object_set_new(jobj, "acl", acl_to_json(mbentry->acl));
 
     /* char *uniqueid; */
     json_object_set_new(jobj, "uniqueid", json_string(mbentry->uniqueid));
