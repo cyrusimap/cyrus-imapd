@@ -687,7 +687,7 @@ static void do_dump(const char *part, int purge, int intermediary)
     puts("\n}");
 }
 
-static void do_undump(void)
+static void do_undump_legacy(void)
 {
     char buf[16384];
     int line = 0;
@@ -734,6 +734,7 @@ static void do_undump(void)
         }
 
         if (strlen(newmbentry->name) >= MAX_MAILBOX_BUFFER) {
+            /* XXX should be MAX_MAILBOX_NAME, not MAX_MAILBOX_BUFFER? */
             fprintf(stderr, "line %d: mailbox name too long\n", line);
             mboxlist_entry_free(&newmbentry);
             continue;
@@ -752,6 +753,200 @@ static void do_undump(void)
     }
 
     return;
+}
+
+static void undump_name_history(ptrarray_t *name_history,
+                                const json_t *jname_history)
+{
+    size_t index;
+    json_t *value;
+
+    /* XXX check lengths of mailbox and partition names */
+
+    json_array_foreach(jname_history, index, value) {
+        former_name_t *histitem;
+        const char *tmp;
+
+        histitem = xzmalloc(sizeof(*histitem));
+
+        /* char *name; */
+        if ((tmp = json_string_value(json_object_get(value, "name")))) {
+            histitem->name = xstrdup(tmp);
+        }
+
+        /* time_t mtime; */
+        if ((tmp = json_string_value(json_object_get(value, "mtime")))) {
+            histitem->mtime = atoi(tmp);
+        }
+
+        /* uint32_t uidvalidity; */
+        if ((tmp = json_string_value(json_object_get(value, "uidvalidity")))) {
+            histitem->uidvalidity = strtoul(tmp, NULL, 10);
+        }
+
+        /* modseq_t createdmodseq; */
+        if ((tmp = json_string_value(json_object_get(value, "createdmodseq")))) {
+            histitem->createdmodseq = atomodseq_t(tmp);
+        }
+
+        /* modseq_t foldermodseq; */
+        if ((tmp = json_string_value(json_object_get(value, "foldermodseq")))) {
+            histitem->foldermodseq = atomodseq_t(tmp);
+        }
+
+        /* uint32_t mbtype; */
+        if ((tmp = json_string_value(json_object_get(value, "mbtype")))) {
+            histitem->mbtype = mboxlist_string_to_mbtype(tmp);
+        }
+
+        /* char *partition; */
+        if ((tmp = json_string_value(json_object_get(value, "partition")))) {
+            histitem->partition = xstrdup(tmp);
+        }
+
+        ptrarray_append(name_history, histitem);
+    }
+}
+
+static int do_undump(void)
+{
+    json_t *jmailboxes = NULL;
+    json_error_t jerr;
+    const char *key;
+    json_t *value;
+
+    jmailboxes = json_loadf(stdin, 0, &jerr);
+    if (!jmailboxes) {
+        fprintf(stderr, "parse error at line %d: %s\n", jerr.line, jerr.text);
+        return -1;
+    }
+
+    json_object_foreach(jmailboxes, key, value) {
+        mbentry_t *newmbentry = mboxlist_entry_create();
+        const char *tmp;
+        json_t *jtmp;
+
+        /* char *name; */
+        if (strlen(key) >= MAX_MAILBOX_NAME) {
+            fprintf(stderr, "mailbox name too long: %s\n", key);
+            goto skip;
+        }
+        newmbentry->name = xstrdup(key);
+
+        /* char *ext_name
+         * this field is a place to cache a calculated value, not
+         * a real value in mailboxes.db, so don't expect it.
+         */
+
+        /* time_t mtime;
+         * this field is ignored, the new mbentry will always be created with
+         * the current time in its mtime field.
+         */
+
+        /* uint32_t uidvalidity; */
+        if ((tmp = json_string_value(json_object_get(value, "uidvalidity")))) {
+            newmbentry->uidvalidity = strtoul(tmp, NULL, 10);
+        }
+        else {
+            fprintf(stderr, "missing uidvalidity for %s\n", key);
+        }
+
+        /* modseq_t createdmodseq; */
+        if ((tmp = json_string_value(json_object_get(value, "createdmodseq")))) {
+            newmbentry->createdmodseq = atomodseq_t(tmp);
+        }
+        else {
+            fprintf(stderr, "missing createdmodseq for %s\n", key);
+        }
+
+        /* modseq_t foldermodseq; */
+        if ((tmp = json_string_value(json_object_get(value, "foldermodseq")))) {
+            newmbentry->foldermodseq = atomodseq_t(tmp);
+        }
+        else {
+            fprintf(stderr, "missing foldermodseq for %s\n", key);
+        }
+
+        /* uint32_t mbtype; */
+        if ((tmp = json_string_value(json_object_get(value, "mbtype")))) {
+            newmbentry->mbtype = mboxlist_string_to_mbtype(tmp);
+        }
+        else {
+            // XXX possibly infer mbtype from name
+            // We might want to set/verify mbtype based on the name.  For
+            // instance user.foo.#calendars* should be MBTYPE_CALENDAR,
+            // user.foo.#jmap should be MBTYPE_COLLECTION, etc.
+            fprintf(stderr, "missing mbtype for %s\n", key);
+        }
+
+        /* char *partition; */
+        if ((tmp = json_string_value(json_object_get(value, "partition")))) {
+            if (strlen(tmp) >= MAX_PARTITION_LEN) {
+                fprintf(stderr, "partition too long for %s\n", key);
+                goto skip;
+            }
+            newmbentry->partition = xstrdup(tmp);
+        }
+        else {
+            fprintf(stderr, "missing mbtype for %s\n", key);
+            goto skip;
+        }
+
+        /* char *server; */
+        if ((tmp = json_string_value(json_object_get(value, "server")))) {
+            newmbentry->server = xstrdup(tmp);
+        }
+        else {
+            // XXX detect whether this needs to be present, whinge if it's not
+            // Its mandatory for frontends and mupdate in a Murder.  Backends
+            // shouldn't have this in a traditional (non-unified) Murder.
+        }
+
+        /* char *acl; */
+        if ((jtmp = json_object_get(value, "acl"))) {
+            const char *aclkey;
+            json_t *aclvalue;
+            struct buf buf = BUF_INITIALIZER;
+
+            json_object_foreach(jtmp, aclkey, aclvalue) {
+                buf_printf(&buf, "%s\t%s\t",
+                                  aclkey,
+                                  json_string_value(aclvalue));
+            }
+            newmbentry->acl = buf_release(&buf);
+        }
+
+        /* char *uniqueid; */
+        if ((tmp = json_string_value(json_object_get(value, "uniqueid")))) {
+           newmbentry->uniqueid = xstrdup(tmp);
+        }
+        else {
+            /* XXX could potentially infer this if the mailbox is on disk */
+            fprintf(stderr, "missing uniqueid for %s\n", key);
+            goto skip;
+        }
+
+        /* char *legacy_specialuse; */
+        if ((tmp = json_string_value(json_object_get(value, "legacy_specialuse")))) {
+            newmbentry->legacy_specialuse = xstrdup(tmp);
+        }
+
+        /* ptrarray_t name_history; */
+        if ((jtmp = json_object_get(value, "name_history"))) {
+            undump_name_history(&newmbentry->name_history, jtmp);
+        }
+
+        /* generate a new entry */
+        mboxlist_updatelock(newmbentry, /*localonly*/1);
+        /* XXX should we auditlog something here? */
+
+skip:
+        mboxlist_entry_free(&newmbentry);
+    }
+
+    json_decref(jmailboxes);
+
+    return 0;
 }
 
 enum {
@@ -1007,7 +1202,7 @@ static void usage(void)
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-x] [-y] [-p partition] [-f filename]\n");
     fprintf(stderr, "UNDUMP:\n");
     fprintf(stderr,
-            "  ctl_mboxlist [-C <alt_config>] -u [-f filename]"
+            "  ctl_mboxlist [-C <alt_config>] -u [-f filename] [-L]"
             "    [< mboxlist.dump]\n");
     fprintf(stderr, "MUPDATE populate:\n");
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-a] [-w] [-i] [-f filename]\n");
@@ -1025,11 +1220,16 @@ int main(int argc, char *argv[])
     enum mboxop op = NONE;
     char *alt_config = NULL;
     int dointermediary = 0;
+    int undump_legacy = 0;
 
-    while ((opt = getopt(argc, argv, "C:awmdurcxf:p:viy")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:Lawmdurcxf:p:viy")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
+            break;
+
+        case 'L':
+            undump_legacy = 1;
             break;
 
         case 'f':
@@ -1094,6 +1294,7 @@ int main(int argc, char *argv[])
     if (op != DUMP && partition) usage();
     if (op != DUMP && dopurge) usage();
     if (op != DUMP && dointermediary) usage();
+    if (op != UNDUMP && undump_legacy) usage();
 
     cyrus_init(alt_config, "ctl_mboxlist", 0, 0);
     global_sasl_init(1,0,NULL);
@@ -1127,7 +1328,12 @@ int main(int argc, char *argv[])
         mboxlist_init(0);
         mboxlist_open(mboxdb_fname);
 
-        do_undump();
+        if (undump_legacy) {
+            do_undump_legacy();
+        }
+        else {
+            do_undump();
+        }
 
         mboxlist_close();
         mboxlist_done();

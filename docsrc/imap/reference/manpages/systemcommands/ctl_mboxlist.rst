@@ -17,7 +17,7 @@ Synopsis
 .. parsed-literal::
 
     **ctl_mboxlist** [ **-C** *config-file* ] **-d** [ **-x** ] [**-y**] [ **-p** *partition* ] [ **-f** *filename* ]
-    **ctl_mboxlist** [ **-C** *config-file* ] **-u** [ **-f** *filename* ]
+    **ctl_mboxlist** [ **-C** *config-file* ] **-u** [ **-f** *filename* ] [ **-L** ]
     **ctl_mboxlist** [ **-C** *config-file* ] **-m** [ **-a** ] [ **-w** ] [ **-i** ] [ **-f** *filename* ]
     **ctl_mboxlist** [ **-C** *config-file* ] **-v** [ **-f** *filename* ]
 
@@ -64,14 +64,24 @@ Options
     Use the database specified by *filename* instead of the default
     (*configdirectory/mailboxes.db**).
 
+.. option:: -L
+
+    When performing an undump, use the legacy dump parser instead of the
+    JSON parser.  This might be useful for importing a dump produced
+    by an older version of Cyrus.
+
 .. option:: -u
 
-    Load the contents of the database from standard input.  The input
-    MUST be in the format output by the **-d** option.
+    Load ("undump") the contents of the database from standard input.  The
+    input MUST be a valid JSON file, unless the -L option is also supplied.
 
-.. NOTE::
-    Both the old and new formats can be loaded, but the old format will
-    break remote mailboxes.
+    .. IMPORTANT::
+        USE THIS OPTION WITH CARE.  If you have modified the dump file since it
+        was dumped, or if the file was not produced by **-d** in the first
+        place, or was produced on a different server, you can easily break your
+        mailboxes.db.  Undump will refuse to process a syntactically-invalid
+        dump file, but it can't do much to protect you from a valid file
+        containing bad data.
 
 .. option:: -m
 
@@ -84,9 +94,9 @@ Options
     that is, only change the mupdate server, do not delete any local
     mailboxes.
 
-.. IMPORTANT::
-    USE THIS OPTION WITH CARE, as it allows namespace collisions into
-    the murder.
+    .. IMPORTANT::
+        USE THIS OPTION WITH CARE, as it allows namespace collisions into
+        the murder.
 
 .. option:: -w
 
@@ -124,7 +134,10 @@ Examples
 ..
 
         Undump (restore) the mailboxes database from *newmboxlist.dump*,
-        a portable text formatted file.
+        where *newmboxlist.dump* is a JSON file produced by **ctl_mboxlist -d**
+
+        .. Note::
+            Be very careful with this option.
 
 .. parsed-literal::
 
