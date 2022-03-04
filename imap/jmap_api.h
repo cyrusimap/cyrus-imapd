@@ -47,6 +47,7 @@
 #include "acl.h"
 #include "auth.h"
 #include "conversations.h"
+#include "dav_db.h"
 #include "hash.h"
 #include "jmap_util.h"
 #include "json_support.h"
@@ -62,6 +63,9 @@
 #define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
 #define JMAP_URN_MDN        "urn:ietf:params:jmap:mdn"
+#define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
+#define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
+#define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
 
 #define JMAP_BLOB_EXTENSION          "https://cyrusimap.org/ns/jmap/blob"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -84,6 +88,7 @@ enum {
     MAX_SIZE_UPLOAD,
     MAX_CONCURRENT_UPLOAD,
     MAX_SIZE_BLOB_SET,
+    MAX_CATENATE_ITEMS,
     JMAP_NUM_LIMITS  /* MUST be last */
 };
 
@@ -101,21 +106,30 @@ enum {
 /* JMAP Calendar (draft-ietf-jmap-calendars) privileges */
 #define JACL_READFB         ACL_USER9      /* Keep sync'd with DACL_READFB */
 #define JACL_RSVP           ACL_USER7      /* Keep sync'd with DACL_REPLY */
-#define JACL_UPDATEPRIVATE  
-#define JACL_UPDATEOWN
-#define JACL_UPDATEALL
-#define JACL_REMOVEOWN
-#define JACL_REMOVEALL
+#define JACL_WRITEOWN       ACL_USER6
+#define JACL_UPDATEPRIVATE  ACL_USER5
+#define JACL_WRITEALL       (JACL_ADDITEMS|JACL_UPDATEITEMS|JACL_SETSEEN|JACL_SETMETADATA|JACL_REMOVEITEMS)
 
 /* Cyrus-specific privileges */
 #define JACL_LOOKUP         ACL_LOOKUP
-#define JACL_ADMIN          ACL_ADMIN
+#define JACL_ADMIN_MAILBOX   (ACL_ADMIN|JACL_DELETE|JACL_CREATECHILD)
+#define JACL_ADMIN_CALENDAR ACL_ADMIN
 #define JACL_SETPROPERTIES  ACL_ANNOTATEMSG
 #define JACL_UPDATEITEMS    (JACL_ADDITEMS|JACL_REMOVEITEMS)
 #define JACL_SETMETADATA    (JACL_SETKEYWORDS|JACL_SETPROPERTIES)
 #define JACL_WRITE          (JACL_UPDATEITEMS|JACL_SETSEEN|JACL_SETMETADATA)
 #define JACL_ALL            (JACL_READITEMS|JACL_WRITE|JACL_RENAME|JACL_SUBMIT\
-                             |JACL_ADMIN|JACL_READFB|JACL_RSVP)
+                             |ACL_ADMIN|JACL_DELETE|JACL_CREATECHILD|JACL_READFB|JACL_RSVP)
+
+
+typedef struct {
+    hash_table methods;
+    json_t *server_capabilities;
+    long limits[JMAP_NUM_LIMITS];
+    // internal state
+    ptrarray_t getblob_handlers; // array of jmap_getblob_handler
+    ptrarray_t event_handlers; // array of (malloced) jmap_handlers
+} jmap_settings_t;
 
 typedef struct jmap_req {
     const char           *method;
@@ -128,6 +142,7 @@ typedef struct jmap_req {
     const char           *tag;
     struct transaction_t *txn;
     struct mboxname_counters counters;
+    jmap_settings_t      *settings;
 
     double real_start;
     double user_start;
@@ -173,8 +188,8 @@ typedef struct {
     const char *accept_mime;     // input to the handler
     unsigned decode : 1;         // input to the handler
     struct buf blob;             // output from the handler
-    char *content_type;          // output from the handler
-    char *encoding;              // output from the handler
+    struct buf content_type;     // output from the handler
+    struct buf encoding;         // output from the handler
     const char *errstr;          // output from the handler
 } jmap_getblob_context_t;
 
@@ -186,12 +201,17 @@ void jmap_getblob_ctx_fini(jmap_getblob_context_t *ctx);
 
 typedef int jmap_getblob_handler(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-typedef struct {
-    hash_table methods;
-    json_t *server_capabilities;
-    long limits[JMAP_NUM_LIMITS];
-    ptrarray_t getblob_handlers; // array of jmap_getblob_handler
-} jmap_settings_t;
+enum jmap_handler_event {
+    JMAP_HANDLE_SHUTDOWN      = (1 << 0), /* executed when httpd is shutdown. req is NULL */
+    JMAP_HANDLE_CLOSE_CONN    = (1 << 1), /* executed when connection is closed. req is NULL */
+    JMAP_HANDLE_BEFORE_METHOD = (1 << 2)  /* executed before each method call. req is set */
+};
+
+struct jmap_handler {
+    int eventmask;
+    void(*handler)(enum jmap_handler_event event, jmap_req_t* req, void *rock);
+    void *rock;
+};
 
 enum jmap_method_flags {
     JMAP_READ_WRITE  = (1 << 0),  /* user can change state with this method */
@@ -206,7 +226,10 @@ typedef struct {
     enum jmap_method_flags flags;
 } jmap_method_t;
 
-extern int jmap_api(struct transaction_t *txn, json_t **res,
+extern int jmap_error_response(struct transaction_t *txn,
+                               long code, json_t **res);
+extern int jmap_api(struct transaction_t *txn,
+                    const json_t *jreq, json_t **res,
                     jmap_settings_t *settings);
 
 extern int jmap_initreq(jmap_req_t *req);
@@ -231,7 +254,10 @@ extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
 extern void jmap_mdn_capabilities(json_t *account_capabilities);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_contact_capabilities(json_t *account_capabilities);
-extern void jmap_calendar_capabilities(json_t *account_capabilities);
+extern void jmap_calendar_capabilities(json_t *account_capabilities,
+                                       struct auth_state *authstate,
+                                       const char *authuserid,
+                                       const char *accountid);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_backup_capabilities(json_t *account_capabilities);
 extern void jmap_notes_capabilities(json_t *account_capabilities);
@@ -242,6 +268,8 @@ extern void jmap_accounts(json_t *accounts, json_t *primary_accounts);
 /* Request-scoped mailbox cache */
 extern int  jmap_openmbox(jmap_req_t *req, const char *name,
                           struct mailbox **mboxp, int rw);
+extern int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
+                                     struct mailbox **mboxp, int rw);
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
 
@@ -285,15 +313,6 @@ extern int jmap_findblob_exact(jmap_req_t *req, const char *accountid,
                                const char *blobid,
                                struct mailbox **mbox, msgrecord_t **mr,
                                struct buf *blob);
-
-#define JMAP_BLOBID_SIZE 42
-extern void jmap_set_blobid(const struct message_guid *guid, char *buf);
-
-#define JMAP_EMAILID_SIZE 26
-extern void jmap_set_emailid(const struct message_guid *guid, char *buf);
-
-#define JMAP_THREADID_SIZE 18
-extern void jmap_set_threadid(conversation_id_t cid, char *buf);
 
 /* JMAP states */
 extern json_t* jmap_getstate(jmap_req_t *req, int mbtype, int refresh);
@@ -449,6 +468,7 @@ struct jmap_query {
     size_t result_position;
     size_t server_limit;
     size_t total;
+    int have_total; /* for calculateTotal: false partial */
     json_t *ids;
 };
 
@@ -560,13 +580,15 @@ extern void jmap_parse_fini(struct jmap_parse *parse);
 extern json_t *jmap_parse_reply(struct jmap_parse *parse);
 
 
-extern json_t *jmap_get_sharewith(const mbentry_t *mbentry);
+extern json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights));
 extern int jmap_set_sharewith(struct mailbox *mbox,
-                              json_t *shareWith, int overwrite);
+                              json_t *shareWith, int overwrite,
+                              int (*patchrights)(int, json_t*));
 extern void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith);
 
 extern void jmap_mbentry_cache_free(jmap_req_t *req);
 extern const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id);
 extern mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id);
+extern mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav);
 
 #endif /* JMAP_API_H */

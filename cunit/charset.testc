@@ -5,6 +5,9 @@
 
 extern int charset_debug;
 
+#define CU_ASSERT_MEMEQUAL(actual, expected, sz) \
+    CU_ASSERT_EQUAL(memcmp(actual, expected, sz), 0)
+
 /* The Unicode Replacement character 0xfffd in UTF-8 encoding */
 #define UTF8_REPLACEMENT    "\357\277\275"
 /* The Replacement char after search normalisation */
@@ -343,6 +346,20 @@ static void test_encode_mimeheader(void)
 
     /* only encode display-name of address */
     TESTCASE("\"abc\xe2\x88\x97xyz\" <foo@example.com>", "=?UTF-8?Q?=22abc=E2=88=97xyz=22?= <foo@example.com>");
+
+    /* fold long lines with whitespace */
+    TESTCASE("012345678 " "012345678 " "012345678 " "012345678 "
+             "012345678 " "012345678 " "012345678 " "0123456789",
+             "012345678 " "012345678 " "012345678 " "012345678 "
+             "012345678 " "012345678 " "012345678" "\r\n "
+             "0123456789");
+
+    /* encode long lines with no whitespace */
+    TESTCASE("0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "0123456789" "0123456789",
+             "=?UTF-8?Q?" "0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "01?=\r\n "
+             "=?UTF-8?Q?" "2345678901" "23456789?=");
 
 #undef TESTCASE
 }
@@ -774,12 +791,14 @@ struct text_rock {
     struct buf out;
 };
 
-static void append_text(const struct buf *text, void *rock)
+static int append_text(const struct buf *text, void *rock)
 {
     struct text_rock *tr = (struct text_rock *)rock;
 
     tr->ncalls++;
     buf_append(&tr->out, text);
+
+    return 0;
 }
 
 #define TESTCASE(in, cs, enc, st, exp) \
@@ -798,7 +817,7 @@ static void append_text(const struct buf *text, void *rock)
         buf_init_ro(&bin, _in, sizeof(_in)-1); \
  \
         r = charset_extract(append_text, &tr, &bin, _cs, _enc, _st, flags); \
-        CU_ASSERT_EQUAL(r, 1); \
+        CU_ASSERT_EQUAL(r, 0); \
         CU_ASSERT_EQUAL(tr.ncalls, 1); \
         CU_ASSERT_STRING_EQUAL(buf_cstring(&tr.out), _exp); \
  \
@@ -1180,25 +1199,19 @@ static void test_utf8_to_searchform(void)
 static void test_charset_decode(void)
 {
 
-#define TESTCASE(in, inlen, want, wantlen, enc) \
+#define TESTCASE(encoded, encodedlen, decoded, decodedlen, encoding) \
     { \
-        struct buf _dst = BUF_INITIALIZER; \
-        static const char _in[] = (in); \
-        static const char _want[] = (want); \
-        int _enc = (enc); \
-        size_t _inlen = (inlen); \
-        size_t _wantlen = (wantlen); \
-        int _r; \
-        _r = charset_decode(&_dst, _in, _inlen, _enc); \
-        CU_ASSERT(_r == 0); \
-        CU_ASSERT(_dst.len == _wantlen); \
-        { \
-            const char *p; \
-            for(p = _dst.s; p < _dst.s + _dst.len; p++) { \
-                if (0) fprintf(stderr, "%x\n", *p); \
-            } \
-        } \
-        CU_ASSERT(memcmp(_dst.s, _want, _wantlen) == 0); \
+        struct buf buf = BUF_INITIALIZER; \
+        int r = charset_decode(&buf, encoded, encodedlen, encoding); \
+        CU_ASSERT(r == 0); \
+        CU_ASSERT(buf.len == decodedlen); \
+        CU_ASSERT(memcmp(buf.s, decoded, decodedlen) == 0); \
+        buf_reset(&buf); \
+        r = charset_encode(&buf, decoded, decodedlen, encoding); \
+        CU_ASSERT(r == 0); \
+        CU_ASSERT(buf.len == encodedlen); \
+        CU_ASSERT(memcmp(buf.s, encoded, encodedlen) == 0); \
+        buf_free(&buf); \
     }
 
     TESTCASE("", 0, "", 0, ENCODING_NONE);
@@ -1214,7 +1227,33 @@ static void test_charset_decode(void)
     TESTCASE("Zm9vYmE=", 8, "fooba", 5, ENCODING_BASE64);
     TESTCASE("Zm9vYmFy", 8, "foobar", 6, ENCODING_BASE64);
 
+    /* Base64 URL encoding */
+    TESTCASE("vu_A3g", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
+    TESTCASE("vu_A3g==", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
+
 #undef TESTCASE
+
+    struct buf buf = BUF_INITIALIZER;
+    int r;
+
+    /* Base64 with ignored whitespace */
+    r = charset_decode(&buf, "Zm 9v\rYm\nFy", 11, ENCODING_BASE64);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_STRING_EQUAL("foobar", buf_cstring(&buf));
+    buf_reset(&buf);
+
+    /* Base64 with invalid characters */
+    r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_STRING_EQUAL("foobar", buf_cstring(&buf));
+    buf_reset(&buf);
+
+    /* Base64url with invalid characters */
+    r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64URL);
+    CU_ASSERT_EQUAL(-1, r);
+    buf_reset(&buf);
+
+    buf_free(&buf);
 }
 
 static void test_broken_length_hint(void)
@@ -1229,6 +1268,7 @@ static void test_broken_length_hint(void)
     s = charset_to_utf8(body, strlen(body), cs, ENCODING_QP);
     CU_ASSERT_STRING_EQUAL(body, s);
     charset_free(&cs);
+    free(s);
 }
 
 static void test_utf8_normalize(void)
@@ -1382,6 +1422,65 @@ static void test_qpencode_mimebody(void)
              "0123456789" "0123456789" "0123456789" "01=\r\n23456789", 1);
 
 #undef TESTCASE
+}
+
+static void test_encode_mimebody(void)
+{
+#define TESTCASE(in, want, wrap, wantlines) \
+    { \
+        size_t inlen = strlen(in); \
+        size_t wantlen = strlen(want); \
+        size_t preflight_outlen = 0xffee; \
+        int preflight_outlines = 0x1234; \
+        char *preflight_retval = charset_encode_mimebody(NULL, inlen, NULL, \
+            &preflight_outlen, &preflight_outlines, wrap); \
+        CU_ASSERT_PTR_NULL(preflight_retval); \
+        CU_ASSERT_EQUAL(wantlen, preflight_outlen); \
+        CU_ASSERT_EQUAL(wantlines, preflight_outlines); \
+        char *retval = malloc(preflight_outlen); \
+        size_t encode_outlen = 0x1234; \
+        int encode_outlines = 0xffee; \
+        char *encode_retval = charset_encode_mimebody(in, inlen, \
+                retval, &encode_outlen, &encode_outlines, wrap); \
+        CU_ASSERT_PTR_EQUAL(retval, encode_retval); \
+        CU_ASSERT_EQUAL(wantlen, encode_outlen); \
+        CU_ASSERT_MEMEQUAL(retval, want, wantlen); \
+        CU_ASSERT_EQUAL(wantlines, encode_outlines); \
+        free(retval); \
+    }
+
+    TESTCASE("a", "YQ==", 0, 1);
+    TESTCASE("ab", "YWI=", 0, 1);
+    TESTCASE("abc", "YWJj", 0, 1);
+    TESTCASE("abcd", "YWJjZA==", 0, 1);
+    TESTCASE("abcde", "YWJjZGU=", 0, 1);
+    TESTCASE("abcdef", "YWJjZGVm", 0, 1);
+
+
+    TESTCASE("012345678901234567890123456789012345678901234567890123",
+             "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIz\r\n",
+             1, 1);
+
+    TESTCASE("0123456789012345678901234567890123456789012345678901234",
+             "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIz\r\n"
+             "NA==\r\n",
+             1, 2);
+
+#undef TESTCASE
+}
+
+static void test_decode_percent(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    int r = charset_decode_percent(&buf, "%21%23%24%25%26%27%28%29%2A%2B%2C%2F%3A%3B%3D%3F%40%5B%5D");
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_STRING_EQUAL("!#$%&'()*+,/:;=?@[]", buf_cstring(&buf));
+
+    // leave bogus percent encodings as-is
+    r = charset_decode_percent(&buf, "a%21b%2xc%24d");
+    CU_ASSERT_EQUAL(-1, r);
+    CU_ASSERT_STRING_EQUAL("a!b%2xc$d", buf_cstring(&buf));
 }
 
 /* vim: set ft=c: */

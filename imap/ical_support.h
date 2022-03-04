@@ -51,11 +51,13 @@
 #include <libical/ical.h>
 #undef icalerror_warn
 #define icalerror_warn(message) \
-{syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s\n", __FUNCTION__, __FILE__, __LINE__, message);}
+{syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s", __FUNCTION__, __FILE__, __LINE__, message);}
 
 #include "mailbox.h"
 
-#define PER_USER_CAL_DATA \
+#define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
+
+#define PER_USER_CAL_DATA                                       \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
 #ifndef HAVE_NEW_CLONE_API
@@ -63,6 +65,12 @@
 #define icalcomponent_clone           icalcomponent_new_clone
 #define icalproperty_clone            icalproperty_new_clone
 #define icalparameter_clone           icalparameter_new_clone
+#endif
+
+#ifndef HAVE_GET_COMPONENT_NAME
+/* This should never match anything in the wild
+   which means that we can't patch X- components */
+#define icalcomponent_get_component_name(comp)  "X-CYR-"
 #endif
 
 /* Initialize libical timezones. */
@@ -74,6 +82,21 @@ extern const char *icalparameter_get_value_as_string(icalparameter *param);
 extern struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop);
 extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
+extern void icalproperty_set_xparam(icalproperty *prop,
+                                    const char *name, const char *val, int purge);
+
+/* Returns if default alerts are explicitly enabled (1) or disabled (0).
+   Returns -1 otherwise. */
+extern int icalcomponent_read_usedefaultalerts(icalcomponent *comp);
+
+extern void icalcomponent_set_usedefaultalerts(icalcomponent *comp);
+
+/* Adds default alerts to ical, if either the X-USE-DEFAULTALERTS property
+ * is set to TRUE, or force is non-zero. */
+extern void icalcomponent_add_defaultalerts(icalcomponent *ical,
+                                            icalcomponent *alarms_withtime,
+                                            icalcomponent *alarms_withdate,
+                                            int force);
 
 /* If range is a NULL period, callback() is executed for ALL occurrences,
    otherwise callback() is only executed for occurrences that overlap the range.
@@ -87,6 +110,7 @@ extern int icalcomponent_myforeach(icalcomponent *comp,
                                    int (*callback) (icalcomponent *comp,
                                                     icaltimetype start,
                                                     icaltimetype end,
+                                                    icaltimetype recurid,
                                                     void *data),
                                    void *callback_data);
 
@@ -136,6 +160,31 @@ extern icaltimetype icaltime_convert_to_utc(const struct icaltimetype tt,
 extern int icalcomponent_apply_vpatch(icalcomponent *ical,
                                       icalcomponent *vpatch,
                                       int *num_changes, const char **errstr);
+
+/* Functions to work around libical TZID prefixes */
+extern const char *icaltimezone_get_location_tzid(const icaltimezone *zone);
+extern const char *icaltime_get_location_tzid(icaltimetype t);
+
+extern icaltimezone *icaltimezone_get_cyrus_timezone_from_tzid(const char *tzid);
+
+struct observance {
+    const char *name;
+    icaltimetype onset;
+    int offset_from;
+    int offset_to;
+    int is_daylight;
+    int is_std;
+    int is_gmt;
+};
+
+extern void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
+                                                     icaltimetype *startp, icaltimetype *endp,
+                                                     icalarray *obsarray,
+                                                     struct observance **proleptic,
+                                                     icalcomponent **eternal_std,
+                                                     icalcomponent **eternal_dst,
+                                                     icaltimetype *last_dtstart,
+                                                     int ms_compatible);
 
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory

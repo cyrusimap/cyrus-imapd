@@ -68,6 +68,7 @@
 #include "gmtoff.h"
 #include "iptostring.h"
 #include "global.h"
+#include "ical_support.h"
 #include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
@@ -93,7 +94,7 @@ static enum {
 
 static int cyrus_init_nodb = 0;
 
-EXPORTED int in_shutdown = 0;
+EXPORTED volatile sig_atomic_t in_shutdown = 0;
 
 EXPORTED int config_fulldirhash;                                /* 0 */
 EXPORTED int config_implicitrights;                     /* "lkxa" */
@@ -114,6 +115,7 @@ EXPORTED const char *config_conversations_db;
 EXPORTED const char *config_backup_db;
 EXPORTED int charset_flags;
 EXPORTED int charset_snippet_flags;
+EXPORTED size_t config_search_maxsize;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
@@ -323,6 +325,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         charset_snippet_flags |= CHARSET_ESCAPEHTML;
     }
 
+    config_search_maxsize = 1024 * config_getint(IMAPOPT_SEARCH_MAXSIZE);
+
     if (!cyrus_init_nodb) {
         /* lookup the database backends */
         config_mboxlist_db = config_getstring(IMAPOPT_MBOXLIST_DB);
@@ -380,6 +384,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
                                   config_getswitch(IMAPOPT_SQL_USESSL));
         libcyrus_config_setswitch(CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
                                   config_getswitch(IMAPOPT_SKIPLIST_ALWAYS_CHECKPOINT));
+        libcyrus_config_setswitch(CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
+                                  config_getswitch(IMAPOPT_ACL_ADMIN_IMPLIES_WRITE));
 
         /* Not until all configuration parameters are set! */
         libcyrus_init();
@@ -390,6 +396,11 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     if (locktime) {
         debug_locks_longer_than = atof(locktime);
     }
+
+#ifdef HAVE_ICAL
+    /* Initialize libical */
+    ical_support_init();
+#endif
 
     return 0;
 }

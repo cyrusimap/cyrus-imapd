@@ -200,13 +200,13 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
 
     res = sieve_register_vacation(interpreter, &stub_vacation);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_vacation() returns %d", res);
         goto done;
     }
 
     res = sieve_register_duplicate(interpreter, &stub_duplicate);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_duplicate() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_duplicate() returns %d", res);
         goto done;
     }
 
@@ -214,6 +214,7 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
     sieve_register_extlists(interpreter,
                             (sieve_list_validator *) &stub_generic,
                             (sieve_list_comparator *) &stub_generic);
+    sieve_register_imip(interpreter, (sieve_callback *) &stub_generic);
 #endif
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interpreter, (sieve_jmapquery *) &stub_generic);
@@ -294,9 +295,13 @@ EXPORTED int sieve_script_parse_string(sieve_interp_t *interp, const char *s,
                                        char **errors, sieve_script_t **script)
 {
     struct yy_buffer_state *buffer = sieve_scan_string(s);
+    sieve_script_t *myscript = NULL;
+
+    if (!script) script = &myscript;
 
     int res = _sieve_script_parse_only(interp, errors, script);
 
+    sieve_script_free(&myscript);
     sieve_delete_buffer(buffer);
 
     return res;

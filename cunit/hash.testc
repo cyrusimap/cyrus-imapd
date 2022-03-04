@@ -56,6 +56,9 @@ static void test_old(void)
     void *j;
     strarray_t sa = STRARRAY_INITIALIZER;
 
+    /* n.b. This test uses mpool, which coincidentally gets us 100% test
+     * coverage of lib/mpool.c, which we do not otherwise test at all!
+     */
     construct_hash_table(&table, 200, 1);
 
     for (i = 0 ; NULL != strings[i] ; i++ ) {
@@ -117,6 +120,9 @@ static void test_empty(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
 
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
+
     /* free the hash table */
     free_hash_table(&ht, NULL);
 }
@@ -146,6 +152,9 @@ static void test_reinsert(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(1, count);
 
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(1, hash_numrecords(&ht));
+
     /* re-insert into the hash table */
     d = hash_insert(KEY0, VALUE1, &ht);
     /* get the old value back */
@@ -160,6 +169,9 @@ static void test_reinsert(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(1, count);
 
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(1, hash_numrecords(&ht));
+
     /* delete from the hash table */
     d = hash_del(KEY0, &ht);
     CU_ASSERT_PTR_EQUAL(VALUE1, d);
@@ -172,6 +184,9 @@ static void test_reinsert(void)
     count = 0;
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
+
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
 
     /* free the hash table */
     free_hash_table(&ht, NULL);
@@ -239,6 +254,9 @@ static void test_many(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(N, count);
 
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(N, hash_numrecords(&ht));
+
     /* delete from the hash table */
     for (i = 0 ; i < N ; i++) {
         d = hash_del(key(i), &ht);
@@ -255,6 +273,9 @@ static void test_many(void)
     count = 0;
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
+
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
 
     /* free the hash table */
     freed_count = 0;
@@ -285,6 +306,9 @@ static void test_freeing_nonempty(void)
     count = 0;
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(N, count);
+
+    /* check hash_numrecords */
+    CU_ASSERT_EQUAL(N, hash_numrecords(&ht));
 
     /* free the hash table */
     freed_count = 0;
@@ -347,4 +371,36 @@ static void test_iter(void)
     hash_iter_free(&iter);
     free_hash_table(&ht, NULL);
 }
+
+static void test_load_factor_warning(void)
+{
+    const char *const words[] = {
+        "id", "faucibus", "nisl", "tincidunt", "eget", "nullam", "non", "nisi",
+        "est", "sit", "amet", "facilisis", "magna", "etiam", "tempor", "orci",
+        "eu", "lobortis", "elementum", "nibh", "tellus", "molestie"
+    };
+    const size_t n_words = sizeof words / sizeof words[0]; /* 22 */
+    const size_t n_buckets = n_words / 4; /* 5 */
+    unsigned i;
+    unsigned int syslog_index;
+
+    hash_table ht;
+
+    /* make sure numeric assumptions hold */
+    CU_ASSERT_EQUAL_FATAL(22, n_words);
+    CU_ASSERT_EQUAL_FATAL(5, n_buckets);
+
+    construct_hash_table(&ht, n_buckets, 0);
+    CU_ASSERT_EQUAL(n_buckets, ht.size);
+
+    syslog_index = CU_SYSLOG_MATCH("hash table load factor exceeds 3.0");
+    /* 5 buckets will hit load factor 3.0 after 15 insertions, 4.0 after 20
+     * insertions, and it won't reach 5.0, so we should warn exactly twice */
+    for (i = 0; i < n_words; i++) {
+        hash_insert(words[i], NULL, &ht);
+    }
+    CU_ASSERT_EQUAL(n_words, hash_numrecords(&ht));
+    CU_ASSERT_SYSLOG(syslog_index, 2);
+}
+
 /* vim: set ft=c: */

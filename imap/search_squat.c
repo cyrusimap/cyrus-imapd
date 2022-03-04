@@ -195,7 +195,7 @@ static struct opstack *opstack_push(SquatBuilderData *bb, int op)
 
 #if DEBUG
     if (bb->verbose > 1)
-        syslog(LOG_NOTICE, "Squat opstack_push(op=%s)\n", search_op_as_string(op));
+        syslog(LOG_NOTICE, "Squat opstack_push(op=%s)", search_op_as_string(op));
 #endif
 
     /* push a new op on the stack */
@@ -449,9 +449,8 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     /* Flatten out the final bit vector into a sequence */
     for (uid = 1 ; uid <= bb->mailbox->i.last_uid; uid++) {
         if (bv_isset(&bb->stack[0].msg_vector, uid)) {
-            r = proc(bb->mailbox->name,
-                     bb->mailbox->i.uidvalidity,
-                     uid, NULL, rock);
+            r = proc(mailbox_name(bb->mailbox),
+                     bb->mailbox->i.uidvalidity, uid, NULL, rock);
             if (r) goto out;
         }
     }
@@ -545,7 +544,7 @@ static void stop_stats(SquatStats *stats)
 static void print_stats(const char *which, const SquatStats *stats)
 {
     syslog(LOG_NOTICE, "squat: %s indexed %lu messages (%lu bytes) "
-            "into %lu index bytes in %d seconds\n",
+            "into %lu index bytes in %d seconds",
             which,
             stats->indexed_messages,
             stats->indexed_bytes,
@@ -628,14 +627,14 @@ static int do_append(SquatReceiverData *d, const struct buf *text)
     int s;          /* SQUAT error */
 
     if (d->verbose > 3)
-        syslog(LOG_ERR, "squat: writing %llu bytes into message %u\n",
+        syslog(LOG_ERR, "squat: writing %llu bytes into message %u",
                (unsigned long long)text->len, d->uid);
 
     s = squat_index_append_document(d->index, text->s, text->len);
     if (s != SQUAT_OK) {
         syslog(LOG_ERR, "squat: error writing index data "
                         "for mailbox %s uid %u: %s",
-                        d->mailbox->name, d->uid,
+                        mailbox_name(d->mailbox), d->uid,
                         squat_strerror(s));
         return IMAP_IOERROR;
     }
@@ -644,7 +643,7 @@ static int do_append(SquatReceiverData *d, const struct buf *text)
     return 0;
 }
 
-static void append_text(search_text_receiver_t *rx,
+static int append_text(search_text_receiver_t *rx,
                         const struct buf *text)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
@@ -655,21 +654,21 @@ static void append_text(search_text_receiver_t *rx,
         if (text->len + d->pending_text.len < SQUAT_WORD_SIZE) {
             /* not enough text yet */
             buf_append(&d->pending_text, text);
-            return;
+            return 0;
         }
 
         /* just went over the threshold */
         if (d->verbose > 2)
-            syslog(LOG_NOTICE, "squat: opening document part '%s'\n",
+            syslog(LOG_NOTICE, "squat: opening document part '%s'",
                     d->doc_name);
 
         s = squat_index_open_document(d->index, d->doc_name);
         if (s != SQUAT_OK) {
             syslog(LOG_ERR, "squat: error opening document %s "
                             "for mailbox %s: %s",
-                            d->doc_name, d->mailbox->name,
+                            d->doc_name, mailbox_name(d->mailbox),
                             squat_strerror(s));
-            return;
+            return IMAP_IOERROR;
         }
         d->doc_is_open = 1;
 
@@ -682,7 +681,7 @@ static void append_text(search_text_receiver_t *rx,
     if (!r)
         r = do_append(d, text);
 
-    /* TODO: propagate an error to the caller */
+    return r;
 }
 
 static void end_part(search_text_receiver_t *rx,
@@ -696,7 +695,7 @@ static void end_part(search_text_receiver_t *rx,
         if (s != SQUAT_OK) {
             syslog(LOG_ERR, "squat: error closing document %s "
                             "for mailbox %s uid %u: %s",
-                            d->doc_name, d->mailbox->name,
+                            d->doc_name, mailbox_name(d->mailbox),
                             d->uid, squat_strerror(s));
             return;
         }
@@ -835,7 +834,7 @@ static int begin_mailbox(search_text_receiver_t *rx,
         if (!d->valid) {
             syslog(LOG_ERR, "squat: corrupt old index for mailbox %s, "
                             "forcing full update",
-                            mailbox->name);
+                            mailbox_name(mailbox));
             incremental = 0;
         }
 
@@ -844,7 +843,7 @@ static int begin_mailbox(search_text_receiver_t *rx,
             /* Squat file refers to old mailbox: force full rebuild */
             syslog(LOG_ERR, "squat: mailbox %s uidvalidity changed "
                             "from %u to %u, forcing full update",
-                            mailbox->name,
+                            mailbox_name(mailbox),
                             mailbox->i.uidvalidity,
                             d->uidvalidity);
             incremental = 0;
@@ -935,7 +934,7 @@ static int end_mailbox(search_text_receiver_t *rx,
     if (s != SQUAT_OK) {
         syslog(LOG_ERR,
                "squat: failed to close index for mailbox %s (error %d)",
-               d->mailbox->name, s);
+               mailbox_name(d->mailbox), s);
         r = IMAP_IOERROR;
         goto out;
     }
@@ -966,7 +965,7 @@ static int end_mailbox(search_text_receiver_t *rx,
 
     if (d->verbose) {
         stop_stats(&d->mailbox_stats);
-        print_stats(d->mailbox->name, &d->mailbox_stats);
+        print_stats(mailbox_name(d->mailbox), &d->mailbox_stats);
     }
     d->mailbox_count++;
     r = 0;
@@ -1052,6 +1051,7 @@ const struct search_engine squat_search_engine = {
     /* deluser */NULL,
     /* check_config */NULL,
     /* langstats */NULL,
-    can_match
+    can_match,
+    /* upgrade */NULL
 };
 

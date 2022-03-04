@@ -55,6 +55,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <dirent.h>
+#include <errno.h>
 
 #include "global.h"
 #include "assert.h"
@@ -92,20 +93,23 @@ static void printfile(struct protstream *out, const struct dlist *dl)
 
     f = fopen(dl->sval, "r");
     if (!f) {
-        syslog(LOG_ERR, "IOERROR: Failed to read file %s", dl->sval);
+        xsyslog(LOG_ERR, "IOERROR: Failed to read file",
+                         "sval=<%s>", dl->sval);
         prot_printf(out, "NIL");
         return;
     }
     if (fstat(fileno(f), &sbuf) == -1) {
-        syslog(LOG_ERR, "IOERROR: Failed to stat file %s", dl->sval);
+        xsyslog(LOG_ERR, "IOERROR: Failed to stat file",
+                         "sval=<%s>", dl->sval);
         prot_printf(out, "NIL");
         fclose(f);
         return;
     }
     size = sbuf.st_size;
     if (size != dl->nval) {
-        syslog(LOG_ERR, "IOERROR: Size mismatch %s (%lu != " MODSEQ_FMT ")",
-               dl->sval, size, dl->nval);
+        xsyslog(LOG_ERR, "IOERROR: Size mismatch",
+                         "sval=<%s> len=<%lu> expected=<" MODSEQ_FMT ">",
+                         dl->sval, size, dl->nval);
         prot_printf(out, "NIL");
         fclose(f);
         return;
@@ -117,8 +121,8 @@ static void printfile(struct protstream *out, const struct dlist *dl)
     message_guid_generate(&guid2, msg_base, msg_len);
 
     if (!message_guid_equal(&guid2, dl->gval)) {
-        syslog(LOG_ERR, "IOERROR: GUID mismatch %s",
-               dl->sval);
+        xsyslog(LOG_ERR, "IOERROR: GUID mismatch",
+                         "guid=<%s>", dl->sval);
         prot_printf(out, "NIL");
         fclose(f);
         map_free(&msg_base, &msg_len);
@@ -162,8 +166,9 @@ EXPORTED const char *dlist_reserve_path(const char *part, int isarchive, int isb
     /* gotta make sure we can create files */
     if (cyrus_mkdir(buf, 0755)) {
         /* it's going to fail later, but at least this will help */
-        syslog(LOG_ERR, "IOERROR: failed to create %s/sync./%lu/ for reserve: %m",
-                        base, (unsigned long)getpid());
+        xsyslog(LOG_ERR, "IOERROR: failed to create directory for reserve",
+                         "directory=<%s/sync./%lu/> file=<%s>",
+                         base, (unsigned long) getpid(), buf);
     }
     return buf;
 }
@@ -172,9 +177,24 @@ static int reservefile(struct protstream *in, const char *part,
                        struct message_guid *guid, unsigned long size,
                        int isbackup, const char **fname)
 {
+    static struct message_guid debug_writefail_guid = MESSAGE_GUID_INITIALIZER;
     FILE *file;
     char buf[8192+1];
     int r = 0;
+
+    if (debug_writefail_guid.status == GUID_UNKNOWN) {
+        const char *guidstr = config_getstring(IMAPOPT_DEBUG_WRITEFAIL_GUID);
+        if (guidstr) {
+            if (!message_guid_decode(&debug_writefail_guid, guidstr)) {
+                xsyslog(LOG_DEBUG, "debug_writefail_guid: ignoring invalid guid",
+                                   "guid=<%s>", guidstr);
+                message_guid_set_null(&debug_writefail_guid);
+            }
+        }
+        else {
+            message_guid_set_null(&debug_writefail_guid);
+        }
+    }
 
     /* XXX - write to a temporary file then move in to place! */
     *fname = dlist_reserve_path(part, /*isarchive*/0, isbackup, guid);
@@ -184,26 +204,37 @@ static int reservefile(struct protstream *in, const char *part,
 
     file = fopen(*fname, "w+");
     if (!file) {
-        syslog(LOG_ERR,
-               "IOERROR: failed to upload file %s", message_guid_encode(guid));
+        xsyslog(LOG_ERR, "IOERROR: failed to upload file",
+                         "guid=<%s>", message_guid_encode(guid));
         r = IMAP_IOERROR;
-        /* Note: we still read the file's data from the wire,
-         * to avoid losing protocol sync */
     }
+    else if (debug_writefail_guid.status == GUID_NONNULL
+             && message_guid_equal(&debug_writefail_guid, guid)) {
+        /* no error, but pretend the disk is full */
+        fclose(file);
+        file = NULL;
+        errno = ENOSPC;
+        xsyslog(LOG_ERR, "IOERROR: failed to upload file (simulated)",
+                         "guid=<%s>", message_guid_encode(guid));
+        r = IMAP_IOERROR;
+    }
+    /* Note: in the case of error we still read the file's data from the wire,
+     * to avoid losing protocol sync */
 
     /* XXX - calculate sha1 on the fly? */
     while (size) {
         size_t n = prot_read(in, buf, size > 8192 ? 8192 : size);
         if (!n) {
-            syslog(LOG_ERR,
-                "IOERROR: reading message: unexpected end of file");
+            xsyslog(LOG_ERR,
+                    "IOERROR: reading message: unexpected end of file", NULL);
             r = IMAP_IOERROR;
             break;
         }
         size -= n;
         if (!file) continue;
         if (fwrite(buf, 1, n, file) != n) {
-            syslog(LOG_ERR, "IOERROR: writing to file '%s': %m", *fname);
+            xsyslog(LOG_ERR, "IOERROR: write failed",
+                             "fname=<%s>", *fname);
             r = IMAP_IOERROR;
             break;
         }
@@ -220,7 +251,8 @@ static int reservefile(struct protstream *in, const char *part,
     }
 
     if (fsync(fileno(file)) < 0) {
-        syslog(LOG_ERR, "IOERROR: fsyncing file '%s': %m", *fname);
+        xsyslog(LOG_ERR, "IOERRROR: fsync failed",
+                         "fname=<%s>", *fname);
         r = IMAP_IOERROR;
         goto error;
     }
@@ -239,6 +271,32 @@ error:
 }
 
 /* DLIST STUFF */
+
+EXPORTED void dlist_push(struct dlist *parent, struct dlist *child)
+{
+    assert(!child->next);
+
+    if (parent->head) {
+        child->next = parent->head;
+        parent->head = child;
+    }
+    else {
+        parent->head = parent->tail = child;
+    }
+}
+
+EXPORTED struct dlist *dlist_pop(struct dlist *parent)
+{
+    struct dlist *child;
+
+    assert(parent->head);
+
+    child = parent->head;
+    parent->head = parent->head->next;
+    child->next = NULL;
+
+    return child;
+}
 
 EXPORTED void dlist_stitch(struct dlist *parent, struct dlist *child)
 {
@@ -382,7 +440,7 @@ void dlist_makeguid(struct dlist *dl, const struct message_guid *guid)
     if (!dl) return;
     _dlist_clean(dl);
     if (guid) {
-        dl->type = DL_GUID,
+        dl->type = DL_GUID;
         dl->gval = xzmalloc(sizeof(struct message_guid));
         message_guid_copy(dl->gval, guid);
     }
@@ -523,49 +581,49 @@ static struct dlist *dlist_updatechild(struct dlist *parent, const char *name)
     return dl;
 }
 
-struct dlist *dlist_updateatom(struct dlist *parent, const char *name, const char *val)
+EXPORTED struct dlist *dlist_updateatom(struct dlist *parent, const char *name, const char *val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makeatom(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updateflag(struct dlist *parent, const char *name, const char *val)
+EXPORTED struct dlist *dlist_updateflag(struct dlist *parent, const char *name, const char *val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makeflag(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updatenum64(struct dlist *parent, const char *name, bit64 val)
+EXPORTED struct dlist *dlist_updatenum64(struct dlist *parent, const char *name, bit64 val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makenum64(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updatenum32(struct dlist *parent, const char *name, uint32_t val)
+EXPORTED struct dlist *dlist_updatenum32(struct dlist *parent, const char *name, uint32_t val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makenum32(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updatedate(struct dlist *parent, const char *name, time_t val)
+EXPORTED struct dlist *dlist_updatedate(struct dlist *parent, const char *name, time_t val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makedate(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updatehex64(struct dlist *parent, const char *name, bit64 val)
+EXPORTED struct dlist *dlist_updatehex64(struct dlist *parent, const char *name, bit64 val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makehex64(dl, val);
     return dl;
 }
 
-struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
+EXPORTED struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
                            const char *val, size_t len)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
@@ -573,7 +631,7 @@ struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
     return dl;
 }
 
-struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
+EXPORTED struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
                                const struct message_guid *guid)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
@@ -581,7 +639,7 @@ struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
     return dl;
 }
 
-struct dlist *dlist_updatefile(struct dlist *parent, const char *name,
+EXPORTED struct dlist *dlist_updatefile(struct dlist *parent, const char *name,
                                const char *part, const struct message_guid *guid,
                                size_t size, const char *fname)
 {
@@ -1289,7 +1347,7 @@ struct dlist *dlist_getkvchild_bykey(struct dlist *dl,
     return NULL;
 }
 
-int dlist_toatom(struct dlist *dl, const char **valp)
+EXPORTED int dlist_toatom(struct dlist *dl, const char **valp)
 {
     const char *str;
     size_t len;
@@ -1646,4 +1704,10 @@ EXPORTED int dlist_getlist(struct dlist *dl, const char *name, struct dlist **va
 EXPORTED const char *dlist_lastkey(void)
 {
     return lastkey;
+}
+
+EXPORTED void dlist_rename(struct dlist *dl, const char *name)
+{
+    free(dl->name);
+    dl->name = xstrdup(name);
 }

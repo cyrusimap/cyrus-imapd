@@ -50,6 +50,7 @@
 #include "mboxname.h"
 #include "signals.h"
 #include "imapparse.h"
+#include "libcyr_cfg.h"
 #include "util.h"
 
 #ifdef HAVE_SSL
@@ -160,7 +161,7 @@ extern int saslprops_set_tls(struct saslprops_t *saslprops,
                              sasl_conn_t *saslconn);
 
 /* Misc globals */
-extern int in_shutdown;
+extern volatile sig_atomic_t in_shutdown;
 extern int config_fulldirhash;
 extern int config_implicitrights;
 extern unsigned long config_metapartition_files;
@@ -180,6 +181,7 @@ extern const char *config_conversations_db;
 extern const char *config_backup_db;
 extern int charset_flags;
 extern int charset_snippet_flags;
+extern size_t config_search_maxsize;
 
 /* Session ID */
 extern void session_new_id(void);

@@ -12,13 +12,12 @@ Synopsis
 Description
 ===========
 
-**imtest** is a utility that allows you to authenticate to a IMAP or
-IMSP server and interactively issue commands to it. Once authenticated
-you may issue any IMAP or IMSP command by simply typing it in. It is
-capable of multiple SASL authentication mechanisms and handles
-encryption layers transparently. This utility is often used for testing
-the operation of a imsp or imap server. Also those developing IMAP
-clients find it useful.
+**imtest** is a utility that allows you to authenticate to a IMAP server
+and interactively issue commands to it. Once authenticated you may issue
+any IMAP command by simply typing it in. It is capable of multiple SASL
+authentication mechanisms and handles encryption layers transparently.
+This utility is often used for testing the operation of a IMAP server.
+Also those developing IMAP clients find it useful.
 
 Options
 =======

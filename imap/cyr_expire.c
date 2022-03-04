@@ -60,7 +60,6 @@
 #include <sys/stat.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <signal.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <libgen.h>
@@ -87,7 +86,6 @@
 #define SECS_IN_A_DAY (24 * SECS_IN_AN_HR)
 
 /* global state */
-static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
 static const char *progname = NULL;
 static struct namespace expire_namespace; /* current namespace */
@@ -157,9 +155,7 @@ struct cyr_expire_ctx {
     struct expire_rock erock;
 };
 
-static const struct cyr_expire_ctx zero_ctx;
-
-static void sighandler(int sig);
+static struct cyr_expire_ctx ctx;
 
 /* verbosep - a wrapper to print if the 'verbose' option is
    turned on.
@@ -180,18 +176,7 @@ static inline void verbosep(const char *fmt, ...)
 
 static void cyr_expire_init(const char *progname, struct cyr_expire_ctx *ctx)
 {
-    struct sigaction action;
-
-    /* Initialise signal handlers */
-    sigemptyset(&action.sa_mask);
-    action.sa_flags = 0;
-    action.sa_handler = sighandler;
-    if (sigaction(SIGQUIT, &action, NULL) < 0)
-        fatal("unable to install signal handler for SIGQUIT", EX_TEMPFAIL);
-    if (sigaction(SIGINT, &action, NULL) < 0)
-        fatal("unable to install signal handler for SIGINT", EX_TEMPFAIL);
-    if (sigaction(SIGTERM, &action, NULL) < 0)
-        fatal("unable to install signal handler for SIGTERM", EX_TEMPFAIL);
+    signals_add_handlers(0);
 
     construct_hash_table(&ctx->erock.table, 10000, 1);
     strarray_init(&ctx->drock.to_delete);
@@ -302,7 +287,7 @@ static int parse_duration(const char *s, int *secondsp)
  * On Success: Returns 1
  * On Failure: Returns 0
  */
-static int get_annotation_value(const char *mboxname,
+static int get_annotation_value(const mbentry_t *mbentry,
                                 const char *annot_entry,
                                 int *secondsp, bool iterate)
 {
@@ -311,7 +296,7 @@ static int get_annotation_value(const char *mboxname,
     /* mboxname needs to be copied since `mboxname_make_parent`
      * runs a strrchr() on it.
      */
-    char *buf = xstrdup(mboxname);
+    char *buf = xstrdup(mbentry->name);
 
     /*
      * Mailboxes inherit /vendo/cmu/cyrus-imapd/{expire, archive, delete},
@@ -319,7 +304,7 @@ static int get_annotation_value(const char *mboxname,
      */
     do {
         buf_free(&attrib);
-        ret = annotatemore_lookup(buf, annot_entry, "", &attrib);
+        ret = annotatemore_lookup_mbe(mbentry, annot_entry, "", &attrib);
         if (ret ||              /* error */
             attrib.s)           /* found an entry */
             break;
@@ -333,7 +318,7 @@ static int get_annotation_value(const char *mboxname,
     buf_free(&attrib);
     free(buf);
 
-    syslog(LOG_DEBUG, "get_annotation_value: ret(%d):secondsp(%d)\n", ret, *secondsp);
+    syslog(LOG_DEBUG, "get_annotation_value: ret(%d):secondsp(%d)", ret, *secondsp);
     return ret;
 }
 
@@ -345,10 +330,10 @@ static int expunge_userflags(struct mailbox *mailbox, struct expire_rock *erock)
     for (i = 0; i < MAX_USER_FLAGS; i++) {
         if (erock->userflags[i/32] & 1<<(i&31))
             continue;
-        if (!mailbox->flagname[i])
+        if (!mailbox->h.flagname[i])
             continue;
         verbosep("Expunging userflag %u (%s) from %s\n",
-                        i, mailbox->flagname[i], mailbox->name);
+                        i, mailbox->h.flagname[i], mailbox_name(mailbox));
         r = mailbox_remove_user_flag(mailbox, i);
         if (r) return r;
         erock->userflags_expunged++;
@@ -380,8 +365,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     int archive_seconds = -1;
 
-    if (sigquit)
-        return 1;
+    signals_poll();
 
     if (mbentry->mbtype & MBTYPE_DELETED)
         goto done;
@@ -394,7 +378,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
 
     /* check /vendor/cmu/cyrus-imapd/archive */
     if (!arock->skip_annotate &&
-        get_annotation_value(mbentry->name, IMAP_ANNOT_NS "archive",
+        get_annotation_value(mbentry, IMAP_ANNOT_NS "archive",
                              &archive_seconds, false)) {
         arock->archive_mark = archive_seconds ?
             time(0) - archive_seconds : 0;
@@ -408,6 +392,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
 
 done:
     mailbox_close(&mailbox);
+    libcyrus_run_delayed();
 
     /* move on to the next mailbox regardless of errors */
     return 0;
@@ -451,10 +436,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
     int expire_seconds = 0;
     int did_expunge = 0;
 
-    if (sigquit) {
-        /* don't care if we leak some memory, we are shutting down */
-        return 1;
-    }
+    signals_poll();
 
     /* Skip remote mailboxes */
     if (mbentry->mbtype & MBTYPE_REMOTE)
@@ -465,7 +447,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
         if (mbentry->mtime < erock->tombstone_mark) {
             verbosep("Removing stale tombstone for %s\n", mbentry->name);
             syslog(LOG_NOTICE, "Removing stale tombstone for %s", mbentry->name);
-            mboxlist_delete(mbentry->name);
+            mboxlist_deletelock(mbentry);
         }
         goto done;
     }
@@ -485,7 +467,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
      * we need to iterate all the way up to "" (server entry)
      */
     if (!erock->skip_annotate &&
-        get_annotation_value(mbentry->name, IMAP_ANNOT_NS "expire",
+        get_annotation_value(mbentry, IMAP_ANNOT_NS "expire",
                              &expire_seconds, true)) {
         /* add mailbox to table */
         erock->expire_mark = expire_seconds ?
@@ -534,6 +516,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
 
 done:
     mailbox_close(&mailbox);
+    libcyrus_run_delayed();
     /* Even if we had a problem with one mailbox, continue with the others */
     return 0;
 }
@@ -544,8 +527,7 @@ static int delete(const mbentry_t *mbentry, void *rock)
     time_t timestamp;
     int delete_seconds = -1;
 
-    if (sigquit)
-        return 1;
+    signals_poll();
 
     if (mbentry->mbtype & MBTYPE_DELETED)
         goto done;
@@ -559,7 +541,7 @@ static int delete(const mbentry_t *mbentry, void *rock)
 
     /* check /vendor/cmu/cyrus-imapd/delete */
     if (!drock->skip_annotate &&
-        get_annotation_value(mbentry->name, IMAP_ANNOT_NS "delete",
+        get_annotation_value(mbentry, IMAP_ANNOT_NS "delete",
                              &delete_seconds, false)) {
         drock->delete_mark = delete_seconds ?
             time(0) - delete_seconds: 0;
@@ -585,8 +567,7 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
     unsigned int nseen = 0, ndeleted = 0;
     char *filename = NULL;
 
-    if (sigquit)
-        return 1;
+    signals_poll();
 
     if (mbentry->mbtype & MBTYPE_DELETED)
         goto done;
@@ -609,6 +590,7 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
     if (!conversations_open_mbox(mbentry->name, 0/*shared*/, &state)) {
         conversations_prune(state, crock->expire_mark, &nseen, &ndeleted);
         conversations_commit(&state);
+        libcyrus_run_delayed();
     }
 
     hash_insert(filename, (void *)1, &crock->seen);
@@ -622,16 +604,10 @@ done:
     return 0;
 }
 
-static void sighandler(int sig __attribute((unused)))
-{
-    sigquit = 1;
-    return;
-}
-
 static int do_archive(struct cyr_expire_ctx *ctx)
 {
     if (ctx->args.archive_seconds >= 0) {
-        syslog(LOG_DEBUG, ">> do_archive: archive_seconds(%d) >= 0\n",
+        syslog(LOG_DEBUG, ">> do_archive: archive_seconds(%d) >= 0",
                ctx->args.archive_seconds);
         ctx->arock.archive_mark = time(0) - ctx->args.archive_seconds;
 
@@ -757,13 +733,13 @@ static int do_delete(struct cyr_expire_ctx *ctx)
         for (i = 0 ; i < ctx->drock.to_delete.count ; i++) {
             char *name = ctx->drock.to_delete.data[i];
 
-            if (sigquit)
-                return ret;         /* return from here, will quit in main. */
+            signals_poll();
 
             verbosep("Removing: %s\n", name);
 
             ret = mboxlist_deletemailboxlock(name, 1, NULL, NULL, NULL,
                                              MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
+            libcyrus_run_delayed();
             /* XXX: Ignoring the return from mboxlist_deletemailbox() ??? */
             count++;
         }
@@ -870,14 +846,23 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
         return -EINVAL;
     }
 
-
     return 0;
 }
+
+static void shut_down(int code) __attribute__((noreturn));
+static void shut_down(int code)
+{
+    in_shutdown = 1;
+
+    cyr_expire_cleanup(&ctx);
+
+    exit(code);
+}
+
 
 int main(int argc, char *argv[])
 {
     int r = 0;
-    struct cyr_expire_ctx ctx = zero_ctx;
 
     progname = basename(argv[0]);
 
@@ -911,30 +896,16 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    r = do_archive(&ctx);
+    do_archive(&ctx);
 
-    if (sigquit)
-        goto finish;
+    do_expunge(&ctx);
 
-    r = do_expunge(&ctx);
+    do_cid_expire(&ctx);
 
-    if (sigquit)
-        goto finish;
-
-    r = do_cid_expire(&ctx);
-
-    if (sigquit)
-        goto finish;
-
-    r = do_delete(&ctx);
-
-    if (sigquit)
-        goto finish;
+    do_delete(&ctx);
 
     /* purge deliver.db entries of expired messages */
-    r = do_duplicate_prune(&ctx);
+    do_duplicate_prune(&ctx);
 
- finish:
-    cyr_expire_cleanup(&ctx);
-    exit(r);
+    shut_down(0);
 }

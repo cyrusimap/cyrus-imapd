@@ -83,6 +83,9 @@
 
 static char vacation_answer;
 
+/* current namespace */
+static struct namespace test_namespace;
+
 typedef struct {
     char *name;
     FILE *data;
@@ -100,6 +103,8 @@ typedef struct {
     const char *host;
     const char *remotehost;
     const char *remoteip;
+    struct auth_state *authstate;
+    struct namespace *ns;
     int edited_header;
 } script_data_t;
 
@@ -567,7 +572,7 @@ static int send_response(void *ac, void *ic, void *sc,
 }
 
 #ifdef WITH_JMAP
-static int jmapquery(void *sc, void *mc, const char *json)
+static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const char *json)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
@@ -593,11 +598,12 @@ static int jmapquery(void *sc, void *mc, const char *json)
     }
 
     if (!md->content.matchmime)
-        md->content.matchmime = jmap_email_matchmime_init(&md->content.map, &err);
+        md->content.matchmime = jmap_email_matchmime_new(&md->content.map, &err);
 
     /* Run query */
     if (md->content.matchmime)
-        matches = jmap_email_matchmime(md->content.matchmime, jfilter, userid, time(NULL), &err);
+        matches = jmap_email_matchmime(md->content.matchmime, jfilter, NULL, userid,
+                sd->authstate, sd->ns, time(NULL), &err);
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
@@ -648,7 +654,7 @@ int main(int argc, char *argv[])
     static strarray_t e_from = STRARRAY_INITIALIZER;
     static strarray_t e_to = STRARRAY_INITIALIZER;
     char *alt_config = NULL;
-    script_data_t sd = { NULL, NULL, "", NULL, 0 };
+    script_data_t sd = { NULL, NULL, "", NULL, NULL, NULL, 0 };
     FILE *f;
 
     /* prevent crashes if -e or -t aren't specified */
@@ -705,6 +711,11 @@ int main(int argc, char *argv[])
 
     /* Load configuration file. */
     config_read(alt_config, 0);
+
+    mboxname_init_namespace(&test_namespace, /*isadmin*/0);
+    sd.ns = &test_namespace;
+    // anyone authstate
+    sd.authstate = auth_newstate("anyone");
 
     if (!sd.host) sd.host = config_servername;
 
@@ -858,6 +869,7 @@ int main(int argc, char *argv[])
         free_msg(m);
     strarray_fini(&e_from);
     strarray_fini(&e_to);
+    auth_freestate(sd.authstate);
 
     return 0;
 }

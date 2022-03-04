@@ -1,0 +1,55 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.16 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.16/cyrus-imapd-3.0.16.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.16/cyrus-imapd-3.0.16.tar.gz.sig
+
+
+.. _relnotes-3.0.16-changes:
+
+Changes Since 3.0.15
+====================
+
+Security fixes:
+---------------
+
+* Fixed CVE-2021-33582_: Certain user inputs are used as hash table keys during
+  processing.  A poorly chosen string hashing algorithm meant that the user
+  could control which bucket their data was stored in, allowing a malicious
+  user to direct many inputs to a single bucket.  Each subsequent insertion to
+  the same bucket requires a strcmp of every other entry in it.  At tens of
+  thousands of entries, each new insertion could keep the CPU busy in a strcmp
+  loop for minutes.
+
+  The string hashing algorithm has been replaced with a better one, and now
+  also uses a random seed per hash table, so malicious inputs cannot be
+  precomputed.
+
+  Discovered by Matthew Horsfall, Fastmail
+
+.. _CVE-2021-33582: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-33582
+
+Build fixes
+-----------
+
+* Fixed: expired test certificates caused unit test failures
+* Fixed: various warnings raised by newer compilers
+
+Bug fixes
+---------
+
+* Fixed: crash when looking up entries in zero-sized hash tables
+* Fixed: deduplicated code in hash_del (thanks Дилян Палаузов)
+* Fixed :issue:`3456`: per-server annotations were unable to replicate

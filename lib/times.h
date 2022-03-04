@@ -76,6 +76,7 @@ int time_to_rfc822(time_t t, char *buf, size_t len);
 /*
  * ISO8601 (RFC 3339) datetime format
  */
+#define ISO8601_DATETIME_MAX 30
 int time_from_iso8601(const char *s, time_t *);
 int time_to_iso8601(time_t t, char *buf, size_t len, int withsep);
 int timeval_to_iso8601(const struct timeval *t, enum timeval_precision tv_prec,

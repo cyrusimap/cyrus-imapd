@@ -53,9 +53,14 @@
 #include "search_part.h"
 #include "search_sort.h"
 
+#define FNAME_XAPIANSUFFIX   "xapianactive"
+#define XAPIAN_DIRNAME       "/xapian"
+
+extern int xapian_basedir(const char *tier, const char *mboxname,
+                          const char *part, const char *root, char **basedir);
+
 typedef int (*search_hit_cb_t)(const char *mboxname, uint32_t uidvalidity,
-                               uint32_t uid, const strarray_t *partids,
-                               void *rock);
+                               uint32_t uid, const char *partid, void *rock);
 
 typedef int (*search_hitguid_cb_t)(const conv_guidrec_t *rec, size_t nguids,
                                    void *rock);
@@ -93,11 +98,6 @@ typedef struct search_snippet_markup {
 
 extern search_snippet_markup_t default_snippet_markup;
 
-/* Maximum size of a query, determined empirically, is a little bit
- * under 8MB.  That seems like more than enough, so let's limit the
- * total amount of parts text to 4 MB. */
-#define SEARCH_MAX_PARTS_SIZE      (4*1024*1024)
-
 /* The functions in search_text_receiver_t get called at least once for each part of every message.
    The invocations form a sequence:
        begin_message(message_t)
@@ -134,7 +134,8 @@ struct search_text_receiver {
                           const struct message_guid *content_guid,
                           const char *type, const char *subtype);
     void (*begin_part)(search_text_receiver_t *, int part);
-    void (*append_text)(search_text_receiver_t *, const struct buf *);
+    /* Returns IMAP_MESSAGE_TOO_LARGE if no more bytes are accepted */
+    int  (*append_text)(search_text_receiver_t *, const struct buf *);
     void (*end_part)(search_text_receiver_t *, int part);
     void (*end_bodypart)(search_text_receiver_t *);
 #define SEARCH_INDEXLEVEL_BASIC 1
@@ -154,6 +155,8 @@ struct search_langstat {
     char *iso_lang;
     size_t count;
 };
+
+struct mboxlist_entry;
 
 #define SEARCH_FLAG_CAN_BATCH      (1<<0)
 #define SEARCH_FLAG_CAN_GUIDSEARCH (1<<1)
@@ -190,10 +193,11 @@ struct search_engine {
     int (*compact)(const char *userid, const strarray_t *reindextiers,
                    const strarray_t *srctiers, const char *desttier,
                    int flags);
-    int (*deluser)(const char *userid);
+    int (*deluser)(const struct mboxlist_entry *mbentry);
     int (*check_config)(char **errstr);
     int (*langstats)(const char *userid, ptrarray_t *lstats, size_t *total_docs);
     int (*can_match)(enum search_op matchop, int partnum);
+    int (*upgrade)(const char *userid);
 };
 
 /* Returns the configured search engine */
@@ -245,8 +249,10 @@ void search_free_internalised(void *internalised);
 int search_list_files(const char *userid, strarray_t *);
 int search_compact(const char *userid, const strarray_t *reindextiers,
                    const strarray_t *srctiers, const char *desttier, int verbose);
-int search_deluser(const char *userid);
+int search_deluser(const struct mboxlist_entry *mbentry);
 int search_check_config(char **errstr);
+
+int search_upgrade(const char *userid);
 
 int search_can_match(enum search_op matchop, int partnum);
 

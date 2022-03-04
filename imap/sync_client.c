@@ -117,6 +117,8 @@ static void shut_down(int code)
 {
     in_shutdown = 1;
 
+    libcyrus_run_delayed();
+
     seen_done();
     cyrus_done();
     exit(code);
@@ -260,13 +262,22 @@ static int do_daemon_work(const char *sync_shutdown_file,
     return(r);
 }
 
-static void replica_connect()
+static void replica_connect(void)
 {
+    static int maxwait = 0;
     int wait;
+
+    if (!maxwait)
+        maxwait = config_getduration(IMAPOPT_SYNC_RECONNECT_MAXWAIT, 's');
 
     for (wait = 15;; wait *= 2) {
         int r = sync_connect(&sync_cs);
         if (r != IMAP_AGAIN) break;
+
+        signals_poll();
+
+        if (maxwait > 0 && wait > maxwait)
+            wait = maxwait;
 
         fprintf(stderr,
                 "Can not connect to server '%s', retrying in %d seconds\n",
@@ -281,6 +292,7 @@ static void replica_connect()
         _exit(1);
     }
 
+#ifdef HAVE_ZLIB
     if (do_compress && !sync_cs.backend->in->zstrm) {
         fprintf(stderr, "Failed to enable compression to server '%s'\n",
                 servername);
@@ -288,10 +300,25 @@ static void replica_connect()
                 servername);
         _exit(1);
     }
+#endif
 
     if (verbose > 1) {
         prot_setlog(sync_cs.backend->in, fileno(stderr));
         prot_setlog(sync_cs.backend->out, fileno(stderr));
+    }
+
+    if (no_copyback) {
+        const char *cmd = "FORCE";
+        struct dlist *kl = dlist_newkvlist(NULL, cmd);
+        struct dlist *kin = NULL;
+        sync_send_apply(kl, sync_cs.backend->out);
+        int r = sync_parse_response(cmd, sync_cs.backend->in, &kin);
+        if (r) {
+            syslog(LOG_ERR, "SYNCERROR: failed to enable force mode");
+            _exit(1);
+        }
+        dlist_free(&kl);
+        dlist_free(&kin);
     }
 }
 
@@ -322,6 +349,7 @@ static void do_daemon(const char *sync_shutdown_file,
             if (!backend_ping(sync_cs.backend, NULL)) restart = 1;
         }
         replica_disconnect();
+        libcyrus_run_delayed();
     }
 }
 
@@ -339,9 +367,10 @@ static int do_mailbox(const char *mboxname)
     return r;
 }
 
-static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused)))
+static int cb_allmbox(const mbentry_t *mbentry, void *rock)
 {
     int r = 0;
+    int *exit_rcp = (int *)rock;
 
     char *userid = mboxname_to_userid(mbentry->name);
 
@@ -378,7 +407,8 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock __attribute__((unused
 
 done:
     free(userid);
-    return r;
+    if (r) *exit_rcp = 1;
+    return 0; // but keep going anyway
 }
 
 /* ====================================================================== */
@@ -629,9 +659,9 @@ int main(int argc, char **argv)
 
     case MODE_ALLUSER:
         /* Open up connection to server */
-        replica_connect(channel);
+        replica_connect();
 
-        if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &channel, 0))
+        if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &exit_rc, 0))
             exit_rc = 1;
 
         replica_disconnect();
@@ -639,7 +669,7 @@ int main(int argc, char **argv)
 
     case MODE_MAILBOX:
         /* Open up connection to server */
-        replica_connect(channel);
+        replica_connect();
 
         mboxname_list = sync_name_list_create();
         if (input_filename) {
@@ -681,7 +711,7 @@ int main(int argc, char **argv)
 
     case MODE_META:
         /* Open up connection to server */
-        replica_connect(channel);
+        replica_connect();
 
         for (i = optind; i < argc; i++) {
             if (sync_do_meta(&sync_cs, argv[i])) {
@@ -703,7 +733,7 @@ int main(int argc, char **argv)
     case MODE_REPEAT:
         if (input_filename) {
             /* Open up connection to server */
-            replica_connect(channel);
+            replica_connect();
 
             exit_rc = do_sync_filename(input_filename);
 
@@ -730,6 +760,8 @@ int main(int argc, char **argv)
     }
 
     buf_free(&tagbuf);
+
+    libcyrus_run_delayed();
 
     shut_down(exit_rc);
 }

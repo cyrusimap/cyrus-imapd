@@ -1,0 +1,39 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.2.8 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.8/cyrus-imapd-3.2.8.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.8/cyrus-imapd-3.2.8.tar.gz.sig
+
+.. _relnotes-3.2.8-changes:
+
+Changes since 3.2.7
+===================
+
+Security fixes:
+---------------
+
+* Fixed CVE-2021-33582_: Certain user inputs are used as hash table keys during
+  processing.  A poorly chosen string hashing algorithm meant that the user
+  could control which bucket their data was stored in, allowing a malicious
+  user to direct many inputs to a single bucket.  Each subsequent insertion to
+  the same bucket requires a strcmp of every other entry in it.  At tens of
+  thousands of entries, each new insertion could keep the CPU busy in a strcmp
+  loop for minutes.
+
+  The string hashing algorithm has been replaced with a better one, and now
+  also uses a random seed per hash table, so malicious inputs cannot be
+  precomputed.
+
+  Discovered by Matthew Horsfall, Fastmail
+
+.. _CVE-2021-33582: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-33582
+
+Bug fixes
+---------
+
+* Fixed: missing CY namespace in some DAV responses

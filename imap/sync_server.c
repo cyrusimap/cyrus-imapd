@@ -82,6 +82,7 @@
 #include "global.h"
 #include "hash.h"
 #include "imparse.h"
+#include "imap_proxy.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
@@ -132,6 +133,7 @@ static struct protstream *sync_in = NULL;
 static int sync_logfd = -1;
 static int sync_starttls_done = 0;
 static int sync_compress_done = 0;
+static int sync_sieve_mailbox_enabled = 0;
 
 static int opt_force = 0;
 
@@ -152,6 +154,7 @@ static void cmd_restore(struct dlist *kin,
 
 static void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
+void shut_down_via_signal(int code) __attribute__ ((noreturn));
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
                       const char *init_resp, const char *resp_prefix,
@@ -220,6 +223,8 @@ static void sync_reset(void)
     sync_starttls_done = 0;
     sync_compress_done = 0;
 
+    sync_sieve_mailbox_enabled = 0;
+
     saslprops_reset(&saslprops);
 }
 
@@ -237,7 +242,7 @@ int service_init(int argc __attribute__((unused)),
     setproctitle_init(argc, argv, envp);
 
     /* set signal handlers */
-    signals_set_shutdown(&shut_down);
+    signals_set_shutdown(&shut_down_via_signal);
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
@@ -291,6 +296,8 @@ static void dobanner(void)
             prot_printf(sync_out, "* COMPRESS DEFLATE\r\n");
         }
 #endif
+
+        prot_printf(sync_out, "* SIEVE-MAILBOX\r\n");
     }
 
     prot_printf(sync_out,
@@ -396,6 +403,8 @@ void shut_down(int code)
 {
     in_shutdown = 1;
 
+    libcyrus_run_delayed();
+
     proc_cleanup();
 
     seen_done();
@@ -422,6 +431,15 @@ void shut_down(int code)
     cyrus_done();
 
     exit(code);
+}
+
+void shut_down_via_signal(int code __attribute__((unused)))
+{
+    if (sync_out) {
+        prot_puts(sync_out, "BYE shutting down\r\n");
+    }
+
+    shut_down(0);
 }
 
 EXPORTED void fatal(const char* s, int code)
@@ -489,6 +507,8 @@ static void cmdloop(void)
 
     for (;;) {
         prot_flush(sync_out);
+
+        libcyrus_run_delayed();
 
         /* Parse command name */
         if ((c = getword(sync_in, &cmd)) == EOF)
@@ -962,10 +982,19 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        0 /* flags */
     };
 
+    if (sync_sieve_mailbox_enabled) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
+
+    if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
+        sync_sieve_mailbox_enabled = 1;
+    }
+
     sync_checkpoint(sync_in);
     prot_printf(sync_out, "%s\r\n", resp);
 }
@@ -978,8 +1007,12 @@ static void cmd_get(struct dlist *kin)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        0 /* flags */
     };
+
+    if (sync_sieve_mailbox_enabled) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
 
     const char *resp = sync_get(kin, &sync_state);
     prot_printf(sync_out, "%s\r\n", resp);
@@ -993,8 +1026,12 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        0 /* flags */
     };
+
+    if (sync_sieve_mailbox_enabled) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
     sync_checkpoint(sync_in);

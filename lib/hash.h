@@ -3,10 +3,11 @@
 #define HASH__H
 
 #include <stddef.h>           /* For size_t     */
+#include <stdint.h>
 #include "mpool.h"
 #include "strarray.h"
 
-#define HASH_TABLE_INITIALIZER {0, NULL, NULL}
+#define HASH_TABLE_INITIALIZER {0, 0, 0, 0, NULL, NULL}
 
 /*
 ** A hash table consists of an array of these buckets.  Each bucket
@@ -32,6 +33,9 @@ typedef struct bucket {
 
 typedef struct hash_table {
     size_t size;
+    size_t count;
+    uint32_t seed;
+    int hash_load_warned_at;
     bucket **table;
     struct mpool *pool;
 } hash_table;

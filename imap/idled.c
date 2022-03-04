@@ -135,7 +135,7 @@ static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
     switch (msg->which) {
     case IDLE_MSG_INIT:
         if (verbose || debugmode)
-            syslog(LOG_DEBUG, "imapd[%s]: IDLE_MSG_INIT '%s'\n",
+            syslog(LOG_DEBUG, "imapd[%s]: IDLE_MSG_INIT '%s'",
                    idle_id_from_addr(remote), msg->mboxname);
 
         /* add an ientry to list of those idling on mboxname */
@@ -149,7 +149,7 @@ static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
 
     case IDLE_MSG_NOTIFY:
         if (verbose || debugmode)
-            syslog(LOG_DEBUG, "IDLE_MSG_NOTIFY '%s'\n", msg->mboxname);
+            syslog(LOG_DEBUG, "IDLE_MSG_NOTIFY '%s'", msg->mboxname);
 
         /* send a message to all clients idling on mboxname */
         t = (struct ientry *) hash_lookup(msg->mboxname, &itable);
@@ -160,13 +160,13 @@ static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
                  * period, so it probably died.  Remove it from the list.
                  */
                 if (verbose || debugmode)
-                    syslog(LOG_DEBUG, "    TIMEOUT %s\n", idle_id_from_addr(&t->remote));
+                    syslog(LOG_DEBUG, "    TIMEOUT %s", idle_id_from_addr(&t->remote));
 
                 remove_ientry(msg->mboxname, &t->remote);
             }
             else { /* signal process to update */
                 if (verbose || debugmode)
-                    syslog(LOG_DEBUG, "    fwd NOTIFY %s\n", idle_id_from_addr(&t->remote));
+                    syslog(LOG_DEBUG, "    fwd NOTIFY %s", idle_id_from_addr(&t->remote));
 
                 /* forward the received msg onto our clients */
                 r = idle_send(&t->remote, msg);
@@ -182,7 +182,7 @@ static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
                                         idle_id_from_addr(&t->remote),
                                         msg->mboxname, error_message(r));
                     if (verbose || debugmode)
-                        syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
+                        syslog(LOG_DEBUG, "    forgetting %s", idle_id_from_addr(&t->remote));
                     remove_ientry(msg->mboxname, &t->remote);
                 }
             }
@@ -191,7 +191,7 @@ static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
 
     case IDLE_MSG_DONE:
         if (verbose || debugmode)
-            syslog(LOG_DEBUG, "imapd[%s]: IDLE_MSG_DONE '%s'\n",
+            syslog(LOG_DEBUG, "imapd[%s]: IDLE_MSG_DONE '%s'",
                    idle_id_from_addr(remote), msg->mboxname);
 
         /* remove client from list of those idling on mboxname */
@@ -226,7 +226,7 @@ static void send_alert(const char *key,
 
         /* signal process to check ALERTs */
         if (verbose || debugmode)
-            syslog(LOG_DEBUG, "    ALERT %s\n", idle_id_from_addr(&t->remote));
+            syslog(LOG_DEBUG, "    ALERT %s", idle_id_from_addr(&t->remote));
 
         r = idle_send(&t->remote, &msg);
         if (r) {
@@ -241,7 +241,7 @@ static void send_alert(const char *key,
                                 idle_id_from_addr(&t->remote),
                                 msg.mboxname, error_message(r));
             if (verbose || debugmode)
-                syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
+                syslog(LOG_DEBUG, "    forgetting %s", idle_id_from_addr(&t->remote));
             remove_ientry(key, &t->remote);
         }
     }
@@ -338,7 +338,7 @@ int main(int argc, char **argv)
         sig = signals_poll();
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
             /* XXX maybe don't restart if we have clients? */
-            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully\n");
+            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully");
             shut_down(0);
         }
 
@@ -346,7 +346,7 @@ int main(int argc, char **argv)
         if (shutdown_file(NULL, 0)) {
             /* signal all processes to shutdown */
             if (verbose || debugmode)
-                syslog(LOG_DEBUG, "Detected shutdown file\n");
+                syslog(LOG_DEBUG, "Detected shutdown file");
             shut_down(1);
         }
 

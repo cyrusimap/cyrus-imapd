@@ -70,7 +70,8 @@
 #include "prometheus.h"
 #include "prot.h"
 #include "times.h"
-#include "sieve/sieve_interface.h"
+#include "sieve_db.h"
+#include "sievedir.h"
 #include "smtpclient.h"
 #include "strhash.h"
 #include "tok.h"
@@ -193,9 +194,7 @@ static int getmailboxidexists(void *sc, const char *extname)
     char *intname = mboxlist_find_uniqueid(extname, userid, sd->authstate);
     int exists = 0;
 
-    if (intname &&
-        !mboxname_isdeletedmailbox(intname, NULL) &&
-        !mboxname_isnonimapmailbox(intname, 0)) {
+    if (intname && !mboxname_isnondeliverymailbox(intname, 0)) {
         exists = 1;
     }
 
@@ -648,11 +647,12 @@ static char *sieve_srs_forward(char *return_path __attribute__((unused)))
 #ifdef WITH_DAV
 #include <libxml/uri.h>
 
-static char *get_addrbook_mboxname(const char *list, const char *userid)
+static mbentry_t *get_addrbook_mbentry(const char *list, const char *userid)
 {
     const char *addrbook_urn_full = "urn:ietf:params:sieve:addrbook:";
     const char *addrbook_urn_abbrev = ":addrbook:";
     char *abook = NULL, *mboxname = NULL;
+    mbentry_t *mbentry = NULL;
 
     /* percent-decode list URI */
     char *uri = xmlURIUnescapeString(list, strlen(list), NULL);
@@ -676,22 +676,22 @@ static char *get_addrbook_mboxname(const char *list, const char *userid)
 
     /* construct mailbox name of addressbook */
     mboxname = carddav_mboxname(userid, abook);
+    free(abook);
 
     /* see if addressbook mailbox exists */
-    if (mboxlist_lookup(mboxname, NULL, NULL) == 0) return mboxname;
-    else {
-        free(mboxname);
-        return NULL;
-    }
+    mboxlist_lookup(mboxname, &mbentry, NULL);
+    free(mboxname);
+
+    return mbentry;
 }
 
 static int listvalidator(void *ic, const char *list)
 {
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
-    char *abook = get_addrbook_mboxname(list, ctx->userid);
-    int ret = abook ? SIEVE_OK : SIEVE_FAIL;
+    mbentry_t *mbentry = get_addrbook_mbentry(list, ctx->userid);
+    int ret = mbentry ? SIEVE_OK : SIEVE_FAIL;
 
-    free(abook);
+    mboxlist_entry_free(&mbentry);
 
     return ret;
 }
@@ -700,10 +700,10 @@ static int listcompare(const char *text, size_t tlen __attribute__((unused)),
                        const char *list, strarray_t *match_vars, void *rock)
 {
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) rock;
-    char *abook = get_addrbook_mboxname(list, ctx->userid);
+    mbentry_t *mbentry = get_addrbook_mbentry(list, ctx->userid);
     int ret = 0;
 
-    if (!abook) return 0;
+    if (!mbentry) return 0;
 
     if (!ctx->carddavdb) {
         /* open user's CardDAV DB */
@@ -712,7 +712,7 @@ static int listcompare(const char *text, size_t tlen __attribute__((unused)),
     if (ctx->carddavdb) {
         /* search for email address in addressbook */
         strarray_t *uids =
-            carddav_getemail2details(ctx->carddavdb, text, abook, NULL);
+            carddav_getemail2details(ctx->carddavdb, text, mbentry, NULL);
         ret = strarray_size(uids);
 
         strarray_free(uids);
@@ -723,7 +723,7 @@ static int listcompare(const char *text, size_t tlen __attribute__((unused)),
         strarray_add(match_vars, text);
     }
 
-    free(abook);
+    mboxlist_entry_free(&mbentry);
 
     return ret;
 }
@@ -770,19 +770,19 @@ static int send_forward(sieve_redirect_context_t *rc,
 
     if (rc->is_ext_list) {
 #ifdef WITH_DAV
-        char *abook = get_addrbook_mboxname(rc->addr, ctx->userid);
+        mbentry_t *mbentry = get_addrbook_mbentry(rc->addr, ctx->userid);
 
-        if (abook && !ctx->carddavdb) {
+        if (mbentry && !ctx->carddavdb) {
             /* open user's CardDAV DB */
             ctx->carddavdb = carddav_open_userid(ctx->userid);
         }
-        if (!(abook && ctx->carddavdb)) {
+        if (!(mbentry && ctx->carddavdb)) {
             r = SIEVE_FAIL;
-            free(abook);
+            mboxlist_entry_free(&mbentry);
             goto done;
         }
-        carddav_foreach(ctx->carddavdb, abook, &list_addresses, &sm_env);
-        free(abook);
+        carddav_foreach(ctx->carddavdb, mbentry, &list_addresses, &sm_env);
+        mboxlist_entry_free(&mbentry);
 #endif
     }
     else {
@@ -1089,9 +1089,7 @@ static int sieve_fileinto(void *ac,
     else {
         if (fc->mailboxid) {
             intname = mboxlist_find_uniqueid(fc->mailboxid, userid, sd->authstate);
-            if (intname &&
-                (mboxname_isdeletedmailbox(intname, NULL) ||
-                 mboxname_isnonimapmailbox(intname, 0))) {
+            if (intname && mboxname_isnondeliverymailbox(intname, 0)) {
                 free(intname);
                 intname = NULL;
             }
@@ -1179,7 +1177,7 @@ done:
     return ret;
 }
 
-#if defined(HAVE_JANSSON) && defined(HAVE_ICAL)
+#ifdef HAVE_ICAL
 #include <jansson.h>
 #include "ical_support.h"
 
@@ -1392,7 +1390,276 @@ done:
 
     return ret;
 }
-#endif /* HAVE_JANSSON && HAVE_ICAL */
+
+#ifdef WITH_DAV
+#include "caldav_util.h"
+#include "http_caldav_sched.h"
+
+char *httpd_userid = NULL;  // due to caldav_util.h including httpd.h
+struct namespace_t namespace_calendar = { .allow = ALLOW_USERDATA | ALLOW_CAL_NOTZ };
+
+static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
+                      const char **errmsg __attribute__((unused)))
+{
+    sieve_imip_context_t *imip = (sieve_imip_context_t *) ac;
+    struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
+    script_data_t *sd = (script_data_t *) sc;
+    deliver_data_t *mydata = (deliver_data_t *) mc;
+    message_data_t *m = mydata->m;
+    icalcomponent *itip = NULL, *comp;
+    icalcomponent_kind kind = 0;
+    icalproperty_method meth = 0;
+    icalproperty *prop = NULL;
+    const char *uid = NULL, *organizer = NULL;
+    const char *originator = NULL, *recipient = NULL;
+    strarray_t sched_addresses = STRARRAY_INITIALIZER;
+    unsigned sched_flags = 0;
+    int ret = 0;
+
+    prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
+
+    buf_setcstr(&imip->outcome, "no_action");
+    buf_reset(&imip->errstr);
+
+    if (caldav_create_defaultcalendars(ctx->userid,
+                                       &lmtpd_namespace, sd->authstate, NULL)) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "could not autoprovision calendars");
+        goto done;
+    }
+
+    /* parse the message body if we haven't already */
+    if (!mydata->content->body &&
+        message_parse_file_buf(m->f, &mydata->content->map,
+                               &mydata->content->body, NULL)) {
+        buf_setcstr(&imip->errstr, "unable to parse iMIP message");
+        goto done;
+    }
+
+    /* XXX currently struct bodypart as defined in message.h is the same as
+       sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
+    struct bodypart **parts = NULL;
+    const char *content_types[] = { "text/calendar", NULL };
+    message_fetch_part(mydata->content, content_types, &parts);
+    if (parts && parts[0]) {
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_init_ro_cstr(&buf, parts[0]->decoded_body);
+        itip = ical_string_as_icalcomponent(&buf);
+        buf_free(&buf);
+    }
+
+    if (!itip) {
+        buf_setcstr(&imip->errstr, "unable to find & parse text/calendar part");
+        goto done;
+    }
+
+    meth = icalcomponent_get_method(itip);
+    if (meth == ICAL_METHOD_NONE) {
+        buf_setcstr(&imip->errstr, "missing METHOD property");
+        goto done;
+    }
+
+    icalrestriction_check(itip);
+    if (get_icalcomponent_errstr(itip)) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "invalid iCalendar data");
+        goto done;
+    }
+
+    comp = icalcomponent_get_first_real_component(itip);
+    if (!comp) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "no component to schedule");
+        goto done;
+    }
+
+    kind = icalcomponent_isa(comp);
+    uid = icalcomponent_get_uid(comp);
+    if (!uid) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "missing UID property");
+        goto done;
+    }
+
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (!prop) {
+        buf_setcstr(&imip->outcome, "error");
+        buf_setcstr(&imip->errstr, "missing ORGANIZER property");
+        goto done;
+    }
+    organizer = icalproperty_get_organizer(prop);
+
+    if (strchr(ctx->userid, '@')) {
+        strarray_add(&sched_addresses, ctx->userid);
+    }
+    else {
+        const char *domains;
+        char *domain;
+        tok_t tok;
+
+        domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
+        if (!domains) domains = config_defdomain;
+        if (!domains) domains = config_servername;
+
+        tok_init(&tok, domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        while ((domain = tok_next(&tok))) {
+            strarray_appendm(&sched_addresses,
+                             strconcat(ctx->userid, "@", domain, NULL));
+        }
+        tok_fini(&tok);
+    }
+
+    switch (kind) {
+    case ICAL_VEVENT_COMPONENT:
+    case ICAL_VTODO_COMPONENT:
+    case ICAL_VPOLL_COMPONENT:
+        switch (meth) {
+        case ICAL_METHOD_POLLSTATUS:
+            if (kind != ICAL_VPOLL_COMPONENT) goto unsupported_method;
+
+            GCC_FALLTHROUGH
+
+        case ICAL_METHOD_CANCEL:
+            if (imip->invites_only) {
+                buf_setcstr(&imip->errstr, "configured to NOT process updates");
+                goto done;
+            }
+
+            if (imip->delete_canceled) sched_flags |= SCHEDFLAG_DELETE_CANCELED;
+
+            GCC_FALLTHROUGH
+
+        case ICAL_METHOD_REQUEST:
+            originator = organizer;
+
+#if 0
+            /* Find invitee that matches owner of script */
+            for (prop = icalcomponent_get_first_invitee(comp); prop;
+                 prop = icalcomponent_get_next_invitee(comp)) {
+                const char *invitee = icalproperty_get_invitee(prop);
+                if (!strncasecmp(invitee, "mailto:", 7)) invitee += 7;
+                int n = strarray_find(&sched_addresses, invitee, 0);
+                if (n >= 0) {
+                    recipient = strarray_nth(&sched_addresses, n);
+                    break;
+                }
+            }
+#else
+            /* XXX  For now, assume an invitee matches owner of script */
+            recipient = strarray_nth(&sched_addresses, 0);
+#endif
+            if (!recipient) {
+                buf_setcstr(&imip->outcome, "error");
+                buf_setcstr(&imip->errstr,
+                            "could not find matching ATTENDEE property");
+                goto done;
+            }
+
+            if (imip->updates_only) sched_flags |= SCHEDFLAG_UPDATES_ONLY;
+            else if (imip->invites_only) sched_flags |= SCHEDFLAG_INVITES_ONLY;
+            break;
+
+        case ICAL_METHOD_REPLY:
+            if (imip->invites_only) {
+                buf_setcstr(&imip->errstr, "configured to NOT process replies");
+                goto done;
+            }
+
+#if 0
+            /* TODO: Organizer better match owner of script */
+            recipient = organizer;
+#else
+            /* XXX  For now, assume organizer matches owner of script */
+            recipient = strarray_nth(&sched_addresses, 0);
+#endif
+            prop = icalcomponent_get_first_invitee(comp);
+            if (!prop) {
+                buf_setcstr(&imip->outcome, "error");
+                buf_setcstr(&imip->errstr, "missing ATTENDEE property");
+                goto done;
+            }
+            originator = icalproperty_get_invitee(prop);
+
+            sched_flags |= SCHEDFLAG_IS_REPLY;
+            break;
+
+        unsupported_method:
+        default:
+            /* Unsupported method */
+            buf_setcstr(&imip->outcome, "error");
+            buf_printf(&imip->errstr, "unsupported method: '%s'",
+                       icalproperty_method_to_string(meth));
+            goto done;
+        }
+        break;
+
+    default:
+        /* Unsupported component */
+        buf_setcstr(&imip->outcome, "error");
+        buf_printf(&imip->errstr, "unsupported component: '%s'",
+                   icalcomponent_kind_to_string(kind));
+        goto done;
+    }
+
+    struct sched_data sched_data =
+        { sched_flags, itip, NULL, NULL,
+          ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, imip->calendarid, NULL };
+    struct caldav_sched_param sched_param = {
+        (char *) ctx->userid, NULL, 0, 0, 1, NULL
+    };
+
+    int r = sched_deliver_local(ctx->userid, originator, recipient,
+                                mydata->content->body->from,
+                                &sched_param, &sched_data,
+                                (struct auth_state *) sd->authstate,
+                                NULL, NULL);
+    switch (r) {
+    case SCHED_DELIVER_ERROR:
+        buf_setcstr(&imip->outcome, "error");
+        buf_printf(&imip->errstr, "failed to deliver iMIP message: %s",
+                   sched_data.status ? sched_data.status : "");
+        break;
+    case SCHED_DELIVER_NOACTION:
+        buf_setcstr(&imip->outcome, "no_action");
+        break;
+    case SCHED_DELIVER_ADDED:
+        buf_setcstr(&imip->outcome, "added");
+        break;
+    default:
+        buf_setcstr(&imip->outcome, "updated");
+        break;
+    }
+
+    syslog(LOG_INFO, "sieve iMIP processed: %s: %s",
+           m->id ? m->id : "<nomsgid>", buf_cstring(&imip->errstr));
+    if (config_auditlog)
+        syslog(LOG_NOTICE,
+               "auditlog: processed iMIP sessionid=<%s> message-id=%s: %s",
+               session_id(), m->id ? m->id : "<nomsgid>",
+               buf_cstring(&imip->errstr));
+
+  done:
+    syslog(LOG_DEBUG, "sieve iMIP: %s: %s (%s)",
+           m->id ? m->id : "<nomsgid>",
+           buf_cstring(&imip->outcome), buf_cstring(&imip->errstr));
+
+    strarray_fini(&sched_addresses);
+    if (parts) {
+        struct bodypart **part;
+
+        for (part = parts; *part; part++) {
+            free(*part);
+        }
+        free(parts);
+
+        if (itip) icalcomponent_free(itip);
+    }
+
+    return ret;
+}
+#endif /* WITH_DAV */
+#endif /* HAVE_ICAL */
 
 static int sieve_keep(void *ac,
                       void *ic __attribute__((unused)),
@@ -1584,9 +1851,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
     if (fcc->mailboxid) {
         intname = mboxlist_find_uniqueid(fcc->mailboxid, userid,
                                          sdata->authstate);
-        if (intname &&
-            (mboxname_isdeletedmailbox(intname, NULL) ||
-             mboxname_isnonimapmailbox(intname, 0))) {
+        if (intname && mboxname_isnondeliverymailbox(intname, 0)) {
             free(intname);
             intname = NULL;
         }
@@ -1773,7 +2038,7 @@ static int sieve_duplicate_check(void *dc,
 {
     sieve_duplicate_context_t *dtc = (sieve_duplicate_context_t *) dc;
     script_data_t *sd = (script_data_t *) sc;
-    time_t t, now = time(NULL);;
+    time_t t, now = time(NULL);
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
 
     dkey.id = dtc->id;
@@ -1820,8 +2085,9 @@ static sieve_duplicate_t duplicate = {
 #ifdef WITH_JMAP
 #include "jmap_mail_query.h"
 
-static int jmapquery(void *sc, void *mc, const char *json)
+static int jmapquery(void *ic, void *sc, void *mc, const char *json)
 {
+    struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *m = ((deliver_data_t *) mc)->m;
     struct message_content *content = ((deliver_data_t *) mc)->content;
@@ -1845,12 +2111,13 @@ static int jmapquery(void *sc, void *mc, const char *json)
             }
         }
         /* build the query filter */
-        content->matchmime = jmap_email_matchmime_init(&content->map, &err);
+        content->matchmime = jmap_email_matchmime_new(&content->map, &err);
     }
 
     /* Run query */
     if (content->matchmime && !err)
-        matches = jmap_email_matchmime(content->matchmime, jfilter, userid, time(NULL), &err);
+        matches = jmap_email_matchmime(content->matchmime, jfilter, ctx->cstate, userid,
+                sd->authstate, sd->ns, time(NULL), &err);
 
     if (err) {
         const char *type = json_string_value(json_object_get(err, "type"));
@@ -1958,7 +2225,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 
     res = sieve_register_vacation(interp, &vacation);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_vacation() returns %d", res);
         fatal("sieve_register_vacation()", EX_SOFTWARE);
     }
 
@@ -1966,7 +2233,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
         config_getduration(IMAPOPT_SIEVE_DUPLICATE_MAX_EXPIRATION, 's');
     res = sieve_register_duplicate(interp, &duplicate);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_duplicate() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_duplicate() returns %d", res);
         fatal("sieve_register_duplicate()", EX_SOFTWARE);
     }
 
@@ -1976,11 +2243,14 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interp, &jmapquery);
 #endif
-#if defined(HAVE_JANSSON) && defined(HAVE_ICAL)
+#ifdef HAVE_ICAL
     /* need timezones for sieve snooze */
     ical_support_init();
     sieve_register_snooze(interp, &sieve_snooze);
+#ifdef WITH_DAV
+    sieve_register_imip(interp, &sieve_imip);
 #endif
+#endif /* HAVE_ICAL */
     sieve_register_parse_error(interp, &sieve_parse_error_handler);
     sieve_register_execute_error(interp, &sieve_execute_error_handler);
 
@@ -1990,10 +2260,6 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 static int sieve_find_script(const char *user, const char *domain,
                              const char *script, char *fname, size_t size)
 {
-    const char *bc_fname = fname;
-    char *freeme = NULL;
-    char *ext = NULL;
-
     if (!user && !script) {
         return -1;
     }
@@ -2011,32 +2277,30 @@ static int sieve_find_script(const char *user, const char *domain,
 
         /* check ~USERNAME/.sieve */
         snprintf(fname, size, "%s/%s", pent->pw_dir, script ? script : ".sieve");
-    } else { /* look in sieve_dir */
-        struct buf buf = BUF_INITIALIZER;
 
-        if (user) buf_setcstr(&buf, user);
-        if (domain) buf_printf(&buf, "@%s", domain);
-        
-        size_t len = strlcpy(fname, user_sieve_path(buf_cstring(&buf)), size);
-        buf_free(&buf);
-
-        if (!script) { /* default script */
-            strlcat(fname, "/defaultbc", size);
-            bc_fname = freeme = sieve_getdefaultbcfname(fname);
-
-            if (!bc_fname) return 0;  /* no default */
-        }
-        else {
-            snprintf(fname+len, size-len, "/%s.bc", script);
-        }
+        return 0;
     }
 
-    /* don't do this for ~username ones */
-    ext = strrchr(bc_fname, '.');
-    if (ext && !strcmp(ext, ".bc"))
-        sieve_rebuild(NULL, bc_fname, 0, NULL);
+    /* look in sieve_dir */
+    struct buf buf = BUF_INITIALIZER;
 
-    free(freeme);
+    if (user) buf_setcstr(&buf, user);
+    if (domain) buf_printf(&buf, "@%s", domain);
+
+    const char *userid = buf_cstring(&buf);
+    const char *sievedir = user_sieve_path(userid);
+
+    if (!script) { /* default script */
+        script = sievedir_get_active(sievedir);
+
+        if (!script) return 0;  /* no default */
+    }
+
+    snprintf(fname, size, "%s/%s.bc", sievedir, script);
+
+    sieve_script_rebuild(userid, sievedir, script);
+
+    buf_free(&buf);
 
     return 0;
 }
@@ -2151,8 +2415,13 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     r = mboxlist_lookup(internalname, 0, 0);
     if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
 
-    r = mboxlist_createmailbox(internalname, 0, NULL,
-                               0, userid, auth_state, 0, 0, 0, 1, NULL);
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    mbentry.name = (char *) internalname;
+    mbentry.mbtype = MBTYPE_EMAIL;
+
+    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                               0/*isadmin*/, userid, auth_state,
+                               MBOXLIST_CREATE_NOTIFY, NULL/*mailboxptr*/);
     if (r) {
         syslog(LOG_ERR, "autosievefolder: User %s, folder %s creation failed. %s",
                userid, internalname, error_message(r));

@@ -194,7 +194,7 @@ CMU_GUESS_RUNPATH_SWITCH
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdarg.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror posix_fadvise strsep memmem memrchr)
-AC_CHECK_FUNCS(strlcat strlcpy strnchr getgrouplist fmemopen pselect futimens futimes)
+AC_CHECK_FUNCS(strlcat strlcpy strnchr getgrouplist fmemopen pselect futimens futimes getline)
 AC_HEADER_DIRENT
 
 dnl check whether to use getpassphrase or getpass
@@ -1502,12 +1502,12 @@ AC_ARG_WITH([chardet],
     [],
     [with_chardet=yes])
 AS_IF([test "x$with_chardet" = "xyes"],
-	[ PKG_CHECK_MODULES([LIBCHARDET], [chardet],
+	[ PKG_CHECK_MODULES([LIBCHARDET], [chardet >= 1.0.5],
 		[ AC_DEFINE(HAVE_LIBCHARDET, [], [Build with chardet library support])
 		  with_chardet=yes ],
 		with_chardet=no)])
 AS_IF([test "x$with_chardet" != "xyes"],
-      [AC_MSG_NOTICE([JMAP will not have character set detection support.  Consider installing chardet])])
+      [AC_MSG_NOTICE([JMAP will not have character set detection support.  Consider installing chardet >= 1.0.5])])
 AC_SUBST([LIBCHARDET_LIBS])
 AC_SUBST([LIBCHARDET_CFLAGS])
 AM_CONDITIONAL([USE_LIBCHARDET], [test "x$with_chardet" = xyes])
@@ -1527,6 +1527,22 @@ AS_IF([test "x$with_cld2" = "xyes"],
 AC_SUBST([CLD2_LIBS])
 AC_SUBST([CLD2_CFLAGS])
 AM_CONDITIONAL([HAVE_CLD2], [test "x$with_cld2" = xyes])
+
+dnl
+dnl Check for guesstz library
+dnl
+AC_ARG_WITH([guesstz],
+       [AS_HELP_STRING([--without-guesstz], [ignore presence of guesstz library and disable it])],
+    [],
+    [with_guesstz=yes])
+AS_IF([test "x$with_guesstz" = "xyes"],
+       [ PKG_CHECK_MODULES([GUESSTZ], [guesstz],
+               [ AC_DEFINE(HAVE_GUESSTZ, [], [Build with guesstz library support])
+                 with_guesstz=yes ],
+          with_guesstz=no)])
+AC_SUBST([GUESSTZ_LIBS])
+AC_SUBST([GUESSTZ_CFLAGS])
+AM_CONDITIONAL([HAVE_GUESSTZ], [test "x$with_guesstz" = xyes])
 
 dnl
 dnl Set pidfile location
@@ -1638,6 +1654,16 @@ dnl
                 AC_DEFINE(HAVE_NEW_CLONE_API,[],
                         [Do we have support for new clone API?]))
 
+        dnl ical_set_invalid_rrule_handling_setting, was added in libical 3.0.9
+        AC_CHECK_LIB(ical, ical_set_invalid_rrule_handling_setting,
+                AC_DEFINE(HAVE_INVALID_RRULE_HANDLING,[],
+                        [Do we have support for controlling invalid RRULE handline?]))
+
+        dnl icalcomponent_get_component_name will be new in libical 3.1.0
+        AC_CHECK_LIB(ical, icalcomponent_get_component_name,
+                AC_DEFINE(HAVE_GET_COMPONENT_NAME,[],
+                        [Do we have support for fetching X- component names?]))
+
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
 dnl                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
@@ -1648,11 +1674,9 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
 
         AC_ARG_WITH(nghttp2, [AS_HELP_STRING([--without-nghttp2], [disable HTTP/2 support (check)])],,[with_nghttp2="check"])
         if test "x$with_nghttp2" = "xyes" -o "x$with_nghttp2" = "xcheck"; then
-                PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.5], [
+                PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.34.0], [
                         AC_DEFINE(HAVE_NGHTTP2,[],
                                 [Build HTTP/2 support into httpd?])
-                        AC_CHECK_DECLS([NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL],
-                                [], [], [[#include <nghttp2/nghttp2.h>]])
                         with_nghttp2=yes
                 ], [
                         if test "x$with_nghttp2" = "xyes"; then
@@ -1990,7 +2014,6 @@ dnl the source directory)
     AC_CONFIG_LINKS([perl/imap/Cyrus/ImapClone.pm:perl/imap/Cyrus/ImapClone.pm])
     AC_CONFIG_LINKS([perl/imap/Cyrus/SyncProto.pm:perl/imap/Cyrus/SyncProto.pm])
     AC_CONFIG_LINKS([perl/imap/IMAP/Shell.pm:perl/imap/IMAP/Shell.pm])
-    AC_CONFIG_LINKS([perl/imap/IMAP/IMSP.pm:perl/imap/IMAP/IMSP.pm])
     AC_CONFIG_LINKS([perl/imap/IMAP/Admin.pm:perl/imap/IMAP/Admin.pm])
     AC_CONFIG_LINKS([perl/imap/IMAP.pm:perl/imap/IMAP.pm])
     AC_CONFIG_FILES([perl/imap/MANIFEST])
@@ -2225,10 +2248,17 @@ AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                        have_ppvr=no
                      ])
 
-AX_PYTHON_MODULE([git], [], [python])
+AX_PYTHON_MODULE([git], [], [python2])
 AS_CASE([$HAVE_PYMOD_GIT],
         [yes],  [],
-        [*],    [AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])])
+        [*],    [
+    unset PYTHON # work around AX_PYTHON_MODULE not cleaning up
+    AX_PYTHON_MODULE([git], [], [python3])
+    AS_CASE([$HAVE_PYMOD_GIT],
+            [yes],  [],
+            [*],    [
+         AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])])
+])
 
 AM_CONDITIONAL([HAVE_SPHINX_BUILD],
     [ test -n "$SPHINX_BUILD" -a x"$have_ppvr" = xyes -a x"$HAVE_PYMOD_GIT" = xyes])
@@ -2492,6 +2522,7 @@ External dependencies:
    icu4c:              $with_icu4c
    chardet:            $with_chardet
    cld2:               $with_cld2
+   guesstz:            $with_guesstz
 
 Database support:
    mysql:              $with_mysql

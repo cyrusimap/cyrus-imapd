@@ -98,7 +98,7 @@ struct namespace_t namespace_admin = {
     http_allow_noauth_get, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    admin_init, NULL, NULL, NULL, NULL, NULL,
+    admin_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */

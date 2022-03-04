@@ -748,30 +748,16 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
-        if (uid) {
-            const char *path =
-                mboxname_datapath(mailbox->part, mailbox->name,
-                                  mailbox->uniqueid, uid);
-
-            printf("\n\nProcessing UID %u:\n", uid);
+        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
+            if (uid && record->uid != uid) continue;
+            printf("\n\nProcessing UID %u:\n", record->uid);
+            const char *path = mailbox_record_fname(mailbox, record);
             r = process_message(path, exe, i, &sd);
         }
-        else {
-            struct mailbox_iter *iter =
-                mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-            const message_t *msg;
-            while ((msg = mailbox_iter_step(iter))) {
-                const struct index_record *record = msg_record(msg);
-                const char *path =
-                    mboxname_datapath(mailbox->part, mailbox->name,
-                                      mailbox->uniqueid, record->uid);
-
-                printf("\n\nProcessing UID %u:\n", record->uid);
-                r = process_message(path, exe, i, &sd);
-            }
-
-            mailbox_iter_done(&iter);
-        }
+        mailbox_iter_done(&iter);
 
         mailbox_close(&mailbox);
     }

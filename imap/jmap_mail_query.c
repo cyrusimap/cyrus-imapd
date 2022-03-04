@@ -106,11 +106,15 @@ static int _email_threadkeyword_is_valid(const char *keyword)
 #include "times.h"
 
 HIDDEN void jmap_email_contactfilter_init(const char *accountid,
+                                          const struct auth_state *authstate,
+                                          const struct namespace *namespace,
                                           const char *addressbookid,
                                           struct email_contactfilter *cfilter)
 {
     memset(cfilter, 0, sizeof(struct email_contactfilter));
     cfilter->accountid = accountid;
+    cfilter->authstate = authstate;
+    cfilter->namespace = namespace;
     if (addressbookid) {
         cfilter->addrbook = carddav_mboxname(accountid, addressbookid);
     }
@@ -126,33 +130,37 @@ HIDDEN void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter)
 }
 
 
-static int _get_sharedaddressbook_cb(const mbentry_t *mbentry, void *rock)
+static int _get_sharedaddressbook_cb(struct findall_data *data, void *rock)
 {
-    mbname_t **mbnamep = rock;
-    if (!mbentry) return 0;
-    if (!(mbentry->mbtype & MBTYPE_ADDRESSBOOK)) return 0;
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
-    if (!strcmpsafe(strarray_nth(mbname_boxes(mbname), -1), "Shared")) {
-        *mbnamep = mbname;
-        return CYRUSDB_DONE;
-    }
-    mbname_free(&mbname);
-    return 0;
+    mbentry_t **mbentryp = rock;
+    if (!data || !data->mbentry) return 0;
+    *mbentryp = mboxlist_entry_copy(data->mbentry);
+    return CYRUSDB_DONE;
 }
 
-
-static mbname_t *_get_sharedaddressbookuser(const char *userid)
+static mbentry_t *_get_sharedaddressbook(const char *userid,
+                                         const struct auth_state *authstate,
+                                         const struct namespace *namespace)
 {
-    mbname_t *res = NULL;
-    int flags = MBOXTREE_PLUS_RACL|MBOXTREE_SKIP_ROOT|MBOXTREE_SKIP_CHILDREN;
-    // XXX - do we need to pass req->authstate right through??
-    int r = mboxlist_usermboxtree(userid, NULL, _get_sharedaddressbook_cb, &res, flags);
-    if (r == CYRUSDB_DONE)
-        return res;
-    mbname_free(&res);
-    return NULL;
-}
+    mbentry_t *res = NULL;
 
+    strarray_t patterns = STRARRAY_INITIALIZER;
+    struct buf pattern = BUF_INITIALIZER;
+    buf_setcstr(&pattern, "user");
+    buf_putc(&pattern, namespace->hier_sep);
+    buf_putc(&pattern, '*');
+    buf_putc(&pattern, namespace->hier_sep);
+    buf_appendcstr(&pattern, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
+    buf_putc(&pattern, namespace->hier_sep);
+    buf_appendcstr(&pattern, "Shared");
+    buf_cstring(&pattern);
+    strarray_appendm(&patterns, buf_release(&pattern));
+    mboxlist_findallmulti((struct namespace*)namespace, &patterns, 0, userid,
+            authstate, _get_sharedaddressbook_cb, &res);
+    strarray_fini(&patterns);
+
+    return res;
+}
 
 static const struct contactfilters_t {
     const char *field;
@@ -175,7 +183,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
 {
     int havefield = 0;
     const struct contactfilters_t *c;
-    mbname_t *othermb = NULL;
+    mbentry_t *othermb = NULL;
     int r = 0;
 
     /* prefilter to see if there are any fields that we will need to look up */
@@ -206,11 +214,13 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         }
     }
 
-    othermb = _get_sharedaddressbookuser(cfilter->accountid);
+    othermb = _get_sharedaddressbook(cfilter->accountid, cfilter->authstate, cfilter->namespace);
     if (othermb) {
-        int r2 = carddav_set_otheruser(cfilter->carddavdb, mbname_userid(othermb));
+        mbname_t *mbname = mbname_from_intname(othermb->name);
+        int r2 = carddav_set_otheruser(cfilter->carddavdb, mbname_userid(mbname));
         if (r2) syslog(LOG_NOTICE, "DBNOTICE: failed to open otheruser %s contacts for %s",
-                 mbname_userid(othermb), cfilter->accountid);
+                 mbname_userid(mbname), cfilter->accountid);
+        mbname_free(&mbname);
     }
 
     /* fetch members for each filter referenced */
@@ -223,7 +233,13 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         if (hash_lookup(groupid, &cfilter->contactgroups)) continue;
 
         /* Lookup group member email addresses */
-        strarray_t *members = carddav_getgroup(cfilter->carddavdb, cfilter->addrbook, groupid, othermb);
+        mbentry_t *mbentry = NULL;
+        strarray_t *members = NULL;
+        if (!cfilter->addrbook ||
+            !mboxlist_lookup(cfilter->addrbook, &mbentry, NULL)) {
+            members = carddav_getgroup(cfilter->carddavdb, mbentry, groupid, othermb);
+        }
+        mboxlist_entry_free(&mbentry);
         if (!members) {
             jmap_parser_invalid(parser, c->field);
         }
@@ -233,8 +249,95 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
     }
 
 done:
-    mbname_free(&othermb);
+    mboxlist_entry_free(&othermb);
     return r;
+}
+
+HIDDEN int jmap_email_hasattachment(const struct body *part,
+                                    json_t *imagesize_by_partid)
+{
+    if (!part) return 0;
+
+    if (!strcmp(part->type, "MULTIPART")) {
+        int i;
+        for (i = 0; i < part->numparts; i++) {
+            if (jmap_email_hasattachment(part->subpart + i, imagesize_by_partid)) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if (!strcmp(part->type, "IMAGE")) {
+        if (!strcmpsafe(part->disposition, "ATTACHMENT")) {
+            return 1;
+        }
+        /* Check image dimensions, if available. Fall back to false positive. */
+        ssize_t dim1 = SSIZE_MAX, dim2 = SSIZE_MAX;
+        if (part->part_id) {
+            json_t *imagesize = json_object_get(imagesize_by_partid, part->part_id);
+            if (json_array_size(imagesize) >= 2) {
+                dim1 = json_integer_value(json_array_get(imagesize, 0));
+                dim2 = json_integer_value(json_array_get(imagesize, 1));
+            }
+        }
+        return dim1 >= 256 && dim2 >= 256;
+    }
+
+
+    /* Determine file name, if any. */
+    const char *filename = NULL;
+    struct param *param;
+    for (param = part->disposition_params; param; param = param->next) {
+        if (!strncasecmp(param->attribute, "filename", 8)) {
+            filename = param->value;
+            break;
+        }
+    }
+    if (!filename) {
+        for (param = part->params; param; param = param->next) {
+            if (!strncasecmp(param->attribute, "name", 4)) {
+                filename = param->value;
+                break;
+            }
+        }
+    }
+    if (filename) return 1;
+
+    /* Signatures are no attachments */
+    if (!strcmp(part->type, "APPLICATION") &&
+            (!strcmp(part->subtype, "PGP-KEYS") ||
+             !strcmp(part->subtype, "PGP-SIGNATURE") ||
+             !strcmp(part->subtype, "PKCS7-SIGNATURE") ||
+             !strcmp(part->subtype, "X-PKCS7-SIGNATURE"))) {
+        return 0;
+    }
+
+    /* Unnamed octet streams are no attachments */
+    if (!strcmp(part->type, "APPLICATION") &&
+            !strcmp(part->subtype, "OCTET-STREAM")) {
+        return 0;
+    }
+
+    /* All of the following are attachments */
+    if ((!strcmp(part->type, "APPLICATION") &&
+                !strcmp(part->subtype, "PDF"))) {
+        return 1;
+    }
+    else if ((!strcmp(part->type, "MESSAGE") &&
+                !strcmp(part->subtype, "RFC822"))) {
+        return 1;
+    }
+    else if ((!strcmp(part->type, "TEXT") &&
+                !strcmp(part->subtype, "RFC822"))) {
+        return 1;
+    }
+    else if ((!strcmp(part->type, "TEXT") &&
+                !strcmp(part->subtype, "CALENDAR"))) {
+        return 1;
+    }
+
+    return !strcmpsafe(part->disposition, "ATTACHMENT");
 }
 
 HIDDEN void jmap_emailbodies_fini(struct emailbodies *bodies)
@@ -416,18 +519,22 @@ static void _matchmime_tr_begin_part(search_text_receiver_t *rx __attribute__((u
 {
 }
 
-static void _matchmime_tr_append_text(search_text_receiver_t *rx,
+static int _matchmime_tr_append_text(search_text_receiver_t *rx,
                                       const struct buf *text)
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
 
-    if (buf_len(&tr->buf) >= SEARCH_MAX_PARTS_SIZE) return;
+    if (buf_len(&tr->buf) >= config_search_maxsize) {
+        return IMAP_MESSAGE_TOO_LARGE;
+    }
 
-    size_t n = SEARCH_MAX_PARTS_SIZE - buf_len(&tr->buf);
+    size_t n = config_search_maxsize - buf_len(&tr->buf);
     if (n > buf_len(text)) {
         n = buf_len(text);
     }
     buf_appendmap(&tr->buf, buf_base(text), n);
+
+    return 0;
 }
 
 static void _matchmime_tr_end_part(search_text_receiver_t *rx, int part)
@@ -507,6 +614,7 @@ static xapian_query_t *_email_matchmime_contactgroup(const char *groupid,
                 xq = xapian_query_new_compound(db, /*is_or*/1,
                         (xapian_query_t **) xsubqs.data, xsubqs.count);
             }
+            ptrarray_fini(&xsubqs);
         }
     }
     if (!xq) {
@@ -590,9 +698,132 @@ static xapian_query_t *build_type_query(xapian_db_t *db, const char *type)
     return xq;
 }
 
+enum convmatch_op {
+    MATCHMIME_CONVKEYWORDS_ALL,
+    MATCHMIME_CONVKEYWORDS_SOME,
+    MATCHMIME_CONVKEYWORDS_NONE
+};
+
+struct convmatch {
+    struct conversations_state *cstate;
+    arrayu64_t cids;
+    dynarray_t convs;
+    int in_state; // -1: error, 0: need to load cids, 1: cids loaded
+};
+
+static void convmatch_reset(struct convmatch *convmatch,
+                            struct conversations_state *cstate)
+{
+    if (!convmatch) return;
+
+    int i;
+    for (i = 0; i < dynarray_size(&convmatch->convs); i++) {
+        conversation_t *conv = dynarray_nth(&convmatch->convs, i);
+        conversation_fini(conv);
+    }
+    dynarray_fini(&convmatch->convs);
+    arrayu64_fini(&convmatch->cids);
+    convmatch->in_state = 0;
+
+    convmatch->cstate = cstate;
+    dynarray_init(&convmatch->convs, sizeof(conversation_t));
+}
+
+static int _email_matchmime_convkeyword(struct convmatch *convmatch,
+                                        message_t *m,
+                                        const char *keyword,
+                                        enum convmatch_op op)
+{
+    const char *flag = jmap_keyword_to_imap(keyword);
+    int num;
+    if (!strcasecmp(flag, "\\Seen")) {
+        num = 0;
+    }
+    else if (!convmatch->cstate->counted_flags) {
+        num = -1;
+    }
+    else {
+        num = strarray_find_case(convmatch->cstate->counted_flags, flag, 0);
+        /* num might be -1 invalid */
+        if (num >= 0)
+            num++;
+    }
+    if (num < 0)
+        return 0;
+
+    if (convmatch->in_state == 0) {
+        /* First conv keyword to match, initialize matcher */
+        int r = message_extract_cids(m, convmatch->cstate, &convmatch->cids);
+        if (r) {
+            xsyslog(LOG_ERR, "message_extract_cids", "err=<%s>",
+                    error_message(r));
+            convmatch->in_state = -1;
+            return 0;
+        }
+        uint64_t i;
+        for (i = 0; i < arrayu64_size(&convmatch->cids); i++) {
+            conversation_id_t cid = arrayu64_nth(&convmatch->cids, i);
+            conversation_t conv = CONVERSATION_INIT;
+            r = conversation_load_advanced(convmatch->cstate, cid, &conv, 0);
+            if (r) {
+                xsyslog(LOG_ERR, "conversation_load_advanced",
+                        "cid=<%s> err=<%s>",
+                        conversation_id_encode(cid), error_message(r));
+                convmatch->in_state = -1;
+                return 0;
+            }
+            dynarray_append(&convmatch->convs, &conv);
+        }
+        convmatch->in_state = 1;
+    }
+
+    if (!arrayu64_size(&convmatch->cids)) {
+        return op == MATCHMIME_CONVKEYWORDS_NONE ? 1 : 0;
+    }
+
+    int matches = op == MATCHMIME_CONVKEYWORDS_NONE ? 1 : 0;
+    int i;
+    for (i = 0; i < dynarray_size(&convmatch->convs); i++) {
+        conversation_t *conv = dynarray_nth(&convmatch->convs, i);
+        /*
+         * 0: no message has flag set
+         * 1: some, but not all, messages have flag set
+         * 2: all messages have flag set
+         */
+        int flagmatch = 0;
+        if (num == 0 && conv->unseen != conv->exists)
+            flagmatch = conv->unseen > 0 ? 1 : 2;
+        else if (num > 0 && conv->counts[num-1])
+            flagmatch = conv->exists > conv->counts[num-1] ? 1 : 2;
+
+        if (flagmatch && op == MATCHMIME_CONVKEYWORDS_SOME) {
+            matches = 1;
+            break;
+        }
+        if (flagmatch && op == MATCHMIME_CONVKEYWORDS_NONE) {
+            matches = 0;
+            break;
+        }
+        if (op == MATCHMIME_CONVKEYWORDS_ALL) {
+            if (flagmatch < 2) {
+                matches = 0;
+                break;
+            }
+            else {
+                matches = 1; // may get reset in next iteration
+            }
+        }
+    }
+
+    return matches;
+}
+
+
+
 static int _email_matchmime_evaluate(json_t *filter,
                                      message_t *m,
                                      xapian_db_t *db,
+                                     struct convmatch *convmatch,
                                      struct email_contactfilter *cfilter,
                                      time_t internaldate)
 {
@@ -627,7 +858,8 @@ static int _email_matchmime_evaluate(json_t *filter,
         json_t *condition;
         size_t i;
         json_array_foreach(conditions, i, condition) {
-            int cond_matches = _email_matchmime_evaluate(condition, m, db, cfilter, internaldate);
+            int cond_matches = _email_matchmime_evaluate(condition, m, db,
+                    convmatch, cfilter, internaldate);
             if (op == SEOP_AND && !cond_matches) {
                 return 0;
             }
@@ -796,16 +1028,11 @@ static int _email_matchmime_evaluate(json_t *filter,
     if (JNOTNULL(jval = json_object_get(filter, "hasAttachment"))) {
         const struct body *body;
         if (message_get_cachebody(m, &body) == 0) {
-            struct emailbodies bodies = EMAILBODIES_INITIALIZER;
-            if (jmap_emailbodies_extract(body, &bodies) == 0) {
-                int have = ptrarray_size(&bodies.attslist) > 0;
-                int want = jval == json_true();
-                jmap_emailbodies_fini(&bodies);
-                if (have == want) {
-                    have_matches++;
-                }
-                else return 0;
+            int has_att = jmap_email_hasattachment(body, NULL);
+            if (json_boolean(has_att) == jval) {
+                have_matches++;
             }
+            else return 0;
         }
     }
 
@@ -851,6 +1078,24 @@ static int _email_matchmime_evaluate(json_t *filter,
         if (internaldate >= t) {
             have_matches++;
         } else return 0;
+    }
+
+    /* allInThreadHaveKeyword */
+    if (JNOTNULL(jval = json_object_get(filter, "allInThreadHaveKeyword"))) {
+        have_matches += _email_matchmime_convkeyword(convmatch, m,
+                json_string_value(jval), MATCHMIME_CONVKEYWORDS_ALL);
+    }
+
+    /* someInThreadHaveKeyword */
+    if (JNOTNULL(jval = json_object_get(filter, "someInThreadHaveKeyword"))) {
+        have_matches += _email_matchmime_convkeyword(convmatch, m,
+                json_string_value(jval), MATCHMIME_CONVKEYWORDS_SOME);
+    }
+
+    /* noneInThreadHaveKeyword */
+    if (JNOTNULL(jval = json_object_get(filter, "noneInThreadHaveKeyword"))) {
+        have_matches += _email_matchmime_convkeyword(convmatch, m,
+                json_string_value(jval), MATCHMIME_CONVKEYWORDS_NONE);
     }
 
     return need_matches == have_matches;
@@ -924,7 +1169,7 @@ HIDDEN void jmap_email_filtercondition_validate(const char *field, json_t *arg,
     }
 }
 
-HIDDEN matchmime_t *jmap_email_matchmime_init(const struct buf *mime, json_t **err)
+HIDDEN matchmime_t *jmap_email_matchmime_new(const struct buf *mime, json_t **err)
 {
     matchmime_t *matchmime = xzmalloc(sizeof(matchmime_t));
     int r = 0;
@@ -993,6 +1238,8 @@ HIDDEN matchmime_t *jmap_email_matchmime_init(const struct buf *mime, json_t **e
         return NULL;
     }
 
+    matchmime->convmatch = xzmalloc(sizeof(struct convmatch));
+
     return matchmime;
 }
 
@@ -1006,13 +1253,20 @@ HIDDEN void jmap_email_matchmime_free(matchmime_t **matchmimep)
     if (matchmime->dbpath) removedir(matchmime->dbpath);
     free(matchmime->dbpath);
 
+    struct convmatch *convmatch = matchmime->convmatch;
+    convmatch_reset(convmatch, NULL);
+    free(convmatch);
+
     free(matchmime);
     *matchmimep = NULL;
 }
 
 HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
                                 json_t *jfilter,
+                                struct conversations_state *cstate,
                                 const char *accountid,
+                                const struct auth_state *authstate,
+                                const struct namespace *namespace,
                                 time_t internaldate,
                                 json_t **err)
 {
@@ -1039,7 +1293,7 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
     jmap_email_filter_parse(jfilter, &parse_ctx);
 
     /* Gather contactgroup ids */
-    jmap_email_contactfilter_init(accountid, /*addressbookid*/NULL, &cfilter);
+    jmap_email_contactfilter_init(accountid, authstate, namespace, NULL, &cfilter);
     ptrarray_t work = PTRARRAY_INITIALIZER;
     ptrarray_push(&work, jfilter);
     json_t *jf;
@@ -1080,8 +1334,15 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
         *err = jmap_server_error(r);
         goto done;
     }
-    matches = _email_matchmime_evaluate(jfilter, matchmime->m, db, &cfilter, internaldate);
+
+    struct convmatch *convmatch = matchmime->convmatch;
+    if (!convmatch->cstate || convmatch->cstate != cstate || convmatch->in_state < 0) {
+        convmatch_reset(convmatch, cstate);
+    }
+    matches = _email_matchmime_evaluate(jfilter, matchmime->m, db,
+            convmatch, &cfilter, internaldate);
     xapian_db_close(db);
+
 
 done:
     jmap_email_contactfilter_fini(&cfilter);

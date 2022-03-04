@@ -106,8 +106,10 @@ mbname_t *mbname_from_userid(const char *userid);
 mbname_t *mbname_from_localdom(const char *localpart, const char *domain);
 mbname_t *mbname_from_intname(const char *intname);
 mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid);
+mbname_t *mbname_from_extnameUTF8(const char *extname, const struct namespace *ns, const char *userid);
 mbname_t *mbname_from_extsub(const char *extsub, const struct namespace *ns, const char *userid);
 mbname_t *mbname_from_recipient(const char *recip, const struct namespace *ns);
+mbname_t *mbname_from_path(const char *path);
 mbname_t *mbname_dup(const mbname_t *mbname);
 
 void mbname_downcaseuser(mbname_t *mbname);
@@ -204,15 +206,33 @@ int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype);
  */
 int mboxname_isjmapuploadmailbox(const char *name, int mbtype);
 
+/*
+ * If (internal) mailbox 'name' is a user's #jmap notifications mailbox
+ * returns boolean
+ */
+int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype);
+
+/*
+ * If (internal) mailbox 'name' is a user's #sieve mailbox
+ * returns boolean
+ */
+int mboxname_issievemailbox(const char *name, int mbtype);
+
 #define mboxname_isnonimapmailbox(name, mbtype)            \
     (mboxname_iscalendarmailbox(name, mbtype)              \
      || mboxname_isaddressbookmailbox(name, mbtype)        \
      || mboxname_isdavdrivemailbox(name, mbtype)           \
      || mboxname_isdavnotificationsmailbox(name, mbtype)   \
-     || mboxname_isnotesmailbox(name, mbtype)              \
      || mboxname_issubmissionmailbox(name, mbtype)         \
-     || mboxname_ispushsubscriptionmailbox(name, mbtype)  \
-     || mboxname_isjmapuploadmailbox(name, mbtype))
+     || mboxname_ispushsubscriptionmailbox(name, mbtype)   \
+     || mboxname_isjmapuploadmailbox(name, mbtype)         \
+     || mboxname_isjmapnotificationsmailbox(name, mbtype)  \
+     || mboxname_issievemailbox(name, mbtype))
+
+#define mboxname_isnondeliverymailbox(name, mbtype)        \
+    (mboxname_isnonimapmailbox(name, mbtype)               \
+     || mboxname_isnotesmailbox(name, mbtype)              \
+     || mboxname_isdeletedmailbox(name, NULL))
 
 /* check if one mboxname is a parent or same as the other */
 int mboxname_is_prefix(const char *longstr, const char *shortstr);
@@ -226,6 +246,10 @@ void mboxname_hash(char *buf, size_t buf_len,
                    const char *root,
                    const char *name) ;
 
+void mboxname_id_hash(char *buf, size_t buf_len,
+                      const char *root,
+                      const char *id);
+
 /*
  * Translate (internal) inboxname into corresponding userid,
  * and vice-versa.
@@ -236,6 +260,7 @@ char *mboxname_user_mbox(const char *userid, const char *subfolder);
 char *mboxname_user_mbox_external(const char *userid, const char *extsubfolder);
 char *mboxname_abook(const char *userid, const char *collection);
 char *mboxname_cal(const char *userid, const char *collection);
+char *mboxname_drive(const char *userid, const char *collection);
 
 /*
  * Check whether two mboxnames have the same userid.
@@ -285,6 +310,8 @@ int mboxname_make_parent(char *namebuf);
 
 char *mboxname_conf_getpath(const mbname_t *mbname,
                             const char *suffix);
+char *mboxname_conf_getpath_legacy(const mbname_t *mbname, const char *suffix);
+char *mboxid_conf_getpath(const char *mboxid, const char *suffix);
 
 /* ======================== COUNTERS ==================== */
 
@@ -322,6 +349,10 @@ struct mboxname_counters {
     modseq_t jmapnotificationdeletedmodseq;
     modseq_t jmapnotificationfoldersmodseq;
     modseq_t jmapnotificationfoldersdeletedmodseq;
+    modseq_t sievemodseq;
+    modseq_t sievedeletedmodseq;
+    modseq_t sievefoldersmodseq;
+    modseq_t sievefoldersdeletedmodseq;
     uint32_t uidvalidity;
 };
 

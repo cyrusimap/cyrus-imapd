@@ -1,4 +1,4 @@
-/* seen_db.c -- implementation of seen database using per-user berkeley db
+/* seen_db.c -- implementation of seen database using per-user db
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -69,7 +69,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-#define FNAME_SEENSUFFIX ".seen" /* per user seen state extension */
 #define FNAME_SEEN "/cyrus.seen" /* for legacy seen state */
 
 enum {
@@ -85,26 +84,12 @@ struct seen {
 
 #define DB (config_seenstate_db)
 
-HIDDEN char *seen_getpath(const char *userid)
+EXPORTED char *seen_getpath(const char *userid)
 {
-    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_DOMAINDIR) +
-                          sizeof(FNAME_USERDIR) + strlen(userid) +
-                          sizeof(FNAME_SEENSUFFIX) + 10);
-    char c, *domain;
+    mbname_t *mbname = mbname_from_userid(userid);
+    char *fname = mboxname_conf_getpath(mbname, FNAME_SEENSUFFIX);
 
-    if (config_virtdomains && (domain = strchr(userid, '@'))) {
-        char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-        *domain = '\0';  /* split user@domain */
-        c = (char) dir_hash_c(userid, config_fulldirhash);
-        sprintf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
-                domain+1, FNAME_USERDIR, c, userid, FNAME_SEENSUFFIX);
-        *domain = '@';  /* reassemble user@domain */
-    }
-    else {
-        c = (char) dir_hash_c(userid, config_fulldirhash);
-        sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
-                FNAME_SEENSUFFIX);
-    }
+    mbname_free(&mbname);
 
     return fname;
 }
@@ -138,7 +123,7 @@ EXPORTED int seen_open(const char *user,
             syslog(level, "DBERROR: opening %s: %s", fname,
                    cyrusdb_strerror(r));
         }
-        r = IMAP_IOERROR;
+        r = r == CYRUSDB_NOTFOUND ? IMAP_NOTFOUND : IMAP_IOERROR;
         free(seendb);
         free(fname);
         return r;
@@ -363,7 +348,7 @@ HIDDEN int seen_create_mailbox(const char *userid, struct mailbox *mailbox)
 {
     if (SEEN_DEBUG) {
         syslog(LOG_DEBUG, "seen_db: seen_create_mailbox(%s, %s)",
-               userid, mailbox->uniqueid);
+               userid, mailbox_uniqueid(mailbox));
     }
 
     /* noop */
@@ -374,7 +359,7 @@ EXPORTED int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
 {
     int r;
     struct seen *seendb = NULL;
-    const char *uniqueid = mailbox->uniqueid;
+    const char *uniqueid = mailbox_uniqueid(mailbox);
 
     if (SEEN_DEBUG) {
         syslog(LOG_DEBUG, "seen_db: seen_delete_mailbox(%s, %s)",
@@ -451,10 +436,10 @@ HIDDEN int seen_copy(const char *userid, struct mailbox *oldmailbox,
 {
     if (SEEN_DEBUG) {
         syslog(LOG_DEBUG, "seen_db: seen_copy %s (%s => %s)",
-               userid ? userid : "", oldmailbox->uniqueid, newmailbox->uniqueid);
+               userid ? userid : "", mailbox_uniqueid(oldmailbox), mailbox_uniqueid(newmailbox));
     }
 
-    if (userid && strcmp(oldmailbox->uniqueid, newmailbox->uniqueid)) {
+    if (userid && strcmp(mailbox_uniqueid(oldmailbox), mailbox_uniqueid(newmailbox))) {
         int r;
         struct seen *seendb = NULL;
         struct seendata sd = SEENDATA_INITIALIZER;
@@ -462,8 +447,8 @@ HIDDEN int seen_copy(const char *userid, struct mailbox *oldmailbox,
         r = seen_open(userid, SEEN_SILENT, &seendb);
 
         /* just be silent if it's missing */
-        if (!r) r = seen_lockread(seendb, oldmailbox->uniqueid, &sd);
-        if (!r) r = seen_write(seendb, newmailbox->uniqueid, &sd);
+        if (!r) r = seen_lockread(seendb, mailbox_uniqueid(oldmailbox), &sd);
+        if (!r) r = seen_write(seendb, mailbox_uniqueid(newmailbox), &sd);
 
         seen_close(&seendb);
         seen_freedata(&sd);

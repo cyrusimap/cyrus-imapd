@@ -78,7 +78,7 @@ static const char *addflag = NULL;
 static void usage(void)
 {
     fprintf(stderr,
-            "unexpunge [-C <altconfig>] -l <mailbox>\n"
+            "unexpunge [-C <altconfig>] -l <mailbox> [<uid>...]\n"
             "unexpunge [-C <altconfig>] -t time-interval [-d] [-v] [-f flag] mailbox\n"
             "unexpunge [-C <altconfig>] -a [-d] [-v] [-f flag] <mailbox>\n"
             "unexpunge [-C <altconfig>] -u [-d] [-v] [-f flag] <mailbox> <uid>...\n");
@@ -98,10 +98,12 @@ enum {
     MODE_UID
 };
 
-static void list_expunged(const char *mboxname)
+static void list_expunged(const char *mboxname,
+                          unsigned long *uids, unsigned nuids)
 {
     struct mailbox *mailbox = NULL;
     struct index_record *records = NULL;
+    unsigned uidnum = 0;
     int alloc = 0;
     int num = 0;
     int i;
@@ -123,6 +125,16 @@ static void list_expunged(const char *mboxname)
         /* still active */
         if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED))
             continue;
+
+        if (nuids) {
+            while (uidnum < nuids && record->uid > uids[uidnum])
+                uidnum++;
+            if (uidnum >= nuids)
+                continue;
+            if (record->uid != uids[uidnum])
+                continue;
+            /* otherwise we want this one */
+        }
 
         /* pre-allocate more space */
         if (alloc <= num) {
@@ -176,7 +188,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
     unsigned uidnum = 0;
     char oldfname[MAX_MAILBOX_PATH];
     const char *fname;
-    char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
     int r = 0;
 
     *numrestored = 0;
@@ -370,8 +382,21 @@ int main(int argc, char *argv[])
     /* Translate mailboxname */
     intname = mboxname_from_external(argv[optind], &unex_namespace, NULL);
 
+    nuids = argc - ++optind;
+    if (nuids) {
+        unsigned i;
+
+        uids = (unsigned long *) xmalloc(nuids * sizeof(unsigned long));
+
+        for (i = 0; i < nuids; i++)
+            uids[i] = strtoul(argv[optind+i], NULL, 10);
+
+        /* Sort the UIDs so we can binary search */
+        qsort(uids, nuids, sizeof(unsigned long), compare_uid);
+    }
+
     if (mode == MODE_LIST) {
-        list_expunged(intname);
+        list_expunged(intname, uids, nuids);
         goto done;
     }
 
@@ -380,19 +405,6 @@ int main(int argc, char *argv[])
     if (r) {
         printf("Failed to open mailbox '%s'\n", intname);
         goto done;
-    }
-
-    if (mode == MODE_UID) {
-        unsigned i;
-
-        nuids = argc - ++optind;
-        uids = (unsigned long *) xmalloc(nuids * sizeof(unsigned long));
-
-        for (i = 0; i < nuids; i++)
-            uids[i] = strtoul(argv[optind+i], NULL, 10);
-
-        /* Sort the UIDs so we can binary search */
-        qsort(uids, nuids, sizeof(unsigned long), compare_uid);
     }
 
     extname = mboxname_to_external(intname, &unex_namespace, NULL);

@@ -603,6 +603,8 @@ void shut_down(int code)
 
     in_shutdown = 1;
 
+    libcyrus_run_delayed();
+
     proc_cleanup();
 
     /* close local mailbox */
@@ -826,12 +828,12 @@ static int expunge_deleted(void)
 
     if (r) {
         syslog(LOG_ERR, "IOERROR: %s failed to expunge record %u uid %u, aborting",
-               popd_mailbox->name, msgno, popd_map[msgno-1].uid);
+               mailbox_name(popd_mailbox), msgno, popd_map[msgno-1].uid);
     }
 
     if (!r && (numexpunged > 0)) {
         syslog(LOG_NOTICE, "Expunged %d messages from %s",
-               numexpunged, popd_mailbox->name);
+               numexpunged, mailbox_name(popd_mailbox));
     }
 
     /* send the MessageExpunge event notification */
@@ -858,7 +860,9 @@ static void cmdloop(void)
         signals_poll();
 
         /* register process */
-        proc_register(config_ident, popd_clienthost, popd_userid, popd_mailbox ? popd_mailbox->name : NULL, NULL);
+        proc_register(config_ident, popd_clienthost, popd_userid, popd_mailbox ? mailbox_name(popd_mailbox) : NULL, NULL);
+
+        libcyrus_run_delayed();
 
         if (backend) {
             /* create a pipe from client to backend */
@@ -890,7 +894,7 @@ static void cmdloop(void)
                 /* Mailbox has been (re)moved */
                 syslog(LOG_WARNING,
                        "Maildrop %s has been (re)moved out from under client",
-                       popd_mailbox->name);
+                       mailbox_name(popd_mailbox));
                 prot_printf(popd_out,
                             "-ERR [SYS/TEMP] "
                             "Maildrop has been (re)moved\r\n");
@@ -935,7 +939,7 @@ static void cmdloop(void)
             syslog(LOG_NOTICE, "command: %s", inputbuf);
 
         /* register process */
-        proc_register(config_ident, popd_clienthost, popd_userid, popd_mailbox ? popd_mailbox->name : NULL, inputbuf);
+        proc_register(config_ident, popd_clienthost, popd_userid, popd_mailbox ? mailbox_name(popd_mailbox) : NULL, inputbuf);
 
         if (!strcmp(inputbuf, "quit")) {
             if (!arg) {
@@ -1883,7 +1887,7 @@ int openinbox(void)
                         error_message(r));
             goto fail;
         }
-        popd_myrights = cyrus_acl_myrights(popd_authstate, popd_mailbox->acl);
+        popd_myrights = cyrus_acl_myrights(popd_authstate, mailbox_acl(popd_mailbox));
         if (config_popuseacl && !(popd_myrights & ACL_READ)) {
             r = (popd_myrights & ACL_LOOKUP) ?
                  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;

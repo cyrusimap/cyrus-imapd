@@ -188,7 +188,6 @@ aren't already there.
    pop3      110/tcp
    nntp      119/tcp
    imap      143/tcp
-   imsp      406/tcp
    nntps     563/tcp
    acap      674/tcp
    imaps     993/tcp
@@ -257,7 +256,7 @@ on the master process sending a signal 0 every second until either the
 master process has gone away or a suitable time has expired (maybe 10
 seconds).  You can then send a SIGTERM if the process still exists.
 
-<p>At FastMail the following snippet of perl is used (warning: Linux
+<p>At Fastmail the following snippet of perl is used (warning: Linux
 specific signal numbers - check your own system before using this):
 
 <pre>

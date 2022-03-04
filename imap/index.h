@@ -58,7 +58,7 @@
 #include "annotate.h" /* for strlist functionality */
 #include "search_engines.h"
 #include "message_guid.h"
-#include "sequence.h"
+#include "seqset.h"
 #include "strarray.h"
 
 /* Special "sort criteria" to load message-id and references/in-reply-to
@@ -90,7 +90,7 @@ struct index_init {
     uint32_t want_mbtype;
     int want_expunged;
     struct vanished_params vanished;
-    struct seqset *vanishedlist;
+    seqset_t *vanishedlist;
 };
 
 struct index_map {
@@ -231,7 +231,7 @@ enum index_warmup_flags
 /* non-locking, non-updating - just do a fetch on the state
  * we already have */
 void index_fetchresponses(struct index_state *state,
-                                 struct seqset *seq,
+                                 seqset_t *seq,
                                  int usinguid,
                                  const struct fetchargs *fetchargs,
                                  int *fetchedsomething);
@@ -247,7 +247,7 @@ extern int index_run_annotator(struct index_state *state,
                                const char *sequence, int usinguid,
                                struct namespace *namespace, int isadmin);
 extern int index_warmup(struct mboxlist_entry *, unsigned int warmup_flags,
-                        struct seqset *uids);
+                        seqset_t *uids);
 extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit,
                       struct searchargs *searchargs, int usinguid);
 extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
@@ -298,7 +298,7 @@ extern void index_tellchanges(struct index_state *state, int canexpunge,
                               int printuid, int printmodseq);
 extern modseq_t index_highestmodseq(struct index_state *state);
 extern int index_check(struct index_state *state, int usinguid, int printuid);
-extern struct seqset *index_vanished(struct index_state *state,
+extern seqset_t *index_vanished(struct index_state *state,
                                     struct vanished_params *params);
 extern int index_urlfetch(struct index_state *state, uint32_t msgno,
                           unsigned params, const char *section,
@@ -320,7 +320,6 @@ struct searchargs *new_searchargs(const char *tag, int state,
                                   struct auth_state *authstate,
                                   int isadmin);
 
-void freesequencelist(struct seqset *l);
 void freesearchargs(struct searchargs *s);
 char *sortcrit_as_string(const struct sortcrit *sortcrit);
 void freesortcrit(struct sortcrit *s);

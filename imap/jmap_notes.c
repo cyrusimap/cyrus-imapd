@@ -71,9 +71,9 @@
 
 #define APPLE_NOTES_ID  "com.apple.mail-note"
 
-static int jmap_notes_get(jmap_req_t *req);
-static int jmap_notes_set(jmap_req_t *req);
-static int jmap_notes_changes(jmap_req_t *req);
+static int jmap_note_get(jmap_req_t *req);
+static int jmap_note_set(jmap_req_t *req);
+static int jmap_note_changes(jmap_req_t *req);
 
 static jmap_method_t jmap_notes_methods_standard[] = {
     { NULL, NULL, NULL, 0}
@@ -81,21 +81,21 @@ static jmap_method_t jmap_notes_methods_standard[] = {
 
 static jmap_method_t jmap_notes_methods_nonstandard[] = {
     {
-        "Notes/get",
+        "Note/get",
         JMAP_NOTES_EXTENSION,
-        &jmap_notes_get,
+        &jmap_note_get,
         /*flags*/0
     },
     {
-        "Notes/set",
+        "Note/set",
         JMAP_NOTES_EXTENSION,
-        &jmap_notes_set,
+        &jmap_note_set,
         JMAP_READ_WRITE
     },
     {
-        "Notes/changes",
+        "Note/changes",
         JMAP_NOTES_EXTENSION,
-        &jmap_notes_changes,
+        &jmap_note_changes,
         /*flags*/0
     },
     { NULL, NULL, NULL, 0}
@@ -171,9 +171,10 @@ static int lookup_notes_collection(const char *accountid, mbentry_t **mbentry)
             goto done;
         }
 
-        if (*mbentry) free((*mbentry)->name);
-        else *mbentry = mboxlist_entry_create();
+        mboxlist_entry_free(mbentry);
+        *mbentry = mboxlist_entry_create();
         (*mbentry)->name = xstrdup(notesname);
+       (*mbentry)->mbtype = MBTYPE_EMAIL;
     }
     else if (!r) {
         int rights = httpd_myrights(httpd_authstate, *mbentry);
@@ -217,10 +218,9 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
             goto done;
         }
 
-        r = mboxlist_createmailbox(mbentry->name, MBTYPE_EMAIL,
-                                   NULL, 1 /* admin */, accountid,
-                                   httpd_authstate,
-                                   0, 0, 0, 0, NULL);
+        r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, accountid, httpd_authstate,
+                                   0/*flags*/, NULL/*mailboxptr*/);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                    mbentry->name, error_message(r));
@@ -444,7 +444,7 @@ static const jmap_property_t notes_props[] = {
     { NULL, NULL, 0 }
 };
 
-static int jmap_notes_get(jmap_req_t *req)
+static int jmap_note_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -465,7 +465,7 @@ static int jmap_notes_get(jmap_req_t *req)
     int r = ensure_notes_collection(req->accountid, &mbentry);
     if (r) {
         syslog(LOG_ERR,
-               "jmap_notes_get: ensure_notes_collection(%s): %s",
+               "jmap_note_get: ensure_notes_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
     }
@@ -576,8 +576,8 @@ static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note
     const char *uid = NULL, *created = NULL;
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+    if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -678,7 +678,7 @@ static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note
                           0, /*quota*/NULL, 0, 0, /*event*/0);
     if (r) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
@@ -690,14 +690,14 @@ static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note
     if (r) {
         append_abort(&as);
         syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
     r = append_commit(&as);
     if (r) {
         syslog(LOG_ERR, "append_commit(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
@@ -831,7 +831,7 @@ static void _notes_destroy_cb(const char *id, message_t *msg,
     }
 }
 
-static int jmap_notes_set(jmap_req_t *req)
+static int jmap_note_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -860,7 +860,7 @@ static int jmap_notes_set(jmap_req_t *req)
     r = ensure_notes_collection(req->accountid, &mbentry);
     if (r) {
         syslog(LOG_ERR,
-               "jmap_notes_set: ensure_notes_collection(%s): %s",
+               "jmap_note_set: ensure_notes_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
     }
@@ -975,7 +975,7 @@ static int change_cmp(const void **a, const void **b)
     return (chg_a - chg_b);
 }
 
-static int jmap_notes_changes(jmap_req_t *req)
+static int jmap_note_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -994,7 +994,7 @@ static int jmap_notes_changes(jmap_req_t *req)
     int r = ensure_notes_collection(req->accountid, &mbentry);
     if (r) {
         syslog(LOG_ERR,
-               "jmap_notes_changes: ensure_submission_collection(%s): %s",
+               "jmap_note_changes: ensure_submission_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
     }

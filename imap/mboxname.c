@@ -766,6 +766,106 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     return mbname;
 }
 
+EXPORTED mbname_t *mbname_from_extnameUTF8(const char *extname, const struct namespace *ns, const char *userid)
+{
+    mbname_t *mbname;
+    char *freeme = NULL;
+
+    if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
+        charset_t cs = charset_lookupname("utf-8");
+        if (cs == CHARSET_UNKNOWN_CHARSET) {
+            /* huh? */
+            syslog(LOG_INFO, "charset utf-8 is unknown");
+            return NULL;
+        }
+
+        /* Encode mailbox name in IMAP UTF-7 */
+        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
+        charset_free(&cs);
+
+        if (!freeme) {
+            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
+            return NULL;
+        }
+
+        extname = freeme;
+    }
+
+    mbname = mbname_from_extname(extname, ns, userid);
+    free(freeme);
+
+    return mbname;
+}
+
+EXPORTED mbname_t *mbname_from_path(const char *path)
+{
+    int absolute = 0;
+    mbname_t *mbname = NULL;
+    mbentry_t *mbentry = NULL;
+    const char *uid;
+
+    /* Is the mailbox argument absolute or relative to cwd? */
+    if (path[0] == '/') {
+        absolute = 1;
+        uid = strrchr(path, '/');
+    }
+    else {
+        /* Construct a mailbox relative to cwd */
+        char cwd[MAX_MAILBOX_PATH+1];
+
+        if (!getcwd(cwd, MAX_MAILBOX_PATH)) {
+            syslog(LOG_ERR, "IOERROR: failed to getcwd in mbname_from_path %s: %m", path);
+        }
+        uid = strrchr(cwd, '/');
+    }
+
+    if (uid) {
+        /* Lookup current mailbox by uniqueid */
+        int r = mboxlist_lookup_by_uniqueid(uid+1, &mbentry, NULL);
+
+        if (!r) {
+            /* Build current mailbox name */
+            mbname = mbname_from_intname(mbentry->name);
+
+            if (!absolute) {
+                /* Add submailbox(es) */
+                strarray_t *subs = subs = strarray_split(path, "/", 0);
+                int i;
+
+                for (i = 0; i < strarray_size(subs); i++) {
+                    const char *sub = strarray_nth(subs, i);
+
+                    if (!strcmp(sub, ".")) continue;
+                    else if (!strcmp(sub, "..")) {
+                        char *s = mbname_pop_boxes(mbname);
+
+                        if (s) free(s);
+                        else {
+                            /* At top of hierarchy */
+                            mbname_free(&mbname);
+                            break;
+                        }
+                    }
+                    else {
+                        mbname_push_boxes(mbname, strarray_nth(subs, i));
+                    }
+                }
+                strarray_free(subs);
+
+                /* If we end up at a magic user.foo.INBOX, revert to user.foo */
+                if (mbname_userid(mbname) != NULL &&
+                    strarray_size(mbname_boxes(mbname)) == 1 &&
+                    !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
+                    free(mbname_pop_boxes(mbname));
+                }
+            }
+        }
+    }
+    mboxlist_entry_free(&mbentry);
+
+    return mbname ? mbname : xzmalloc(sizeof(mbname_t));
+}
+
 EXPORTED void mbname_free(mbname_t **mbnamep)
 {
     mbname_t *mbname = *mbnamep;
@@ -1405,7 +1505,7 @@ EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
  */
 EXPORTED int mboxname_iscalendarmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_CALENDAR) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_CALENDAR) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1424,7 +1524,7 @@ EXPORTED int mboxname_iscalendarmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_ADDRESSBOOK) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_ADDRESSBOOK) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1443,7 +1543,7 @@ EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isdavdrivemailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_COLLECTION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_COLLECTION) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1462,7 +1562,7 @@ EXPORTED int mboxname_isdavdrivemailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isdavnotificationsmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_COLLECTION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_COLLECTION) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1481,7 +1581,7 @@ EXPORTED int mboxname_isdavnotificationsmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_JMAPNOTIFICATION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_JMAPNOTIFY) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1518,7 +1618,7 @@ EXPORTED int mboxname_isnotesmailbox(const char *name, int mbtype __attribute__(
  */
 EXPORTED int mboxname_issubmissionmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_SUBMISSION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_JMAPSUBMIT) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1537,7 +1637,7 @@ EXPORTED int mboxname_issubmissionmailbox(const char *name, int mbtype)
  */
 EXPORTED int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype)
 {
-    if (mbtype & MBTYPE_PUSHSUBSCRIPTION) return 1;  /* Only works on backends */
+    if (mbtype_isa(mbtype) == MBTYPE_JMAPPUSHSUB) return 1;  /* Only works on backends */
     int res = 0;
 
     mbname_t *mbname = mbname_from_intname(name);
@@ -1561,6 +1661,26 @@ EXPORTED int mboxname_isjmapuploadmailbox(const char *name, int mbtype __attribu
     mbname_t *mbname = mbname_from_intname(name);
     const strarray_t *boxes = mbname_boxes(mbname);
     const char *prefix = config_getstring(IMAPOPT_JMAPUPLOADFOLDER);
+
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+        res = 1;
+
+    mbname_free(&mbname);
+    return res;
+}
+
+/*
+ * If (internal) mailbox 'name' is a user's #sieve mailbox
+ * returns boolean
+ */
+EXPORTED int mboxname_issievemailbox(const char *name, int mbtype)
+{
+    if (mbtype_isa(mbtype) == MBTYPE_SIEVE) return 1;  /* Only works on backends */
+    int res = 0;
+
+    mbname_t *mbname = mbname_from_intname(name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_SIEVE_FOLDER);
 
     if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
         res = 1;
@@ -1605,6 +1725,19 @@ EXPORTED char *mboxname_cal(const char *userid, const char *collection)
     mbname_t *mbname = mbname_from_userid(userid);
 
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
+    if (collection) mbname_push_boxes(mbname, collection);
+
+    char *res = xstrdup(mbname_intname(mbname));
+    mbname_free(&mbname);
+
+    return res;
+}
+
+EXPORTED char *mboxname_drive(const char *userid, const char *collection)
+{
+    mbname_t *mbname = mbname_from_userid(userid);
+
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
     if (collection) mbname_push_boxes(mbname, collection);
 
     char *res = xstrdup(mbname_intname(mbname));
@@ -1877,10 +2010,25 @@ EXPORTED void mboxname_hash(char *dest, size_t destlen,
     mbname_free(&mbname);
 }
 
+EXPORTED void mboxname_id_hash(char *dest, size_t destlen,
+                               const char *root,
+                               const char *id)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (root) buf_printf(&buf, "%s/uuid/%c/%c/%s", root, id[0], id[1], id);
+    else buf_printf(&buf, "uuid/%c/%c/%s", id[0], id[1], id);
+
+    /* for now, keep API even though we're doing a buffer inside here */
+    strncpy(dest, buf_cstring(&buf), destlen);
+
+    buf_free(&buf);
+}
+
 /* note: mboxname must be internal */
 EXPORTED char *mboxname_datapath(const char *partition,
                                  const char *mboxname,
-                                 const char *uniqueid __attribute__((unused)),
+                                 const char *uniqueid,
                                  unsigned long uid)
 {
     static char pathresult[MAX_MAILBOX_PATH+1];
@@ -1896,7 +2044,14 @@ EXPORTED char *mboxname_datapath(const char *partition,
         return pathresult;
     }
 
-    mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
+    if (uniqueid) {
+        /* Mailbox dir by uniqueid */
+        mboxname_id_hash(pathresult, MAX_MAILBOX_PATH, root, uniqueid);
+    }
+    else {
+        /* Legacy mailbox dir by mboxname */
+        mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
+    }
 
     if (uid) {
         int len = strlen(pathresult);
@@ -1913,7 +2068,7 @@ EXPORTED char *mboxname_datapath(const char *partition,
 /* note: mboxname must be internal */
 EXPORTED char *mboxname_archivepath(const char *partition,
                                     const char *mboxname,
-                                    const char *uniqueid __attribute__((unused)),
+                                    const char *uniqueid,
                                     unsigned long uid)
 {
     static char pathresult[MAX_MAILBOX_PATH+1];
@@ -1932,7 +2087,14 @@ EXPORTED char *mboxname_archivepath(const char *partition,
         return pathresult;
     }
 
-    mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
+    if (uniqueid) {
+        /* Mailbox dir by uniqueid */
+        mboxname_id_hash(pathresult, MAX_MAILBOX_PATH, root, uniqueid);
+    }
+    else {
+        /* Legacy mailbox dir by mboxname */
+        mboxname_hash(pathresult, MAX_MAILBOX_PATH, root, mboxname);
+    }
 
     if (uid) {
         int len = strlen(pathresult);
@@ -1959,6 +2121,8 @@ char *mboxname_lockpath_suffix(const char *mboxname,
     const char *root = config_getstring(IMAPOPT_MBOXNAME_LOCKPATH);
     int len;
 
+    if (!mboxname) return NULL;
+
     if (!root) {
         snprintf(basepath, MAX_MAILBOX_PATH, "%s/lock", config_dir);
         root = basepath;
@@ -1978,7 +2142,7 @@ char *mboxname_lockpath_suffix(const char *mboxname,
 
 EXPORTED char *mboxname_metapath(const char *partition,
                                  const char *mboxname,
-                                 const char *uniqueid __attribute__((unused)),
+                                 const char *uniqueid,
                                  int metafile,
                                  int isnew)
 {
@@ -2063,7 +2227,14 @@ EXPORTED char *mboxname_metapath(const char *partition,
         return metaresult;
     }
 
-    mboxname_hash(metaresult, MAX_MAILBOX_PATH, root, mboxname);
+    if (uniqueid) {
+        /* Mailbox dir by uniqueid */
+        mboxname_id_hash(metaresult, MAX_MAILBOX_PATH, root, uniqueid);
+    }
+    else {
+        /* Legacy mailbox dir by mboxname */
+        mboxname_hash(metaresult, MAX_MAILBOX_PATH, root, mboxname);
+    }
 
     if (filename) {
         int len = strlen(metaresult);
@@ -2154,10 +2325,57 @@ EXPORTED int mboxname_contains_parent(const char *mboxname, const char *prev)
 EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
 {
     char *fname = NULL;
+
+    if (mbname->localpart) {
+        char *inboxname = mboxname_user_mbox(mbname_userid(mbname), NULL);
+        mbentry_t *mbentry = NULL;
+        int r = mboxlist_lookup_allow_all(inboxname, &mbentry, NULL);
+        free(inboxname);
+
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            // look for the INBOX of previous names in order to see if we're mid-rename
+            mbentry_t *mbentry_byname = NULL;
+            mbentry_t *mbentry_byid = NULL;
+            int r2 = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry_byname, NULL);
+            if (!r2) r2 = mboxlist_lookup_by_uniqueid(mbentry_byname->uniqueid, &mbentry_byid, NULL);
+            if (!r2) {
+                int i;
+                for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
+                    const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
+                    char *olduserid = mboxname_to_userid(histitem->name);
+                    char *oldinboxname = mboxname_user_mbox(olduserid, NULL);
+                    r = mboxlist_lookup_allow_all(oldinboxname, &mbentry, NULL);
+                    free(oldinboxname);
+                    free(olduserid);
+                    if (r != IMAP_MAILBOX_NONEXISTENT) break;
+                }
+            }
+            mboxlist_entry_free(&mbentry_byid);
+            mboxlist_entry_free(&mbentry_byname);
+        }
+
+        if (!r && mbentry && mbentry->uniqueid && !(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
+            fname = mboxid_conf_getpath(mbentry->uniqueid, suffix);
+        }
+
+        mboxlist_entry_free(&mbentry);
+    }
+
+    if (!fname) {
+        fname = mboxname_conf_getpath_legacy(mbname, suffix);
+    }
+
+    return fname;
+}
+
+EXPORTED char *mboxname_conf_getpath_legacy(const mbname_t *mbname,
+                                            const char *suffix)
+{
+    char *fname = NULL;
     char c[2], d[2];
 
-    if (mbname->domain) {
-        if (mbname->localpart) {
+    if (mbname->localpart) {
+        if (mbname->domain) {
             if (suffix) {
                 fname = strconcat(config_dir,
                                   FNAME_DOMAINDIR,
@@ -2181,47 +2399,68 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
         else {
             if (suffix) {
                 fname = strconcat(config_dir,
-                                  FNAME_DOMAINDIR,
-                                  dir_hash_b(mbname->domain, config_fulldirhash, d),
-                                  "/", mbname->domain,
-                                  "/", FNAME_SHAREDPREFIX, ".", suffix,
+                                  FNAME_USERDIR,
+                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
+                                  "/", mbname->localpart, ".", suffix,
                                   (char *)NULL);
             }
             else {
                 fname = strconcat(config_dir,
-                                  FNAME_DOMAINDIR,
-                                  dir_hash_b(mbname->domain, config_fulldirhash, d),
-                                  "/", mbname->domain,
+                                  FNAME_USERDIR,
+                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
                                   (char *)NULL);
             }
         }
     }
-    else {
-        if (mbname->localpart) {
-            if (suffix) {
-                fname = strconcat(config_dir,
-                                  FNAME_USERDIR,
-                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
-                                  "/", mbname->localpart, ".", suffix,
-                                  (char *)NULL);
-            }
-            else {
-                fname = strconcat(config_dir,
-                                  FNAME_USERDIR,
-                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
-                                  (char *)NULL);
-            }
+    else if (mbname->domain) {
+        if (suffix) {
+            fname = strconcat(config_dir,
+                              FNAME_DOMAINDIR,
+                              dir_hash_b(mbname->domain, config_fulldirhash, d),
+                              "/", mbname->domain,
+                              "/", FNAME_SHAREDPREFIX, ".", suffix,
+                              (char *)NULL);
         }
         else {
-            if (suffix) {
-                fname = strconcat(config_dir,
-                                  "/", FNAME_SHAREDPREFIX, ".", suffix,
-                                  (char *)NULL);
-            }
-            else {
-                fname = xstrdup(config_dir);
-            }
+            fname = strconcat(config_dir,
+                              FNAME_DOMAINDIR,
+                              dir_hash_b(mbname->domain, config_fulldirhash, d),
+                              "/", mbname->domain,
+                              (char *)NULL);
         }
+    }
+    else {
+        if (suffix) {
+            fname = strconcat(config_dir,
+                              "/", FNAME_SHAREDPREFIX, ".", suffix,
+                              (char *)NULL);
+        }
+        else {
+            fname = xstrdup(config_dir);
+        }
+    }
+
+    return fname;
+}
+
+EXPORTED char *mboxid_conf_getpath(const char *mboxid, const char *suffix)
+{
+    char *fname = NULL;
+    char path[MAX_MAILBOX_PATH+1];
+
+    mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mboxid);
+
+    if (suffix) {
+        fname = strconcat(config_dir,
+                          FNAME_USERDIR,
+                          path, "/", suffix, ".db",
+                          (char *)NULL);
+    }
+    else {
+        fname = strconcat(config_dir,
+                          FNAME_USERDIR,
+                          path,
+                          (char *)NULL);
     }
 
     return fname;
@@ -2229,46 +2468,7 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
 
 /* ========================= COUNTERS ============================ */
 
-static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
-{
-    bit64 fileval = 0;
-    mbname_t *mbname = NULL;
-    char *fname = NULL;
-    const char *base = NULL;
-    size_t len = 0;
-    int fd = -1;
-
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, metaname);
-    if (!fname) goto done;
-
-    fd = open(fname, O_RDONLY);
-
-    /* read the value - note: we don't care if it's being rewritten,
-     * we'll still get a consistent read on either the old or new
-     * value */
-    if (fd != -1) {
-        struct stat sbuf;
-        if (fstat(fd, &sbuf)) {
-            syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
-            goto done;
-        }
-        if (sbuf.st_size) {
-            map_refresh(fd, 1, &base, &len, sbuf.st_size, metaname, mboxname);
-            parsenum(base, NULL, sbuf.st_size, &fileval);
-            map_free(&base, &len);
-        }
-    }
-
- done:
-    if (fd != -1) close(fd);
-    mbname_free(&mbname);
-    free(fname);
-    return fileval;
-}
-
-#define MV_VERSION 8
+#define MV_VERSION 9
 
 #define MV_OFF_GENERATION 0
 #define MV_OFF_VERSION 4
@@ -2303,9 +2503,13 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
 #define MV_OFF_JMAPNOTIFICATIONDELETEDMODSEQ 232
 #define MV_OFF_JMAPNOTIFICATIONFOLDERSMODSEQ 240
 #define MV_OFF_JMAPNOTIFICATIONFOLDERSDELETEDMODSEQ 248
-#define MV_OFF_UIDVALIDITY 256
-#define MV_OFF_CRC 260
-#define MV_LENGTH 264
+#define MV_OFF_SIEVEMODSEQ 256
+#define MV_OFF_SIEVEDELETEDMODSEQ 264
+#define MV_OFF_SIEVEFOLDERSMODSEQ 272
+#define MV_OFF_SIEVEFOLDERSDELETEDMODSEQ 280
+#define MV_OFF_UIDVALIDITY 288
+#define MV_OFF_CRC 292
+#define MV_LENGTH 296
 
 /* NOTE: you need a MV_LENGTH byte base here */
 static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxname_counters *vals)
@@ -2520,6 +2724,49 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         vals->uidvalidity = ntohl(*((uint32_t *)(base+256)));
         break;
 
+    case 9:
+        if (len != 296) return IMAP_MAILBOX_CHECKSUM;
+        if (crc32_map(base, 292) != ntohl(*((uint32_t *)(base+292))))
+            return IMAP_MAILBOX_CHECKSUM;
+
+        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
+        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
+        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
+        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
+        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
+        vals->mailfoldersmodseq = ntohll(*((uint64_t *)(base+48)));
+        vals->caldavfoldersmodseq = ntohll(*((uint64_t *)(base+56)));
+        vals->carddavfoldersmodseq = ntohll(*((uint64_t *)(base+64)));
+        vals->notesfoldersmodseq = ntohll(*((uint64_t *)(base+72)));
+        vals->quotamodseq = ntohll(*((uint64_t *)(base+80)));
+        vals->raclmodseq = ntohll(*((uint64_t *)(base+88)));
+        vals->submissionmodseq = ntohll(*((uint64_t *)(base+96)));
+        vals->submissionfoldersmodseq = ntohll(*((uint64_t *)(base+104)));
+        vals->maildeletedmodseq = ntohll(*((uint64_t *)(base+112)));
+        vals->caldavdeletedmodseq = ntohll(*((uint64_t *)(base+120)));
+        vals->carddavdeletedmodseq = ntohll(*((uint64_t *)(base+128)));
+        vals->notesdeletedmodseq = ntohll(*((uint64_t *)(base+136)));
+        vals->submissiondeletedmodseq = ntohll(*((uint64_t *)(base+144)));
+        vals->mailfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+152)));
+        vals->caldavfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+160)));
+        vals->carddavfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+168)));
+        vals->notesfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+176)));
+        vals->submissionfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+184)));
+        vals->davnotificationmodseq = ntohll(*((uint64_t *)(base+192)));
+        vals->davnotificationdeletedmodseq = ntohll(*((uint64_t *)(base+200)));
+        vals->davnotificationfoldersmodseq = ntohll(*((uint64_t *)(base+208)));
+        vals->davnotificationfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+216)));
+        vals->jmapnotificationmodseq = ntohll(*((uint64_t *)(base+224)));
+        vals->jmapnotificationdeletedmodseq = ntohll(*((uint64_t *)(base+232)));
+        vals->jmapnotificationfoldersmodseq = ntohll(*((uint64_t *)(base+240)));
+        vals->jmapnotificationfoldersdeletedmodseq = ntohll(*((uint64_t *)(base+248)));
+        vals->sievemodseq = ntohll(*((uint64_t *)(base+256)));
+        vals->sievedeletedmodseq = ntohll(*((uint64_t *)(base+264)));
+        vals->sievefoldersmodseq = ntohll(*((uint64_t *)(base+272)));
+        vals->sievefoldersdeletedmodseq = ntohll(*((uint64_t *)(base+280)));
+        vals->uidvalidity = ntohl(*((uint32_t *)(base+288)));
+        break;
+
     default:
         return IMAP_MAILBOX_BADFORMAT;
     }
@@ -2577,6 +2824,10 @@ static void mboxname_counters_to_buf(const struct mboxname_counters *vals, char 
                  vals->jmapnotificationfoldersmodseq);
     align_htonll(base+MV_OFF_JMAPNOTIFICATIONFOLDERSDELETEDMODSEQ,
                  vals->jmapnotificationfoldersdeletedmodseq);
+    align_htonll(base+MV_OFF_SIEVEMODSEQ, vals->sievemodseq);
+    align_htonll(base+MV_OFF_SIEVEDELETEDMODSEQ, vals->sievedeletedmodseq);
+    align_htonll(base+MV_OFF_SIEVEFOLDERSMODSEQ, vals->sievefoldersmodseq);
+    align_htonll(base+MV_OFF_SIEVEFOLDERSDELETEDMODSEQ, vals->sievefoldersdeletedmodseq);
     *((uint32_t *)(base+MV_OFF_UIDVALIDITY)) = htonl(vals->uidvalidity);
     *((uint32_t *)(base+MV_OFF_CRC)) = htonl(crc32_map(base, MV_OFF_CRC));
 }
@@ -2584,25 +2835,15 @@ static void mboxname_counters_to_buf(const struct mboxname_counters *vals, char 
 /* XXX - inform about errors?  Any error causes the value of at least
    last+1 to be returned.  An error only on writing causes
    max(last, fileval) + 1 to still be returned */
-static int mboxname_load_counters(const char *mboxname, struct mboxname_counters *vals, int *fdp)
+static int mboxname_load_fcounters(const char *fname, struct mboxname_counters *vals, int *fdp)
 {
     int fd = -1;
-    char *fname = NULL;
     struct stat sbuf, fbuf;
     const char *base = NULL;
     size_t len = 0;
-    mbname_t *mbname = NULL;
     int r = 0;
 
     memset(vals, 0, sizeof(struct mboxname_counters));
-
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, "counters");
-    if (!fname) {
-        r = IMAP_MAILBOX_BADNAME;
-        goto done;
-    }
 
     /* get a blocking lock on fd */
     for (;;) {
@@ -2613,19 +2854,23 @@ static int mboxname_load_counters(const char *mboxname, struct mboxname_counters
             fd = open(fname, O_RDWR | O_CREAT, 0644);
         }
         if (fd == -1) {
-            syslog(LOG_ERR, "IOERROR: failed to create %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: create failed",
+                             "filename=<%s>", fname);
             goto done;
         }
         if (lock_blocking(fd, fname)) {
-            syslog(LOG_ERR, "IOERROR: failed to lock %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: lock_blocking failed",
+                             "filename=<%s>", fname);
             goto done;
         }
         if (fstat(fd, &sbuf)) {
-            syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                             "filename=<%s>", fname);
             goto done;
         }
         if (stat(fname, &fbuf)) {
-            syslog(LOG_ERR, "IOERROR: failed to stat file %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: stat failed",
+                             "filename=<%s>", fname);
             goto done;
         }
         if (sbuf.st_ino == fbuf.st_ino) break;
@@ -2639,19 +2884,13 @@ static int mboxname_load_counters(const char *mboxname, struct mboxname_counters
         goto done;
     }
 
-    if (sbuf.st_size >= 8) {
+    if (sbuf.st_size) {
         /* read the old value */
-        map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
+        map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", fname);
         if (len >= 8) {
             r = mboxname_buf_to_counters(base, len, vals);
         }
         map_free(&base, &len);
-    }
-    else {
-        /* going to have to read the old files */
-        vals->mailmodseq = vals->caldavmodseq = vals->carddavmodseq =
-            vals->highestmodseq = mboxname_readval_old(mboxname, "modseq");
-        vals->uidvalidity = mboxname_readval_old(mboxname, "uidvalidity");
     }
 
 done:
@@ -2665,34 +2904,23 @@ done:
         /* maintain the lock until we're done */
         *fdp = fd;
     }
-    mbname_free(&mbname);
-    free(fname);
     return r;
 }
 
-static int mboxname_set_counters(const char *mboxname, struct mboxname_counters *vals, int fd)
+static int mboxname_set_fcounters(const char *fname, struct mboxname_counters *vals, int fd)
 {
-    char *fname = NULL;
-    mbname_t *mbname = NULL;
     char buf[MV_LENGTH];
     char newfname[MAX_MAILBOX_PATH];
     int newfd = -1;
     int n = 0;
     int r = 0;
 
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, "counters");
-    if (!fname) {
-        r = IMAP_MAILBOX_BADNAME;
-        goto done;
-    }
-
     snprintf(newfname, MAX_MAILBOX_PATH, "%s.NEW", fname);
     newfd = open(newfname, O_CREAT | O_TRUNC | O_WRONLY, 0644);
     if (newfd == -1) {
         r = IMAP_IOERROR;
-        syslog(LOG_ERR, "IOERROR: failed to open for write %s: %m", newfname);
+        xsyslog(LOG_ERR, "IOERROR: open failed",
+                         "filename=<%s>", newfname);
         goto done;
     }
 
@@ -2703,13 +2931,15 @@ static int mboxname_set_counters(const char *mboxname, struct mboxname_counters 
     n = retry_write(newfd, buf, MV_LENGTH);
     if (n < 0) {
         r = IMAP_IOERROR;
-        syslog(LOG_ERR, "IOERROR: failed to write %s: %m", newfname);
+        xsyslog(LOG_ERR, "IOERROR: retry_write failed",
+                         "filename=<%s>", newfname);
         goto done;
     }
 
     if (fdatasync(newfd)) {
         r = IMAP_IOERROR;
-        syslog(LOG_ERR, "IOERROR: failed to fdatasync %s: %m", newfname);
+        xsyslog(LOG_ERR, "IOERROR: fdatasync failed",
+                         "filename=<%s>", newfname);
         goto done;
     }
 
@@ -2718,7 +2948,9 @@ static int mboxname_set_counters(const char *mboxname, struct mboxname_counters 
 
     if (rename(newfname, fname)) {
         r = IMAP_IOERROR;
-        syslog(LOG_ERR, "IOERROR: failed to rename %s: %m", newfname);
+        xsyslog(LOG_ERR, "IOERROR: rename failed",
+                         "oldfname=<%s> newfname=<%s>",
+                         newfname, fname);
         goto done;
     }
 
@@ -2728,8 +2960,6 @@ static int mboxname_set_counters(const char *mboxname, struct mboxname_counters 
         lock_unlock(fd, fname);
         close(fd);
     }
-    mbname_free(&mbname);
-    free(fname);
 
     return r;
 }
@@ -2741,53 +2971,28 @@ static int mboxname_unload_counters(int fd)
     return 0;
 }
 
-EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals)
+static int mboxname_read_fcounters(const char *fname, struct mboxname_counters *vals)
 {
     int r = 0;
-    mbname_t *mbname = NULL;
     struct stat sbuf;
-    char *fname = NULL;
     const char *base = NULL;
     size_t len = 0;
     int fd = -1;
 
     memset(vals, 0, sizeof(struct mboxname_counters));
 
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, "counters");
-    if (!fname) {
-        r = IMAP_MAILBOX_BADNAME;
-        goto done;
-    }
-
     fd = open(fname, O_RDONLY);
-
-    /* if no file, import from the old files potentially, and write a file regardless */
-    if (fd < 0) {
-        /* race => multiple rewrites, won't hurt too much */
-        r = mboxname_load_counters(mboxname, vals, &fd);
-        if (r) goto done;
-        r = mboxname_set_counters(mboxname, vals, fd);
-        fd = -1;
-        if (r) goto done;
-        free(fname);
-        fname = mboxname_conf_getpath(mbname, "modseq");
-        if (fname) unlink(fname);
-        free(fname);
-        fname = mboxname_conf_getpath(mbname, "uidvalidity");
-        if (fname) unlink(fname);
-        goto done;
-    }
+    if (fd < 0) goto done;
 
     if (fstat(fd, &sbuf)) {
-        syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+        xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                         "filename=<%s>", fname);
         r = IMAP_IOERROR;
         goto done;
     }
 
     if (sbuf.st_size >= 8) {
-        map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", mboxname);
+        map_refresh(fd, 1, &base, &len, sbuf.st_size, "counters", fname);
         if (len >= 8)
             r = mboxname_buf_to_counters(base, len, vals);
         map_free(&base, &len);
@@ -2795,14 +3000,26 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
 
  done:
     if (fd != -1) close(fd);
-    mbname_free(&mbname);
+    return r;
+}
+
+EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals)
+{
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    int r = mboxname_read_fcounters(fname, vals);
+
     free(fname);
+    mbname_free(&mbname);
+
     return r;
 }
 
 enum domodseq { MBOXMODSEQ, QUOTAMODSEQ, RACLMODSEQ };
 
-static modseq_t mboxname_domodseq(const char *mboxname,
+static modseq_t mboxname_domodseq(const char *fname,
+                                  const char *mboxname,
                                   modseq_t last,
                                   enum domodseq domodseq,
                                   int mbtype,   // for MBOXMODSEQ
@@ -2821,7 +3038,7 @@ static modseq_t mboxname_domodseq(const char *mboxname,
         return last + add;
 
     /* XXX error handling */
-    if (mboxname_load_counters(mboxname, &counters, &fd))
+    if (mboxname_load_fcounters(fname, &counters, &fd))
         return last + add;
 
     oldcounters = counters;
@@ -2875,6 +3092,14 @@ static modseq_t mboxname_domodseq(const char *mboxname,
                 &counters.jmapnotificationfoldersdeletedmodseq :
                 &counters.jmapnotificationfoldersmodseq;
         }
+        else if (mboxname_issievemailbox(mboxname, mbtype)) {
+            typemodseqp = isdelete ?
+                &counters.sievedeletedmodseq :
+                &counters.sievemodseq;
+            foldersmodseqp = isdelete ?
+                &counters.sievefoldersdeletedmodseq :
+                &counters.sievefoldersmodseq;
+        }
         else {
             typemodseqp = isdelete ?
                 &counters.maildeletedmodseq :
@@ -2909,7 +3134,7 @@ static modseq_t mboxname_domodseq(const char *mboxname,
     }
 
     if (memcmp(&counters, &oldcounters, sizeof(struct mboxname_counters)))
-        mboxname_set_counters(mboxname, &counters, fd);
+        mboxname_set_fcounters(fname, &counters, fd);
     else
         mboxname_unload_counters(fd);
 
@@ -2918,12 +3143,28 @@ static modseq_t mboxname_domodseq(const char *mboxname,
 
 EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int flags)
 {
-    return mboxname_domodseq(mboxname, last, MBOXMODSEQ, mbtype, flags, 1);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, MBOXMODSEQ, mbtype, flags, 1);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t last, int mbtype, int flags)
 {
-    return mboxname_domodseq(mboxname, last, MBOXMODSEQ, mbtype, flags, 0);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, MBOXMODSEQ, mbtype, flags, 0);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED modseq_t mboxname_readquotamodseq(const char *mboxname)
@@ -2933,20 +3174,42 @@ EXPORTED modseq_t mboxname_readquotamodseq(const char *mboxname)
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return 0;
 
-    if (mboxname_read_counters(mboxname, &counters))
-        return 0;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
 
+    int r = mboxname_read_fcounters(fname, &counters);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    if (r) return 0;
     return counters.quotamodseq;
 }
 
 EXPORTED modseq_t mboxname_nextquotamodseq(const char *mboxname, modseq_t last)
 {
-    return mboxname_domodseq(mboxname, last, QUOTAMODSEQ, 0, 0, 1);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, QUOTAMODSEQ, 0, 0, 1);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED modseq_t mboxname_setquotamodseq(const char *mboxname, modseq_t last)
 {
-    return mboxname_domodseq(mboxname, last, QUOTAMODSEQ, 0, 0, 0);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, QUOTAMODSEQ, 0, 0, 0);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED modseq_t mboxname_readraclmodseq(const char *mboxname)
@@ -2959,46 +3222,77 @@ EXPORTED modseq_t mboxname_readraclmodseq(const char *mboxname)
     if (!mboxname_isusermailbox(mboxname, /*isinbox*/1))
         return 0;  // raclmodseq is only defined on user inboxes
 
-    if (mboxname_read_counters(mboxname, &counters))
-        return 0;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = fname = mboxname_conf_getpath(mbname, "counters");
 
+    int r = mboxname_read_fcounters(fname, &counters);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    if (r) return 0;
     return counters.raclmodseq;
 }
 
 EXPORTED modseq_t mboxname_nextraclmodseq(const char *mboxname, modseq_t last)
 {
-    return mboxname_domodseq(mboxname, last, RACLMODSEQ, 0, 0, 1);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, RACLMODSEQ, 0, 0, 1);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED modseq_t mboxname_setraclmodseq(const char *mboxname, modseq_t last)
 {
-    return mboxname_domodseq(mboxname, last, RACLMODSEQ, 0, 0, 0);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    modseq_t modseq = mboxname_domodseq(fname, mboxname, last, RACLMODSEQ, 0, 0, 0);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    return modseq;
 }
 
 EXPORTED uint32_t mboxname_readuidvalidity(const char *mboxname)
 {
-    struct mboxname_counters counters;
-
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return 0;
 
-    if (mboxname_read_counters(mboxname, &counters))
-        return 0;
+    struct mboxname_counters counters;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
 
+    int r = mboxname_read_counters(mboxname, &counters);
+
+    free(fname);
+    mbname_free(&mbname);
+
+    if (r) return 0;
     return counters.uidvalidity;
 }
 
 EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
 {
-    struct mboxname_counters counters;
-    int fd = -1;
-
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return last + 1;
 
+    struct mboxname_counters counters;
+    int fd = -1;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
     /* XXX error handling */
-    if (mboxname_load_counters(mboxname, &counters, &fd))
-        return last + 1;
+    if (mboxname_load_fcounters(fname, &counters, &fd)) {
+        counters.uidvalidity = last + 1;
+        goto done;
+    }
 
     if (counters.uidvalidity < last)
         counters.uidvalidity = last;
@@ -3006,23 +3300,30 @@ EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
     counters.uidvalidity++;
 
     /* always set, because we always increased */
-    mboxname_set_counters(mboxname, &counters, fd);
+    mboxname_set_fcounters(fname, &counters, fd);
+
+ done:
+    free(fname);
+    mbname_free(&mbname);
 
     return counters.uidvalidity;
 }
 
 EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
 {
-    struct mboxname_counters counters;
-    int fd = -1;
-    int dirty = 0;
-
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return val;
 
-    /* XXX error handling */
-    if (mboxname_load_counters(mboxname, &counters, &fd))
-        return val;
+    struct mboxname_counters counters;
+    int fd = -1;
+    int dirty = 0;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    if (mboxname_load_fcounters(fname, &counters, &fd)) {
+        counters.uidvalidity = val;
+        goto done;
+    }
 
     if (counters.uidvalidity < val) {
         counters.uidvalidity = val;
@@ -3030,9 +3331,13 @@ EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
     }
 
     if (dirty)
-        mboxname_set_counters(mboxname, &counters, fd);
+        mboxname_set_fcounters(fname, &counters, fd);
     else
         mboxname_unload_counters(fd);
+
+ done:
+    free(fname);
+    mbname_free(&mbname);
 
     return val;
 }

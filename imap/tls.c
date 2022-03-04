@@ -1368,7 +1368,7 @@ EXPORTED int tls_reset_servertls(SSL **conn)
         if (TLS_FAST_SHUTDOWN) {
             /*
              * Don't bother spending time closing the TLS session,
-             * but make sure its available for reuse.
+             * but make sure it is available for reuse.
              */
             SSL_set_shutdown(*conn,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
         }
@@ -1743,6 +1743,41 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     *ret = tls_conn;
 
     return r;
+}
+
+/* Select an application protocol from the client list in order of preference */
+EXPORTED int tls_alpn_select(SSL *ssl __attribute__((unused)),
+                             const unsigned char **out, unsigned char *outlen,
+                             const unsigned char *in, unsigned int inlen,
+                             void *server_list)
+{
+    strarray_t ids = STRARRAY_INITIALIZER;
+
+    for (; inlen; inlen -= (in[0] + 1), in += in[0] + 1) {
+        struct tls_alpn_t *alpn;
+
+        for (alpn = (struct tls_alpn_t *) server_list; alpn->id; alpn++) {
+            if ((in[0] == strlen(alpn->id)) &&
+                memcmp(alpn->id, in + 1, in[0]) == 0 &&
+                (!alpn->check_availabilty || alpn->check_availabilty(alpn->rock))) {
+
+                strarray_fini(&ids);
+
+                *out = in + 1;
+                *outlen = in[0];
+                return SSL_TLSEXT_ERR_OK;
+            }
+        }
+
+        strarray_appendm(&ids, xstrndup((const char *) in + 1, in[0]));
+    }
+
+    char *proto = strarray_join(&ids, ", ");
+    xsyslog(LOG_NOTICE, "ALPN failed", "proto=<%s>", proto);
+    free(proto);
+    strarray_fini(&ids);
+
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
 }
 
 #else

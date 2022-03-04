@@ -319,6 +319,11 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         capability = "vnd.cyrus.snooze";
         supported = parse_script->support & SIEVE_CAPA_SNOOZE;
         break;
+
+    case B_PROCESSIMIP:
+        capability = "vnd.cyrus.imip";
+        supported = parse_script->support & SIEVE_CAPA_IMIP;
+        break;
     }
 
     if (!supported) {
@@ -403,6 +408,7 @@ void free_test(test_t *t)
 
     case BC_DATE:
     case BC_CURRENTDATE:
+        free(t->u.dt.zone.offset);
         free(t->u.dt.header_name);
         strarray_free(t->u.dt.kl);
         break;
@@ -537,6 +543,12 @@ void free_tree(commandlist_t *cl)
             strarray_free(cl->u.sn.removeflags);
             arrayu64_free(cl->u.sn.times);
             free(cl->u.sn.tzid);
+            break;
+
+        case B_PROCESSIMIP:
+            free(cl->u.imip.calendarid);
+            free(cl->u.imip.outcome_var);
+            free(cl->u.imip.errstr_var);
             break;
         }
 

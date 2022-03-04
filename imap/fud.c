@@ -392,7 +392,7 @@ static int handle_request(const char *who, const char *name,
     }
 
     if (mboxname_isusermailbox(intname, 0)) {
-        int myrights = cyrus_acl_myrights(mystate, mailbox->acl);
+        int myrights = cyrus_acl_myrights(mystate, mailbox_acl(mailbox));
         if (!(myrights & ACL_USER0)) {
             auth_freestate(mystate);
             mailbox_close(&mailbox);
@@ -411,7 +411,7 @@ static int handle_request(const char *who, const char *name,
         struct seen *seendb = NULL;
         struct seendata sd = SEENDATA_INITIALIZER;
         r = seen_open(who, 0, &seendb);
-        if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+        if (!r) r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
         seen_close(&seendb);
 
         if (r) {

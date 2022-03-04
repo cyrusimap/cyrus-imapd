@@ -51,6 +51,7 @@
 #include "acl.h"
 #include "annotate.h"
 #include "caldav_db.h"
+#include "dav_util.h"
 #include "httpd.h"
 #include "spool.h"
 #include "quota.h"
@@ -64,19 +65,6 @@
 #define SCHED_OUTBOX    "Outbox/"
 #define SCHED_DEFAULT   "Default/"
 #define MANAGED_ATTACH  "Attachments/"
-
-/* XML namespace URIs */
-#define XML_NS_DAV      "DAV:"
-#define XML_NS_CALDAV   "urn:ietf:params:xml:ns:caldav"
-#define XML_NS_CARDDAV  "urn:ietf:params:xml:ns:carddav"
-#define XML_NS_ISCHED   "urn:ietf:params:xml:ns:ischedule"
-#define XML_NS_CS       "http://calendarserver.org/ns/"
-#define XML_NS_MECOM    "http://me.com/_namespace/"
-#define XML_NS_MOBME    "urn:mobileme:davservices"
-#define XML_NS_APPLE    "http://apple.com/ns/ical/"
-#define XML_NS_USERFLAG "http://cyrusimap.org/ns/userflag/"
-#define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
-#define XML_NS_DAVMOUNT "http://purl.org/NET/webdav/mount/"
 
 #define USER_COLLECTION_PREFIX  "user"
 #define GROUP_COLLECTION_PREFIX "group"
@@ -97,8 +85,11 @@ enum {
     NS_MECOM,
     NS_MOBME,
     NS_CYRUS,
+    NS_JMAPCAL,
+    NS_USERFLAG,
+    NS_SYSFLAG
 };
-#define NUM_NAMESPACE 8
+#define NUM_NAMESPACE 9
 
 /* Cyrus-specific privileges */
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */
@@ -111,6 +102,10 @@ enum {
 #define DACL_ADMIN      ACL_ADMIN       /* CY:admin (aggregates
                                            DAV:read-acl, DAV:write-acl,
                                            DAV:unlock and DAV:share) */
+
+/* JMAP-specific privileges */
+#define DACL_WRITEOWNRSRC  ACL_USER6   /* CY:update-own-resource - used for JMAP */
+#define DACL_UPDATEPRIVATE ACL_USER5
 
 /* WebDAV (RFC 3744) privileges */
 #define DACL_READ       (ACL_READ\
@@ -172,94 +167,6 @@ enum {
                                            schedule-send-reply,
                                            schedule-send-freebusy) */
 
-/* Index into preconditions array */
-enum {
-    /* WebDAV (RFC 4918) preconditions */
-    DAV_PROT_PROP = 1,
-    DAV_BAD_LOCK_TOKEN,
-    DAV_NEED_LOCK_TOKEN,
-    DAV_LOCKED,
-    DAV_FINITE_DEPTH,
-
-    /* WebDAV Versioning (RFC 3253) preconditions */
-    DAV_SUPP_REPORT,
-    DAV_RES_EXISTS,
-
-    /* WebDAV ACL (RFC 3744) preconditions */
-    DAV_NEED_PRIVS,
-    DAV_NO_INVERT,
-    DAV_NO_ABSTRACT,
-    DAV_SUPP_PRIV,
-    DAV_RECOG_PRINC,
-    DAV_ALLOW_PRINC,
-    DAV_GRANT_ONLY,
-
-    /* WebDAV Quota (RFC 4331) preconditions */
-    DAV_OVER_QUOTA,
-    DAV_NO_DISK_SPACE,
-
-    /* WebDAV Extended MKCOL (RFC 5689) preconditions */
-    DAV_VALID_RESTYPE,
-
-    /* WebDAV Sync (RFC 6578) preconditions */
-    DAV_SYNC_TOKEN,
-    DAV_OVER_LIMIT,
-
-    /* CalDAV (RFC 4791) preconditions */
-    CALDAV_SUPP_DATA,
-    CALDAV_VALID_DATA,
-    CALDAV_VALID_OBJECT,
-    CALDAV_SUPP_COMP,
-    CALDAV_LOCATION_OK,
-    CALDAV_UID_CONFLICT,
-    CALDAV_SUPP_FILTER,
-    CALDAV_VALID_FILTER,
-    CALDAV_SUPP_COLLATION,
-
-    /* RSCALE (RFC 7529) preconditions */
-    CALDAV_SUPP_RSCALE,
-
-    /* Time Zones by Reference (RFC 7809) preconditions */
-    CALDAV_VALID_TIMEZONE,
-
-    /* Managed Attachments (draft-ietf-calext-caldav-attachments) preconditions */
-    CALDAV_VALID_MANAGEDID,
-
-    /* Bulk Change (draft-daboo-calendarserver-bulk-change) preconditions */
-    CALDAV_CTAG_OK,
-
-    /* CalDAV Scheduling (RFC 6638) preconditions */
-    CALDAV_VALID_SCHED,
-    CALDAV_VALID_ORGANIZER,
-    CALDAV_UNIQUE_OBJECT,
-    CALDAV_SAME_ORGANIZER,
-    CALDAV_ALLOWED_ORG_CHANGE,
-    CALDAV_ALLOWED_ATT_CHANGE,
-    CALDAV_DEFAULT_NEEDED,
-    CALDAV_VALID_DEFAULT,
-
-    /* iSchedule (draft-desruisseaux-ischedule) preconditions */
-    ISCHED_UNSUPP_VERSION,
-    ISCHED_UNSUPP_DATA,
-    ISCHED_INVALID_DATA,
-    ISCHED_INVALID_SCHED,
-    ISCHED_ORIG_MISSING,
-    ISCHED_MULTIPLE_ORIG,
-    ISCHED_ORIG_INVALID,
-    ISCHED_ORIG_DENIED,
-    ISCHED_RECIP_MISSING,
-    ISCHED_RECIP_MISMATCH,
-    ISCHED_VERIFICATION_FAILED,
-
-    /* CardDAV (RFC 6352) preconditions */
-    CARDDAV_SUPP_DATA,
-    CARDDAV_VALID_DATA,
-    CARDDAV_UID_CONFLICT,
-    CARDDAV_LOCATION_OK,
-    CARDDAV_SUPP_FILTER,
-    CARDDAV_SUPP_COLLATION
-};
-
 /* Preference bits */
 enum {
     PREFER_MIN    = (1<<0),
@@ -296,24 +203,24 @@ typedef int (*db_close_proc_t)(void *davdb);
 /* Function to lookup DAV 'resource' in 'mailbox',
  * placing the record in 'data'
  */
-typedef int (*db_lookup_proc_t)(void *davdb, const char *mailbox,
+typedef int (*db_lookup_proc_t)(void *davdb, const mbentry_t *mbentry,
                                 const char *resource, void **data,
                                 int tombstones);
 
 /* Function to lookup DAV 'imapuid' in 'mailbox',
  * placing the record in 'data'
  */
-typedef int (*db_imapuid_proc_t)(void *davdb, const char *mailbox,
+typedef int (*db_imapuid_proc_t)(void *davdb, const mbentry_t *mbentry,
                                  int uid, void **data, int tombstones);
 
 /* Function to process each DAV resource in 'mailbox' with 'cb' */
-typedef int (*db_foreach_proc_t)(void *davdb, const char *mailbox,
+typedef int (*db_foreach_proc_t)(void *davdb, const mbentry_t *mbentry,
                                  int (*cb)(void *rock, void *data), void *rock);
 
 /* Function to process 'limit' DAV resources
    updated since 'oldmodseq' in 'mailbox' with 'cb' */
 typedef int (*db_updates_proc_t)(void *davdb, modseq_t oldmodseq,
-                                 const char *mailbox, int kind, int limit,
+                                 const mbentry_t *mbentry, int kind, int limit,
                                  int (*cb)(void *rock, void *data), void *rock);
 
 /* Context for fetching properties */
@@ -368,7 +275,6 @@ struct propfind_ctx {
     xmlBufferPtr xmlbuf;                /* Buffer for dumping XML nodes */
 };
 
-
 /* Context for patching (writing) properties */
 struct proppatch_ctx {
     struct transaction_t *txn;          /* request transaction */
@@ -380,8 +286,10 @@ struct proppatch_ctx {
     struct txn *tid;                    /* Transaction ID for annot writes */
     int *ret;                           /* Return code to pass up to caller */
     struct buf buf;                     /* Working buffer */
+    ptrarray_t postprocs;               /* Post-processors after patching */
 };
-
+/* Post processor function after properties are patched */
+typedef void (*pctx_postproc_t)(struct proppatch_ctx *);
 
 /* Structure for property status */
 struct propstat {
@@ -460,6 +368,20 @@ struct davdb_params {
     db_delete_proc_t delete_resourceLOCKONLY;   /* delete a specific resource */
 };
 
+/* Function to convert to/from MIME type */
+struct mime_type_t {
+    const char *content_type;
+    const char *version;
+    const char *file_ext;
+    struct buf* (*from_object)(void *);
+    void* (*to_object)(const struct buf *);
+    void (*free)(void *);
+    const char* (*begin_stream)(struct buf *, struct mailbox *mailbox,
+                                const char *prodid, const char *name,
+                                const char *desc, const char *color);
+    void (*end_stream)(struct buf *);
+};
+
 /*
  * Process 'priv', augmenting 'rights' as necessary.
  * Returns 1 if processing is complete.
@@ -474,21 +396,8 @@ typedef int (*delete_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
 
 /* Function to do special processing for GET method (optional) */
 typedef int (*get_proc_t)(struct transaction_t *txn, struct mailbox *mailbox,
-                          struct index_record *record, void *data, void **obj);
-
-/* Function to convert to/from MIME type */
-struct mime_type_t {
-    const char *content_type;
-    const char *version;
-    const char *file_ext;
-    struct buf* (*from_object)(void *);
-    void* (*to_object)(const struct buf *);
-    void (*free)(void *);
-    const char* (*begin_stream)(struct buf *, struct mailbox *mailbox,
-                                const char *prodid, const char *name,
-                                const char *desc, const char *color);
-    void (*end_stream)(struct buf *);
-};
+                          struct index_record *record, void *data, void **obj,
+                          struct mime_type_t *mime);
 
 /* meth_mkcol() parameters */
 typedef int (*mkcol_proc_t)(struct mailbox *mailbox);
@@ -607,8 +516,6 @@ struct match_type_t {
     unsigned value;
 };
 
-extern const struct match_type_t dav_match_types[];
-
 enum {
     COLLATION_UNICODE = 0,
     COLLATION_ASCII,
@@ -620,8 +527,6 @@ struct collation_t {
     unsigned value;
 };
 
-extern const struct collation_t dav_collations[];
-    
 struct text_match_t {
     xmlChar *text;
     unsigned negate    : 1;
@@ -689,18 +594,11 @@ int dav_parse_req_target(struct transaction_t *txn,
                          struct meth_params *params);
 int calcarddav_parse_path(const char *path, struct request_target_t *tgt,
                           const char *mboxprefix, const char **resultstr);
-int dav_get_validators(struct mailbox *mailbox, void *data,
-                       const char *userid, struct index_record *record,
-                       const char **etag, time_t *lastmod);
 modseq_t dav_get_modseq(struct mailbox *mailbox,
                         void *data, const char *userid);
 int dav_check_precond(struct transaction_t *txn, struct meth_params *params,
                       struct mailbox *mailbox, const void *data,
                       const char *etag, time_t lastmod);
-int dav_store_resource(struct transaction_t *txn,
-                       const char *data, size_t datalen,
-                       struct mailbox *mailbox, struct index_record *oldrecord,
-                       modseq_t createdmodseq, strarray_t *imapflags);
 int dav_premethod(struct transaction_t *txn);
 unsigned get_preferences(struct transaction_t *txn);
 struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types);
@@ -737,6 +635,8 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
 int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx);
 void free_entry_list(struct propfind_entry_list *elist);
+
+void dav_precond_as_string(struct buf *buf, struct error_t *err);
 
 /* DAV method processing functions */
 int meth_acl(struct transaction_t *txn, void *params);
@@ -911,5 +811,9 @@ int proppatch_todb(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
                    struct propstat propstat[], void *rock);
 int proppatch_restype(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
                       struct propstat propstat[], void *rock);
+
+/* Parse request-target path in DAV principals namespace */
+int principal_parse_path(const char *path, struct request_target_t *tgt,
+                         const char **resultstr);
 
 #endif /* HTTP_DAV_H */

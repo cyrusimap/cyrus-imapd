@@ -58,12 +58,14 @@
 #include "xmalloc.h"
 #include "strarray.h"
 #include "libconfig.h"
+#include "lib/libcyr_cfg.h"
 
 /*
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  */
 EXPORTED int cyrus_acl_myrights(const struct auth_state *auth_state, const char *origacl)
 {
+    int admin_implies_write = libcyrus_config_getswitch(CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE);
     char *acl = xstrdupsafe(origacl);
     char *thisid, *rights, *nextid;
     long acl_positive = 0, acl_negative = 0;
@@ -97,6 +99,11 @@ EXPORTED int cyrus_acl_myrights(const struct auth_state *auth_state, const char 
     }
 
     free(acl);
+
+    if (admin_implies_write && (acl_positive & ACL_ADMIN)) {
+        acl_positive |= ACL_SETSEEN | ACL_WRITE | ACL_INSERT
+                     | ACL_DELETEMSG | ACL_EXPUNGE | ACL_ANNOTATEMSG;
+    }
 
     return acl_positive & ~acl_negative;
 }

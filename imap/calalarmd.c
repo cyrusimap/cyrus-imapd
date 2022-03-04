@@ -126,7 +126,7 @@ int main(int argc, char **argv)
     }
 
     if (runattime) {
-        caldav_alarm_process(runattime, NULL);
+        caldav_alarm_process(runattime, NULL, /*dryrun*/0);
         shut_down(0);
     }
 
@@ -158,7 +158,8 @@ int main(int argc, char **argv)
         signals_poll();
 
         gettimeofday(&start, 0);
-        caldav_alarm_process(0, &interval);
+        caldav_alarm_process(0, &interval, /*dryrun*/0);
+        libcyrus_run_delayed();
         gettimeofday(&end, 0);
 
         signals_poll();

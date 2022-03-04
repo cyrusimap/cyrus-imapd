@@ -203,7 +203,7 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
     /* make a copy and append the default unit if necessary */
     copy = xzmalloc(len + 2);
     strlcpy(copy, str, len + 2);
-    if (cyrus_isdigit(copy[len-1]))
+    if (len > 0 && cyrus_isdigit(copy[len-1]))
         copy[len] = defunit;
 
     p = copy;
@@ -480,7 +480,7 @@ EXPORTED void config_reset(void)
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-        if (imapopts[opt].t == OPT_STRING &&
+        if ((imapopts[opt].t == OPT_STRING || imapopts[opt].t == OPT_DURATION) &&
             (imapopts[opt].seen ||
              (imapopts[opt].def.s &&
               imapopts[opt].val.s != imapopts[opt].def.s &&
@@ -495,6 +495,12 @@ EXPORTED void config_reset(void)
 
     /* free the overflow table */
     free_hash_table(&confighash, free);
+
+    /* in normal use this was either freed already or we fatal'd out,
+     * but under cunit we may continue after catching a fatal, so make
+     * sure includehash gets reset with everything else
+     */
+    free_hash_table(&includehash, NULL);
 
     /* we no longer have loaded config */
     config_loaded = 0;
@@ -874,7 +880,9 @@ static void config_read_file(const char *filename)
 
             /* If we've seen it already, we're replacing it, so we need
              * to free the current string if there is one */
-            if (imapopts[opt].seen && imapopts[opt].t == OPT_STRING)
+            if (imapopts[opt].seen
+                && (imapopts[opt].t == OPT_STRING
+                    || imapopts[opt].t == OPT_DURATION))
                 free((char *)imapopts[opt].val.s);
 
             if (service_specific)
@@ -999,6 +1007,7 @@ static void config_read_file(const char *filename)
             {
                 /* make sure it's parseable, though we don't know the default units */
                 if (config_parseduration(p, '\0', NULL)) {
+                    imapopts[opt].seen = 0; /* not seen after all */
                     snprintf(errbuf, sizeof(errbuf),
                              "unparsable duration '%s' for %s in line %d",
                              p, imapopts[opt].optname, lineno);

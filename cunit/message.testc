@@ -1001,6 +1001,7 @@ HTML_PART "\r\n"
     CU_ASSERT_PTR_NULL(part->params);
     CU_ASSERT_STRING_EQUAL(part->encoding, "BASE64");
 
+    message_free_body(&body);
 #undef HTML_PART
 }
 
@@ -1189,6 +1190,7 @@ static void test_cache_simple(void)
     CU_ASSERT_EQUAL(r, 0);
 
     message_free_body(body);
+    free(body);
 
     message_read_bodystructure(&record, &body);
     CU_ASSERT_PTR_NOT_NULL_FATAL(body);
@@ -1351,6 +1353,42 @@ static void test_cache_quotedaddr(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "Sarah Smith <sjsmith@gmail.com>");
 
     buf_free(&buf);
+}
+
+static void test_parse_bogus_charset_params(void)
+{
+#define TESTCASE(charsetparams, want) \
+    { \
+        static const char msg[] = \
+            "From: Fred Bloggs <fbloggs@fastmail.fm>\r\n" \
+            "To: Sarah Jane Smith <sjsmith@gmail.com>\r\n" \
+            "Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n" \
+            "Subject: Trivial testing email\r\n" \
+            "Message-ID: <fake800@fastmail.fm>\r\n" \
+            "Content-Type: text/plain; " charsetparams "\r\n" \
+            "X-Mailer: Norman\r\n" \
+            "\r\n" \
+            "Hello, World\n"; \
+        int r; \
+        struct body *body = xzmalloc(sizeof(struct body)); \
+        memset(body, 0x45, sizeof(struct body)); \
+        r = message_parse_mapped(msg, sizeof(msg)-1, body, NULL); \
+        CU_ASSERT_EQUAL(r, 0); \
+        if (want) \
+            CU_ASSERT_STRING_EQUAL(body->charset_id, want); \
+        else \
+            CU_ASSERT_PTR_NULL(body->charset_id); \
+        message_free_body(body); \
+        free(body); \
+    }
+
+    TESTCASE("charset=text/plain; charset=iso-8859-1", "iso-8859-1");
+    TESTCASE("charset=us-ascii; charset=iso-8859-1", "iso-8859-1");
+    TESTCASE("charset=iso-8859-1; charset=text/plain", "iso-8859-1");
+    TESTCASE("charset=iso-8859-1; charset=us-ascii", "us-ascii");
+    TESTCASE("charset=text/plain; charset=text/html", "us-ascii");
+
+#undef TESTCASE
 }
 
 /* vim: set ft=c: */

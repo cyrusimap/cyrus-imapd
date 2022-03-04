@@ -55,6 +55,7 @@
 
 #include <time.h>
 
+#include "auth.h"
 #include "hash.h"
 #include "ptrarray.h"
 
@@ -64,12 +65,16 @@
 
 struct email_contactfilter {
     const char *accountid;
+    const struct auth_state *authstate;
+    const struct namespace *namespace;
     struct carddav_db *carddavdb;
     char *addrbook;
     hash_table contactgroups; /* maps groupid to emails (strarray) */
 };
 
 extern void jmap_email_contactfilter_init(const char *accountid,
+                                          const struct auth_state *authstate,
+                                          const struct namespace *namespace,
                                           const char *addressbookid,
                                           struct email_contactfilter *cfilter);
 extern void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter);
@@ -94,6 +99,9 @@ extern void jmap_emailbodies_fini(struct emailbodies *bodies);
 
 extern int jmap_emailbodies_extract(const struct body *root,
                                     struct emailbodies *bodies);
+
+extern int jmap_email_hasattachment(const struct body *root,
+                                    json_t *imagesize_by_partid);
 
 struct jmap_email_filter_parser_rock {
     struct jmap_parser *parser;
@@ -121,13 +129,17 @@ struct matchmime {
     xapian_dbw_t *dbw;
     message_t *m;
     const struct buf *mime;
+    void *convmatch;
 };
 typedef struct matchmime matchmime_t;
-extern matchmime_t *jmap_email_matchmime_init(const struct buf *buf, json_t **err);
+extern matchmime_t *jmap_email_matchmime_new(const struct buf *buf, json_t **err);
 extern void jmap_email_matchmime_free(matchmime_t **matchmimep);
 extern int jmap_email_matchmime(matchmime_t *matchmime,
                                 json_t *jfilter,
+                                struct conversations_state *cstate,
                                 const char *accountid,
+                                const struct auth_state *authstate,
+                                const struct namespace *ns,
                                 time_t internaldate,
                                 json_t **err);
 

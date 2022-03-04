@@ -3,7 +3,6 @@ Changes                 The evolution of this weirdness
 IMAP.pm                 Cyrus::IMAP: Perl interface to Cyrus imclient library
 IMAP/Admin.pm           Cyrus::IMAP::Admin: administrative Cyrus functions
 IMAP/Shell.pm           Cyrus::IMAP::Shell: cyradm command shell
-IMAP/IMSP.pm            Cyrus::IMAP::IMSP: IMSP support routines
 IMAP.xs                 Perl interface routines for Cyrus library
 MANIFEST                This file
 Makefile.PL             Build Makefile for Cyrus::IMAP

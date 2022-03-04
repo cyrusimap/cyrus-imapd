@@ -369,7 +369,6 @@ static void test_fromurl_utf2_high(void)
     free(iurl.freeme);
 }
 
-/* This test was located in lib/test/imapurl.c.  */
 static void test_cycle(void)
 {
     struct imapurl iurl;

@@ -125,7 +125,7 @@ extern int opterr;
 struct backend *backend_current = NULL;
 
 /* our cached connections */
-struct backend **backend_cached = NULL;
+ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 #ifdef HAVE_SSL
 static SSL *tls_conn;
@@ -323,15 +323,13 @@ static void nntp_reset(void)
         index_close(&group_state);
 
     /* close backend connections */
-    i = 0;
-    while (backend_cached && backend_cached[i]) {
-        proxy_downserver(backend_cached[i]);
-        free(backend_cached[i]->context);
-        free(backend_cached[i]);
-        i++;
+    for (i = 0; i < ptrarray_size(&backend_cached); i++) {
+        struct backend *be = ptrarray_nth(&backend_cached, i);
+        proxy_downserver(be);
+        free(be->context);
+        free(be);
     }
-    if (backend_cached) free(backend_cached);
-    backend_cached = NULL;
+    ptrarray_fini(&backend_cached);
     backend_current = NULL;
 
     if (nntp_in) {
@@ -419,7 +417,7 @@ int service_init(int argc __attribute__((unused)),
     /* initialize duplicate delivery database */
     if (duplicate_init(NULL) != 0) {
         syslog(LOG_ERR,
-               "unable to init duplicate delivery database\n");
+               "unable to init duplicate delivery database");
         fatal("unable to init duplicate delivery database", EX_SOFTWARE);
     }
 
@@ -574,6 +572,8 @@ void shut_down(int code)
 
     in_shutdown = 1;
 
+    libcyrus_run_delayed();
+
     proc_cleanup();
 
     /* close local mailbox */
@@ -581,14 +581,13 @@ void shut_down(int code)
         index_close(&group_state);
 
     /* close backend connections */
-    i = 0;
-    while (backend_cached && backend_cached[i]) {
-        proxy_downserver(backend_cached[i]);
-        free(backend_cached[i]->context);
-        free(backend_cached[i]);
-        i++;
+    for (i = 0; i < ptrarray_size(&backend_cached); i++) {
+        struct backend *be = ptrarray_nth(&backend_cached, i);
+        proxy_downserver(be);
+        free(be->context);
+        free(be);
     }
-    if (backend_cached) free(backend_cached);
+    ptrarray_fini(&backend_cached);
 
     duplicate_done();
 
@@ -731,6 +730,8 @@ static void cmdloop(void)
         signals_poll();
 
         proc_register(config_ident, nntp_clienthost, nntp_userid, index_mboxname(group_state), NULL);
+
+        libcyrus_run_delayed();
 
         if (!proxy_check_input(protin, nntp_in, nntp_out,
                                backend_current ? backend_current->in : NULL,
@@ -2641,7 +2642,7 @@ static void cmd_list(char *arg1, char *arg2)
 
         strcpy(pattern, newsprefix);
         strcat(pattern, "*");
-        annotatemore_findall(pattern, 0, "/comment", /*modseq*/0,
+        annotatemore_findall_pattern(pattern, 0, "/comment", /*modseq*/0,
                              newsgroups_cb, lrock.wild, /*flags*/0);
 
         prot_printf(nntp_out, ".\r\n");

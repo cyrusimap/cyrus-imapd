@@ -59,7 +59,6 @@
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
     char *s;                   /* String */
-    comp_pat *p;               /* Compiled pattern, for search */
     struct strlist *next;
 };
 
@@ -88,7 +87,6 @@ struct annotate_metadata
 };
 
 typedef struct annotate_state annotate_state_t;
-typedef struct annotate_recalc_state annotate_recalc_state_t;
 
 annotate_state_t *annotate_state_new(void);
 /* either of these close */
@@ -107,9 +105,16 @@ int annotate_state_set_message(annotate_state_t *state,
                                struct mailbox *mailbox,
                                unsigned int uid);
 
+#define ANNOTATION_SCOPE_UNKNOWN    (-1)
+enum {
+  ANNOTATION_SCOPE_SERVER = 1,
+  ANNOTATION_SCOPE_MAILBOX = 2,
+  ANNOTATION_SCOPE_MESSAGE = 3
+};
+int annotate_state_scope(annotate_state_t *state);
+
 /* String List Management */
 void appendstrlist(struct strlist **l, char *s);
-void appendstrlistpat(struct strlist **l, char *s);
 void freestrlist(struct strlist *l);
 
 /* Attribute Management (also used by ID) */
@@ -155,9 +160,16 @@ typedef int (*annotatemore_find_proc_t)(const char *mailbox,
 /* For findall() matches also tombstones */
 #define ANNOTATE_TOMBSTONES  (1<<0)
 
-/* 'proc'ess all annotations matching 'mailbox' and 'entry' */
-int annotatemore_findall(const char *mboxname, uint32_t uid,
-                         const char *entry,
+/* 'proc'ess all annotations matching 'mailbox' and 'entry'.
+ * if 'mailbox' is NULL, then 'pattern' is a pattern for
+ * mboxlist_findall and will return all matching entries.. */
+EXPORTED int annotatemore_findall_mailbox(const struct mailbox *mailbox,
+                         uint32_t uid, const char *entry,
+                         modseq_t since_modseq,
+                         annotatemore_find_proc_t proc, void *rock,
+                         int flags);
+EXPORTED int annotatemore_findall_pattern(const char *pattern,
+                         uint32_t uid, const char *entry,
                          modseq_t since_modseq,
                          annotatemore_find_proc_t proc, void *rock,
                          int flags);
@@ -190,11 +202,22 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
 int annotatemore_lookupmask(const char *mboxname, const char *entry,
                             const char *userid, struct buf *value);
 /* lookup a single per-message annotation and return result */
-int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
+int annotatemore_msg_lookup(const struct mailbox *mailbox,
+                            uint32_t uid, const char *entry,
                             const char *userid, struct buf *value);
+int annotatemore_lookup_mbe(const mbentry_t *mbentry, const char *entry,
+                            const char *userid, struct buf *value);
+int annotatemore_lookup_mbox(const struct mailbox *mailbox, const char *entry,
+                             const char *userid, struct buf *value);
 /* same but check shared if per-user doesn't exist */
-int annotatemore_msg_lookupmask(const char *mboxname, uint32_t uid, const char *entry,
+int annotatemore_msg_lookupmask(const struct mailbox *mailbox,
+                                uint32_t uid, const char *entry,
                                 const char *userid, struct buf *value);
+int annotatemore_lookupmask_mbe(const mbentry_t *mbentry, const char *entry,
+                                const char *userid, struct buf *value);
+int annotatemore_lookupmask_mbox(const struct mailbox *mailbox,
+                                 const char *entry,
+                                 const char *userid, struct buf *value);
 
 /* store annotations.  Requires an open transaction */
 int annotate_state_store(annotate_state_t *state, struct entryattlist *l);
@@ -233,15 +256,6 @@ int annotate_msg_cleanup(struct mailbox *mailbox, uint32_t uid);
  * Uses its own transaction. */
 int annotate_delete_mailbox(struct mailbox *mailbox);
 
-/* recalc APIs */
-int annotate_recalc_begin(struct mailbox *mailbox,
-                          annotate_recalc_state_t **arsp,
-                          int reconstruct);
-void annotate_recalc_add(annotate_recalc_state_t *ars,
-                         uint32_t uid);
-int annotate_recalc_commit(annotate_recalc_state_t *ars);
-void annotate_recalc_abort(annotate_recalc_state_t *ars);
-
 /*
  * Annotation DB transactions used to be opened and closed explicitly.
  * Now they're opened whenever they're needed as a side effect of
@@ -274,11 +288,13 @@ void annotate_done(void);
  * annotations at all on the mailbox. These APIs are for performance
  * optimisations only; the other annotate APIs will manage their own
  * references internally. */
-int annotate_getdb(const char *mboxname, annotate_db_t **dbp);
+int annotate_getdb(const struct mailbox *mailbox, annotate_db_t **dbp);
 void annotate_putdb(annotate_db_t **dbp);
 
 /* Maybe this isn't the right place - move later */
 int specialuse_validate(const char *mboxname, const char *userid,
                         const char *src, struct buf *dest, int allow_dups);
+
+int annotatemore_upgrade(void);
 
 #endif /* ANNOTATE_H */

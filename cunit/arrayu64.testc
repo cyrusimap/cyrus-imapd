@@ -1,0 +1,748 @@
+#include "cunit/cyrunit.h"
+#include "xmalloc.h"
+#include "bsearch.h"
+#include "arrayu64.h"
+
+static void test_fini_null(void)
+{
+    /* _fini(NULL) is harmless */
+    arrayu64_fini(NULL);
+    /* _free(NULL) is harmless */
+    arrayu64_free(NULL);
+}
+
+static void test_auto(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+    uint64_t u1;
+    uint64_t u2;
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    u1 = 1234567UL;
+    arrayu64_append(&a, u1);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 1);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), u1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), u1);
+
+    u2 = 7654321UL;
+    arrayu64_append(&a, u2);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 2);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), u1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), u2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), u2);
+
+    arrayu64_fini(&a);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT_EQUAL(a.alloc, 0);
+    CU_ASSERT_PTR_NULL(a.data);
+}
+
+static void test_heap(void)
+{
+    arrayu64_t *a = arrayu64_new();
+    uint64_t u1;
+    uint64_t u2;
+
+    CU_ASSERT_EQUAL(a->count, 0);
+    CU_ASSERT(a->alloc >= a->count);
+    CU_ASSERT_EQUAL(arrayu64_nth(a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(a, -1), 0UL);
+
+    u1 = 1234567UL;
+    arrayu64_append(a, u1);
+    CU_ASSERT_EQUAL(a->count, 1);
+    CU_ASSERT(a->alloc >= a->count);
+    CU_ASSERT_PTR_NOT_NULL(a->data);
+    CU_ASSERT_EQUAL(arrayu64_nth(a, 0), u1);
+    CU_ASSERT_EQUAL(arrayu64_nth(a, -1), u1);
+
+    u2 = 7654321UL;
+    arrayu64_append(a, u2);
+    CU_ASSERT_EQUAL(a->count, 2);
+    CU_ASSERT(a->alloc >= a->count);
+    CU_ASSERT_PTR_NOT_NULL(a->data);
+    CU_ASSERT_EQUAL(arrayu64_nth(a, 0), u1);
+    CU_ASSERT_EQUAL(arrayu64_nth(a, 1), u2);
+    CU_ASSERT_EQUAL(arrayu64_nth(a, -1), u2);
+
+    arrayu64_free(a);
+}
+
+static void test_set(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+#define VAL0        (1234567UL)
+#define VAL0REP     (2345678UL)
+#define VAL0REP2    (3456789UL)
+#define VAL1        (1111111UL)
+#define VAL2        (2222222UL)
+#define VAL2REP     (222UL)
+#define VAL3        (3333333UL)
+#define VAL4        (4444444UL)
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    arrayu64_append(&a, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 1);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+
+    arrayu64_set(&a, 0, VAL0REP);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 1);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0REP);
+
+    arrayu64_set(&a, -1, VAL0REP2);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 1);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0REP2);
+
+    arrayu64_append(&a, VAL1);
+    arrayu64_append(&a, VAL2);
+    arrayu64_append(&a, VAL3);
+    arrayu64_append(&a, VAL4);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 5);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0REP2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL4);
+
+    arrayu64_set(&a, 2, VAL2REP);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 5);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0REP2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2REP);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL4);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL0REP
+#undef VAL0REP2
+#undef VAL1
+#undef VAL2
+#undef VAL2REP
+#undef VAL3
+#undef VAL4
+}
+
+static void test_insert(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+#define VAL0   (111111UL)
+#define VAL1   (222222UL)
+#define VAL2   (333333UL)
+#define VAL3   (444444UL)
+#define VAL4   (555555UL)
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    arrayu64_insert(&a, 0, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 1);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+
+    arrayu64_insert(&a, -1, VAL1);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 2);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL0);
+
+    arrayu64_insert(&a, 0, VAL2);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 3);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL0);
+
+    arrayu64_insert(&a, -1, VAL3);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 4);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL0);
+
+    arrayu64_insert(&a, 2, VAL4);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 5);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL4);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL0);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL1
+#undef VAL2
+#undef VAL3
+#undef VAL4
+}
+
+/* test that _set(), _setm(), _insert() and _insertm() of a bad
+ * index will fail silently and leave no side effects including
+ * memory leaks */
+static void test_bad_index(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+#define VAL0   (111111UL)
+#define VAL1   (222222UL)
+#define VAL2   (333333UL)
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    /* when the arrayu64 is empty, -1 is a bad index */
+
+    arrayu64_set(&a, -1, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    arrayu64_insert(&a, -1, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    /* a negative number larger than the (non-zero) count is a bad index */
+    arrayu64_append(&a, VAL1);
+    arrayu64_append(&a, VAL2);
+
+    arrayu64_set(&a, -4, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), VAL2);
+
+    arrayu64_insert(&a, -4, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), VAL2);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL1
+#undef VAL2
+}
+
+/* test building a sparse array with _set() and _setm() */
+static void test_sparse_set(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+#define VAL0   (1111111UL)
+#define VAL1   (2222222UL)
+#define VAL2   (3333333UL)
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    arrayu64_set(&a, 3, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 4);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), VAL0);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL1
+#undef VAL2
+}
+
+static void test_remove(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+    uint64_t u;
+#define VAL0   (1111111UL)
+#define VAL1   (2222222UL)
+#define VAL2   (3333333UL)
+#define VAL3   (4444444UL)
+#define VAL4   (5555555UL)
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    arrayu64_append(&a, VAL0);
+    arrayu64_append(&a, VAL1);
+    arrayu64_append(&a, VAL2);
+    arrayu64_append(&a, VAL3);
+    arrayu64_append(&a, VAL4);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 5);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL4);
+
+    u = arrayu64_remove(&a, 2);
+    CU_ASSERT_EQUAL(u, VAL2);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 4);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL4);
+
+    u = arrayu64_remove(&a, 0);
+    CU_ASSERT_EQUAL(u, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 3);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL4);
+
+    u = arrayu64_remove(&a, -1);
+    CU_ASSERT_EQUAL(u, VAL4);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 2);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL3);
+
+    u = arrayu64_remove(&a, 1);
+    CU_ASSERT_EQUAL(u, VAL3);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 1);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL1);
+
+    u = arrayu64_remove(&a, 0);
+    CU_ASSERT_EQUAL(u, VAL1);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+
+    u = arrayu64_remove(&a, 0);
+    CU_ASSERT_EQUAL(u, 0UL);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL1
+#undef VAL2
+#undef VAL3
+#undef VAL4
+}
+
+static void test_truncate(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+#define VAL0   (1111111UL)
+#define VAL1   (2222222UL)
+#define VAL2   (3333333UL)
+#define VAL3   (4444444UL)
+#define VAL4   (5555555UL)
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    arrayu64_append(&a, VAL0);
+    arrayu64_append(&a, VAL1);
+    arrayu64_append(&a, VAL2);
+    arrayu64_append(&a, VAL3);
+    arrayu64_append(&a, VAL4);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 5);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL4);
+
+    /* expand the array */
+    arrayu64_truncate(&a, 7);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 7);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL4);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 5), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 6), 0UL);
+
+    /* shrink the array */
+    arrayu64_truncate(&a, 4);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 4);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+
+    /* shrink the array harder */
+    arrayu64_truncate(&a, 3);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 3);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+
+    /* shrink the array to nothing */
+    arrayu64_truncate(&a, 0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    /* whether a.data is NULL is undefined at this time */
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL1
+#undef VAL2
+#undef VAL3
+#undef VAL4
+}
+
+static void test_find(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+    off_t i;
+#define VAL0    (1111111UL)
+#define VAL1    (2222222UL)
+#define VAL2    (3333333UL)
+#define VAL3    (4444444UL)
+#define VAL4    (5555555UL)
+#define NOTHERE (1234567UL)
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    arrayu64_append(&a, VAL0);
+    arrayu64_append(&a, VAL1);
+    arrayu64_append(&a, VAL2);
+    arrayu64_append(&a, VAL3);
+    arrayu64_append(&a, VAL0);
+    arrayu64_append(&a, VAL4);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 6);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 5), VAL4);
+
+    /* search for something which isn't there */
+    i = arrayu64_find(&a, NOTHERE, 0);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which isn't there, starting off the end */
+    i = arrayu64_find(&a, NOTHERE, 7);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which is there */
+    i = arrayu64_find(&a, VAL1, 0);
+    CU_ASSERT_EQUAL(i, 1);
+    i = arrayu64_find(&a, VAL1, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which is there, starting off the end */
+    i = arrayu64_find(&a, VAL1, 7);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which is there multiple times */
+    i = arrayu64_find(&a, VAL0, 0);
+    CU_ASSERT_EQUAL(i, 0);
+    i = arrayu64_find(&a, VAL0, i+1);
+    CU_ASSERT_EQUAL(i, 4);
+    i = arrayu64_find(&a, VAL0, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL1
+#undef VAL2
+#undef VAL3
+#undef VAL4
+#undef NOTHERE
+}
+
+static void test_dup(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+    arrayu64_t *dup;
+#define VAL0   (1111111UL)
+#define VAL1   (2222222UL)
+#define VAL2   (3333333UL)
+#define VAL3   (4444444UL)
+#define VAL4   (5555555UL)
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+
+    /* dup an empty array */
+    dup = arrayu64_dup(&a);
+    CU_ASSERT_PTR_NOT_NULL(dup);
+    CU_ASSERT_PTR_NOT_EQUAL(dup, &a);
+    CU_ASSERT_EQUAL(dup->count, 0);
+    CU_ASSERT(dup->alloc >= dup->count);
+    arrayu64_free(dup);
+
+    /* dup a non-empty array */
+    arrayu64_append(&a, VAL0);
+    arrayu64_append(&a, VAL1);
+    arrayu64_append(&a, VAL2);
+    arrayu64_append(&a, VAL3);
+    arrayu64_append(&a, VAL0);
+    arrayu64_append(&a, VAL4);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 6);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 5), VAL4);
+
+    dup = arrayu64_dup(&a);
+    CU_ASSERT_PTR_NOT_NULL(dup);
+    CU_ASSERT_PTR_NOT_EQUAL(dup, &a);
+    CU_ASSERT_EQUAL(dup->count, 6);
+    CU_ASSERT(dup->alloc >= dup->count);
+    CU_ASSERT_PTR_NOT_NULL(dup->data);
+    CU_ASSERT_PTR_NOT_EQUAL(a.data, dup->data);
+    CU_ASSERT_EQUAL(arrayu64_nth(dup, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(dup, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(dup, 2), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(dup, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(dup, 4), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(dup, 5), VAL4);
+    arrayu64_free(dup);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL1
+#undef VAL2
+#undef VAL3
+#undef VAL4
+}
+
+static void test_remove_all(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+#define VAL0   (1111111UL)
+#define VAL1   (2222222UL)
+#define VAL2   (3333333UL)
+#define VAL3   (4444444UL)
+#define VAL4   (5555555UL)
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+
+    /* removing from an empty array */
+    arrayu64_remove_all(&a, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+
+    /* removing a single item from a non-empty array */
+    arrayu64_append(&a, VAL0);
+    arrayu64_append(&a, VAL1);
+    arrayu64_append(&a, VAL2);
+    arrayu64_append(&a, VAL3);
+    arrayu64_append(&a, VAL0);
+    arrayu64_append(&a, VAL4);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 6);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 5), VAL4);
+
+    arrayu64_remove_all(&a, VAL1);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 5);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL4);
+
+    /* removing an item that appears more than once */
+    arrayu64_remove_all(&a, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 3);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL4);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL1
+#undef VAL2
+#undef VAL3
+#undef VAL4
+}
+
+static void test_sort(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+#define VAL0   (1111111UL)
+#define VAL1   (2222222UL)
+#define VAL2   (5555555UL)
+#define VAL3   (4444444UL)
+#define VAL4   (3333333UL)
+
+    /* initialise */
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    arrayu64_append(&a, VAL0);
+    arrayu64_append(&a, VAL1);
+    arrayu64_append(&a, VAL2);
+    arrayu64_append(&a, VAL3);
+    arrayu64_append(&a, VAL4);
+    /* duplicates */
+    arrayu64_append(&a, VAL0);
+    arrayu64_append(&a, VAL2);
+    arrayu64_append(&a, VAL1);
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 8);
+
+    /* normal sort */
+    arrayu64_sort(&a, NULL);
+
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL4);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 5), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 6), VAL2);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 7), VAL2);
+
+    /* uniq */
+    arrayu64_uniq(&a);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 5);
+
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL4);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 3), VAL3);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 4), VAL2);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL1
+#undef VAL2
+#undef VAL3
+#undef VAL4
+}
+
+static void test_add(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+#define VAL0   (1111111UL)
+#define VAL1   (2222222UL)
+#define VAL2   (3333333UL)
+
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 0);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), 0UL);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, -1), 0UL);
+
+    /* _add() on an empty array appends */
+    arrayu64_add(&a, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 1);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+
+    /* _add() of an item already present is a no-op */
+    arrayu64_add(&a, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 1);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+
+    /* _add() of an item not already present appends */
+    arrayu64_add(&a, VAL1);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 2);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+
+    /* _add() of an item already present is a no-op */
+    arrayu64_add(&a, VAL0);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 2);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+
+    arrayu64_add(&a, VAL2);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 3);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+
+    arrayu64_add(&a, VAL1);
+    CU_ASSERT_EQUAL(arrayu64_size(&a), 3);
+    CU_ASSERT(a.alloc >= arrayu64_size(&a));
+    CU_ASSERT_PTR_NOT_NULL(a.data);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 0), VAL0);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 1), VAL1);
+    CU_ASSERT_EQUAL(arrayu64_nth(&a, 2), VAL2);
+
+    arrayu64_fini(&a);
+#undef VAL0
+#undef VAL1
+#undef VAL2
+}
+
+/* vim: set ft=c: */

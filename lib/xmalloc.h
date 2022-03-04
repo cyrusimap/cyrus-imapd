@@ -58,12 +58,7 @@ extern char *xstrdupsafe (const char *str);
 extern char *xstrndup (const char *str, size_t len);
 extern void *xmemdup (const void *ptr, size_t size);
 
-// this can be used on lvalues (e.g. function returns)
-#define xfree(ptr) do { \
-  void *x = ptr; if (x) { free(x); } \
-} while (0)
-
-// NOTE - can not be used on things that can't be lvalues :)
+// free a pointer and also zero it
 #define xzfree(ptr) do { \
   if (ptr) { free(ptr); ptr = NULL; } \
 } while (0)

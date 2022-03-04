@@ -3,6 +3,7 @@
 *.gcda
 *.la
 *.lo
+*.loT
 *.o
 *.orig
 *.patch
@@ -34,6 +35,7 @@ backup/restore
 bench/cyrdbbench
 cmulocal/
 compile
+confdefs.h
 config.guess
 config.h
 config.h.in
@@ -42,6 +44,7 @@ config.status
 config.status.lineno
 config.sub
 configure
+conftest*
 com_err/et/compile_et
 coverage.xml
 cscope.out
@@ -79,6 +82,8 @@ imap/cyr_deny
 imap/cyr_df
 imap/cyr_expire
 imap/cyr_info
+imap/cyr_ls
+imap/cyr_pwd
 imap/cyr_sequence
 imap/cyr_sphinxmgr
 imap/cyr_synclog
@@ -121,6 +126,7 @@ imap/promdata.h
 imap/promstatsd
 imap/quota
 imap/reconstruct
+imap/relocate_by_id
 imap/search_test
 imap/smmapd
 imap/squatter

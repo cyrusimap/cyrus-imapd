@@ -84,6 +84,7 @@
 #include "index.h"
 #include "message.h"
 #include "util.h"
+#include "itip_support.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -204,6 +205,7 @@ static int should_index(const char *name)
     int ret = 1;
     mbentry_t *mbentry = NULL;
     mbname_t *mbname = mbname_from_intname(name);
+    const char *userid = mbname_userid(mbname);
     /* Skip remote mailboxes */
     int r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
@@ -213,7 +215,7 @@ static int should_index(const char *name)
             printf("error looking up %s: %s\n",
                    extname, error_message(r));
         }
-        syslog(LOG_INFO, "error looking up %s: %s\n",
+        syslog(LOG_INFO, "error looking up %s: %s",
                extname, error_message(r));
 
         free(extname);
@@ -233,10 +235,28 @@ static int should_index(const char *name)
         goto done;
     }
 
-    // skip COLLECTION mailboxes (just files)
-    if (mbentry->mbtype & MBTYPE_COLLECTION) {
+    // skip sieve scripts
+    if (mboxname_issievemailbox(mbentry->name, mbentry->mbtype)) {
         ret = 0;
         goto done;
+    }
+
+    // skip COLLECTION mailboxes (just files)
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_COLLECTION) {
+        ret = 0;
+        goto done;
+    }
+
+    // skip CalDAV scheduling Inbox
+    if ((mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR) && userid) {
+        const strarray_t *boxes = mbname_boxes(mbname);
+        if (strarray_size(boxes) == 2 &&
+            /* SCHED_INBOX ends in "/", so trim it */
+            !strncmpsafe(strarray_nth(boxes, 1),
+                         SCHED_INBOX, strlen(SCHED_INBOX)-1)) {
+            ret = 0;
+            goto done;
+        }
     }
 
     // skip deleted mailboxes
@@ -253,8 +273,7 @@ static int should_index(const char *name)
     }
 
     // skip listed users
-    if (mbname_userid(mbname) && skip_users &&
-        strarray_find(skip_users, mbname_userid(mbname), 0) >= 0) {
+    if (userid && skip_users && strarray_find(skip_users, userid, 0) >= 0) {
         ret = 0;
         goto done;
     }
@@ -345,7 +364,7 @@ again:
         if (verbose) {
             printf("error opening %s: %s\n", extname, error_message(r));
         }
-        syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
+        syslog(LOG_INFO, "error opening %s: %s", extname, error_message(r));
         free(extname);
 
         return r;
@@ -528,8 +547,7 @@ error:
 }
 
 static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
-                            uint32_t uid,
-                            const strarray_t *partids __attribute__((unused)),
+                            uint32_t uid, const char *partid __attribute__((unused)),
                             void *rock)
 {
     int single = *(int *)rock;
@@ -756,7 +774,7 @@ static void do_rolling(const char *channel)
         int sig = signals_poll();
 
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
-            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully\n");
+            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully");
             sync_log_reader_end(slr);
             shut_down(0);
         }
@@ -965,7 +983,7 @@ int main(int argc, char **argv)
 
         /* squat flags */
         {"squat-annot", no_argument, 0, 'a' },
-        {"squat-skip", optional_argument, 0, 's' },
+        {"squat-skip", required_argument, 0, 's' },
 
         /* synclog-mode flags */
         {"synclog", required_argument, 0, 'f' },
@@ -1106,16 +1124,13 @@ int main(int argc, char **argv)
 
         case 's':
             if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
-            if (optarg) {
+            {
                 char *end;
                 long val = strtol(optarg, &end, 10);
                 if (val < 0 || val > INT_MAX || *end) {
                     usage(argv[0]);
                 }
                 skip_unmodified = (int) val;
-            }
-            else {
-                skip_unmodified = 60;
             }
             mode = INDEXER;
             break;

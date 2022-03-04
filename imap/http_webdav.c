@@ -63,8 +63,6 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-static struct webdav_db *auth_webdavdb = NULL;
-
 static void my_webdav_init(struct buf *serverinfo);
 static int my_webdav_auth(const char *userid);
 static void my_webdav_reset(void);
@@ -75,7 +73,8 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
                              const char **resultstr);
 
 static int webdav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data, void **obj);
+                      struct index_record *record, void *data, void **obj,
+                      struct mime_type_t *mime);
 static int webdav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
                       void *davdb, unsigned flags);
@@ -265,7 +264,7 @@ struct namespace_t namespace_drive = {
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL),
     &my_webdav_init, &my_webdav_auth, my_webdav_reset, &my_webdav_shutdown,
-    &dav_premethod, /*bearer*/NULL,
+    &dav_premethod,
     {
         { &meth_acl,            &webdav_params },      /* ACL          */
         { NULL,                 NULL },                /* BIND         */
@@ -315,18 +314,10 @@ static int my_webdav_auth(const char *userid)
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
         return 0;
     }
-    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV databases */
         return 0;
-    }
-    else {
-        /* Open WebDAV DB for 'userid' */
-        my_webdav_reset();
-        auth_webdavdb = webdav_open_userid(userid);
-        if (!auth_webdavdb) {
-            syslog(LOG_ERR, "Unable to open WebDAV DB for userid: %s", userid);
-            return HTTP_UNAVAILABLE;
-        }
     }
 
     /* Auto-provision toplevel DAV drive collection for 'userid' */
@@ -356,10 +347,13 @@ static int my_webdav_auth(const char *userid)
         mboxlist_entry_free(&mbentry);
 
         if (!r) {
-            r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_COLLECTION,
-                                       NULL, httpd_userisadmin || httpd_userisproxyadmin,
+            mbentry_t mbentry = MBENTRY_INITIALIZER;
+            mbentry.name = (char *) mbname_intname(mbname);
+            mbentry.mbtype = MBTYPE_COLLECTION;
+            r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                       httpd_userisadmin || httpd_userisproxyadmin,
                                        userid, httpd_authstate,
-                                       0, 0, 0, 0, NULL);
+                                       0/*flags*/, NULL/*mailboxptr*/);
             if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                           mbname_intname(mbname), error_message(r));
         }
@@ -379,8 +373,7 @@ static int my_webdav_auth(const char *userid)
 
 static void my_webdav_reset(void)
 {
-    if (auth_webdavdb) webdav_close(auth_webdavdb);
-    auth_webdavdb = NULL;
+    // nothing
 }
 
 
@@ -568,7 +561,8 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
 static int webdav_get(struct transaction_t *txn,
                       struct mailbox *mailbox __attribute__((unused)),
                       struct index_record *record, void *data,
-                      void **obj __attribute__((unused)))
+                      void **obj __attribute__((unused)),
+                      struct mime_type_t *mime __attribute__((unused)))
 {
     if (record && record->uid) {
         /* GET on a resource */
@@ -584,16 +578,6 @@ static int webdav_get(struct transaction_t *txn,
     /* Get on a user/collection */
     struct buf *body = &txn->resp_body.payload;
     unsigned level = 0;
-
-    /* Check ACL for current user */
-    int rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if ((rights & DACL_READ) != DACL_READ) {
-        /* DAV:need-privileges */
-        txn->error.precond = DAV_NEED_PRIVS;
-        txn->error.resource = txn->req_tgt.path;
-        txn->error.rights = DACL_READ;
-        return HTTP_NO_PRIVS;
-    }
 
     struct strlist *action = hash_lookup("action", &txn->req_qparams);
     if (!action) {
@@ -659,12 +643,24 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     if (!buf) return HTTP_FORBIDDEN;
 
     /* Find message UID for the resource */
-    webdav_lookup_resource(db, mailbox->name, resource, &wdata, 0);
+    /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
+       XXX  because we may have been called as part of a COPY/MOVE */
+    const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
+    webdav_lookup_resource(db, &mbentry, resource, &wdata, 0);
 
     if (wdata->dav.imap_uid) {
         /* Fetch index record for the resource */
-        oldrecord = &record;
-        mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord);
+        int r = mailbox_find_index_record(mailbox, wdata->dav.imap_uid, &record);
+        if (!r) {
+            oldrecord = &record;
+        }
+        else {
+            xsyslog(LOG_ERR,
+                    "Couldn't find index record corresponding to WebDAV DB record",
+                    "mailbox=<%s> record=<%u> error=<%s>",
+                    mailbox_name(mailbox), wdata->dav.imap_uid, error_message(r));
+        }
     }
 
     /* Get filename of attachment */
@@ -706,7 +702,8 @@ static int webdav_put(struct transaction_t *txn, void *obj,
 
     /* Store the resource */
     return dav_store_resource(txn, buf_base(buf), buf_len(buf),
-                              mailbox, oldrecord, wdata->dav.createdmodseq, NULL);
+                              mailbox, oldrecord, wdata->dav.createdmodseq,
+                              NULL, NULL);
 }
 
 

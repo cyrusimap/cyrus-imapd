@@ -15,7 +15,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **mbpath** [ **-C** *config-file* ] [ **-l** ] [ **-m** ] [ **-q** ] [ **-s** ] [ **-u** ] [ **-a** | **-A** | **-M** | **-S** | **-U** ] [ *mailbox-names*... ]
+    **mbpath** [ **-C** *config-file* ] [ **-l** ] [ **-m** ] [ **-q** ] [ **-s** ] [ **-u** | **-p** ] [ **-a** | **-A** | **-M** | **-S** | **-U** ] [ *mailbox-names*... ]
 
 Description
 ===========
@@ -57,6 +57,10 @@ Options
 .. option:: -u
 
     The specified *mailbox-names* are users, not mailboxes.
+
+.. option:: -p
+
+    The specified *mailbox-names* are UNIX mailbox paths, not mailboxes.
 
 Selectors
 =========

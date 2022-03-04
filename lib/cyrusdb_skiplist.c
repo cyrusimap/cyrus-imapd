@@ -536,7 +536,7 @@ static int read_header(struct dbengine *db)
 
     if (db->maxlevel > SKIPLIST_MAXLEVEL) {
         syslog(LOG_ERR,
-               "skiplist %s: MAXLEVEL %d in database beyond maximum %d\n",
+               "skiplist %s: MAXLEVEL %d in database beyond maximum %d",
                db->fname, db->maxlevel, SKIPLIST_MAXLEVEL);
         return CYRUSDB_IOERROR;
     }
@@ -545,7 +545,7 @@ static int read_header(struct dbengine *db)
 
     if (db->curlevel > db->maxlevel) {
         syslog(LOG_ERR,
-               "skiplist %s: CURLEVEL %d in database beyond maximum %d\n",
+               "skiplist %s: CURLEVEL %d in database beyond maximum %d",
                db->fname, db->curlevel, db->maxlevel);
         return CYRUSDB_IOERROR;
     }
@@ -1982,7 +1982,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
             if (offset > db->map_size) {
                 syslog(LOG_ERR,
                         "skiplist inconsistent: %04X: ptr %d is %04X; "
-                        "eof is %04X\n",
+                        "eof is %04X",
                         (unsigned int) (ptr - db->map_base),
                         i, offset, (unsigned int) db->map_size);
                 if (!locked) unlock(db);
@@ -1998,7 +1998,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
                 if (cmp >= 0) {
                     syslog(LOG_ERR,
                             "skiplist inconsistent: %04X: ptr %d is %04X; "
-                            "db->compar() = %d\n",
+                            "db->compar() = %d",
                             (unsigned int) (ptr - db->map_base),
                             i,
                             offset, cmp);

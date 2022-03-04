@@ -71,7 +71,7 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS };
 
-int verbose = 0;
+static int verbose = 0;
 
 int mode = UNKNOWN;
 static const char *audit_temp_directory;
@@ -306,7 +306,10 @@ static int do_recalc(const char *userid)
     r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 
-    r = conversations_zero_counts(state);
+    // wipe if it's currently folders_byname, will recreate with byid
+    int wipe = state->folders_byname;
+
+    r = conversations_zero_counts(state, wipe);
     if (r) goto err;
 
     r = mboxlist_usermboxtree(userid, NULL, recalc_counts_cb, NULL, 0);
@@ -605,7 +608,7 @@ int do_checkfolders(const char *userid)
     }
 
     /* don't mess with the original */
-    copy1 = strarray_dup(state->folder_names);
+    copy1 = strarray_dup(state->folders);
     /* remove empty folders first, they will duplicate for sure */
     strarray_remove_all(copy1, "-");
     copy2 = strarray_dup(copy1);
@@ -671,7 +674,7 @@ static int do_audit(const char *userid)
         goto out;
     }
 
-    r = conversations_zero_counts(state_temp);
+    r = conversations_zero_counts(state_temp, /*wipe*/0);
     if (r) {
         fprintf(stderr, "Failed to zero counts in %s: %s\n",
                 filename_temp, error_message(r));
@@ -760,6 +763,8 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
     char *fname;
     int r = 0;
 
+    signals_poll();
+
     fname = conversations_getuserpath(userid);
     if (fname == NULL) {
         fprintf(stderr, "Unable to get conversations database "
@@ -814,12 +819,23 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
     return r;
 }
 
+static void shut_down(int code) __attribute__((noreturn));
+static void shut_down(int code)
+{
+    in_shutdown = 1;
+
+    libcyrus_run_delayed();
+
+    cyrus_done();
+
+    exit(code);
+}
+
 int main(int argc, char **argv)
 {
     int c;
     const char *alt_config = NULL;
     const char *userid = NULL;
-    int r = 0;
     int recursive = 0;
 
     while ((c = getopt(argc, argv, "durzSAbvRFC:T:")) != EOF) {
@@ -904,15 +920,17 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_conversationsdb", 0, 0);
 
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers(0);
+
     if (recursive) {
         mboxlist_alluser(do_user, NULL);
     }
-    else
+    else {
         do_user(userid, NULL);
+    }
 
-    cyrus_done();
-
-    return r;
+    shut_down(0);
 }
 
 static int usage(const char *name)
@@ -936,7 +954,7 @@ static int usage(const char *name)
     exit(EX_USAGE);
 }
 
-void fatal(const char* s, int code)
+EXPORTED void fatal(const char* s, int code)
 {
     fprintf(stderr, "ctl_conversationsdb: %s\n", s);
     cyrus_done();

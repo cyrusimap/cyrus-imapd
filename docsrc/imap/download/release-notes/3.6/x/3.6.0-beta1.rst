@@ -1,0 +1,139 @@
+:tocdepth: 3
+
+====================================
+Cyrus IMAP 3.6.0-beta1 Release Notes
+====================================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.6.0-beta1/cyrus-imapd-3.6.0-beta1.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.6.0-beta1/cyrus-imapd-3.6.0-beta1.tar.gz.sig
+
+.. _relnotes-3.6.0-beta1-changes:
+
+Major changes since the 3.4 series
+==================================
+
+* All members of a newly created mailbox hierarchy will now be selectable
+  mailboxes.  In other words, when creating mailbox user.foo.A.B.C, both
+  user.foo.A and user.foo.A.B will also be created as real mailboxes.
+* XFER will no longer move individual mailboxes that would leave unselectable
+  mailboxes behind in the user heirarchy.
+* Update IMAP PREVIEW extension from
+  :draft:`draft-ietf-extra-imap-fetch-preview-07` to :rfc:`8970`
+* JMAP Blob handling updated to :draft:`draft-ietf-jmap-blob-04`
+* Always return 'blobId' and 'size' in Contact/setcreate, Contact/setupdate,
+  and Contact/get responses.
+* Added Bearer authentication for :rfc:`7519` JSON Web Tokens.  See
+  `http_jwt_key` and `http_jwt_max_age` in :cyrusman:`imapd.conf(5)`.
+* Added `icalendar_max_size` and `vcard_max_size` :cyrusman:`imapd.conf(5)`
+  options to limit the size of iCalendar and vCard resources that can be
+  stored.
+* Added `caldav_accept_invalid_rrules` :cyrusman:`imapd.conf(5)` option to
+  configure whether invalid RRULES should be accepted or rejected.  They
+  were previously always rejected.
+* The `event_extra_params` :cyrusman:`imapd.conf(5)` option now supports
+  a `vnd.fastmail.jmapEmail` selector, which adds a JMAP Email object to
+  event messages.  If you enable this selector, you might consider removing
+  `vnd.cmu.envelope`, `vnd.cmu.emailid`, and `vnd.cmu.threadid`, as they
+  would be redundant.
+* Added `search_maxsize` :cyrusman:`imapd.conf(5)` option to limit how much
+  of long message body parts are indexed by Xapian, which can improve indexing
+  and snippet-generation latency.  The default is 4MB.  An earlier
+  implementation applied a hardcoded 4MB limit to entire messages; systems
+  that had this implementation may notice an increase in index size due to
+  more text now being indexed.
+* The :cyrusman:`squatter(8)` `-s delta` option now requires the delta
+  argument.
+* Added an upper limit to :cyrusman:`sync_client(8)`'s exponential reconnect
+  backoff, configurable with the `sync_reconnect_maxwait`
+  :cyrusman:`imapd.conf(5)` option.
+* :cyrusman:`sync_client(8)` now recognises when the remote
+  :cyrusman:`sync_server(8)` has been shut down cleanly, and doesn't log a
+  bunch of disconnection errors about it
+* Added an inactivity timeout for WebSocket connections, configurable with
+  the `websocket_timeout` :cyrusman:`imapd.conf(5)` option.
+* Mailboxes and user metadata directories are now organised on disk by UUID
+  rather than by mailbox name.  See :ref:`relnotes_storage_changes` below.
+* Sieve scripts are now stored in a special mailbox, rather than in
+  `sievedir`.  Compiled bytecode is still stored in `sievedir`.  The name of
+  the mailbox can be overridden with the `sieve_folder`
+  :cyrusman:`imapd.conf(5)` option (default: '#sieve').
+* Experimental `processimip` Sieve action, for updating calendar entries
+  based on iMIP (:rfc:`6047`) messages.
+* Support for JMAP Push (:rfc:`8620`) over EventSource, with polling interval
+  controlled by the `jmap_pushpoll` :cyrusman:`imapd.conf(5)` option
+  (default: 60s).
+* Experimental support for JMAP Push over WebSockets, if Cyrus has been
+  compiled with WebSockets enabled.  Controlled by the same `jmap_pushpoll`
+  option.
+* When a MIME part Content-Type header incorrectly specifies multiple charsets,
+  Cyrus now checks each charset for validity and uses the last valid one.
+  Previously, it would just use the first one, which is often junk when
+  multiple are present.
+* JMAP Email/query and XCONV IMAP extension commands no longer ignore the SEEN
+  state of messages in the "Trash" mailbox when evaluating conversation flags.
+  Queries must explicitly exclude the "Trash" mailbox to ignore SEEN state of
+  messages in "Trash".
+* JMAP Contact.importance property is now a per-user property rather than
+  shared.
+* JMAP Contacts now uses Apple-style labels on vCard ADR/TEL/EMAIL properties
+  (via property grouping)
+* JMAP Contacts avatars can now reference any valid blob, not only blobs
+  originally uploaded via JMAP.
+
+.. _relnotes_storage_changes:
+
+Storage changes
+===============
+
+Mailboxes and user metadata directories are now organised on disk by UUID
+rather than by mailbox name.
+
+At startup (or when you run `ctl_cyrusdb -r` manually),
+:cyrusman:`ctl_cyrusdb(8)` will upgrade mailboxes.db to accommodate both
+old-style and new-style storage.
+
+By default, new top-level mailboxes will be created in the new style.
+Mailboxes that already exist will remain in the old style until you convert
+them with :cyrusman:`relocate_by_id(8)`.  New mailboxes below the top level
+will be created in the same style as their parent mailbox.
+
+The new :cyrusman:`cyr_ls(8)` tool can be used to examine the on-disk
+contents of a given mailbox name.  :cyrusman:`mbpath(8)` can be used to find
+where on disk a given mailbox and its metadata are.
+
+If you want new top level mailboxes to be created in the old style, you
+can enable the `mailbox_legacy_dirs` :cyrusman:`imapd.conf(5)` option, which
+defaults to **off**.  With this turned on, you may still use `relocate_by_id`
+to convert them to the new style.
+
+Updates to default configuration
+================================
+
+The :cyrusman:`cyr_info(8)` `conf`, `conf-all` and `conf-default` subcommands
+accept an `-s <version>` argument to highlight :cyrusman:`imapd.conf(5)`
+options that are new or whose behaviour has changed since the specified
+version.  We recommend using this when evaluating a new Cyrus version to
+check which configuration options you will need to examine and maybe set or
+change during the process.
+
+* The `reverseuniqueids` :cyrusman:`imapd.conf(5)` option is now deprecated
+  and unused.  Reverse UNIQUEID records are now standard and cannot be turned
+  off.
+
+Security fixes
+==============
+
+* None so far
+
+Significant bugfixes
+====================
+
+* Fixed :issue:`3325`: email addresses with quoted-string names were stored in
+  the cache and search indexes without quotes, which could cause
+  inconsistencies in handling.  Affected mailboxes can be fixed by first
+  running :cyrusman:`reconstruct(8)` to repair the cache, and then
+  :cyrusman:`squatter(8)` to reindex the mailbox.
+* Fixed :issue:`3421`: PROPFIND <C:schedule-calendar-transp> now returns an
+  XML element instead of text (thanks Дилян Палаузов)

@@ -74,6 +74,8 @@ struct imap4flags {
 };
 
 /* forward declarations */
+extern struct namespace lmtpd_namespace;
+
 extern int fuzzy_match(mbname_t *mbname);
 
 extern int deliver_mailbox(FILE *f,

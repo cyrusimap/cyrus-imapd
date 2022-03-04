@@ -837,6 +837,16 @@ static void dump2(bytecode_input_t *d, int bc_len)
         }
 
 
+        case B_PROCESSIMIP:
+            printf("PROCESSIMIP INVITESONLY(%d)"
+                   " UPDATESONLY(%d) DELETECANCELED(%d)",
+                   !!cmd.u.imip.invites_only,
+                   !!cmd.u.imip.updates_only, !!cmd.u.imip.delete_canceled);
+            print_string(" CALENDARID", cmd.u.imip.calendarid);
+            print_string(" OUTCOME", cmd.u.imip.outcome_var);
+            print_string(" ERRSTR", cmd.u.imip.errstr_var);
+            break;
+
         default:
             printf("%d (NOT AN OP)\n", cmd.type);
             exit(1);
@@ -937,7 +947,8 @@ static void generate_stringlist(const char *tag, const strarray_t *sl,
 
 static void generate_time(uint64_t t, struct buf *buf)
 {
-    buf_printf(buf, "\"%02lu:%02lu:%02lu\"", t / 3600, (t % 3600) / 60, t % 60);
+    buf_printf(buf, "\"%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 "\"",
+                    t / 3600, (t % 3600) / 60, t % 60);
 }
 
 static void generate_valuelist(const char *name, const arrayu64_t *vl,
@@ -959,7 +970,7 @@ static void generate_valuelist(const char *name, const arrayu64_t *vl,
             buf_appendcstr(buf, sep);
             gen_cb(u, buf);
         }
-        else buf_printf(buf, "%s%lu", sep, u);
+        else buf_printf(buf, "%s%" PRIu64, sep, u);
         sep = ", ";
     }
     if (len > 1) buf_putc(buf, ']');
@@ -1621,6 +1632,17 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             }
             generate_string(":tzid", cmd.u.sn.tzid, buf);
             generate_valuelist(NULL, cmd.u.sn.times, &generate_time, buf);
+            break;
+
+        case B_PROCESSIMIP:
+            *requires |= SIEVE_CAPA_IMIP;
+            generate_token("processimip", 0, buf);
+            generate_switch(":invitesonly", cmd.u.imip.invites_only, buf);
+            generate_switch(":updatesonly", cmd.u.imip.updates_only, buf);
+            generate_switch(":deletecanceled", cmd.u.imip.delete_canceled, buf);
+            generate_string(":calendarid", cmd.u.imip.calendarid, buf);
+            generate_string(":outcome", cmd.u.imip.outcome_var, buf);
+            generate_string(":errstr", cmd.u.imip.errstr_var, buf);
             break;
 
         default:

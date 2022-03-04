@@ -42,7 +42,7 @@ you can `generate a new key <https://help.github.com/articles/generating-a-new-s
 ----------------------
 
 Whether you're contributing to `Cyrus <https://github.com/cyrusimap/cyrus-imapd>`_ (source, or documentation), 
-contributing to tests with `Cassandane <https://github.com/cyrusimap/cassandane>`_ or into helping out with `SASL <https://github.com/cyrusimap/cyrus-sasl>`_ or 
+or into helping out with `SASL <https://github.com/cyrusimap/cyrus-sasl>`_ or
 any of the other `Cyrus component projects <https://github.com/cyrusimap>`_, use the Fork button to make a copy of the repository into your own GitHub work space.
 
 GitHub has more information on `how to fork a repository <https://help.github.com/articles/fork-a-repo/>`_.

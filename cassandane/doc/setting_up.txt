@@ -1,0 +1,109 @@
+How To Setup A System To Run Cassandane
+---------------------------------------
+
+Cassandane is designed to be operated on a day-to-day basis as an
+unprivileged user.  However, Cassandane needs root to make some small
+one-time adjustments to be performed to your system before it will run
+at all.  This section documents those steps.
+
+0.  Before doing anything else, make sure you have all the pre-reqs
+    listed in README.deps installed.  A good way to check is:
+
+    gnb> cd ~/my/cassandane/workarea
+    gnb> make
+    ...
+    testrunner.pl syntax OK
+    Cassandane/ThreadedGenerator.pm syntax OK
+    Cassandane/MasterEvent.pm syntax OK
+    Cassandane/PortManager.pm syntax OK
+    Cassandane/IMAPMessageStore.pm syntax OK
+    ...
+
+1.  The passwd and group maps need valid entries for user "cyrus"
+    and group "mail".  An easy way is to manually add this line
+    to /etc/passwd
+
+    cyrus:x:501:8::/usr/cyrus:/bin/sh
+
+    and this line to /etc/group (it's likely already there)
+
+    mail:x:8:
+
+    and then add a password for the "cyrus" user
+
+    # passwd cyrus
+
+    NOTE: User 'cyrus' must actually be in 'group' mail, or the annotator
+    will fail to start.
+
+2.  You need to be able to run a program as the "cyrus" user, preferably
+    without entering your password all the time.  One way of doing this
+    is to add the following at the *end* of your /etc/sudoers file
+
+    gnb ALL = (cyrus) NOPASSWD: ALL
+
+    Obviously, replace 'gnb' with your username.
+
+3.  You need to tell Cassandane how to find Cyrus.  There are two
+    obvious ways of doing this.
+
+     *  Fully installed Cyrus build in /usr/cyrus.  This requires
+        you to do a step as root every time you build Cyrus, which
+        can be a pain.
+
+        gnb> cd ~/my/cyrus/workarea
+        gnb> ./configure --prefix=/usr/cyrus \
+              --with-cyrus-prefix=/usr/cyrus ...
+        gnb> make && sudo make install
+
+     *  Partially installed Cyrus build in a temp directory.  This
+        is what I use.
+
+        gnb> cd ~/my/cyrus/workarea
+        gnb> ./configure --prefix=/usr/cyrus \
+              --with-cyrus-prefix=/usr/cyrus ...
+        gnb> make && make DESTDIR=/var/tmp/cyrus install
+
+        gnb> cd ~/my/cassandane/workarea
+        gnb> cp cassandane.ini.example cassandane.ini
+        gnb> vi cassandane.ini
+        [cyrus default]
+        destdir = /var/tmp/cyrus
+
+    Also note that you can do other combinations too, the trick is to
+    set up the 'cyrus default' section in the cassandane.ini such that
+
+     *  'prefix' is the value of --prefix you used when you ran the
+         Cyrus configure script.  Default is /usr/cyrus (which is not
+         the default for the Cyrus configure script!)
+
+     *  'destdir' is the value of DESTDIR when you did 'make install'
+        in the Cyrus directory.  Default is empty.
+
+4.  It's also a good idea to set some kernel tunables.
+
+    When dumping core files, use the PID of the dumping process
+    in the name, so that if multiple processes dump core during the
+    test you'll see all the core files instead of just one named "core".
+
+    # echo 1 >/proc/sys/kernel/core_uses_pid
+
+    As a security feature, Linux won't generate cores for processes
+    which have changed ownership.  This prevents any of the Cyrus
+    processes in your test ever dumping core, so you want to turn
+    that feature off.
+
+    # echo 1 >/proc/sys/fs/suid_dumpable
+
+    Finally, some Linux systems might require to unlimit the size of
+    core dumps. As suid_dumpable, this shouldn't normally be set on
+    production systems.
+
+    # ulimit -c unlimited
+
+Now, to run Cassandane use this command
+
+    gnb> cd ~/my/cassandane/workarea
+    gnb> ./testrunner.pl
+
+    NOTE: Cassandane will internally run 'sudo' to become user 'cyrus'

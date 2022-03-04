@@ -47,7 +47,7 @@
 #include "mboxevent.h"
 #include "message.h"
 #include "prot.h"
-#include "sequence.h"
+#include "seqset.h"
 #include "strarray.h"
 #include "annotate.h"
 #include "conversations.h"
@@ -71,7 +71,7 @@ struct appendstate {
 
     /* set seen on these message on commit */
     int internalseen;
-    struct seqset *seen_seq;
+    seqset_t *seen_seq;
 
     /* for annotations */
     const struct namespace *namespace;

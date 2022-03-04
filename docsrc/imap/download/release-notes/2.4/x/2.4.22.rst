@@ -1,0 +1,8 @@
+===============================
+Cyrus IMAP 2.4.22 Release Notes
+===============================
+* Fixed :issue:`3312`: fixed use-after-free segfault in imapd and
+  mupdate-client (thanks Mario Haustein)
+* Fixed: XFER now recognises 3.4 and 3.5 backends
+
+:ref:`imap-release-notes-2.4`

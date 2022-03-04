@@ -121,7 +121,7 @@ struct namespace_t namespace_ischedule = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     (ALLOW_READ | ALLOW_POST | ALLOW_ISCHEDULE),
-    isched_init, NULL, NULL, isched_shutdown, NULL, NULL,
+    isched_init, NULL, NULL, isched_shutdown, NULL,
     {
         { NULL,                 NULL }, /* ACL          */
         { NULL,                 NULL }, /* BIND         */
@@ -152,7 +152,7 @@ struct namespace_t namespace_domainkey = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL }, /* ACL          */
         { NULL,                 NULL }, /* BIND         */
@@ -457,7 +457,7 @@ static int meth_post_isched(struct transaction_t *txn,
 
     /* Make sure we have a body */
     if (!buf_len(&txn->req_body.payload)) {
-        txn->error.desc = "Missing request body\r\n";
+        txn->error.desc = "Missing request body";
         return HTTP_BAD_REQUEST;
     }
 
@@ -531,9 +531,11 @@ static int meth_post_isched(struct transaction_t *txn,
         case ICAL_METHOD_REQUEST:
         case ICAL_METHOD_REPLY:
         case ICAL_METHOD_CANCEL: {
+            unsigned flags = SCHEDFLAG_ISCHEDULE;
+            if (meth == ICAL_METHOD_REPLY) flags |= SCHEDFLAG_IS_REPLY;
             struct sched_data sched_data =
-                { 1, meth == ICAL_METHOD_REPLY, 0,
-                  ical, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL };
+                { flags, ical, NULL, NULL,
+                  ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL, NULL };
             xmlNodePtr root = NULL;
             xmlNsPtr ns[NUM_NAMESPACE];
             struct auth_state *authstate;
@@ -543,7 +545,7 @@ static int meth_post_isched(struct transaction_t *txn,
             if (!(root = init_xml_response("schedule-response",
                                            NS_ISCHED, NULL, ns))) {
                 ret = HTTP_SERVER_ERROR;
-                txn->error.desc = "Unable to create XML response\r\n";
+                txn->error.desc = "Unable to create XML response";
                 goto done;
             }
 
@@ -565,7 +567,7 @@ static int meth_post_isched(struct transaction_t *txn,
                     sched_param_fini(&sparam);
 
                     if (r) sched_data.status = REQSTAT_NOUSER;
-                    else sched_deliver(httpd_userid, recipient, &sched_data, authstate);
+                    else sched_deliver(httpd_userid, httpd_userid, recipient, &sched_data, authstate);
 
                     xml_add_schedresponse(root, NULL, BAD_CAST recipient,
                                           BAD_CAST sched_data.status);
@@ -574,6 +576,7 @@ static int meth_post_isched(struct transaction_t *txn,
             }
 
             xml_response(HTTP_OK, txn, root->doc);
+            xmlFreeDoc(root->doc);
 
             auth_freestate(authstate);
         }

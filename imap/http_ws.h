@@ -41,42 +41,40 @@
  *
  */
 
-#ifndef HTTPD_WS_H
-#define HTTPD_WS_H
+#ifndef HTTP_WS_H
+#define HTTP_WS_H
 
 #include <config.h>
 
 #ifdef HAVE_WSLAY
 #include <wslay/wslay.h>
 
-/* Supported WebSocket version for Upgrade */
-#define WS_TOKEN         "websocket"
-#define WS_VERSION       "13"
-
 #else /* !HAVE_WSLAY */
 
-#define WS_TOKEN         ""
-#define WS_VERSION       ""
+enum wslay_opcode {
+    WSLAY_TEXT_FRAME
+};
 
 #endif /* HAVE_WSLAY */
 
 
-extern void ws_init(struct buf *serverinfo);
+/* Supported WebSocket version for Upgrade */
+#define WS_TOKEN         "websocket"
+#define WS_VERSION       "13"
 
-extern int ws_enabled();
+extern int ws_init(struct http_connection *conn, struct buf *serverinfo);
 
-extern void ws_done();
+typedef int ws_data_callback(struct transaction_t *txn, enum wslay_opcode opcode,
+                             struct buf *inbuf, struct buf *outbuf,
+                             struct buf *logbuf);
 
-extern int ws_start_channel(struct transaction_t *txn, const char *sub_prot,
-                            int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
-                                           struct buf *logbuf, void **rock));
+extern int ws_start_channel(struct transaction_t *txn,
+                            const char *sub_prot, ws_data_callback *data_cb);
 
 extern void ws_add_resp_hdrs(struct transaction_t *txn);
 
-extern void ws_end_channel(void *ws_ctx);
-
-extern void ws_output(struct transaction_t *txn);
-
 extern void ws_input(struct transaction_t *txn);
 
-#endif /* HTTPD_WS_H */
+extern void ws_send(struct transaction_t *txn, struct buf *outbuf);
+
+#endif /* HTTP_WS_H */

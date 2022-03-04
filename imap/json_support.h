@@ -51,6 +51,7 @@
 #include "util.h"
 
 #define JNOTNULL(item)          ((item) ? (json_is_null(item) == 0) : 0)
+#define JNULL(item)             ((item) ? (json_is_null(item)) : 1)
 
 /* jansson replacement functions for those missing in older versions */
 
@@ -89,6 +90,7 @@ n = json_object_iter_next(object, json_object_key_to_iter(key)))
          index++)
 #endif /* json_array_foreach */
 
+EXPORTED int json_is_date(json_t *json);
 EXPORTED int json_is_utcdate(json_t *json);
 
 EXPORTED int json_array_find(json_t *array, const char *needle);

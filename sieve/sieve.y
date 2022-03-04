@@ -119,6 +119,7 @@ static commandlist_t *build_deleteheader(sieve_script_t*, commandlist_t *c,
 static commandlist_t *build_log(sieve_script_t*, char *text);
 static commandlist_t *build_snooze(sieve_script_t *sscript,
                                    commandlist_t *c, arrayu64_t *times);
+static commandlist_t *build_imip(sieve_script_t *sscript, commandlist_t *t);
 
 /* construct/canonicalize test commands */
 static test_t *build_anyof(sieve_script_t*, testlist_t *tl);
@@ -284,7 +285,7 @@ extern void sieverestart(FILE *f);
 %type <test> methtags
 
 /* notify - draft-martin-sieve-notify-01 */
-%token DENOTIFY ID ANY
+%token DENOTIFY NID ANY
 %token <nval> LOW NORMAL HIGH
 %type <cl> dtags
 %type <nval> priority
@@ -346,6 +347,11 @@ extern void sieverestart(FILE *f);
 
 /* vnd.cyrus.jmapquery */
 %token JMAPQUERY
+
+/* vnd.cyrus.imip */
+%token PROCESSIMIP INVITESONLY UPDATESONLY DELETECANCELED CALENDARID
+%token OUTCOME ERRSTR
+%type <cl> imiptags
 
 
 %%
@@ -529,6 +535,7 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
         | LOG string             { $$ = build_log(sscript, $2); }
         | SNOOZE sntags timelist { $$ = build_snooze(sscript, $2, $3); }
+        | PROCESSIMIP imiptags   { $$ = build_imip(sscript, $2); }
         ;
 
 
@@ -1098,7 +1105,7 @@ ntags: /* empty */               {
         | ntags fcctags
 
         /* legacy-only tagged arguments */
-        | ntags ID string        {
+        | ntags NID string       {
                                      if ($$->u.n.id != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1292,6 +1299,119 @@ time1: time                      {
 
 
 time: STRING                     { $$ = verify_time(sscript, $1); }
+        ;
+
+
+/* PROCESSIMIP tagged arguments */
+imiptags: /* empty */            { $$ = new_command(B_PROCESSIMIP, sscript); }
+        | imiptags INVITESONLY   {
+                                     if ($$->u.imip.invites_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":invitesonly");
+                                     }
+                                     else if ($$->u.imip.updates_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
+                                                      ":updatesonly");
+                                     }
+                                     else if ($$->u.imip.delete_canceled) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
+                                                      ":deletecanceled");
+                                     }
+
+                                     $$->u.imip.invites_only = 1;
+                                 }
+
+        | imiptags UPDATESONLY   {
+                                     if ($$->u.imip.updates_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":updatesonly");
+                                     }
+                                     else if ($$->u.imip.invites_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
+                                                      ":updatesonly");
+                                     }
+                                     else if ($$->u.imip.calendarid != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":updatesonly",
+                                                      ":calendarid");
+                                     }
+
+                                     $$->u.imip.updates_only = 1;
+                                 }
+
+        | imiptags DELETECANCELED
+                                 {
+                                     if ($$->u.imip.delete_canceled) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":deletecanceled");
+                                     }
+                                     else if ($$->u.imip.invites_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
+                                                      ":deletecanceled");
+                                     }
+
+                                     $$->u.imip.delete_canceled = 1;
+                                 }
+        | imiptags CALENDARID string
+                                 {
+                                     if ($$->u.imip.calendarid != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":calendarid");
+                                         free($$->u.imip.calendarid);
+                                     }
+                                     else if ($$->u.imip.updates_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":updatesonly",
+                                                      ":calendarid");
+                                     }
+
+                                     $$->u.imip.calendarid = $3;
+                                 }
+        | imiptags OUTCOME string
+                                 {
+                                     if ($$->u.imip.outcome_var != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":outcome");
+                                         free($$->u.imip.outcome_var);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_VARIABLES)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "variables");
+                                     }
+
+                                     $$->u.imip.outcome_var = $3;
+                                 }
+        | imiptags ERRSTR string {
+                                     if ($$->u.imip.errstr_var != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":errstr");
+                                         free($$->u.imip.errstr_var);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_VARIABLES)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "variables");
+                                     }
+
+                                     $$->u.imip.errstr_var = $3;
+                                 }
         ;
 
 
@@ -2823,6 +2943,28 @@ static commandlist_t *build_log(sieve_script_t *sscript, char *text)
     return c;
 }
 
+static commandlist_t *build_imip(sieve_script_t *sscript, commandlist_t *c)
+{
+    unsigned flags = 0;
+
+    assert(c && c->type == B_PROCESSIMIP);
+
+    if (c->u.imip.invites_only) flags |= IMIP_INVITESONLY;
+    if (c->u.imip.updates_only) flags |= IMIP_UPDATESONLY;
+    if (c->u.imip.delete_canceled) flags |= IMIP_DELETECANCELED;
+
+    if (c->u.imip.outcome_var) verify_identifier(sscript, c->u.imip.outcome_var);
+    if (c->u.imip.errstr_var) verify_identifier(sscript, c->u.imip.errstr_var);
+    
+    c->nargs = bc_precompile(c->args, "isss",
+                             flags,
+                             c->u.imip.calendarid,
+                             c->u.imip.outcome_var,
+                             c->u.imip.errstr_var);
+
+    return c;
+}
+
 static test_t *build_anyof(sieve_script_t *sscript, testlist_t *tl)
 {
     test_t *t;
@@ -3100,6 +3242,7 @@ static test_t *build_date(sieve_script_t *sscript,
     }
 
     t->u.dt.date_part = verify_date_part(sscript, part);
+    free(part); /* done with this string */
     t->u.dt.header_name = hn;
     t->u.dt.kl = kl;
 

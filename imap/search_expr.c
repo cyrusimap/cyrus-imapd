@@ -58,6 +58,7 @@
 #include "annotate.h"
 #include "global.h"
 #include "lsort.h"
+#include "seen.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
 
@@ -593,6 +594,102 @@ static void combine(search_expr_t **ep, search_expr_t **prevp)
     }
 }
 
+static int detrivialise(search_expr_t **ep)
+{
+    if (!ep || !*ep) return 0;
+
+    int r = 0;
+
+    search_expr_t *e = *ep;
+    search_expr_t *c, *next;
+    for (c = e->children; c; c = next) {
+        next = c->next;
+        int r2 = detrivialise(&c);
+        if (!r2) r = r2;
+    }
+
+    search_expr_t *detached_children = NULL;
+
+    switch (e->op) {
+        case SEOP_AND:
+        case SEOP_OR:
+            {
+                enum search_op trivop = e->op == SEOP_AND ?
+                    SEOP_FALSE : SEOP_TRUE;
+                enum search_op noop = e->op == SEOP_AND ?
+                    SEOP_TRUE : SEOP_FALSE;
+                for (c = e->children; c; c = next) {
+                    next = c->next;
+                    if (c->op == trivop) {
+                        detached_children = e->children;
+                        e->children = NULL;
+                        e->op = trivop;
+                        r = 1;
+                        break;
+                    }
+                    else if (c->op == noop) {
+                        search_expr_detach(e, c);
+                        search_expr_free(c);
+                        r = 1;
+                    }
+                }
+                break;
+            }
+        case SEOP_NOT:
+            if (e->children) {
+                int childop = e->children->op;
+                if (childop == SEOP_TRUE || childop == SEOP_FALSE) {
+                    detached_children = e->children;
+                    e->children = NULL;
+                    e->op = childop == SEOP_TRUE ? SEOP_FALSE : SEOP_TRUE;
+                    r = 1;
+                }
+            }
+            break;
+        default:
+            // do nothing
+            ;
+    }
+
+    for (c = detached_children; c; c = next) {
+        next = c->next;
+        search_expr_free(c);
+    }
+
+    if (e->op == SEOP_AND || e->op == SEOP_OR) {
+        if (e->children && !e->children->next) {
+            if (e->parent) {
+                // Prepend sole child to parent children
+                search_expr_t *p = e->parent;
+                c = e->children;
+                e->children = NULL;
+                search_expr_detach(e->parent, e);
+                search_expr_free(e);
+                c->next = p->children;
+                p->children = c;
+                c->parent = p;
+            }
+            else {
+                *ep = e->children;
+                e->children = NULL;
+                search_expr_free(e);
+            }
+            r = 1;
+        }
+        else if (!e->children) {
+            e->op = e->op == SEOP_AND ? SEOP_TRUE : SEOP_FALSE;
+            r = 1;
+        }
+    }
+
+    return r;
+}
+
+EXPORTED void search_expr_detrivialise(search_expr_t **ep)
+{
+    detrivialise(ep); // ignore return code
+}
+
 /*
  * Top-level normalisation step.  Returns 1 if it changed the subtree, 0
  * if it didn't, and -1 on error (such as exceeding a complexity limit).
@@ -800,11 +897,16 @@ static int search_expr_normalise_nnodes(search_expr_t **ep, unsigned *nnodes)
     the_rootp = ep;
 #endif
     r = normalise(ep, nnodes);
+    if (r >= 0) {
+        int r2 = detrivialise(ep);
+        if (!r) r = r2;
+    }
     sort_children(*ep);
 #if DEBUG
     the_rootp = NULL;
     the_focus = NULL;
 #endif
+
     return r;
 }
 
@@ -1449,32 +1551,35 @@ out:
 
 /* ====================================================================== */
 
-static int search_contenttype_match(message_t *m, const union search_value *v,
+static int search_contenttype_match(message_t *m,
+                                    const union search_value *v __attribute__((unused)),
                                     void *internalised,
                                     void *data1 __attribute__((unused)))
 {
     int r;
-    comp_pat *pat = (comp_pat *)internalised;
+    struct search_string_internal *internal = internalised;
+    comp_pat *pat = internal->pat;
+    const char *s = internal->s;
     strarray_t types = STRARRAY_INITIALIZER;
     int i;
     char combined[128];
 
-    if (!message_get_leaf_types(m, &types)) {
+    if (!message_get_types(m, &types)) {
         for (i = 0 ; i < types.count ; i+= 2) {
             const char *type = types.data[i];
             const char *subtype = types.data[i+1];
 
             /* match against type */
-            r = charset_searchstring(v->s, pat, type, strlen(type), charset_flags);
+            r = charset_searchstring(s, pat, type, strlen(type), charset_flags);
             if (r) goto out;    // success
 
             /* match against subtype */
-            r = charset_searchstring(v->s, pat, subtype, strlen(subtype), charset_flags);
+            r = charset_searchstring(s, pat, subtype, strlen(subtype), charset_flags);
             if (r) goto out;    // success
 
             /* match against combined type_subtype */
             snprintf(combined, sizeof(combined), "%s/%s", type, subtype);
-            r = charset_searchstring(v->s, pat, combined, strlen(combined), charset_flags);
+            r = charset_searchstring(s, pat, combined, strlen(combined), charset_flags);
             if (r) goto out;    // success
         }
     }
@@ -1526,10 +1631,7 @@ static int search_header_match(message_t *m, const union search_value *v,
 static void internalise_sequence(const union search_value *v,
                                  void **internalisedp, unsigned maxval)
 {
-    if (*internalisedp) {
-        seqset_free(*internalisedp);
-        *internalisedp = NULL;
-    }
+    seqset_free((seqset_t **)internalisedp);
     if (v) {
         *internalisedp = seqset_parse(v->s, NULL, maxval);
     }
@@ -1552,7 +1654,7 @@ static int search_seq_match(message_t *m,
                             void *internalised,
                             void *data1)
 {
-    struct seqset *seq = internalised;
+    seqset_t *seq = internalised;
     int r;
     uint32_t u;
     int (*getter)(message_t *, uint32_t *) = (int(*)(message_t *, uint32_t *))data1;
@@ -1839,7 +1941,7 @@ static void search_folder_internalise(struct index_state *state,
                                       void **internalisedp)
 {
     if (state)
-        *internalisedp = (void *)(unsigned long)(!strcmp(state->mailbox->name, v->s));
+        *internalisedp = (void *)(unsigned long)(!strcmp(mailbox_name(state->mailbox), v->s));
 }
 
 static int search_folder_match(message_t *m __attribute__((unused)),
@@ -2053,6 +2155,7 @@ struct conv_rock {
     struct conversations_state *cstate;
     int cstate_is_ours;
     int num;        /* -1=invalid, 0=\Seen, 1+=index into cstate->counted_flags+1 */
+    int include_trash;
 };
 
 static void conv_rock_new(struct mailbox *mailbox,
@@ -2074,6 +2177,11 @@ static void search_convflags_internalise(struct index_state *state,
         if (rock->cstate) {
             if (!strcasecmp(v->s, "\\Seen")) {
                 rock->num = 0;
+            }
+            else if (!strcasecmp(v->s, "\\SeenInclTrash")) {
+                // XXX workaround for conv.unseen not counting Trash mailbox
+                rock->num = 0;
+                rock->include_trash = 1;
             }
             else if (!rock->cstate->counted_flags) {
                 rock->num = -1;
@@ -2101,13 +2209,26 @@ static int search_convflags_match(message_t *m,
     if (!rock->cstate) return 0;
 
     message_get_cid(m, &cid);
-    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/0)) return 0;
+    int flags = rock->include_trash ? CONV_WITHFOLDERS : 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, flags)) return 0;
     if (!conv.exists) return 0;
 
-    if (rock->num == 0)
-        r = (conv.unseen != conv.exists);
-    else if (rock->num > 0)
+    if (rock->num == 0) {
+        uint64_t unseen = conv.unseen;
+        if (rock->include_trash) {
+            conv_folder_t *folder;
+            for (folder = conv.folders; folder; folder = folder->next) {
+                if (folder->number == rock->cstate->trashfolder) {
+                    unseen += folder->unseen;
+                    break;
+                }
+            }
+        }
+        r = (unseen != conv.exists);
+    }
+    else if (rock->num > 0) {
         r = !!conv.counts[rock->num-1];
+    }
 
     conversation_fini(&conv);
     return r;
@@ -2126,11 +2247,23 @@ static int search_allconvflags_match(message_t *m,
     if (!rock->cstate) return 0;
 
     message_get_cid(m, &cid);
-    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/0)) return 0;
+    int flags = rock->include_trash ? CONV_WITHFOLDERS : 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, flags)) return 0;
     if (!conv.exists) return 0;
 
-    if (rock->num == 0)
-        r = !conv.unseen;
+    if (rock->num == 0) {
+        uint64_t unseen = conv.unseen;
+        if (rock->include_trash) {
+            conv_folder_t *folder;
+            for (folder = conv.folders; folder; folder = folder->next) {
+                if (folder->number == rock->cstate->trashfolder) {
+                    unseen += folder->unseen;
+                    break;
+                }
+            }
+        }
+        r = !unseen;
+    }
     else if (rock->num > 0)
         r = (conv.counts[rock->num-1] == conv.exists);
 
@@ -2184,9 +2317,9 @@ static void conv_rock_new(struct mailbox *mailbox,
 {
     struct conv_rock *rock = xzmalloc(sizeof(*rock));
 
-    rock->cstate = conversations_get_mbox(mailbox->name);
+    rock->cstate = conversations_get_mbox(mailbox_name(mailbox));
     if (!rock->cstate) {
-        if (conversations_open_mbox(mailbox->name, 1/*shared*/, &rock->cstate))
+        if (conversations_open_mbox(mailbox_name(mailbox), 1/*shared*/, &rock->cstate))
             rock->num = -1;         /* invalid */
         else
             rock->cstate_is_ours = 1;
@@ -2351,12 +2484,77 @@ static int search_language_match(message_t *m __attribute__((unused)),
 
 /* ====================================================================== */
 
+static void search_seen_internalise(struct index_state *state,
+                                    const union search_value *v,
+                                    void **internalisedp)
+{
+    seqset_free((seqset_t **)internalisedp);
+    if (v) {
+        if (!mailbox_internal_seen(state->mailbox, v->s)) {
+            // read sequence of seen uids from seendb,
+            // fall back to owner systemflags on error
+            seqset_t *seen = NULL;
+            struct seen *seendb = NULL;
+            int r = seen_open(v->s, SEEN_SILENT, &seendb);
+            if (!r) {
+                struct seendata sd = SEENDATA_INITIALIZER;
+                r = seen_read(seendb, mailbox_uniqueid(state->mailbox), &sd);
+                if (!r) {
+                    seen = seqset_parse(sd.seenuids, NULL, sd.lastuid);
+                    seen_freedata(&sd);
+                    *internalisedp = seen;
+                }
+                else {
+                    xsyslog(LOG_WARNING, "can not read seen data",
+                            "userid=<%s> mboxid=<%s> err=<%s>",
+                            v->s, mailbox_uniqueid(state->mailbox), error_message(r));
+                }
+            }
+            else {
+                xsyslog(LOG_WARNING, "can not open seendb",
+                        "userid=<%s> err=<%s>", v->s, error_message(r));
+            }
+            seen_close(&seendb);
+        }
+    }
+}
+
+static int search_seen_match(message_t *m,
+                             const union search_value *v __attribute__((unused)),
+                             void *internalised,
+                             void *data1 __attribute__((unused)))
+{
+    if (internalised) {
+        seqset_t *seen = internalised;
+        uint32_t uid;
+        if (!message_get_uid(m, &uid)) {
+            return seqset_ismember(seen, uid);
+        }
+        else return 0;
+    }
+    else {
+        uint32_t flags;
+        if (!message_get_systemflags(m, &flags)) {
+            return flags & FLAG_SEEN;
+        }
+        else return 0;
+    }
+}
+
+/* ====================================================================== */
+
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 static int search_attr_initialized = 0;
 
 static void done_cb(void *rock __attribute__((unused))) {
-    /* do nothing */
+    hash_iter *iter = hash_table_iter(&attrs_by_name);
+    while (hash_iter_next(iter)) {
+        struct search_attr *attr = hash_iter_val(iter);
+        if (attr->freeattr) attr->freeattr(attr);
+    }
+    hash_iter_free(&iter);
+    free_hash_table(&attrs_by_name, NULL);
 }
 
 static void init_internal() {
@@ -2388,6 +2586,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_list_duplicate,
             search_list_free,
+            /*freeattr*/NULL,
             (void *)message_get_bcc
         },{
             "cclist",
@@ -2402,6 +2601,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_list_duplicate,
             search_list_free,
+            /*freeattr*/NULL,
             (void *)message_get_cc
         },{
             "fromlist",
@@ -2416,6 +2616,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_list_duplicate,
             search_list_free,
+            /*freeattr*/NULL,
             (void *)message_get_from
         },{
             "tolist",
@@ -2430,6 +2631,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_list_duplicate,
             search_list_free,
+            /*freeattr*/NULL,
             (void *)message_get_to
         },{
             "bcc",
@@ -2444,6 +2646,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_bcc
         },{
             "deliveredto",
@@ -2458,6 +2661,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_deliveredto
         },{
             "cc",
@@ -2472,6 +2676,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_cc
         },{
             "from",
@@ -2486,6 +2691,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_from
         },{
             "message-id",
@@ -2500,6 +2706,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_messageid
         },{
             "listid",
@@ -2514,6 +2721,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             NULL
         },{
             "contenttype",
@@ -2528,6 +2736,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             NULL
         },{
             "subject",
@@ -2542,6 +2751,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_subject
         },{
             "to",
@@ -2556,6 +2766,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_to
         },{
             "msgno",
@@ -2570,6 +2781,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_msgno
         },{
             "uid",
@@ -2584,6 +2796,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_uid
         },{
             "systemflags",
@@ -2598,6 +2811,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_systemflags
         },{
             "indexflags",
@@ -2612,6 +2826,7 @@ EXPORTED void search_attr_init(void)
             search_indexflags_get_countability,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_indexflags
         },{
             "keyword",
@@ -2626,6 +2841,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             NULL
         },{
             "convflags",
@@ -2640,6 +2856,7 @@ EXPORTED void search_attr_init(void)
             search_convflags_get_countability,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             NULL
         },{
             "allconvflags",
@@ -2654,6 +2871,7 @@ EXPORTED void search_attr_init(void)
             search_convflags_get_countability,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             NULL
         },{
             "convmodseq",
@@ -2668,6 +2886,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             NULL
         },{
             "modseq",
@@ -2682,6 +2901,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_modseq
         },{
             "cid",
@@ -2696,6 +2916,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_cid
         },{
             "emailid",
@@ -2710,6 +2931,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)NULL
         },{
             "threadid",
@@ -2724,6 +2946,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)NULL
         },{
             "folder",
@@ -2738,6 +2961,7 @@ EXPORTED void search_attr_init(void)
             search_folder_get_countability,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)NULL
         },{
             "annotation",
@@ -2752,6 +2976,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_annotation_duplicate,
             search_annotation_free,
+            /*freeattr*/NULL,
             (void *)NULL
         },{
             "size",
@@ -2766,6 +2991,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_size
         },{
             "internaldate",
@@ -2780,6 +3006,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_internaldate
         },{
             "savedate",
@@ -2794,6 +3021,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_savedate
         },{
             "indexversion",
@@ -2808,6 +3036,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_indexversion
         },{
             "sentdate",
@@ -2822,6 +3051,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_sentdate
         },{
             "spamscore",
@@ -2836,6 +3066,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_spamscore
         },{
             "body",
@@ -2850,6 +3081,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)1       /* skipheader flag */
         },{
             "text",
@@ -2864,6 +3096,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0       /* skipheader flag */
         },{
             "date",
@@ -2878,6 +3111,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             /*duplicate*/NULL,
             /*free*/NULL,
+            /*freeattr*/NULL,
             (void *)message_get_gmtime
         },{
             "location",     /* for iCalendar */
@@ -2892,6 +3126,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0
         },{
             "attachmentname",
@@ -2906,6 +3141,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0
         },{
             "attachmentbody",
@@ -2920,6 +3156,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0       /* skipheader flag */
         },{
             "language",
@@ -2934,6 +3171,7 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)0
         }, {
             "priority",
@@ -2948,7 +3186,23 @@ EXPORTED void search_attr_init(void)
             /*get_countability*/NULL,
             search_string_duplicate,
             search_string_free,
+            /*freeattr*/NULL,
             (void *)message_get_priority
+        },{
+            "seen",
+            SEA_MUTABLE,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            search_seen_internalise,
+            /*cmp*/NULL,
+            search_seen_match,
+            search_string_serialise,
+            search_string_unserialise,
+            /*get_countability*/NULL,
+            search_string_duplicate,
+            search_string_free,
+            /*freeattr*/NULL,
+            (void *)0
         }
     };
 
@@ -2976,6 +3230,12 @@ EXPORTED const search_attr_t *search_attr_find(const char *name)
     return hash_lookup(tmp, &attrs_by_name);
 }
 
+static void field_attr_free(search_attr_t *attr)
+{
+    free((char*)attr->name);
+    free(attr);
+}
+
 /*
  * Find and return a search attribute for the named header field.  Used
  * when building comparison nodes for the HEADER search criterion in a
@@ -3000,6 +3260,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
         /*get_countability*/NULL,
         search_string_duplicate,
         search_string_free,
+        field_attr_free,
         NULL
     };
 
@@ -3025,6 +3286,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
                    ? SEARCH_COST_CACHE : SEARCH_COST_BODY;
         attr->part = (config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS)
                         ? SEARCH_PART_HEADERS : -1);
+        attr->freeattr = field_attr_free;
         attr->data1 = strchr(key, ':')+1;
         hash_insert(attr->name, (void *)attr, &attrs_by_name);
         key = NULL;     /* attr takes this over */

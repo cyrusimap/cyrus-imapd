@@ -953,7 +953,7 @@ envelope_err:
             res = SIEVE_RUN_ERROR;
             goto body_err;
         }
-	/*
+        /*
           RFC 5173         Sieve Email Filtering: Body Extension        April 2008
 
           6. Interaction with Other Sieve Extensions
@@ -1001,10 +1001,6 @@ envelope_err:
                                         comp, comprock, ctag,
                                         (requires & BFE_VARIABLES) ?
                                         variables : NULL, match_vars);
-                    if (res < 0) {
-                        free(val[y]);
-                        goto body_err;
-                    }
                 }
             }
 
@@ -1014,7 +1010,9 @@ envelope_err:
         } /* For each body part */
 
         /* free the bodypart array */
-        if (val) free(val);
+        free(val);
+        if (res < 0)
+            goto body_err;
 
         if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
@@ -1574,7 +1572,7 @@ envelope_err:
                 json = parse_string(json, variables);
             }
 
-            res = interp->jmapquery(sc, m, json);
+            res = interp->jmapquery(interp->interp_context, sc, m, json);
         }
         else res = 0;
         break;
@@ -1775,11 +1773,13 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         case B_FILEINTO_ORIG:
         {
             const char *folder = cmd.u.f.folder;
+            const char *mailboxid = cmd.u.f.mailboxid;
             const char *specialuse = cmd.u.f.specialuse;
             struct buf *headers = NULL;
 
             if (requires & BFE_VARIABLES) {
                 folder = parse_string(folder, variables);
+                mailboxid = parse_string(mailboxid, variables);
                 specialuse = parse_string(specialuse, variables);
             }
 
@@ -1794,7 +1794,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             if (i->edited_headers) i->getheadersection(m, &headers);
 
             res = do_fileinto(i, sc, actions, folder, specialuse,
-                              !cmd.u.f.copy, cmd.u.f.create, cmd.u.f.mailboxid,
+                              !cmd.u.f.copy, cmd.u.f.create, mailboxid,
                               actionflags, headers);
 
             if (res == SIEVE_RUN_ERROR)
@@ -2459,6 +2459,50 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 }
 
                 i->log(sc, m, text);
+            }
+            break;
+
+        case B_PROCESSIMIP:
+            if (i->imip) {
+                sieve_imip_context_t imip_ctx = {
+                    !!cmd.u.imip.invites_only,
+                    !!cmd.u.imip.updates_only,
+                    !!cmd.u.imip.delete_canceled,
+                    cmd.u.imip.calendarid,
+                    BUF_INITIALIZER,  // outcome
+                    BUF_INITIALIZER   // errstr
+                };
+                variable_list_t *vl;
+
+                res = i->imip(&imip_ctx, i->interp_context, sc, m, errmsg);
+
+                if (cmd.u.imip.outcome_var) {
+                    vl = varlist_select(variables, cmd.u.imip.outcome_var);
+
+                    if (!vl) {
+                        vl = varlist_extend(variables);
+                        vl->name = xstrdup(cmd.u.imip.outcome_var);
+                    }
+                    strarray_fini(vl->var);
+                    strarray_appendm(vl->var, buf_release(&imip_ctx.outcome));
+                }
+
+                if (cmd.u.imip.errstr_var) {
+                    vl = varlist_select(variables, cmd.u.imip.errstr_var);
+
+                    if (!vl) {
+                        vl = varlist_extend(variables);
+                        vl->name = xstrdup(cmd.u.imip.errstr_var);
+                    }
+                    strarray_fini(vl->var);
+                    strarray_appendm(vl->var, buf_release(&imip_ctx.errstr));
+                }
+
+                buf_free(&imip_ctx.outcome);
+                buf_free(&imip_ctx.errstr);
+            }
+            else {
+                return SIEVE_RUN_ERROR;
             }
             break;
 

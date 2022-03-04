@@ -64,15 +64,13 @@
 #include "xstrlcpy.h"
 #include "imap/global.h"
 #include "imap/sievedir.h"
-#include "imap/sync_log.h"
+#include "imap/sieve_db.h"
 #include "imap/tls.h"
+#include "imap/user.h"
 #include "imap/version.h"
 #include "sieve/sieve_interface.h"
 #include "timsieved/actions.h"
 #include "timsieved/codes.h"
-
-/* after a user has authentication, our current directory is their Sieve
-   directory! */
 
 extern int sieved_userisadmin;
 extern sieve_interp_t *interp;
@@ -82,71 +80,85 @@ static char *sieved_userid = NULL;
 
 static char *sieve_dir = NULL;
 
+static struct mailbox *sieve_mailbox = NULL;
+static struct sieve_db *sievedb = NULL;
+
 int actions_init(void)
 {
-  int sieve_usehomedir = 0;
+    int sieve_usehomedir = 0;
 
-  sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
+    sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
 
-  if (!sieve_usehomedir) {
-      sieve_dir_config = (char *) config_getstring(IMAPOPT_SIEVEDIR);
-  } else {
-      /* can't use home directories with timsieved */
-      syslog(LOG_ERR, "can't use home directories");
+    if (!sieve_usehomedir) {
+        sieve_dir_config = (char *) config_getstring(IMAPOPT_SIEVEDIR);
+    } else {
+        /* can't use home directories with timsieved */
+        syslog(LOG_ERR, "can't use home directories");
 
-      return TIMSIEVE_FAIL;
-  }
+        return TIMSIEVE_FAIL;
+    }
 
-  return TIMSIEVE_OK;
+    return TIMSIEVE_OK;
 }
 
 int actions_setuser(const char *userid)
 {
-  char *domain = NULL;
-  struct buf buf = BUF_INITIALIZER;
-  int result, ret = TIMSIEVE_OK;
+    struct buf buf = BUF_INITIALIZER;
+    int result;
 
-  free(sieved_userid);
-  sieved_userid = xstrdup(userid);
-  if (config_virtdomains) {
-      /* split the user and domain */
-      if ((domain = strrchr(sieved_userid, '@'))) *domain++ = '\0';
-  }
+    sieved_userid = xstrdup(userid);
 
-  buf_setcstr(&buf, sieve_dir_config);
+    if (sieved_userisadmin) {
+        char *domain = NULL;
 
-  if (domain) {
-      char dhash = (char) dir_hash_c(domain, config_fulldirhash);
-      buf_printf(&buf, "%s%c/%s", FNAME_DOMAINDIR, dhash, domain);
-  }
+        buf_setcstr(&buf, sieve_dir_config);
 
-  if (sieved_userisadmin) {
-      buf_appendcstr(&buf, "/global");
-  }
-  else {
-      char hash = (char) dir_hash_c(sieved_userid, config_fulldirhash);
-      buf_printf(&buf, "/%c/%s", hash, sieved_userid);
-  }
+        if (config_virtdomains && (domain = strrchr(userid, '@'))) {
+            char dhash = (char) dir_hash_c(++domain, config_fulldirhash);
+            buf_printf(&buf, "%s%c/%s", FNAME_DOMAINDIR, dhash, domain);
+        }
 
-  /* rejoin user and domain */
-  if (domain) domain[-1] = '@';
+        buf_appendcstr(&buf, "/global");
+    }
+    else {
+        buf_setcstr(&buf, user_sieve_path(userid));
+    }
 
-  if (sieve_dir) free(sieve_dir);
-  sieve_dir = buf_release(&buf);
+    if (sieve_dir) free(sieve_dir);
+    sieve_dir = buf_release(&buf);
 
-  struct stat sbuf;
-  result = stat(sieve_dir, &sbuf);
-  if (result && errno == ENOENT) {
-      result = cyrus_mkdir(sieve_dir, 0755);
-      if (!result) {
-          result = mkdir(sieve_dir, 0755);
-          if (!result) result = stat(sieve_dir, &sbuf);
-      }
-  }
-  ret = result ? TIMSIEVE_FAIL : TIMSIEVE_OK;
+    struct stat sbuf;
+    result = stat(sieve_dir, &sbuf);
+    if (result && errno == ENOENT) {
+        result = cyrus_mkdir(sieve_dir, 0755);
+        if (!result) {
+            result = mkdir(sieve_dir, 0755);
+            if (!result) result = stat(sieve_dir, &sbuf);
+        }
+    }
 
-  buf_free(&buf);
-  return ret;
+    if (result) return TIMSIEVE_FAIL;
+
+    sievedb = sievedb_open_userid(sieved_userid);
+    if (!sievedb) return TIMSIEVE_FAIL;
+
+    result = sieve_ensure_folder(sieved_userid, &sieve_mailbox);
+    if (result) return TIMSIEVE_FAIL;
+
+    mailbox_unlock_index(sieve_mailbox, NULL);
+
+    return TIMSIEVE_OK;
+}
+
+void actions_unsetuser(void)
+{
+    xzfree(sieved_userid);
+
+    mailbox_close(&sieve_mailbox);
+    sieve_mailbox = NULL;
+
+    sievedb_close(sievedb);
+    sievedb = NULL;
 }
 
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
@@ -202,32 +214,36 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
 
 int getscript(struct protstream *conn, const struct buf *name)
 {
-    int size;                     /* size of the file */
-    char path[1024];
-    struct buf *buf;
+    struct sieve_data *sdata = NULL;
+    struct buf content = BUF_INITIALIZER;
+    int result;
 
     if (!sievedir_valid_name(name)) {
         prot_printf(conn,"NO \"Invalid script name\"\r\n");
         return TIMSIEVE_FAIL;
     }
 
-    snprintf(path, 1023, "%s.script", name->s);
-
-    buf = sievedir_get_script(sieve_dir, path);
-
-    if (!buf) {
-        prot_printf(conn,"NO (NONEXISTENT) \"Script doesn't exist\"\r\n");
+    result = sievedb_lookup_name(sievedb, buf_cstring(name), &sdata, 0);
+    if (result == CYRUSDB_NOTFOUND) {
+        prot_printf(conn, "NO (NONEXISTENT) \"Script does not exist\"\r\n");
         return TIMSIEVE_NOEXIST;
     }
 
-    size = buf_len(buf);
-    prot_printf(conn, "{%d}\r\n", size);
-    prot_write(conn, buf_base(buf), size);
-    buf_destroy(buf);
+    if (!result) {
+        result = sieve_script_fetch(sieve_mailbox, sdata, &content);
+    }
+    if (result) {
+        prot_printf(conn, "NO \"Error getting script\"\r\n");
+        return TIMSIEVE_FAIL;
+    }
 
-    prot_printf(conn,"\r\n");
+    prot_printf(conn, "{%lu}\r\n", buf_len(&content));
+    prot_putbuf(conn, &content);
+    prot_puts(conn, "\r\n");
 
-    prot_printf(conn, "OK\r\n");
+    buf_free(&content);
+
+    prot_puts(conn, "OK\r\n");
 
     return TIMSIEVE_OK;
 }
@@ -236,146 +252,112 @@ int getscript(struct protstream *conn, const struct buf *name)
 int putscript(struct protstream *conn, const struct buf *name,
               const struct buf *data, int verify_only)
 {
-  int result;
-  char *err = NULL;
-  int maxscripts;
-  sieve_script_t *s = NULL;
+    int result;
+    char *err = NULL;
+    int numscripts, maxscripts;
 
-  if (!sievedir_valid_name(name))
-  {
-      prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return TIMSIEVE_FAIL;
-  }
+    if (!verify_only) {
+        if (!sievedir_valid_name(name)) {
+            prot_printf(conn,"NO \"Invalid script name\"\r\n");
+            return TIMSIEVE_FAIL;
+        }
 
-  if (verify_only) {
-      result = sieve_script_parse_string(interp, buf_cstring(data), &err, &s);
-      sieve_script_free(&s);
-      if (result != SIEVE_OK) result = SIEVEDIR_INVALID;
-  }
-  else {
-      /* see if this would put the user over quota */
-      maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
+        /* see if this would put the user over quota */
+        maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
 
-      if (sievedir_num_scripts(sieve_dir, name->s)+1 > maxscripts)
-      {
-          prot_printf(conn,
-                      "NO (QUOTA/MAXSCRIPTS) \"You are only allowed %d scripts on this server\"\r\n",
-                      maxscripts);
-          return TIMSIEVE_FAIL;
-      }
+        sievedb_count(sievedb, &numscripts);
+        if (numscripts == maxscripts) {
+            prot_printf(conn, "NO (QUOTA/MAXSCRIPTS)"
+                        " \"You are only allowed %d scripts on this server\"\r\n",
+                        maxscripts);
+            return TIMSIEVE_FAIL;
+        }
+    }
 
-      result = sievedir_put_script(sieve_dir,
-                                   buf_cstring(name), buf_cstring(data), &err);
-      if (result == SIEVEDIR_OK)
-          sync_log_sieve(sieved_userid);
-  }
+    result = sieve_script_parse_string(interp, buf_cstring(data), &err, NULL);
 
-  switch (result) {
-  case SIEVEDIR_INVALID:
-      if (err) {
-          prot_printf(conn, "NO ");
-          prot_printstring(conn, err);
-          prot_printf(conn, "\r\n");
-          free(err);
-      } else {
-          prot_printf(conn, "NO \"parse failed\"\r\n");
-      }
-      return TIMSIEVE_FAIL;
-
-    case SIEVEDIR_FAIL:
-        prot_printf(conn, "NO \"bytecode generate failed\"\r\n");
-        return TIMSIEVE_FAIL;
-
-    case SIEVEDIR_IOERROR:
-        prot_printf(conn, "NO \"%s\"\r\n", strerror(errno));
+    if (result != SIEVE_OK) {
+        if (err) {
+            prot_printf(conn, "NO ");
+            prot_printstring(conn, err);
+            prot_printf(conn, "\r\n");
+            free(err);
+        } else {
+            prot_printf(conn, "NO \"parse failed\"\r\n");
+        }
         return TIMSIEVE_FAIL;
     }
 
-  prot_printf(conn, "OK\r\n");
+    if (!verify_only) {
+        struct sieve_data *sdata = NULL;
 
-  return TIMSIEVE_OK;
-}
+        result = sievedb_lookup_name(sievedb, buf_cstring(name), &sdata, 0);
+        if (!result || result == CYRUSDB_NOTFOUND) {
+            sdata->name = buf_cstring(name);
 
-/* delete the active script */
+            result = sieve_script_store(sieve_mailbox, sdata, data);
+        }
 
-static int deleteactive(struct protstream *conn)
-{
-    int result = sievedir_deactivate_script(sieve_dir);
-    if (result != SIEVEDIR_OK) {
-        prot_printf(conn,"NO \"Unable to deactivate script\"\r\n");
-        return TIMSIEVE_FAIL;
+        if (result) {
+            prot_printf(conn, "NO \"Error putting script\"\r\n");
+            return TIMSIEVE_FAIL;
+        }
     }
-    sync_log_sieve(sieved_userid);
 
+    prot_printf(conn, "OK\r\n");
     return TIMSIEVE_OK;
 }
 
 /* delete a sieve script */
 int deletescript(struct protstream *conn, const struct buf *name)
 {
-  int result;
+    struct sieve_data *sdata = NULL;
+    int result;
 
-  if (!sievedir_valid_name(name))
-  {
-      prot_printf(conn,"NO \"Invalid script name\"\r\n");
-      return TIMSIEVE_FAIL;
-  }
+    if (!sievedir_valid_name(name)) {
+        prot_printf(conn,"NO \"Invalid script name\"\r\n");
+        return TIMSIEVE_FAIL;
+    }
 
-  if (sievedir_script_isactive(sieve_dir, name->s)) {
-    prot_printf(conn, "NO (ACTIVE) \"Active script cannot be deleted\"\r\n");
-    return TIMSIEVE_FAIL;
-  }
+    result = sievedb_lookup_name(sievedb, buf_cstring(name), &sdata, 0);
+    if (result == CYRUSDB_NOTFOUND) {
+        prot_printf(conn, "NO (NONEXISTENT) \"Script does not exist\"\r\n");
+        return TIMSIEVE_NOEXIST;
+    }
+    else if (sdata->isactive) {
+        prot_printf(conn, "NO (ACTIVE) \"Active script cannot be deleted\"\r\n");
+        return TIMSIEVE_FAIL;
+    }
+    else if (!result) {
+        result = sieve_script_remove(sieve_mailbox, sdata);
+    }
 
-  result = sievedir_delete_script(sieve_dir, name->s);
-  if (result != SIEVEDIR_OK) {
-      if (result == SIEVEDIR_NOTFOUND)
-          prot_printf(conn, "NO (NONEXISTENT) \"Script %s does not exist.\"\r\n", name->s);
-      else
-          prot_printf(conn,"NO \"Error deleting script\"\r\n");
-      return TIMSIEVE_FAIL;
-  }
+    if (result) {
+        prot_printf(conn, "NO \"Error deleting script\"\r\n");
+        return TIMSIEVE_FAIL;
+    }
 
-  sync_log_sieve(sieved_userid);
-
-  prot_printf(conn,"OK\r\n");
-  return TIMSIEVE_OK;
+    prot_printf(conn,"OK\r\n");
+    return TIMSIEVE_OK;
 }
 
-struct list_rock {
-    struct protstream *conn;
-    const char *active;
-};
-
-static int list_cb(const char *sievedir __attribute__((unused)),
-                   const char *name,
-                   struct stat *sbuf __attribute__((unused)),
-                   const char *link_target __attribute__((unused)),
-                   void *rock)
+static int list_cb(void *rock, struct sieve_data *sdata)
 {
-    struct list_rock *lrock = (struct list_rock *) rock;
-    size_t name_len = strlen(name)- SCRIPT_SUFFIX_LEN;
+    struct protstream *conn = (struct protstream *) rock;
 
-    prot_printf(lrock->conn, "\"%.*s\"", (int) name_len, name);
-    if (lrock->active &&
-        strlen(lrock->active) == name_len &&
-        !strncmp(lrock->active, name, name_len)) {
-        /* is the active script */
-        prot_puts(lrock->conn, " ACTIVE");
-    }
-    prot_puts(lrock->conn, "\r\n");
+    prot_printf(conn, "\"%s\"", sdata->name);
+    if (sdata->isactive) prot_puts(conn, " ACTIVE");
+    prot_puts(conn, "\r\n");
 
-    return SIEVEDIR_OK;
+    return 0;
 }
 
 /* list the scripts user has available */
 int listscripts(struct protstream *conn)
 {
-    struct list_rock lrock = { conn, sievedir_get_active(sieve_dir) };
+    sievedb_foreach(sievedb, &list_cb, conn);
 
-    sievedir_foreach(sieve_dir, SIEVEDIR_SCRIPTS_ONLY, &list_cb, &lrock);
-
-    prot_printf(conn,"OK\r\n");
-
+    prot_printf(conn, "OK\r\n");
     return TIMSIEVE_OK;
 }
 
@@ -383,36 +365,32 @@ int listscripts(struct protstream *conn)
 
 int setactive(struct protstream *conn, const struct buf *name)
 {
-    int result;
+    const char *action = "deactivating";
+    struct sieve_data *sdata = NULL;
+    int result = 0;
 
     /* if string name is empty, disable active script */
-    if (!name->len) {
-        if (deleteactive(conn) != TIMSIEVE_OK)
+    if (buf_len(name)) {
+        action = "activating";
+
+        if (!sievedir_valid_name(name)) {
+            prot_printf(conn,"NO \"Invalid script name\"\r\n");
             return TIMSIEVE_FAIL;
+        }
 
-        prot_printf(conn,"OK\r\n");
-        return TIMSIEVE_OK;
+        result = sievedb_lookup_name(sievedb, buf_cstring(name), &sdata, 0);
+        if (result == CYRUSDB_NOTFOUND) {
+            prot_printf(conn,"NO (NONEXISTENT) \"Script does not exist\"\r\n");
+            return TIMSIEVE_NOEXIST;
+        }
     }
 
-    if (!sievedir_valid_name(name))
-    {
-        prot_printf(conn,"NO \"Invalid script name\"\r\n");
+    result = sieve_script_activate(sieve_mailbox, sdata);
+
+    if (result) {
+        prot_printf(conn, "NO \"Error %s script\"\r\n", action);
         return TIMSIEVE_FAIL;
     }
-
-    if (sievedir_script_exists(sieve_dir, name->s)==FALSE)
-    {
-        prot_printf(conn,"NO (NONEXISTENT) \"Script does not exist\"\r\n");
-        return TIMSIEVE_NOEXIST;
-    }
-
-    result = sievedir_activate_script(sieve_dir, name->s);
-    if (result != SIEVEDIR_OK) {
-        prot_printf(conn,"NO \"Error activating script\"\r\n");
-        return TIMSIEVE_FAIL;
-    }
-
-    sync_log_sieve(sieved_userid);
 
     prot_printf(conn,"OK\r\n");
     return TIMSIEVE_OK;
@@ -422,53 +400,61 @@ int setactive(struct protstream *conn, const struct buf *name)
 int renamescript(struct protstream *conn,
                  const struct buf *oldname, const struct buf *newname)
 {
-  int result;
+    struct sieve_data *sdata = NULL;
+    int result;
 
-  if (!sievedir_valid_name(oldname))
-  {
-      prot_printf(conn,"NO \"Invalid old script name\"\r\n");
-      return TIMSIEVE_FAIL;
-  }
-  if (!sievedir_valid_name(newname))
-  {
-      prot_printf(conn,"NO \"Invalid new script name\"\r\n");
-      return TIMSIEVE_FAIL;
-  }
+    if (!sievedir_valid_name(oldname)) {
+            prot_printf(conn,"NO \"Invalid old script name\"\r\n");
+            return TIMSIEVE_FAIL;
+    }
+    if (!sievedir_valid_name(newname)) {
+            prot_printf(conn,"NO \"Invalid new script name\"\r\n");
+            return TIMSIEVE_FAIL;
+    }
 
-  if (sievedir_script_exists(sieve_dir, newname->s)==TRUE) {
-    prot_printf(conn, "NO (ALREADYEXISTS) \"Script %s already exists.\"\r\n",
-                newname->s);
-    return TIMSIEVE_EXISTS;
-  }
+    result = sievedb_lookup_name(sievedb, buf_cstring(newname), &sdata, 0);
+    if (!result) {
+        prot_printf(conn, "NO (ALREADYEXISTS) \"Script %s already exists.\"\r\n",
+                    buf_cstring(newname));
+        return TIMSIEVE_EXISTS;
+    }
 
-  result = sievedir_rename_script(sieve_dir, oldname->s, newname->s);
-  if (result == SIEVEDIR_OK) {
-      prot_printf(conn,"OK\r\n");
-      sync_log_sieve(sieved_userid);
-      result = TIMSIEVE_OK;
-  }
-  else {
-      prot_printf(conn,"NO \"Error renaming script\"\r\n");
-      result = TIMSIEVE_FAIL;
-  }
+    if (result == CYRUSDB_NOTFOUND) {
+        result = sievedb_lookup_name(sievedb, buf_cstring(oldname), &sdata, 0);
+        if (result == CYRUSDB_NOTFOUND) {
+            prot_printf(conn,"NO (NONEXISTENT) \"Script %s does not exist\"\r\n",
+                        buf_cstring(oldname));
+            return TIMSIEVE_NOEXIST;
+        }
 
-  return result;
+        if (!result) {
+            result = sieve_script_rename(sieve_mailbox,
+                                         sdata, buf_cstring(newname));
+        }
+    }
+
+    if (result) {
+        prot_printf(conn,"NO \"Error renaming script\"\r\n");
+        return TIMSIEVE_FAIL;
+    }
+
+    prot_printf(conn,"OK\r\n");
+    return TIMSIEVE_OK;
 }
 
-int cmd_havespace(struct protstream *conn, const struct buf *sieve_name, unsigned long num)
+int cmd_havespace(struct protstream *conn,
+                  const struct buf *sieve_name, unsigned long num)
 {
-    int maxscripts;
+    int numscripts, maxscripts;
     extern unsigned long maxscriptsize;
 
-    if (!sievedir_valid_name(sieve_name))
-    {
+    if (!sievedir_valid_name(sieve_name)) {
         prot_printf(conn,"NO \"Invalid script name\"\r\n");
         return TIMSIEVE_FAIL;
     }
 
     /* see if the size of the script is too big */
-    if (num > maxscriptsize)
-    {
+    if (num > maxscriptsize) {
         prot_printf(conn,
                     "NO (QUOTA/MAXSIZE) \"Script size is too large. "
                     "Max script size is %ld bytes\"\r\n",
@@ -479,10 +465,10 @@ int cmd_havespace(struct protstream *conn, const struct buf *sieve_name, unsigne
     /* see if this would put the user over quota */
     maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
 
-    if (sievedir_num_scripts(sieve_dir, sieve_name->s)+1 > maxscripts)
-    {
-        prot_printf(conn,
-                    "NO (QUOTA/MAXSCRIPTS) \"You are only allowed %d scripts on this server\"\r\n",
+    sievedb_count(sievedb, &numscripts);
+    if (numscripts == maxscripts) {
+        prot_printf(conn, "NO (QUOTA/MAXSCRIPTS)"
+                    " \"You are only allowed %d scripts on this server\"\r\n",
                     maxscripts);
         return TIMSIEVE_FAIL;
     }

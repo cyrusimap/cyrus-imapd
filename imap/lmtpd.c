@@ -130,7 +130,7 @@ static int autocreate_inbox(const mbname_t *mbname);
 #endif
 
 /* current namespace */
-static struct namespace lmtpd_namespace;
+struct namespace lmtpd_namespace;
 
 static struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
                             &spoolfile, &removespool, &lmtpd_namespace,
@@ -156,7 +156,7 @@ static struct protstream *deliver_out, *deliver_in;
 int deliver_logfd = -1; /* used in lmtpengine.c */
 
 /* our cached connections */
-struct backend **backend_cached = NULL;
+ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 static struct protocol_t lmtp_protocol =
 { "lmtp", "lmtp", TYPE_STD,
@@ -286,6 +286,7 @@ int service_main(int argc, char **argv,
     prometheus_increment(CYRUS_LMTP_CONNECTIONS_TOTAL);
 
     lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
+    libcyrus_run_delayed();
 
     prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
 
@@ -502,8 +503,7 @@ int deliver_mailbox(FILE *f,
     time_t internaldate = 0;
 
     /* make sure we have an IMAP mailbox */
-    if (mboxname_isdeletedmailbox(mailboxname, NULL) ||
-        mboxname_isnonimapmailbox(mailboxname, 0/*mbtype*/)) {
+    if (mboxname_isnondeliverymailbox(mailboxname, 0/*mbtype*/)) {
         return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
@@ -538,7 +538,7 @@ int deliver_mailbox(FILE *f,
     }
 
     /* check for duplicate message */
-    uuid = xstrdup(as.mailbox->uniqueid);
+    uuid = xstrdup(mailbox_uniqueid(as.mailbox));
     dkey.id = id;
     dkey.to = uuid;
     dkey.date = date;
@@ -577,7 +577,7 @@ int deliver_mailbox(FILE *f,
             if (imap4flags->authstate != authstate) {
                 /* Flags get set as owner of Sieve script */
                 int owner_rights =
-                    cyrus_acl_myrights(imap4flags->authstate, mailbox->acl);
+                    cyrus_acl_myrights(imap4flags->authstate, mailbox_acl(mailbox));
 
                 as.myrights |= (owner_rights & ~ACL_POST);
             }
@@ -815,7 +815,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 #if defined(USE_SIEVE) && defined(WITH_JMAP)
         /* build the query filter */
-        content.matchmime = jmap_email_matchmime_init(&content.map, &jerr);
+        content.matchmime = jmap_email_matchmime_new(&content.map, &jerr);
 #endif
     }
 
@@ -844,13 +844,15 @@ int deliver(message_data_t *msgdata, char *authuser,
             // lock conversations for the duration of delivery, so nothing else can read
             // the state of any mailbox while the delivery is half done
             struct conversations_state *state = NULL;
-            r = conversations_open_user(mbname_userid(mbname), 0/*shared*/, &state);
-            if (r) goto setstatus;
+            if (mbname_userid(mbname)) {
+                r = conversations_open_user(mbname_userid(mbname), 0/*shared*/, &state);
+                if (r) goto setstatus;
+            }
 
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
-            struct sieve_interp_ctx ctx = { mbname_userid(mbname), NULL };
+            struct sieve_interp_ctx ctx = { mbname_userid(mbname), state, NULL };
             sieve_interp_t *interp = setup_sieve(&ctx);
 
             sieve_srs_init();
@@ -1007,14 +1009,15 @@ void shut_down(int code)
     /* set flag */
     in_shutdown = 1;
 
+    libcyrus_run_delayed();
+
     /* close backend connections */
-    i = 0;
-    while (backend_cached && backend_cached[i]) {
-        proxy_downserver(backend_cached[i]);
-        free(backend_cached[i]);
-        i++;
+    for (i = 0; i < ptrarray_size(&backend_cached); i++) {
+        struct backend *be = ptrarray_nth(&backend_cached, i);
+        proxy_downserver(be);
+        free(be);
     }
-    if (backend_cached) free(backend_cached);
+    ptrarray_fini(&backend_cached);
 
     if (excluded_specialuse) strarray_free(excluded_specialuse);
 

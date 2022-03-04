@@ -232,16 +232,23 @@ static int do_reid(const mbname_t *mbname)
     r = mailbox_open_iwl(name, &mailbox);
     if (r) return r;
 
-    mailbox_make_uniqueid(mailbox);
+    if (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) {
+        mailbox_make_uniqueid(mailbox);
+    }
+    else {
+        printf("Non-legacy mailbox, cannot reid: %s", extname);
+        goto done;
+    }
 
     r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) return r;
+    if (r) goto done;
 
     free(mbentry->uniqueid);
-    mbentry->uniqueid = xstrdup(mailbox->uniqueid);
+    mbentry->uniqueid = xstrdup(mailbox_uniqueid(mailbox));
 
     mboxlist_update(mbentry, 0);
 
+done:
     mailbox_close(&mailbox);
 
     /* printf("did reid %s\n", mboxname); */

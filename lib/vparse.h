@@ -5,6 +5,9 @@
 #include "util.h"
 #include "strarray.h"
 
+#define VCARD_APPLE_LABEL_PROPERTY "X-ABLabel"
+#define VCARD_APPLE_ABADR_PROPERTY "X-ABADR"
+
 enum parse_error {
 PE_OK = 0,
 PE_BACKQUOTE_EOF,

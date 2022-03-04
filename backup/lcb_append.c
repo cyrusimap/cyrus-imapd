@@ -76,7 +76,9 @@ static int retry_gzwrite(gzFile gzfile, const char *str, size_t len, const char 
         else {
             int r;
             const char *err = gzerror(gzfile, &r);
-            syslog(LOG_ERR, "IOERROR: %s gzwrite %s: %s", __func__, fname, err);
+            xsyslog(LOG_ERR, "IOERROR: gzwrite failed",
+                             "filename=<%s> error=<%s>",
+                             fname, err);
 
             if (r == Z_STREAM_ERROR)
                 fatal("gzwrite: invalid stream", EX_IOERR);
@@ -147,7 +149,7 @@ HIDDEN int backup_real_append_start(struct backup *backup,
 
     r = sqldb_exec(backup->db, backup_index_start_sql, bval, NULL, NULL);
     if (r) {
-        syslog(LOG_ERR, "%s: something went wrong: %i\n", __func__, r);
+        syslog(LOG_ERR, "%s: something went wrong: %i", __func__, r);
         sqldb_rollback(backup->db, "backup_append");
         goto error;
     }
@@ -192,7 +194,7 @@ EXPORTED int backup_append(struct backup *backup,
     int r;
 
     /* preload buffer with timestamp preamble */
-    buf_printf(&buf, INT64_FMT " APPLY ", (int64_t) ts);
+    buf_printf(&buf, "%" PRId64 " APPLY ", (int64_t) ts);
 
     /* iterate over the dlist */
     iter = dlist_print_iter_new(dlist, 1);
@@ -257,7 +259,7 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
     if (!(backup->append_state->mode & BACKUP_APPEND_INDEXONLY)) {
         r = gzflush(backup->append_state->gzfile, Z_FINISH);
         if (r != Z_OK) {
-            syslog(LOG_ERR, "IOERROR: gzflush %s failed: %i\n",
+            syslog(LOG_ERR, "IOERROR: gzflush %s failed: %i",
                             backup->data_fname, r);
             sqldb_rollback(backup->db, "backup_append");
             goto done;
@@ -280,7 +282,7 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
 
     r = sqldb_exec(backup->db, backup_index_end_sql, bval, NULL, NULL);
     if (r) {
-        syslog(LOG_ERR, "%s: something went wrong: %i\n", __func__, r);
+        syslog(LOG_ERR, "%s: something went wrong: %i", __func__, r);
         sqldb_rollback(backup->db, "backup_append");
     }
     else {

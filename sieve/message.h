@@ -67,7 +67,7 @@ typedef enum {
     ACTION_UNMARK,
     ACTION_ENOTIFY,
     ACTION_NOTIFY,
-    ACTION_DENOTIFY
+    ACTION_DENOTIFY,
 } action_t;
 
 /* information */

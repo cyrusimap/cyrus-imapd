@@ -286,9 +286,10 @@ static int lookup_submission_collection(const char *accountid,
             goto done;
         }
 
-        if (*mbentry) free((*mbentry)->name);
-        else *mbentry = mboxlist_entry_create();
+        mboxlist_entry_free(mbentry);
+        *mbentry = mboxlist_entry_create();
         (*mbentry)->name = xstrdup(submissionname);
+        (*mbentry)->mbtype = MBTYPE_JMAPSUBMIT;
     }
     else if (!r) {
         int rights = httpd_myrights(httpd_authstate, *mbentry);
@@ -339,10 +340,9 @@ static int ensure_submission_collection(const char *accountid,
 
         int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
             | OPT_POP3_NEW_UIDL | OPT_IMAP_HAS_ALARMS;
-        r = mboxlist_createmailbox_opts(mbentry->name, MBTYPE_SUBMISSION,
-                                        NULL, 1 /* admin */, accountid,
-                                        httpd_authstate,
-                                        options, 0, 0, 0, 0, NULL, NULL);
+        r = mboxlist_createmailbox(mbentry, options, 0/*highestmodseq*/,
+                                   1/*isadmin*/, accountid, httpd_authstate,
+                                   0/*flags*/, NULL/*mailboxptr*/);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                    mbentry->name, error_message(r));
@@ -387,8 +387,8 @@ static int store_submission(struct mailbox *mailbox,
     }
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, internaldate, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+    if (!(f = append_newstage(mailbox_name(mailbox), internaldate, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -442,7 +442,7 @@ static int store_submission(struct mailbox *mailbox,
                           0, /*quota*/NULL, 0, 0, /*event*/0);
     if (r) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
@@ -452,14 +452,14 @@ static int store_submission(struct mailbox *mailbox,
     if (r) {
         append_abort(&as);
         syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
     r = append_commit(&as);
     if (r) {
         syslog(LOG_ERR, "append_commit(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
@@ -683,6 +683,14 @@ static void _emailsubmission_create(jmap_req_t *req,
         json_decref(rcpts);
         json_object_set_new(myenvelope, "rcptTo", rcptTo);
     }
+    else if (holduntil) {
+        hash_table props = HASH_TABLE_INITIALIZER;
+        construct_hash_table(&props, 1, 0);
+        hash_insert("from", (void*)1, &props);
+        r = jmap_email_get_with_props(req, &props, mr, &msg);
+        free_hash_table(&props, NULL);
+        if (r) goto done;
+    }
 
     /* Validate envelope */
     if (!json_array_size(json_object_get(envelope, "rcptTo"))) {
@@ -708,7 +716,7 @@ static void _emailsubmission_create(jmap_req_t *req,
         goto done;
     }
 
-    buf_refresh_mmap(&buf, 1, fd_msg, fname, sbuf.st_size, mbox->name);
+    buf_refresh_mmap(&buf, 1, fd_msg, fname, sbuf.st_size, mailbox_name(mbox));
     if (!buf_len(&buf)) {
         syslog(LOG_ERR, "_email_submissioncreate: can't mmap %s: %m", fname);
         r = IMAP_IOERROR;
@@ -745,8 +753,20 @@ static void _emailsubmission_create(jmap_req_t *req,
 
     if (holduntil) {
         /* Pre-flight the message */
-        smtpclient_set_size(*sm, buf_len(&buf));
-        r = smtpclient_sendprot(*sm, &smtpenv, NULL);
+        json_t *jfromaddr = json_object_get(msg, "from");
+        strarray_t fromaddr = STRARRAY_INITIALIZER;
+        if (jfromaddr) {
+            size_t i;
+            json_t *jval;
+            json_array_foreach(jfromaddr, i, jval) {
+                const char *s = json_string_value(json_object_get(jval, "email"));
+                if (s) {
+                    strarray_append(&fromaddr, s);
+                }
+            }
+        }
+        r = smtpclient_sendcheck(*sm, &smtpenv, buf_len(&buf), &fromaddr);
+        strarray_fini(&fromaddr);
     }
     else {
         /* Send message */
@@ -1259,7 +1279,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     if (mbox) jmap_closembox(req, &mbox);
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
+    json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     jmap_ok(req, jmap_get_reply(&get));
@@ -1402,7 +1422,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     if (set.if_in_state) {
         /* TODO rewrite state function to use char* not json_t* */
         json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_SUBMISSION)) {
+        if (jmap_cmpstate(req, jstate, MBTYPE_JMAPSUBMIT)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             json_decref(jstate);
             goto done;
@@ -1411,7 +1431,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/0);
+        json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/0);
         set.old_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
@@ -1477,7 +1497,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     // TODO refactor jmap_getstate to return a string, once
     // all code has been migrated to the new JMAP parser.
-    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/1);
+    json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/1);
     set.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -1557,7 +1577,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         mboxlist_entry_free(&mbentry);
         r = 0;
-        changes.new_modseq = jmap_highestmodseq(req, MBTYPE_SUBMISSION);
+        changes.new_modseq = jmap_highestmodseq(req, MBTYPE_JMAPSUBMIT);
         jmap_ok(req, jmap_changes_reply(&changes));
         goto done;
     }
@@ -1620,7 +1640,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     // if we issued a query for changes since 6, max_changes 1 - we'd get back
     // has_more_changes: true, new_modseq 15, and we'd never see UID=4 as having changed.
     changes.new_modseq = changes.has_more_changes ?
-        highest_modseq : jmap_highestmodseq(req, MBTYPE_SUBMISSION);
+        highest_modseq : jmap_highestmodseq(req, MBTYPE_JMAPSUBMIT);
 
     jmap_ok(req, jmap_changes_reply(&changes));
 
@@ -1980,7 +2000,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         mboxlist_entry_free(&mbentry);
         r = 0;
         /* Build response */
-        json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
+        json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
         query.query_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
         query.result_position = 0;
@@ -2093,7 +2113,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     free(sortcrit);
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
+    json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
     query.query_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     query.result_position = query.position;

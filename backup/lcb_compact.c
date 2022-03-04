@@ -165,9 +165,15 @@ static int compact_closerename(struct backup **originalp,
         unlink(original->data_fname);
         unlink(original->index_fname);
         if (link(buf_cstring(&ts_data_fname), original->data_fname))
-            syslog(LOG_ERR, "IOERROR: failed to link file back (%s %s)!", buf_cstring(&ts_data_fname), original->data_fname);
+            xsyslog(LOG_ERR, "IOERROR: failed to link file back!",
+                             "source=<%s> dest=<%s>",
+                             buf_cstring(&ts_data_fname),
+                             original->data_fname);
         if (link(buf_cstring(&ts_index_fname), original->index_fname))
-            syslog(LOG_ERR, "IOERROR: failed to link file back (%s %s)!", buf_cstring(&ts_index_fname), original->index_fname);
+            xsyslog(LOG_ERR, "IOERROR: failed to link file back!",
+                             "source=<%s> dest=<%s>",
+                             buf_cstring(&ts_index_fname),
+                             original->index_fname);
         goto done;
     }
 
@@ -419,7 +425,8 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
     int r = gzuc_read(gzuc, buf, len);
 
     if (r < 0)
-        syslog(LOG_ERR, "IOERROR: gzuc_read returned %i", r);
+        xsyslog(LOG_ERR, "IOERROR: gzuc_read failed",
+                         "return=<%d>", r);
     if (r < -1)
         errno = EIO;
 
@@ -521,7 +528,7 @@ EXPORTED int backup_compact(const char *name,
                 const char *error = prot_error(in);
                 if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                     syslog(LOG_ERR,
-                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
+                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %i: %s",
                            name, chunk->offset, prot_bytes_in(in), error);
 
                     if (out)

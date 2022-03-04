@@ -48,12 +48,7 @@ their documentation if you're not sure what you need.
 ------------------------------------
 
 Your Cyrus IMAP server will want to receive the emails accepted by your
-SMTP server (ie Sendmail, Postfix, etc). In Cyrus, this happens via a
-protocol called LMTP, which is usually supported by your SMTP server.
-
-.. include:: /assets/setup-sendmail.rst
-
-.. include:: /assets/setup-postfix.rst
+SMTP server (ie Sendmail, Postfix, Exim). See :ref:`Mail delivery from your MTA <mta_lda_delivery>`.
 
 5. Protocol ports
 -----------------

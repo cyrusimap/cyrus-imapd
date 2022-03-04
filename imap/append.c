@@ -94,7 +94,7 @@ struct stagemsg {
 };
 
 static int append_addseen(struct mailbox *mailbox, const char *userid,
-                          struct seqset *newseen);
+                          seqset_t *newseen);
 static int append_setseen(struct appendstate *as, msgrecord_t *mr);
 
 /*
@@ -121,7 +121,7 @@ EXPORTED int append_check(const char *name,
     r = mailbox_open_irl(name, &mailbox);
     if (r) return r;
 
-    myrights = cyrus_acl_myrights(auth_state, mailbox->acl);
+    myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 
     if ((myrights & aclcheck) != aclcheck) {
         r = (myrights & ACL_LOOKUP) ?
@@ -192,7 +192,7 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 
     memset(as, 0, sizeof(*as));
 
-    as->myrights = cyrus_acl_myrights(auth_state, mailbox->acl);
+    as->myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 
     if ((as->myrights & aclcheck) != aclcheck) {
         r = (as->myrights & ACL_LOOKUP) ?
@@ -241,8 +241,7 @@ static void append_free(struct appendstate *as)
     if (!as) return;
     if (as->s == APPEND_DONE) return;
 
-    seqset_free(as->seen_seq);
-    as->seen_seq = NULL;
+    seqset_free(&as->seen_seq);
 
     mboxevent_freequeue(&as->mboxevents);
     as->event_type = 0;
@@ -266,7 +265,7 @@ EXPORTED int append_commit(struct appendstate *as)
         as->mailbox->i.last_appenddate = time(0);
 
         /* log the append so rolling squatter can index this mailbox */
-        sync_log_append(as->mailbox->name);
+        sync_log_append(mailbox_name(as->mailbox));
 
         /* set seen state */
         if (as->userid[0])
@@ -277,8 +276,9 @@ EXPORTED int append_commit(struct appendstate *as)
      * duplicate DB consistency */
     r = mailbox_commit(as->mailbox);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: committing mailbox append %s: %s",
-               as->mailbox->name, error_message(r));
+        xsyslog(LOG_ERR, "IOERROR: committing mailbox append",
+                         "mailbox=<%s> error=<%s>",
+                         mailbox_name(as->mailbox), error_message(r));
         append_abort(as);
         return r;
     }
@@ -367,8 +367,8 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
         }
     }
     if (!f) {
-        syslog(LOG_ERR, "IOERROR: creating message file %s: %m",
-               stagefile);
+        xsyslog(LOG_ERR, "IOERROR: creating message file",
+                         "filename=<%s>", stagefile);
         strarray_fini(&stage->parts);
         free(stage);
         return NULL;
@@ -865,6 +865,42 @@ out:
     return r;
 }
 
+struct findstage_cb_rock {
+    const char *partition;
+    const char *stagefile;
+};
+
+static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct findstage_cb_rock *rock = vrock;
+    mbentry_t *mbentry = NULL;
+
+    if (rec->part) return 0;
+    // no point copying from archive, spool is on data
+    if (rec->internal_flags & FLAG_INTERNAL_ARCHIVED) return 0;
+
+    int r = conv_guidrec_mbentry(rec, &mbentry);
+    if (r) return 0;
+
+    if (!strcmp(rock->partition, mbentry->partition)) {
+        struct stat sbuf;
+        const char *msgpath = mbentry_datapath(mbentry, rec->uid);
+        if (msgpath && !stat(msgpath, &sbuf)) {
+            /* link the first stage part to the existing message file */
+            r = cyrus_copyfile(msgpath, rock->stagefile, 0/*flags*/);
+            if (r) {
+                /* don't fail - worst case, we will use existing stage */
+                r = 0;
+            }
+            else r = CYRUSDB_DONE;
+        }
+    }
+
+    mboxlist_entry_free(&mbentry);
+
+    return r;
+}
+
 /*
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
@@ -892,7 +928,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 #endif
 
     /* for staging */
-    char stagefile[MAX_MAILBOX_PATH+1];
+    char stagefile[MAX_MAILBOX_PATH+1] = "";
 
     assert(stage != NULL && stage->parts.count);
 
@@ -909,8 +945,26 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     }
 
     /* xxx check errors */
-    mboxlist_findstage(mailbox->name, stagefile, sizeof(stagefile));
+    mboxlist_findstage(mailbox_name(mailbox), stagefile, sizeof(stagefile));
     strlcat(stagefile, stage->fname, sizeof(stagefile));
+
+    if (!nolink) {
+        /* attempt to find an existing message with the same guid
+           and use it as the stagefile */
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+
+        if (cstate) {
+            struct findstage_cb_rock rock = { mailbox_partition(mailbox), stagefile };
+
+            r = conversations_guid_foreach(cstate,
+                                           message_guid_encode(&(*body)->guid),
+                                           findstage_cb, &rock);
+            if (r && r != CYRUSDB_DONE) {
+                r = IMAP_IOERROR;
+                goto out;
+            }
+        }
+    }
 
     for (i = 0 ; i < stage->parts.count ; i++) {
         /* ok, we've successfully created the file */
@@ -930,7 +984,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             char stagedir[MAX_MAILBOX_PATH+1];
 
             /* xxx check errors */
-            mboxlist_findstage(mailbox->name, stagedir, sizeof(stagedir));
+            mboxlist_findstage(mailbox_name(mailbox), stagedir, sizeof(stagedir));
             if (mkdir(stagedir, 0755) != 0) {
                 syslog(LOG_ERR, "couldn't create stage directory: %s: %m",
                        stagedir);
@@ -943,8 +997,8 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         if (r) {
             /* oh well, we tried */
 
-            syslog(LOG_ERR, "IOERROR: creating message file %s: %m",
-                   stagefile);
+            xsyslog(LOG_ERR, "IOERROR: creating message file",
+                             "filename=<%s>", stagefile);
             unlink(stagefile);
             goto out;
         }
@@ -1026,7 +1080,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             newflags = strarray_new();
         r = callout_run(fname, *body, &user_annots, &system_annots, newflags);
         if (r) {
-            syslog(LOG_ERR, "Annotation callout failed, ignoring\n");
+            syslog(LOG_ERR, "Annotation callout failed, ignoring");
             r = 0;
         }
         flags = newflags;
@@ -1079,7 +1133,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     if (in_object_storage) {  // must delete local file
         if (unlink(fname) != 0) // unlink should do it.
             if (!remove (fname))  // we must insist
-                syslog(LOG_ERR, "Removing local file <%s> error \n", fname);
+                syslog(LOG_ERR, "Removing local file <%s> error", fname);
     }
 
     /* Apply the annotations */
@@ -1119,7 +1173,7 @@ out:
      * present in body structure ? */
     mboxevent_extract_msgrecord(mboxevent, msgrec);
     mboxevent_extract_mailbox(mboxevent, mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
 
     msgrecord_unref(&msgrec);
@@ -1135,7 +1189,8 @@ EXPORTED int append_removestage(struct stagemsg *stage)
     while ((p = strarray_pop(&stage->parts))) {
         /* unlink the staging file */
         if (unlink(p) != 0) {
-            syslog(LOG_ERR, "IOERROR: error unlinking file %s: %m", p);
+            xsyslog(LOG_ERR, "IOERROR: error unlinking file",
+                             "filename=<%s>", p);
         }
         free(p);
     }
@@ -1189,7 +1244,8 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     unlink(fname);
     destfile = fopen(fname, "w+");
     if (!destfile) {
-        syslog(LOG_ERR, "IOERROR: creating message file %s: %m", fname);
+        xsyslog(LOG_ERR, "IOERROR: creating message file",
+                         "filename=<%s>", fname);
         r = IMAP_IOERROR;
         goto out;
     }
@@ -1237,7 +1293,7 @@ out:
      * present in body structure */
     mboxevent_extract_msgrecord(mboxevent, msgrec);
     mboxevent_extract_mailbox(mboxevent, mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
     msgrecord_unref(&msgrec);
 
@@ -1438,16 +1494,16 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
             for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
                 bit32 flagmask = src_user_flags[userflag/32];
-                if (mailbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
+                if (mailbox->h.flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
                     int num;
-                    r = mailbox_user_flag(as->mailbox, mailbox->flagname[userflag], &num, 1);
+                    r = mailbox_user_flag(as->mailbox, mailbox->h.flagname[userflag], &num, 1);
                     if (r)
                         xsyslog(LOG_ERR, "IOERROR: unable to copy flag",
                                          "flag=<%s> src_mailbox=<%s> dest_mailbox=<%s>"
                                          " uid=<%u> error=<%s>",
-                                         mailbox->flagname[userflag],
-                                         mailbox->name,
-                                         as->mailbox->name,
+                                         mailbox->h.flagname[userflag],
+                                         mailbox_name(mailbox),
+                                         mailbox_name(as->mailbox),
                                          src_uid,
                                          error_message(r));
                     else
@@ -1457,8 +1513,10 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
             r = msgrecord_set_userflags(dst_msgrec, dst_user_flags);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: unable to copy user flags from %s to %s for UID %u: %s",
-                        mailbox->name, as->mailbox->name, src_uid, error_message(r));
+                xsyslog(LOG_ERR, "IOERROR: unable to copy user flags",
+                                 "source=<%s> dest=<%s> uid=<%u> error=<%s>",
+                                 mailbox_name(mailbox), mailbox_name(as->mailbox),
+                                 src_uid, error_message(r));
             }
         }
         else {
@@ -1546,7 +1604,7 @@ out:
     }
 
     mboxevent_extract_mailbox(mboxevent, as->mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, as->mailbox->name, 1);
+    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
     mboxevent_set_numunseen(mboxevent, as->mailbox, -1);
 
     return 0;
@@ -1573,26 +1631,28 @@ static int append_setseen(struct appendstate *as, msgrecord_t *msgrec)
  */
 static int append_addseen(struct mailbox *mailbox,
                           const char *userid,
-                          struct seqset *newseen)
+                          seqset_t *newseen)
 {
     int r;
     struct seen *seendb = NULL;
     struct seendata sd = SEENDATA_INITIALIZER;
-    struct seqset *oldseen;
+    seqset_t *oldseen;
 
-    if (!newseen->len)
+    if (!seqset_first(newseen))
         return 0;
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: append_addseen failed to open DB for %s", userid);
+        xsyslog(LOG_ERR, "IOERROR: seen_open failed",
+                         "userid=<%s>", userid);
         goto done;
     }
 
-    r = seen_lockread(seendb, mailbox->uniqueid, &sd);
+    r = seen_lockread(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: append_addseen failed to read old value for %s/%s",
-               userid, mailbox->uniqueid);
+        xsyslog(LOG_ERR, "IOERROR: seen_lockread failed",
+                         "userid=<%s> uniqueid=<%s>",
+                         userid, mailbox_uniqueid(mailbox));
         goto done;
     }
 
@@ -1603,14 +1663,15 @@ static int append_addseen(struct mailbox *mailbox,
     /* add the extra items */
     seqset_join(oldseen, newseen);
     sd.seenuids = seqset_cstring(oldseen);
-    seqset_free(oldseen);
+    seqset_free(&oldseen);
 
     /* and write it out */
     sd.lastchange = time(NULL);
-    r = seen_write(seendb, mailbox->uniqueid, &sd);
+    r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: append_addseen failed to write new value for %s/%s",
-               userid, mailbox->uniqueid);
+        xsyslog(LOG_ERR, "IOERROR: seen_write failed",
+                         "userid=<%s> uniqueid=<%s>",
+                         userid, mailbox_uniqueid(mailbox));
     }
     seen_freedata(&sd);
 

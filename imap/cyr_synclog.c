@@ -51,6 +51,7 @@
 #include <unistd.h>
 #endif
 
+#include "assert.h"
 #include "global.h"
 #include "sync_log.h"
 #include "util.h"

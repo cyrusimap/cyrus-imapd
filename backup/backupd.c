@@ -721,7 +721,8 @@ static void cmdloop(void)
 
         }
 
-        syslog(LOG_ERR, "IOERROR: received bad command: %s", cmd.s);
+        xsyslog(LOG_ERR, "IOERROR: received bad command",
+                         "command=<%s>", cmd.s);
         prot_printf(backupd_out, "BAD IMAP_PROTOCOL_ERROR Unrecognized command\r\n");
         eatline(backupd_in, c);
         continue;
@@ -913,7 +914,7 @@ static int cmd_apply_message(struct dlist *dl)
 
             message_guid_generate(&computed_guid, msg_base, msg_len);
             if (!message_guid_equal(guid, &computed_guid)) {
-                syslog(LOG_ERR, "%s: guid mismatch: header %s, derived %s\n",
+                syslog(LOG_ERR, "%s: guid mismatch: header %s, derived %s",
                     __func__, message_guid_encode(guid),
                     message_guid_encode(&computed_guid));
                 r = IMAP_PROTOCOL_ERROR;
@@ -923,7 +924,8 @@ static int cmd_apply_message(struct dlist *dl)
             close(fd);
         }
         else {
-            syslog(LOG_ERR, "IOERROR: %s open %s: %m", __func__, fname);
+            xsyslog(LOG_ERR, "IOERROR: open failed",
+                             "filename=<%s>", fname);
             r = IMAP_IOERROR;
         }
 
@@ -1037,7 +1039,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     struct dlist *di;
     strarray_t userids = STRARRAY_INITIALIZER;
     mbname_t *shared_mbname = NULL;
-    int i, r;
+    int i, r = 0;
 
     if (!dlist_getatom(dl, "PARTITION", &partition)) return IMAP_PROTOCOL_ERROR;
     if (!dlist_getlist(dl, "MBOXNAME", &ml)) return IMAP_PROTOCOL_ERROR;

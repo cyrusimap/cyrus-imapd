@@ -241,6 +241,11 @@ static json_t *buildinfo()
 #else
     json_object_set_new(dependency, "cld2", json_false());
 #endif
+#ifdef HAVE_GUESSTZ
+    json_object_set_new(dependency, "guesstz", json_true());
+#else
+    json_object_set_new(dependency, "guesstz", json_false());
+#endif
 
     /* Enabled databases */
 #ifdef HAVE_MYSQL

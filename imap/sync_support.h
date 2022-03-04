@@ -184,11 +184,6 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
                                        const char *uniqueid);
 
-struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
-                                              const char *name);
-
-int sync_folder_mark(struct sync_folder_list *l, const char *uniqueid);
-
 void sync_folder_list_free(struct sync_folder_list **lp);
 
 /* ====================================================================== */
@@ -321,20 +316,7 @@ struct sync_sieve_list {
 
 struct sync_sieve_list *sync_sieve_list_create(void);
 
-void sync_sieve_list_add(struct sync_sieve_list *l,
-                         const char *name, time_t last_update,
-                         struct message_guid *guidp, int active);
-
-struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l,
-                                     const char *name);
-
-void sync_sieve_list_set_active(struct sync_sieve_list *l, const char *name);
-
 void sync_sieve_list_free(struct sync_sieve_list **lp);
-
-struct sync_sieve_list *sync_sieve_list_generate(const char *userid);
-
-char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep);
 
 int sync_sieve_upload(const char *userid, const char *name,
                       time_t last_update, const char *content, size_t len);
@@ -404,7 +386,6 @@ struct dlist *sync_parseline(struct protstream *in);
 
 /* ====================================================================== */
 
-int addmbox(char *name, int matchlen, int category, void *rock);
 int addmbox_cb(const mbentry_t *mbentry, void *rock);
 
 int parse_upload(struct dlist *kr, struct mailbox *mailbox,
@@ -436,7 +417,7 @@ struct sync_client_state {
     const char *channel;
     struct db *cachedb;
     struct buf tagbuf;
-    int flags;
+    unsigned flags;
 };
 #define SYNC_CLIENT_STATE_INITIALIZER { NULL, NULL, NULL, NULL, NULL, BUF_INITIALIZER, 0 }
 
@@ -448,7 +429,7 @@ struct sync_state {
     struct auth_state *authstate;
     struct namespace *namespace;
     struct protstream *pout;
-    int local_only;
+    unsigned flags;
 };
 
 int sync_get_message(struct dlist *kin, struct sync_state *sstate);
@@ -498,6 +479,7 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_DELETE_REMOTE (1<<3)
 #define SYNC_FLAG_NO_COPYBACK (1<<4)
 #define SYNC_FLAG_BATCH (1<<5)
+#define SYNC_FLAG_SIEVE_MAILBOX (1<<6)
 
 int sync_do_seen(struct sync_client_state *sync_cs, const char *userid, char *uniqueid);
 int sync_do_quota(struct sync_client_state *sync_cs, const char *root);
@@ -545,6 +527,8 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
 int sync_do_restart(struct sync_client_state *sync_cs);
 
 int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr);
+
+int sync_do_enable(struct sync_client_state *sync_cs, unsigned capa);
 
 int sync_connect(struct sync_client_state *sync_cs);
 void sync_disconnect(struct sync_client_state *sync_cs);

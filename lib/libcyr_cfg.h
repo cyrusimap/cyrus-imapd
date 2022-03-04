@@ -89,7 +89,7 @@ enum cyrus_opt {
     CYRUSOPT_VIRTDOMAINS,
     /* authorization mechanism (unix) */
     CYRUSOPT_AUTH_MECH,
-    /* BDB max locks (50000) */
+    /* RFC 2086 right which allows DELETE ("c") */
     CYRUSOPT_DELETERIGHT,
     /* SQL database */
     CYRUSOPT_SQL_DATABASE,
@@ -105,6 +105,8 @@ enum cyrus_opt {
     CYRUSOPT_SQL_USESSL,
     /* Checkpoint after every recovery (OFF) */
     CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
+    /* ACL override */
+    CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
 
     CYRUSOPT_LAST
 
@@ -131,6 +133,9 @@ extern int libcyrus_config_getswitch(enum cyrus_opt opt);
 void libcyrus_config_setstring(enum cyrus_opt opt, const char *val);
 void libcyrus_config_setint(enum cyrus_opt opt, int val);
 void libcyrus_config_setswitch(enum cyrus_opt opt, int val);
+
+extern void libcyrus_delayed_action(const char *key, void (*cb)(void *), void (*free)(void *), void *rock);
+extern void libcyrus_run_delayed(void);
 
 /* Start/Stop the Library */
 /* Should be done AFTER setting configuration options */

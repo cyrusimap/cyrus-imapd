@@ -187,7 +187,7 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
                 mbentry->foldermodseq, mbentry->createdmodseq,
                 mbentry->legacy_specialuse);
             if (d->purge) {
-                mboxlist_delete(mbentry->name);
+                mboxlist_deletelock(mbentry);
             }
         }
         break;
@@ -489,7 +489,7 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
             free(mbentry->server);
             mbentry->server = NULL;
             mbentry->mbtype &= ~(MBTYPE_MOVING|MBTYPE_REMOTE);
-            ret = mboxlist_update(mbentry, 1);
+            ret = mboxlist_updatelock(mbentry, 1);
             if (ret) {
                 fprintf(stderr,
                         "couldn't perform update to un-remote-flag %s\n",
@@ -619,7 +619,7 @@ static void do_undump(void)
         }
 
         /* generate a new entry */
-        int r = mboxlist_update(newmbentry, /*localonly*/1);
+        int r = mboxlist_updatelock(newmbentry, /*localonly*/1);
         mboxlist_entry_free(&newmbentry);
 
         if (r) break;

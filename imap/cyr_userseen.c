@@ -80,7 +80,7 @@ static int deluserseen(const mbentry_t *mbentry, void *rock __attribute__((unuse
 
     char *userid = mboxname_to_userid(mbentry->name);
     if (userid) {
-        printf("removing seen for %s on %s\n", userid, mailbox->name);
+        printf("removing seen for %s on %s\n", userid, mailbox_name(mailbox));
         if (do_remove) seen_delete_mailbox(userid, mailbox);
         free(userid);
     }

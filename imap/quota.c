@@ -184,10 +184,7 @@ int main(int argc,char **argv)
         fatal(error_message(r), EX_CONFIG);
     }
 
-    if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT))
-        compar = bsearch_compare_mbox;
-    else
-        compar = strcmp;
+    compar = strcmp;
 
     /*
      * Lock mailbox list to prevent mailbox creation/deletion
@@ -227,7 +224,7 @@ int main(int argc,char **argv)
 static void usage(void)
 {
     fprintf(stderr,
-            "usage: quota [-C <alt_config>] [-d <domain>] [-f] [-q] [-u] [mailbox-spec]...\n");
+            "usage: quota [-C <alt_config>] [-d <domain>] [-f] [-q] [-J] [-n] [-u] [mailbox-spec]...\n");
     exit(EX_USAGE);
 }
 
@@ -318,12 +315,15 @@ static void test_sync_done(const char *mboxname)
 /*
  * A quotaroot was found, add it to our list
  */
-static int fixquota_addroot(struct quota *q,
-                            void *rock __attribute__((unused)))
+static int fixquota_addroot(struct quota *q, void *rock)
 {
     struct quota localq;
     struct txn *tid = NULL;
+    const char *userid = (const char *)rock;
     int r;
+
+    if (userid && !mboxname_userownsmailbox(userid, q->root))
+        return 0;
 
     if (quota_num == quota_alloc) {
         /* Create new qr list entry */
@@ -390,7 +390,7 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-        r = quota_foreach(buf, fixquota_addroot, buf, NULL);
+        r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
         if (r) {
             errmsg(IMAP_IOERROR, "failed building quota list for '%s'", buf);
         }
@@ -405,14 +405,14 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
             char *res = mboxname_user_mbox(roots[i], NULL);
             strlcpy(buf, res, sizeof(buf));
             free(res);
+            r = quota_foreach(buf, fixquota_addroot, roots[i], NULL);
         }
         else {
             char *intname = mboxname_from_external(roots[i], &quota_namespace, NULL);
             strlcpy(tail, intname, sizeof(buf) - domainlen);
             free(intname);
+            r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
         }
-
-        r = quota_foreach(buf, fixquota_addroot, buf, NULL);
 
         if (r) {
             errmsg(IMAP_IOERROR, "failed building quota list for '%s'", buf);
@@ -425,8 +425,7 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
 
 static int findroot(const char *name, int *thisquota)
 {
-    int i = config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT)
-            ? quota_todo : 0;
+    int i = 0;
 
     *thisquota = -1;
 
@@ -464,24 +463,9 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
     int thisquota = -1;
     struct txn *txn = NULL;
 
-    if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT)) {
-        while (quota_todo < quota_num) {
-            const char *root = quotaroots[quota_todo].name;
-
-            /* in the future, definitely don't close yet */
-            if (compar(mbentry->name, root) < 0)
-                break;
-
-            /* inside the first root, don't close yet */
-            if (mboxname_is_prefix(mbentry->name, root))
-                break;
-
-            /* finished, close out now */
-            r = fixquota_finish(quota_todo);
-            quota_todo++;
-            if (r) goto done;
-        }
-    }
+    // skip mailbox types that we don't look at
+    if (mbentry->mbtype & MBTYPE_REMOTE) return 0;
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) return 0;
 
     test_sync_wait(mbentry->name);
 
@@ -500,9 +484,9 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
     if (thisquota == -1) {
         /* no matching quotaroot exists, remove from
          * mailbox if present */
-        if (mailbox->quotaroot) {
+        if (mailbox_quotaroot(mailbox)) {
             /* unless it's outside the current prefix of course */
-            if (strlen(mailbox->quotaroot) < prefixlen) goto done;
+            if (strlen(mailbox_quotaroot(mailbox)) < prefixlen) goto done;
             r = fixquota_fixroot(mailbox, NULL);
             if (r) goto done;
         }
@@ -515,8 +499,7 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
 
         /* matching quotaroot exists, ensure mailbox has the
          * correct root */
-        if (!mailbox->quotaroot ||
-            strcmp(mailbox->quotaroot, root) != 0) {
+        if (strcmpsafe(mailbox_quotaroot(mailbox), root)) {
             r = fixquota_fixroot(mailbox, root);
             if (r) goto done;
         }
@@ -556,16 +539,14 @@ done:
 int fixquota_fixroot(struct mailbox *mailbox,
                      const char *root)
 {
-    int r;
-
-    fprintf(stderr, "%s: quota root %s --> %s\n", mailbox->name,
-           mailbox->quotaroot ? mailbox->quotaroot : "(none)",
+    const char *oldroot = mailbox_quotaroot(mailbox);
+    fprintf(stderr, "%s: quota root %s --> %s\n", mailbox_name(mailbox),
+           oldroot ? oldroot : "(none)",
            root ? root : "(none)");
 
-    r = mailbox_set_quotaroot(mailbox, root);
-    if (r) errmsg(r, "failed writing header for mailbox '%s'", mailbox->name);
+    mailbox_set_quotaroot(mailbox, root);
 
-    return r;
+    return 0;
 }
 
 /*

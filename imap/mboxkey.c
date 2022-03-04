@@ -68,8 +68,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-#define FNAME_MBOXKEYSUFFIX ".mboxkey" /* per user mailbox key extension */
-
 enum {
     MBOXKEY_VERSION = 1,
     MBOXKEY_DEBUG = 0
@@ -98,26 +96,12 @@ static void abortcurrent(struct mboxkey *s)
     }
 }
 
-HIDDEN char *mboxkey_getpath(const char *userid)
+EXPORTED char *mboxkey_getpath(const char *userid)
 {
-    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_DOMAINDIR) +
-                          sizeof(FNAME_USERDIR) + strlen(userid) +
-                          sizeof(FNAME_MBOXKEYSUFFIX) + 10);
-    char c, *domain;
+    mbname_t *mbname = mbname_from_userid(userid);
+    char *fname = mboxname_conf_getpath(mbname, FNAME_MBOXKEYSUFFIX);
 
-    if (config_virtdomains && (domain = strchr(userid, '@'))) {
-        char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-        *domain = '\0';  /* split user@domain */
-        c = (char) dir_hash_c(userid, config_fulldirhash);
-        sprintf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
-                domain+1, FNAME_USERDIR, c, userid, FNAME_MBOXKEYSUFFIX);
-        *domain = '@';  /* reassemble user@domain */
-    }
-    else {
-        c = (char) dir_hash_c(userid, config_fulldirhash);
-        sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
-                FNAME_MBOXKEYSUFFIX);
-    }
+    mbname_free(&mbname);
 
     return fname;
 }

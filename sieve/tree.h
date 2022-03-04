@@ -254,6 +254,14 @@ struct Commandlist {
             arrayu64_t *times;
             char *tzid;
         } sn;
+        struct {
+            int invites_only;
+            int updates_only;
+            int delete_canceled;
+            char *calendarid;
+            char *outcome_var;
+            char *errstr_var;
+        } imip;
     } u;
     struct Commandlist *next;
 

@@ -82,6 +82,7 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
+    NULL,
     NULL
 };
 
@@ -231,7 +232,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         const struct index_record *record = msg_record(msg);
         if ((flags & SEARCH_UPDATE_BATCH) && batch.count >= batch_size) {
             syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
-                   batch.count, mailbox->name);
+                   batch.count, mailbox_name(mailbox));
             incomplete_batch = 1;
             break;
         }
@@ -319,10 +320,10 @@ EXPORTED int search_compact(const char *userid,
     return (se->compact ? se->compact(userid, reindextiers, srctiers, desttier, flags) : 0);
 }
 
-EXPORTED int search_deluser(const char *userid)
+EXPORTED int search_deluser(const mbentry_t *mbentry)
 {
     const struct search_engine *se = search_engine();
-    return (se->deluser ? se->deluser(userid) : 0);
+    return (se->deluser ? se->deluser(mbentry) : 0);
 }
 
 EXPORTED int search_check_config(char **errstr)
@@ -349,4 +350,10 @@ EXPORTED int search_can_match(enum search_op matchop, int partnum)
 {
     const struct search_engine *se = search_engine();
     return (se->can_match ? se->can_match(matchop, partnum) : 0);
+}
+
+EXPORTED int search_upgrade(const char *userid)
+{
+    const struct search_engine *se = search_engine();
+    return se->upgrade ? se->upgrade(userid) : 0;
 }

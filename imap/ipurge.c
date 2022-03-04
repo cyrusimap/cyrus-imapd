@@ -319,11 +319,11 @@ static unsigned purge_check(struct mailbox *mailbox,
             if (((my_time - (time_t) senttime)/86400) == (days/86400)) {
                 if (invertmatch) return 0;
                 deleteit(record->size, stats);
-                return dryrun ? print_record(mailbox, record), 0 : 1;
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
             } else {
                 if (!invertmatch) return 0;
                 deleteit(record->size, stats);
-                return dryrun ? print_record(mailbox, record), 0 : 1;
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
             }
         }
         if (size >= 0) {
@@ -331,11 +331,11 @@ static unsigned purge_check(struct mailbox *mailbox,
             if (record->size == (unsigned)size) {
                 if (invertmatch) return 0;
                 deleteit(record->size, stats);
-                return dryrun ? print_record(mailbox, record), 0 : 1;
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
             } else {
                 if (!invertmatch) return 0;
                 deleteit(record->size, stats);
-                return dryrun ? print_record(mailbox, record), 0 : 1;
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
             }
         }
         return 0;
@@ -344,22 +344,22 @@ static unsigned purge_check(struct mailbox *mailbox,
             /* printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
             if (!invertmatch && ((my_time - (time_t) senttime) > days)) {
                 deleteit(record->size, stats);
-                return dryrun ? print_record(mailbox, record), 0 : 1;
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
             }
             if (invertmatch && ((my_time - (time_t) senttime) < days)) {
                 deleteit(record->size, stats);
-                return dryrun ? print_record(mailbox, record), 0 : 1;
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
             }
         }
         if (size >= 0) {
             /* check size */
             if (!invertmatch && ((int) record->size > size)) {
                 deleteit(record->size, stats);
-                return dryrun ? print_record(mailbox, record), 0 : 1;
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
             }
                 if (invertmatch && ((int) record->size < size)) {
                 deleteit(record->size, stats);
-                return dryrun ? print_record(mailbox, record), 0 : 1;
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
             }
         }
         return 0;

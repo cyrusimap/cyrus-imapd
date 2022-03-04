@@ -1739,6 +1739,45 @@ static int skipwrite(struct dbengine *db,
     return 0;
 }
 
+struct dcrock {
+    char *fname;
+    int flags;
+};
+
+static void _delayed_checkpoint_free(void *rock)
+{
+    struct dcrock *drock = rock;
+    free(drock->fname);
+    free(drock);
+}
+
+static void _delayed_checkpoint(void *rock)
+{
+    struct dcrock *drock = rock;
+    struct dbengine *db = NULL;
+    struct txn *txn = NULL;
+    int r = myopen(drock->fname, drock->flags, &db, &txn);
+    if (r == CYRUSDB_NOTFOUND) {
+        syslog(LOG_INFO, "twoskip: no file to delayed checkpoint for %s",
+               drock->fname);
+    }
+    else if (r) {
+        syslog(LOG_ERR, "DBERROR: opening %s for checkpoint: %s",
+               drock->fname, cyrusdb_strerror(r));
+    }
+    else if (db->header.current_size > MINREWRITE
+             && db->header.current_size > 2 * db->header.repack_size) {
+        mycheckpoint(db);
+        free(txn);
+    }
+    else {
+        syslog(LOG_INFO, "twoskip: delayed checkpoint not needed for %s (%llu %llu)",
+               drock->fname, (LLU)db->header.repack_size, (LLU)db->header.current_size);
+        myabort(db, txn);
+    }
+    if (db) myclose(db);
+}
+
 static int mycommit(struct dbengine *db, struct txn *tid)
 {
     struct skiprecord newrecord;
@@ -1773,6 +1812,18 @@ static int mycommit(struct dbengine *db, struct txn *tid)
     db->header.current_size = db->end;
     db->header.flags &= ~DIRTY;
     r = commit_header(db);
+    if (r) goto done;
+
+    if (!(db->open_flags & CYRUSDB_NOCOMPACT)
+           && db->header.current_size > MINREWRITE
+           && db->header.current_size > 2 * db->header.repack_size) {
+        // delay the checkpoint until the user isn't waiting
+        struct dcrock *drock = xzmalloc(sizeof(struct dcrock));
+        drock->fname = xstrdup(FNAME(db));
+        drock->flags = db->open_flags;
+        libcyrus_delayed_action(drock->fname, _delayed_checkpoint,
+                                _delayed_checkpoint_free, drock);
+    }
 
  done:
     if (r) {
@@ -1787,20 +1838,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
         }
     }
     else {
-        if (db->current_txn && !db->current_txn->shared
-            && !(db->open_flags & CYRUSDB_NOCOMPACT)
-            && db->header.current_size > MINREWRITE
-            && db->header.current_size > 2 * db->header.repack_size) {
-            int r2 = mycheckpoint(db);
-            if (r2) {
-                syslog(LOG_NOTICE, "twoskip: failed to checkpoint %s: %m",
-                       FNAME(db));
-            }
-        }
-        else {
-            unlock(db);
-        }
-
+        unlock(db);
         free(tid);
         db->current_txn = NULL;
     }

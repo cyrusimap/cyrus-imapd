@@ -89,8 +89,8 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-static struct carddav_db *auth_carddavdb = NULL;
 static time_t compile_time;
+static int vcard_max_size;
 
 static void my_carddav_init(struct buf *serverinfo);
 static int my_carddav_auth(const char *userid);
@@ -105,7 +105,8 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
                         void *destdb, unsigned flags);
 
 static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                       struct index_record *record, void *data, void **obj);
+                       struct index_record *record, void *data, void **obj,
+                       struct mime_type_t *mime);
 
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
@@ -131,6 +132,10 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop, xmlNodePtr resp,
                                  struct propstat propstat[], void *rock);
+static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
+                            struct propfind_ctx *fctx,
+                            xmlNodePtr prop, xmlNodePtr resp,
+                            struct propstat propstat[], void *rock);
 static int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
                                struct propfind_ctx *fctx,
                                xmlNodePtr prop, xmlNodePtr resp,
@@ -143,6 +148,16 @@ static int report_card_query(struct transaction_t *txn,
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", "vcf",
+      (struct buf* (*)(void *)) &vcard_as_buf,
+      (void * (*)(const struct buf*)) &vcard_parse_buf,
+      (void (*)(void *)) &vparse_free_card, NULL, NULL
+    },
+    { "text/directory; charset=utf-8", "3.0", "vcf",
+      (struct buf* (*)(void *)) &vcard_as_buf,
+      (void * (*)(const struct buf*)) &vcard_parse_buf,
+      (void (*)(void *)) &vparse_free_card, NULL, NULL
+    },
+    { "text/vcard", "4.0", "vcf",
       (struct buf* (*)(void *)) &vcard_as_buf,
       (void * (*)(const struct buf*)) &vcard_parse_buf,
       (void (*)(void *)) &vparse_free_card, NULL, NULL
@@ -292,7 +307,7 @@ static const struct prop_entry carddav_props[] = {
       propfind_collationset, NULL, NULL },
     { "max-resource-size", NS_CARDDAV,
       PROP_COLLECTION,
-      NULL, NULL, NULL },
+      propfind_maxsize, NULL, NULL },
 
     /* Apple Calendar Server properties */
     { "getctag", NS_CS,
@@ -354,7 +369,7 @@ struct namespace_t namespace_addressbook = {
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL | ALLOW_CARD),
     &my_carddav_init, &my_carddav_auth, my_carddav_reset, &my_carddav_shutdown,
-    &dav_premethod, /*bearer*/NULL,
+    &dav_premethod,
     {
         { &meth_acl,            &carddav_params },      /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -398,6 +413,9 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
     namespace_principal.allow |= ALLOW_CARD;
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
+
+    vcard_max_size = config_getint(IMAPOPT_VCARD_MAX_SIZE);
+    if (vcard_max_size <= 0) vcard_max_size = INT_MAX;
 }
 
 
@@ -406,26 +424,25 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 static int _create_mailbox(const char *userid, const char *mailboxname, int type,
                            const char *displayname, struct mboxlock **namespacelockp)
 {
-    int r = 0;
     struct mailbox *mailbox = NULL;
 
-    r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (!r) return 0;
+    int r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r != IMAP_MAILBOX_NONEXISTENT) return r;
 
     if (!*namespacelockp) {
         *namespacelockp = mboxname_usernamespacelock(mailboxname);
         // maybe we lost the race on this one
         r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (!r) return 0;
         if (r != IMAP_MAILBOX_NONEXISTENT) return r;
     }
 
     /* Create locally */
-    r = mboxlist_createmailbox(mailboxname, type,
-                               NULL, 0,
-                               userid, httpd_authstate,
-                               0, 0, 0, 0, displayname ? &mailbox : NULL);
+    mbentry_t mbentry = MBENTRY_INITIALIZER;
+    mbentry.name = (char *) mailboxname;
+    mbentry.mbtype = type;
+    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                               0/*isadmin*/, userid, httpd_authstate,
+                               0/*flags*/, displayname ? &mailbox : NULL);
 
     if (!r && displayname) {
         annotate_state_t *astate = NULL;
@@ -502,18 +519,10 @@ static int my_carddav_auth(const char *userid)
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
         return 0;
     }
-    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV databases */
         return 0;
-    }
-    else {
-        /* Open CardDAV DB for 'userid' */
-        my_carddav_reset();
-        auth_carddavdb = carddav_open_userid(userid);
-        if (!auth_carddavdb) {
-            syslog(LOG_ERR, "Unable to open CardDAV DB for userid: %s", userid);
-            return HTTP_UNAVAILABLE;
-        }
     }
 
     /* Auto-provision an addressbook for 'userid' */
@@ -529,8 +538,7 @@ static int my_carddav_auth(const char *userid)
 
 static void my_carddav_reset(void)
 {
-    if (auth_carddavdb) carddav_close(auth_carddavdb);
-    auth_carddavdb = NULL;
+    // nothing
 }
 
 
@@ -550,17 +558,11 @@ static int carddav_parse_path(const char *path, struct request_target_t *tgt,
                                  resultstr);
 }
 
-/* Perform a COPY/MOVE/PUT request
- *
- * preconditions:
- *   CARDDAV:valid-address-data
- *   CARDDAV:no-uid-conflict (DAV:href)
- *   CARDDAV:max-resource-size
- */
-static int store_resource(struct transaction_t *txn,
-                          struct vparse_card *vcard,
-                          struct mailbox *mailbox, const char *resource,
-                          struct carddav_db *davdb, int dupcheck)
+/* Store the vCard data in the specified addressbook/resource */
+static int carddav_store_resource(struct transaction_t *txn,
+                                  struct vparse_card *vcard,
+                                  struct mailbox *mailbox, const char *resource,
+                                  struct carddav_db *davdb)
 {
     struct vparse_entry *ventry;
     struct carddav_data *cdata;
@@ -569,10 +571,7 @@ static int store_resource(struct transaction_t *txn,
     char *mimehdr;
 
     /* Validate the vCard data */
-    if (!vcard ||
-        !vcard->objects ||
-        !vcard->objects->type ||
-        strcasecmp(vcard->objects->type, "vcard")) {
+    if (!vcard) {
         txn->error.precond = CARDDAV_VALID_DATA;
         return HTTP_FORBIDDEN;
     }
@@ -585,13 +584,8 @@ static int store_resource(struct transaction_t *txn,
         if (!name) continue;
         if (!propval) continue;
 
-        if (!strcasecmp(name, "version")) {
+        if (!strcasecmp(name, "version"))
             version = propval;
-            if (strcmp(version, "3.0")) {
-                txn->error.precond = CARDDAV_SUPP_DATA;
-                return HTTP_FORBIDDEN;
-            }
-        }
 
         else if (!strcasecmp(name, "uid"))
             uid = propval;
@@ -600,54 +594,32 @@ static int store_resource(struct transaction_t *txn,
             fullname = propval;
     }
 
-    /* Sanity check data */
-    if (!version || !uid || !fullname) {
-        txn->error.precond = CARDDAV_VALID_DATA;
+    struct buf *buf = vcard_as_buf(vcard);
+    if (buf_len(buf) > (size_t) vcard_max_size) {
+        buf_destroy(buf);
+        txn->error.precond = CARDDAV_MAX_SIZE;
         return HTTP_FORBIDDEN;
     }
 
-    /* Check for changed UID on existing resource */
-    carddav_lookup_resource(davdb, mailbox->name, resource, &cdata, 0);
-    if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
-        char *owner = mboxname_to_userid(cdata->dav.mailbox);
-
-        txn->error.precond = CARDDAV_UID_CONFLICT;
-        assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                   namespace_addressbook.prefix,
-                   USER_COLLECTION_PREFIX, owner,
-                   strrchr(cdata->dav.mailbox, '.')+1,
-                   cdata->dav.resource);
-        txn->error.resource = buf_cstring(&txn->buf);
-        free(owner);
-        return HTTP_FORBIDDEN;
-    }
-
-    if (dupcheck) {
-        /* Check for different resource with same UID */
-        carddav_lookup_uid(davdb, uid, &cdata);
-        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
-                                    strcmp(cdata->dav.resource, resource))) {
-            /* CARDDAV:no-uid-conflict */
-            char *owner = mboxname_to_userid(cdata->dav.mailbox);
-
-            txn->error.precond = CARDDAV_UID_CONFLICT;
-            assert(!buf_len(&txn->buf));
-            buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                       namespace_addressbook.prefix,
-                       USER_COLLECTION_PREFIX, owner,
-                       strrchr(cdata->dav.mailbox, '.')+1,
-                       cdata->dav.resource);
-            txn->error.resource = buf_cstring(&txn->buf);
-            free(owner);
-            return HTTP_FORBIDDEN;
-        }
-    }
+    /* Check for an existing resource */
+    /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
+       XXX  because we may have been called as part of a COPY/MOVE */
+    const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
+    carddav_lookup_resource(davdb, &mbentry, resource, &cdata, 0);
 
     if (cdata->dav.imap_uid) {
         /* Fetch index record for the resource */
-        oldrecord = &record;
-        mailbox_find_index_record(mailbox, cdata->dav.imap_uid, oldrecord);
+        int r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+        if (!r) {
+            oldrecord = &record;
+        }
+        else {
+            xsyslog(LOG_ERR,
+                    "Couldn't find index record corresponding to CardDAV DB record",
+                    "mailbox=<%s> record=<%u> error=<%s>",
+                    mailbox_name(mailbox), cdata->dav.imap_uid, error_message(r));
+        }
     }
 
     /* Create and cache RFC 5322 header fields for resource */
@@ -675,9 +647,9 @@ static int store_resource(struct transaction_t *txn,
     spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
 
     /* Store the resource */
-    struct buf *buf = vcard_as_buf(vcard);
     int r = dav_store_resource(txn, buf_cstring(buf), 0,
-                              mailbox, oldrecord, cdata->dav.createdmodseq, NULL);
+                              mailbox, oldrecord, cdata->dav.createdmodseq,
+                              NULL, NULL);
     buf_destroy(buf);
     return r;
 }
@@ -688,11 +660,13 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     struct vparse_card *vcard = (struct vparse_card *)obj;
-    return store_resource(txn, vcard, mailbox, resource, db, /*dupcheck*/0);
+
+    return carddav_store_resource(txn, vcard, mailbox, resource, db);
 }
 
 
-static int export_addressbook(struct transaction_t *txn)
+static int export_addressbook(struct transaction_t *txn,
+                              struct mime_type_t *mime)
 {
     int ret = 0, r, precond;
     struct resp_body_t *resp_body = &txn->resp_body;
@@ -702,14 +676,8 @@ static int export_addressbook(struct transaction_t *txn)
     static const char *displayname_annot =
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct buf attrib = BUF_INITIALIZER;
-    const char **hdr, *sep = "";
-    struct mime_type_t *mime = NULL;
+    const char *sep = "";
 
-    /* Check requested MIME type:
-       1st entry in carddav_mime_types array MUST be default MIME type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
-        mime = get_accept_type(hdr, carddav_mime_types);
-    else mime = carddav_mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     /* Open mailbox for reading */
@@ -753,10 +721,10 @@ static int export_addressbook(struct transaction_t *txn)
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
-    r = annotatemore_lookupmask(mailbox->name, displayname_annot,
-                                httpd_userid, &attrib);
+    r = annotatemore_lookupmask_mbox(mailbox, displayname_annot,
+                                     httpd_userid, &attrib);
     /* fall back to last part of mailbox name */
-    if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox->name, '.') + 1);
+    if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox_name(mailbox), '.') + 1);
 
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "%s.%s", buf_cstring(&attrib), mime->file_ext);
@@ -778,6 +746,7 @@ static int export_addressbook(struct transaction_t *txn)
     else buf_reset(buf);
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
+    unsigned want_ver = (mime->version[0] == '4') ? 4 : 3;
     struct mailbox_iter *iter =
         mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
 
@@ -790,6 +759,15 @@ static int export_addressbook(struct transaction_t *txn)
         vcard = record_to_vcard(mailbox, record);
 
         if (vcard) {
+            struct vparse_entry *ventry =
+                vparse_get_entry(vcard, NULL, "version");
+            unsigned version = (ventry && ventry->v.value[0] == '4') ? 4 : 3;
+
+            if (version != want_ver) {
+                if (want_ver == 4) vcard_to_v4(vcard);
+                else vcard_to_v3(vcard);
+            }
+
             if (r++ && *sep) {
                 /* Add separator, if necessary */
                 buf_reset(buf);
@@ -862,7 +840,7 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     if (!defaultlen) defaultlen = strlen(DEFAULT_ADDRBOOK);
 
     /* Make sure its a addrendar */
-    if (mbentry->mbtype != MBTYPE_ADDRESSBOOK) goto done;
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) goto done;
 
     /* Make sure its readable */
     rights = httpd_myrights(httpd_authstate, mbentry);
@@ -872,8 +850,8 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     len = strlen(shortname);
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookupmask(mbentry->name, displayname_annot,
-                                httpd_userid, &displayname);
+    r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
+                                    httpd_userid, &displayname);
     /* fall back to the last part of the mailbox name */
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
 
@@ -1127,29 +1105,25 @@ static int list_addressbooks(struct transaction_t *txn)
 
 
 /* Perform a GET/HEAD request on a CardDAV resource */
-static int carddav_get(struct transaction_t *txn,
-                       struct mailbox *mailbox __attribute__((unused)),
-                       struct index_record *record,
-                       void *data __attribute__((unused)),
-                       void **obj __attribute__((unused)))
+static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
+                       struct index_record *record, void *data, void **obj,
+                       struct mime_type_t *mime)
 {
-    int rights;
-
     if (!(txn->req_tgt.collection || txn->req_tgt.userid))
         return HTTP_NO_CONTENT;
 
-    /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if ((rights & DACL_READ) != DACL_READ) {
-        /* DAV:need-privileges */
-        txn->error.precond = DAV_NEED_PRIVS;
-        txn->error.resource = txn->req_tgt.path;
-        txn->error.rights = DACL_READ;
-        return HTTP_NO_PRIVS;
-    }
-
     if (record && record->uid) {
         /* GET on a resource */
+        struct carddav_data *cdata = (struct carddav_data *) data;
+        unsigned want_ver = (mime && mime->version[0] == '4') ? 4 : 3;
+
+        if (cdata->version != want_ver) {
+            /* Translate between vCard versions */
+            *obj = record_to_vcard(mailbox, record);
+            if (want_ver == 4) vcard_to_v4(*obj);
+            else vcard_to_v3(*obj);
+        }
+
         return HTTP_CONTINUE;
     }
 
@@ -1169,7 +1143,7 @@ static int carddav_get(struct transaction_t *txn,
 
     if (txn->req_tgt.collection) {
         /* Download an entire addressbook collection */
-        return export_addressbook(txn);
+        return export_addressbook(txn, mime);
     }
     else if (txn->req_tgt.userid &&
              config_getswitch(IMAPOPT_CARDDAV_ALLOWADDRESSBOOKADMIN)) {
@@ -1182,20 +1156,180 @@ static int carddav_get(struct transaction_t *txn,
 }
 
 
+/* Perform a COPY/MOVE/PUT request
+ *
+ * preconditions:
+ *   CARDDAV:valid-address-data
+ *   CARDDAV:no-uid-conflict (DAV:href)
+ *   CARDDAV:max-resource-size
+ */
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
                        void *destdb, unsigned flags __attribute__((unused)))
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     struct vparse_card *vcard = (struct vparse_card *)obj;
+    char *type = NULL, *subtype = NULL;
+    struct param *params = NULL;
+    const char *want_ver = NULL;
 
-    if (!(vcard && vcard->objects &&
-          vparse_restriction_check(vcard->objects))) {
-        txn->error.precond = CARDDAV_VALID_DATA;
-        return HTTP_FORBIDDEN;
+    /* Sanity check Content-Type */
+    const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+    if (hdr && hdr[0]) {
+        const char *profile = NULL;
+        struct param *param;
+
+        message_parse_type(hdr[0], &type, &subtype, &params);
+
+        for (param = params; param; param = param->next) {
+            if (!strcasecmp(param->attribute, "version")) {
+                want_ver = param->value;
+
+                if (strcmp(want_ver, "3.0") &&
+                    strcmp(want_ver, "4.0")) {
+                    txn->error.precond = CARDDAV_SUPP_DATA;
+                    txn->error.desc =
+                        "Unsupported version= specified in Content-Type";
+                    goto done;
+                }
+            }
+            else if (!strcasecmp(param->attribute, "charset")) {
+                charset_t charset = charset_lookupname(param->value);
+
+                if (charset == CHARSET_UNKNOWN_CHARSET) {
+                    txn->error.precond = CARDDAV_SUPP_DATA;
+                    txn->error.desc =
+                        "Unknown charset= specified in Content-Type";
+                    goto done;
+                }
+                if (strcmp(charset_canon_name(charset), "utf-8")) {
+                    txn->error.precond = CARDDAV_SUPP_DATA;
+                    txn->error.desc =
+                        "Server only accepts Content-type charset=utf-8";
+                    goto done;
+                }
+            }
+            else if (!strcasecmp(param->attribute, "profile")) {
+                profile = param->value;
+            }
+        }
+
+        if (!strcasecmp(subtype, "directory")) {
+            if (profile && strcasecmp(profile, "vcard")) {
+                txn->error.precond = CARDDAV_SUPP_DATA;
+                txn->error.desc = "Only profile=vcard is accepted"
+                    " for Content-type 'text/directory'";
+                goto done;
+            }
+
+            if (!want_ver) {
+                want_ver = "3.0";
+            }
+            else if (want_ver[0] != 3) {
+                txn->error.precond = CARDDAV_VALID_DATA;
+                txn->error.desc =
+                    "Content-Type 'text/directory' MUST use version=3.0";
+                goto done;
+            }
+        }
     }
 
-    return store_resource(txn, vcard, mailbox, resource, db, /*dupcheck*/1);
+    /* Validate the vCard data */
+    if (!vcard ||
+        !vcard->objects ||
+        !vcard->objects->type ||
+        strcasecmp(vcard->objects->type, "vcard")) {
+        txn->error.precond = CARDDAV_VALID_DATA;
+        txn->error.desc = "Resource is not a vCard object";
+        goto done;
+    }
+
+    if (!vparse_restriction_check(vcard->objects)) {
+        txn->error.precond = CARDDAV_VALID_DATA;
+        txn->error.desc = "Failed restriction checks";
+        goto done;
+    }
+
+    /* Sanity check vCard data */
+    struct vparse_entry *ventry;
+    const char *uid = NULL, *fullname = NULL;
+    for (ventry = vcard->objects->properties; ventry; ventry = ventry->next) {
+        const char *name = ventry->name;
+        const char *propval = ventry->v.value;
+
+        if (!name) continue;
+        if (!propval) continue;
+
+        if (!strcasecmp(name, "version")) {
+            if (strcmp(ventry->v.value, "3.0") &&
+                strcmp(ventry->v.value, "4.0")) {
+                txn->error.precond = CARDDAV_SUPP_DATA;
+                txn->error.desc = "Unsupported vCard version";
+                goto done;
+            }
+            if (want_ver && (want_ver[0] != ventry->v.value[0])) {
+                txn->error.precond = CARDDAV_VALID_DATA;
+                txn->error.desc =
+                    "Content-Type version= and vCard VERSION mismatch";
+                goto done;
+            }
+        }
+
+        else if (!strcasecmp(name, "uid"))
+            uid = propval;
+
+        else if (!strcasecmp(name, "fn"))
+            fullname = propval;
+    }
+
+    if (!uid) {
+        txn->error.precond = CARDDAV_VALID_DATA;
+        txn->error.desc = "Missing mandatory UID property";
+        goto done;
+    }
+    if (!fullname) {
+        txn->error.precond = CARDDAV_VALID_DATA;
+        txn->error.desc = "Missing mandatory FN property";
+        goto done;
+    }
+
+    /* Check for changed UID */
+    struct carddav_data *cdata;
+    carddav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
+    if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
+        /* CARDDAV:no-uid-conflict */
+        char *owner;
+        const char *mboxname;
+        mbentry_t *mbentry = NULL;
+
+        if (cdata->dav.mailbox_byname)
+            mboxname = cdata->dav.mailbox;
+        else {
+            mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
+            mboxname = mbentry->name;
+        }
+        owner = mboxname_to_userid(mboxname);
+
+        assert(!buf_len(&txn->buf));
+        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                   namespace_addressbook.prefix, USER_COLLECTION_PREFIX, owner,
+                   strrchr(mboxname, '.') + 1, cdata->dav.resource);
+        txn->error.resource = buf_cstring(&txn->buf);
+        mboxlist_entry_free(&mbentry);
+        free(owner);
+
+        txn->error.precond = CARDDAV_UID_CONFLICT;
+        goto done;
+    }
+
+  done:
+    param_free(&params);
+    free(subtype);
+    free(type);
+
+    if (txn->error.precond) return HTTP_FORBIDDEN;
+
+    return carddav_store_resource(txn, vcard, mailbox, resource, db);
 }
 
 
@@ -1452,6 +1586,10 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
         }
     }
     else {
+        struct carddav_data *cdata = (struct carddav_data *) fctx->data;
+        struct vparse_card *vcard = NULL;
+        unsigned want_ver;
+
         if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
 
         if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
@@ -1462,17 +1600,31 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
         if (!fctx->msg_buf.len) return HTTP_SERVER_ERROR;
 
-        data = fctx->msg_buf.s + fctx->record->header_size;
+        data = buf_cstring(&fctx->msg_buf) + fctx->record->header_size;
         datalen = fctx->record->size - fctx->record->header_size;
+
+        want_ver = (out_type->version[0] == '4') ? 4 : 3;
+
+        if (cdata->version != want_ver) {
+            /* Translate between vCard versions */
+            vcard = fctx->obj;
+
+            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
+
+            if (want_ver == 4) vcard_to_v4(vcard);
+            else vcard_to_v3(vcard);
+        }
 
         if (strarray_size(partial)) {
             /* Limit returned properties */
-            struct vparse_card *vcard = fctx->obj;
+            vcard = fctx->obj;
 
             if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
             prune_properties(vcard->objects, partial);
+        }
 
-            /* Create vCard data from new vcard component */
+        if (vcard) {
+            /* Create vCard data from new vCard component */
             buf_reset(&fctx->msg_buf);
             vparse_tobuf(vcard, &fctx->msg_buf);
             data = buf_cstring(&fctx->msg_buf);
@@ -1565,6 +1717,25 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
+/* Callback to fetch CARDDAV:max-resource-size */
+static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
+                            struct propfind_ctx *fctx,
+                            xmlNodePtr prop __attribute__((unused)),
+                            xmlNodePtr resp __attribute__((unused)),
+                            struct propstat propstat[],
+                            void *rock __attribute__((unused)))
+{
+    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, "%d", vcard_max_size);
+    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
+
+    return 0;
+}
+
+
 /* Callback to fetch CY:address-groups */
 int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
                         struct propfind_ctx *fctx,
@@ -1590,7 +1761,7 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
         goto done;
     }
 
-    r = carddav_lookup_resource(davdb, fctx->req_tgt->mbentry->name,
+    r = carddav_lookup_resource(davdb, fctx->req_tgt->mbentry,
                                 fctx->req_tgt->resource, &cdata, 0);
     if (r)
         goto done;

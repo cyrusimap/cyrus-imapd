@@ -112,7 +112,7 @@ int email_notification = 0;
 struct infected_mbox *public = NULL;
 struct infected_mbox *user = NULL;
 
-int verbose = 0;
+static int verbose = 0;
 
 /* abstract definition of a virus scan engine */
 struct scan_engine {
@@ -221,7 +221,7 @@ int clamav_scanfile(void *state, const char *fname,
 
     default:
         printf("cl_scanfile error: %s\n", cl_strerror(r));
-        syslog(LOG_ERR, "cl_scanfile error: %s\n", cl_strerror(r));
+        syslog(LOG_ERR, "cl_scanfile error: %s", cl_strerror(r));
         break;
     }
 
@@ -454,14 +454,14 @@ int scan_me(struct findall_data *data, void *rock)
         if (owner) {
             if (user && !strcmp(owner, user->owner)) {
                 i_mbox = user;
+                free(owner);
             } else {
                 /* new owner (Inbox) */
                 struct infected_mbox *new = xzmalloc(sizeof(struct infected_mbox));
-                new->owner = xstrdup(owner);
+                new->owner = owner;
                 new->next = user;
                 i_mbox = user = new;
             }
-            free(owner);
         }
 #if 0  /* XXX what to do with public mailboxes (bboards)? */
         else {
@@ -495,7 +495,7 @@ void create_digest(struct infected_mbox *i_mbox, struct mailbox *mailbox,
     struct address addr;
     struct buf from = BUF_INITIALIZER;
 
-    i_msg->mboxname = xstrdup(mailbox->name);
+    i_msg->mboxname = xstrdup(mailbox_name(mailbox));
     i_msg->virname = xstrdup(virname);
     i_msg->uid = record->uid;
 
@@ -544,7 +544,7 @@ unsigned virus_check(struct mailbox *mailbox,
         /* print header if this is the first infection seen for this user */
         if (verbose || !srock->user_infected) print_header();
 
-        char *extname = mboxname_to_external(mailbox->name,
+        char *extname = mboxname_to_external(mailbox_name(mailbox),
                                              srock->namespace,
                                              NULL);
 

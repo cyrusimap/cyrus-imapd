@@ -496,7 +496,7 @@ EXPORTED int msgrecord_annot_lookup(msgrecord_t *mr, const char *entry,
     int r = msgrecord_need(mr, M_MAILBOX|M_UID|M_ANNOTATIONS);
     if (r) return r;
 
-    return annotatemore_msg_lookup(mr->mbox->name, mr->record.uid, entry, userid, value);
+    return annotatemore_msg_lookup(mr->mbox, mr->record.uid, entry, userid, value);
 }
 
 
@@ -507,7 +507,7 @@ EXPORTED int msgrecord_annot_findall(msgrecord_t *mr,
 {
     int r = msgrecord_need(mr, M_MAILBOX|M_UID|M_ANNOTATIONS);
     if (r) return r;
-    return annotatemore_findall(mr->mbox->name, mr->record.uid, entry, /*modseq*/0,
+    return annotatemore_findall_mailbox(mr->mbox, mr->record.uid, entry, /*modseq*/0,
                                 proc, rock, /*flags*/0);
 }
 
@@ -787,7 +787,7 @@ static int msgrecord_save(msgrecord_t *mr)
 
     if (!mailbox_index_islocked(mr->mbox, 1)) {
         syslog(LOG_ERR, "msgrecord: need mailbox lock to save %s:%d",
-                mr->mbox->name, mr->record.uid);
+                mailbox_name(mr->mbox), mr->record.uid);
         return IMAP_INTERNAL;
     }
     if (mr->isappend) {
@@ -805,7 +805,7 @@ EXPORTED int msgrecord_append(msgrecord_t *mr)
 {
     if (!mr->isappend) {
         syslog(LOG_ERR, "msgrecord: can't append, record %s:%d already exists",
-                mr->mbox->name, mr->record.uid);
+                mailbox_name(mr->mbox), mr->record.uid);
         return IMAP_INTERNAL;
     }
     return msgrecord_save(mr);

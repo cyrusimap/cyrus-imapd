@@ -45,6 +45,10 @@
 
 #include "auth.h"
 #include "mboxname.h"
+#include "mboxlist.h"
+
+#define FNAME_SUBSSUFFIX     "sub"
+#define FNAME_COUNTERSSUFFIX "counters"
 
 /* path to user's sieve directory */
 const char *user_sieve_path(const char *user);
@@ -54,7 +58,7 @@ const char *user_sieve_path(const char *user);
  *
  * wipe-user says to delete seen state also (remove the user from the murder)
  */
-int user_deletedata(const char *userid, int wipe_user);
+int user_deletedata(const mbentry_t *mbentry, int wipe_user);
 
 /* Rename/copy user meta-data (seen state, subscriptions, sieve scripts)
  * from 'olduser' to 'newuser'.
@@ -77,9 +81,17 @@ char *user_hash_subs(const char *user);
 /* find any sort of file for the user */
 char *user_hash_meta(const char *userid, const char *suffix);
 
+/* find xapian search dir for the user */
+char *user_hash_xapian(const char *userid, const char *root);
+char *user_hash_xapian_byname(const mbname_t *mbname, const char *root);
+char *user_hash_xapian_byid(const char *mboxid, const char *root);
+
 /* default to exclusive lock! */
 struct mboxlock *user_namespacelock_full(const char *userid, int locktype);
 #define user_namespacelock(userid) user_namespacelock_full(userid, LOCK_EXCLUSIVE)
 int user_isnamespacelocked(const char *userid);
+
+int user_sharee_renameacls(const struct namespace *namespace,
+                           const char *olduser, const char *newuser);
 
 #endif
