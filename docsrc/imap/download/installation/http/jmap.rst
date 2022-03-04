@@ -62,29 +62,24 @@ JMAP implementation status
 
 The JMAP implementation in Cyrus is at various stages of maturity.
 
-Working
--------
+Implemented
+-----------
 
-* **Contacts**
-    * All JMAP methods are implemented. JMAP blobs are not supported.
+* The core protocol (:rfc:`8620`), except for PushSubscription
+* JMAP Mail (:rfc:`8621`)
+* A JMAP Subprotocol for WebSocket (:rfc:`8887`)
 
-* **Calendars**
-    * All JMAP methods are implemented. JMAP blobs are not supported.
+In development
+--------------
 
-* **Messages**
-    * Most JMAP methods are implemented. The following methods are not planned for implementation:
+* JMAP Calendars (:draft:`draft-ietf-jmap-calendars`)
+* JMAP Sharing (:draft:`draft-ietf-jmap-sharing`)
+* JMAP Blobs (:draft:`draft-ietf-jmap-blob`)
+* JMAP Sieve (:draft:`draft-ietf-jmap-sieve`)
+* JMAP Contacts (:draft:`draft-ietf-jmap-jscontact`)
+* JMAP MDN (:rfc:`9007`)
 
-      * copyMessages
-      * reportMessages
-      * getVacationResponse
-      * setVacationResponse
-      * getIdentityUpdates
-      * setIdentities
-
-Not yet implemented
--------------------
-
-* **Remote mailboxes**
-
-* **Events**
-    * Changes on mailbox entries trigger notifications. However, the JMAP event service is not implemented.
+Not implemented
+---------------
+* JMAP Tasks (:draft:`draft-ietf-jmap-tasks`)
+* JMAP SMIME (:draft:`draft-ietf-jmap-smime`)
