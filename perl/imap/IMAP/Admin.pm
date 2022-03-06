@@ -724,7 +724,7 @@ sub getinfo {
 			# this is the only possible response.
 
 		        if ($text =~
-			       /^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\"([^\"]*)\"\)/) {
+			       /^\s*(?|\"([^\"]*)\"|(\S+))\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+(?|\"([^\"]*)\"|(NIL)\s*)\)/) {
 			  # note that we require mailbox and entry to be qstrings
 			  # Single annotation, not literal,
 			  # but possibly multiple values
@@ -737,9 +737,9 @@ sub getinfo {
 			  }
 			  $d{-rock}{$key} = $4;
 		        }  elsif ($text =~
-			       /^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n/) {
+			       /^\s*(?|\"([^\"]*)\"|(\S+))\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n/) {
 			  my $len = $3;
-			  $text =~ s/^\s*\"([^\"]*)\"\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n//s;
+			  $text =~ s/^\s*(?|\"([^\"]*)\"|(\S+))\s+\"([^\"]*)\"\s+\(\"([^\"]*)\"\s+\{(.*)\}\r\n//s;
 			  $text = substr($text, 0, $len);
 			  # note that we require mailbox and entry to be qstrings
 			  # Single annotation (literal style),
