@@ -2629,10 +2629,11 @@ sub run_dbcommand
 
 sub read_mailboxes_db
 {
-    my ($self) = @_;
+    my ($self, $params) = @_;
 
     # run ctl_mboxlist -d to dump mailboxes.db to a file
-    my $outfile = $self->get_basedir() . "/$$-ctl_mboxlist.out";
+    my $outfile = $params->{outfile}
+                  || $self->get_basedir() . "/$$-ctl_mboxlist.out";
     $self->run_command({
         cyrus => 1,
         redirects => {
