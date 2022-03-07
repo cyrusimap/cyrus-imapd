@@ -1479,4 +1479,135 @@ sub assert_sieve_matches
                              digest_file_hex($filename, "MD5"));
 }
 
+# create a bunch of mailboxes and messages with various flags and annots,
+# returning a hash of what to expect to find there later
+sub populate_user
+{
+    my ($self, $instance, $store, $folders) = @_;
+
+    my $created = {};
+
+    my @specialuse = qw(Drafts Junk Sent Trash);
+
+    foreach my $folder (@{$folders}) {
+        $store->set_folder($folder);
+
+        # create some messages
+        foreach my $n (1 .. 20) {
+            my $msg = $self->make_message("Message $n", store => $store);
+            $created->{mailboxes}->{$folder}->{messages}->{$msg->uid()} = $msg;
+        }
+
+        # fizzbuzz some flags
+        my $talk = $store->get_client();
+        $talk->select($folder);
+        my $n = 1;
+        while (my ($uid, $msg)
+                = each %{$created->{mailboxes}->{$folder}->{messages}})
+        {
+            my @flags;
+
+            if ($n % 3 == 0) {
+                # fizz
+                $talk->store("$uid", '+flags', '(\\Flagged)');
+                $self->assert_str_equals(
+                    'ok', $talk->get_last_completion_response()
+                );
+                push @flags, '\\Flagged';
+            }
+            if ($n % 5 == 0) {
+                # buzz
+                $talk->store("$uid", '+flags', '(\\Deleted)');
+                $self->assert_str_equals(
+                    'ok', $talk->get_last_completion_response()
+                );
+                push @flags, '\\Deleted';
+            }
+
+            $msg->set_attribute('flags', \@flags) if scalar @flags;
+            $n++;
+        }
+
+        # make sure the messages are as expected
+        $store->set_fetch_attributes('uid', 'flags');
+        $self->check_messages($created->{mailboxes}->{$folder}->{messages},
+                              store => $store,
+                              check_guid => 0,
+                              keyed_on => 'uid');
+
+        # maybe set a special use annotation if the folder name is such
+        my ($suflag, @extra) = grep {
+            lc $folder =~ m{^(?:INBOX[./])?$_$}
+        } @specialuse;
+        if ($suflag and not scalar @extra) {
+            $talk->setmetadata($folder, '/private/specialuse', "\\$suflag");
+            $self->assert_str_equals('ok',
+                                     $talk->get_last_completion_response());
+            $created->{mailboxes}->{$folder}->{specialuse} = "\\$suflag";
+        }
+    }
+
+    # XXX ought to be conditional on whether $instance was built with sieve
+    # XXX support, but Cassandane::BuildInfo doesn't currently support
+    # XXX choosing an instance to ask about...
+    my $scriptname = random_word();
+    my $scriptcontent = 'keep;';
+
+    $instance->install_sieve_script($scriptcontent,
+                                    name => $scriptname,
+                                    username => $store->{username});
+    $self->assert_sieve_exists($instance, $store->{username}, $scriptname);
+    $self->assert_sieve_active($instance, $store->{username}, $scriptname);
+
+    $created->{sieve}->{scripts}->{$scriptname} = $scriptcontent;
+    $created->{sieve}->{active} = $scriptname;
+
+    return $created;
+}
+
+# check that the contents of the store match the data returned by
+# populate_user()
+sub check_user
+{
+    my ($self, $instance, $store, $expected) = @_;
+
+    die "bad expected hash" if ref $expected ne 'HASH';
+
+    foreach my $folder (keys %{$expected->{mailboxes}}) {
+        $store->set_folder($folder);
+        $store->set_fetch_attributes('uid', 'flags');
+        $self->check_messages($expected->{mailboxes}->{$folder}->{messages},
+                              store => $store,
+                              check_guid => 0,
+                              keyed_on => 'uid');
+
+        my $specialuse = $expected->{mailboxes}->{$folder}->{specialuse};
+        if ($specialuse) {
+            my $talk = $store->get_client();
+            my $res = $talk->getmetadata($folder, '/private/specialuse');
+            $self->assert_str_equals('ok',
+                                     $talk->get_last_completion_response());
+            $self->assert_not_null($res);
+
+            $self->assert_str_equals($specialuse,
+                                     $res->{$folder}->{'/private/specialuse'});
+        }
+    }
+
+    if (exists $expected->{sieve}) {
+        while (my ($scriptname, $scriptcontent)
+               = each %{$expected->{sieve}->{scripts}})
+        {
+            $self->assert_sieve_exists($instance, $store->{username},
+                                       $scriptname, 1);
+            $self->assert_sieve_matches($instance, $store->{username},
+                                        $scriptname, $scriptcontent);
+        }
+        if ($expected->{sieve}->{active}) {
+            $self->assert_sieve_active($instance, $store->{username},
+                                       $expected->{sieve}->{active});
+        }
+    }
+}
+
 1;
