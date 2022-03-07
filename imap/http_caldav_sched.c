@@ -2525,8 +2525,21 @@ static void schedule_sub_declines(const char *attendee,
     if (!reply->itip)
         reply->itip = make_itip(ICAL_METHOD_REPLY, oldical);
 
+    // find old master component, if any
     icalcomponent *comp = icalcomponent_get_first_real_component(oldical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
+    icalcomponent *mastercomp = NULL;
+
+    for (; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) {
+            mastercomp = comp;
+            break;
+        }
+    }
+
+    comp = icalcomponent_get_first_real_component(oldical);
 
     for (; comp; comp = icalcomponent_get_next_component(oldical, kind)) {
         icalproperty *prop =
@@ -2547,6 +2560,16 @@ static void schedule_sub_declines(const char *attendee,
         icalcomponent *newcomp =
             find_attended_component(newical, recurid, attendee);
         if (newcomp) continue;
+
+        icalparameter_scheduleforcesend force_send =
+            get_forcesend(icalcomponent_get_first_property(comp,
+                                                           ICAL_ORGANIZER_PROPERTY));
+
+        /* master component already declined, no need to send */
+        if (!reply->master_send && !partstat_changed(mastercomp, comp, attendee)) {
+            if (force_send == ICAL_SCHEDULEFORCESEND_NONE)
+                continue;
+        }
 
         /* we need to send an update for this recurrence */
         icalcomponent *copy = icalcomponent_clone(comp);
@@ -2572,8 +2595,23 @@ static void schedule_sub_replies(const char *attendee,
 
     if (!reply->itip) reply->itip = make_itip(ICAL_METHOD_REPLY, newical);
 
+    // find master component, if any
     icalcomponent *comp = icalcomponent_get_first_real_component(newical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
+    icalcomponent *mastercomp = NULL;
+
+    for (; comp; comp = icalcomponent_get_next_component(newical, kind)) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) {
+            mastercomp = comp;
+            break;
+        }
+    }
+
+    // process overrides
+
+    comp = icalcomponent_get_first_real_component(newical);
 
     for (; comp; comp = icalcomponent_get_next_component(newical, kind)) {
         icalproperty *prop =
@@ -2598,7 +2636,8 @@ static void schedule_sub_replies(const char *attendee,
             find_attended_component(oldical, recurid, attendee);
 
         /* unchanged partstat - we don't need to send anything */
-        if (!reply->master_send && !partstat_changed(oldcomp, comp, attendee)) {
+        if (!reply->master_send &&
+                !partstat_changed(oldcomp ? oldcomp : mastercomp, comp, attendee)) {
             if (force_send == ICAL_SCHEDULEFORCESEND_NONE)
                 continue;
         }

@@ -20062,5 +20062,145 @@ sub test_calendarevent_set_replace_standalone_with_destroy
 
 }
 
+sub test_calendarevent_set_reply_partstat_changed
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Clean notifications";
+    $self->{instance}->getnotify();
+
+    xlog "Create scheduled event";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'event',
+                    start => '2021-01-01T15:30:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 30,
+                    }],
+                    replyTo => {
+                        imip => 'mailto:organizer@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                            participationStatus => 'needs-action',
+                            expectReply => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+
+    xlog "Assert that no iTIP notification is sent";
+    my $data = $self->{instance}->getnotify();
+    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_null($notif);
+
+    xlog "Clean notifications";
+    $self->{instance}->getnotify();
+
+    xlog "Update participationStatus";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'participants/cassandane/participationStatus' => 'accepted',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Assert that iTIP notification is sent";
+    $data = $self->{instance}->getnotify();
+    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($notif);
+
+    xlog "Clean notifications";
+    $self->{instance}->getnotify();
+
+    xlog "Update title";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => 'updated',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Assert that no iTIP notification is sent";
+    $data = $self->{instance}->getnotify();
+    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_null($notif);
+
+    xlog "Clean notifications";
+    $self->{instance}->getnotify();
+
+    xlog "Update participationStatus in recurrence override";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    recurrenceOverrides => {
+                        '2021-01-02T15:30:00' => {
+                            'participants/cassandane/participationStatus' => 'declined',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Assert that iTIP notification is sent";
+    $data = $self->{instance}->getnotify();
+    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($notif);
+
+    xlog "Clean notifications";
+    $self->{instance}->getnotify();
+
+    xlog "Update title in recurrence override";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'recurrenceOverrides/2021-01-03T15:30:00' => {
+                        title => 'updatedOverride',
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Assert that no iTIP notification is sent";
+    $data = $self->{instance}->getnotify();
+    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_null($notif);
+}
 
 1;
