@@ -5899,6 +5899,46 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         r = 0;
     }
 
+    /* destroy */
+    size_t index;
+    json_t *juid;
+
+    json_array_foreach(set.destroy, index, juid) {
+        jmap_caleventid_free(&eid);
+
+        const char *id = json_string_value(juid);
+        if (!id) continue;
+
+        eid = setcalendarevents_parse_id(req, id);
+        if (!eid) {
+            json_object_set_new(set.not_destroyed, id,
+                    json_pack("{s:s}", "type", "notFound"));
+            continue;
+        }
+
+        /* Destroy the calendar event. */
+        r = setcalendarevents_destroy(req, notifmbox, eid, db, send_itip);
+        if (r == IMAP_NOTFOUND) {
+            json_t *err = json_pack("{s:s}", "type", "notFound");
+            json_object_set_new(set.not_destroyed, eid->raw, err);
+            r = 0;
+            continue;
+        } else if (r == IMAP_PERMISSION_DENIED) {
+            json_t *err = json_pack("{s:s}", "type", "forbidden");
+            json_object_set_new(set.not_destroyed, eid->raw, err);
+            r = 0;
+            continue;
+        } else if (r) {
+            goto done;
+        }
+
+        /* Report calendar event as destroyed. */
+        json_array_append_new(set.destroyed, json_string(eid->raw));
+    }
+    jmap_caleventid_free(&eid);
+
+
+
     /* create */
     const char *key;
     json_t *arg;
@@ -5967,45 +6007,6 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         /* Report calendar event as updated. */
         json_object_set_new(set.updated, eid->raw, update);
-    }
-    jmap_caleventid_free(&eid);
-
-
-    /* destroy */
-    size_t index;
-    json_t *juid;
-
-    json_array_foreach(set.destroy, index, juid) {
-        jmap_caleventid_free(&eid);
-
-        const char *id = json_string_value(juid);
-        if (!id) continue;
-
-        eid = setcalendarevents_parse_id(req, id);
-        if (!eid) {
-            json_object_set_new(set.not_destroyed, id,
-                    json_pack("{s:s}", "type", "notFound"));
-            continue;
-        }
-
-        /* Destroy the calendar event. */
-        r = setcalendarevents_destroy(req, notifmbox, eid, db, send_itip);
-        if (r == IMAP_NOTFOUND) {
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_destroyed, eid->raw, err);
-            r = 0;
-            continue;
-        } else if (r == IMAP_PERMISSION_DENIED) {
-            json_t *err = json_pack("{s:s}", "type", "forbidden");
-            json_object_set_new(set.not_destroyed, eid->raw, err);
-            r = 0;
-            continue;
-        } else if (r) {
-            goto done;
-        }
-
-        /* Report calendar event as destroyed. */
-        json_array_append_new(set.destroyed, json_string(eid->raw));
     }
     jmap_caleventid_free(&eid);
 
