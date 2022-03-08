@@ -1794,6 +1794,34 @@ static int setcalendar_writeprops(jmap_req_t *req,
     return r;
 }
 
+static int set_scheddefault(jmap_req_t *req, annotate_state_t *astate, const char *colname)
+{
+    int r = 0;
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf, colname ? colname : "");
+
+    static const char *annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+
+    if (colname) {
+        struct mailbox *mbox = NULL;
+        char *mboxname = caldav_mboxname(req->accountid, colname);
+        r = jmap_openmbox(req, mboxname, &mbox, 1);
+        if (!r) {
+            r = annotate_state_writemask(astate, annot, "", &buf);
+        }
+        jmap_closembox(req, &mbox);
+        free(mboxname);
+    }
+    else {
+        r = annotate_state_writemask(astate, annot, "", &buf);
+    }
+
+    buf_free(&buf);
+    return r;
+}
+
 static int _calendar_hasevents_cb(void *rock __attribute__((unused)),
                                   struct caldav_data *cdata __attribute__((unused)))
 {
@@ -1811,6 +1839,9 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
     mbentry_t *mbentry = NULL;
     struct buf buf = BUF_INITIALIZER;
     struct caldav_db *db = NULL;
+    char *calhome_name = caldav_mboxname(req->accountid, NULL);
+    annotate_state_t *calhome_astate = NULL;
+    struct mailbox *calhome_mbox = NULL;
     int r = 0;
 
     /* Make sure we don't delete special calendars */
@@ -1828,14 +1859,6 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
     }
     else if (!jmap_hasrights_mbentry(req, mbentry, JACL_DELETE)) {
         *err = json_pack("{s:s}", "type", "accountReadOnly");
-        goto done;
-    }
-
-    if (!strcmpsafe(defaultname, calid)) {
-        *err = json_pack("{s:s s:s}",
-                "type", "forbidden",
-                "description",
-                "is CalendarPreferences.defaultCalendarId");
         goto done;
     }
 
@@ -1890,6 +1913,41 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
 
     if (!r) r = caldav_update_shareacls(req->accountid);
 
+    /* Update default calendar - must go last */
+    if (!strcmpsafe(defaultname, calid)) {
+        int r2 = jmap_openmbox(req, calhome_name, &calhome_mbox, 1);
+        if (r2) {
+            xsyslog(LOG_ERR, "can not open calendar home mailbox",
+                    "err=<%s>", error_message(r));
+            goto done;
+        }
+        r2 = mailbox_get_annotate_state(calhome_mbox, 0, &calhome_astate);
+        if (r2) {
+            xsyslog(LOG_ERR, "can not get calendar home annotation state",
+                    "err=<%s>", error_message(r2));
+            goto done;
+        }
+
+        // Set default calendar to null
+        r2 = set_scheddefault(req, calhome_astate, NULL);
+        if (r2) {
+            xsyslog(LOG_ERR, "can not set default calendar to null",
+                    "err=<%s>", error_message(r2));
+            goto done;
+        }
+
+        // Pick new default calendar
+        char *newdefaultname = caldav_scheddefault(req->accountid, 1);
+        if (newdefaultname) {
+            r2 = set_scheddefault(req, calhome_astate, newdefaultname);
+            if (r2) {
+                xsyslog(LOG_ERR, "can not set new default calendar",
+                        "name=<%s> err=<%s>", newdefaultname, error_message(r2));
+            }
+            free(newdefaultname);
+        }
+    }
+
 done:
     if (db) {
         int rr = caldav_close(db);
@@ -1903,6 +1961,8 @@ done:
             *err = jmap_server_error(r);
         }
     }
+    jmap_closembox(req, &calhome_mbox);
+    free(calhome_name);
     free(mboxname);
     free(defaultname);
     mbname_free(&mbname);
@@ -11188,38 +11248,17 @@ static void calendarpreferences_set(struct jmap_req *req,
 
     /* Set default calendar */
     if (jcalid) {
-        const char *calid = json_string_value(jcalid);
-        buf_setcstr(&buf, calid ? calid : "");
-
-        const char *annot =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
-
-        if (calid) {
-            // lock mailbox
-            struct mailbox *mbox = NULL;
-            char *mboxname = caldav_mboxname(req->accountid, calid);
-            r = jmap_openmbox(req, mboxname, &mbox, 1);
-            if (r) {
-                if (r == IMAP_MAILBOX_NONEXISTENT) {
-                    jmap_parser_invalid(parser, "defaultCalendarId");
-                    r = 0;
-                }
+        r = set_scheddefault(req, astate, json_string_value(jcalid));
+        if (r) {
+            if (r == IMAP_MAILBOX_NONEXISTENT) {
+                jmap_parser_invalid(parser, "defaultCalendarId");
+                r = 0;
             }
             else {
-                r = annotate_state_writemask(astate, annot, "", &buf);
+                xsyslog(LOG_ERR, "can not write schedule default calendar",
+                        "err=<%s>", error_message(r));
+                goto done;
             }
-            jmap_closembox(req, &mbox);
-            free(mboxname);
-        }
-        else {
-            r = annotate_state_writemask(astate, annot, "", &buf);
-        }
-        buf_reset(&buf);
-
-        if (r) {
-            xsyslog(LOG_ERR, "can not write schedule default calendar",
-                    "err=<%s>", error_message(r));
-            goto done;
         }
     }
 
