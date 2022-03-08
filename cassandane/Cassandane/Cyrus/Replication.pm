@@ -258,6 +258,121 @@ EOF
 }
 
 #
+# Test handling of replication when append fails due to disk error
+#
+sub test_syncall_failinguser
+    :NoStartInstances :min_version_3_6
+{
+    my ($self) = @_;
+
+    my $canary = << 'EOF';
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+To: Sarah Jane Smith <sjsmith@tard.is>
+Subject: this is just to say
+X-Cassandane-Unique: canary
+
+I have eaten
+the canary
+that was in
+the coal mine
+
+and which
+you were probably
+saving
+for emergencies
+
+Forgive me
+it was delicious
+so tweet
+and so coaled
+EOF
+    $canary =~ s/\n/\r\n/g;
+    my $canaryguid = "f2eaa91974c50ec3cfb530014362e92efb06a9ba";
+
+    $self->{replica}->{config}->set('debug_writefail_guid' => $canaryguid);
+    $self->_start_instances();
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    $self->{instance}->create_user("a_early");
+    $self->{instance}->create_user("z_late");
+
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $astore = $mastersvc->create_store(username => "a_early");
+    my $zstore = $mastersvc->create_store(username => "z_late");
+    my $replicasvc = $self->{replica}->get_service('imap');
+    my $replica_astore = $replicasvc->create_store(username => "a_early");
+    my $replica_zstore = $replicasvc->create_store(username => "z_late");
+
+    xlog $self, "Creating a message in each user";
+    my %apreexp;
+    my %cpreexp;
+    my %zpreexp;
+    $apreexp{1} = $self->make_message("Message A", store => $astore);
+    $cpreexp{1} = $self->make_message("Message C", store => $master_store);
+    $zpreexp{1} = $self->make_message("Message Z", store => $zstore);
+
+    xlog $self, "Running all user replication";
+    $self->run_replication(allusers => 1);
+
+    xlog $self, "Creating a second message for each user (cassandane having the canary)";
+    my %aexp = %apreexp;
+    my %cexp = %cpreexp;
+    my %zexp = %zpreexp;
+    $aexp{2} = $self->make_message("Message A2", store => $astore);
+    $cexp{2} = Cassandane::Message->new(raw => $canary,
+                                       attrs => { UID => 2 }),
+    $self->_save_message($cexp{2}, $master_store);
+    $zexp{2} = $self->make_message("Message Z2", store => $zstore);
+
+    xlog $self, "new messages should be on master only";
+    $self->check_messages(\%aexp, keyed_on => 'uid', store => $astore);
+    $self->check_messages(\%apreexp, keyed_on => 'uid', store => $replica_astore);
+    $self->check_messages(\%cexp, keyed_on => 'uid', store => $master_store);
+    $self->check_messages(\%cpreexp, keyed_on => 'uid', store => $replica_store);
+    $self->check_messages(\%zexp, keyed_on => 'uid', store => $zstore);
+    $self->check_messages(\%zpreexp, keyed_on => 'uid', store => $replica_zstore);
+
+    xlog $self, "running replication...";
+    eval {
+        $self->run_replication(allusers => 1);
+    };
+    my $e = $@;
+
+    # sync_client should have exited with an error
+    $self->assert($e);
+    $self->assert_matches(qr/child\sprocess\s
+                            \(binary\ssync_client\spid\s\d+\)\s
+                            exited\swith\scode/x,
+                          $e->to_string());
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # sync_client should have logged the BAD response
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/IOERROR: received bad response/, "@lines");
+
+        # sync server should have logged the write error
+        @lines = $self->{replica}->getsyslog();
+        $self->assert_matches(qr{IOERROR:\sfailed\sto\supload\sfile
+                                 (?:\s\(simulated\))?:\sguid=<$canaryguid>
+                              }x,
+                              "@lines");
+    }
+
+    xlog $self, "Check that cassandane user wasn't updated, both others were";
+    $self->check_replication('a_early');
+    $self->check_replication('z_late');
+
+    $self->check_messages(\%aexp, keyed_on => 'uid', store => $astore);
+    $self->check_messages(\%aexp, keyed_on => 'uid', store => $replica_astore);
+    $self->check_messages(\%cexp, keyed_on => 'uid', store => $master_store);
+    $self->check_messages(\%cpreexp, keyed_on => 'uid', store => $replica_store);
+    $self->check_messages(\%zexp, keyed_on => 'uid', store => $zstore);
+    $self->check_messages(\%zexp, keyed_on => 'uid', store => $replica_zstore);
+}
+
+#
 # Test replication of messages APPENDed to the master
 #
 sub test_splitbrain

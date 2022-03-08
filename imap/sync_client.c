@@ -374,6 +374,9 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
 
     char *userid = mboxname_to_userid(mbentry->name);
 
+    // reconnect if we've been disconnected
+    if (!sync_cs.backend) replica_connect();
+
     if (userid) {
         /* skip deleted mailboxes only because the are out of order, and you would
          * otherwise have to sync the user twice thanks to our naive logic */
@@ -381,22 +384,34 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
             goto done;
 
         /* only sync if we haven't just done the user */
-        if (strcmpsafe(userid, prev_userid)) {
-            r = sync_do_user(&sync_cs, userid, NULL);
-            if (r) {
-                if (verbose)
-                    fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
-                syslog(LOG_ERR, "Error in do_user(%s): bailing out!", userid);
-                goto done;
-            }
-            free(prev_userid);
-            prev_userid = xstrdup(userid);
+        if (!strcmpsafe(userid, prev_userid))
+            goto done;
+
+        xzfree(prev_userid);
+        prev_userid = xstrdup(userid);
+
+        r = sync_do_user(&sync_cs, userid, NULL);
+        if (r == IMAP_MAILBOX_LOCKED) {
+            if (verbose)
+                fprintf(stderr, "Skipping locked user %s\n", userid);
+            r = 0;
+        }
+        if (r) {
+            if (verbose)
+                fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
+            syslog(LOG_ERR, "Error in do_user(%s): bailing out!", userid);
+            goto done;
         }
     }
     else {
         /* all shared mailboxes, including DELETED ones, sync alone */
         /* XXX: batch in hundreds? */
         r = do_mailbox(mbentry->name);
+        if (r == IMAP_MAILBOX_LOCKED) {
+            if (verbose)
+                fprintf(stderr, "Skipping locked mailbox %s\n", mbentry->name);
+            r = 0;
+        }
         if (r) {
             if (verbose)
                 fprintf(stderr, "Error from do_user(%s): bailing out!\n", mbentry->name);
@@ -407,7 +422,12 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
 
 done:
     free(userid);
-    if (r) *exit_rcp = 1;
+    if (r) {
+        // disconnect on errors
+        replica_disconnect();
+        // remember that we had an error for the exit code
+        *exit_rcp = 1;
+    }
     return 0; // but keep going anyway
 }
 
@@ -449,7 +469,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRumsozOAp:1")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRNumsozOAp:1")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -508,6 +528,10 @@ int main(int argc, char **argv)
             if (mode != MODE_UNKNOWN)
                 usage("sync_client", "Mutually exclusive options defined");
             mode = MODE_REPEAT;
+            break;
+
+        case 'N': // return LOCKED if this user is already sync locked
+            flags |= SYNC_FLAG_NONBLOCK;
             break;
 
         case 'A':
@@ -663,6 +687,8 @@ int main(int argc, char **argv)
 
         if (mboxlist_allmbox(optind < argc ? argv[optind] : NULL, cb_allmbox, &exit_rc, 0))
             exit_rc = 1;
+
+        xzfree(prev_userid);
 
         replica_disconnect();
         break;

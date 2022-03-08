@@ -20,7 +20,7 @@ Synopsis
     **sync_client** [ **-v** ] [ **-l** ] [ **-L** ] [ **-z** ] [ **-C** *config-file* ] [ **-S** *server-name* ]
         [ **-f** *input-file* ] [ **-F** *shutdown_file* ] [ **-w** *wait_interval* ]
         [ **-t** *timeout* ] [ **-d** *delay* ] [ **-r** ] [ **-n** *channel* ] [ **-u** ] [ **-m** ]
-        [ **-p** *partition* ] [ **-A** ] [ **-s** ] [ **-O** ] *objects*...
+        [ **-p** *partition* ] [ **-A** ] [ **-N** ] [ **-s** ] [ **-O** ] *objects*...
 
 Description
 ===========
@@ -91,6 +91,11 @@ Options
     channels are specified in ``sync_log_channels`` then use one of them.
     This option is probably best combined with **-S** to connect to a
     different server with each channel.
+
+.. option:: -N
+
+    Use non-blocking sync_lock (combination of IP address and username)
+    to skip over any users who are currently syncing.
 
 .. option:: -o
 

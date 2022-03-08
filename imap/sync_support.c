@@ -260,7 +260,10 @@ static struct mboxlock *sync_lock(struct sync_client_state *sync_cs,
 {
     const char *name = _synclock_name(sync_cs->servername, userid);
     struct mboxlock *lock = NULL;
-    int r = mboxname_lock(name, &lock, LOCK_EXCLUSIVE);
+    int flags = LOCK_EXCLUSIVE;
+    if (sync_cs->flags & SYNC_FLAG_NONBLOCK)
+        flags |= LOCK_NONBLOCK;
+    int r = mboxname_lock(name, &lock, flags);
     return r ? NULL : lock;
 }
 
