@@ -261,7 +261,7 @@ EOF
 # Test handling of replication when append fails due to disk error
 #
 sub test_syncall_failinguser
-    :NoStartInstances :min_version_3_5
+    :NoStartInstances :min_version_3_6
 {
     my ($self) = @_;
 
