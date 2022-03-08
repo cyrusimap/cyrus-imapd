@@ -2494,7 +2494,7 @@ static int renamecheck(const mbentry_t *mbentry, void *rock)
 
     text->found++;
 
-    if((text->nl + strlen(mbentry->name + text->ol)) >= MAX_MAILBOX_NAME)
+    if((text->nl + strlen(mbentry->name + text->ol)) >= MAX_MAILBOX_CREATENAME)
         return IMAP_MAILBOX_BADNAME;
 
     strcpy(text->newname + text->nl, mbentry->name + text->ol);

@@ -1819,7 +1819,7 @@ EXPORTED int mboxname_policycheck(const char *name)
     if (mboxname_isdeletedmailbox(name, NULL))
         return 0;
 
-    if (namelen > MAX_MAILBOX_NAME)
+    if (namelen > MAX_MAILBOX_CREATENAME)
         return IMAP_MAILBOX_BADNAME;
 
     /* find the virtual domain, if any.  We don't sanity check domain
