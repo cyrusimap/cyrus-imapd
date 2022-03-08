@@ -2654,6 +2654,7 @@ struct getcalendarevents_rock {
     /* Event-scoped context */
     uint32_t imap_uid;
     icalcomponent *ical;
+    hash_table ical_instances_by_recurid;
     struct message_guid guid;
     int is_draft;
 };
@@ -3194,11 +3195,15 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
     }
 }
 
+static void _icalcomponent_free_cb(void *val)
+{
+    icalcomponent_free((icalcomponent*)val);
+}
+
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct getcalendarevents_rock *rock = vrock;
     int r = 0;
-    icalcomponent* myical = NULL;
     json_t *jsevent = NULL;
     jmap_req_t *req = rock->req;
     hash_table *props = rock->get->props;
@@ -3206,6 +3211,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
     jstimezones_t *jstzones = NULL;
     struct jmapical_ctx *jmapctx = rock->jmapctx;
     struct caldav_data *cdata = &jscal->cdata;
+    icalcomponent *ical_instance = NULL;
 
     if (!cdata->dav.alive || !jscal->alive)
         return 0;
@@ -3280,6 +3286,8 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         rock->imap_uid = cdata->dav.imap_uid;
         rock->is_draft = 0;
         message_guid_set_null(&rock->guid);
+        if (rock->ical_instances_by_recurid.size)
+            free_hash_table(&rock->ical_instances_by_recurid, _icalcomponent_free_cb);
 
         /* Open calendar mailbox. */
         if (!rock->mailbox || strcmp(mailbox_uniqueid(rock->mailbox), rock->mbentry->uniqueid)) {
@@ -3327,36 +3335,57 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
     }
 
     if (jscal->ical_recurid[0]) {
-        myical = icalcomponent_clone(rock->ical);
+        if (!rock->ical_instances_by_recurid.size) {
+            // first time we see a recurrence instance for this ical data.
+            // prepare for any further callback calls for the same UID
 
-        /* Prune all components but this standalone instance */
-        icalcomponent *nextcomp, *comp;
-        icalcomponent_kind kind;
-        for (comp = icalcomponent_get_first_real_component(myical);
-                comp; comp = nextcomp) {
+            // step 1: count the number of instances and initialize the 
+            // standalone instance cache.
+            // The database ensures that we only run into this case if there
+            // is no main event available, so each component in the iCalendar
+            // data must have a recurrence-id
+            size_t ncomps = 0;
+            icalcomponent *comp = icalcomponent_get_first_real_component(rock->ical);
+            icalcomponent_kind kind = icalcomponent_isa(comp);
+            for ( ; comp; comp = icalcomponent_get_next_component(rock->ical, kind)) {
+                ncomps++;
+            }
 
-            kind = icalcomponent_isa(comp);
-            nextcomp = icalcomponent_get_next_component(myical, kind);
+            construct_hash_table(&rock->ical_instances_by_recurid, ncomps + 1, 0);
 
-            const char *recurid = NULL;
-            icalproperty *prop =
-                icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-            if (prop) recurid = icalproperty_get_value_as_string(prop);
-            if (strcmpsafe(recurid, jscal->ical_recurid)) {
-                icalcomponent_remove_component(myical, comp);
-                icalcomponent_free(comp);
+            // step 2: remove each component and cache by recurrence id
+            icalcomponent *nextcomp;
+            for (comp = icalcomponent_get_first_real_component(rock->ical);
+                    comp; comp = nextcomp) {
+
+                nextcomp = icalcomponent_get_next_component(rock->ical, kind);
+
+                icalproperty *prop =
+                    icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+                if (prop) {
+                    const char *recurid = icalproperty_get_value_as_string(prop);
+                    icalcomponent_remove_component(rock->ical, comp);
+                    if (!hash_lookup(recurid, &rock->ical_instances_by_recurid)) {
+                        hash_insert(icalproperty_get_value_as_string(prop), comp,
+                                &rock->ical_instances_by_recurid);
+                    }
+                }
             }
         }
-    }
-    else {
-        myical = rock->ical;
+
+        // inject the current instance in the embedding VCALENDAR.
+        // we'll remove it again at the end of the callback
+        ical_instance = hash_lookup(jscal->ical_recurid,
+                 &rock->ical_instances_by_recurid);
+        if (!ical_instance) goto done;
+        icalcomponent_add_component(rock->ical, ical_instance);
     }
 
-    jstzones = jstimezones_new(myical);
+    jstzones = jstimezones_new(rock->ical);
 
     /* Convert to JMAP */
     context_begin_cdata(jmapctx, rock->mbentry, cdata);
-    jsevent = jmapical_tojmap(myical, NULL, jmapctx);
+    jsevent = jmapical_tojmap(rock->ical, NULL, jmapctx);
     context_end_cdata(jmapctx);
     if (!jsevent) {
         syslog(LOG_ERR, "jmapical_tojson: can't convert %u:%s",
@@ -3516,16 +3545,17 @@ gotevent:
         }
         if (!jscal->ical_recurid[0]) {
             /* Expand instances, if requested */
-            r = getcalendarevents_getinstances(jsevent, cdata, myical,
+            r = getcalendarevents_getinstances(jsevent, cdata, rock->ical,
                     jstzones, floatingtz, rock);
             if (r) goto done;
         }
     }
 
 done:
+    if (ical_instance) {
+        icalcomponent_remove_component(rock->ical, ical_instance);
+    }
     jstimezones_free(&jstzones);
-    if (myical && myical != rock->ical)
-        icalcomponent_free(myical);
     json_decref(jsevent);
     msgrecord_unref(&mr);
     return r;
@@ -3984,6 +4014,8 @@ done:
     if (rock.mbentry) mboxlist_entry_free(&rock.mbentry);
     if (rock.mbname) mbname_free(&rock.mbname);
     if (rock.ical) icalcomponent_free(rock.ical);
+    if (rock.ical_instances_by_recurid.size)
+        free_hash_table(&rock.ical_instances_by_recurid, _icalcomponent_free_cb);
     free_hashu64_table(&rock.cache_jsevents, (void(*)(void*))json_decref);
     free_hash_table(&rock.floatingtz_by_mboxid, NULL); /* values owned by libical */
     if (ptrarray_size(&rock.malloced_fallbacktzs)) {
