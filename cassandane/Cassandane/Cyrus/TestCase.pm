@@ -1181,7 +1181,7 @@ sub run_replication
     push(@cmd, '-O') if defined $nosyncback;
     push(@cmd, '-u', $user) if defined $user;
     push(@cmd, '-m', $mailbox) if defined $mailbox;
-    push(@cmd, '-A') if defined $allusers;
+    push(@cmd, '-A') if $allusers;  # n.b. boolean
 
     my %run_options;
     $run_options{cyrus} = 1;
