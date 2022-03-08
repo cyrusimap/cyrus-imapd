@@ -19349,17 +19349,19 @@ EOF
     }, $res->[1][1]{list}[0]{calendarIds});
     $state = $res->[1][1]{state};
 
-    xlog "Destroying default calendar A is forbidden";
+    xlog "Destroying calendar A picks Default as new default";
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             destroy => [$calendarA],
             onDestroyRemoveEvents => JSON::true,
         }, 'R1'],
+        ['CalendarPreferences/get', {
+        }, 'R2'],
     ]);
-    $self->assert_str_equals('forbidden',
-        $res->[0][1]{notDestroyed}{$calendarA}{type});
+    $self->assert_deep_equals([$calendarA], $res->[0][1]{destroyed});
+    $self->assert_str_equals('Default', $res->[1][1]{list}[0]{defaultCalendarId});
 
-    xlog "Set default calendar to null and destroy A";
+    xlog "Set default calendar to null and destroy special calendar Default";
     $res = $jmap->CallMethods([
         ['CalendarPreferences/set', {
             update => {
@@ -19369,21 +19371,12 @@ EOF
             },
         }, 'R1'],
         ['Calendar/set', {
-            destroy => [$calendarA],
+            destroy => [ 'Default' ],
             onDestroyRemoveEvents => JSON::true,
         }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{singleton});
-    $self->assert_deep_equals([$calendarA], $res->[1][1]{destroyed});
-
-    xlog "Destroy special calendar Default";
-    $res = $jmap->CallMethods([
-        ['Calendar/set', {
-            destroy => ['Default'],
-            onDestroyRemoveEvents => JSON::true,
-        }, 'R1'],
-    ]);
-    $self->assert_deep_equals(['Default'], $res->[0][1]{destroyed});
+    $self->assert_deep_equals(['Default'], $res->[1][1]{destroyed});
 
     xlog "Get CalendarEvent state";
     $res = $jmap->CallMethods([
@@ -19402,7 +19395,7 @@ EOF
     xlog "Deliver message";
     $self->deliver_imip();
 
-    xlog "Message should go into any calendar";
+    xlog "Message should go into last remaining calendar B";
     $res = $jmap->CallMethods([
         ['CalendarEvent/changes', {
             sinceState => $state,
@@ -19420,6 +19413,18 @@ EOF
         $calendarB => JSON::true
     }, $res->[1][1]{list}[0]{calendarIds});
     $state = $res->[1][1]{state};
+
+    xlog "Destroy last calendar B";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            destroy => [ $calendarB ],
+            onDestroyRemoveEvents => JSON::true,
+        }, 'R1'],
+        ['CalendarPreferences/get', {
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$calendarB], $res->[0][1]{destroyed});
+    $self->assert_null($res->[1][1]{list}[0]{defaultCalendarId});
 }
 
 sub test_calendarpreferences_participantidentity
