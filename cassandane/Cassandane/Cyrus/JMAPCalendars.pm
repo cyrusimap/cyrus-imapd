@@ -18859,6 +18859,187 @@ sub test_calendarevent_set_updated
     $self->assert_str_equals($updated, $res->[0][1]{created}{event}{updated});
 }
 
+sub test_calendarevent_set_updated_scheduled_not_source
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $t = DateTime->now();
+    $t->set_time_zone('Etc/UTC');
+    my $start = $t->strftime('%Y-%m-%dT%H:%M:%S');
+    my $now= $t->strftime('%Y-%m-%dT%H:%M:%SZ');
+    $t->add(DateTime::Duration->new(days => -2));
+    my $past = $t->strftime('%Y-%m-%dT%H:%M:%SZ');
+
+
+    xlog "Create event where cassandane is invitee";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => $start,
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    created => $past,
+                    updated => $past,
+                    replyTo => {
+                        imip => 'mailto:someone@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'accepted',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ '#event' ],
+            properties => ['updated'],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals($past, $res->[1][1]{list}[0]{updated});
+    my $eventId = $res->[1][1]{list}[0]{id};
+
+    xlog "Change partstat of cassandane";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'participants/cassandane/participationStatus' => 'tentative',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ '#event' ],
+            properties => ['updated'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_str_equals($past, $res->[1][1]{list}[0]{updated});
+
+    xlog "Client updates updated property themselves";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    updated => $now,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ '#event' ],
+            properties => ['updated'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_str_equals($now, $res->[1][1]{list}[0]{updated});
+}
+
+sub test_calendarevent_set_updated_scheduled_source
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $t = DateTime->now();
+    $t->set_time_zone('Etc/UTC');
+    my $start = $t->strftime('%Y-%m-%dT%H:%M:%S');
+    my $now= $t->strftime('%Y-%m-%dT%H:%M:%SZ');
+    $t->add(DateTime::Duration->new(days => -2));
+    my $past = $t->strftime('%Y-%m-%dT%H:%M:%SZ');
+
+    xlog "Create event where cassandane is owner";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => $start,
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    created => $past,
+                    updated => $past,
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        someone => {
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ '#event' ],
+            properties => ['updated'],
+        }, 'R2'],
+    ]);
+    my $updated = $res->[1][1]{list}[0]{updated};
+    $self->assert($past lt $updated);
+    my $eventId = $res->[1][1]{list}[0]{id};
+
+    sleep(1);
+
+    xlog "Invite someone else";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'participants/someoneelse' => {
+                        sendTo => {
+                            imip => 'mailto:someoneelse@example.com',
+                        },
+                        expectReply => JSON::true,
+                        participationStatus => 'needs-action',
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ '#event' ],
+            properties => ['updated'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert($updated lt $res->[1][1]{list}[0]{updated});
+    $updated = $res->[1][1]{list}[0]{updated};
+
+    xlog "Client updates updated property themselves";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    updated => $past,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ '#event' ],
+            properties => ['updated'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_str_equals($updated, $res->[1][1]{list}[0]{updated});
+}
+
 sub test_calendarevent_set_method
     :min_version_3_7 :needs_component_jmap
 {

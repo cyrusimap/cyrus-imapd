@@ -515,6 +515,7 @@ HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
     struct jmapical_ctx *jmapctx = xzmalloc(sizeof(struct jmapical_ctx));
 
     jmapctx->req = req;
+    jmapctx->schedule_addresses = schedule_addresses;
 
     const char *slash = strrchr(req->method, '/');
     jmapctx->attachments.lock = slash && !strcmp(slash, "/set");
@@ -6981,13 +6982,30 @@ static void timestamps_to_ical(icalcomponent *comp,
     }
 
     // Validate updated
+    int updated_is_server_set = jmapctx && !jmapctx->to_ical.no_sanitize_timestamps;
+    if (updated_is_server_set) {
+        /* Still need to check if server is source of the event.
+           "The server is the source if it will receive messages sent to any
+            of the methods specified in the “replyTo” property of the event." */
+        if (json_object_get(jsevent, "replyTo") && jmapctx->schedule_addresses) {
+            json_t *jreplyto = json_object_get(jsevent, "replyTo");
+            const char *orga = json_string_value(json_object_get(jreplyto, "imip"));
+            if (orga) {
+                if (!strncasecmp(orga, "mailto:", 7)) orga += 7;
+                if (strarray_find_case(jmapctx->schedule_addresses, orga, 0) < 0) {
+                    updated_is_server_set = 0;
+                }
+            }
+        }
+    }
+
     icaltimetype updated = now;
     jval = json_object_get(jsevent, "updated");
     if (json_is_string(jval)) {
         const char *val = json_string_value(jval);
         struct jmapical_datetime t = JMAPICAL_DATETIME_INITIALIZER;
         if (jmapical_utcdatetime_from_string(val, &t) >= 0) {
-            if (!jmapctx || jmapctx->to_ical.no_sanitize_timestamps) {
+            if (!updated_is_server_set) {
                 updated = jmapical_datetime_to_icaltime(&t, now.zone);
             }
         }
@@ -7003,15 +7021,19 @@ static void timestamps_to_ical(icalcomponent *comp,
         return;
 
     // Write DTSTAMP
-    remove_icalprop(comp, ICAL_DTSTAMP_PROPERTY);
-    icalcomponent_add_property(comp, icalproperty_new_dtstamp(updated));
-    if (jmapctx) {
+    if (updated_is_server_set) {
+        remove_icalprop(comp, ICAL_DTSTAMP_PROPERTY);
+        icalcomponent_add_property(comp, icalproperty_new_dtstamp(now));
         struct jmapical_datetime t = JMAPICAL_DATETIME_INITIALIZER;
         jmapical_datetime_from_icaltime(updated, &t);
         jmapical_utcdatetime_as_string(&t, &buf);
         json_object_set_new(jmapctx->to_ical.serverset,
                 "updated", json_string(buf_cstring(&buf)));
         buf_reset(&buf);
+    }
+    else {
+        remove_icalprop(comp, ICAL_DTSTAMP_PROPERTY);
+        icalcomponent_add_property(comp, icalproperty_new_dtstamp(updated));
     }
 
     // Write CREATED
