@@ -1557,7 +1557,13 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
                         id = json_string_value(json_object_get(jsuccess, "id"));
                 }
                 const char *emailid = json_string_value(json_object_get(success_emailids, id));
-                if (emailid) json_object_set(updateEmails, emailid, jemail);
+                if (emailid) {
+                    json_object_set(updateEmails, emailid, jemail);
+
+                    /* Add this email to scheduled email cache so Email/set{update}
+                       can override ACL check on $scheduled mailbox */
+                    strarray_append(req->scheduled_emails, emailid);
+                }
             }
 
             json_object_set_new(subargs, "update", updateEmails);
