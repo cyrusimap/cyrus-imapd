@@ -555,6 +555,35 @@ static void _emailsubmission_create(jmap_req_t *req,
         envelope = NULL;
     }
 
+    json_t *onSend = json_object_get(emailsubmission, "onSend");
+    if (JNOTNULL(onSend)) {
+        const char *field;
+        json_t *jval;
+
+        jmap_parser_push(&parser, "onSend");
+        json_object_foreach(onSend, field, jval) {
+            if (!strcmp(field, "moveToMailboxId")) {
+                if (JNOTNULL(jval) && !json_is_string(jval)) {
+                    jmap_parser_invalid(&parser, "moveToMailboxId");
+                }
+            }
+            else if (!strcmp(field, "setKeywords")) {
+                const char *keyword;
+                json_t *jbool;
+
+                jmap_parser_push(&parser, "setKeywords");
+                json_object_foreach(jval, keyword, jbool) {
+                    if (!json_is_boolean(jbool) ||
+                        !jmap_email_keyword_is_valid(keyword)) {
+                        jmap_parser_invalid(&parser, keyword);
+                    }
+                }
+                jmap_parser_pop(&parser);
+            }
+        }
+        jmap_parser_pop(&parser);
+    }
+
     /* Reject read-only properties */
     if (json_object_get(emailsubmission, "id")) {
         jmap_parser_invalid(&parser, "id");
@@ -1089,7 +1118,7 @@ static int getsubmission(struct jmap_get *get,
             json_object_del(sub, "envelope");
         }
 
-        /* senddAt */
+        /* sendAt */
         if (jmap_wantprop(get->props, "sendAt")) {
             char datestr[RFC3339_DATETIME_MAX];
             time_t t;
@@ -1203,6 +1232,11 @@ static const jmap_property_t submission_props[] = {
         "mdnBlobIds",
         NULL,
         JMAP_PROP_SERVER_SET
+    },
+    {
+        "onSend",
+        NULL,
+        JMAP_PROP_IMMUTABLE
     },
     { NULL, NULL, 0 }
 };
