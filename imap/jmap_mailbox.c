@@ -277,72 +277,6 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
     return _SHAREDMBOX_HIDDEN;
 }
 
-struct _mbox_find_specialuse_rock {
-    jmap_req_t *req;
-    const char *use;
-    char *mboxname;
-    char *uniqueid;
-};
-
-static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
-{
-    struct _mbox_find_specialuse_rock *d = (struct _mbox_find_specialuse_rock *)rock;
-    struct buf attrib = BUF_INITIALIZER;
-    jmap_req_t *req = d->req;
-
-    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
-        return 0;
-    }
-
-    annotatemore_lookup_mbe(mbentry, "/specialuse", req->accountid, &attrib);
-
-    if (attrib.len) {
-        strarray_t *uses = strarray_split(buf_cstring(&attrib), " ", STRARRAY_TRIM);
-        if (strarray_find_case(uses, d->use, 0) >= 0) {
-            d->mboxname = xstrdup(mbentry->name);
-            d->uniqueid = xstrdup(mbentry->uniqueid);
-        }
-        strarray_free(uses);
-    }
-
-    buf_free(&attrib);
-
-    if (d->mboxname) return CYRUSDB_DONE;
-    return 0;
-}
-
-static int _mbox_find_specialuse(jmap_req_t *req, const char *use,
-                                 char **mboxnameptr,
-                                 char **uniqueidptr)
-{
-    /* \\Inbox is magical */
-    if (!strcasecmp(use, "\\Inbox")) {
-        char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-        mbentry_t *mbentry = NULL;
-        int r = mboxlist_lookup(inboxname, &mbentry, NULL);
-        if (!r) {
-            if (mboxnameptr) *mboxnameptr = xstrdup(inboxname);
-            if (uniqueidptr) *uniqueidptr = xstrdup(mbentry->uniqueid);
-        }
-        free(inboxname);
-        mboxlist_entry_free(&mbentry);
-        return r;
-    }
-
-    struct _mbox_find_specialuse_rock rock = { req, use, NULL, NULL };
-    int ret = mboxlist_usermboxtree(req->accountid, req->authstate, _mbox_find_specialuse_cb, &rock, MBOXTREE_INTERMEDIATES);
-
-    if (mboxnameptr) {
-        *mboxnameptr = rock.mboxname;
-    } else free(rock.mboxname);
-
-    if (uniqueidptr) {
-        *uniqueidptr = rock.uniqueid;
-    } else free(rock.uniqueid);
-
-    return ret == CYRUSDB_DONE ? 0 : IMAP_NOTFOUND;
-}
-
 static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
 {
     struct buf buf = BUF_INITIALIZER;
@@ -1910,31 +1844,6 @@ static void _mbox_setargs_fini(struct mboxset_args *args)
     json_decref(args->jargs);
 }
 
-static char *_mbox_role_to_specialuse(const char *role)
-{
-    if (!role) return NULL;
-    if (!role[0]) return NULL;
-    char *specialuse = strconcat("\\", role, (char *)NULL);
-    specialuse[1] = toupper(specialuse[1]);
-    return specialuse;
-}
-
-EXPORTED int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
-                                    char **mboxnameptr,
-                                    char **uniqueidptr)
-{
-    char *specialuse = _mbox_role_to_specialuse(role);
-    int r = 0;
-
-    if (specialuse) {
-        r = _mbox_find_specialuse(req, specialuse, mboxnameptr, uniqueidptr);
-    }
-
-    free(specialuse);
-
-    return r;
-}
-
 static void _mboxset_args_parse(json_t *jargs,
                                 struct jmap_parser *parser,
                                 struct mboxset_args *args,
@@ -2008,7 +1917,7 @@ static void _mboxset_args_parse(json_t *jargs,
             /* inbox role is server-set */
             is_valid = 0;
         } else {
-            char *specialuse = _mbox_role_to_specialuse(role);
+            char *specialuse = jmap_role_to_specialuse(role);
             struct buf buf = BUF_INITIALIZER;
             int r = specialuse_validate(NULL, req->userid, specialuse, &buf, 1);
             if (r) is_valid = 0;
