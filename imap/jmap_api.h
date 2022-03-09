@@ -169,6 +169,7 @@ typedef struct jmap_req {
     hash_table *mbentry_byid;
     hash_table *mboxid_byrole;
     ptrarray_t *method_calls;
+    strarray_t *scheduled_emails;
     const strarray_t *using_capabilities;
 } jmap_req_t;
 
