@@ -3410,7 +3410,11 @@ static int _mbox_find_specialuse(jmap_req_t *req, const char *use,
             free(rock.uniqueid);
         }
 
-        if (!mboxid) mboxid = xstrdup("");
+        if (!mboxid) {
+            /* Create an entry with an empty mboxid so we don't keep
+               doing lookups for a non-existent mailbox */
+            mboxid = xstrdup("");
+        }
 
         hash_insert(use, mboxid, req->mboxid_byrole);
     }
