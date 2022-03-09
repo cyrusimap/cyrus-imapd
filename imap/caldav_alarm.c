@@ -1142,6 +1142,160 @@ done_item:
 }
 
 #ifdef WITH_JMAP
+static int move_to_mailboxid(struct mailbox *srcmbox,
+                             struct index_record *record,
+                             const char *destmboxid, time_t savedate,
+                             json_t *setkeywords, int is_snoozed)
+                           
+{
+    struct buf buf = BUF_INITIALIZER;
+    msgrecord_t *mr = NULL;
+    mbname_t *mbname = NULL;
+    struct appendstate as;
+    struct mailbox *destmbox = NULL;
+    struct auth_state *authstate = NULL;
+    const char *userid;
+    char *destname = NULL;
+    struct stagemsg *stage = NULL;
+    struct entryattlist *annots = NULL;
+    strarray_t *flags = NULL;
+    struct body *body = NULL;
+    FILE *f = NULL;
+    int r = 0;
+
+    syslog(LOG_DEBUG, "moving message %s:%u to mailboxid %s",
+           mailbox_name(srcmbox), record->uid, destmboxid);
+
+    mr = msgrecord_from_index_record(srcmbox, record);
+    if (!mr) goto done;
+
+    /* Fetch message */
+    r = msgrecord_get_body(mr, &buf);
+    if (r) goto done;
+
+    /* Fetch annotations */
+    r = msgrecord_extract_annots(mr, &annots);
+    if (r) goto done;
+
+    mbname = mbname_from_intname(mailbox_name(srcmbox));
+    mbname_set_boxes(mbname, NULL);
+    userid = mbname_userid(mbname);
+    authstate = auth_newstate(userid);
+
+    /* Fetch flags */
+    r = msgrecord_extract_flags(mr, userid, &flags);
+    if (r) goto done;
+
+    if (is_snoozed) {
+        /* Add \snoozed pseudo-flag */
+        strarray_add(flags, "\\snoozed");
+    }
+
+    /* (Un)set any client-supplied flags */
+    if (setkeywords) {
+        const char *key;
+        json_t *val;
+
+        json_object_foreach(setkeywords, key, val) {
+            const char *flag = jmap_keyword_to_imap(key);
+            if (flag) {
+                if (json_is_true(val)) strarray_add_case(flags, flag);
+                else strarray_remove_all_case(flags, flag);
+            }
+        }
+    }
+
+    /* Determine destination mailbox of moved email */
+    if (destmboxid) {
+        mbentry_t *mbentry = NULL;
+        r = mboxlist_lookup_by_uniqueid(destmboxid, &mbentry, NULL);
+        if (!r && mbentry &&
+            // MUST be an email mailbox
+            (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) &&
+            // MUST NOT be deleted
+            !(mbentry->mbtype & MBTYPE_DELETED) &&
+            // MUST be able to append messages
+            (cyrus_acl_myrights(authstate, mbentry->acl) & ACL_INSERT) &&
+            // MUST NOT be DELETED mailbox
+            !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
+            // MUST NOT be our source mailbox
+            strcmp(mbentry->name, mailbox_name(srcmbox))) {
+            destname = xstrdup(mbentry->name);
+        }
+        mboxlist_entry_free(&mbentry);
+
+        if (!destname && !is_snoozed) {
+            /* Lookup \Sent mailbox */
+        }
+    }
+    if (!destname) {
+        destname = xstrdup(mbname_intname(mbname));
+    }
+
+    /* Fetch message filename */
+    const char *fname;
+    r = msgrecord_get_fname(mr, &fname);
+    if (r) goto done;
+
+    /* Prepare to stage the message */
+    if (!(f = append_newstage_full(destname, time(0), 0, &stage, fname))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", destname);
+        r = IMAP_IOERROR;
+        goto done;
+    }
+    fclose(f);
+
+    r = mailbox_open_iwl(destname, &destmbox);
+    if (r) goto done;
+
+    /* XXX: should we look for an existing record with that GUID in the target folder
+     * first and just remove this copy if so?  Otherwise we could duplicate if the
+     * update fails between the append to the new mailbox and the expunge from Snoozed
+     */
+
+    r = append_setup_mbox(&as, destmbox, userid, authstate,
+                          ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_NEW);
+    if (r) goto done;
+
+    /* Append the message to the mailbox */
+    r = append_fromstage_full(&as, &body, stage, record->internaldate,
+                              savedate, 0, flags, 0, &annots);
+    if (r) {
+        append_abort(&as);
+        goto done;
+    }
+
+    r = append_commit(&as);
+    if (r) goto done;
+
+    /* Expunge the resource from the \Snoozed mailbox (also unset \snoozed) */
+    record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
+    if (is_snoozed) record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+    r = mailbox_rewrite_index_record(srcmbox, record);
+    if (r) {
+        syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
+               mailbox_name(srcmbox), record->uid, error_message(r));
+    }
+
+  done:
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    strarray_free(flags);
+    freeentryatts(annots);
+    append_removestage(stage);
+
+    mailbox_close(&destmbox);
+    if (authstate) auth_freestate(authstate);
+    if (mbname) mbname_free(&mbname);
+    if (mr) msgrecord_unref(&mr);
+    buf_free(&buf);
+    free(destname);
+
+    return r;
+}
+
 static int process_futurerelease(struct mailbox *mailbox,
                                  struct index_record *record)
 {
@@ -1243,21 +1397,8 @@ static int process_snoozed(struct mailbox *mailbox,
                            time_t runtime,
                            int dryrun)
 {
-    struct buf buf = BUF_INITIALIZER;
-    msgrecord_t *mr = NULL;
-    mbname_t *mbname = NULL;
-    struct appendstate as;
-    struct mailbox *destmbox = NULL;
-    struct auth_state *authstate = NULL;
-    const char *userid;
-    char *destname = NULL;
+    json_t *snoozed, *destmboxid, *setkeywords;
     time_t wakeup;
-    struct stagemsg *stage = NULL;
-    struct entryattlist *annots = NULL;
-    strarray_t *flags = NULL;
-    struct body *body = NULL;
-    FILE *f = NULL;
-    json_t *snoozed, *destmboxid, *keywords;
     int r = 0;
 
     syslog(LOG_DEBUG, "processing snoozed email for mailbox %s uid %u",
@@ -1271,6 +1412,7 @@ static int process_snoozed(struct mailbox *mailbox,
         goto done;
     }
 
+    /* Extract until (wakeup) */
     time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
                       &wakeup);
 
@@ -1280,141 +1422,21 @@ static int process_snoozed(struct mailbox *mailbox,
         goto done;
     }
 
-    mr = msgrecord_from_index_record(mailbox, record);
-    if (!mr) goto done;
-
-    /* Fetch message */
-    r = msgrecord_get_body(mr, &buf);
-    if (r) goto done;
-
-    /* Fetch annotations */
-    r = msgrecord_extract_annots(mr, &annots);
-    if (r) goto done;
-
-    mbname = mbname_from_intname(mailbox_name(mailbox));
-    mbname_set_boxes(mbname, NULL);
-    userid = mbname_userid(mbname);
-    authstate = auth_newstate(userid);
-
-    /* Fetch flags */
-    r = msgrecord_extract_flags(mr, userid, &flags);
-    if (r) goto done;
-
-    /* Add \snoozed pseudo-flag */
-    strarray_add(flags, "\\snoozed");
-
-    /* (Un)set any client-supplied flags */
-    keywords = json_object_get(snoozed, "setKeywords");
-    if (keywords) {
-        const char *key;
-        json_t *val;
-
-        json_object_foreach(keywords, key, val) {
-            const char *flag = jmap_keyword_to_imap(key);
-            if (flag) {
-                if (json_is_true(val)) strarray_add_case(flags, flag);
-                else strarray_remove_all_case(flags, flag);
-            }
-        }
-    }
-
-    /* Determine destination mailbox of awakened email */
     destmboxid = json_object_get(snoozed, "moveToMailboxId");
-    if (destmboxid) {
-        mbentry_t *mbentry = NULL;
-        r = mboxlist_lookup_by_uniqueid(json_string_value(destmboxid),
-                                         &mbentry, NULL);
-        if (!r && mbentry &&
-            // MUST be an email mailbox
-            (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) &&
-            // MUST NOT be deleted
-            !(mbentry->mbtype & MBTYPE_DELETED) &&
-            // MUST be able to append messages
-            (cyrus_acl_myrights(authstate, mbentry->acl) & ACL_INSERT) &&
-            // MUST NOT be DELETED mailbox
-            !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
-            // MUST NOT be \Snoozed mailbox
-            strcmp(mbentry->name, mailbox_name(mailbox))) {
-            destname = xstrdup(mbentry->name);
-        }
-        mboxlist_entry_free(&mbentry);
-    }
-    if (!destname) {
-        destname = xstrdup(mbname_intname(mbname));
-    }
+    setkeywords = json_object_get(snoozed, "setKeywords");
 
-    /* Fetch message filename */
-    const char *fname;
-    r = msgrecord_get_fname(mr, &fname);
-    if (r) goto done;
+    r = move_to_mailboxid(mailbox, record, json_string_value(destmboxid),
+                          wakeup, setkeywords, 1/*is_snoozed*/);
 
-    /* Prepare to stage the message */
-    if (!(f = append_newstage_full(destname, runtime, 0, &stage, fname))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", destname);
-        r = IMAP_IOERROR;
-        goto done;
-    }
-    fclose(f);
-
-    r = mailbox_open_iwl(destname, &destmbox);
-    if (r) goto done;
-
-    /* XXX: should we look for an existing record with that GUID in the target folder
-     * first and just remove this copy if so?  Otherwise we could duplicate if the
-     * update fails between the append to the new mailbox and the expunge from Snoozed
-     */
-
-    r = append_setup_mbox(&as, destmbox, userid, authstate,
-                          ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_NEW);
-    if (r) goto done;
-
-    /* Extract until and use it as savedate */
-    time_t savedate;
-    time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
-                      &savedate);
-
-    /* Append the message to the mailbox */
-    r = append_fromstage_full(&as, &body, stage, record->internaldate,
-                              savedate, 0, flags, 0, &annots);
-    if (r) {
-        append_abort(&as);
-        goto done;
-    }
-
-    r = append_commit(&as);
-    if (r) goto done;
-
-    /* Expunge the resource from the \Snoozed mailbox (also unset \snoozed) */
-    record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
-    record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
-    r = mailbox_rewrite_index_record(mailbox, record);
-    if (r) {
-        syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
-               mailbox_name(mailbox), record->uid, error_message(r));
-    }
-
-  done:
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to unsnooze %s:%u (%s)",
                mailbox_name(mailbox), record->uid, error_message(r));
-        update_alarmdb(mailbox_name(mailbox), record->uid, runtime + 300); // try again in 5 minutes
+        /* try again in 5 minutes */
+        update_alarmdb(mailbox_name(mailbox), record->uid, runtime + 300);
     }
 
-    if (body) {
-        message_free_body(body);
-        free(body);
-    }
-    strarray_free(flags);
-    freeentryatts(annots);
-    append_removestage(stage);
-
-    mailbox_close(&destmbox);
-    if (authstate) auth_freestate(authstate);
-    if (mbname) mbname_free(&mbname);
-    if (mr) msgrecord_unref(&mr);
+ done:
     if (snoozed) json_decref(snoozed);
-    buf_free(&buf);
-    free(destname);
 
     return r;
 }
