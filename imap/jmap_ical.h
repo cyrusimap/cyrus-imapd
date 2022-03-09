@@ -119,6 +119,7 @@ struct jmapical_ctx {
         int allow_method;
         json_t *replyto;
     } to_ical;
+    const strarray_t *schedule_addresses;
 };
 
 extern struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
