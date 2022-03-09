@@ -8548,14 +8548,15 @@ static int _copy_msgrecords(struct auth_state *authstate,
                             struct namespace *namespace,
                             struct mailbox *src,
                             struct mailbox *dst,
-                            ptrarray_t *msgrecs)
+                            ptrarray_t *msgrecs,
+                            long aclcheck)
 {
     struct appendstate as;
     int r;
     int nolink = !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
 
     r = append_setup_mbox(&as, dst, user_id, authstate,
-            JACL_ADDITEMS, NULL, namespace, 0, EVENT_MESSAGE_COPY);
+                 aclcheck, NULL, namespace, 0, EVENT_MESSAGE_COPY);
     if (r) goto done;
 
     r = append_copy(src, &as, msgrecs, nolink,
@@ -8590,7 +8591,7 @@ static int _copy_msgrecord(struct auth_state *authstate,
 
     ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
     ptrarray_add(&msgrecs, mrw);
-    int r = _copy_msgrecords(authstate, user_id, namespace, src, dst, &msgrecs);
+    int r = _copy_msgrecords(authstate, user_id, namespace, src, dst, &msgrecs, JACL_ADDITEMS);
     ptrarray_fini(&msgrecs);
     return r;
 }
@@ -11421,6 +11422,14 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
     hash_table copyupdates_by_mbox_id = HASH_TABLE_INITIALIZER;
     construct_hash_table(&copyupdates_by_mbox_id, ptrarray_size(updates)+1, 0);
 
+    const mbentry_t *scheduled_mbe = NULL;
+    const char *scheduled_uniqueid = NULL;
+
+    jmap_findmbox_role(bulk->req, "scheduled", &scheduled_mbe);
+    if (scheduled_mbe) {
+        scheduled_uniqueid = scheduled_mbe->uniqueid;
+    }
+
     int i;
     for (i = 0; i < ptrarray_size(updates); i++) {
         struct email_update *update = ptrarray_nth(updates, i);
@@ -11501,7 +11510,14 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
                         struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
                         if (!strcmp(mbox_id, uidrec->mboxrec->mbox_id)) {
                             ptrarray_append(&plan->delete, uidrec);
-                            plan->needrights |= JACL_REMOVEITEMS;
+
+                            /* Don't require rights to remove items from the
+                               normally read-only $scheduled mailbox
+                               since we have already verified that the emails
+                               in this plan are indeed scheduled for sending */
+                            if (strcmpnull(scheduled_uniqueid, mbox_id)) {
+                                plan->needrights |= JACL_REMOVEITEMS;
+                            }
                         }
                     }
                 }
@@ -11527,7 +11543,14 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
                 else {
                     /* Delete message from mailbox */
                     ptrarray_append(&plan->delete, uidrec);
-                    plan->needrights |= JACL_REMOVEITEMS;
+
+                    /* Don't require rights to remove items from the
+                       normally read-only $scheduled mailbox
+                       since we have already verified that the emails
+                       in this plan are indeed scheduled for sending */
+                    if (strcmpnull(scheduled_uniqueid, mboxrec->mbox_id)) {
+                        plan->needrights |= JACL_REMOVEITEMS;
+                    }
                 }
             }
 
@@ -11607,7 +11630,13 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
                 ptrarray_append(&plan->copy, pick_uidrecs);
             }
             ptrarray_append(pick_uidrecs, pick_uidrec);
-            plan->needrights |= JACL_ADDITEMS;
+
+            /* Don't require rights to add items to the normally
+               read-only $scheduled mailbox since we have already verified
+               that the emails in this plan are indeed scheduled for sending */
+            if (strcmpnull(scheduled_uniqueid, dst_mbox_id)) {
+                plan->needrights |= JACL_ADDITEMS;
+            }
         }
         free_hash_table(&src_mbox_id_counts, NULL);
     }
@@ -12204,7 +12233,13 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
 static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     int i;
+    const mbentry_t *scheduled_mbe = NULL;
+    const char *scheduled_uniqueid = NULL;
+
     bulk->req = req;
+
+    jmap_findmbox_role(bulk->req, "scheduled", &scheduled_mbe);
+    if (scheduled_mbe) scheduled_uniqueid = scheduled_mbe->uniqueid;
 
     /* Map mailbox creation ids and role to mailbox identifiers */
     for(i = 0; i < ptrarray_size(updates); i++) {
@@ -12222,6 +12257,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
                 if (!jmap_findmbox_role(bulk->req, role, &mbentry)) {
                     json_object_del(update->mailboxids, mbox_id);
                     json_object_set(update->mailboxids, mbentry->uniqueid, jval);
+                    mbox_id = mbentry->uniqueid;
                 }
                 else is_valid = 0;
             }
@@ -12230,9 +12266,18 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
                 if (resolved_mbox_id) {
                     json_object_del(update->mailboxids, mbox_id);
                     json_object_set(update->mailboxids, resolved_mbox_id, jval);
+                    mbox_id = resolved_mbox_id;
                 }
                 else is_valid = 0;
             }
+
+            /* If trying to move a message in/out of $scheduled
+               it better be in our scheduled email cache */
+            if (!strcmpnull(scheduled_uniqueid, mbox_id) &&
+                strarray_find(req->scheduled_emails, update->email_id, 0) < 0) {
+                is_valid = 0;
+            }
+
             if (!is_valid) {
                 if (json_object_get(bulk->set_errors, update->email_id) == NULL) {
                     json_object_set_new(bulk->set_errors, update->email_id,
@@ -12507,7 +12552,7 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                 ptrarray_append(&src_msgrecs, mrw);
             }
             int r = _copy_msgrecords(httpd_authstate, bulk->req->userid, &jmap_namespace,
-                                     src_mbox, dst_mbox, &src_msgrecs);
+                                     src_mbox, dst_mbox, &src_msgrecs, plan->needrights);
             if (r) {
                 for (k = 0; k < ptrarray_size(src_uidrecs); k++) {
                     struct email_uidrec *src_uidrec = ptrarray_nth(src_uidrecs, k);
@@ -13050,6 +13095,9 @@ static int jmap_email_set(jmap_req_t *req)
     jmap_ok(req, reply);
 
 done:
+    /* Flush cache of scheduled emails */
+    strarray_fini(req->scheduled_emails);
+
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     return 0;
