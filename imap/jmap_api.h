@@ -167,6 +167,7 @@ typedef struct jmap_req {
     hash_table *created_ids;
     hash_table *inmemory_blobs;
     hash_table *mbentry_byid;
+    hash_table *mboxid_byrole;
     ptrarray_t *method_calls;
     const strarray_t *using_capabilities;
 } jmap_req_t;
@@ -590,5 +591,8 @@ extern void jmap_mbentry_cache_free(jmap_req_t *req);
 extern const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id);
 extern mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id);
 extern mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav);
+
+extern int jmap_findmbox_role(jmap_req_t *req, const char *role,
+                              const mbentry_t **mbentryptr);
 
 #endif /* JMAP_API_H */

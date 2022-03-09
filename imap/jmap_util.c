@@ -1353,3 +1353,12 @@ EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, s
 
     return buf_cstring(buf);
 }
+
+EXPORTED char *jmap_role_to_specialuse(const char *role)
+{
+    if (!role) return NULL;
+    if (!role[0]) return NULL;
+    char *specialuse = strconcat("\\", role, (char *)NULL);
+    specialuse[1] = toupper(specialuse[1]);
+    return specialuse;
+}

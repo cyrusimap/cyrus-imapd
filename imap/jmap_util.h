@@ -93,6 +93,8 @@ extern json_t *jmap_fetch_snoozed(const char *mbox, uint32_t uid);
 extern int jmap_email_keyword_is_valid(const char *keyword);
 extern const char *jmap_keyword_to_imap(const char *keyword);
 
+extern char *jmap_role_to_specialuse(const char *role);
+
 /* JMAP request parser */
 struct jmap_parser {
     struct buf buf;

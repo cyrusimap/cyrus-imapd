@@ -10314,12 +10314,17 @@ static void _append_validate_mboxids(jmap_req_t *req,
                                      struct jmap_parser *parser,
                                      int *have_snoozed_mboxid)
 {
-    char *snoozed_mboxname = NULL, *snoozed_uniqueid = NULL;
+    const char *snoozed_mboxname = NULL, *snoozed_uniqueid = NULL;
+    const mbentry_t *snoozed_mbe = NULL;
     const char *mbox_id;
     json_t *jval;
     void *tmp;
 
-    jmap_mailbox_find_role(req, "snoozed", &snoozed_mboxname, &snoozed_uniqueid);
+    jmap_findmbox_role(req, "snoozed", &snoozed_mbe);
+    if (snoozed_mbe) {
+        snoozed_mboxname = snoozed_mbe->name;
+        snoozed_uniqueid = snoozed_mbe->uniqueid;
+    }
 
     jmap_parser_push(parser, "mailboxIds");
     json_object_foreach_safe(jmailboxids, tmp, mbox_id, jval) {
@@ -10328,8 +10333,7 @@ static void _append_validate_mboxids(jmap_req_t *req,
         if (*mbox_id == '$') {
             /* Lookup mailbox by role */
             const char *role = mbox_id + 1;
-            char *uniqueid = NULL;
-            char *mboxname = NULL;
+            const mbentry_t *mbentry = NULL;
             if (snoozed_uniqueid && !strcmp(role, "snoozed") &&
                 jmap_hasrights(req, snoozed_mboxname, need_rights)) {
                 /* Flag this mailboxId as being $snoozed */
@@ -10338,17 +10342,15 @@ static void _append_validate_mboxids(jmap_req_t *req,
                                     snoozed_uniqueid, json_string("$snoozed"));
                 *have_snoozed_mboxid = 1;
             }
-            else if (!jmap_mailbox_find_role(req, role, &mboxname, &uniqueid) &&
-                jmap_hasrights(req, mboxname, need_rights)) {
+            else if (!jmap_findmbox_role(req, role, &mbentry) &&
+                jmap_hasrights(req, mbentry->name, need_rights)) {
                 json_object_del(jmailboxids, mbox_id);
-                json_object_set_new(jmailboxids, uniqueid, json_true());
+                json_object_set_new(jmailboxids, mbentry->uniqueid, json_true());
             }
             else {
                 jmap_parser_invalid(parser, NULL);
                 is_valid = 0;
             }
-            free(uniqueid);
-            free(mboxname);
         }
         else {
             /* Lookup mailbox by id */
@@ -10373,9 +10375,6 @@ static void _append_validate_mboxids(jmap_req_t *req,
         if (!is_valid) break;
     }
     jmap_parser_pop(parser);
-
-    free(snoozed_mboxname);
-    free(snoozed_uniqueid);
 }
 
 static void _email_create(jmap_req_t *req,
@@ -11556,10 +11555,17 @@ static int _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarr
 static int  _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                                           ptrarray_t *updates)
 {
-    char *snoozed_mboxid = NULL, *inboxid = NULL;
+    const mbentry_t *snoozed_mbe = NULL, *inbox_mbe = NULL;
+    const char *snoozed_mboxid = NULL, *inboxid = NULL;
 
-    jmap_mailbox_find_role(bulk->req, "snoozed", NULL, &snoozed_mboxid);
-    jmap_mailbox_find_role(bulk->req, "inbox", NULL, &inboxid);
+    jmap_findmbox_role(bulk->req, "snoozed", &snoozed_mbe);
+    jmap_findmbox_role(bulk->req, "inbox", &inbox_mbe);
+    if (snoozed_mbe) {
+        snoozed_mboxid = snoozed_mbe->uniqueid;
+    }
+    if (inbox_mbe) {
+        inboxid = inbox_mbe->uniqueid;
+    }
 
     int i;
     for (i = 0; i < ptrarray_size(updates); i++) {
@@ -11697,9 +11703,6 @@ static int  _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                                           "properties", "mailboxIds", "snoozed"));
         }
     }
-
-    free(snoozed_mboxid);
-    free(inboxid);
 
     return 0;
 }
@@ -11841,15 +11844,12 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
             int is_valid = 1;
             if (*mbox_id == '$') {
                 const char *role = mbox_id + 1;
-                char *mboxname = NULL;
-                char *uniqueid = NULL;
-                if (!jmap_mailbox_find_role(bulk->req, role, &mboxname, &uniqueid)) {
+                const mbentry_t *mbentry = NULL;
+                if (!jmap_findmbox_role(bulk->req, role, &mbentry)) {
                     json_object_del(update->mailboxids, mbox_id);
-                    json_object_set(update->mailboxids, uniqueid, jval);
+                    json_object_set(update->mailboxids, mbentry->uniqueid, jval);
                 }
                 else is_valid = 0;
-                free(uniqueid);
-                free(mboxname);
             }
             else if (*mbox_id == '#') {
                 const char *resolved_mbox_id = jmap_lookup_id(req, mbox_id + 1);
@@ -13307,16 +13307,15 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     json_object_foreach_safe(jmailboxids, tmp, mbox_id, jval) {
         if (*mbox_id != '$') continue;
         const char *role = mbox_id + 1;
-        char *uniqueid = NULL;
-        if (jmap_mailbox_find_role(req, role, NULL, &uniqueid) == 0) {
+        const mbentry_t *mbentry = NULL;
+        if (!jmap_findmbox_role(req, role, &mbentry)) {
             json_object_del(jmailboxids, mbox_id);
-            json_object_set_new(jmailboxids, uniqueid, jval);
+            json_object_set_new(jmailboxids, mbentry->uniqueid, jval);
         }
         else {
             *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
                     "properties", "mailboxIds");
         }
-        free(uniqueid);
         if (*err) goto done;
     }
 

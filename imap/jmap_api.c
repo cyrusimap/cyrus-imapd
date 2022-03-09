@@ -63,6 +63,7 @@
 #include "times.h"
 #include "strhash.h"
 #include "syslog.h"
+#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
@@ -434,6 +435,11 @@ HIDDEN void jmap_finireq(jmap_req_t *req)
     req->mboxes = NULL;
 
     jmap_mbentry_cache_free(req);
+
+    if (req->mboxid_byrole) {
+        free_hash_table(req->mboxid_byrole, free);
+        xzfree(req->mboxid_byrole);
+    }
 
     json_decref(req->perf_details);
     req->perf_details = NULL;
@@ -3329,4 +3335,111 @@ EXPORTED mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav)
     }
 
     return mbentry;
+}
+
+
+struct _mbox_find_specialuse_rock {
+    jmap_req_t *req;
+    const char *use;
+    char *uniqueid;
+};
+
+static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct _mbox_find_specialuse_rock *d = (struct _mbox_find_specialuse_rock *)rock;
+    struct buf attrib = BUF_INITIALIZER;
+    jmap_req_t *req = d->req;
+
+    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
+        return 0;
+    }
+
+    annotatemore_lookup_mbe(mbentry, "/specialuse", req->accountid, &attrib);
+
+    if (attrib.len) {
+        strarray_t *uses = strarray_split(buf_cstring(&attrib), " ", STRARRAY_TRIM);
+        if (strarray_find_case(uses, d->use, 0) >= 0) {
+            d->uniqueid = xstrdup(mbentry->uniqueid);
+        }
+        strarray_free(uses);
+    }
+
+    buf_free(&attrib);
+
+    if (d->uniqueid) return CYRUSDB_DONE;
+    return 0;
+}
+
+static int _mbox_find_specialuse(jmap_req_t *req, const char *use,
+                                 const mbentry_t **mbentryptr)
+{
+    char *mboxid = NULL, *freeme = NULL;
+    int r;
+
+    if (!req->mboxid_byrole) {
+        req->mboxid_byrole = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(req->mboxid_byrole, 1024, 0);
+    }
+    else {
+        mboxid = freeme = xstrdupnull(hash_lookup(use, req->mboxid_byrole));
+    }
+
+    if (!mboxid) {
+        /* \\Inbox is magical */
+        if (!strcasecmp(use, "\\Inbox")) {
+            char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+            mbentry_t *mbentry = NULL;
+
+            r = mboxlist_lookup(inboxname, &mbentry, NULL);
+            if (!r) {
+                mboxid = xstrdup(mbentry->uniqueid);
+            }
+            free(inboxname);
+            mboxlist_entry_free(&mbentry);
+        }
+        else {
+            struct _mbox_find_specialuse_rock rock = { req, use, NULL };
+
+            r = mboxlist_usermboxtree(req->accountid, req->authstate,
+                                            _mbox_find_specialuse_cb, &rock,
+                                            MBOXTREE_INTERMEDIATES);
+            if (r == CYRUSDB_DONE) {
+                mboxid = xstrdup(rock.uniqueid);
+            }
+
+            free(rock.uniqueid);
+        }
+
+        if (!mboxid) mboxid = xstrdup("");
+
+        hash_insert(use, mboxid, req->mboxid_byrole);
+    }
+
+    if (*mboxid) {
+        *mbentryptr = jmap_mbentry_by_uniqueid(req, mboxid);
+        r = 0;
+    }
+    else {
+        *mbentryptr = NULL;
+        r = IMAP_NOTFOUND;
+    }
+
+    free(freeme);
+
+    return r;
+}
+
+EXPORTED int jmap_findmbox_role(jmap_req_t *req, const char *role,
+                                const mbentry_t **mbentryptr)
+{
+    char *specialuse = jmap_role_to_specialuse(role);
+    int r = 0;
+
+    if (specialuse) {
+        r = _mbox_find_specialuse(req, specialuse, mbentryptr);
+    }
+
+    free(specialuse);
+
+    return r;
 }
