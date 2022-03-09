@@ -23089,12 +23089,13 @@ EOF
     $self->assert_str_equals("hello", $res->{content});
 }
 
-sub test_email_get_calendarevents_itip_reply
+sub test_email_get_calendarevents_itip_schedprops
     :min_version_3_5 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
+    my ($maj, $min) = Cassandane::Instance->get_version();
 
     # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
     # calendarEvents property
@@ -23128,6 +23129,7 @@ TRANSP:OPAQUE
 END:VEVENT
 END:VCALENDAR
 EOF
+        wantMethod => 'reply',
         wantScheduleUpdated => '2021-08-02T03:22:34Z',
         wantScheduleSequence => 3,
         wantParticipationComment => 'Hello, World!',
@@ -23175,13 +23177,53 @@ X-MICROSOFT-DISALLOW-COUNTER:FALSE
 END:VEVENT
 END:VCALENDAR
 EOF
+        wantMethod => 'reply',
         wantScheduleUpdated => '2021-08-02T03:24:46Z',
         wantScheduleSequence => 5,
         wantParticipationComment => "A comment.\n",
+    }, {
+        ical => <<'EOF',
+BEGIN:VCALENDAR
+PRODID:-//Google Inc//Google Calendar 70.9054//EN
+VERSION:2.0
+CALSCALE:GREGORIAN
+METHOD:COUNTER
+BEGIN:VEVENT
+DTSTART:20210807T130000Z
+DTEND:20210807T140000Z
+DTSTAMP:20210802T032234Z
+ORGANIZER;CN=Test User:mailto:organizer@local
+UID:a4294f2a-cafb-407b-951b-67684ed0ba54
+ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=TENTATIVE;
+ X-NUM-GUESTS=0:mailto:attendee@local
+COMMENT:A counter comment
+CREATED:20210802T032207Z
+DESCRIPTION:
+LAST-MODIFIED:20210802T032234Z
+LOCATION:
+SEQUENCE:3
+STATUS:CONFIRMED
+SUMMARY:iTIP COUNTER
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR
+EOF
+        sinceVersion => ['3','7'],
+        wantMethod => 'counter',
+        wantScheduleUpdated => '2021-08-02T03:22:34Z',
+        wantScheduleSequence => 3,
+        wantParticipationComment => 'A counter comment',
     });
 
     foreach my $i (0 .. $#testCases) {
         my $tc = $testCases[$i];
+
+        # skip tests for older Cyrus versions
+        next if $tc->{sinceVersion} &&
+            ($maj le $tc->{sinceVersion}[0] ||
+            ($maj eq $tc->{sinceVersion}[0] &&
+                $min le $tc->{sinceVersion}[1]));
+
         $tc->{ical} =~ s/\r?\n/\r\n/gs;
         $self->make_message("test$i",
             mime_type => 'multipart/related',
@@ -23218,7 +23260,7 @@ EOF
 
         my $event = (values %{$res->[1][1]{list}[0]{calendarEvents}})[0][0];
         $self->assert_not_null($event);
-        $self->assert_str_equals('reply', $event->{method});
+        $self->assert_str_equals($tc->{wantMethod}, $event->{method});
 
         my @attendees = grep { exists $_->{roles}{attendee} } values %{$event->{participants}};
         $self->assert_num_equals(1, scalar @attendees);

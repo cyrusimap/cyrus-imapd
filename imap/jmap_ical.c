@@ -2489,8 +2489,9 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
     icalproperty *prop;
     json_t *participants = json_object();
     struct buf buf = BUF_INITIALIZER;
-    int is_itip_reply = icalcomponent_get_parent(comp) &&
-        icalcomponent_get_method(icalcomponent_get_parent(comp)) == ICAL_METHOD_REPLY;
+    icalproperty_method method = ICAL_METHOD_NONE;
+    if (icalcomponent_get_parent(comp))
+        method = icalcomponent_get_method(icalcomponent_get_parent(comp));
 
     /* Collect all attendees in a map to lookup delegates and their ids. */
     construct_hash_table(&attendee_by_uri, 32, 0);
@@ -2538,8 +2539,12 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
         const char *id = hash_lookup(uri, &id_by_uri);
         json_t *p = participant_from_ical(prop, &id_by_uri, orga,
                 json_incref(json_object_get(linksbyparticipant, id)));
-        if (p && is_itip_reply) {
-            /* Set attendee schedule properties from iTIP REPLY */
+
+        if (p && (method == ICAL_METHOD_COUNTER ||
+                  method == ICAL_METHOD_REFRESH ||
+                  method == ICAL_METHOD_REPLY)) {
+
+            /* Set attendee scheduling properties */
             json_object_set_new(p, "scheduleUpdated",
                     json_string(schedule_updated));
 
