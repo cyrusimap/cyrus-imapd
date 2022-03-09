@@ -1296,12 +1296,79 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     return r;
 }
 
+struct find_sched_rock {
+    char *userid;
+    char *mboxname;
+    uint32_t uid;
+};
+
+static int find_sched_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct find_sched_rock *frock = (struct find_sched_rock *) rock;
+    struct buf attrib = BUF_INITIALIZER;
+    mbentry_t *mbentry = NULL;
+
+    if (rec->part) return 0;
+
+    conv_guidrec_mbentry(rec, &mbentry);
+
+    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
+        goto done;
+    }
+
+    annotatemore_lookup_mbe(mbentry, "/specialuse", frock->userid, &attrib);
+
+    if (attrib.len) {
+        strarray_t *uses = strarray_split(buf_cstring(&attrib),
+                                          " ", STRARRAY_TRIM);
+
+        if (strarray_find_case(uses, "\\Scheduled", 0) >= 0) {
+            frock->mboxname = xstrdup(mbentry->name);
+            frock->uid = rec->uid;
+        }
+        strarray_free(uses);
+    }
+
+  done:
+    mboxlist_entry_free(&mbentry);
+    buf_free(&attrib);
+
+    return frock->mboxname ? IMAP_OK_COMPLETED : 0;
+}
+
+static int find_scheduled_email(const char *emailid,
+                                struct find_sched_rock *frock)
+{
+    struct conversations_state *cstate = NULL;
+    int r;
+
+    if (emailid[0] != 'M' || strlen(emailid) != 25) {
+        return IMAP_NOTFOUND;
+    }
+
+    r = conversations_open_user(frock->userid, 1/*shared*/, &cstate);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open conversations for user %s",
+               frock->userid);
+        return r;
+    }
+
+    const char *guid = emailid + 1;
+    r = conversations_guid_foreach(cstate, guid, find_sched_cb, frock);
+    conversations_commit(&cstate);
+
+    if (r == IMAP_OK_COMPLETED) r = 0;
+    else if (!frock->mboxname) r = IMAP_NOTFOUND;
+
+    return r;
+}
+
 static int process_futurerelease(struct mailbox *mailbox,
                                  struct index_record *record)
 {
     message_t *m = message_new_from_record(mailbox, record);
     struct buf buf = BUF_INITIALIZER;
-    json_t *submission = NULL, *identity, *envelope;
+    json_t *submission = NULL, *identity, *envelope, *onSend;
     int r = 0;
 
     syslog(LOG_DEBUG, "processing future release for mailbox %s uid %u",
@@ -1383,6 +1450,51 @@ static int process_futurerelease(struct mailbox *mailbox,
     }
 
     caldav_alarm_delete_record(mailbox_name(mailbox), record->uid);
+
+    onSend = json_object_get(submission, "onSend");
+    if (onSend) {
+        json_t *emailid = json_object_get(submission, "emailId");
+        struct find_sched_rock frock =
+            { mboxname_to_userid(mailbox_name(mailbox)), NULL, 0 };
+        struct mailbox *sched_mbox = NULL;
+        struct index_record sched_rec;
+
+        /* Locate email in \Scheduled mailbox */
+        r = find_scheduled_email(json_string_value(emailid), &frock);
+
+        if (r || !frock.mboxname) {
+            syslog(LOG_ERR,
+                   "IOERROR: failed to find \\Scheduled mailbox for user %s (%s)",
+                   frock.userid, error_message(r));
+        }
+        else if ((r = mailbox_open_iwl(frock.mboxname, &sched_mbox))) {
+            syslog(LOG_ERR, "IOERROR: failed to open %s: %s",
+                   frock.mboxname, error_message(r));
+        }
+        else if ((r = mailbox_find_index_record(sched_mbox,
+                                                frock.uid, &sched_rec))) {
+            syslog(LOG_ERR, "IOERROR: failed find message %u in %s: %s",
+                   frock.uid, frock.mboxname, error_message(r));
+        }
+        else {
+            json_t *destmboxid = json_object_get(onSend, "moveToMailboxId");
+            json_t *setkeywords = json_object_get(onSend, "setKeywords");
+
+            r = move_to_mailboxid(sched_mbox, &sched_rec,
+                                  json_string_value(destmboxid),
+                                  time(0), setkeywords, 0/*is_snoozed*/);
+
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to move %s:%u (%s)",
+                       frock.mboxname, frock.uid, error_message(r));
+
+            }
+        }
+
+        mailbox_close(&sched_mbox);
+        free(frock.mboxname);
+        free(frock.userid);
+    }
 
   done:
     if (submission) json_decref(submission);
