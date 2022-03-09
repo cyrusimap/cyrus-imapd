@@ -743,6 +743,7 @@ static int deliver_merge_cancel(const char *recipient,
         }
         else {
             master_comp = comp;
+            hash_insert("", comp, &comp_table);
         }
     }
 
@@ -794,9 +795,12 @@ static int deliver_merge_cancel(const char *recipient,
         }
     }
 
+    /* Did we cancel all instances? */
+    int ret = (num_canceled >= hash_numrecords(&comp_table));
+
     free_hash_table(&comp_table, NULL);
 
-    return (num_canceled >= hash_numrecords(&comp_table));
+    return ret;
 }
 
 
@@ -1068,9 +1072,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     switch (method) {
     case ICAL_METHOD_CANCEL: {
-        int entire_comp = deliver_merge_cancel(recipient, ical, itip);
+        int all_instances = deliver_merge_cancel(recipient, ical, itip);
 
-        if (entire_comp && SCHED_DELETE_CANCELED(sched_data)) {
+        if (all_instances && SCHED_DELETE_CANCELED(sched_data)) {
             /* Expunge the resource */
             struct index_record record;
             int r;
