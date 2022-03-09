@@ -3163,10 +3163,13 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
         json_object_set_new(publicprops, "due", json_true());
         json_object_set_new(publicprops, "duration", json_true());
         json_object_set_new(publicprops, "estimatedDuration", json_true());
+        json_object_set_new(publicprops, "excluded", json_true());
         json_object_set_new(publicprops, "excludedRecurrenceRules", json_true());
         json_object_set_new(publicprops, "freeBusyStatus", json_true());
         json_object_set_new(publicprops, "id", json_true());
         json_object_set_new(publicprops, "privacy", json_true());
+        json_object_set_new(publicprops, "recurrenceId", json_true());
+        json_object_set_new(publicprops, "recurrenceIdTimeZone", json_true());
         json_object_set_new(publicprops, "recurrenceRules", json_true());
         json_object_set_new(publicprops, "recurrenceOverrides", json_true());
         json_object_set_new(publicprops, "sequence", json_true());
