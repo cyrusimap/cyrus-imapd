@@ -196,6 +196,8 @@ int mboxlist_createmailboxcheck(const char *name, int mbtype,
 #define MBOXLIST_CREATE_SYNC                (1<<4)
 /* don't promote intermediary into a real mailbox */
 #define MBOXLIST_CREATE_KEEP_INTERMEDIARIES (1<<5)
+/* create mailbox as read only by everyone */
+#define MBOXLIST_CREATE_READ_ONLY           (1<<6)
 
 /* create mailbox */
 /* if given a mailbox pointer, return the still-locked mailbox

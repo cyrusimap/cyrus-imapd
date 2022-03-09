@@ -1870,6 +1870,15 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     else {
         r = mboxlist_create_acl(mboxname, &acl);
         if (r) goto done;
+
+        if (flags & MBOXLIST_CREATE_READ_ONLY) {
+            /* Remove 'swipkxten' from ALL users */
+            r = cyrus_acl_set(&acl, "-anyone", ACL_MODE_ADD,
+                              ACL_READ_WRITE | ACL_POST |
+                              ACL_CREATE | ACL_DELETEMBOX,
+                              NULL, NULL);
+            if (r) goto done;
+        }
     }
 
     r = mboxlist_create_partition(mboxname, mbentry->partition, &newpartition);
