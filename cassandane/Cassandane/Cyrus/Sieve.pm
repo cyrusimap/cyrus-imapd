@@ -76,16 +76,19 @@ sub new
     }
     $config->set(sievenotifier => 'mailto');
     $config->set(caldav_realm => 'Cassandane');
-    $config->set(httpmodules => 'caldav');
+    $config->set(httpmodules => ['caldav', 'jmap']);
     $config->set(calendar_user_address_set => 'example.com');
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
     $config->set(icalendar_max_size => 100000);
     $config->set(virtdomains => 'no');
+    $config->set(jmap_nonstandard_extensions => 'yes');
+    $config->set(conversations => 'yes');
 
     return $class->SUPER::new({
             config => $config,
             deliver => 1,
+            jmap => 1,
             services => [ 'imap', 'sieve', 'http' ],
             adminstore => 1,
     }, @_);
@@ -95,6 +98,16 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
+    if ($self->{jmap}) {
+        $self->{jmap}->DefaultUsing([
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:calendars',
+            'urn:ietf:params:jmap:principals',
+            'urn:ietf:params:jmap:calendars:preferences',
+            'https://cyrusimap.org/ns/jmap/calendars',
+            'https://cyrusimap.org/ns/jmap/debug',
+        ]);
+    }
 }
 
 sub tear_down
@@ -5274,6 +5287,184 @@ EOF
 
     $self->assert_not_null($events->[0]{recurrenceRule});
     $self->assert_null($events->[0]{recurrenceOverrides});
+}
+
+sub test_imip_move_event
+    :min_version_3_7 :needs_component_jmap :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :deletecanceled :outcome "outcome";
+}
+EOF
+    );
+
+    xlog "Create calendar X and Y, set X as default calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                calendarX => {
+                    name => 'X',
+                },
+                calendarY => {
+                    name => 'Y',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $calendarX = $res->[0][1]{created}{calendarX}{id};
+    $self->assert_not_null($calendarX);
+    my $calendarY = $res->[0][1]{created}{calendarY}{id};
+    $self->assert_not_null($calendarY);
+
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/set', {
+            update => {
+                singleton => {
+                    defaultCalendarId => $calendarX,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{singleton});
+
+    xlog "Get CalendarEvent state";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [],
+        }, 'R1'],
+    ]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+RECURRENCE-ID;TZID=America/New_York:20210923T153000
+TRANSP:OPAQUE
+SUMMARY:instance1
+DTSTART;TZID=America/New_York:20210923T153000
+DURATION:PT1H
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=cassandane:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog "Deliver iMIP invite for instance1";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    xlog "Assert instance1 got into calendar X";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/changes',
+                path => '/created'
+            },
+            properties => [ 'calendarIds' ],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals({
+        $calendarX => JSON::true,
+    }, $res->[1][1]{list}[0]{calendarIds});
+    my $instance1 = $res->[1][1]{list}[0]{id};
+
+    xlog "Move instance1 to calendar Y";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $instance1 => {
+                    calendarIds => {
+                        $calendarY => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$instance1});
+    $state = $res->[0][1]{newState};
+
+    $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+RECURRENCE-ID;TZID=America/New_York:20210930T153000
+TRANSP:OPAQUE
+SUMMARY:instance2
+DTSTART;TZID=America/New_York:20210930T153000
+DURATION:PT1H
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=cassandane:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog "Deliver iMIP invite for instance2";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    my $instance2 = $res->[0][1]{created}[0];
+    $self->assert_str_not_equals($instance1, $instance2);
+
+    xlog "Assert both instance1 and instance2 are in calendar Y";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [ $instance1, $instance2 ],
+            properties => [ 'calendarIds' ],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals({
+        $calendarY => JSON::true,
+    }, $res->[0][1]{list}[0]{calendarIds});
+    $self->assert_deep_equals({
+        $calendarY => JSON::true,
+    }, $res->[0][1]{list}[1]{calendarIds});
 }
 
 1;
