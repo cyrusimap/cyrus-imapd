@@ -1225,10 +1225,16 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
         mboxlist_entry_free(&mbentry);
 
         if (!destname && !is_snoozed) {
-            /* Lookup \Sent mailbox */
+            /* Fallback to \Sent mailbox */
+            destname = mboxlist_find_specialuse("\\Sent", userid);
         }
     }
+    else if (!is_snoozed) {
+        /* onSend with no destination, just remove from \Scheduled */
+        goto expunge;
+    }
     if (!destname) {
+        /* Fallback to INBOX */
         destname = xstrdup(mbname_intname(mbname));
     }
 
@@ -1254,7 +1260,8 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
      */
 
     r = append_setup_mbox(&as, destmbox, userid, authstate,
-                          ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_NEW);
+                          ACL_INSERT, NULL, NULL, 0,
+                          is_snoozed ? EVENT_MESSAGE_NEW : EVENT_MESSAGE_APPEND);
     if (r) goto done;
 
     /* Append the message to the mailbox */
@@ -1268,7 +1275,8 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     r = append_commit(&as);
     if (r) goto done;
 
-    /* Expunge the resource from the \Snoozed mailbox (also unset \snoozed) */
+  expunge:
+    /* Expunge the resource from the source mailbox (also unset \snoozed) */
     record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
     if (is_snoozed) record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
     r = mailbox_rewrite_index_record(srcmbox, record);
