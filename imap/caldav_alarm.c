@@ -1308,8 +1308,14 @@ static int find_sched_cb(const conv_guidrec_t *rec, void *rock)
     struct buf attrib = BUF_INITIALIZER;
     mbentry_t *mbentry = NULL;
 
-    if (rec->part) return 0;
+    /* We're looking for whole, non-expunged messages */
+    if (rec->part ||
+        (rec->system_flags & FLAG_DELETED) ||
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        return 0;
+    }
 
+    /* Lookup mailbox and make sure it is \Scheduled */
     conv_guidrec_mbentry(rec, &mbentry);
 
     if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
