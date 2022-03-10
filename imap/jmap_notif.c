@@ -48,13 +48,14 @@
 #include "append.h"
 #include "dav_util.h"
 #include "caldav_util.h"
-#include "http_err.h"
-#include "imap_err.h"
 #include "jmap_ical.h"
 #include "strhash.h"
 #include "times.h"
 #include "user.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 HIDDEN char *jmap_notifmboxname(const char *userid)
 {

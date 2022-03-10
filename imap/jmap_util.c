@@ -56,7 +56,6 @@
 #include "carddav_db.h"
 #include "global.h"
 #include "hash.h"
-#include "http_err.h"
 #include "index.h"
 #include "jmap_ical.h"
 #include "jmap_util.h"
@@ -71,6 +70,7 @@
 #endif
 
 /* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
 #include "imap/imap_err.h"
 
 EXPORTED int jmap_readprop_full(json_t *root, const char *prefix, const char *name,
