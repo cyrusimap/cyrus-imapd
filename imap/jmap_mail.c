@@ -11439,11 +11439,11 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
     construct_hash_table(&copyupdates_by_mbox_id, ptrarray_size(updates)+1, 0);
 
     const mbentry_t *scheduled_mbe = NULL;
-    const char *scheduled_uniqueid = NULL;
+    const char *scheduled_id = NULL;
 
     jmap_findmbox_role(bulk->req, "scheduled", &scheduled_mbe);
     if (scheduled_mbe) {
-        scheduled_uniqueid = scheduled_mbe->uniqueid;
+        scheduled_id = scheduled_mbe->uniqueid;
     }
 
     int i;
@@ -11527,13 +11527,8 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
                         if (!strcmp(mbox_id, uidrec->mboxrec->mbox_id)) {
                             ptrarray_append(&plan->delete, uidrec);
 
-                            /* Don't require rights to remove items from the
-                               normally read-only $scheduled mailbox
-                               since we have already verified that the emails
-                               in this plan are indeed scheduled for sending */
-                            if (strcmpnull(scheduled_uniqueid, mbox_id)) {
-                                plan->needrights |= JACL_REMOVEITEMS;
-                            }
+                            plan->needrights |=
+                                !strcmpnull(scheduled_id, mbox_id) ? 0 : JACL_REMOVEITEMS;
                         }
                     }
                 }
@@ -11559,14 +11554,8 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
                 else {
                     /* Delete message from mailbox */
                     ptrarray_append(&plan->delete, uidrec);
-
-                    /* Don't require rights to remove items from the
-                       normally read-only $scheduled mailbox
-                       since we have already verified that the emails
-                       in this plan are indeed scheduled for sending */
-                    if (strcmpnull(scheduled_uniqueid, mboxrec->mbox_id)) {
-                        plan->needrights |= JACL_REMOVEITEMS;
-                    }
+                    plan->needrights |=
+                        !strcmpnull(scheduled_id, mboxrec->mbox_id) ? 0 : JACL_REMOVEITEMS;
                 }
             }
 
@@ -11646,13 +11635,8 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
                 ptrarray_append(&plan->copy, pick_uidrecs);
             }
             ptrarray_append(pick_uidrecs, pick_uidrec);
-
-            /* Don't require rights to add items to the normally
-               read-only $scheduled mailbox since we have already verified
-               that the emails in this plan are indeed scheduled for sending */
-            if (strcmpnull(scheduled_uniqueid, dst_mbox_id)) {
-                plan->needrights |= JACL_ADDITEMS;
-            }
+            plan->needrights |=
+                !strcmpnull(scheduled_id, dst_mbox_id) ? 0 : JACL_ADDITEMS;
         }
         free_hash_table(&src_mbox_id_counts, NULL);
     }
