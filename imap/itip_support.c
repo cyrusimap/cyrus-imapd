@@ -100,6 +100,7 @@ HIDDEN icalproperty *find_attendee(icalcomponent *comp, const char *match)
 
 HIDDEN const char *get_organizer(icalcomponent *comp)
 {
+    if (!comp) return NULL;
     icalproperty *prop =
         icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     const char *organizer = icalproperty_get_organizer(prop);
@@ -129,6 +130,11 @@ HIDDEN int partstat_changed(icalcomponent *oldcomp,
 {
     if (!attendee) return 1; // something weird is going on, treat it as a change
     return (get_partstat(oldcomp, attendee) != get_partstat(newcomp, attendee));
+}
+
+HIDDEN int organizer_changed(icalcomponent *oldcomp, icalcomponent *newcomp)
+{
+    return strcmpsafe(get_organizer(oldcomp), get_organizer(newcomp));
 }
 
 struct pick_scheddefault_rock {
