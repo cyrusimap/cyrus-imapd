@@ -580,6 +580,9 @@ static void _emailsubmission_create(jmap_req_t *req,
                 }
                 jmap_parser_pop(&parser);
             }
+            else {
+                jmap_parser_invalid(&parser, field);
+            }
         }
         jmap_parser_pop(&parser);
     }
