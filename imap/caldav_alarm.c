@@ -1459,14 +1459,15 @@ static int process_futurerelease(struct mailbox *mailbox,
 
     onSend = json_object_get(submission, "onSend");
     if (onSend) {
-        json_t *emailid = json_object_get(submission, "emailId");
+        const char *emailid =
+            json_string_value(json_object_get(submission, "emailId"));
         struct find_sched_rock frock =
             { mboxname_to_userid(mailbox_name(mailbox)), NULL, 0 };
         struct mailbox *sched_mbox = NULL;
         struct index_record sched_rec;
 
         /* Locate email in \Scheduled mailbox */
-        r = find_scheduled_email(json_string_value(emailid), &frock);
+        r = find_scheduled_email(emailid, &frock);
 
         if (r || !frock.mboxname) {
             syslog(LOG_ERR,
@@ -1483,11 +1484,11 @@ static int process_futurerelease(struct mailbox *mailbox,
                    frock.uid, frock.mboxname, error_message(r));
         }
         else {
-            json_t *destmboxid = json_object_get(onSend, "moveToMailboxId");
+            const char *destmboxid =
+                json_string_value(json_object_get(onSend, "moveToMailboxId"));
             json_t *setkeywords = json_object_get(onSend, "setKeywords");
 
-            r = move_to_mailboxid(sched_mbox, &sched_rec,
-                                  json_string_value(destmboxid),
+            r = move_to_mailboxid(sched_mbox, &sched_rec, destmboxid,
                                   time(0), setkeywords, 0/*is_snoozed*/);
 
             if (r) {
