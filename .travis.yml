@@ -7,10 +7,10 @@ before_install:
 - echo '{"ipv6":true,"fixed-cidr-v6":"2001:db8:1::/64"}' | sudo tee /etc/docker/daemon.json
 - echo 'core' | sudo tee /proc/sys/kernel/core_pattern
 - sudo service docker restart
-- docker pull cyrusimapdocker/cyrus-jessie
+- docker pull cyrusimapdocker/cyrus-buster
 script:
 - docker run --env TRAVIS_BRANCH --env TRAVIS_PULL_REQUEST --env TRAVIS_PULL_REQUEST_BRANCH
-  --ulimit core=-1 -it cyrusimapdocker/cyrus-jessie /bin/sh -c "cd / && ./entrypoint.sh"
+  --ulimit core=-1 -it cyrusimapdocker/cyrus-buster /bin/sh -c "cd / && ./entrypoint.sh"
 branches:
   only:
   - master
