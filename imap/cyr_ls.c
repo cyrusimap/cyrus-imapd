@@ -71,6 +71,7 @@
 #include <sys/param.h>
 #include <pwd.h>
 #include <grp.h>
+#include <inttypes.h>
 
 #include "bsearch.h"
 #include "util.h"
@@ -182,7 +183,7 @@ static void long_list(struct stat *statp)
 
     strftime(datestr, 13, datefmt, localtime(&(statp->st_ctime)));
 
-    printf("%c%c%c%c%c%c%c%c%c%c %lu %-8s %-8s % 10ld %s ",
+    printf("%c%c%c%c%c%c%c%c%c%c %" PRIuMAX " %-8s %-8s % 10ld %s ",
            S_ISDIR(statp->st_mode) ? 'd' : '-',
            (statp->st_mode & S_IRUSR) ? 'r' : '-',
            (statp->st_mode & S_IWUSR) ? 'w' : '-',
@@ -193,7 +194,8 @@ static void long_list(struct stat *statp)
            (statp->st_mode & S_IROTH) ? 'r' : '-',
            (statp->st_mode & S_IWOTH) ? 'w' : '-',
            (statp->st_mode & S_IXOTH) ? 'x' : '-',
-           statp->st_nlink, pwd->pw_name, grp->gr_name,
+           (uintmax_t) statp->st_nlink, // int size differs by platform
+           pwd->pw_name, grp->gr_name,
            statp->st_size, datestr);
 }
 
