@@ -582,7 +582,7 @@ static int deliver_merge_request(const char *attendee,
         if (prop) recurid = icalproperty_get_value_as_string(prop);
         else {
             recurid = "";
-            master = comp;
+            master = icalcomponent_clone(comp);
         }
 
         hash_insert(recurid, comp, &comp_table);
@@ -715,6 +715,7 @@ static int deliver_merge_request(const char *attendee,
     }
 
     free_hash_table(&comp_table, NULL);
+    if (master) icalcomponent_free(master);
 
     return deliver_inbox;
 }
