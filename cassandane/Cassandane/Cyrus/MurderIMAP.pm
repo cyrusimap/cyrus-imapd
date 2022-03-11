@@ -202,6 +202,7 @@ sub check_user
 }
 
 sub test_aaasetup
+    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -210,6 +211,7 @@ sub test_aaasetup
 }
 
 sub test_frontend_commands
+    :needs_component_murder
 {
     my ($self) = @_;
     my $result;
@@ -250,6 +252,7 @@ sub test_frontend_commands
 }
 
 sub test_list_specialuse
+    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -317,6 +320,7 @@ sub test_list_specialuse
 }
 
 sub test_xlist
+    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -386,6 +390,7 @@ sub test_xlist
 }
 
 sub test_move_to_backend_nonexistent
+    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -435,6 +440,7 @@ sub test_move_to_backend_nonexistent
 }
 
 sub test_move_to_nonexistent
+    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -476,7 +482,7 @@ sub test_move_to_nonexistent
 }
 
 sub test_rename_with_location
-    :AllowMoves
+    :needs_component_murder :AllowMoves
 {
     my ($self) = @_;
 
@@ -506,7 +512,7 @@ sub test_rename_with_location
 }
 
 sub test_xfer_nonexistent_unixhs
-    :UnixHierarchySep
+    :needs_component_murder :UnixHierarchySep
 {
     my ($self) = @_;
 
@@ -544,7 +550,7 @@ sub test_xfer_nonexistent_unixhs
 
 sub test_xfer_user_altns_unixhs
     :AllowMoves :AltNamespace :UnixHierarchySep
-    :min_version_3_2
+    :needs_component_murder :min_version_3_2
 {
     my ($self) = @_;
 
@@ -647,7 +653,7 @@ sub test_xfer_user_altns_unixhs
 
 sub test_xfer_user_noaltns_nounixhs
     :AllowMoves :NoAltNamespace
-    :min_version_3_2
+    :needs_component_murder :min_version_3_2
 {
     my ($self) = @_;
 
@@ -750,7 +756,7 @@ sub test_xfer_user_noaltns_nounixhs
 
 sub test_xfer_user_altns_unixhs_virtdom
     :AllowMoves :AltNamespace :UnixHierarchySep :VirtDomains
-    :min_version_3_2
+    :needs_component_murder :min_version_3_2
 {
     my ($self) = @_;
 
@@ -866,7 +872,7 @@ sub test_xfer_user_altns_unixhs_virtdom
 
 sub test_xfer_user_noaltns_nounixhs_virtdom
     :AllowMoves :NoAltNamespace :VirtDomains
-    :min_version_3_2
+    :needs_component_murder :min_version_3_2
 {
     my ($self) = @_;
 
@@ -982,7 +988,7 @@ sub test_xfer_user_noaltns_nounixhs_virtdom
 
 sub test_xfer_mailbox_altns_unixhs
     :AllowMoves :AltNamespace :UnixHierarchySep
-    :min_version_3_2 :max_version_3_4
+    :needs_component_murder :min_version_3_2 :max_version_3_4
 {
     my ($self) = @_;
 
@@ -1115,7 +1121,7 @@ sub test_xfer_mailbox_altns_unixhs
 
 sub test_xfer_no_user_intermediates
     :AllowMoves :AltNamespace :UnixHierarchySep
-    :min_version_3_5
+    :needs_component_murder :min_version_3_5
 {
     my ($self) = @_;
 
