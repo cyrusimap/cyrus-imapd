@@ -831,7 +831,7 @@ static int backend_login(struct backend *ret, const char *userid,
                      * automatically send capabilities, so we treat it
                      * as optional.
                      */
-                    char ch;
+                    int ch;
 
                     /* wait and probe for possible auto-capability response */
                     usleep(250000);
