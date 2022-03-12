@@ -72,10 +72,13 @@ sub _is_allowed
     # Rules are:
     # deny if method has been explicitly denied
     return 0 if $self->{denied}->{$name};
+
     # allow if method has been explicitly allowed
     return 1 if $self->{allowed}->{$name};
+
     # deny if anything is explicitly allowed
-    return 0 if scalar keys %{$self->{allowed}};
+    return 0 if %{$self->{allowed}};
+
     # finally, allow
     return 1;
 }
