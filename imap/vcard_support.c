@@ -159,7 +159,7 @@ static const struct image_signature {
                       { 0, 0, { 0x00 } } } },
     { "image/webp", { { 0, 4, { 0x52, 0x49, 0x46, 0x46 } },             // "RIFF"
                       { 8, 4, { 0x57, 0x45, 0x42, 0x50 } } } },         // "WEBP"
-    { NULL }
+    { 0 }
 };
 
 /* Decode a base64-encoded binary vCard property and calculate a GUID.
