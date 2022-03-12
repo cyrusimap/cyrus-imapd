@@ -2969,7 +2969,14 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
     }
     if (code == HTTP_SWITCH_PROT || code == HTTP_UPGRADE) {
         buf_printf(logbuf, "%supgrade=", sep);
+#pragma GCC diagnostic push
+// despite the name, this pragma is for clang. clang complains about
+// the va_list noargs variable being unitialized. And gcc complains
+// about an unknown pragma if we correctly address clang in the
+// pragma definition. So let clang just pick up the GCC pragma.
+#pragma GCC diagnostic ignored "-Wuninitialized"
         comma_list_body(logbuf, upgrd_tokens, txn->flags.upgrade, 0, noargs);
+#pragma GCC diagnostic pop
         sep = "; ";
     }
     if (txn->flags.te) {
