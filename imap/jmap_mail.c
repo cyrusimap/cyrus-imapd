@@ -8832,7 +8832,7 @@ static json_t *_header_from_addresses(json_t *addrs,
                 enum name_type { ATOM, QUOTED_STRING, HIGH_BIT } name_type = ATOM;
                 const char *p;
                 for (p = name; *p; p++) {
-                    char c = *p;
+                    unsigned char c = *p;
                     /* Check for ATOM characters */
                     if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z'))
                         continue;
@@ -8840,7 +8840,7 @@ static json_t *_header_from_addresses(json_t *addrs,
                         continue;
                     if (strchr("!#$%&'*+-/=?^_`{|}~", c))
                         continue;
-                    if (c < 0) {
+                    if (c > 127) {
                         /* Contains at least one high bit character. */
                         name_type = HIGH_BIT;
                         break;
