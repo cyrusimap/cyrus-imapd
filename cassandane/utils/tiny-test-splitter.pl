@@ -4,6 +4,12 @@ use warnings;
 my $file;
 my @buffer;
 
+my $prefix = shift @ARGV;
+
+unless (-d "tiny-tests/$prefix") {
+  system "mkdir -p tiny-tests/$prefix";
+}
+
 my @lines = <<>>;
 
 LINE: while ($_ = shift @lines) {
@@ -15,7 +21,7 @@ LINE: while ($_ = shift @lines) {
 
   if (/^}$/ && (!@lines || $lines[0] =~ /^$/)) {
     push @buffer, $_;
-    open my $fh, '>', "tiny-tests/$file"
+    open my $fh, '>', "tiny-tests/$prefix/$file"
       or die "can't open $file: $!";
     print {$fh} "#!perl\nuse Cassandane::Tiny;\n\n", @buffer;
     close $fh;
