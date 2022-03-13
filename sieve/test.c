@@ -67,6 +67,7 @@
 #include "tree.h"
 #include "sieve/sieve.h"
 #include "imap/mailbox.h"
+#include "imap/mboxname.h"
 #include "imap/message.h"
 #include "imap/spool.h"
 #include "util.h"
@@ -78,7 +79,6 @@
 
 #ifdef WITH_JMAP
 #include "imap/jmap_mail_query.h"
-#include "imap/mboxname.h"
 #endif
 
 static char vacation_answer;
