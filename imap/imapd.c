@@ -6731,6 +6731,10 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     if (!r && ismove && !(imapd_index->myrights & ACL_EXPUNGE))
         r = IMAP_PERMISSION_DENIED;
 
+    /* don't allow copying into \Scheduled mailbox */
+    else if (mboxname_isscheduledmailbox(intname, 0))
+        r = IMAP_PERMISSION_DENIED;
+
     /* local mailbox -> local mailbox */
     if (!r) {
         r = index_copy(imapd_index, sequence, usinguid, intname,
