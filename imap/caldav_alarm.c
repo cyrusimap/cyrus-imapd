@@ -1313,8 +1313,8 @@ struct find_sched_rock {
 static int find_sched_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct find_sched_rock *frock = (struct find_sched_rock *) rock;
-    struct buf attrib = BUF_INITIALIZER;
     mbentry_t *mbentry = NULL;
+    int res = 0;
 
     /* We're looking for whole, non-expunged messages */
     if (rec->part ||
@@ -1326,28 +1326,17 @@ static int find_sched_cb(const conv_guidrec_t *rec, void *rock)
     /* Lookup mailbox and make sure it is \Scheduled */
     conv_guidrec_mbentry(rec, &mbentry);
 
-    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
-        goto done;
+    if (!mbentry) return 0;
+
+    if (mboxname_isscheduledmailbox(mbentry->name, mbentry->mbtype)) {
+        frock->mboxname = xstrdup(mbentry->name);
+        frock->uid = rec->uid;
+        res = IMAP_OK_COMPLETED;
     }
 
-    annotatemore_lookup_mbe(mbentry, "/specialuse", frock->userid, &attrib);
-
-    if (attrib.len) {
-        strarray_t *uses = strarray_split(buf_cstring(&attrib),
-                                          " ", STRARRAY_TRIM);
-
-        if (strarray_find_case(uses, "\\Scheduled", 0) >= 0) {
-            frock->mboxname = xstrdup(mbentry->name);
-            frock->uid = rec->uid;
-        }
-        strarray_free(uses);
-    }
-
-  done:
     mboxlist_entry_free(&mbentry);
-    buf_free(&attrib);
 
-    return frock->mboxname ? IMAP_OK_COMPLETED : 0;
+    return res;
 }
 
 static int find_scheduled_email(const char *emailid,
