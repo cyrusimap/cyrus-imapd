@@ -238,6 +238,7 @@ int mboxname_isscheduledmailbox(const char *name, int mbtype);
 #define mboxname_isnondeliverymailbox(name, mbtype)        \
     (mboxname_isnonimapmailbox(name, mbtype)               \
      || mboxname_isnotesmailbox(name, mbtype)              \
+     || mboxname_isscheduledmailbox(name, mbtype)          \
      || mboxname_isdeletedmailbox(name, NULL))
 
 /* check if one mboxname is a parent or same as the other */
