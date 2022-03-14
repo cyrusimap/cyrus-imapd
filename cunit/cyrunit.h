@@ -73,8 +73,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     long long _a = (actual), _e = (expected);                           \
     CU_assertFormatImplementation((_a == _e), __LINE__,                 \
         __FILE__, "", CU_FALSE,                                         \
-        "CU_ASSERT_EQUAL(" #actual "=%lld," #expected "=%lld)",         \
-        _a, _e);                                                        \
+        "CU_ASSERT_EQUAL(%s=%lld,%s=%lld)",                             \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #undef CU_ASSERT_EQUAL_FATAL
@@ -82,8 +82,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     long long _a = (actual), _e = (expected);                           \
     CU_assertFormatImplementation((_a == _e), __LINE__,                 \
         __FILE__, "", CU_TRUE,                                          \
-        "CU_ASSERT_EQUAL_FATAL(" #actual "=%lld," #expected "=%lld)",   \
-        _a, _e);                                                        \
+        "CU_ASSERT_EQUAL_FATAL(%s=%lld,%s=%lld)",                       \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #undef CU_ASSERT_NOT_EQUAL
@@ -91,8 +91,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     long long _a = (actual), _e = (expected);                           \
     CU_assertFormatImplementation((_a != _e), __LINE__,                 \
         __FILE__, "", CU_FALSE,                                         \
-        "CU_ASSERT_NOT_EQUAL(" #actual "=%lld," #expected "=%lld)",     \
-        _a, _e);                                                        \
+        "CU_ASSERT_NOT_EQUAL(%s=%lld,%s=%lld)",                         \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #undef CU_ASSERT_NOT_EQUAL_FATAL
@@ -100,8 +100,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     long long _a = (actual), _e = (expected);                           \
     CU_assertFormatImplementation((_a != _e), __LINE__,                 \
         __FILE__, "", CU_TRUE,                                          \
-        "CU_ASSERT_NOT_EQUAL_FATAL(" #actual "=%lld," #expected "=%lld)", \
-        _a, _e);                                                        \
+        "CU_ASSERT_NOT_EQUAL_FATAL(%s=%lld,%s=%lld)",                   \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 
@@ -111,8 +111,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const void *_a = (actual), *_e = (expected);                        \
     CU_assertFormatImplementation((_a == _e), __LINE__,                 \
         __FILE__, "", CU_FALSE,                                         \
-        "CU_ASSERT_PTR_EQUAL(" #actual "=%p," #expected "=%p)",         \
-        _a, _e);                                                        \
+        "CU_ASSERT_PTR_EQUAL(%s=%p,%s=%p)",                             \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #undef CU_ASSERT_PTR_EQUAL_FATAL
@@ -120,8 +120,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const void *_a = (actual), *_e = (expected);                        \
     CU_assertFormatImplementation((_a == _e), __LINE__,                 \
         __FILE__, "", CU_TRUE,                                          \
-        "CU_ASSERT_PTR_EQUAL_FATAL(" #actual "=%p," #expected "=%p)",   \
-        _a, _e);                                                        \
+        "CU_ASSERT_PTR_EQUAL_FATAL(%s=%p,%s=%p)",                       \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #undef CU_ASSERT_PTR_NOT_EQUAL
@@ -129,8 +129,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const void *_a = (actual), *_e = (expected);                        \
     CU_assertFormatImplementation((_a != _e), __LINE__,                 \
         __FILE__, "", CU_FALSE,                                         \
-        "CU_ASSERT_PTR_NOT_EQUAL(" #actual "=%p," #expected "=%p)",     \
-        _a, _e);                                                        \
+        "CU_ASSERT_PTR_NOT_EQUAL(%s=%p,%s=%p)",                         \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #undef CU_ASSERT_PTR_NOT_EQUAL_FATAL
@@ -138,8 +138,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const void *_a = (actual), *_e = (expected);                        \
     CU_assertFormatImplementation((_a != _e), __LINE__,                 \
         __FILE__, "", CU_TRUE,                                          \
-        "CU_ASSERT_PTR_NOT_EQUAL_FATAL(" #actual "=%p," #expected "=%p)", \
-        _a, _e);                                                        \
+        "CU_ASSERT_PTR_NOT_EQUAL_FATAL(%s=%p,%s=%p)",                   \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #undef CU_ASSERT_PTR_NULL
@@ -147,7 +147,7 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const void *_a = (actual);                                          \
     CU_assertFormatImplementation(!(_a), __LINE__,                      \
         __FILE__, "", CU_FALSE,                                         \
-        "CU_ASSERT_PTR_NULL(" #actual ")");                             \
+        "CU_ASSERT_PTR_NULL(%s)", #actual);                             \
 } while(0)
 
 #undef CU_ASSERT_PTR_NULL_FATAL
@@ -155,7 +155,7 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const void *_a = (actual);                                          \
     CU_assertFormatImplementation(!(_a), __LINE__,                      \
         __FILE__, "", CU_TRUE,                                          \
-        "CU_ASSERT_PTR_NULL_FATAL(" #actual ")");                       \
+        "CU_ASSERT_PTR_NULL(%s)", #actual);                             \
 } while(0)
 
 #undef CU_ASSERT_PTR_NOT_NULL
@@ -163,7 +163,7 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const void *_a = (actual);                                          \
     CU_assertFormatImplementation(!!(_a), __LINE__,                     \
         __FILE__, "", CU_FALSE,                                         \
-        "CU_ASSERT_PTR_NOT_NULL(" #actual ")");                         \
+        "CU_ASSERT_PTR_NULL(%s)", #actual);                             \
 } while(0)
 
 #undef CU_ASSERT_PTR_NOT_NULL_FATAL
@@ -171,7 +171,7 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const void *_a = (actual);                                          \
     CU_assertFormatImplementation(!!(_a), __LINE__,                     \
         __FILE__, "", CU_TRUE,                                          \
-        "CU_ASSERT_PTR_NOT_NULL_FATAL(" #actual ")");                   \
+        "CU_ASSERT_PTR_NULL(%s)", #actual);                             \
 } while(0)
 
 #undef CU_ASSERT_STRING_EQUAL
@@ -179,8 +179,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const char *_a = (actual), *_e = (expected);                        \
     CU_assertFormatImplementation(!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
         __FILE__, "", CU_FALSE,                                         \
-        "CU_ASSERT_STRING_EQUAL(" #actual "=\"%s\"," #expected "=\"%s\")", \
-        _a, _e);                                                        \
+        "CU_ASSERT_STRING_EQUAL(%s=\"%s\",%s=\"%s\")",                  \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #undef CU_ASSERT_STRING_EQUAL_FATAL
@@ -188,8 +188,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const char *_a = (actual), *_e = (expected);                        \
     CU_assertFormatImplementation(!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
         __FILE__, "", CU_TRUE,                                          \
-        "CU_ASSERT_STRING_EQUAL_FATAL(" #actual "=\"%s\"," #expected "=\"%s\")", \
-        _a, _e);                                                        \
+        "CU_ASSERT_STRING_EQUAL_FATAL(%s=\"%s\",%s=\"%s\")",            \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #undef CU_ASSERT_STRING_NOT_EQUAL
@@ -197,8 +197,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const char *_a = (actual), *_e = (expected);                        \
     CU_assertFormatImplementation(!!strcmp(_a?_a:"",_e?_e:""),          \
         __LINE__, __FILE__, "", CU_FALSE,                               \
-        "CU_ASSERT_STRING_NOT_EQUAL(" #actual "=\"%s\"," #expected "=\"%s\")", \
-        _a, _e);                                                        \
+        "CU_ASSERT_STRING_NOT_EQUAL(%s=\"%s\",%s=\"%s\")",              \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #undef CU_ASSERT_STRING_NOT_EQUAL_FATAL
@@ -206,8 +206,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     const char *_a = (actual), *_e = (expected);                        \
     CU_assertFormatImplementation(!!strcmp(_a?_a:"",_e?_e:""),          \
         __LINE__, __FILE__, "", CU_TRUE,                                \
-        "CU_ASSERT_STRING_NOT_EQUAL_FATAL(" #actual "=\"%s\"," #expected "=\"%s\")", \
-        _a, _e);                                                        \
+        "CU_ASSERT_STRING_NOT_EQUAL_FATAL(%s=\"%s\",%s=\"%s\")",        \
+        #actual, _a, #expected, _e);                                    \
 } while(0)
 
 #define CU_SYSLOG_MATCH(re) \
@@ -218,7 +218,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     _a = CU_syslogMatchEnd((match), &_s);                               \
     CU_assertFormatImplementation((_a == _e), __LINE__,                 \
         __FILE__, "", CU_FALSE,                                         \
-        "CU_ASSERT_SYSLOG(/%s/=%u, " #expected "=%u)", _s, _a, _e);     \
+        "CU_ASSERT_SYSLOG(/%s/=%u, %s=%u)",                             \
+        _s, _a, #expected, _e);                                         \
 } while(0)
 
 #define CU_ASSERT_SYSLOG_FATAL(match, expected) do {                    \
@@ -226,8 +227,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     _a = CU_syslogMatchEnd((match), &_s);                               \
     CU_assertFormatImplementation((_a == _e), __LINE__,                 \
         __FILE__, "", CU_TRUE,                                          \
-        "CU_ASSERT_SYSLOG_FATAL(/%s/=%u, " #expected "=%u)",            \
-        _s, _a, _e);                                                    \
+        "CU_ASSERT_SYSLOG_FATAL(/%s/=%u, %s=%u)",                       \
+        _s, _a, #expected, _e);                                         \
 } while(0)
 
 extern jmp_buf fatal_jbuf;
