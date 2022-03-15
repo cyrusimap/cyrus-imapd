@@ -4507,7 +4507,7 @@ EOF
     xlog $self, "Check that the message made it to INBOX";
     $self->check_messages({ 1 => $msg }, check_guid => 0);
 
-    xlog $self, "Check that the updated event made it to calendar";
+    xlog $self, "Check that the standalone instance was dropped from the calendar";
     $events = $CalDAV->GetEvents($CalendarId);
 
     $self->assert_equals(1, scalar @$events);

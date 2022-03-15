@@ -594,7 +594,10 @@ static int deliver_merge_request(const char *attendee,
     for (; itip; itip = icalcomponent_get_next_component(request, kind)) {
         icalcomponent *new_comp = icalcomponent_clone(itip);
 
-        /* Lookup and remove this comp from the hash table */
+        /* Lookup this iTIP comp in the hash table of old object components.
+           We acually remove it from the hash table because those that are
+           left behind are those that will be removed from the old object
+           (see end of loop). */
         prop =
             icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
         if (prop) recurid = icalproperty_get_value_as_string(prop);
@@ -714,7 +717,8 @@ static int deliver_merge_request(const char *attendee,
         icalcomponent_add_component(ical, new_comp);
     }
 
-    /* Remove components of old object that still remain in the hash table */
+    /* Remove components of old object that are not present in the iTIP request
+       (those that still remain in the old component hash table). */
     comp = icalcomponent_get_first_real_component(ical);
     for (; comp; comp = next) {
         next = icalcomponent_get_next_component(ical, kind);
