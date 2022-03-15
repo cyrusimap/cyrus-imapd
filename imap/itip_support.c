@@ -525,7 +525,7 @@ static int deliver_merge_request(const char *attendee,
 {
     int deliver_inbox = 0;
     struct hash_table comp_table;
-    icalcomponent *comp, *itip, *master = NULL;
+    icalcomponent *comp, *itip, *master = NULL, *next = NULL;
     icalcomponent_kind kind = ICAL_NO_COMPONENT;
     icalproperty *prop;
     icalparameter *param;
@@ -594,13 +594,13 @@ static int deliver_merge_request(const char *attendee,
     for (; itip; itip = icalcomponent_get_next_component(request, kind)) {
         icalcomponent *new_comp = icalcomponent_clone(itip);
 
-        /* Lookup this comp in the hash table */
+        /* Lookup and remove this comp from the hash table */
         prop =
             icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
         if (prop) recurid = icalproperty_get_value_as_string(prop);
         else recurid = "";
 
-        comp = hash_lookup(recurid, &comp_table);
+        comp = hash_del(recurid, &comp_table);
         if (comp) {
             int old_seq, new_seq;
 
@@ -712,6 +712,21 @@ static int deliver_merge_request(const char *attendee,
 
         /* Add new/modified component from iTIP request */
         icalcomponent_add_component(ical, new_comp);
+    }
+
+    /* Remove components of old object that still remain in the hash table */
+    comp = icalcomponent_get_first_real_component(ical);
+    for (; comp; comp = next) {
+        next = icalcomponent_get_next_component(ical, kind);
+        prop =
+            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (prop) recurid = icalproperty_get_value_as_string(prop);
+        else recurid = "";
+
+        if (hash_lookup(recurid, &comp_table)) {
+            icalcomponent_remove_component(ical, comp);
+            icalcomponent_free(comp);
+        }
     }
 
     free_hash_table(&comp_table, NULL);
