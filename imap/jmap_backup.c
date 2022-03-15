@@ -2019,8 +2019,12 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     if (mailbox->i.deletedmodseq > rrock->deletedmodseq)
         rrock->deletedmodseq = mailbox->i.deletedmodseq;
 
-    /* Remove "$restored" flag from mailbox */
-    if (!(r || (rrock->jrestore->mode & DRY_RUN)) && userflag >= 0) {
+    /* Remove "$restored" flag from mailbox,
+       iff not DRYRUN and didn't restore anything */
+    if (userflag >=0 &&
+        !(r || (rrock->jrestore->mode & DRY_RUN) ||
+          (rrock->jrestore->num_undone[DRAFT_DESTROYS] +
+           rrock->jrestore->num_undone[DESTROYS]))) {
         mailbox_remove_user_flag(mailbox, userflag);
         mailbox_commit(mailbox);
     }

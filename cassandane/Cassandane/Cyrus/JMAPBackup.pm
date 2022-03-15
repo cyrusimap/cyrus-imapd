@@ -2177,4 +2177,136 @@ sub test_restore_notes_all_dryrun
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
 }
 
+sub test_restore_mail_twice
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))") || die;
+    $imaptalk->create("INBOX.Notes") || die;
+
+    xlog $self, "get mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $inbox = $m{"Inbox"};
+    my $trash = $m{"Trash"};
+    my $notes = $m{"Notes"};
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        $inbox->{id} => JSON::true
+                    },
+                    from => [{ email => q{foo1@bar} }],
+                    to => [{ email => q{bar1@foo} }],
+                    subject => "email1"
+                }
+            },
+        }, 'R2'],
+        ['Email/get', {
+            ids => [ '#email1' ],
+            properties => ['receivedAt']
+         }, "R3"]
+    ]);
+    my $emailId1 = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($emailId1);
+    my $emailAt1 = $res->[1][1]{list}[0]{receivedAt};
+
+    xlog "move email from Inbox to Trash";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId1 => {
+                "mailboxIds/$inbox->{id}" => undef,
+                "mailboxIds/$trash->{id}" => JSON::true
+                } }
+         }, "R5"]
+    ]);
+
+    # need a gap between move and destroy otherwise we will restore both copies
+    sleep 3;
+
+    xlog "destroy email1";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            destroy => ["$emailId1"]
+         }, "R5"],
+    ]);
+
+    xlog "restore mail prior to most recent changes";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreMail', {
+            undoPeriod => "PT1S"
+         }, "R7"],
+        ['Email/get', {
+            ids => ["$emailId1"],
+            properties => ['subject', 'keywords', 'mailboxIds', 'receivedAt']
+         }, "R9"]
+    ]);
+    $self->assert_num_equals(0, $res->[0][1]{numDraftsRestored});
+    $self->assert_num_equals(1, $res->[0][1]{numNonDraftsRestored});
+
+    $self->assert_num_equals(1, scalar(@{$res->[1][1]{list}}));
+    $self->assert_str_equals("$emailId1", $res->[1][1]{list}[0]{id});
+    $self->assert_str_equals("$emailAt1", $res->[1][1]{list}[0]{receivedAt});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{keywords}->{'$restored'});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mailboxIds}{$trash->{id}});
+    $self->assert_null($res->[1][1]{list}[0]{mailboxIds}->{$inbox->{id}});
+
+    xlog "try restoring mail again";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreMail', {
+            undoPeriod => "PT1S"
+         }, "R7"],
+        ['Email/get', {
+            ids => ["$emailId1"],
+            properties => ['subject', 'keywords', 'mailboxIds', 'receivedAt']
+         }, "R9"]
+    ]);
+    $self->assert_num_equals(0, $res->[0][1]{numDraftsRestored});
+    $self->assert_num_equals(0, $res->[0][1]{numNonDraftsRestored});
+
+    $self->assert_num_equals(1, scalar(@{$res->[1][1]{list}}));
+    $self->assert_str_equals("$emailId1", $res->[1][1]{list}[0]{id});
+    $self->assert_str_equals("$emailAt1", $res->[1][1]{list}[0]{receivedAt});
+    $self->assert_null($res->[1][1]{list}[0]{keywords}->{'$restored'});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mailboxIds}{$trash->{id}});
+    $self->assert_null($res->[1][1]{list}[0]{mailboxIds}->{$inbox->{id}});
+
+    # need a gap between destroys otherwise we will restore both copies
+    sleep 3;
+
+    xlog "destroy email1 again";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            destroy => ["$emailId1"]
+         }, "R5"],
+    ]);
+
+    xlog "restore mail prior to most recent changes";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreMail', {
+            undoPeriod => "PT1S"
+         }, "R7"],
+        ['Email/get', {
+            ids => ["$emailId1"],
+            properties => ['subject', 'keywords', 'mailboxIds', 'receivedAt']
+         }, "R9"]
+    ]);
+    $self->assert_num_equals(0, $res->[0][1]{numDraftsRestored});
+    $self->assert_num_equals(1, $res->[0][1]{numNonDraftsRestored});
+
+    $self->assert_num_equals(1, scalar(@{$res->[1][1]{list}}));
+    $self->assert_str_equals("$emailId1", $res->[1][1]{list}[0]{id});
+    $self->assert_str_equals("$emailAt1", $res->[1][1]{list}[0]{receivedAt});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{keywords}->{'$restored'});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mailboxIds}{$trash->{id}});
+    $self->assert_null($res->[1][1]{list}[0]{mailboxIds}->{$inbox->{id}});
+}
+
 1;
