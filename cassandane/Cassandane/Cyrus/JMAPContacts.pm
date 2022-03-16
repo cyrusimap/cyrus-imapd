@@ -2240,14 +2240,14 @@ sub test_contact_set_avatar_singlecommand
     ];
 
     my $res = $jmap->CallMethods([
-        ['Blob/set', { create => {
-            "img" => { 'data:asText' => 'some photo',
+        ['Blob/upload', { create => {
+            "img" => { data => [{'data:asText' => 'some photo'}],
                        type => 'image/jpeg' } } }, 'R0'],
         ['Contact/set', {create => {"1" => $contact }}, "R1"],
         ['Contact/get', {}, "R2"]],
         $using);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('Blob/upload', $res->[0][0]);
     $self->assert_str_equals('R0', $res->[0][2]);
 
     $contact->{avatar}{blobId} = $res->[0][1]{created}{"img"}{blobId};
@@ -2308,14 +2308,14 @@ sub test_contact_set_avatar_from_deleted_contact
 
     xlog $self, "create initial card";
     my $res = $jmap->CallMethods([
-        ['Blob/set', { create => {
-            "img" => { 'data:asText' => 'some photo',
+        ['Blob/upload', { create => {
+            "img" => { data => [{'data:asText' => 'some photo'}],
                        type => 'image/jpeg' } } }, 'R0'],
         ['Contact/set', {create => {"1" => $contact }}, "R1"],
         ['Contact/get', {}, "R2"]],
         $using);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('Blob/upload', $res->[0][0]);
     $self->assert_str_equals('R0', $res->[0][2]);
 
     $contact->{avatar}{blobId} = $res->[0][1]{created}{"img"}{blobId};

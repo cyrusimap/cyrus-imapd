@@ -204,9 +204,9 @@ EOF
 
     xlog "create script";
     $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "A" => { 'data:asText' => $script2 }
+               "A" => { data => [{'data:asText' => $script2}] }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -274,9 +274,9 @@ EOF
 
     xlog "rewrite one script and activate another";
     $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "B" => { 'data:asText' => $script3 }
+               "B" => { data => [{'data:asText' => $script3}] }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -362,9 +362,9 @@ EOF
 
     xlog "create script";
     $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "A" => { 'data:asText' => $script2 }
+               "A" => { data => [{'data:asText' => $script2}] }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -441,9 +441,9 @@ EOF
 
     xlog "rewrite one script and activate another";
     $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "B" => { 'data:asText' => $script3 }
+               "B" => { data => [{'data:asText' => $script3}] }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -539,9 +539,9 @@ sub test_sieve_set_bad_script
 
     xlog "update bad script";
     $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "A" => { 'data:asText' => "keep;" }
+               "A" => { data => [{'data:asText' => "keep;"}] }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -579,12 +579,12 @@ sub test_sieve_query
 
     xlog "create script";
     my $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "A" => { 'data:asText' => "keep;" },
-               "B" => { 'data:asText' => "discard;" },
-               "C" => { 'data:asText' => "redirect \"test\@example.com\";" },
-               "D" => { 'data:asText' => "stop;"}
+               "A" => { data => [{'data:asText' => "keep;"}] },
+               "B" => { data => [{'data:asText' => "discard;"}] },
+               "C" => { data => [{'data:asText' => "redirect \"test\@example.com\";"}] },
+               "D" => { data => [{'data:asText' => "stop;"}] },
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -737,10 +737,10 @@ sub test_sieve_validate
 
     xlog "validating scripts";
     my $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "A" => { 'data:asText' => "keepme;" },
-               "B" => { 'data:asText' => "keep;" }
+               "A" => { data => [{'data:asText' => "keepme;"}] },
+               "B" => { data => [{'data:asText' => "keep;"}] }
             }
          }, "R0"],
         ['SieveScript/validate', {
@@ -791,9 +791,9 @@ EOF
 
     xlog "create script";
     my $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "A" => { 'data:asText' => $script }
+               "A" => { data => [{'data:asText' => $script}] }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -983,11 +983,11 @@ EOF
 
     xlog "test script";
     my $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-                "1" => { 'data:asText' => $email1 },
-                "3" => { 'data:asText' => $email2 },
-                "2" => { 'data:asText' => $script },
+                "1" => { data => [{'data:asText' => $email1}] },
+                "3" => { data => [{'data:asText' => $email2}] },
+                "2" => { data => [{'data:asText' => $script}] },
             }}, 'R0'],
         ['SieveScript/test', {
             emailBlobIds => [ '#1', 'foobar', '#3' ],
@@ -1034,9 +1034,9 @@ sub test_sieve_blind_replace_active
 
     xlog "create initial script";
     my $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "A" => { 'data:asText' => "keep;" }
+               "A" => { data => [{'data:asText' => "keep;"}] }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -1089,9 +1089,9 @@ sub test_sieve_blind_replace_active
 
     xlog "replace active script";
     $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "B" => { 'data:asText' => "discard;" }
+               "B" => { data => [{'data:asText' => "discard;"}] }
             }
          }, "R0"],
         ['SieveScript/set', {
@@ -1160,9 +1160,9 @@ sub test_deliver_compile
 
     xlog $self, "Install a sieve script filing all mail into the target folder";
     my $res = $jmap->CallMethods([
-        ['Blob/set', {
+        ['Blob/upload', {
             create => {
-               "A" => { 'data:asText' => "require [\"fileinto\"];\r\nfileinto \"$target\";\r\n" }
+               "A" => { data => [{'data:asText' => "require [\"fileinto\"];\r\nfileinto \"$target\";\r\n"}] }
             }
          }, "R0"],
         ['SieveScript/set', {

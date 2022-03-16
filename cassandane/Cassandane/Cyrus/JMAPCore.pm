@@ -682,15 +682,15 @@ sub test_blob_set_basic
 
     xlog "Test without capability";
     my $jmap = $self->{jmap};
-    my $res = $jmap->CallMethods([['Blob/set', { create => { b1 => { 'data:asText' => 'hello world' } } }, 'R1']]);
+    my $res = $jmap->CallMethods([['Blob/upload', { create => { b1 => { data => [{'data:asText' => 'hello world'}] } } }, 'R1']]);
     $self->assert_str_equals($res->[0][0], 'error');
 
     # XXX: this will be replaced with the upstream one
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
 
-    xlog "Regular Blob/set works and returns a blobId";
-    $res = $jmap->CallMethods([['Blob/set', { create => { b1 => { 'data:asText' => 'hello world' } } }, 'R1']]);
-    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    xlog "Regular Blob/upload works and returns a blobId";
+    $res = $jmap->CallMethods([['Blob/upload', { create => { b1 => { data => [{'data:asText' => 'hello world'}] } } }, 'R1']]);
+    $self->assert_str_equals('Blob/upload', $res->[0][0]);
     $self->assert_not_null($res->[0][1]{created}{b1}{id});
 }
 
@@ -818,41 +818,41 @@ sub test_blob_set_complex
 
     my $res;
 
-    xlog "Regular Blob/set works and returns the right data";
+    xlog "Regular Blob/upload works and returns the right data";
     $res = $jmap->CallMethods([
-      ['Blob/set', { create => { b1 => { 'data:asText' => $data } } }, 'S1'],
+      ['Blob/upload', { create => { b1 => { data => [{'data:asText' => $data}] } } }, 'S1'],
       ['Blob/get', { ids => ['#b1'], properties => [ 'data:asText', 'size' ] }, 'G1'],
     ]);
-    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('Blob/upload', $res->[0][0]);
     $self->assert_str_equals('Blob/get', $res->[1][0]);
     $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
     $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
 
-    xlog "Base64 Blob/set works and returns the right data";
+    xlog "Base64 Blob/upload works and returns the right data";
     $res = $jmap->CallMethods([
-      ['Blob/set', { create => { b2 => { 'data:asBase64' => $bdata } } }, 'S2'],
+      ['Blob/upload', { create => { b2 => { data => [{'data:asBase64' => $bdata}] } } }, 'S2'],
       ['Blob/get', { ids => ['#b2'], properties => [ 'data:asText', 'size' ] }, 'G2'],
     ]);
-    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('Blob/upload', $res->[0][0]);
     $self->assert_str_equals('Blob/get', $res->[1][0]);
     $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
     $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
 
-    xlog "Complex catenate expression works and returns the right data";
+    xlog "Complex expression works and returns the right data";
     my $target = "How quick was that?";
     $res = $jmap->CallMethods([
-      ['Blob/set', { create => { b4 => { 'data:asText' => $data } } }, 'S4'],
-      ['Blob/set', { create => { cat => { catenate => [
+      ['Blob/upload', { create => { b4 => { data => [{'data:asText' => $data}] } } }, 'S4'],
+      ['Blob/upload', { create => { mult => { data => [
         { 'data:asText' => 'How' },                      # 'How'
         { 'blobId' => '#b4', offset => 3, length => 7 }, # ' quick '
         { 'data:asText' => "was t" },                    # 'was t'
         { 'blobId' => '#b4', offset => 1, length => 1 }, # 'h'
         { 'data:asBase64' => encode_base64('at?', '') }, # 'at?'
       ] } } }, 'CAT'],
-      ['Blob/get', { ids => ['#cat'], properties => [ 'data:asText', 'size' ] }, 'G4'],
+      ['Blob/get', { ids => ['#mult'], properties => [ 'data:asText', 'size' ] }, 'G4'],
     ]);
-    $self->assert_str_equals('Blob/set', $res->[0][0]);
-    $self->assert_str_equals('Blob/set', $res->[1][0]);
+    $self->assert_str_equals('Blob/upload', $res->[0][0]);
+    $self->assert_str_equals('Blob/upload', $res->[1][0]);
     $self->assert_str_equals('Blob/get', $res->[2][0]);
     $self->assert_str_equals($target, $res->[2][1]{list}[0]{'data:asText'});
     $self->assert_num_equals(length $target, $res->[2][1]{list}[0]{size});
