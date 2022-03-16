@@ -40,6 +40,18 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+# You can set (or override) any of the settings in this file by setting
+# an environment variable thus: CASSINI_SECTION_NAME=value
+# If an environment variable so named is defined, its value will be used
+# instead of the value from the cassandane.ini file
+#
+# e.g.
+# [cassandane].rootdir   -> CASSINI_CASSANDANE_ROOTDIR
+# [cyrus default].prefix -> CASSINI_CYRUS_DEFAULT_PREFIX
+#
+# See Cassandane::Cassini::val() for specific details of how
+# the environment variable name to look up is constructed
+
 # This section describes configurable properties of the
 # Cassandane infrastructure
 [cassandane]
