@@ -7780,11 +7780,11 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
             state = imapd_index;
         }
         else {
-            struct index_init init;
-            memset(&init, 0, sizeof(init));
-            init.userid = imapd_userid;
-            init.authstate = imapd_authstate;
-            init.out = imapd_out;
+            struct index_init init = {
+                .out = imapd_out,
+                .userid = imapd_userid,
+                .authstate = imapd_authstate
+            };
             r = index_open(oldmailboxname, &init, &state);
             seqset_free(&init.vanishedlist);
         }
