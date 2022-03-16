@@ -176,6 +176,133 @@ sub test_boolval
     $self->assert_matches(qr/Bad boolean/, $exception);
 }
 
+sub test_environment_override
+{
+    my ($self) = @_;
+
+    local $CWD = tempdir(CLEANUP => 1);
+    local %ENV = (); # stop real environment from interfering!
+
+    xlog "Working in temporary directory $CWD";
+    # artisinal handcrafted data
+    # okay that's a lie... these are the real options and their defaults
+    # as documented by cassandane.ini.example
+    write_inifile({},
+        'cassandane.rootdir' => '/var/tmp/cass',
+        'cassandane.pwcheck' => 'alwaystrue',
+        'cassandane.cleanup' => 'no',
+        'cassandane.maxworkers' => '1',
+        'cassandane.base_port' => '9100',
+        'cassandane.suppress' => '',
+        'valgrind.enabled' => 'no',
+        'valgrind.binary' => '/usr/bin/valgrind',
+        'valgrind.suppressions' => 'vg.supp',
+        'valgrind.arguments' => '-q --tool=memcheck --leak-check=full --run-libc-freeres=no',
+        'cyrus default.prefix' => '/usr/cyrus',
+        'cyrus default.destdir' => '',
+        'cyrus default.quota' => 'cyr_quota',
+        'cyrus default.coresizelimit' => '100',
+        'cyrus replica.prefix' => '/usr/cyrus',
+        'cyrus replica.destdir' => '',
+        'cyrus murder.prefix' => '/usr/cyrus',
+        'cyrus murder.destdir' => '',
+        'gdb.imapd' => 'yes',
+        'gdb.sync_server' => 'yes',
+        'gdb.lmtpd' => 'yes',
+        'gdb.timsieved' => 'yes',
+        'gdb.backupd' => 'yes',
+        'config.sasl_mech_list' => 'PLAIN LOGIN',
+        'config.debug_command' => '@prefix@/utils/gdbtramp %s %d',
+        'caldavtalk.basedir' => '',
+        'imaptest.basedir' => '',
+        'imaptest.suppress' => 'listext subscribe',
+        'caldavtester.basedir' => '',
+        'caldavtester.suppress-caldav' => '',
+        'caldavtester.suppress-carddav' => '',
+        'jmaptestsuite.basedir' => '',
+        'jmaptestsuite.suppress' => '',
+    );
+
+    my $cassini = new Cassandane::Cassini;
+
+    # let's test the things we provide examples of
+    $self->assert_str_equals(
+        '/var/tmp/cass',
+        $cassini->val('cassandane', 'rootdir', 'ignored')
+    );
+
+    $ENV{CASSINI_CASSANDANE_ROOTDIR} = 'overridden!';
+    $self->assert_str_equals(
+        'overridden!',
+        $cassini->val('cassandane', 'rootdir', 'ignored')
+    );
+
+    $ENV{CASSINI_CASSANDANE_ROOTDIR} = '';
+    $self->assert_str_equals(
+        '',
+        $cassini->val('cassandane', 'rootdir', 'ignored')
+    );
+
+    delete $ENV{CASSINI_CASSANDANE_ROOTDIR};
+    $self->assert_str_equals(
+        '/var/tmp/cass',
+        $cassini->val('cassandane', 'rootdir', 'ignored')
+    );
+
+    # [cyrus default] is a section with a space in its name
+    $self->assert_str_equals(
+        '/usr/cyrus',
+        $cassini->val('cyrus default', 'prefix', 'ignored')
+    );
+
+    $ENV{CASSINI_CYRUS_DEFAULT_PREFIX} = 'overridden!';
+    $self->assert_str_equals(
+        'overridden!',
+        $cassini->val('cyrus default', 'prefix', 'ignored')
+    );
+
+    $ENV{CASSINI_CYRUS_DEFAULT_PREFIX} = '';
+    $self->assert_str_equals(
+        '',
+        $cassini->val('cyrus default', 'prefix', 'ignored')
+    );
+
+    delete $ENV{CASSINI_CYRUS_DEFAULT_PREFIX};
+    $self->assert_str_equals(
+        '/usr/cyrus',
+        $cassini->val('cyrus default', 'prefix', 'ignored')
+    );
+
+    # booleans should work too
+    $self->assert_str_equals(
+        'no',
+        $cassini->val('cassandane', 'cleanup', 'ignored')
+    );
+
+    foreach my $x (qw( no NO false FALSE 0 off OFF )) {
+        $ENV{CASSINI_CASSANDANE_CLEANUP} = $x;
+        $self->assert_equals(0, $cassini->bool_val('cassandane', 'cleanup'));
+    }
+
+    foreach my $x (qw( yes YES true TRUE 1 on ON )) {
+        $ENV{CASSINI_CASSANDANE_CLEANUP} = $x;
+        $self->assert_equals(1, $cassini->bool_val('cassandane', 'cleanup'));
+    }
+
+    foreach my $x (q{}, 'invalid') {
+        $ENV{CASSINI_CASSANDANE_CLEANUP} = $x;
+        eval { $cassini->bool_val('cassandane', 'cleanup'); };
+        my $exception = $@;
+        $self->assert_matches(qr/Bad boolean/, $exception);
+    }
+
+    delete $ENV{CASSINI_CASSANDANE_CLEANUP};
+    $self->assert_str_equals(
+        'no',
+        $cassini->val('cassandane', 'cleanup', 'ignored')
+    );
+}
+
 sub test_override
 {
     my ($self) = @_;
