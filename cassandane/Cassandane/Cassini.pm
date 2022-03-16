@@ -138,10 +138,10 @@ sub instance
 
 sub val
 {
-    # Args are: section, name, default
+    my ($self, $section, $name, $default) = @_;
+
     # see the Config::IniFiles documentation for ->val()
-    my ($self, @args) = @_;
-    return $self->{inifile}->val(@args);
+    return $self->{inifile}->val($section, $name, $default);
 }
 
 sub bool_val
