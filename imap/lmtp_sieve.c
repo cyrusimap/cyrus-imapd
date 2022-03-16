@@ -1414,6 +1414,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     const char *originator = NULL, *recipient = NULL;
     strarray_t sched_addresses = STRARRAY_INITIALIZER;
     unsigned sched_flags = 0;
+    struct bodypart **parts = NULL;
     int ret = 0;
 
     prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
@@ -1438,7 +1439,6 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
 
     /* XXX currently struct bodypart as defined in message.h is the same as
        sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
-    struct bodypart **parts = NULL;
     const char *content_types[] = { "text/calendar", NULL };
     message_fetch_part(mydata->content, content_types, &parts);
     if (parts && parts[0]) {

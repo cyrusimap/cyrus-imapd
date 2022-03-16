@@ -3231,7 +3231,7 @@ int main(int argc, char **argv)
                      * automatically send capabilities, so we treat it
                      * as optional.
                      */
-                    char ch;
+                    int ch;
 
                     /* wait and probe for possible auto-capability response*/
                     usleep(250000);
