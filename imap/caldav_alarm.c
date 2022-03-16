@@ -930,7 +930,7 @@ static enum alarm_type mbtype_to_alarm_type(uint32_t mbtype)
         atype = ALARM_SEND;
         break;
     default:
-        assert(0);
+        fatal("unknown alarm type", EX_SOFTWARE);
     }
 
     return atype;
