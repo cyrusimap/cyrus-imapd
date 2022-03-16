@@ -7780,7 +7780,13 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
             state = imapd_index;
         }
         else {
-            r = index_open(oldmailboxname, NULL, &state);
+            struct index_init init = {
+                .out = imapd_out,
+                .userid = imapd_userid,
+                .authstate = imapd_authstate
+            };
+            r = index_open(oldmailboxname, &init, &state);
+            seqset_free(&init.vanishedlist);
         }
 
         /* move all the emails to the new folder */

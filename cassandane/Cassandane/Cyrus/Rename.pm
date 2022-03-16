@@ -377,6 +377,57 @@ sub test_rename_inbox
     }
 }
 
+sub test_rename_inbox_unselected
+    :Conversations :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->{store}->set_folder("INBOX");
+    $self->{store}->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $self->{store}->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $self->{store}->write_end();
+
+    $imaptalk->select("INBOX") || die;
+    my @predata = $imaptalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $self->check_conversations();
+
+    my $res = $imaptalk->status("INBOX", ['mailboxid']);
+    my $oldInboxId = $res->{mailboxid}[0];
+
+    # Unselect the mailbox to release Cyrus index state and test different code path
+    $imaptalk->unselect() || die;
+
+    $imaptalk->rename("INBOX", "INBOX.dst") || die;
+
+    $imaptalk->select("INBOX") || die;
+    my @postinboxdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
+    $self->assert_num_equals(0, scalar @postinboxdata);
+
+    $imaptalk->select("INBOX.dst") || die;
+    my @postdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
+    $self->assert_num_equals(1, scalar @postdata);
+
+    $self->check_conversations();
+
+    # older cyrus may not support mailboxid, we don't need to test
+    # for ID change in that case
+    if ($oldInboxId) {
+        $res = $imaptalk->status("INBOX", ['mailboxid']);
+        my $newInboxId = $res->{mailboxid}[0];
+
+        $res = $imaptalk->status("INBOX.dst", ['mailboxid']);
+        my $dstId = $res->{mailboxid}[0];
+
+        $self->assert_str_equals($oldInboxId, $newInboxId);
+        $self->assert_str_not_equals($oldInboxId, $dstId);
+    }
+}
+
 #
 # Test evil INBOX rename possibilities
 #
