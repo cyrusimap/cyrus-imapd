@@ -3544,21 +3544,11 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     }
     else if (cdata->dav.imap_uid == new->uid) {
         /* just a flag change on an existing record */
-        struct vparse_card *vcard = record_to_vcard(mailbox, new);
         int ispinned = (new->system_flags & FLAG_FLAGGED) ? 1 : 0;
-
-        if (!vcard || !vcard->objects) {
-            syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
-                   cdata->dav.imap_uid, mailbox_name(mailbox));
-            r = IMAP_MAILBOX_BADFORMAT; // XXX better error?
-            vparse_free_card(vcard);
-            goto done;
-        }
 
         cdata->dav.modseq = new->modseq;
         cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
-        r = carddav_writecard(carddavdb, cdata, vcard->objects, ispinned);
-        vparse_free_card(vcard);
+        r = carddav_update(carddavdb, cdata, ispinned);
     }
     else {
         /* Load message containing the resource and parse vcard data */

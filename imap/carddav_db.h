@@ -163,6 +163,10 @@ int carddav_foreach_sort(struct carddav_db *carddavdb, const mbentry_t *mbentry,
 int carddav_write_jmapcache(struct carddav_db *carddavdb, int rowid,
                             int version, const char *data);
 
+/* update an entry in 'carddavdb' */
+int carddav_update(struct carddav_db *carddavdb,
+                   struct carddav_data *cdata, int ispinned);
+
 /* write an entry to 'carddavdb' */
 int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata);
 
