@@ -2323,10 +2323,15 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
     if (r) goto done;
 
-    /* Lookup and return the new mailbox id */
+    /* Lookup and return the new mailbox id and other server-set properties */
     r = jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r) goto done;
-    *mbox = json_pack("{s:s}", "id", mbentry->uniqueid);
+    *mbox = json_pack("{s:s s:o s:i s:i s:i s:i}",
+                      "id", mbentry->uniqueid,
+                      "myrights", _mbox_get_myrights(req, mbentry),
+                      "totalEmails", 0, "unreadEmails", 0,
+                      "totalThreads", 0, "unreadThreads", 0);
+
     /* Set server defaults */
     if (args->is_subscribed < 0) {
         json_object_set_new(*mbox, "isSubscribed", json_false());
