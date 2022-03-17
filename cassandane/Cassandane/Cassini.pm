@@ -152,7 +152,11 @@ sub val
     #
     my $envname = "\UCASSINI $section $name\E";
     $envname =~ s{[^A-Z0-9]+}{_}g;
-    return $ENV{$envname} if defined $ENV{$envname};
+    if (defined $ENV{$envname}) {
+        xlog "Using configuration from environment:"
+             . " \$$envname=\"$ENV{$envname}\"";
+        return $ENV{$envname};
+    }
 
     # see the Config::IniFiles documentation for ->val()
     return $self->{inifile}->val($section, $name, $default);
