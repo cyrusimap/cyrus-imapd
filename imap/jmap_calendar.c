@@ -2080,7 +2080,7 @@ static void setcalendars_create(struct jmap_req *req,
     }
 
     /* Report calendar as created. */
-    *record = json_pack("{s:s s:o }", "id", uid,
+    *record = json_pack("{s:s s:o}", "id", uid,
                         "myRights",
                         calendarrights_to_jmap(jmap_myrights_mbentry(req, &mbentry),
                                                !strcmp(req->userid, req->accountid)));
