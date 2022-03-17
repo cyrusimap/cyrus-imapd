@@ -2226,7 +2226,9 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 
     /* Check parent exists and has the proper ACL. */
     const mbentry_t *mbparent = jmap_mbentry_by_uniqueid(req, parent_id);
-    if (!mbparent || !jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD)) {
+    if (!mbparent || !jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD) ||
+        // you can't create a child of $scheduled
+        mboxname_isscheduledmailbox(mbparent->name, mbparent->mbtype)) {
         jmap_parser_invalid(&parser, "parentId");
         goto done;
     }
@@ -2925,6 +2927,11 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
         goto done;
     }
 
+    /* Do not allow to remove $scheduled */
+    if (mboxname_isscheduledmailbox(mbentry->name, mbentry->mbtype)) {
+        result->err = json_pack("{s:s}", "type", "forbidden");
+        goto done;
+    }
 
     /* Check ACL */
     if (!jmap_hasrights_mbentry(req, mbentry, JACL_DELETE)) {

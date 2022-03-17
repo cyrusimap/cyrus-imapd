@@ -1372,6 +1372,29 @@ sub test_emailsubmission_scheduled_send
     }, $mbox);
 
 
+    xlog $self, "Try to create a child of Scheduled mailbox";
+    $res = $jmap->CallMethods([
+        [ 'Mailbox/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    parentId => "$schedid"
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]->{notCreated}{1});
+
+
+    xlog $self, "Try to destroy Scheduled mailbox";
+    $res = $jmap->CallMethods([
+        [ 'Mailbox/set', {
+            destroy => [ "$schedid" ]
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]->{notDestroyed}{$schedid});
+
+
     xlog $self, "Create 2 draft emails";
     $res = $jmap->CallMethods([
         ['Email/set', {
