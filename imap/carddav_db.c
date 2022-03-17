@@ -930,6 +930,25 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
 }
 
 
+#define CMD_UPDATE_EMAILS                                                \
+    "UPDATE vcard_emails SET ispinned = :ispinned WHERE objid = :objid;"
+
+EXPORTED int carddav_update(struct carddav_db *carddavdb,
+                            struct carddav_data *cdata, int ispinned)
+{
+    struct sqldb_bindval bval[] = {
+        { ":objid",        SQLITE_INTEGER, { .i = cdata->dav.rowid } },
+        { ":ispinned",     SQLITE_INTEGER, { .i = ispinned         } },
+        { NULL,            SQLITE_NULL,    { .s = NULL             } } };
+
+    int r = carddav_write(carddavdb, cdata);
+    if (r) return r;
+
+    return sqldb_exec(carddavdb->db, CMD_UPDATE_EMAILS, bval, NULL, NULL);
+}
+
+
+
 #define CMD_DELETE "DELETE FROM vcard_objs WHERE rowid = :rowid;"
 
 EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid)
