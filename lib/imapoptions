@@ -2639,13 +2639,13 @@ product version in the capabilities
    extending that list in the future or adding your own
    if needed. */
 
-{ "specialuse_nochildren", NULL, STRING, "3.6.0" }
+{ "specialuse_nochildren", "\\Scheduled \\Snooze", STRING, "3.6.0" }
 /* Whitespace separated list of special-use attributes that may not contain
    child folders.  If set, mailboxes with any of these attributes may not
    have child folders created, and these attributes cannot be added to
    mailboxes that already have children.. */
 
-{ "specialuse_protect", "\\Archive \\Drafts \\Important \\Junk \\Sent \\Trash", STRING, "3.1.7" }
+{ "specialuse_protect", "\\Archive \\Drafts \\Important \\Junk \\Sent \\Scheduled \\Snooze \\Trash", STRING, "3.1.7" }
 /* Whitespace separated list of special-use attributes
    to protect the mailboxes for.  If set, don't allow
    mailboxes with these special use attributes to be deleted
