@@ -1336,7 +1336,6 @@ sub test_emailsubmission_scheduled_send
                 }
             }
          }, "R1"],
-        [ 'Mailbox/get', { ids => ['#2'] }, 'R2'],
     ]);
     my $identityid = $res->[0][1]->{list}[0]->{id};
     my $draftsid = $res->[1][1]{created}{"1"}{id};
@@ -1344,32 +1343,20 @@ sub test_emailsubmission_scheduled_send
     my $sentid = $res->[1][1]{created}{"3"}{id};
 
 
-    xlog $self, "Verify Scheduled mailbox properties";
-    my $mbox = $res->[2][1]{list}[0];
+    xlog $self, "Verify Scheduled mailbox rights";
+    my $myRights = $res->[1][1]{created}{"2"}{myrights};
     $self->assert_deep_equals({
-        id => "$schedid",
-        name => "Scheduled",
-        parentId => undef,
-        myRights => {
-            mayReadItems => JSON::true,
-            mayAddItems => JSON::false,
-            mayRemoveItems => JSON::false,
-            mayCreateChild => JSON::false,
-            mayDelete => JSON::false,
-            maySubmit => JSON::false,
-            maySetSeen => JSON::false,
-            maySetKeywords => JSON::false,
-            mayAdmin => JSON::false,
-            mayRename => JSON::false
-        },
-        role => "scheduled",
-        totalEmails => 0,
-        unreadEmails => 0,
-        totalThreads => 0,
-        unreadThreads => 0,
-        sortOrder => 8,
-        isSubscribed => JSON::false
-    }, $mbox);
+        mayReadItems => JSON::true,
+        mayAddItems => JSON::false,
+        mayRemoveItems => JSON::false,
+        mayCreateChild => JSON::false,
+        mayDelete => JSON::false,
+        maySubmit => JSON::false,
+        maySetSeen => JSON::false,
+        maySetKeywords => JSON::false,
+        mayAdmin => JSON::false,
+        mayRename => JSON::false
+    }, $myRights);
 
 
     xlog $self, "Try to create a child of Scheduled mailbox";
