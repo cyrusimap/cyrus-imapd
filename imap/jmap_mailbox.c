@@ -2328,7 +2328,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     if (r) goto done;
     *mbox = json_pack("{s:s s:o s:i s:i s:i s:i}",
                       "id", mbentry->uniqueid,
-                      "myrights", _mbox_get_myrights(req, mbentry),
+                      "myRights", _mbox_get_myrights(req, mbentry),
                       "totalEmails", 0, "unreadEmails", 0,
                       "totalThreads", 0, "unreadThreads", 0);
 
