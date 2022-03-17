@@ -248,6 +248,8 @@ EXPORTED int is_system_user(const char *userid)
 
     if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS), NULL, STRARRAY_TRIM);
 
+    if (*userid == '-') userid++;
+
     if (!strcmp(userid, "anyone")) return 1;
     if (!strcmp(userid, "anonymous")) return 1;
     if (strarray_find(admins, userid, 0) >= 0)
