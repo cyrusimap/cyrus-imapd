@@ -84,7 +84,7 @@ EXPORTED int saslserver(sasl_conn_t *conn, const char *mech,
     }
 
     /* start the exchange */
-    if (r == SASL_OK)
+    if (r == SASL_OK || r == SASL_CONTINUE)
         r = sasl_server_start(conn, mech, clientin, clientinlen,
                               &serverout, &serveroutlen);
 
