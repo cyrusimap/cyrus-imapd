@@ -1344,7 +1344,7 @@ sub test_emailsubmission_scheduled_send
 
 
     xlog $self, "Verify Scheduled mailbox rights";
-    my $myRights = $res->[1][1]{created}{"2"}{myrights};
+    my $myRights = $res->[1][1]{created}{"2"}{myRights};
     $self->assert_deep_equals({
         mayReadItems => JSON::true,
         mayAddItems => JSON::false,
