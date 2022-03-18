@@ -399,7 +399,9 @@ sub cleanup_leftovers
 
     map
     {
-        xlog "Cleaning up old basedir $rootdir/$_";
+        if (get_verbose) {
+            xlog "Cleaning up old basedir $rootdir/$_";
+        }
         rmtree "$rootdir/$_";
     } @dirs;
 }
