@@ -1530,18 +1530,6 @@ sub stop
     return @errors;
 }
 
-sub cleanup
-{
-    my ($self) = @_;
-
-    if (Cassandane::Cassini->instance()->bool_val('cassandane', 'cleanup'))
-    {
-        # Remove all on-disk traces of this instance
-        xlog "Cleaning up basedir " . $self->{basedir};
-        rmtree $self->{basedir};
-    }
-}
-
 sub DESTROY
 {
     my ($self) = @_;
