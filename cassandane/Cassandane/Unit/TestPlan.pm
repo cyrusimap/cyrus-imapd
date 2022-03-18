@@ -802,7 +802,7 @@ sub _run_workitem
     {
         eval
         {
-            $test->post_tear_down();
+            $test->post_tear_down($witem->{result});
         };
         my $ex = $@;
         if ($ex)
