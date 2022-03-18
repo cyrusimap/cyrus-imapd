@@ -44,6 +44,7 @@ use attributes;
 use Data::Dumper;
 use Scalar::Util qw(refaddr);
 use List::Util qw(uniq);
+use File::Path qw(rmtree);
 
 use lib '.';
 use base qw(Cassandane::Unit::TestCase);
@@ -885,37 +886,40 @@ sub tear_down
     $self->{backend1_adminstore} = undef;
 
     my @stop_errors;
+    my @basedirs;
 
     if (defined $self->{instance})
     {
         eval { push @stop_errors, $self->{instance}->stop() };
-        $self->{instance}->cleanup();
+        push @basedirs, $self->{instance}->get_basedir();
         $self->{instance} = undef;
     }
     if (defined $self->{backups})
     {
         eval { push @stop_errors, $self->{backups}->stop() };
-        $self->{backups}->cleanup();
+        push @basedirs, $self->{backups}->get_basedir();
         $self->{backups} = undef;
     }
     if (defined $self->{backend2})
     {
         eval { push @stop_errors, $self->{backend2}->stop() };
-        $self->{backend2}->cleanup();
+        push @basedirs, $self->{backend2}->get_basedir();
         $self->{backend2} = undef;
     }
     if (defined $self->{replica})
     {
         eval { push @stop_errors, $self->{replica}->stop() };
-        $self->{replica}->cleanup();
+        push @basedirs, $self->{replica}->get_basedir();
         $self->{replica} = undef;
     }
     if (defined $self->{frontend})
     {
         eval { push @stop_errors, $self->{frontend}->stop() };
-        $self->{frontend}->cleanup();
+        push @basedirs, $self->{frontend}->get_basedir();
         $self->{frontend} = undef;
     }
+
+    $self->{cleanup_basedirs} = [@basedirs];
 
     # maybe there's multiple errors, but we can only die for one of them...
     die $stop_errors[0] if scalar @stop_errors;
@@ -925,7 +929,17 @@ sub tear_down
 
 sub post_tear_down
 {
-    my ($self) = @_;
+    my ($self, $result) = @_;
+
+    if ($result eq 'pass'
+        && ref $self->{cleanup_basedirs}
+        && Cassandane::Cassini->instance()->bool_val('cassandane', 'cleanup')
+    ) {
+        foreach my $basedir (@{$self->{cleanup_basedirs}}) {
+            xlog $self, "Cleaning up basedir " . $basedir;
+            rmtree $basedir;
+        }
+    }
 
     die "Found some stray processes"
         if (Cassandane::GenericDaemon::kill_processes_on_ports(
