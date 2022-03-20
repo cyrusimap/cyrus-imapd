@@ -138,10 +138,28 @@ sub instance
 
 sub val
 {
-    # Args are: section, name, default
+    my ($self, $section, $name, $default) = @_;
+
+    # Allow overrides from specially-named environment variables.
+    #
+    # Examples:
+    #
+    # to override the "rootdir" option from the "[cassandane]" section,
+    # set: CASSINI_CASSANDANE_ROOTDIR=/some/different/value
+    #
+    # to override the "prefix" option from the "[cyrus default]" section,
+    # set: CASSINI_CYRUS_DEFAULT_PREFIX=/some/different/value
+    #
+    my $envname = "\UCASSINI $section $name\E";
+    $envname =~ s{[^A-Z0-9]+}{_}g;
+    if (defined $ENV{$envname}) {
+        xlog "Using configuration from environment:"
+             . " \$$envname=\"$ENV{$envname}\"";
+        return $ENV{$envname};
+    }
+
     # see the Config::IniFiles documentation for ->val()
-    my ($self, @args) = @_;
-    return $self->{inifile}->val(@args);
+    return $self->{inifile}->val($section, $name, $default);
 }
 
 sub bool_val
