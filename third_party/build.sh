@@ -53,7 +53,7 @@ if [ ! $ITEM ] || [ $ITEM == icu ] ; then
 )
 fi
 
-if [ ! $ITEM ] || [ $ITEM == zeroskip ] ; then
+if [ $ITEM == zeroskip ] ; then
 (
   cd zeroskip
   git clean -f -x -d
