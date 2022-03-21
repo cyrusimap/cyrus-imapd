@@ -2479,7 +2479,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
   done:
     bc_cur->is_executing = 0;
 
-    if (!res && implicit_keep) {
+    if (!res && implicit_keep && !is_incl) {
         strarray_t *actionflags = strarray_dup(variables->var);
         struct buf *headers = NULL;
 
