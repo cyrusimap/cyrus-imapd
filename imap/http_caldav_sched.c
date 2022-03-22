@@ -2566,7 +2566,8 @@ static void schedule_sub_declines(const char *attendee,
                                                            ICAL_ORGANIZER_PROPERTY));
 
         /* master component already declined, no need to send */
-        if (!reply->master_send && !partstat_changed(mastercomp, comp, attendee)) {
+        if (!reply->master_send && !partstat_changed(mastercomp, comp, attendee) &&
+                (!comp || !organizer_changed(comp, newcomp))) {
             if (force_send == ICAL_SCHEDULEFORCESEND_NONE)
                 continue;
         }
@@ -2637,7 +2638,8 @@ static void schedule_sub_replies(const char *attendee,
 
         /* unchanged partstat - we don't need to send anything */
         if (!reply->master_send &&
-                !partstat_changed(oldcomp ? oldcomp : mastercomp, comp, attendee)) {
+                !partstat_changed(oldcomp ? oldcomp : mastercomp, comp, attendee) &&
+                (!oldcomp || !organizer_changed(oldcomp, comp))) {
             if (force_send == ICAL_SCHEDULEFORCESEND_NONE)
                 continue;
         }
@@ -2699,6 +2701,7 @@ static void schedule_full_decline(const char *attendee,
     reply->master_send = 1;
 }
 
+
 /* we've already tested that master contains this attendee */
 static void schedule_full_reply(const char *attendee,
                                 icaltimetype h_cutoff,
@@ -2736,8 +2739,11 @@ static void schedule_full_reply(const char *attendee,
     else {
         /* or it's different */
         icalcomponent *oldmaster = find_attended_component(oldical, "", attendee);
+
         if (partstat_changed(oldmaster, mastercomp, attendee))
             add_master = 1;
+        else if (oldmaster && organizer_changed(oldmaster, mastercomp))
+            add_master = 1; // Event might got moved in Google Calendar
 
         /* or it includes new EXDATEs */
         else {

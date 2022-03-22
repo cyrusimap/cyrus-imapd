@@ -4063,30 +4063,6 @@ static int setcalendarevents_schedule(const char *sched_userid,
     const char *organizer = icalproperty_get_organizer(prop);
     if (!organizer) goto done;
     if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
-
-    /* Validate create/update. */
-    if (oldical && (mode & (JMAP_CREATE|JMAP_UPDATE))) {
-        /* Don't allow ORGANIZER to be updated */
-        const char *oldorganizer = NULL;
-
-        icalcomponent *oldcomp = NULL;
-        icalproperty *prop = NULL;
-        oldcomp =
-            icalcomponent_get_first_component(oldical, ICAL_VEVENT_COMPONENT);
-        if (oldcomp) {
-            prop = icalcomponent_get_first_property(oldcomp,
-                                                    ICAL_ORGANIZER_PROPERTY);
-        }
-        if (prop) oldorganizer = icalproperty_get_organizer(prop);
-        if (oldorganizer) {
-            if (!strncasecmp(oldorganizer, "mailto:", 7)) oldorganizer += 7;
-            if (strcasecmp(oldorganizer, organizer)) {
-                /* XXX This should become a set error. */
-                goto done;
-            }
-        }
-    }
-
     if (organizer &&
             /* XXX Hack for Outlook */ icalcomponent_get_first_invitee(comp)) {
 
