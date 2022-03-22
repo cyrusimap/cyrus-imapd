@@ -289,6 +289,8 @@ sub _make_instance_info
 
 sub _make_unique_instance_info
 {
+    # This must be kept in sync with cleanup_leftovers, which expects
+    # to be able to recognise instance directories by name for cleanup.
     if (!defined $stamp)
     {
         $stamp = to_iso8601(DateTime->now);
@@ -383,13 +385,23 @@ sub cleanup_leftovers
     my @dirs;
     while (my $e = readdir(ROOT))
     {
-        push(@dirs, $e) if ($e =~ m/^[0-9]{6}([A-Z]|)[0-9]{1,}$/);
+        # This must be kept in sync with _make_unique_instance_info,
+        # which is what names and creates these directories.
+        my $basedirpat = qr{
+            \d{6}               # UTC timestamp as HHMMSS
+            (?:[0-9A-F]{2,})?   # optional worker ID as 2+ hex digits
+            [0-9A-F]{2,}        # unique number as 2+ hex digits
+        }ax;
+
+        push(@dirs, $e) if $e =~ m/$basedirpat/;
     }
     closedir ROOT;
 
     map
     {
-        xlog "Cleaning up old basedir $rootdir/$_";
+        if (get_verbose) {
+            xlog "Cleaning up old basedir $rootdir/$_";
+        }
         rmtree "$rootdir/$_";
     } @dirs;
 }
@@ -1527,18 +1539,6 @@ sub stop
     }
 
     return @errors;
-}
-
-sub cleanup
-{
-    my ($self) = @_;
-
-    if (Cassandane::Cassini->instance()->bool_val('cassandane', 'cleanup'))
-    {
-        # Remove all on-disk traces of this instance
-        xlog "Cleaning up basedir " . $self->{basedir};
-        rmtree $self->{basedir};
-    }
 }
 
 sub DESTROY
