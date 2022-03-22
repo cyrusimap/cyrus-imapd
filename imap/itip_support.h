@@ -153,6 +153,7 @@ extern icalproperty *find_attendee(icalcomponent *comp, const char *match);
 extern const char *get_organizer(icalcomponent *comp);
 extern int partstat_changed(icalcomponent *oldcomp,
                             icalcomponent *newcomp, const char *attendee);
+extern int organizer_changed(icalcomponent *oldcomp, icalcomponent *newcomp);
 
 extern icalcomponent *master_to_recurrence(icalcomponent *master,
                                            icalproperty *recurid);
