@@ -731,4 +731,47 @@ EOF
     $self->assert_matches(qr/max-resource-size/, $Err);
 }
 
+sub test_allow_change_text_uuid_to_urn_uuid
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+    my $href = "$Id/bar.vcf";
+
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:3b678b69-ca41-461e-b2c7-f96b9fe48d68
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    xlog $self, "PUT vCard v3 with text UID";
+    eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
+
+    xlog $self, "PUT same vCard as v4 with URL (urn) UID";
+    $card =~ s/VERSION:3.0/VERSION:4.0/;
+    $card =~ s/UID:/UID:urn:uuid:/;
+
+    eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
+    my $Err = $@;
+    $self->assert_matches(qr//, $Err);
+
+    xlog $self, "PUT vCard v3 with text UID";
+    $card =~ s/VERSION:4.0/VERSION:3.0/;
+    $card =~ s/UID:urn:uuid:/UID:/;
+
+    eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
+    $Err = $@;
+    $self->assert_matches(qr//, $Err);
+}
+
 1;
