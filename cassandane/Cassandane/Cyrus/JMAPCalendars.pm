@@ -18420,6 +18420,10 @@ sub test_calendarevent_get_privacy_shared
             },
         },
     };
+
+    my @wantProperties = keys %{$eventTemplate};
+    push @wantProperties, 'calendarIds', 'isDraft', 'utcStart', 'utcEnd';
+
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
@@ -18428,9 +18432,18 @@ sub test_calendarevent_get_privacy_shared
                 secretEvent => { ( privacy => 'secret' ), %$eventTemplate }
             },
         }, 'R1'],
-        ['CalendarEvent/get', { ids => ['#publicEvent'] }, 'R2'],
-        ['CalendarEvent/get', { ids => ['#privateEvent'] }, 'R3'],
-        ['CalendarEvent/get', { ids => ['#secretEvent'] }, 'R4'],
+        ['CalendarEvent/get', {
+            ids => ['#publicEvent'],
+            properties => \@wantProperties,
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => ['#privateEvent'],
+            properties => \@wantProperties,
+        }, 'R3'],
+        ['CalendarEvent/get', {
+            ids => ['#secretEvent'],
+            properties => \@wantProperties,
+        }, 'R4'],
     ]);
 
     my $publicEvent = $res->[1][1]{list}[0];
@@ -18453,7 +18466,8 @@ sub test_calendarevent_get_privacy_shared
     $res = $shareeJmap->CallMethods([
         ['CalendarEvent/get', {
             accountId => 'cassandane',
-            ids => [$publicEvent->{id}]
+            ids => [$publicEvent->{id}],
+            properties => \@wantProperties,
         }, 'R1'],
     ]);
     my $sharedPublicEvent = $res->[0][1]{list}[0];
@@ -18469,12 +18483,14 @@ sub test_calendarevent_get_privacy_shared
     $res = $shareeJmap->CallMethods([
         ['CalendarEvent/get', {
             accountId => 'cassandane',
-            ids => [$privateEvent->{id}]
+            ids => [$privateEvent->{id}],
+            properties => \@wantProperties,
         }, 'R1'],
     ]);
     my $sharedPrivateEvent = $res->[0][1]{list}[0];
     my %publicProps = (
         '@type' => 1,
+        calendarIds => 1,
         created => 1,
         due => 1,
         duration => 1,
@@ -18482,6 +18498,7 @@ sub test_calendarevent_get_privacy_shared
         excludedRecurrenceRules => 1,
         freeBusyStatus => 1,
         id => 1,
+        isDraft => 1,
         privacy => 1,
         recurrenceRules => 1,
         recurrenceOverrides => 1,
@@ -18492,6 +18509,8 @@ sub test_calendarevent_get_privacy_shared
         timeZones => 1,
         uid => 1,
         updated => 1,
+        utcStart => 1,
+        utcEnd => 1,
     );
     my @nonPublic;
     foreach my $prop (keys %{$privateEvent}) {
@@ -18507,7 +18526,8 @@ sub test_calendarevent_get_privacy_shared
     $res = $shareeJmap->CallMethods([
         ['CalendarEvent/get', {
             accountId => 'cassandane',
-            ids => [$secretEvent->{id}]
+            ids => [$secretEvent->{id}],
+            properties => \@wantProperties,
         }, 'R1'],
     ]);
     $self->assert_deep_equals([$secretEvent->{id}], $res->[0][1]{notFound});
