@@ -20447,4 +20447,129 @@ EOF
     }
 }
 
+
+sub test_calendarevent_set_override_created
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $t = DateTime->now();
+    $t->set_time_zone('Etc/UTC');
+    my $now = $t->strftime('%Y-%m-%dT%H:%M:%SZ');
+    $t->add(DateTime::Duration->new(days => -2));
+    my $past = $t->strftime('%Y-%m-%dT%H:%M:%SZ');
+    $t->add(DateTime::Duration->new(days => -2));
+    my $waypast = $t->strftime('%Y-%m-%dT%H:%M:%SZ');
+    $t->add(DateTime::Duration->new(days => 8));
+    my $future = $t->strftime('%Y-%m-%dT%H:%M:%SZ');
+
+    xlog "Create recurring event and set 'created' timestamp";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'event',
+                    created => $past,
+                    start => '2021-01-01T15:30:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 30,
+                    }],
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+
+    xlog "Add new override: created > main:created";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    recurrenceOverrides => {
+                        '2021-01-02T15:30:00' => {
+                            title => 'eventOverride',
+                            created => $now,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            properties => ['created', 'recurrenceOverrides'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_str_equals($past, $res->[1][1]{list}[0]{created});
+    $self->assert_str_equals($now, $res->[1][1]{list}[0]
+        {recurrenceOverrides}{'2021-01-02T15:30:00'}{created});
+
+    xlog "Add new override: created < main:created";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'recurrenceOverrides/2021-01-03T15:30:00' => {
+                        title => 'eventOverride',
+                        created => $waypast,
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            properties => ['created', 'recurrenceOverrides'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_str_equals($past, $res->[1][1]{list}[0]{created});
+    $self->assert_str_equals($waypast, $res->[1][1]{list}[0]
+        {recurrenceOverrides}{'2021-01-03T15:30:00'}{created});
+
+    xlog "Add new override: created > now: server clamps to now";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'recurrenceOverrides/2021-01-04T15:30:00' => {
+                        title => 'eventOverride',
+                        created => $future,
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            properties => ['created', 'recurrenceOverrides'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_str_equals($past, $res->[1][1]{list}[0]{created});
+    $self->assert_str_equals(substr($now, 0, 15),
+        substr($res->[1][1]{list}[0]{recurrenceOverrides}
+            {'2021-01-04T15:30:00'}{created}, 0, 15));
+
+    xlog "Can't change created of existing override";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'recurrenceOverrides/2021-01-02T15:30:00/created' => $past,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals(['recurrenceOverrides/2021-01-02T15:30:00/created'],
+        $res->[0][1]{notUpdated}{$eventId}{properties});
+
+
+}
+
 1;

@@ -6958,6 +6958,7 @@ static void overrides_to_ical(icalcomponent *comp,
 static void timestamps_to_ical(icalcomponent *comp,
                                struct jmap_parser *parser,
                                json_t *jsevent,
+                               int is_override,
                                struct icalcomps *oldcomps,
                                icaltimetype now,
                                struct jmapical_ctx *jmapctx)
@@ -7040,13 +7041,15 @@ static void timestamps_to_ical(icalcomponent *comp,
     int is_server_set = 0;
     if (jmapctx && !jmapctx->to_ical.no_sanitize_timestamps) {
         icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
-        if (old_comp) {
+        int is_new_override = is_override && old_comp &&
+            !icalcomponent_get_first_property(old_comp, ICAL_RECURRENCEID_PROPERTY);
+        if (old_comp && !is_new_override) {
+            // can't change value of 'created'
             icalproperty *prop = icalcomponent_get_first_property(old_comp,
                     ICAL_CREATED_PROPERTY);
             if (prop) {
                 icaltimetype old_created = icalproperty_get_created(prop);
                 if (icaltime_compare(created, old_created)) {
-                    // can't change value of 'created'
                     jmap_parser_invalid(parser, "created");
                 }
             }
@@ -7099,7 +7102,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     int is_exc = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY) != NULL;
 
     /* Update 'created' and 'updated' timestamps */
-    timestamps_to_ical(comp, parser, event, oldcomps, now, jmapctx);
+    timestamps_to_ical(comp, parser, event, is_exc, oldcomps, now, jmapctx);
 
     json_t *jprop = json_object_get(event, "excluded");
     if (jprop && jprop != json_false()) {
