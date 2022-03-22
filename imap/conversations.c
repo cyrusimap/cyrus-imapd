@@ -2348,6 +2348,7 @@ static int _read_emailcounts_cb(const conv_guidrec_t *rec, void *rock)
 
     i->exists++;
     if (rec->foldernum == ecounts->foldernum) i->folderexists++;
+    bv_set(&ecounts->exists_foldernums, rec->foldernum);
 
     // not seen or unsure, count it as unseen
     if (rec->version == 0 || !(rec->system_flags & (FLAG_SEEN|FLAG_DRAFT))) {
@@ -2356,6 +2357,13 @@ static int _read_emailcounts_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     return 0;
+}
+
+EXPORTED void emailcounts_fini(struct emailcounts *ecounts)
+{
+    bv_fini(&ecounts->exists_foldernums);
+    static struct emailcounts init = EMAILCOUNTS_INIT;
+    *ecounts = init;
 }
 
 EXPORTED int conversations_update_record(struct conversations_state *cstate,
@@ -2372,6 +2380,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     int i;
     modseq_t modseq = 0;
     int r = 0;
+    struct emailcounts ecounts = EMAILCOUNTS_INIT;
 
     if (old && new) {
         /* we're always moving forwards */
@@ -2423,10 +2432,10 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
-    struct emailcounts ecounts = EMAILCOUNTS_INIT;
     ecounts.foldernum =
         conversation_folder_number(cstate, CONV_FOLDER_KEY_MBOX(cstate, mailbox), /*create*/1);
     ecounts.trashfolder = cstate->trashfolder;
+    bv_setsize(&ecounts.exists_foldernums, conversations_num_folders(cstate));
 
     /* count the email state before making GUID changes */
     r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
@@ -2565,6 +2574,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     r = conversation_save(cstate, record->cid, conv);
 
 done:
+    emailcounts_fini(&ecounts);
     conversation_free(conv);
     free(delta_counts);
     return r;
@@ -2657,14 +2667,18 @@ EXPORTED int conversation_update(struct conversations_state *state,
     // now update all the folder counts
 
     int dexists = !!ecounts->post.folderexists - !!ecounts->pre.folderexists;
-    int dunseen = !!ecounts->post.folderunseen - !!ecounts->pre.folderunseen;
+    int dfolderunseen = !!ecounts->post.folderunseen - !!ecounts->pre.folderunseen;
+    int dfolderexists = !!ecounts->post.folderexists - !!ecounts->pre.folderexists;
+    int dunseen = !!ecounts->post.unseen - !!ecounts->pre.unseen;
     int dthreadexists = !!folder->exists - !!oldfolderexists;
     int dthreadunseen = !!conv->unseen - !!oldunseen;
     if (is_trash) dthreadunseen = !!folder->unseen - !!oldfolderunseen;
 
+
     for (folder = conv->folders; folder; folder = folder->next) {
         conv_status_t status;
         const char *mailbox = strarray_nth(state->folders, folder->number);
+
         int r = conversation_getstatus(state, mailbox, &status);
         if (r) return r;
 
@@ -2676,10 +2690,31 @@ EXPORTED int conversation_update(struct conversations_state *state,
                 _apply_delta(&status.emailexists, dexists);
                 dirty = 1;
             }
-            if (dunseen) {
-                _apply_delta(&status.emailunseen, dunseen);
+
+            if (folder->number != state->trashfolder) {
+                if (dfolderexists > 0 && ecounts->post.unseen) {
+                    // email just got added here and is unseen
+                    _apply_delta(&status.emailunseen, 1);
+                }
+                else if (dfolderexists < 0 && ecounts->pre.unseen) {
+                    // email just got deleted here and was unseen
+                    _apply_delta(&status.emailunseen, -1);
+                }
+                else if (dfolderexists == 0 && dunseen > 0) {
+                    // email was seen and got unseen
+                    _apply_delta(&status.emailunseen, 1);
+                }
+                else if (dfolderexists == 0 && dunseen < 0) {
+                    // email was unseen and got seen
+                    _apply_delta(&status.emailunseen, -1);
+                }
+            }
+            else if (dfolderunseen) {
+                // trash only counts its own unseen emails
+                _apply_delta(&status.emailunseen, dfolderunseen);
                 dirty = 1;
             }
+
             if (dthreadexists) {
                 _apply_delta(&status.threadexists, dthreadexists);
                 dirty = 1;
@@ -2703,6 +2738,18 @@ EXPORTED int conversation_update(struct conversations_state *state,
         }
         // unseen changes apply to all other folders except trash if this isn't the trash folder
         else if (!is_trash && folder->number != state->trashfolder && folder->exists) {
+
+            if (bv_isset(&ecounts->exists_foldernums, folder->number)) {
+                if (dunseen > 0) {
+                    // email was seen and got unseen
+                    _apply_delta(&status.emailunseen, 1);
+                }
+                if (dunseen < 0) {
+                    // email was unseen and got seen
+                    _apply_delta(&status.emailunseen, -1);
+                }
+            }
+
             if (dthreadunseen) {
                 _apply_delta(&status.threadunseen, dthreadunseen);
                 dirty = 1;
