@@ -1352,8 +1352,8 @@ sub test_emailsubmission_scheduled_send
         mayCreateChild => JSON::false,
         mayDelete => JSON::false,
         maySubmit => JSON::false,
-        maySetSeen => JSON::false,
-        maySetKeywords => JSON::false,
+        maySetSeen => JSON::true,
+        maySetKeywords => JSON::true,
         mayAdmin => JSON::false,
         mayRename => JSON::false
     }, $myRights);

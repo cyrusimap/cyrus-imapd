@@ -6906,7 +6906,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
         if (strstr(buf_cstring(&specialuse), "\\Snoozed"))
             options |= OPT_IMAP_HAS_ALARMS;
         else if (strstr(buf_cstring(&specialuse), "\\Scheduled"))
-            flags |= MBOXLIST_CREATE_READ_ONLY;
+            flags |= MBOXLIST_CREATE_SETFLAGS_ONLY;
     }
 
     // A non-admin is not allowed to specify the server nor partition on which

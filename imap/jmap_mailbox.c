@@ -2296,7 +2296,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
         if (!strcmp("\\Snoozed", args->specialuse))
             options |= OPT_IMAP_HAS_ALARMS;
         else if (!strcmp("\\Scheduled", args->specialuse)) {
-            flags |= MBOXLIST_CREATE_READ_ONLY;
+            flags |= MBOXLIST_CREATE_SETFLAGS_ONLY;
 
             /* Flush any empty entry for "scheduled" role in mboxid_byrole hash --
                If jmap_findmbox_role("scheduled") was called before this
