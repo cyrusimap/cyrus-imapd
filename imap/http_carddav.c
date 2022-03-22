@@ -1293,10 +1293,14 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    /* Check for changed UID */
+    /* Check for changed UID -- Allow for text uuid <-> urn:uuid */
     struct carddav_data *cdata;
     carddav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
-    if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
+    
+    const char *olduid = cdata->vcard_uid;
+    if (!strncmp(uid, "urn:uuid:", 9)) uid += 9;
+    if (!strncmpsafe(olduid, "urn:uuid:", 9)) olduid += 9;
+    if (cdata->dav.imap_uid && strcmpsafe(olduid, uid)) {
         /* CARDDAV:no-uid-conflict */
         char *owner;
         const char *mboxname;
