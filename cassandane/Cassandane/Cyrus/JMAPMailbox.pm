@@ -4038,6 +4038,7 @@ sub test_mailbox_counts
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
     $imap->uid(1);
+    my ($maj, $min) = Cassandane::Instance->get_version();
 
     xlog "Set up mailboxes";
     my $res = $jmap->CallMethods([
@@ -4176,11 +4177,19 @@ EOF
     # T3 in (a,b) unseen
     # T4 in (a,trash) seen
 
-    $self->_check_counts('Initial Test',
-        a => [ 5, 2, 4, 2 ],
-        b => [ 3, 1, 2, 2 ],
-        trash => [ 1, 0, 1, 0 ],
-    );
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $self->_check_counts('Initial Test',
+            a => [ 5, 2, 4, 2 ],
+            b => [ 3, 2, 2, 2 ],
+            trash => [ 1, 0, 1, 0 ],
+        );
+    } else {
+        $self->_check_counts('Initial Test',
+            a => [ 5, 2, 4, 2 ],
+            b => [ 3, 1, 2, 2 ],
+            trash => [ 1, 0, 1, 0 ],
+        );
+    }
 
     xlog $self, "Move half an email to Trash";
     $imap->select("INBOX.a");
@@ -4195,11 +4204,19 @@ EOF
     # F (a:6, seen)
     # G (trash:1, seen)
 
-    $self->_check_counts('After first move',
-        a => [ 5, 1, 4, 2 ],
-        b => [ 3, 1, 2, 2 ],
-        trash => [ 2, 1, 2, 1 ],
-    );
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $self->_check_counts('After first move',
+            a => [ 5, 1, 4, 2 ],
+            b => [ 3, 2, 2, 2 ],
+            trash => [ 2, 1, 2, 1 ],
+        );
+    } else {
+        $self->_check_counts('After first move',
+            a => [ 5, 1, 4, 2 ],
+            b => [ 3, 1, 2, 2 ],
+            trash => [ 2, 1, 2, 1 ],
+        );
+    }
 
     xlog $self, "Mark the bits of the thread OUTSIDE Trash all seen";
     $imap->select("INBOX.b");
@@ -4214,11 +4231,19 @@ EOF
     # F (a:6, seen)
     # G (trash:1, seen)
 
-    $self->_check_counts('Second change',
-        a => [ 5, 1, 4, 1 ],
-        b => [ 3, 0, 2, 1 ],
-        trash => [ 2, 1, 2, 1 ],
-    );
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $self->_check_counts('Second change',
+            a => [ 5, 1, 4, 1 ],
+            b => [ 3, 1, 2, 1 ],
+            trash => [ 2, 1, 2, 1 ],
+        );
+    } else {
+        $self->_check_counts('Second change',
+            a => [ 5, 1, 4, 1 ],
+            b => [ 3, 0, 2, 1 ],
+            trash => [ 2, 1, 2, 1 ],
+        );
+    }
 
     xlog $self, "Delete a message we don't care about";
     $imap->select("INBOX.b");
@@ -4233,11 +4258,19 @@ EOF
     # F (a:6, seen)
     # G (trash:1, seen)
 
-    $self->_check_counts('Third change',
-        a => [ 5, 1, 4, 1 ],
-        b => [ 2, 0, 2, 1 ],
-        trash => [ 2, 1, 2, 1 ],
-    );
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $self->_check_counts('Third change',
+            a => [ 5, 1, 4, 1 ],
+            b => [ 2, 1, 2, 1 ],
+            trash => [ 2, 1, 2, 1 ],
+        );
+    } else {
+        $self->_check_counts('Third change',
+            a => [ 5, 1, 4, 1 ],
+            b => [ 2, 0, 2, 1 ],
+            trash => [ 2, 1, 2, 1 ],
+        );
+    }
 
     xlog $self, "Delete some more";
     $imap->select("INBOX.a");
@@ -4251,12 +4284,19 @@ EOF
     # E (a:5, unseen - b:3, seen) == unseen
     # G (trash:1, seen)
 
-    $self->_check_counts('Forth change',
-        a => [ 2, 1, 2, 1 ],
-        b => [ 2, 0, 2, 1 ],
-        trash => [ 2, 1, 2, 1 ],
-    );
-
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $self->_check_counts('Forth change',
+            a => [ 2, 1, 2, 1 ],
+            b => [ 2, 1, 2, 1 ],
+            trash => [ 2, 1, 2, 1 ],
+        );
+    } else {
+        $self->_check_counts('Forth change',
+            a => [ 2, 1, 2, 1 ],
+            b => [ 2, 0, 2, 1 ],
+            trash => [ 2, 1, 2, 1 ],
+        );
+    }
 }
 
 sub test_mailbox_counts_add_remove
@@ -4342,6 +4382,12 @@ EOF
     $imap->append('INBOX.a', "(\\Seen)", $raw{C}) || die $@;
     $imap->append('INBOX.a', "()", $raw{D}) || die $@;
 
+    # expectation:
+    # A (a:1, seen)
+    # B (a:2, unseen)
+    # C (a:3, seen)
+    # D (a:4 unseen)
+
     $self->_check_counts('Initial Test',
         a => [ 4, 2, 2, 2 ],
         b => [ 0, 0, 0, 0 ],
@@ -4350,6 +4396,13 @@ EOF
     xlog $self, "Move email to b";
     $imap->select("INBOX.a");
     $imap->move("3", "INBOX.b");
+
+    # expectation:
+    # A (a:1, seen)
+    # B (a:2, unseen)
+    # C (b:1, seen)
+    # D (a:4 unseen)
+
     $self->_check_counts('After first move',
         a => [ 3, 2, 2, 2 ],
         b => [ 1, 0, 1, 1 ],
@@ -4357,6 +4410,13 @@ EOF
 
     xlog $self, "mark seen";
     $imap->store(2, "+flags", "\\Seen");
+
+    # expectation:
+    # A (a:1, seen)
+    # B (a:2, seen)
+    # C (b:1, seen)
+    # D (a:4 unseen)
+
     $self->_check_counts('After mark seen',
         a => [ 3, 1, 2, 1 ],
         b => [ 1, 0, 1, 0 ],
@@ -4364,6 +4424,13 @@ EOF
 
     xlog $self, "move other";
     $imap->move("4", "INBOX.b");
+
+    # expectation:
+    # A (a:1, seen)
+    # B (a:2, seen)
+    # C (b:1, seen)
+    # D (b:2 unseen)
+
     $self->_check_counts('After move other',
         a => [ 2, 0, 1, 0 ],
         b => [ 2, 1, 2, 1 ],
@@ -4372,6 +4439,13 @@ EOF
     xlog $self, "move first back";
     $imap->select("INBOX.b");
     $imap->move("1", "INBOX.a");
+
+    # expectation:
+    # A (a:1, seen)
+    # B (a:2, seen)
+    # C (a:5, seen)
+    # D (b:2 unseen)
+
     $self->_check_counts('After move first back',
         a => [ 3, 0, 1, 0 ],
         b => [ 1, 1, 1, 1 ],
@@ -4380,6 +4454,13 @@ EOF
     xlog $self, "mark unseen again (different email)";
     $imap->select("INBOX.a");
     $imap->store(1, "-flags", "\\Seen");
+
+    # expectation:
+    # A (a:1, unseen)
+    # B (a:2, seen)
+    # C (a:5, seen)
+    # D (b:2 unseen)
+
     $self->_check_counts('After mark unseen again',
         a => [ 3, 1, 1, 1 ],
         b => [ 1, 1, 1, 1 ],

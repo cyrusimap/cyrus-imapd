@@ -50,6 +50,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "arrayu64.h"
+#include "bitvector.h"
 #include "hash.h"
 #include "hashu64.h"
 #include "message_guid.h"
@@ -207,9 +208,12 @@ struct emailcounts {
     int ispost;
     struct emailcountitems pre;
     struct emailcountitems post;
+    bitvector_t exists_foldernums;
 };
 
-#define EMAILCOUNTS_INIT { -1, -1, 0, EMAILCOUNTITEMS_INIT, EMAILCOUNTITEMS_INIT }
+#define EMAILCOUNTS_INIT { -1, -1, 0, EMAILCOUNTITEMS_INIT, EMAILCOUNTITEMS_INIT, BV_INITIALIZER }
+
+extern void emailcounts_fini(struct emailcounts *ecounts);
 
 #include "mailbox.h"
 
