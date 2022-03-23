@@ -921,6 +921,11 @@ sub test_no_delete_non_imap
     $talk->delete('INBOX.#calendars.Default');
     $self->assert_str_equals('no', $talk->get_last_completion_response());
     $self->assert_matches(qr/Permission denied/i, $talk->get_last_error());
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->delete('user.cassandane.#calendars.Default');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 }
 
 1;
