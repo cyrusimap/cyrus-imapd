@@ -835,7 +835,7 @@ static void _emailsubmission_create(jmap_req_t *req,
         }
 
         default:
-            *set_err = json_pack("{s:s s:s}", "type", "smtpProtocolError",
+            *set_err = json_pack("{s:s s:s}", "type", "forbiddenToSend",
                                  "description", desc);
             break;
         }
