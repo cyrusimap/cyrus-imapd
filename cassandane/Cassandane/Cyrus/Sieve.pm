@@ -5810,4 +5810,32 @@ EOF
     }, $res->[0][1]{list}[1]{calendarIds});
 }
 
+sub test_include_cancel_implicit_keep
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog $self, "Install a script which includes another";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["include"];
+include "foo";
+EOF
+    );
+
+    xlog $self, "Install a script to be included";
+    $self->{instance}->install_sieve_script(<<EOF
+# This should cancel implicit keep
+discard;
+EOF
+    , name=>'foo');
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that no messages are in INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({}, check_guid => 0);
+}
+
 1;

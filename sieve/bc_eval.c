@@ -1643,7 +1643,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
     int op;
     int version;
     int requires = 0;
-    int implicit_keep = 1;
 
     sieve_bytecode_t *bc_cur = exe->bc_cur;
     bytecode_input_t *bc = (bytecode_input_t *) bc_cur->data;
@@ -1727,8 +1726,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             res = do_keep(i, sc, actions, actionflags, headers);
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Keep can not be used with Reject";
-            else
-                implicit_keep = 0;
 
             actionflags = NULL;
             break;
@@ -1738,8 +1735,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         case B_DISCARD:
             res = do_discard(actions);
 
-            if (res == SIEVE_OK)
-                implicit_keep = 0;
             break;
 
 
@@ -1758,8 +1753,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "[e]Reject can not be used with any other action";
-            else
-                implicit_keep = 0;
 
             break;
         }
@@ -1799,8 +1792,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Fileinto can not be used with Reject";
-            else if (!cmd.u.f.copy)
-                implicit_keep = 0;
 
             actionflags = NULL;
             break;
@@ -1850,8 +1841,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Snooze can not be used with Reject";
-            else
-                implicit_keep = 0;
 
             actionflags = NULL;
             break;
@@ -1926,8 +1915,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Redirect can not be used with Reject";
-            else if (!cmd.u.r.copy)
-                implicit_keep = 0;
 
             break;
         }
@@ -2522,17 +2509,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
   done:
     bc_cur->is_executing = 0;
-
-    if (!res && implicit_keep) {
-        strarray_t *actionflags = strarray_dup(variables->var);
-        struct buf *headers = NULL;
-
-        if (i->edited_headers) i->getheadersection(m, &headers);
-
-        res = do_keep(i, sc, actions, actionflags, headers);
-
-        implicit_keep = 0;
-    }
 
     return res;
 }
