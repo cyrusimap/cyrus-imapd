@@ -2156,6 +2156,12 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) goto done;
 
+    /* Don't allow users to delete non-IMAP mailboxes */
+    if (!isadmin && (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL)) {
+        r = IMAP_PERMISSION_DENIED;
+        goto done;
+    }
+
     /* check if user has Delete right (we've already excluded non-admins
      * from deleting a user mailbox) */
     if (checkacl && !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
@@ -2281,6 +2287,12 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 
     r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) goto done;
+
+    /* Don't allow users to delete non-IMAP mailboxes */
+    if (!isadmin && (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL)) {
+        r = IMAP_PERMISSION_DENIED;
+        goto done;
+    }
 
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
         // make it deleted and mark it done!
