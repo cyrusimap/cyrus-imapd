@@ -4189,7 +4189,7 @@ EOF
     # T3 in (a,b) unseen
     # T4 in (a,trash) seen
 
-    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+    if ($maj > 3 || ($maj == 3 && $min >= 6)) {
         $self->_check_counts('Initial Test',
             a => [ 5, 2, 4, 2 ],
             b => [ 3, 2, 2, 2 ],
@@ -4216,7 +4216,7 @@ EOF
     # F (a:6, seen)
     # G (trash:1, seen)
 
-    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+    if ($maj > 3 || ($maj == 3 && $min >= 6)) {
         $self->_check_counts('After first move',
             a => [ 5, 1, 4, 2 ],
             b => [ 3, 2, 2, 2 ],
@@ -4243,7 +4243,7 @@ EOF
     # F (a:6, seen)
     # G (trash:1, seen)
 
-    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+    if ($maj > 3 || ($maj == 3 && $min >= 6)) {
         $self->_check_counts('Second change',
             a => [ 5, 1, 4, 1 ],
             b => [ 3, 1, 2, 1 ],
@@ -4270,7 +4270,7 @@ EOF
     # F (a:6, seen)
     # G (trash:1, seen)
 
-    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+    if ($maj > 3 || ($maj == 3 && $min >= 6)) {
         $self->_check_counts('Third change',
             a => [ 5, 1, 4, 1 ],
             b => [ 2, 1, 2, 1 ],
@@ -4296,7 +4296,7 @@ EOF
     # E (a:5, unseen - b:3, seen) == unseen
     # G (trash:1, seen)
 
-    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+    if ($maj > 3 || ($maj == 3 && $min >= 6)) {
         $self->_check_counts('Forth change',
             a => [ 2, 1, 2, 1 ],
             b => [ 2, 1, 2, 1 ],
