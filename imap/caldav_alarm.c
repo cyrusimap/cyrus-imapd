@@ -75,6 +75,9 @@
 struct caldav_alarm_data {
     char *mboxname;
     uint32_t imap_uid;
+    uint32_t type;
+    uint32_t num_rcpts;
+    uint32_t num_retries;
     time_t nextcheck;
 };
 
@@ -123,7 +126,10 @@ EXPORTED int caldav_alarm_done(void)
     " imap_uid INTEGER NOT NULL,"                       \
     " nextcheck INTEGER NOT NULL,"                      \
     " type INTEGER NOT NULL,"                           \
-    " numrcpts INTEGER NOT NULL,"                       \
+    " num_rcpts INTEGER NOT NULL,"                      \
+    " num_retries INTEGER NOT NULL,"                    \
+    " last_attempt INTEGER NOT NULL,"                   \
+    " last_err TEXT,"                                   \
     " PRIMARY KEY (mboxname, imap_uid)"                 \
     ");"                                                \
     "CREATE INDEX IF NOT EXISTS checktime ON events (nextcheck);" \
@@ -136,10 +142,17 @@ EXPORTED int caldav_alarm_done(void)
  * Sadly there's no other way to do it without creating a lock inversion! */
 #define CMD_UPGRADEv2 CMD_CREATE
 
-#define CMD_UPGRADEv3                                   \
-    "ALTER TABLE events ADD COLUMN type INTEGER;"       \
-    "ALTER TABLE events ADD COLUMN numrcpts INTEGER;"   \
-    "UPDATE events SET type = 1, numrcpts = 0;"         \
+#define CMD_UPGRADEv3                                      \
+    "ALTER TABLE events ADD COLUMN type INTEGER;"          \
+    "ALTER TABLE events ADD COLUMN num_rcpts INTEGER;"     \
+    "ALTER TABLE events ADD COLUMN num_retries INTEGER;"   \
+    "ALTER TABLE events ADD COLUMN last_attempt INTEGER;"  \
+    "ALTER TABLE events ADD COLUMN last_err TEXT;"         \
+    "UPDATE events SET"                                    \
+    "  type         = 1,"                                  \
+    "  num_rcpts    = 0,"                                  \
+    "  num_retries  = 0,"                                  \
+    "  last_attempt = 0;"                                  \
     "CREATE INDEX IF NOT EXISTS idx_type ON events (type);"
 
 static struct sqldb_upgrade upgrade[] = {
@@ -151,16 +164,22 @@ static struct sqldb_upgrade upgrade[] = {
 
 #define CMD_REPLACE                                            \
     "REPLACE INTO events"                                      \
-    " ( mboxname, imap_uid, nextcheck, type, numrcpts )"       \
+    " ( mboxname, imap_uid, nextcheck, type, num_rcpts,"       \
+    "   num_retries, last_attempt, last_err)"                  \
     " VALUES"                                                  \
-    " ( :mboxname, :imap_uid, :nextcheck, :type, :numrcpts )"  \
+    " ( :mboxname, :imap_uid, :nextcheck, :type, :num_rcpts,"  \
+    "   :num_retries, :last_attempt, :last_err)"               \
     ";"
 
 #define CMD_UPDATE                               \
     "UPDATE events SET"                          \
-    "  nextcheck = :nextcheck"                   \
+    "  nextcheck     = :nextcheck,"              \
+    "  num_retries   = :num_retries,"            \
+    "  last_attempt  = :last_attempt,"           \
+    "  last_err      = :last_err"                \
     " WHERE mboxname = :mboxname"                \
     "   AND imap_uid = :imap_uid"
+
 
 #define CMD_DELETE                               \
     "DELETE FROM events"                         \
@@ -179,13 +198,14 @@ static struct sqldb_upgrade upgrade[] = {
     ";"
 
 #define CMD_SELECTUSER                                      \
-    "SELECT mboxname, imap_uid, nextcheck, type, numrcpts"  \
+    "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts,"\
+    "  num_retries, last_attempt, last_err"                 \
     " FROM events WHERE"                                    \
     " mboxname LIKE :prefix"                                \
     ";"
 
 #define CMD_SELECT_ALARMS                                                \
-    "SELECT mboxname, imap_uid, nextcheck"                               \
+    "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts, num_retries" \
     " FROM events WHERE"                                                 \
     " nextcheck < :before"                                               \
     " ORDER BY mboxname, imap_uid, nextcheck"                            \
@@ -265,7 +285,10 @@ static int copydb(sqlite3_stmt *stmt, void *rock)
         { ":imap_uid",  SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 1)  } },
         { ":nextcheck", SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 2)  } },
         { ":type",      SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 3)  } },
-        { ":numrcpts",  SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 4)  } },
+        { ":num_rcpts", SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 4)  } },
+        { ":num_retries", SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 5)  } },
+        { ":last_attempt",SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 6)  } },
+        { ":last_err",  SQLITE_TEXT,    { .s = (const char *)sqlite3_column_text(stmt, 7) } },
         { NULL,         SQLITE_NULL,    { .s = NULL      } }
     };
     return sqldb_exec(destdb, CMD_REPLACE, bval, NULL, NULL);
@@ -600,30 +623,37 @@ static int process_alarm_cb(icalcomponent *comp,
 
 static int update_alarmdb(const char *mboxname,
                           uint32_t imap_uid, time_t nextcheck,
-                          uint32_t type, uint32_t numrcpts)
+                          uint32_t type, uint32_t num_rcpts,
+                          uint32_t num_retries, time_t last_attempt,
+                          const char *last_err)
 {
     struct sqldb_bindval bval[] = {
-        { ":mboxname",  SQLITE_TEXT,    { .s = mboxname  } },
-        { ":imap_uid",  SQLITE_INTEGER, { .i = imap_uid  } },
-        { ":nextcheck", SQLITE_INTEGER, { .i = nextcheck } },
-        { ":type",      SQLITE_INTEGER, { .i = type      } },
-        { ":numrcpts",  SQLITE_INTEGER, { .i = numrcpts  } },
-        { NULL,         SQLITE_NULL,    { .s = NULL      } }
+        { ":mboxname",     SQLITE_TEXT,    { .s = mboxname     } },
+        { ":imap_uid",     SQLITE_INTEGER, { .i = imap_uid     } },
+        { ":nextcheck",    SQLITE_INTEGER, { .i = nextcheck    } },
+        { ":type",         SQLITE_INTEGER, { .i = type         } },
+        { ":num_rcpts",    SQLITE_INTEGER, { .i = num_rcpts    } },
+        { ":num_retries",  SQLITE_INTEGER, { .i = num_retries  } },
+        { ":last_attempt", SQLITE_INTEGER, { .i = last_attempt } },
+        { ":last_err",     SQLITE_TEXT,    { .s = last_err     } },
+        { NULL,            SQLITE_NULL,    { .s = NULL         } }
     };
 
     sqldb_t *alarmdb = caldav_alarm_open();
     if (!alarmdb) return -1;
     int rc = SQLITE_OK;
 
-    syslog(LOG_DEBUG, "update_alarmdb(%s:%u, " TIME_T_FMT ", %u, %u)",
-           mboxname, imap_uid, nextcheck, type, numrcpts);
+    syslog(LOG_DEBUG,
+           "update_alarmdb(%s:%u, " TIME_T_FMT ", %u, %u, %u, " TIME_T_FMT ", %s)",
+           mboxname, imap_uid, nextcheck, type, num_rcpts,
+           num_retries, last_attempt, last_err ? last_err : "NULL");
 
     if (!nextcheck)
         rc = sqldb_exec(alarmdb, CMD_DELETE, bval, NULL, NULL);
-    else if (type)
-        rc = sqldb_exec(alarmdb, CMD_REPLACE, bval, NULL, NULL);
-    else
+    else if (last_err)
         rc = sqldb_exec(alarmdb, CMD_UPDATE, bval, NULL, NULL);
+    else
+        rc = sqldb_exec(alarmdb, CMD_REPLACE, bval, NULL, NULL);
 
     caldav_alarm_close(alarmdb);
 
@@ -742,7 +772,7 @@ done:
 }
 
 static int has_alarms(void *data, struct mailbox *mailbox,
-                      uint32_t uid, unsigned *numrcpts)
+                      uint32_t uid, unsigned *num_rcpts)
 {
     int has_alarms = 0;
 
@@ -750,12 +780,12 @@ static int has_alarms(void *data, struct mailbox *mailbox,
            mailbox_name(mailbox), uid);
 
     if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
-        if (data && numrcpts &&
+        if (data && num_rcpts &&
             mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_JMAPSUBMIT) {
             json_t *submission = (json_t *) data;
             json_t *envelope = json_object_get(submission, "envelope");
             if (envelope) {
-                *numrcpts = json_array_size(json_object_get(envelope, "rcptTo"));
+                *num_rcpts = json_array_size(json_object_get(envelope, "rcptTo"));
             }
         }
         return 1;
@@ -941,12 +971,12 @@ HIDDEN int caldav_alarm_add_record(struct mailbox *mailbox,
                                    const struct index_record *record,
                                    void *data)
 {
-    unsigned numrcpts = 0;
+    unsigned num_rcpts = 0;
 
-    if (has_alarms(data, mailbox, record->uid, &numrcpts)) {
+    if (has_alarms(data, mailbox, record->uid, &num_rcpts)) {
         enum alarm_type atype = mbtype_to_alarm_type(mailbox_mbtype(mailbox));
         update_alarmdb(mailbox_name(mailbox), record->uid, record->internaldate,
-                       atype, numrcpts);
+                       atype, num_rcpts, 0, 0, NULL);
     }
 
     return 0;
@@ -956,14 +986,14 @@ EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
                                        const struct index_record *record,
                                        int force)
 {
-    unsigned numrcpts = 0;
+    unsigned num_rcpts = 0;
 
     /* if there are alarms in the annotations,
      * the next alarm may have become earlier, so get calalarmd to check again */
-    if (force || has_alarms(NULL, mailbox, record->uid, &numrcpts)) {
+    if (force || has_alarms(NULL, mailbox, record->uid, &num_rcpts)) {
         enum alarm_type atype = mbtype_to_alarm_type(mailbox_mbtype(mailbox));
         return update_alarmdb(mailbox_name(mailbox), record->uid,
-                              record->last_updated, atype, numrcpts);
+                              record->last_updated, atype, num_rcpts, 0, 0, NULL);
     }
 
     return 0;
@@ -972,13 +1002,14 @@ EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
 /* called by sync_support from sync_server -
  * set nextcheck in the calalarmdb based on the full state,
  * record + annotations, after the annotations have been updated too */
-EXPORTED int caldav_alarm_sync_nextcheck(struct mailbox *mailbox, const struct index_record *record)
+EXPORTED int caldav_alarm_sync_nextcheck(struct mailbox *mailbox,
+                                         const struct index_record *record)
 {
     struct lastalarm_data data;
     if (!read_lastalarm(mailbox, record, &data)) {
         enum alarm_type atype = mbtype_to_alarm_type(mailbox_mbtype(mailbox));
         return update_alarmdb(mailbox_name(mailbox), record->uid,
-                              data.nextcheck, atype, 0);
+                              data.nextcheck, atype, 0, 0, 0, NULL);
     }
 
     /* if there's no lastalarm on the record, nuke any existing alarmdb entry */
@@ -988,13 +1019,20 @@ EXPORTED int caldav_alarm_sync_nextcheck(struct mailbox *mailbox, const struct i
 /* delete all alarms matching the event */
 HIDDEN int caldav_alarm_delete_record(const char *mboxname, uint32_t imap_uid)
 {
-    return update_alarmdb(mboxname, imap_uid, 0, 0, 0);
+    return update_alarmdb(mboxname, imap_uid, 0, 0, 0, 0, 0, NULL);
 }
 
-static int caldav_alarm_bump_nextcheck(const char *mboxname,
-                                       uint32_t imap_uid, time_t nextcheck)
+static int caldav_alarm_bump_nextcheck(struct caldav_alarm_data *data,
+                                       time_t nextcheck,
+                                       time_t last_attempt, const char *last_err)
 {
-    return update_alarmdb(mboxname, imap_uid, nextcheck, 0, 0);
+    uint32_t num_retries = data->num_retries;
+
+    if (last_err) num_retries++;
+
+    return update_alarmdb(data->mboxname, data->imap_uid, nextcheck,
+                          data->type, data->num_rcpts,
+                          num_retries, last_attempt, last_err);
 }
 
 /* delete all alarms matching the event */
@@ -1050,6 +1088,9 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
         struct caldav_alarm_data *data = xzmalloc(sizeof(struct caldav_alarm_data));
         data->mboxname    = xstrdup((const char *) sqlite3_column_text(stmt, 0));
         data->imap_uid    = sqlite3_column_int(stmt, 1);
+        data->type        = sqlite3_column_int(stmt, 3);
+        data->num_rcpts   = sqlite3_column_int(stmt, 4);
+        data->num_retries = sqlite3_column_int(stmt, 5);
         data->nextcheck   = nextcheck;
         ptrarray_append(&alarm->list, data);
     }
@@ -1208,7 +1249,8 @@ static int process_valarms(struct mailbox *mailbox,
     data.lastrun = runtime;
     if (!dryrun) write_lastalarm(mailbox, record, &data);
 
-    update_alarmdb(mboxname, record->uid, data.nextcheck, ALARM_CALENDAR, 0);
+    update_alarmdb(mboxname, record->uid, data.nextcheck,
+                   ALARM_CALENDAR, 0, 0, 0, NULL);
 
 done_item:
     if (ical) icalcomponent_free(ical);
@@ -1583,7 +1625,8 @@ static int process_futurerelease(struct mailbox *mailbox,
     return r;
 }
 
-static int process_snoozed(struct mailbox *mailbox,
+static int process_snoozed(struct caldav_alarm_data *data,
+                           struct mailbox *mailbox,
                            struct index_record *record,
                            time_t runtime,
                            int dryrun)
@@ -1609,7 +1652,7 @@ static int process_snoozed(struct mailbox *mailbox,
 
     /* Check runtime against wakeup and adjust as necessary */
     if (dryrun || wakeup > runtime) {
-        caldav_alarm_bump_nextcheck(mailbox_name(mailbox), record->uid, wakeup);
+        caldav_alarm_bump_nextcheck(data, wakeup, runtime, NULL);
         goto done;
     }
 
@@ -1623,7 +1666,7 @@ static int process_snoozed(struct mailbox *mailbox,
         syslog(LOG_ERR, "IOERROR: failed to unsnooze %s:%u (%s)",
                mailbox_name(mailbox), record->uid, error_message(r));
         /* try again in 5 minutes */
-        caldav_alarm_bump_nextcheck(mailbox_name(mailbox), record->uid, runtime + 300);
+        caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
     }
 
  done:
@@ -1652,7 +1695,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
         /* Temporary error - skip over this message for now and try again in 5 minutes */
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for uid %u (%s)",
                data->mboxname, data->imap_uid, error_message(r));
-        caldav_alarm_bump_nextcheck(mailbox_name(mailbox), data->imap_uid, runtime + 300);
+        caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
         return;
     }
 
@@ -1670,7 +1713,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
         syslog(LOG_ERR, "IOERROR: error reading mailbox %s uid %u (%s)",
                data->mboxname, data->imap_uid, error_message(r));
         /* XXX no index record? item deleted or transient error? */
-        caldav_alarm_bump_nextcheck(mailbox_name(mailbox), data->imap_uid, runtime + 300);
+        caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
         goto done;
     }
 
@@ -1690,14 +1733,14 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
 #ifdef WITH_JMAP
     else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_JMAPSUBMIT) {
         if (record.internaldate > runtime || dryrun) {
-            caldav_alarm_bump_nextcheck(data->mboxname, data->imap_uid, record.internaldate);
+            caldav_alarm_bump_nextcheck(data, record.internaldate, runtime, error_message(r));
             goto done;
         }
         r = process_futurerelease(mailbox, &record);
     }
     else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
         /* XXX  Check special-use flag on mailbox */
-        r = process_snoozed(mailbox, &record, runtime, dryrun);
+        r = process_snoozed(data, mailbox, &record, runtime, dryrun);
     }
 #endif
     else {
@@ -1876,7 +1919,7 @@ EXPORTED int caldav_alarm_upgrade()
                     free(userid);
 
                     update_alarmdb(mailbox_name(mailbox), record->uid, nextcheck,
-                                   ALARM_CALENDAR, 0);
+                                   ALARM_CALENDAR, 0, 0, 0, NULL);
                 }
                 icalcomponent_free(ical);
             }
