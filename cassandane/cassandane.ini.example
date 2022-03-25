@@ -87,7 +87,14 @@
 # A list of tests or suites which will be suppressed.  These tests
 # will still run if requested on the command line, but will not be
 # run by default.
-## suppress =
+##suppress =
+# Whether Cassandane should allow itself to start up without a
+# cassandane.ini file.  This doesn't make much sense to specify in
+# a cassandane.ini file, but if you enable it via the environment
+# variable CASSINI_CASSANDANE_ALLOW_NOINIFILE, it will permit you
+# to run Cassandane using only configuration from environment
+# variables (or defaults)
+##allow_noinifile = no
 
 # This section describes configurable properties of Valgrind.
 [valgrind]
