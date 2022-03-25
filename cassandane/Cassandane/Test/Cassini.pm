@@ -303,6 +303,42 @@ sub test_environment_override
     );
 }
 
+sub test_environment_only
+{
+    my ($self) = @_;
+
+    local $CWD = tempdir(CLEANUP => 1);
+    local %ENV = (); # stop real environment from interfering!
+
+    my $cassini;
+
+    # n.b. did not create an ini file!
+
+    # allow_noinifile has not been set, so it should barf
+    eval { $cassini = new Cassandane::Cassini; };
+    my $e = $@;
+    $self->assert_matches(qr/couldn't find a cassandane\.ini file/, $e);
+
+    # set allow_noinifile and other config via environment
+    $ENV{CASSINI_CASSANDANE_ALLOW_NOINIFILE} = 'yes';
+    $ENV{CASSINI_CASSANDANE_ROOTDIR} = 'overridden!';
+
+    # should work this time
+    $cassini = new Cassandane::Cassini;
+
+    $self->assert_equals(1,
+        $cassini->bool_val('cassandane', 'allow_noinifile'));
+
+    $self->assert_str_equals(
+        'overridden!',
+        $cassini->val('cassandane', 'rootdir', 'ignored')
+    );
+
+    # we didn't change this one at all, and its default is 'no'
+    $self->assert_equals(0,
+        $cassini->bool_val('cassandane', 'cleanup'));
+}
+
 sub test_override
 {
     my ($self) = @_;
