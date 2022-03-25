@@ -93,8 +93,7 @@ sub new
         }
     }
 
-    die "couldn't find a cassandane.ini file" if not $filename;
-    $filename = abs_path($filename);
+    $filename = abs_path($filename) if $filename;
 
     my $inifile = new Config::IniFiles();
     if ( -f $filename)
@@ -118,6 +117,13 @@ sub new
     };
 
     bless $self, $class;
+
+    if ((not $filename or not -f $filename)
+        and not $self->bool_val('cassandane', 'allow_noinifile', 'no'))
+    {
+        die "couldn't find a cassandane.ini file";
+    }
+
     $instance = $self
         unless defined $instance;
     return $self;
