@@ -1483,12 +1483,16 @@ static int find_scheduled_email(const char *emailid,
     return r;
 }
 
-static int process_futurerelease(struct mailbox *mailbox,
-                                 struct index_record *record)
+static int process_futurerelease(struct caldav_alarm_data *data,
+                                 struct mailbox *mailbox,
+                                 struct index_record *record,
+                                 time_t runtime)
+
 {
     message_t *m = message_new_from_record(mailbox, record);
     struct buf buf = BUF_INITIALIZER;
     json_t *submission = NULL, *identity, *envelope, *onSend;
+    smtpclient_t *sm = NULL;
     int r = 0;
 
     syslog(LOG_DEBUG, "processing future release for mailbox %s uid %u",
@@ -1532,38 +1536,108 @@ static int process_futurerelease(struct mailbox *mailbox,
     }
 
     /* Open the SMTP connection */
-    smtpclient_t *sm = NULL;
+    unsigned code = 0, cancel = 0;
+    const char *err = NULL;
     r = smtpclient_open(&sm);
     if (r) {
-        syslog(LOG_ERR, "smtpclient_open failed: %s", error_message(r));
-        goto done;
+        err = error_message(r);
+        syslog(LOG_ERR, "smtpclient_open failed: %s", err);
     }
-    smtpclient_set_auth(sm, json_string_value(identity));
+    else {
+        smtpclient_set_auth(sm, json_string_value(identity));
 
-    /* Prepare envelope */
-    smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
-    jmap_emailsubmission_envelope_to_smtp(&smtpenv, envelope);
+        /* Prepare envelope */
+        smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
+        jmap_emailsubmission_envelope_to_smtp(&smtpenv, envelope);
 
-    /* Send message */
-    r = smtpclient_send(sm, &smtpenv, &buf);
-    smtp_envelope_fini(&smtpenv);
-    smtpclient_close(&sm);
+        /* Send message */
+        r = smtpclient_send(sm, &smtpenv, &buf);
+        smtp_envelope_fini(&smtpenv);
+        if (r) {
+            /* Get the response code and error text.
+               We treat anything other than 5xx as a temp failure */
+            code = smtpclient_get_resp_code(sm);
+            if (code) {
+                err = smtpclient_get_resp_text(sm);
+                if (code >= 500) {
+                    /* Permanent failure */
+                    cancel = 1;
+                }
+            }
+            else {
+                err = error_message(r);
+            }
+            syslog(LOG_ERR, "smtpclient_send failed: %s", err);
+        }
+    }
+
+    const char *destmboxid = NULL;
+    json_t *setkeywords = NULL;
 
     if (r) {
-        syslog(LOG_ERR, "smtpclient_send failed: %s", error_message(r));
-        goto done;
-    }
+        /* Determine if we should retry (again) or cancel the submission.
+           We try at 5m, 15m, 30m, 60m after original scheduled time. */
+        unsigned duration;
+        switch (data->num_retries) {
+        case 0: duration =  300; break;
+        case 1: duration =  600; break;
+        case 2: duration =  900; break;
+        case 3: duration = 1800; break;
+        default: cancel = 1; break;
+        }
 
-    /* Mark the email as sent */
-    record->system_flags |= FLAG_ANSWERED;
-    if (config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
-        /* delete the EmailSubmission object immediately */
+        if (cancel) {
+            /* Move the scheduled message back into Drafts mailbox.
+               Use INBOX as a fallback. */
+            char *userid = mboxname_to_userid(data->mboxname);
+            char *destname = mboxlist_find_specialuse("\\Drafts", userid);
+            mbentry_t *mbentry = NULL;
+
+            if (!destname) {
+                destname = mboxname_user_mbox(userid, NULL);
+            }
+
+            mboxlist_lookup(destname, &mbentry, NULL);
+            buf_setcstr(&buf, mbentry->uniqueid);
+
+            destmboxid = buf_cstring(&buf);
+            setkeywords = json_pack("{ s:b }", "$draft", 1);
+
+            mboxlist_entry_free(&mbentry);
+            free(destname);
+            free(userid);
+        }
+        else {
+            /* Retry */
+            caldav_alarm_bump_nextcheck(data, runtime + duration, runtime, err);
+            if (sm) smtpclient_close(&sm);
+            goto done;
+        }
+    }
+    else {
+        /* Mark the email as sent */
+        record->system_flags |= FLAG_ANSWERED;
+
+        /* Get any onSend instructions */
+        onSend = json_object_get(submission, "onSend");
+        if (onSend) {
+            destmboxid =
+                json_string_value(json_object_get(onSend, "moveToMailboxId"));
+            setkeywords = json_deep_copy(json_object_get(onSend, "setKeywords"));
+        }
+    }
+    if (sm) smtpclient_close(&sm);
+
+    if (cancel || config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
+        /* Delete the EmailSubmission object immediately */
         record->system_flags |= FLAG_DELETED;
         record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
     }
+
     r = mailbox_rewrite_index_record(mailbox, record);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: marking emailsubmission as sent (%s:%u) failed: %s",
+        syslog(LOG_ERR, "IOERROR: marking emailsubmission as %s (%s:%u) failed: %s",
+               cancel ? "cancelled" : "sent",
                mailbox_name(mailbox), record->uid, error_message(r));
         // email is already sent, so we don't want to try to send it again!
         // go ahead and delete the record still...
@@ -1571,8 +1645,8 @@ static int process_futurerelease(struct mailbox *mailbox,
 
     caldav_alarm_delete_record(mailbox_name(mailbox), record->uid);
 
-    onSend = json_object_get(submission, "onSend");
-    if (onSend) {
+    if (destmboxid) {
+        /* Move the scheduled message into the specified mailbox */
         const char *emailid =
             json_string_value(json_object_get(submission, "emailId"));
         struct find_sched_rock frock =
@@ -1598,10 +1672,6 @@ static int process_futurerelease(struct mailbox *mailbox,
                    frock.uid, frock.mboxname, error_message(r));
         }
         else {
-            const char *destmboxid =
-                json_string_value(json_object_get(onSend, "moveToMailboxId"));
-            json_t *setkeywords = json_object_get(onSend, "setKeywords");
-
             r = move_to_mailboxid(sched_mbox, &sched_rec, destmboxid,
                                   time(0), setkeywords, 0/*is_snoozed*/);
 
@@ -1612,6 +1682,7 @@ static int process_futurerelease(struct mailbox *mailbox,
             }
         }
 
+        if (setkeywords) json_decref(setkeywords);
         mailbox_close(&sched_mbox);
         free(frock.mboxname);
         free(frock.userid);
@@ -1736,7 +1807,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
             caldav_alarm_bump_nextcheck(data, record.internaldate, runtime, error_message(r));
             goto done;
         }
-        r = process_futurerelease(mailbox, &record);
+        r = process_futurerelease(data, mailbox, &record, runtime);
     }
     else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
         /* XXX  Check special-use flag on mailbox */
