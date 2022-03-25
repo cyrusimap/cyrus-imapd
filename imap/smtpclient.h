@@ -177,6 +177,9 @@ extern unsigned long smtpclient_get_maxsize(smtpclient_t *sm);
  * Return NULL if the extension is not supported. */
 extern const char *smtpclient_has_ext(smtpclient_t *sm, const char *name);
 
+/* Return the code of the last SMTP response */
+extern unsigned smtpclient_get_resp_code(smtpclient_t *sm);
+
 /* Return the text of the last SMTP response */
 extern const char *smtpclient_get_resp_text(smtpclient_t *sm);
 

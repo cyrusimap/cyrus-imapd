@@ -787,6 +787,11 @@ EXPORTED unsigned long smtpclient_get_maxsize(smtpclient_t *sm)
     return maxsize;
 }
 
+EXPORTED unsigned smtpclient_get_resp_code(smtpclient_t *sm)
+{
+    return atoi(sm->resp.code);
+}
+
 EXPORTED const char *smtpclient_get_resp_text(smtpclient_t *sm)
 {
     return buf_cstring(&sm->resp.text);
