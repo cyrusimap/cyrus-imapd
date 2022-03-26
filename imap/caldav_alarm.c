@@ -1573,6 +1573,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
 
     const char *destmboxid = NULL;
     json_t *setkeywords = NULL;
+    char *userid = NULL;
 
     if (r) {
         /* Determine if we should retry (again) or cancel the submission.
@@ -1589,7 +1590,8 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         if (cancel) {
             /* Move the scheduled message back into Drafts mailbox.
                Use INBOX as a fallback. */
-            char *userid = mboxname_to_userid(data->mboxname);
+            userid = mboxname_to_userid(data->mboxname);
+
             char *destname = mboxlist_find_specialuse("\\Drafts", userid);
             mbentry_t *mbentry = NULL;
 
@@ -1598,14 +1600,15 @@ static int process_futurerelease(struct caldav_alarm_data *data,
             }
 
             mboxlist_lookup(destname, &mbentry, NULL);
-            buf_setcstr(&buf, mbentry->uniqueid);
+            if (mbentry) {
+                buf_setcstr(&buf, mbentry->uniqueid);
 
-            destmboxid = buf_cstring(&buf);
-            setkeywords = json_pack("{ s:b }", "$draft", 1);
+                destmboxid = buf_cstring(&buf);
+                setkeywords = json_pack("{ s:b }", "$draft", 1);
 
-            mboxlist_entry_free(&mbentry);
+                mboxlist_entry_free(&mbentry);
+            }
             free(destname);
-            free(userid);
         }
         else {
             /* Retry */
@@ -1647,10 +1650,11 @@ static int process_futurerelease(struct caldav_alarm_data *data,
 
     if (destmboxid) {
         /* Move the scheduled message into the specified mailbox */
+        if (!userid) userid = mboxname_to_userid(data->mboxname);
+
         const char *emailid =
             json_string_value(json_object_get(submission, "emailId"));
-        struct find_sched_rock frock =
-            { mboxname_to_userid(mailbox_name(mailbox)), NULL, 0 };
+        struct find_sched_rock frock = { userid, NULL, 0 };
         struct mailbox *sched_mbox = NULL;
         struct index_record sched_rec;
 
@@ -1685,8 +1689,8 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         if (setkeywords) json_decref(setkeywords);
         mailbox_close(&sched_mbox);
         free(frock.mboxname);
-        free(frock.userid);
     }
+    free(userid);
 
   done:
     if (submission) json_decref(submission);
