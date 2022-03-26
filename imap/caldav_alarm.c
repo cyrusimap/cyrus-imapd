@@ -1088,10 +1088,10 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
         struct caldav_alarm_data *data = xzmalloc(sizeof(struct caldav_alarm_data));
         data->mboxname    = xstrdup((const char *) sqlite3_column_text(stmt, 0));
         data->imap_uid    = sqlite3_column_int(stmt, 1);
+        data->nextcheck   = nextcheck; // column 2
         data->type        = sqlite3_column_int(stmt, 3);
         data->num_rcpts   = sqlite3_column_int(stmt, 4);
         data->num_retries = sqlite3_column_int(stmt, 5);
-        data->nextcheck   = nextcheck;
         ptrarray_append(&alarm->list, data);
     }
     else if (nextcheck < alarm->next) {
@@ -1808,7 +1808,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
 #ifdef WITH_JMAP
     else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_JMAPSUBMIT) {
         if (record.internaldate > runtime || dryrun) {
-            caldav_alarm_bump_nextcheck(data, record.internaldate, runtime, error_message(r));
+            caldav_alarm_bump_nextcheck(data, record.internaldate, runtime, NULL);
             goto done;
         }
         r = process_futurerelease(data, mailbox, &record, runtime);
