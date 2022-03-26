@@ -75,10 +75,12 @@
 struct caldav_alarm_data {
     char *mboxname;
     uint32_t imap_uid;
+    time_t nextcheck;
     uint32_t type;
     uint32_t num_rcpts;
     uint32_t num_retries;
-    time_t nextcheck;
+    time_t last_run;
+    char *last_err;
 };
 
 void caldav_alarm_fini(struct caldav_alarm_data *alarmdata)
@@ -128,7 +130,7 @@ EXPORTED int caldav_alarm_done(void)
     " type INTEGER NOT NULL,"                           \
     " num_rcpts INTEGER NOT NULL,"                      \
     " num_retries INTEGER NOT NULL,"                    \
-    " last_attempt INTEGER NOT NULL,"                   \
+    " last_run INTEGER NOT NULL,"                       \
     " last_err TEXT,"                                   \
     " PRIMARY KEY (mboxname, imap_uid)"                 \
     ");"                                                \
@@ -146,13 +148,13 @@ EXPORTED int caldav_alarm_done(void)
     "ALTER TABLE events ADD COLUMN type INTEGER;"          \
     "ALTER TABLE events ADD COLUMN num_rcpts INTEGER;"     \
     "ALTER TABLE events ADD COLUMN num_retries INTEGER;"   \
-    "ALTER TABLE events ADD COLUMN last_attempt INTEGER;"  \
+    "ALTER TABLE events ADD COLUMN last_run INTEGER;"      \
     "ALTER TABLE events ADD COLUMN last_err TEXT;"         \
     "UPDATE events SET"                                    \
     "  type         = 1,"                                  \
     "  num_rcpts    = 0,"                                  \
     "  num_retries  = 0,"                                  \
-    "  last_attempt = 0;"                                  \
+    "  last_run     = 0;"                                  \
     "CREATE INDEX IF NOT EXISTS idx_type ON events (type);"
 
 static struct sqldb_upgrade upgrade[] = {
@@ -165,21 +167,11 @@ static struct sqldb_upgrade upgrade[] = {
 #define CMD_REPLACE                                            \
     "REPLACE INTO events"                                      \
     " ( mboxname, imap_uid, nextcheck, type, num_rcpts,"       \
-    "   num_retries, last_attempt, last_err)"                  \
+    "   num_retries, last_run, last_err)"                      \
     " VALUES"                                                  \
     " ( :mboxname, :imap_uid, :nextcheck, :type, :num_rcpts,"  \
-    "   :num_retries, :last_attempt, :last_err)"               \
+    "   :num_retries, :last_run, :last_err)"                   \
     ";"
-
-#define CMD_UPDATE                               \
-    "UPDATE events SET"                          \
-    "  nextcheck     = :nextcheck,"              \
-    "  num_retries   = :num_retries,"            \
-    "  last_attempt  = :last_attempt,"           \
-    "  last_err      = :last_err"                \
-    " WHERE mboxname = :mboxname"                \
-    "   AND imap_uid = :imap_uid"
-
 
 #define CMD_DELETE                               \
     "DELETE FROM events"                         \
@@ -199,16 +191,17 @@ static struct sqldb_upgrade upgrade[] = {
 
 #define CMD_SELECTUSER                                      \
     "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts,"\
-    "  num_retries, last_attempt, last_err"                 \
+    "  num_retries, last_run, last_err"                     \
     " FROM events WHERE"                                    \
     " mboxname LIKE :prefix"                                \
     ";"
 
-#define CMD_SELECT_ALARMS                                                \
-    "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts, num_retries" \
-    " FROM events WHERE"                                                 \
-    " nextcheck < :before"                                               \
-    " ORDER BY mboxname, imap_uid, nextcheck"                            \
+#define CMD_SELECT_ALARMS                                   \
+    "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts" \
+    "  num_retries, last_run, last_err"                     \
+    " FROM events WHERE"                                    \
+    " nextcheck < :before"                                  \
+    " ORDER BY mboxname, imap_uid, nextcheck"               \
     ";"
 
 static sqldb_t *my_alarmdb;
@@ -287,7 +280,7 @@ static int copydb(sqlite3_stmt *stmt, void *rock)
         { ":type",      SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 3)  } },
         { ":num_rcpts", SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 4)  } },
         { ":num_retries", SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 5)  } },
-        { ":last_attempt",SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 6)  } },
+        { ":last_run",  SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 6)  } },
         { ":last_err",  SQLITE_TEXT,    { .s = (const char *)sqlite3_column_text(stmt, 7) } },
         { NULL,         SQLITE_NULL,    { .s = NULL      } }
     };
@@ -624,7 +617,7 @@ static int process_alarm_cb(icalcomponent *comp,
 static int update_alarmdb(const char *mboxname,
                           uint32_t imap_uid, time_t nextcheck,
                           uint32_t type, uint32_t num_rcpts,
-                          uint32_t num_retries, time_t last_attempt,
+                          uint32_t num_retries, time_t last_run,
                           const char *last_err)
 {
     struct sqldb_bindval bval[] = {
@@ -634,7 +627,7 @@ static int update_alarmdb(const char *mboxname,
         { ":type",         SQLITE_INTEGER, { .i = type         } },
         { ":num_rcpts",    SQLITE_INTEGER, { .i = num_rcpts    } },
         { ":num_retries",  SQLITE_INTEGER, { .i = num_retries  } },
-        { ":last_attempt", SQLITE_INTEGER, { .i = last_attempt } },
+        { ":last_run",     SQLITE_INTEGER, { .i = last_run     } },
         { ":last_err",     SQLITE_TEXT,    { .s = last_err     } },
         { NULL,            SQLITE_NULL,    { .s = NULL         } }
     };
@@ -646,14 +639,12 @@ static int update_alarmdb(const char *mboxname,
     syslog(LOG_DEBUG,
            "update_alarmdb(%s:%u, " TIME_T_FMT ", %u, %u, %u, " TIME_T_FMT ", %s)",
            mboxname, imap_uid, nextcheck, type, num_rcpts,
-           num_retries, last_attempt, last_err ? last_err : "NULL");
+           num_retries, last_run, last_err ? last_err : "NULL");
 
-    if (!nextcheck)
-        rc = sqldb_exec(alarmdb, CMD_DELETE, bval, NULL, NULL);
-    else if (last_err)
-        rc = sqldb_exec(alarmdb, CMD_UPDATE, bval, NULL, NULL);
-    else
+    if (nextcheck)
         rc = sqldb_exec(alarmdb, CMD_REPLACE, bval, NULL, NULL);
+    else
+        rc = sqldb_exec(alarmdb, CMD_DELETE, bval, NULL, NULL);
 
     caldav_alarm_close(alarmdb);
 
@@ -1024,15 +1015,17 @@ HIDDEN int caldav_alarm_delete_record(const char *mboxname, uint32_t imap_uid)
 
 static int caldav_alarm_bump_nextcheck(struct caldav_alarm_data *data,
                                        time_t nextcheck,
-                                       time_t last_attempt, const char *last_err)
+                                       time_t last_run, const char *last_err)
 {
     uint32_t num_retries = data->num_retries;
 
     if (last_err) num_retries++;
+    else last_err = data->last_err;
 
-    return update_alarmdb(data->mboxname, data->imap_uid, nextcheck,
-                          data->type, data->num_rcpts,
-                          num_retries, last_attempt, last_err);
+    if (!last_run) last_run = data->last_run;
+
+    return update_alarmdb(data->mboxname, data->imap_uid, nextcheck, data->type,
+                          data->num_rcpts, num_retries, last_run, last_err);
 }
 
 /* delete all alarms matching the event */
@@ -1086,12 +1079,14 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 
     if (nextcheck <= alarm->runtime) {
         struct caldav_alarm_data *data = xzmalloc(sizeof(struct caldav_alarm_data));
-        data->mboxname    = xstrdup((const char *) sqlite3_column_text(stmt, 0));
-        data->imap_uid    = sqlite3_column_int(stmt, 1);
-        data->nextcheck   = nextcheck; // column 2
-        data->type        = sqlite3_column_int(stmt, 3);
-        data->num_rcpts   = sqlite3_column_int(stmt, 4);
-        data->num_retries = sqlite3_column_int(stmt, 5);
+        data->mboxname     = xstrdup((const char *) sqlite3_column_text(stmt, 0));
+        data->imap_uid     = sqlite3_column_int(stmt, 1);
+        data->nextcheck    = nextcheck; // column 2
+        data->type         = sqlite3_column_int(stmt, 3);
+        data->num_rcpts    = sqlite3_column_int(stmt, 4);
+        data->num_retries  = sqlite3_column_int(stmt, 5);
+        data->last_run     = sqlite3_column_int(stmt, 6);
+        data->last_err     = xstrdupnull((const char *) sqlite3_column_text(stmt, 7));
         ptrarray_append(&alarm->list, data);
     }
     else if (nextcheck < alarm->next) {
@@ -1727,7 +1722,7 @@ static int process_snoozed(struct caldav_alarm_data *data,
 
     /* Check runtime against wakeup and adjust as necessary */
     if (dryrun || wakeup > runtime) {
-        caldav_alarm_bump_nextcheck(data, wakeup, runtime, NULL);
+        caldav_alarm_bump_nextcheck(data, wakeup, 0, NULL);
         goto done;
     }
 
@@ -1808,7 +1803,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
 #ifdef WITH_JMAP
     else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_JMAPSUBMIT) {
         if (record.internaldate > runtime || dryrun) {
-            caldav_alarm_bump_nextcheck(data, record.internaldate, runtime, NULL);
+            caldav_alarm_bump_nextcheck(data, record.internaldate, 0, NULL);
             goto done;
         }
         r = process_futurerelease(data, mailbox, &record, runtime);
