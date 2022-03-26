@@ -304,15 +304,20 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
         buf_free(&userdata);
     }
     else if (cdata->comp_flags.defaultalerts) {
-        char buf[4*MESSAGE_GUID_SIZE];
-        size_t buf_len = MESSAGE_GUID_SIZE;
+        if (etag) {
+            char buf[4*MESSAGE_GUID_SIZE];
+            size_t buf_len = MESSAGE_GUID_SIZE;
 
-        message_guid_export(&record->guid, buf);
-        add_defaultalarm_guid(mailbox_name(mailbox), userid, buf, &buf_len);
+            message_guid_export(&record->guid, buf);
+            add_defaultalarm_guid(mailbox_name(mailbox), userid, buf, &buf_len);
 
-        struct message_guid guid;
-        message_guid_generate(&guid, buf, buf_len);
-        *etag = message_guid_encode(&guid);
+            struct message_guid guid;
+            message_guid_generate(&guid, buf, buf_len);
+            *etag = message_guid_encode(&guid);
+        }
+        if (lastmod) {
+            /* XXX  What, if anything do we do here? */
+        }
     }
 
     return 0;
