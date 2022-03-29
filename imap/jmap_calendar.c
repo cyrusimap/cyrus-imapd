@@ -123,7 +123,7 @@ static int jmap_calendarpreferences_set(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-#define JMAPCACHE_CALVERSION 25
+#define JMAPCACHE_CALVERSION 26
 
 static jmap_method_t jmap_calendar_methods_standard[] = {
     {
@@ -3257,6 +3257,13 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         strarray_truncate(&rock->schedule_addresses, 0);
         get_schedule_addresses(NULL, rock->mbentry->name, sched_userid,
                 &rock->schedule_addresses);
+
+        // reset ical iterator state
+        if (rock->ical) {
+            icalcomponent_free(rock->ical);
+            rock->ical = NULL;
+        }
+        rock->imap_uid = 0;
     }
 
     /* Check mailbox ACL rights */
