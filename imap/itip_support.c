@@ -397,18 +397,29 @@ static const char *deliver_merge_reply(icalcomponent *ical,
     icalproperty *prop, *att;
     icalparameter *param;
     icalparameter_partstat partstat = ICAL_PARTSTAT_NONE;
-    const char *attendee = NULL, *cn = NULL;
+    const char *attendee = NULL, *cn = NULL, *tzid = NULL;
+    icaltimezone *utc_zone = icaltimezone_get_utc_timezone();
+    icaltimezone *startzone = NULL;
+    icaltimetype dtstart;
 
     /* Add each component of old object to hash table for comparison */
     construct_hash_table(&comp_table, 10, 1);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
     do {
-        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        if (prop)
-            hash_insert(icalproperty_get_value_as_string(prop), comp, &comp_table);
-        else
+        icaltimetype recurid = icalcomponent_get_recurrenceid_with_zone(comp);
+
+        if (icaltime_is_null_time(recurid)) {
             master = comp;
+            dtstart = icalcomponent_get_dtstart(master);
+            startzone = (icaltimezone *) icaltime_get_timezone(dtstart);
+            tzid = icaltimezone_get_location(startzone);
+        }
+        else {
+            /* Convert RECURRENCE-ID to UTC */
+            recurid = icaltime_convert_to_zone(recurid, utc_zone);
+            hash_insert(icaltime_as_ical_string(recurid), comp, &comp_table);
+        }
 
     } while ((comp = icalcomponent_get_next_component(ical, kind)));
 
@@ -422,13 +433,17 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             icalcomponent_get_first_property(itip, ICAL_SEQUENCE_PROPERTY);
         icalproperty *dtstamp =
             icalcomponent_get_first_property(itip, ICAL_DTSTAMP_PROPERTY);
+        icaltimetype recurid = icalcomponent_get_recurrenceid_with_zone(itip);
 
         /* Lookup this comp in the hash table */
-        prop = icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
-        if (prop)
-            comp = hash_lookup(icalproperty_get_value_as_string(prop), &comp_table);
-        else
+        if (icaltime_is_null_time(recurid)) {
             comp = master;
+        }
+        else {
+            /* Convert RECURRENCE-ID to UTC */
+            recurid = icaltime_convert_to_zone(recurid, utc_zone);
+            comp = hash_lookup(icaltime_as_ical_string(recurid), &comp_table);
+        }
 
         if (!comp) {
             /* New recurrence overridden by attendee. */
@@ -438,14 +453,15 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             }
 
             icaltimetype occur = icaltime_null_time();
-            icaltimetype recurid = icalproperty_get_recurrenceid(prop);
             icalproperty *rrule =
                 icalcomponent_get_first_property(master, ICAL_RRULE_PROPERTY);
 
             if (rrule) {
                 icalrecur_iterator *ritr =
-                    icalrecur_iterator_new(icalproperty_get_rrule(rrule),
-                                           icalcomponent_get_dtstart(master));
+                    icalrecur_iterator_new(icalproperty_get_rrule(rrule), dtstart);
+
+                /* Convert RECURRENCE-ID to DTSTART time zone */
+                recurid = icaltime_convert_to_zone(recurid, startzone);
 
                 icalrecur_iterator_set_start(ritr, recurid);
                 occur = icalrecur_iterator_next(ritr);
@@ -458,7 +474,11 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             }
 
             /* create a new recurrence from master component. */
-            comp = master_to_recurrence(master, icalproperty_clone(prop));
+            icalproperty *recuridp = icalproperty_new_recurrenceid(recurid);
+            if (tzid) {
+                icalproperty_set_parameter(recuridp, icalparameter_new_tzid(tzid));
+            }
+            comp = master_to_recurrence(master, recuridp);
             icalcomponent_add_component(ical, comp);
 
             /* Replace SEQUENCE */
