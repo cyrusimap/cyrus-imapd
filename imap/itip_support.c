@@ -368,7 +368,8 @@ HIDDEN icalcomponent *master_to_recurrence(icalcomponent *master,
     struct icaltimetype newstart = _get_datetime(master, recurid);
 
     icaltimezone *startzone = (icaltimezone *)icaltime_get_timezone(start);
-    icalcomponent_set_dtstart(comp, icaltime_convert_to_zone(newstart, startzone));
+    icalproperty_set_dtstart(startprop,
+                             icaltime_convert_to_zone(newstart, startzone));
 
     if (endprop) {
         struct icaltimetype end = _get_datetime(master, endprop);
@@ -378,7 +379,8 @@ HIDDEN icalcomponent *master_to_recurrence(icalcomponent *master,
         struct icaltimetype newend = icaltime_add(newstart, diff);
 
         icaltimezone *endzone = (icaltimezone *)icaltime_get_timezone(end);
-        icalcomponent_set_dtend(comp, icaltime_convert_to_zone(newend, endzone));
+        icalproperty_set_dtend(endprop,
+                               icaltime_convert_to_zone(newend, endzone));
     }
     /* otherwise it will be a duration, which is still valid! */
 
