@@ -361,7 +361,7 @@ HIDDEN icalcomponent *master_to_recurrence(icalcomponent *master,
     }
 
     /* Add RECURRENCE-ID */
-    icalcomponent_add_property(comp, icalproperty_clone(recurid));
+    icalcomponent_add_property(comp, recurid);
 
     /* calculate a new dtend based on recurid */
     struct icaltimetype start = _get_datetime(master, startprop);
@@ -456,7 +456,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             }
 
             /* create a new recurrence from master component. */
-            comp = master_to_recurrence(master, prop);
+            comp = master_to_recurrence(master, icalproperty_clone(prop));
             icalcomponent_add_component(ical, comp);
 
             /* Replace SEQUENCE */
