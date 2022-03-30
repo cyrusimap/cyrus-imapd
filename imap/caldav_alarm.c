@@ -1311,8 +1311,23 @@ static int process_snoozed(struct mailbox *mailbox,
     /* Determine destination mailbox of awakened email */
     destmboxid = json_object_get(snoozed, "moveToMailboxId");
     if (destmboxid) {
-        destname = mboxlist_find_uniqueid(json_string_value(destmboxid),
-                                          userid, authstate);
+        mbentry_t *mbentry = NULL;
+        r = mboxlist_lookup_by_uniqueid(json_string_value(destmboxid),
+                                         &mbentry, NULL);
+        if (!r && mbentry &&
+            // MUST be an email mailbox
+            (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) &&
+            // MUST NOT be deleted
+            !(mbentry->mbtype & MBTYPE_DELETED) &&
+            // MUST be able to append messages
+            (cyrus_acl_myrights(authstate, mbentry->acl) & ACL_INSERT) &&
+            // MUST NOT be DELETED mailbox
+            !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
+            // MUST NOT be \Snoozed mailbox
+            strcmp(mbentry->name, mbname_intname(mbname))) {
+            destname = xstrdup(mbentry->name);
+        }
+        mboxlist_entry_free(&mbentry);
     }
     if (!destname) {
         destname = xstrdup(mbname_intname(mbname));
