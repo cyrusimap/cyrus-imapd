@@ -7022,9 +7022,29 @@ static void timestamps_to_ical(icalcomponent *comp,
         return;
 
     // Write DTSTAMP
+    remove_icalprop(comp, ICAL_DTSTAMP_PROPERTY);
+    icalcomponent_add_property(comp, icalproperty_new_dtstamp(updated));
+
+    // Write CREATED
+    int created_is_server_set = 0;
+    if (jmapctx && !jmapctx->to_ical.no_sanitize_timestamps) {
+        icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
+        int is_new_event = !old_comp || (is_override &&
+                !icalcomponent_get_first_property(old_comp, ICAL_RECURRENCEID_PROPERTY));
+        if (is_new_event && updated_is_server_set) {
+            if (icaltime_is_null_time(created) || icaltime_compare(created, now) > 0) {
+                // clamp 'created' timestamp to server time
+                created = now;
+                created_is_server_set = 1;
+            }
+        }
+    }
+    if (!icaltime_is_null_time(created)) {
+        remove_icalprop(comp, ICAL_CREATED_PROPERTY);
+        icalcomponent_add_property(comp, icalproperty_new_created(created));
+    }
+
     if (updated_is_server_set) {
-        remove_icalprop(comp, ICAL_DTSTAMP_PROPERTY);
-        icalcomponent_add_property(comp, icalproperty_new_dtstamp(now));
         struct jmapical_datetime t = JMAPICAL_DATETIME_INITIALIZER;
         jmapical_datetime_from_icaltime(updated, &t);
         jmapical_utcdatetime_as_string(&t, &buf);
@@ -7032,46 +7052,14 @@ static void timestamps_to_ical(icalcomponent *comp,
                 "updated", json_string(buf_cstring(&buf)));
         buf_reset(&buf);
     }
-    else {
-        remove_icalprop(comp, ICAL_DTSTAMP_PROPERTY);
-        icalcomponent_add_property(comp, icalproperty_new_dtstamp(updated));
-    }
 
-    // Write CREATED
-    int is_server_set = 0;
-    if (jmapctx && !jmapctx->to_ical.no_sanitize_timestamps) {
-        icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
-        int is_new_override = is_override && old_comp &&
-            !icalcomponent_get_first_property(old_comp, ICAL_RECURRENCEID_PROPERTY);
-        if (old_comp && !is_new_override) {
-            // can't change value of 'created'
-            icalproperty *prop = icalcomponent_get_first_property(old_comp,
-                    ICAL_CREATED_PROPERTY);
-            if (prop) {
-                icaltimetype old_created = icalproperty_get_created(prop);
-                if (icaltime_compare(created, old_created)) {
-                    jmap_parser_invalid(parser, "created");
-                }
-            }
-        }
-        else if (icaltime_is_null_time(created) ||
-                 icaltime_compare(created, now) > 0) {
-            // clamp 'created' timestamp to server time
-            created = now;
-            is_server_set = 1;
-        }
-    }
-    if (!icaltime_is_null_time(created)) {
-        remove_icalprop(comp, ICAL_CREATED_PROPERTY);
-        icalcomponent_add_property(comp, icalproperty_new_created(created));
-        if (jmapctx && is_server_set) {
-            struct jmapical_datetime t = JMAPICAL_DATETIME_INITIALIZER;
-            jmapical_datetime_from_icaltime(created, &t);
-            jmapical_utcdatetime_as_string(&t, &buf);
-            json_object_set_new(jmapctx->to_ical.serverset,
-                    "created", json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
+    if (created_is_server_set) {
+        struct jmapical_datetime t = JMAPICAL_DATETIME_INITIALIZER;
+        jmapical_datetime_from_icaltime(created, &t);
+        jmapical_utcdatetime_as_string(&t, &buf);
+        json_object_set_new(jmapctx->to_ical.serverset,
+                "created", json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
     }
 
     buf_free(&buf);
