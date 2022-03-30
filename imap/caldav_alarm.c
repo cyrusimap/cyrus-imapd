@@ -1324,7 +1324,7 @@ static int process_snoozed(struct mailbox *mailbox,
             // MUST NOT be DELETED mailbox
             !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
             // MUST NOT be \Snoozed mailbox
-            strcmp(mbentry->name, mbname_intname(mbname))) {
+            strcmp(mbentry->name, mailbox_name(mailbox))) {
             destname = xstrdup(mbentry->name);
         }
         mboxlist_entry_free(&mbentry);
