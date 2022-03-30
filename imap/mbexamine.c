@@ -111,6 +111,7 @@ int main(int argc, char **argv)
     char buf[MAX_MAILBOX_PATH+1];
     char *alt_config = NULL;
     int (*cb)(struct findall_data *, void *) = &do_examine;
+    int ok_count = 0;
 
     while ((opt = getopt(argc, argv, "C:u:s:qc")) != EOF) {
         switch (opt) {
@@ -155,16 +156,31 @@ int main(int argc, char **argv)
 
     if (optind == argc) {
         strlcpy(buf, "*", sizeof(buf));
-        mboxlist_findall(&mbexamine_namespace, buf, 1, 0, 0, cb, NULL);
+        r = mboxlist_findall(&mbexamine_namespace, buf, 1, 0, 0, cb, &ok_count);
+        if (r) {
+            fprintf(stderr, "%s: %s\n", buf, error_message(r));
+        }
     }
 
     for (i = optind; i < argc; i++) {
-        mboxlist_findall(&mbexamine_namespace, argv[i], 1, 0, 0, cb, NULL);
+        r = mboxlist_findall(&mbexamine_namespace, argv[i], 1, 0, 0, cb, &ok_count);
+        if (r) {
+            fprintf(stderr, "%s: %s\n", argv[i], error_message(r));
+        }
     }
 
     cyrus_done();
 
-    exit(0);
+    if (r && !ok_count) {
+        return r;
+    }
+    else if (!ok_count) {
+        fprintf(stderr, "No matching mailboxes found\n");
+        return EX_NOUSER; /* XXX i guess? */
+    }
+    else {
+        return 0;
+    }
 }
 
 static void usage(void)
@@ -185,13 +201,14 @@ static void print_rec(const char *name, const struct buf *citem)
 /*
  * mboxlist_findall() callback function to examine a mailbox
  */
-static int do_examine(struct findall_data *data, void *rock __attribute__((unused)))
+static int do_examine(struct findall_data *data, void *rock)
 {
     unsigned i, msgno;
     int r = 0;
     int flag = 0;
     struct mailbox *mailbox = NULL;
     int j;
+    int *ok_count = (int *) rock;
 
     /* don't want partial matches */
     if (!data) return 0;
@@ -351,19 +368,22 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
 
     mailbox_close(&mailbox);
 
+    if (!r && ok_count) (*ok_count) ++;
+
     return r;
 }
 
 /*
  * mboxlist_findall() callback function to examine a mailbox quota usage
  */
-static int do_quota(struct findall_data *data, void *rock __attribute__((unused)))
+static int do_quota(struct findall_data *data, void *rock)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
     quota_t total = 0;
     const char *fname;
     struct stat sbuf;
+    int *ok_count = (int *) rock;
 
     /* don't want partial matches */
     if (!data) return 0;
@@ -413,6 +433,7 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
 
  done:
     mailbox_close(&mailbox);
+    if (!r && ok_count) (*ok_count) ++;
 
     return r;
 }
@@ -428,13 +449,14 @@ int numcmp(const void *a, const void *b)
 /*
  * mboxlist_findall() callback function to compare a mailbox
  */
-static int do_compare(struct findall_data *data, void *rock __attribute__((unused)))
+static int do_compare(struct findall_data *data, void *rock)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
     DIR *dirp;
     struct dirent *dirent;
     uint32_t *uids = NULL, nalloc, count = 0, msgno;
+    int *ok_count = (int *) rock;
 
     /* don't want partial matches */
     if (!data) return 0;
@@ -583,6 +605,8 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
   done:
     mailbox_close(&mailbox);
     free(uids);
+
+    if (!r && ok_count) (*ok_count) ++;
 
     return r;
 }
