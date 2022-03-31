@@ -138,7 +138,7 @@ EXPORTED int caldav_alarm_done(void)
     "CREATE INDEX IF NOT EXISTS idx_type ON events (type);"
 
 
-#define DBVERSION 3
+#define DBVERSION 4
 
 /* the command loop will do the upgrade and then drop the old tables.
  * Sadly there's no other way to do it without creating a lock inversion! */
@@ -146,20 +146,22 @@ EXPORTED int caldav_alarm_done(void)
 
 #define CMD_UPGRADEv3                                      \
     "ALTER TABLE events ADD COLUMN type INTEGER;"          \
-    "ALTER TABLE events ADD COLUMN num_rcpts INTEGER;"     \
+    "ALTER TABLE events ADD COLUMN numrcpts INTEGER;"      \
+    "UPDATE events SET type = 1, numrcpts = 0;"            \
+    "CREATE INDEX IF NOT EXISTS idx_type ON events (type);"
+
+#define CMD_UPGRADEv4                                      \
+    "ALTER TABLE events"                                   \
+    " RENAME COLUMN numrcpts TO num_rcpts;"                \
     "ALTER TABLE events ADD COLUMN num_retries INTEGER;"   \
     "ALTER TABLE events ADD COLUMN last_run INTEGER;"      \
     "ALTER TABLE events ADD COLUMN last_err TEXT;"         \
-    "UPDATE events SET"                                    \
-    "  type         = 1,"                                  \
-    "  num_rcpts    = 0,"                                  \
-    "  num_retries  = 0,"                                  \
-    "  last_run     = 0;"                                  \
-    "CREATE INDEX IF NOT EXISTS idx_type ON events (type);"
+    "UPDATE events SET num_retries = 0, last_run = 0;"
 
 static struct sqldb_upgrade upgrade[] = {
     /* Don't upgrade to version 2. */
     { 3, CMD_UPGRADEv3, NULL },
+    { 4, CMD_UPGRADEv4, NULL },
     /* always finish with an empty row */
     { 0, NULL, NULL }
 };
