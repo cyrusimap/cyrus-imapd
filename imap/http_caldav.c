@@ -5012,6 +5012,7 @@ static void prune_properties(icalcomponent *parent,
 static int expand_cb(icalcomponent *comp,
                      icaltimetype start, icaltimetype end,
                      icaltimetype _recurid __attribute__((unused)), // FIXME
+                     int is_standalone __attribute__((unused)),
                      void *rock)
 {
     icalcomponent *ical = icalcomponent_get_parent(comp);
@@ -6990,6 +6991,7 @@ static void add_freebusy(struct icaltimetype *recurid,
 static int add_freebusy_comp(icalcomponent *comp,
                              icaltimetype start, icaltimetype end,
                              icaltimetype _recurid __attribute__((unused)), 
+                             int is_standalone __attribute__((unused)),
                              void *rock)
 {
     struct freebusy_filter *fbfilter = (struct freebusy_filter *) rock;
@@ -7437,14 +7439,14 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
                 period.end = fb->per.start;
                 if (icaltime_compare(period.end, period.start) > 0) {
                     add_freebusy_comp(comp, period.start, period.end,
-                            icaltime_null_time(), fbfilter);
+                            icaltime_null_time(), 0, fbfilter);
                 }
                 period.start = fb->per.end;
             }
             period.end = availfilter.end;
             if (icaltime_compare(period.end, period.start) > 0) {
                 add_freebusy_comp(comp, period.start, period.end,
-                        icaltime_null_time(), fbfilter);
+                        icaltime_null_time(), 0, fbfilter);
             }
         }
 

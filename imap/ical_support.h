@@ -111,6 +111,7 @@ extern int icalcomponent_myforeach(icalcomponent *comp,
                                                     icaltimetype start,
                                                     icaltimetype end,
                                                     icaltimetype recurid,
+                                                    int is_standalone,
                                                     void *data),
                                    void *callback_data);
 
