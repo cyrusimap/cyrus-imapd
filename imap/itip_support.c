@@ -397,7 +397,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
     icalproperty *prop, *att;
     icalparameter *param;
     icalparameter_partstat partstat = ICAL_PARTSTAT_NONE;
-    const char *attendee = NULL, *cn = NULL, *tzid = NULL;
+    const char *attendee = NULL, *cn = NULL;
     icaltimezone *utc_zone = icaltimezone_get_utc_timezone();
     icaltimezone *startzone = NULL;
     icaltimetype dtstart;
@@ -413,7 +413,6 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             master = comp;
             dtstart = icalcomponent_get_dtstart(master);
             startzone = (icaltimezone *) icaltime_get_timezone(dtstart);
-            tzid = icaltimezone_get_location(startzone);
         }
         else {
             /* Convert RECURRENCE-ID to UTC */
@@ -475,6 +474,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 
             /* create a new recurrence from master component. */
             icalproperty *recuridp = icalproperty_new_recurrenceid(recurid);
+            const char *tzid = icaltimezone_get_location(startzone);
             if (tzid) {
                 icalproperty_set_parameter(recuridp, icalparameter_new_tzid(tzid));
             }
