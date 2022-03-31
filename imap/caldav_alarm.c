@@ -197,7 +197,7 @@ static struct sqldb_upgrade upgrade[] = {
     ";"
 
 #define CMD_SELECT_ALARMS                                   \
-    "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts" \
+    "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts,"\
     "  num_retries, last_run, last_err"                     \
     " FROM events WHERE"                                    \
     " nextcheck < :before"                                  \
