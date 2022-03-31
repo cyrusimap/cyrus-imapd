@@ -5248,6 +5248,151 @@ EOF
                              $events->[0]{recurrenceOverrides}{'2021-10-21T15:30:00'}{participants}{'foo@example.net'}{scheduleStatus});
 }
 
+sub test_imip_reply_override_google
+    :needs_component_sieve :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $IMAP = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $IMAP->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Create calendar user";
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = 'Default';
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$CalendarId/$uuid.ics";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "updated" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20210714T034327Z
+UID:$uuid
+TRANSP:OPAQUE
+SUMMARY:A Recurring Event
+DTSTART;TZID=America/New_York:20210714T153000
+DTEND;TZID=America/New_York:20210714T183000
+RRULE:FREQ=WEEKLY
+DTSTAMP:20210714T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Cassandane;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:foo\@example.net
+END:VEVENT
+BEGIN:VEVENT
+CREATED:20210714T034327Z
+UID:$uuid
+TRANSP:OPAQUE
+SUMMARY:A Recurring Event
+DTSTART;TZID=America/New_York:20210722T153000
+DTEND;TZID=America/New_York:20210722T183000
+RECURRENCE-ID;TZID=America/New_York:20210721T153000
+DTSTAMP:20210714T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Cassandane;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:foo\@example.net
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Create an event on calendar";
+    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Check that the event made it to calendar";
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('',
+                             $events->[0]{participants}{'foo@example.net'}{name});
+    $self->assert_str_equals('needs-action',
+                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+
+
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: text/calendar; method=REPLY; component=VEVENT
+X-Cassandane-Unique: $uuid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REPLY
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20210723T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:foo\@example.net
+END:VEVENT
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20210714T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Test User;PARTSTAT=TENTATIVE:MAILTO:foo\@example.net
+RECURRENCE-ID:20210721T193000Z
+END:VEVENT
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20210723T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Test User;PARTSTAT=DECLINED:MAILTO:foo\@example.net
+RECURRENCE-ID:20210728T193000Z
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP reply";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 1,
+                        flags => [ '\\Recent', '\\Flagged' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Check that the reply made it to calendar";
+    $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('Test User',
+                             $events->[0]{participants}{'foo@example.net'}{name});
+    $self->assert_str_equals('accepted',
+                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+
+    $self->assert_str_equals('2021-07-22T15:30:00',
+                             $events->[0]{recurrenceOverrides}{'2021-07-21T15:30:00'}{start});
+    $self->assert_str_equals('accepted',
+                             $events->[0]{recurrenceOverrides}{'2021-07-21T15:30:00'}{participants}{'cassandane@example.com'}{scheduleStatus});
+    $self->assert_str_equals('tentative',
+                             $events->[0]{recurrenceOverrides}{'2021-07-21T15:30:00'}{participants}{'foo@example.net'}{scheduleStatus});
+
+    $self->assert_str_equals('accepted',
+                             $events->[0]{recurrenceOverrides}{'2021-07-28T15:30:00'}{participants}{'cassandane@example.com'}{scheduleStatus});
+    $self->assert_str_equals('declined',
+                             $events->[0]{recurrenceOverrides}{'2021-07-28T15:30:00'}{participants}{'foo@example.net'}{scheduleStatus});
+}
+
 sub test_imip_reply_override_invalid
     :needs_component_sieve :needs_component_httpd :min_version_3_5
 {

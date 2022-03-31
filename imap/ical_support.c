@@ -910,8 +910,11 @@ icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
     icalproperty *prop =
         icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
 
-    struct icaldatetimeperiodtype dtp = icalproperty_get_datetimeperiod(prop);
-    return dtp.time;
+    if (prop == 0) {
+        return icaltime_null_time();
+    }
+
+    return icalproperty_get_datetime_with_component(prop, comp);
 }
 
 

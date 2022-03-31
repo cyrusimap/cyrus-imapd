@@ -1908,7 +1908,8 @@ static void schedule_sub_updates(const char *userid, const strarray_t *schedule_
          * generate a synthetic one */
         icalcomponent *oldcomp = find_component(oldical, recurid);
         if (!oldcomp && oldmaster) {
-            oldcomp = freeme = master_to_recurrence(oldmaster, prop);
+            oldcomp = freeme = master_to_recurrence(oldmaster,
+                                                    icalproperty_clone(prop));
         }
 
         /* unchanged event - we don't need to send anything */
