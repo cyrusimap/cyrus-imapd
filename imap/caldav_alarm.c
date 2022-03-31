@@ -83,10 +83,10 @@ struct caldav_alarm_data {
     char *last_err;
 };
 
-void caldav_alarm_fini(struct caldav_alarm_data *alarmdata)
+static void caldav_alarm_fini(struct caldav_alarm_data *alarmdata)
 {
-    free(alarmdata->mboxname);
-    alarmdata->mboxname = NULL;
+    xzfree(alarmdata->mboxname);
+    xzfree(alarmdata->last_err);
 }
 
 struct get_alarm_rock {
@@ -205,7 +205,7 @@ static struct sqldb_upgrade upgrade[] = {
     ";"
 
 static sqldb_t *my_alarmdb;
-int refcount;
+static int refcount;
 static struct mboxlock *my_alarmdb_lock;
 
 /* get a database handle to the alarm db */
@@ -1521,6 +1521,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     }
     envelope = json_object_get(submission, "envelope");
     identity = json_object_get(submission, "identityId");
+    onSend = json_object_get(submission, "onSend");
 
     /* Load message */
     r = message_get_field(m, "rawbody", MESSAGE_RAW, &buf);
@@ -1582,7 +1583,13 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         default: cancel = 1; break;
         }
 
-        if (cancel) {
+        if (!cancel) {
+            /* Retry */
+            caldav_alarm_bump_nextcheck(data, runtime + duration, runtime, err);
+            if (sm) smtpclient_close(&sm);
+            goto done;
+        }
+        else if (onSend) {
             /* Move the scheduled message back into Drafts mailbox.
                Use INBOX as a fallback. */
             userid = mboxname_to_userid(data->mboxname);
@@ -1605,19 +1612,12 @@ static int process_futurerelease(struct caldav_alarm_data *data,
             }
             free(destname);
         }
-        else {
-            /* Retry */
-            caldav_alarm_bump_nextcheck(data, runtime + duration, runtime, err);
-            if (sm) smtpclient_close(&sm);
-            goto done;
-        }
     }
     else {
         /* Mark the email as sent */
         record->system_flags |= FLAG_ANSWERED;
 
         /* Get any onSend instructions */
-        onSend = json_object_get(submission, "onSend");
         if (onSend) {
             destmboxid =
                 json_string_value(json_object_get(onSend, "moveToMailboxId"));
@@ -1751,8 +1751,9 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
     int r;
     struct mailbox *mailbox = NULL;
 
-    syslog(LOG_DEBUG, "processing alarms for mailbox %s uid %u",
-           data->mboxname, data->imap_uid);
+    syslog(LOG_DEBUG,
+           "processing alarms for mailbox %s uid %u type %u retries %u",
+           data->mboxname, data->imap_uid, data->type, data->num_retries);
 
     r = dryrun ? mailbox_open_irl(data->mboxname, &mailbox) : mailbox_open_iwl(data->mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
