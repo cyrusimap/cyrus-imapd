@@ -322,7 +322,7 @@ sub test_emailsubmission_set_futurerelease
     $self->assert_deep_equals([], $res->[0][1]->{notFound});
 
     xlog $self, "set up a send block";
-    $self->{instance}->set_smtpd({ begin_data => ["554", "5.3.0 [jmapError:forbiddenToSend] try later"] });
+    $self->{instance}->set_smtpd({ begin_data => ["451", "4.3.0 [jmapError:forbiddenToSend] try later"] });
 
     xlog $self, "attempt delivery of the second email";
     my $now = DateTime->now();
@@ -342,7 +342,7 @@ sub test_emailsubmission_set_futurerelease
     $self->{instance}->set_smtpd();
 
     xlog $self, "trigger delivery of second email submission";
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 120 );
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 600 );
 
     $res = $jmap->CallMethods([['EmailSubmission/get', { ids => [ $msgsubid2 ] }, "R7"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
