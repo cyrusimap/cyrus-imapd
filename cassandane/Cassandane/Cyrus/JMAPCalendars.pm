@@ -18823,7 +18823,7 @@ sub test_calendarevent_set_created
     $self->assert_str_equals($created,
         $res->[0][1]{created}{eventCreatedInFuture}{created});
 
-    xlog "can't update created value";
+    xlog "Can update created value";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -18832,11 +18832,13 @@ sub test_calendarevent_set_created
                 },
             },
         }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ $eventNoCreatedId ],
+            properties => ['created'],
+        }, 'R2'],
     ]);
-    $self->assert_str_equals('invalidProperties',
-        $res->[0][1]{notUpdated}{$eventNoCreatedId}{type});
-    $self->assert_deep_equals(['created'],
-        $res->[0][1]{notUpdated}{$eventNoCreatedId}{properties});
+    $self->assert(exists $res->[0][1]{updated}{$eventNoCreatedId});
+    $self->assert_str_equals($past, $res->[1][1]{list}[0]{created});
 }
 
 sub test_calendarevent_set_updated
@@ -20467,7 +20469,7 @@ EOF
     }
 }
 
-sub test_calendarevent_set_override_created
+sub test_calendarevent_set_created_override
     :min_version_3_7 :needs_component_jmap
 {
     my ($self) = @_;
@@ -20575,20 +20577,22 @@ sub test_calendarevent_set_override_created
         substr($res->[1][1]{list}[0]{recurrenceOverrides}
             {'2021-01-04T15:30:00'}{created}, 0, 15));
 
-    xlog "Can't change created of existing override";
+    xlog "Can change created of existing override";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
                 $eventId => {
-                    'recurrenceOverrides/2021-01-02T15:30:00/created' => $past,
+                    'recurrenceOverrides/2021-01-02T15:30:00/created' => $waypast,
                 },
             },
         }, 'R1'],
+        ['CalendarEvent/get', {
+            properties => ['created', 'recurrenceOverrides'],
+        }, 'R2'],
     ]);
-    $self->assert_deep_equals(['recurrenceOverrides/2021-01-02T15:30:00/created'],
-        $res->[0][1]{notUpdated}{$eventId}{properties});
-
-
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_str_equals($waypast, $res->[1][1]{list}[0]{recurrenceOverrides}
+            {'2021-01-02T15:30:00'}{created});
 }
 
 sub test_itip_rsvp_organizer_change
