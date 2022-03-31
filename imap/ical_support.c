@@ -486,6 +486,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
                                                     icaltimetype start,
                                                     icaltimetype end,
                                                     icaltimetype recurid,
+                                                    int is_standalone,
                                                     void *data),
                                    void *callback_data)
 {
@@ -532,6 +533,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
         mastercomp = comp;
         break;
     }
+    int is_standalone = !mastercomp;
 
     /* find event length first, we'll need it for overrides */
     if (mastercomp) {
@@ -630,7 +632,8 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
             /* an overridden recurrence */
             if (data->comp &&
                 !span_compare_range(&data->span, &range_span) &&
-                !callback(data->comp, data->dtstart, data->dtend, recurid, callback_data))
+                !callback(data->comp, data->dtstart, data->dtend, recurid,
+                    is_standalone, callback_data))
                 goto done;
 
             /* if they're both the same time, it's a precisely overridden
@@ -668,7 +671,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
                     icaltimetype recurid = ritem;
                     recurid.zone = dtstart.zone;
                     r = callback(mastercomp, ritem, thisend, has_rrule ?
-                            recurid : icaltime_null_time(), callback_data);
+                            recurid : icaltime_null_time(), is_standalone, callback_data);
                     if (!r) goto done;
                 }
             }

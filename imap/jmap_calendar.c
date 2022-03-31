@@ -2671,6 +2671,7 @@ static int _recurid_instanceof_cb(icalcomponent *comp __attribute__((unused)),
                                   icaltimetype start,
                                   icaltimetype end __attribute__((unused)),
                                   icaltimetype recurid __attribute__((unused)), // FIXME
+                                  int is_standalone __attribute__((unused)),
                                   void *vrock)
 {
     struct recurid_instanceof_rock *rock = vrock;
@@ -6833,6 +6834,7 @@ static int eventquery_recur_cb(icalcomponent *comp,
                                icaltimetype start,
                                icaltimetype end __attribute__((unused)),
                                icaltimetype recurid __attribute__((unused)), // FIXME
+                               int is_standalone __attribute__((unused)),
                                void *vrock)
 {
     struct eventquery_recur_rock *rock = vrock;
@@ -8612,6 +8614,7 @@ static int principal_getavailability_ical_cb(icalcomponent *comp,
                                              icaltimetype start,
                                              icaltimetype end,
                                              icaltimetype recurid __attribute__((unused)),
+                                             int is_standalone __attribute__((unused)),
                                              void *vrock)
 {
     if (!getavailability_ishidden(comp)) return 1;
@@ -8795,7 +8798,7 @@ static int principal_getavailability_cb(void *vrock, struct caldav_jscal *jscal)
             icaltimetype dtstart = icalcomponent_get_dtstart(comp);
             icaltimetype dtend = icalcomponent_get_dtend(comp);
             principal_getavailability_ical_cb(comp, dtstart, dtend,
-                    icaltime_null_time(), rock);
+                    icaltime_null_time(), 0, rock);
         }
     }
 

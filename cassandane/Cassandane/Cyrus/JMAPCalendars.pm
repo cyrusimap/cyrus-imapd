@@ -15772,7 +15772,7 @@ EOF
         $events[0]{userId}); # accountId
     $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
         $events[0]{uid});
-    $self->assert_str_equals('E-574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+    $self->assert_str_equals(encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
         $events[0]{calendarEventId});
     $self->assert_str_equals('', $events[0]{recurrenceId});
     $self->assert_str_equals('E157A1FC-06BB-4495-933E-4E99C79A8649',
@@ -15802,7 +15802,7 @@ sub test_calendaralert_notification_recurring
 
     my $recurdt = $startdt->clone();
     $recurdt->add(DateTime::Duration->new(days => 1));
-    my $recurid = $recurdt->strftime('%Y%m%dT%H%M%S');
+    my $recurid = $recurdt->strftime('%Y-%m-%dT%H:%M:%S');
 
     # set the trigger to notify us at the start of the event
     my $trigger="PT0S";
@@ -15874,7 +15874,7 @@ EOF
         $events[0]{userId}); # accountId
     $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
         $events[0]{uid});
-    $self->assert_str_equals('ER-' . $recurid . '-574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+    $self->assert_str_equals(encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
         $events[0]{calendarEventId});
     $self->assert_str_equals($recurid, $events[0]{recurrenceId});
     $self->assert_str_equals('E157A1FC-06BB-4495-933E-4E99C79A8649',
@@ -15899,7 +15899,9 @@ sub test_calendaralert_notification_standalone
     # define the event to start in a few seconds
     my $startdt = $now->clone();
     $startdt->add(DateTime::Duration->new(seconds => 2));
-    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+    my $icalStart = $startdt->strftime('%Y%m%dT%H%M%S');
+    my $icalRecurid = $startdt->strftime('%Y%m%dT%H%M%S');
+    my $recurid = $startdt->strftime('%Y-%m-%dT%H:%M:%S');
 
     # set the trigger to notify us at the start of the event
     my $trigger="PT0S";
@@ -15932,8 +15934,8 @@ CREATED:20150806T234327Z
 UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
 TRANSP:OPAQUE
 SUMMARY:Simple
-DTSTART;TZID=Australia/Sydney:$start
-RECURRENCE-ID;TZID=Australia/Sydney:$start
+DTSTART;TZID=Australia/Sydney:$icalStart
+RECURRENCE-ID;TZID=Australia/Sydney:$icalRecurid
 DURATION:PT1H
 DTSTAMP:20150806T234327Z
 SEQUENCE:0
@@ -15971,9 +15973,9 @@ EOF
         $events[0]{userId}); # accountId
     $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
         $events[0]{uid});
-    $self->assert_str_equals('ER-' . $start . '-574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+    $self->assert_str_equals(encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9', $icalRecurid),
         $events[0]{calendarEventId});
-    $self->assert_str_equals($start, $events[0]{recurrenceId});
+    $self->assert_str_equals($recurid, $events[0]{recurrenceId});
     $self->assert_str_equals('E157A1FC-06BB-4495-933E-4E99C79A8649',
         $events[0]{alertId});
 }

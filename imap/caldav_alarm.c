@@ -308,11 +308,13 @@ static int send_alarm(struct get_alarm_rock *rock,
                       icalcomponent *comp, icalcomponent *alarm,
                       icaltimetype start, icaltimetype end,
                       icaltimetype recurid,
+                      int is_standalone,
                       icaltimetype alarmtime)
 {
     const char *userid = rock->userid;
     struct buf calname = BUF_INITIALIZER;
     struct buf calcolor = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
 
     /* get the calendar id */
     mbname_t *mbname = mbname_from_intname(rock->mboxname);
@@ -356,17 +358,24 @@ static int send_alarm(struct get_alarm_rock *rock,
     FILL_STRING_PARAM(event, EVENT_CALENDAR_UID,
                       xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
 
-    if (!icaltime_is_null_time(recurid))
+    if (!icaltime_is_null_time(recurid) && is_standalone) {
+        // if the event is a standalone recurrence instance, encode
+        // the recurrence id in the event id. otherwise use the
+        // main event id for the alert notification
         eid.ical_recurid = icaltime_as_ical_string(recurid);
-
-    FILL_STRING_PARAM(event, EVENT_CALENDAR_RECURID,
-            xstrdup(eid.ical_recurid ? eid.ical_recurid : ""));
-
-    if (eid.ical_uid) {
-        struct buf buf = BUF_INITIALIZER;
-        if (jmap_caleventid_encode(&eid, &buf))
-            FILL_STRING_PARAM(event, EVENT_CALENDAR_EVENTID, buf_release(&buf));
     }
+
+    // set calendarEventId
+    if (eid.ical_uid) jmap_caleventid_encode(&eid, &buf);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_EVENTID, buf_release(&buf));
+
+    // set recurrenceId
+    if (!icaltime_is_null_time(recurid)) {
+        buf_printf(&buf, "%d-%02d-%02dT%02d:%02d:%02d",
+                recurid.year, recurid.month, recurid.day,
+                recurid.hour, recurid.minute, recurid.second);
+    }
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_RECURID, buf_release(&buf));
 
     prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_SUMMARY,
@@ -449,6 +458,7 @@ static int send_alarm(struct get_alarm_rock *rock,
 
     buf_free(&calname);
     buf_free(&calcolor);
+    buf_free(&buf);
     mbname_free(&mbname);
 
     return 0;
@@ -457,6 +467,7 @@ static int send_alarm(struct get_alarm_rock *rock,
 static int process_alarm_cb(icalcomponent *comp,
                             icaltimetype start, icaltimetype end,
                             icaltimetype recurid,
+                            int is_standalone,
                             void *rock)
 {
     struct get_alarm_rock *data = (struct get_alarm_rock *)rock;
@@ -542,7 +553,7 @@ static int process_alarm_cb(icalcomponent *comp,
                        data->mboxname, data->imap_uid,
                        icaltime_as_ical_string(start), alarmno,
                        summary);
-                send_alarm(data, comp, alarm, start, end, recurid, alarmtime);
+                send_alarm(data, comp, alarm, start, end, recurid, is_standalone, alarmtime);
             }
         }
 
