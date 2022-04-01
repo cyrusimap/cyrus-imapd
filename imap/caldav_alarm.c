@@ -1798,31 +1798,35 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
         goto done;
     }
 
-    if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_CALENDAR) {
+    switch (data->type) {
+    case ALARM_CALENDAR: {
         icaltimezone *floatingtz = get_floatingtz(mailbox_name(mailbox), "");
         r = process_valarms(mailbox, &record, floatingtz, runtime, dryrun);
         if (floatingtz) icaltimezone_free(floatingtz, 1);
+        break;
     }
 #ifdef WITH_JMAP
-    else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_JMAPSUBMIT) {
+    case ALARM_SEND:
         if (record.internaldate > runtime || dryrun) {
             caldav_alarm_bump_nextcheck(data, record.internaldate, 0, NULL);
             goto done;
         }
         r = process_futurerelease(data, mailbox, &record, runtime);
-    }
-    else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
+        break;
+
+    case ALARM_SNOOZE:
         /* XXX  Check special-use flag on mailbox */
         r = process_snoozed(data, mailbox, &record, runtime, dryrun);
-    }
+        break;
 #endif
-    else {
+    default:
         /* XXX  Should never get here */
         syslog(LOG_ERR, "Unknown/unsupported alarm triggered for"
                " mailbox %s uid %u of type %d with options 0x%02x",
                data->mboxname, data->imap_uid,
                mailbox_mbtype(mailbox), mailbox->i.options);
         caldav_alarm_delete_record(data->mboxname, data->imap_uid);
+        break;
     }
 
 done:
