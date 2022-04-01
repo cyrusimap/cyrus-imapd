@@ -65,6 +65,7 @@ sub new
     $config->set(caldav_realm => 'Cassandane',
                  conversations => 'yes',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
+                 event_groups => 'mailbox message flags calendar applepushservice jmap',
                  jmapsubmission_deleteonsend => 'no',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no');
@@ -1588,6 +1589,9 @@ sub test_emailsubmission_scheduled_send_fail
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
+    # clean notification cache
+    $self->{instance}->getnotify();
+
     xlog $self, "Create Drafts, Scheduled, and Sent mailboxes";
     my $res = $jmap->CallMethods([
         [ 'Identity/get', {}, "R0" ],
@@ -1724,6 +1728,29 @@ sub test_emailsubmission_scheduled_send_fail
                          $res->[1][1]->{list}[0]->{keywords}{'$draft'});
     $self->assert_equals(JSON::null,
                          $res->[1][1]->{list}[0]->{keywords}{'$sent'});
+
+
+    xlog $self, "Verify 1 event left in the alarmdb";
+    $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$alarmdata);
+
+
+    xlog $self, "Trigger delivery of unscheduled notification";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() + 360 );
+
+    xlog $self, "Verify notification was sent";
+    my $data = $self->{instance}->getnotify();
+    my $unscheduled;
+    foreach (@$data) {
+        my $event = decode_json($_->{MESSAGE});
+        if ($event->{event} eq "MessagesUnscheduled") {
+            $unscheduled = $event;
+        }
+    }
+    $self->assert_not_null($unscheduled);
+    $self->assert_str_equals("cassandane", $unscheduled->{userId});
+    $self->assert_num_equals(1, $unscheduled->{count});
 
 
     xlog $self, "Verify no events left in the alarmdb";

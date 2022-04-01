@@ -54,6 +54,7 @@ enum alarm_type {
     ALARM_CALENDAR = 1,
     ALARM_SNOOZE,
     ALARM_SEND,
+    ALARM_UNSCHEDULED,
 };
 
 /* prepare for caldav alarm operations in this process */

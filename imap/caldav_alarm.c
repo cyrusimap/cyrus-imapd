@@ -1480,6 +1480,60 @@ static int find_scheduled_email(const char *emailid,
     return r;
 }
 
+static int count_cb(sqlite3_stmt *stmt, void *rock)
+{
+    unsigned *count = (unsigned *) rock;
+
+    *count = sqlite3_column_int(stmt, 0);
+
+    return 0;
+}
+
+#define CMD_GET_UNSCHEDULED_COUNT \
+    "SELECT num_retries"          \
+    " FROM events WHERE"          \
+    "  mboxname = :mboxname AND"  \
+    "  imap_uid = :imap_uid AND"  \
+    "  type     = :type"          \
+    ";"
+
+static int update_unscheduled(const char *mboxname, time_t nextcheck)
+{
+    struct sqldb_bindval bval[] = {
+        { ":mboxname",     SQLITE_TEXT,    { .s = mboxname          } },
+        { ":imap_uid",     SQLITE_INTEGER, { .i = 0                 } },
+        { ":nextcheck",    SQLITE_INTEGER, { .i = nextcheck         } },
+        { ":type",         SQLITE_INTEGER, { .i = ALARM_UNSCHEDULED } },
+        { ":num_rcpts",    SQLITE_INTEGER, { .i = 0                 } },
+        { ":num_retries",  SQLITE_INTEGER, { .i = 0                 } },
+        { ":last_run",     SQLITE_INTEGER, { .i = 0                 } },
+        { ":last_err",     SQLITE_TEXT,    { .s = NULL              } },
+        { NULL,            SQLITE_NULL,    { .s = NULL              } }
+    };
+
+    sqldb_t *alarmdb = caldav_alarm_open();
+    if (!alarmdb) return -1;
+
+    syslog(LOG_DEBUG, "update_unscheduled(%s, " TIME_T_FMT ")",
+           mboxname, nextcheck);
+
+    unsigned count = 0;
+    int rc = sqldb_exec(alarmdb, CMD_GET_UNSCHEDULED_COUNT,
+                        bval, &count_cb, &count);
+
+    if (rc == SQLITE_OK) {
+        bval[5].val.i = ++count; // num_retries used as unscheduled count
+        rc = sqldb_exec(alarmdb, CMD_REPLACE, bval, NULL, NULL);
+    }
+
+    caldav_alarm_close(alarmdb);
+
+    if (rc == SQLITE_OK) return 0;
+
+    /* failed? */
+    return -1;
+}
+
 static int process_futurerelease(struct caldav_alarm_data *data,
                                  struct mailbox *mailbox,
                                  struct index_record *record,
@@ -1681,6 +1735,9 @@ static int process_futurerelease(struct caldav_alarm_data *data,
                        frock.mboxname, frock.uid, error_message(r));
 
             }
+            else if (cancel) {
+                update_unscheduled(data->mboxname, runtime + 300);
+            }
         }
 
         if (setkeywords) json_decref(setkeywords);
@@ -1748,6 +1805,20 @@ static int process_snoozed(struct caldav_alarm_data *data,
 }
 #endif /* WITH_JMAP */
 
+static void process_unscheduled(struct caldav_alarm_data *data)
+{
+    struct mboxevent *event = mboxevent_new(EVENT_MESSAGES_UNSCHEDULED);
+    char *userid = mboxname_to_userid(data->mboxname);
+
+    FILL_STRING_PARAM(event, EVENT_MESSAGES_UNSCHEDULED_USERID, userid);
+    FILL_UNSIGNED_PARAM(event, EVENT_MESSAGES_UNSCHEDULED_COUNT, data->num_retries);
+
+    mboxevent_notify(&event);
+    mboxevent_free(&event);
+
+    caldav_alarm_delete_record(data->mboxname, data->imap_uid);
+}
+
 static void process_one_record(struct caldav_alarm_data *data, time_t runtime, int dryrun)
 {
     int r;
@@ -1756,6 +1827,11 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
     syslog(LOG_DEBUG,
            "processing alarms for mailbox %s uid %u type %u retries %u",
            data->mboxname, data->imap_uid, data->type, data->num_retries);
+
+    if (data->type == ALARM_UNSCHEDULED) {
+        process_unscheduled(data);
+        return;
+    }
 
     r = dryrun ? mailbox_open_irl(data->mboxname, &mailbox) : mailbox_open_iwl(data->mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
