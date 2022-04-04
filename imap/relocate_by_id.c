@@ -80,6 +80,8 @@ static struct namespace reloc_namespace;
 static const char *progname = NULL;
 
 /* forward declarations */
+static int add_xapian_paths(const char *userid, const char *userpath,
+                            strarray_t *oldpaths, strarray_t *newpaths);
 static int find_p(const mbentry_t *mbentry, void *rock);
 static void get_searchparts(const char *key, const char *val, void *rock);
 static int relocate(const char *old, const char *new);
@@ -263,49 +265,8 @@ int main(int argc, char **argv)
                 }
 
                 /* Add xapian tier paths */
-                char *activefname = user_hash_meta(userid, FNAME_XAPIANSUFFIX);
-                struct mappedfile *activefile = NULL;
-
-                r = mappedfile_open(&activefile, activefname, 0);
-                if (r) {
-                    fprintf(stderr,
-                            "Failed to open activefile for %s: %s\n",
-                            activefname, error_message(r));
-                    free(activefname);
-                    goto cleanup;
-                }
-
-                strarray_t *items = strarray_nsplit(mappedfile_base(activefile),
-                        mappedfile_size(activefile), NULL, 1);
-
-                struct buf buf = BUF_INITIALIZER;
-                if (items) {
-                    struct search_rock rock = {
-                        userid, userpath,
-                        STRARRAY_INITIALIZER,
-                        ARRAYU64_INITIALIZER,
-                        oldpaths, newpaths,
-                    };
-                    int j;
-                    for (j = 0; j < strarray_size(items); j++) {
-                        const char *item = strarray_nth(items, j);
-                        const char *col = strrchr(item, ':');
-                        if (!col) continue;
-                        buf_setmap(&buf, item, col-item);
-                        strarray_append(&rock.tiernames, buf_cstring(&buf));
-                        arrayu64_append(&rock.tiergens, atoi(col+1));
-                    }
-                    config_foreachoverflowstring(get_searchparts, &rock);
-
-                    strarray_fini(&rock.tiernames);
-                    arrayu64_fini(&rock.tiergens);
-                }
-                strarray_free(items);
-                buf_free(&buf);
-
-                mappedfile_unlock(activefile);
-                mappedfile_close(&activefile);
-                free(activefname);
+                r = add_xapian_paths(userid, userpath, oldpaths, newpaths);
+                if (r) goto cleanup;
             }
 
             /* Relocate our list of paths */
@@ -523,4 +484,55 @@ done:
     free(tier);
     free(basedir);
     buf_free(&buf);
+}
+
+static int add_xapian_paths(const char *userid, const char *userpath,
+                            strarray_t *oldpaths, strarray_t *newpaths)
+{
+    char *activefname = user_hash_meta(userid, FNAME_XAPIANSUFFIX);
+    struct mappedfile *activefile = NULL;
+    int r;
+
+    r = mappedfile_open(&activefile, activefname, 0);
+    if (r) {
+        fprintf(stderr,
+                "Failed to open activefile for %s: %s\n",
+                activefname, error_message(r));
+        free(activefname);
+        return r;
+    }
+
+    strarray_t *items = strarray_nsplit(mappedfile_base(activefile),
+                                        mappedfile_size(activefile), NULL, 1);
+
+    struct buf buf = BUF_INITIALIZER;
+    if (items) {
+        struct search_rock rock = {
+            userid, userpath,
+            STRARRAY_INITIALIZER,
+            ARRAYU64_INITIALIZER,
+            oldpaths, newpaths,
+        };
+        int j;
+        for (j = 0; j < strarray_size(items); j++) {
+            const char *item = strarray_nth(items, j);
+            const char *col = strrchr(item, ':');
+            if (!col) continue;
+            buf_setmap(&buf, item, col-item);
+            strarray_append(&rock.tiernames, buf_cstring(&buf));
+            arrayu64_append(&rock.tiergens, atoi(col+1));
+        }
+        config_foreachoverflowstring(get_searchparts, &rock);
+
+        strarray_fini(&rock.tiernames);
+        arrayu64_fini(&rock.tiergens);
+    }
+    strarray_free(items);
+    buf_free(&buf);
+
+    mappedfile_unlock(activefile);
+    mappedfile_close(&activefile);
+    free(activefname);
+
+    return 0;
 }
