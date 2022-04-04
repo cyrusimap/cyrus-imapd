@@ -15684,10 +15684,11 @@ sub test_session_capability_isrfc
 }
 
 sub test_calendaralert_notification
-    :min_version_3_5 :needs_component_calalarmd
+    :min_version_3_7 :needs_component_calalarmd :needs_component_jmap
 {
     my ($self) = @_;
     my $caldav = $self->{caldav};
+    my $jmap = $self->{jmap};
 
     my $calendarId = $caldav->NewCalendar({name => 'foo'});
     $self->assert_not_null($calendarId);
@@ -15702,9 +15703,6 @@ sub test_calendaralert_notification
     my $startdt = $now->clone();
     $startdt->add(DateTime::Duration->new(seconds => 2));
     my $start = $startdt->strftime('%Y%m%dT%H%M%S');
-
-    # set the trigger to notify us at the start of the event
-    my $trigger="PT0S";
 
     my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
     my $href = "$calendarId/$uuid.ics";
@@ -15739,10 +15737,16 @@ DURATION:PT1H
 DTSTAMP:20150806T234327Z
 SEQUENCE:0
 BEGIN:VALARM
-TRIGGER:$trigger
+TRIGGER:PT0S
 ACTION:DISPLAY
 SUMMARY: My alarm
 UID:E157A1FC-06BB-4495-933E-4E99C79A8649
+DESCRIPTION:My alarm has triggered
+END:VALARM
+BEGIN:VALARM
+TRIGGER:PT1H
+ACTION:DISPLAY
+SUMMARY: My alarm without a uid
 DESCRIPTION:My alarm has triggered
 END:VALARM
 END:VEVENT
@@ -15750,6 +15754,17 @@ END:VCALENDAR
 EOF
 
     $caldav->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog "Get calendar event alert ids";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['alerts'],
+        }, 'R1'],
+    ]);
+
+    my %alerts = %{$res->[0][1]{list}[0]{alerts}};
+    my %alertIds = map { $alerts{$_}{trigger}{offset} => $_ } keys %alerts;
+    $self->assert_num_equals(2, scalar keys %alertIds);
 
     # clean notification cache
     $self->{instance}->getnotify();
@@ -15775,8 +15790,33 @@ EOF
     $self->assert_str_equals(encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
         $events[0]{calendarEventId});
     $self->assert_str_equals('', $events[0]{recurrenceId});
-    $self->assert_str_equals('E157A1FC-06BB-4495-933E-4E99C79A8649',
-        $events[0]{alertId});
+    $self->assert_str_equals($alertIds{'PT0S'}, $events[0]{alertId});
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 3660 );
+
+    $data = $self->{instance}->getnotify();
+    @events = ();
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                push @events, $e;
+            }
+        }
+    }
+
+    $self->assert_num_equals(1, scalar @events);
+    $self->assert_str_equals('cassandane',
+        $events[0]{userId}); # accountId
+    $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+        $events[0]{uid});
+    $self->assert_str_equals(encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
+        $events[0]{calendarEventId});
+    $self->assert_str_equals('', $events[0]{recurrenceId});
+    $self->assert_str_equals($alertIds{'PT1H'}, $events[0]{alertId});
 }
 
 sub test_calendaralert_notification_recurring

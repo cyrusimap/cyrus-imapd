@@ -422,9 +422,8 @@ static int send_alarm(struct get_alarm_rock *rock,
     }
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ALARM_RECIPIENTS, recipients);
 
-    prop = icalcomponent_get_first_property(alarm, ICAL_UID_PROPERTY);
-    FILL_STRING_PARAM(event, EVENT_CALENDAR_ALERTID,
-            xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+    jmap_alertid_encode(alarm, &buf);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_ALERTID, buf_release(&buf));
 
     strarray_t *attendee_names = strarray_new();
     strarray_t *attendee_emails = strarray_new();
