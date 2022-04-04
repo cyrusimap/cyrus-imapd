@@ -493,7 +493,8 @@ static int add_xapian_paths(const char *userid, const char *userpath,
     struct mappedfile *activefile = NULL;
     int r;
 
-    r = mappedfile_open(&activefile, activefname, 0);
+    r = mappedfile_open(&activefile, activefname,
+                        MAPPEDFILE_CREATE | MAPPEDFILE_RW);
     if (r) {
         fprintf(stderr,
                 "Failed to open activefile for %s: %s\n",
