@@ -163,10 +163,14 @@ int main(int argc, char **argv)
             MBOXTREE_TOMBSTONES | MBOXTREE_DELETED | MBOXTREE_INTERMEDIATES;
 
         /* Make a list of all mailboxes in tree */
-        if (dousers)
+        if (dousers) {
             r = mboxlist_usermboxtree(argv[i], NULL, find_p, &mboxlist_rock, flags);
-        else
-            r = mboxlist_mboxtree(argv[i], find_p, &mboxlist_rock, flags);
+        }
+        else {
+            char *intname = mboxname_from_external(argv[i], &reloc_namespace, NULL);
+            r = mboxlist_mboxtree(intname, find_p, &mboxlist_rock, flags);
+            free(intname);
+        }
 
         /* Make sure we have some work to do */
         if (!mboxlist_rock.matched) {
