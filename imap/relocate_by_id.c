@@ -90,6 +90,11 @@ static void usage(void);
 static int quiet = 0;
 static int nochanges = 0;
 
+struct mboxlist_rock {
+    ptrarray_t *mboxlist;
+    int matched;
+};
+
 struct search_rock {
     const char *userid;
     const char *userpath;
@@ -153,19 +158,37 @@ int main(int argc, char **argv)
     }
 
     for (i = optind; i < argc; i++) {
-        ptrarray_t *mboxlist = ptrarray_new();
+        struct mboxlist_rock mboxlist_rock = { ptrarray_new(), 0 };
         int flags =
             MBOXTREE_TOMBSTONES | MBOXTREE_DELETED | MBOXTREE_INTERMEDIATES;
 
         /* Make a list of all mailboxes in tree */
         if (dousers)
-            r = mboxlist_usermboxtree(argv[i], NULL, find_p, mboxlist, flags);
+            r = mboxlist_usermboxtree(argv[i], NULL, find_p, &mboxlist_rock, flags);
         else
-            r = mboxlist_mboxtree(argv[i], find_p, mboxlist, flags);
+            r = mboxlist_mboxtree(argv[i], find_p, &mboxlist_rock, flags);
+
+        /* Make sure we have some work to do */
+        if (!mboxlist_rock.matched) {
+            /* usage error: nothing found with this name */
+            fprintf(stderr, "%s: %s not found\n",
+                            argv[i],
+                            dousers ? "user" : "mailbox");
+            ptrarray_free(mboxlist_rock.mboxlist);
+            continue;
+        }
+        else if (!ptrarray_size(mboxlist_rock.mboxlist)) {
+            /* everything below this name already relocated */
+            fprintf(stderr, "%s: %s already relocated\n",
+                            argv[i],
+                            dousers ? "user" : "mailbox");
+            ptrarray_free(mboxlist_rock.mboxlist);
+            continue;
+        }
 
         /* Process each mailbox in reverse order (children first) */
         struct buf part_buf = BUF_INITIALIZER;
-        while ((mbentry = ptrarray_pop(mboxlist))) {
+        while ((mbentry = ptrarray_pop(mboxlist_rock.mboxlist))) {
             const char *partition = mbentry->partition;
             const char *uniqueid = mbentry->uniqueid;
             const char *name = mbentry->name;
@@ -341,7 +364,7 @@ int main(int argc, char **argv)
             free(extname);
             free(userid);
         }
-        ptrarray_free(mboxlist);
+        ptrarray_free(mboxlist_rock.mboxlist);
         buf_free(&part_buf);
     }
 
@@ -373,12 +396,15 @@ static void usage(void)
  * Append mailboxes needing relocation to our array */
 static int find_p(const mbentry_t *mbentry, void *rock)
 {
-    ptrarray_t *mboxlist = (ptrarray_t *) rock;
+    struct mboxlist_rock *mboxlist_rock = (struct mboxlist_rock *) rock;
 
     if (mbentry->mbtype & MBTYPE_DELETED) {
         /* skip tombstones */
         return 0;
     }
+
+    /* lookup has found something (whether or not it needs relocating) */
+    mboxlist_rock->matched ++;
 
     if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
         mbentry_t *mbentry_copy = NULL;
@@ -411,7 +437,7 @@ static int find_p(const mbentry_t *mbentry, void *rock)
             mbentry_copy = mboxlist_entry_copy(mbentry);
         }
 
-        ptrarray_push(mboxlist, mbentry_copy);
+        ptrarray_push(mboxlist_rock->mboxlist, mbentry_copy);
     }
 
     return 0;
