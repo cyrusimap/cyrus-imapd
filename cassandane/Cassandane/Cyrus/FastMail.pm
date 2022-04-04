@@ -1579,7 +1579,7 @@ sub test_sync_reset_legacy
     close(FH);
 
     xlog $self, "files exist";
-    $self->assert(@files);
+    $self->assert_not_equals(0, scalar @files);
 
     $self->{instance}->run_command({ cyrus => 1 }, 'sync_reset', '-f' => 'magicuser' );
 
@@ -1588,7 +1588,7 @@ sub test_sync_reset_legacy
     close(FH);
 
     xlog $self, "no files left for this user";
-    $self->assert(not @files);
+    $self->assert_equals(0, scalar @files);
 }
 
 sub test_sync_reset_nolegacy
@@ -1668,7 +1668,7 @@ sub test_relocate_legacy_nodomain
     close(FH);
 
     xlog $self, "files exist";
-    $self->assert(@files);
+    $self->assert_not_equals(0, scalar @files);
 
     $self->{instance}->run_command({ cyrus => 1 }, 'relocate_by_id', '-u' => "magicuser" );
 
@@ -1677,7 +1677,7 @@ sub test_relocate_legacy_nodomain
     close(FH);
 
     xlog $self, "no files left for this user";
-    $self->assert(not @files);
+    $self->assert_equals(0, scalar @files);
 }
 
 sub test_relocate_legacy_domain
@@ -1709,7 +1709,7 @@ sub test_relocate_legacy_domain
     close(FH);
 
     xlog $self, "files exist";
-    $self->assert(@files);
+    $self->assert_not_equals(0, scalar @files);
 
     $self->{instance}->run_command({ cyrus => 1 }, 'relocate_by_id', '-u' => "magicuser\@example.com" );
 
@@ -1718,7 +1718,7 @@ sub test_relocate_legacy_domain
     close(FH);
 
     xlog $self, "no files left for this user";
-    $self->assert(not @files);
+    $self->assert_equals(0, scalar @files);
 }
 
 sub test_relocate_messages_still_exist
@@ -1764,7 +1764,7 @@ sub test_relocate_messages_still_exist
     close(FH);
 
     xlog $self, "files exist";
-    $self->assert(@files);
+    $self->assert_not_equals(0, scalar @files);
 
     $self->{instance}->run_command({ cyrus => 1 }, 'relocate_by_id', '-u' => $username );
 
@@ -1773,7 +1773,7 @@ sub test_relocate_messages_still_exist
     close(FH);
 
     xlog $self, "no files left for this user";
-    $self->assert(not @files);
+    $self->assert_equals(0, scalar @files);
 
     $imaptalk = $self->{store}->get_client();
 
