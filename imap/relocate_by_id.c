@@ -106,6 +106,7 @@ int main(int argc, char **argv)
     struct buf buf = BUF_INITIALIZER;
     char *alt_config = NULL;
     mbentry_t *mbentry;
+    enum enum_value config_search_engine = IMAPOPT_ZERO;
 
     progname = basename(argv[0]);
 
@@ -134,6 +135,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "relocate_by_id", 0, CONFIG_NEED_PARTITION_DATA);
     global_sasl_init(1, 0, NULL);
+    config_search_engine = config_getenum(IMAPOPT_SEARCH_ENGINE);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&reloc_namespace, 1)) != 0) {
@@ -264,9 +266,12 @@ int main(int argc, char **argv)
                     strarray_append(newpaths, buf_cstring(&buf));
                 }
 
-                /* Add xapian tier paths */
-                r = add_xapian_paths(userid, userpath, oldpaths, newpaths);
-                if (r) goto cleanup;
+                if (config_search_engine == IMAP_ENUM_SEARCH_ENGINE_XAPIAN) {
+                    /* Add xapian tier paths */
+                    r = add_xapian_paths(userid, userpath, oldpaths, newpaths);
+                    if (r) goto cleanup;
+                }
+                /* squat index, if any, was taken care of earlier as metadata */
             }
 
             /* Relocate our list of paths */
