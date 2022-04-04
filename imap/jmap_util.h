@@ -206,6 +206,8 @@ extern const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, str
 
 extern void jmap_caleventid_free(struct jmap_caleventid **eidptr);
 
+extern void jmap_alertid_encode(icalcomponent *valarm, struct buf *buf);
+
 #define JMAP_NOTIF_CALENDAREVENT "jmap-notif-calendarevent"
 
 extern char *jmap_notifmboxname(const char *userid);

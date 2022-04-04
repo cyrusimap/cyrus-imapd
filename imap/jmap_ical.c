@@ -2603,10 +2603,7 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
 
 HIDDEN json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *idbuf)
 {
-    const char *id = icalcomponent_get_uid(valarm);
-    char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
-    if (!id) id = sha1hexstr(icalcomponent_as_ical_string(valarm), keybuf);
-    buf_setcstr(idbuf, id);
+    jmap_alertid_encode(valarm, idbuf);
 
     /* Determine TRIGGER and RELATED parameter */
     struct icaltriggertype trigger = {

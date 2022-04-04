@@ -1362,3 +1362,19 @@ EXPORTED char *jmap_role_to_specialuse(const char *role)
     specialuse[1] = toupper(specialuse[1]);
     return specialuse;
 }
+
+EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
+{
+    buf_reset(idbuf);
+    const char *id = icalcomponent_get_uid(valarm);
+    char keybuf[2*SHA1_DIGEST_LENGTH+1];
+    if (!id) {
+        unsigned char dest[SHA1_DIGEST_LENGTH];
+        const char *val = icalcomponent_as_ical_string(valarm);
+        xsha1((const unsigned char *) val, strlen(val), dest);
+        bin_to_hex(dest, SHA1_DIGEST_LENGTH, keybuf, BH_LOWER);
+        keybuf[2*SHA1_DIGEST_LENGTH] = '\0';
+        id = keybuf;
+    }
+    buf_setcstr(idbuf, id);
+}
