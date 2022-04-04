@@ -262,7 +262,7 @@ sub test_recurring_absolute_trigger
 
     # set the trigger to notify us at the start of the event
     my $triggerdt = $startdt->clone();
-    $triggerdt->add(DateTime::Duration->new(hours => -11));
+    $triggerdt->add(DateTime::Duration->new(seconds => 0 - $now->offset()));
     my $trigger = $triggerdt->strftime('%Y%m%dT%H%M%SZ');
 
     my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
