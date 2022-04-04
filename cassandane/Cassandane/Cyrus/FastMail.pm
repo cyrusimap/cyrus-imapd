@@ -1721,6 +1721,50 @@ sub test_relocate_legacy_domain
     $self->assert_equals(0, scalar @files);
 }
 
+sub test_relocate_legacy_nosearchdb
+    :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+{
+    my ($self) = @_;
+
+    my $adminstore = $self->{adminstore};
+    my $admintalk = $adminstore->get_client();
+
+    my $inbox = "user.magicuser\@example.com";
+    my $subfolder = "user.magicuser.foo\@example.com";
+
+    $admintalk->create($inbox);
+    $admintalk->setacl($inbox, admin => 'lrswipkxtecdan');
+    $admintalk->create($subfolder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $adminstore->set_folder($subfolder);
+    $self->make_message("Email", store => $adminstore) or die;
+
+    # Don't create the search database!
+    # A user who's never been indexed should still relocate cleanly
+
+    my $basedir = $self->{instance}{basedir};
+    open(FH, "-|", "find", $basedir);
+    my @files = grep { m{/magicuser/} and not m{/conf/lock/} } <FH>;
+    close(FH);
+
+    xlog $self, "files exist";
+    $self->assert_not_equals(0, scalar @files);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'relocate_by_id', '-u' => "magicuser\@example.com" );
+
+    open(FH, "-|", "find", $basedir);
+    @files = grep { m{/magicuser/} and not m{/conf/lock/} } <FH>;
+    close(FH);
+
+    xlog $self, "no files left for this user";
+    $self->assert_equals(0, scalar @files);
+
+    # Hopefully squatter still works!
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+}
+
 sub test_relocate_messages_still_exist
     :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
 {
