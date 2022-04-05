@@ -152,8 +152,23 @@ static int pick_scheddefault_cb(const mbentry_t *mbentry, void *vrock)
         mbname = mbname_from_intname(mbentry->name);
         const char *collname = strarray_nth(mbname_boxes(mbname), -1);
         if (strarray_find(&rock->ignore, collname, 0) < 0) {
-            rock->collname = xstrdup(collname);
-            r = CYRUSDB_DONE;
+            if (mbentry->acl) {
+                // Must be writable by owner
+                const char *ownerid = mbname_userid(mbname);
+                strarray_t *acl = strarray_split(mbentry->acl, "\t", STRARRAY_TRIM);
+                for (int i = 0; i < strarray_size(acl); i += 2) {
+                    const char *userid = strarray_nth(acl, i);
+                    if (!strcmp(userid, ownerid) || !strcmp(userid, "anyone")) {
+                        int rights = 0;
+                        cyrus_acl_strtomask(strarray_nth(acl, i+1), &rights);
+                        if (rights & ACL_INSERT) {
+                            rock->collname = xstrdup(collname);
+                            r = CYRUSDB_DONE;
+                        }
+                    }
+                }
+                strarray_free(acl);
+            }
         }
     }
 
