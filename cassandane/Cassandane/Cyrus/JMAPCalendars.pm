@@ -6401,6 +6401,7 @@ sub test_rscale_in_jmap_hidden_in_caldav
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
+    my $admin = $self->{adminstore}->get_client();
 
     my $calid = "Default";
     my $event =  {
@@ -19423,10 +19424,11 @@ sub test_calendarpreferences_set
             ids => ['singleton'],
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{singleton});
+    xlog "Setting defaultCalendarId to null assigns a new default calendar";
+    $self->assert_not_null($res->[0][1]{updated}{singleton}{defaultCalendarId});
     $self->assert_deep_equals([{
         id => 'singleton',
-        defaultCalendarId => undef,
+        defaultCalendarId => $res->[0][1]{updated}{singleton}{defaultCalendarId},
         defaultParticipantIdentityId => undef,
     }], $res->[1][1]{list});
 }
@@ -19531,7 +19533,7 @@ EOF
     }, $res->[1][1]{list}[0]{calendarIds});
     $state = $res->[1][1]{state};
 
-    xlog "Create calendars A and B";
+    xlog "Create calendars A, B and C";
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             create => {
@@ -19541,24 +19543,21 @@ EOF
                 calendarB => {
                     name => 'B',
                 },
-            },
-        }, 'R1'],
-        ['CalendarPreferences/set', {
-            update => {
-                singleton => {
-                    '#defaultCalendarId' => {
-                        resultOf => 'R1',
-                        name => 'Calendar/set',
-                        path => '/created/calendarA/id',
-                    },
+                calendarC => {
+                    name => 'C',
                 },
             },
-        }, 'R2'],
+        }, 'R1'],
     ]);
     my $calendarA = $res->[0][1]{created}{calendarA}{id};
     $self->assert_not_null($calendarA);
     my $calendarB = $res->[0][1]{created}{calendarB}{id};
     $self->assert_not_null($calendarB);
+    my $calendarC = $res->[0][1]{created}{calendarC}{id};
+    $self->assert_not_null($calendarC);
+
+    xlog "Make calendar C read-only to owner";
+    $admin->setacl("user.cassandane.#calendars.$calendarC", cassandane => 'lrs') or die;
 
     xlog "Set calendarA as default";
     $res = $jmap->CallMethods([
@@ -19606,7 +19605,7 @@ EOF
     $self->assert_deep_equals([$calendarA], $res->[0][1]{destroyed});
     $self->assert_str_equals('Default', $res->[1][1]{list}[0]{defaultCalendarId});
 
-    xlog "Set default calendar to null and destroy special calendar Default";
+    xlog "Can set defaultCalendarId to null, but new one gets picked immediately";
     $res = $jmap->CallMethods([
         ['CalendarPreferences/set', {
             update => {
@@ -19615,13 +19614,23 @@ EOF
                 },
             },
         }, 'R1'],
+        ['CalendarPreferences/get', {
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals($res->[0][1]{updated}{singleton}{defaultCalendarId},
+        $res->[1][1]{list}[0]{defaultCalendarId});
+
+    xlog "Destroy special calendar Default, new default is calendar B";
+    $res = $jmap->CallMethods([
         ['Calendar/set', {
             destroy => [ 'Default' ],
             onDestroyRemoveEvents => JSON::true,
+        }, 'R1'],
+        ['CalendarPreferences/get', {
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{singleton});
-    $self->assert_deep_equals(['Default'], $res->[1][1]{destroyed});
+    $self->assert_deep_equals(['Default'], $res->[0][1]{destroyed});
+    $self->assert_str_equals($calendarB, $res->[1][1]{list}[0]{defaultCalendarId});
 
     xlog "Get CalendarEvent state";
     $res = $jmap->CallMethods([
@@ -19640,7 +19649,7 @@ EOF
     xlog "Deliver message";
     $self->deliver_imip();
 
-    xlog "Message should go into last remaining calendar B";
+    xlog "Message should go into writable calendar B";
     $res = $jmap->CallMethods([
         ['CalendarEvent/changes', {
             sinceState => $state,
@@ -19659,7 +19668,7 @@ EOF
     }, $res->[1][1]{list}[0]{calendarIds});
     $state = $res->[1][1]{state};
 
-    xlog "Destroy last calendar B";
+    xlog "Destroy calendar B";
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             destroy => [ $calendarB ],
@@ -19669,6 +19678,24 @@ EOF
         }, 'R2'],
     ]);
     $self->assert_deep_equals([$calendarB], $res->[0][1]{destroyed});
+
+    xlog "Read-only calendar C does not get picked as default";
+    $self->assert_null($res->[1][1]{list}[0]{defaultCalendarId});
+
+    xlog "Cannot set read-only calendar as default calendar";
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/set', {
+            update => {
+                singleton => {
+                    defaultCalendarId => $calendarC,
+                },
+            },
+        }, 'R1'],
+        ['CalendarPreferences/get', {
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals(['defaultCalendarId'],
+        $res->[0][1]{notUpdated}{singleton}{properties});
     $self->assert_null($res->[1][1]{list}[0]{defaultCalendarId});
 }
 

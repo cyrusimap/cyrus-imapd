@@ -1801,21 +1801,25 @@ static int set_scheddefault(jmap_req_t *req, annotate_state_t *astate, const cha
     struct buf buf = BUF_INITIALIZER;
     buf_setcstr(&buf, colname ? colname : "");
 
-    static const char *annot =
+    const char *annot =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
 
     if (colname) {
         struct mailbox *mbox = NULL;
         char *mboxname = caldav_mboxname(req->accountid, colname);
+        // Make sure it exists and is writable
         r = jmap_openmbox(req, mboxname, &mbox, 1);
         if (!r) {
-            r = annotate_state_writemask(astate, annot, "", &buf);
+            if (httpd_myrights(req->authstate, mbox->mbentry) & ACL_INSERT)
+                r = annotate_state_writemask(astate, annot, req->accountid, &buf);
+            else
+                r = IMAP_PERMISSION_DENIED;
         }
         jmap_closembox(req, &mbox);
         free(mboxname);
     }
     else {
-        r = annotate_state_writemask(astate, annot, "", &buf);
+        r = annotate_state_writemask(astate, annot, req->accountid, &buf);
     }
 
     buf_free(&buf);
@@ -11214,6 +11218,7 @@ static void calendarpreferences_set(struct jmap_req *req,
                                     struct jmap_parser *parser,
                                     json_t *jprefs,
                                     mbentry_t *mbcalhome,
+                                    json_t *server_set,
                                     json_t **err)
 {
     json_t *jcalid = NULL;
@@ -11277,11 +11282,21 @@ static void calendarpreferences_set(struct jmap_req *req,
 
     /* Set default calendar */
     if (jcalid) {
-        r = set_scheddefault(req, astate, json_string_value(jcalid));
+        char *server_set_default_calid = NULL;
+        if (json_is_null(jcalid)) {
+            server_set_default_calid = caldav_scheddefault(req->accountid, 1);
+            r = set_scheddefault(req, astate, server_set_default_calid);
+        }
+        else {
+            r = set_scheddefault(req, astate, json_string_value(jcalid));
+        }
         if (r) {
-            if (r == IMAP_MAILBOX_NONEXISTENT) {
-                jmap_parser_invalid(parser, "defaultCalendarId");
+            if (r == IMAP_MAILBOX_NONEXISTENT || r == IMAP_PERMISSION_DENIED) {
+                *err = json_pack("{s:s, s:[s]}",
+                        "type", "invalidProperties",
+                        "properties", "defaultCalendarId");
                 r = 0;
+                goto done;
             }
             else {
                 xsyslog(LOG_ERR, "can not write schedule default calendar",
@@ -11289,6 +11304,11 @@ static void calendarpreferences_set(struct jmap_req *req,
                 goto done;
             }
         }
+        if (server_set_default_calid) {
+            json_object_set_new(server_set, "defaultCalendarId",
+                    json_string(server_set_default_calid));
+        }
+        xzfree(server_set_default_calid);
     }
 
     /* Set default participant identity */
@@ -11407,14 +11427,20 @@ static int jmap_calendarpreferences_set(struct jmap_req *req)
 
     json_t *jprefs = json_object_get(set.update, "singleton");
     if (JNOTNULL(jprefs)) {
+        json_t *server_set = json_object();
         json_t *err = NULL;
-        calendarpreferences_set(req, &parser, jprefs, mbcalhome, &err);
+        calendarpreferences_set(req, &parser, jprefs, mbcalhome, server_set, &err);
+        if (!json_object_size(server_set)) {
+            json_decref(server_set);
+            server_set = json_null();
+        }
         if (err) {
             json_object_set_new(set.not_updated, "singleton", err);
         }
         else {
-            json_object_set_new(set.updated, "singleton", json_null());
+            json_object_set(set.updated, "singleton", server_set);
         }
+        json_decref(server_set);
     }
 
     // Reload foldermodseq
