@@ -122,8 +122,12 @@ EXPORTED int caldav_alarm_done(void)
 }
 
 
-#define CMD_CREATE                                      \
-    "CREATE TABLE IF NOT EXISTS events ("               \
+#define CMD_CREATE_INDEXES                                        \
+    "CREATE INDEX IF NOT EXISTS checktime ON events (nextcheck);" \
+    "CREATE INDEX IF NOT EXISTS idx_type ON events (type);"
+
+#define CMD_CREATE(name)                                \
+    "CREATE TABLE IF NOT EXISTS " name " ("             \
     " mboxname TEXT NOT NULL,"                          \
     " imap_uid INTEGER NOT NULL,"                       \
     " nextcheck INTEGER NOT NULL,"                      \
@@ -134,33 +138,22 @@ EXPORTED int caldav_alarm_done(void)
     " last_err TEXT,"                                   \
     " PRIMARY KEY (mboxname, imap_uid)"                 \
     ");"                                                \
-    "CREATE INDEX IF NOT EXISTS checktime ON events (nextcheck);" \
-    "CREATE INDEX IF NOT EXISTS idx_type ON events (type);"
+    CMD_CREATE_INDEXES
 
 
 #define DBVERSION 4
 
-/* the command loop will do the upgrade and then drop the old tables.
- * Sadly there's no other way to do it without creating a lock inversion! */
-#define CMD_UPGRADEv2 CMD_CREATE
-
-#define CMD_UPGRADEv3                                      \
-    "ALTER TABLE events ADD COLUMN type INTEGER;"          \
-    "ALTER TABLE events ADD COLUMN numrcpts INTEGER;"      \
-    "UPDATE events SET type = 1, numrcpts = 0;"            \
-    "CREATE INDEX IF NOT EXISTS idx_type ON events (type);"
-
 #define CMD_UPGRADEv4                                      \
-    "ALTER TABLE events"                                   \
-    " RENAME COLUMN numrcpts TO num_rcpts;"                \
-    "ALTER TABLE events ADD COLUMN num_retries INTEGER;"   \
-    "ALTER TABLE events ADD COLUMN last_run INTEGER;"      \
-    "ALTER TABLE events ADD COLUMN last_err TEXT;"         \
-    "UPDATE events SET num_retries = 0, last_run = 0;"
+    CMD_CREATE("new_events")                               \
+    "INSERT INTO new_events"                               \
+    " SELECT *, 1, 0, 0, 0, NULL FROM events;"             \
+    "DROP TABLE events;"                                   \
+    "ALTER TABLE new_events RENAME TO events;"             \
+    CMD_CREATE_INDEXES
 
 static struct sqldb_upgrade upgrade[] = {
     /* Don't upgrade to version 2. */
-    { 3, CMD_UPGRADEv3, NULL },
+    /* Don't upgrade to version 3.  This was an intermediate DB version */
     { 4, CMD_UPGRADEv4, NULL },
     /* always finish with an empty row */
     { 0, NULL, NULL }
@@ -228,7 +221,7 @@ static sqldb_t *caldav_alarm_open()
 
     // XXX - config option?
     char *dbfilename = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
-    my_alarmdb = sqldb_open(dbfilename, CMD_CREATE, DBVERSION, upgrade,
+    my_alarmdb = sqldb_open(dbfilename, CMD_CREATE("events"), DBVERSION, upgrade,
                             config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
 
     if (!my_alarmdb) {
@@ -262,7 +255,7 @@ EXPORTED int caldav_alarm_set_reconstruct(sqldb_t *db)
     assert(!refcount);
 
     // create the events table
-    int rc = sqldb_exec(db, CMD_CREATE, NULL, NULL, NULL);
+    int rc = sqldb_exec(db, CMD_CREATE("events"), NULL, NULL, NULL);
     if (rc != SQLITE_OK) return IMAP_IOERROR;
 
     // preload the DB into our refcounter
