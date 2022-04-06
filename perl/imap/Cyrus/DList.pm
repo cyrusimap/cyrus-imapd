@@ -1,5 +1,5 @@
 #!/usr/bin/perl -c
-#  Copyright (c) 2017 Fastmail.  All rights reserved.
+#  Copyright (c) 2017-2022 Fastmail.  All rights reserved.
 #
 # Author: Bron Gondwana <brong@fastmail.fm>
 #
