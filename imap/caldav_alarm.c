@@ -139,8 +139,8 @@ EXPORTED int caldav_alarm_done(void)
     " PRIMARY KEY (mboxname, imap_uid)"                 \
     ");"                                                \
 
-#define CMD_CREATE(name)                                \
-    CMD_CREATE_TABLE(name)                              \
+#define CMD_CREATE                                      \
+    CMD_CREATE_TABLE("events")                          \
     CMD_CREATE_INDEXES
 
 
@@ -232,7 +232,7 @@ static sqldb_t *caldav_alarm_open()
 
     // XXX - config option?
     char *dbfilename = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
-    my_alarmdb = sqldb_open(dbfilename, CMD_CREATE("events"), DBVERSION, upgrade,
+    my_alarmdb = sqldb_open(dbfilename, CMD_CREATE, DBVERSION, upgrade,
                             config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
 
     if (!my_alarmdb) {
@@ -266,7 +266,7 @@ EXPORTED int caldav_alarm_set_reconstruct(sqldb_t *db)
     assert(!refcount);
 
     // create the events table
-    int rc = sqldb_exec(db, CMD_CREATE("events"), NULL, NULL, NULL);
+    int rc = sqldb_exec(db, CMD_CREATE, NULL, NULL, NULL);
     if (rc != SQLITE_OK) return IMAP_IOERROR;
 
     // preload the DB into our refcounter
