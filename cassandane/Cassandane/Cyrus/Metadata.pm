@@ -47,6 +47,8 @@ use Config;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+
+use lib '../perl/imap';
 use Cyrus::DList;
 
 sub new
