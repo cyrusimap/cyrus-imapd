@@ -22143,6 +22143,197 @@ sub test_email_query_seen_shared
     $self->assert_deep_equals([$email2], $res->[3][1]{ids});
 }
 
+sub test_email_query_seen_multimbox
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog 'Create email in mailboxes A and B';
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+            },
+        }, 'R1'],
+        ['Email/set', {
+            create => {
+                email => {
+                    mailboxIds => {
+                        '#mboxA' => JSON::true,
+                        '#mboxB' => JSON::true,
+                    },
+                    from => [{
+                       email => 'from@local'
+                    }],
+                    subject => 'test',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        },
+                    },
+                },
+            },
+        }, 'R2'],
+    ]);
+    my $mboxA = $res->[0][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    my $emailId = $res->[1][1]{created}{email}{id};
+    $self->assert_not_null($emailId);
+
+    xlog "Assert email is unseen";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                hasKeyword => '$seen',
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxA,
+                hasKeyword => '$seen',
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxB,
+                hasKeyword => '$seen',
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                notKeyword => '$seen',
+            },
+        }, 'R4'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxA,
+                notKeyword => '$seen',
+            },
+        }, 'R5'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxB,
+                notKeyword => '$seen',
+            },
+        }, 'R6'],
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{ids});
+    $self->assert_deep_equals([], $res->[1][1]{ids});
+    $self->assert_deep_equals([], $res->[2][1]{ids});
+    $self->assert_deep_equals([$emailId], $res->[3][1]{ids});
+    $self->assert_deep_equals([$emailId], $res->[4][1]{ids});
+    $self->assert_deep_equals([$emailId], $res->[5][1]{ids});
+
+    xlog 'Set \Seen on message in mailbox A';
+    $imap->select('A');
+    $imap->store('1', '+flags', '(\Seen)');
+
+    xlog "Assert email still is unseen";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                hasKeyword => '$seen',
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxA,
+                hasKeyword => '$seen',
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxB,
+                hasKeyword => '$seen',
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                notKeyword => '$seen',
+            },
+        }, 'R4'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxA,
+                notKeyword => '$seen',
+            },
+        }, 'R5'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxB,
+                notKeyword => '$seen',
+            },
+        }, 'R6'],
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{ids});
+    $self->assert_deep_equals([], $res->[1][1]{ids});
+    $self->assert_deep_equals([], $res->[2][1]{ids});
+    $self->assert_deep_equals([$emailId], $res->[3][1]{ids});
+    $self->assert_deep_equals([$emailId], $res->[4][1]{ids});
+    $self->assert_deep_equals([$emailId], $res->[5][1]{ids});
+
+    xlog 'Set \Seen on message in mailbox B';
+    $imap->select('B');
+    $imap->store('1', '+flags', '(\Seen)');
+
+    xlog "Assert email seen";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                hasKeyword => '$seen',
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxA,
+                hasKeyword => '$seen',
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxB,
+                hasKeyword => '$seen',
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                notKeyword => '$seen',
+            },
+        }, 'R4'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxA,
+                notKeyword => '$seen',
+            },
+        }, 'R5'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxB,
+                notKeyword => '$seen',
+            },
+        }, 'R6'],
+    ]);
+    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
+    $self->assert_deep_equals([$emailId], $res->[1][1]{ids});
+    $self->assert_deep_equals([$emailId], $res->[2][1]{ids});
+    $self->assert_deep_equals([], $res->[3][1]{ids});
+    $self->assert_deep_equals([], $res->[4][1]{ids});
+    $self->assert_deep_equals([], $res->[5][1]{ids});
+}
+
 sub test_searchsnippet_get_text_rtf
     :min_version_3_4 :needs_component_jmap :JMAPExtensions
     :SearchAttachmentExtractor
