@@ -1,4 +1,43 @@
 #!/usr/bin/perl -c
+#  Copyright (c) 2017-2022 Fastmail.  All rights reserved.
+#
+# Author: Bron Gondwana <brong@fastmail.fm>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
+#    the documentation and/or other materials provided with the
+#    distribution.
+#
+# 3. The name "Carnegie Mellon University" must not be used to
+#    endorse or promote products derived from this software without
+#    prior written permission. For permission or any other legal
+#    details, please contact
+#      Office of Technology Transfer
+#      Carnegie Mellon University
+#      5000 Forbes Avenue
+#      Pittsburgh, PA  15213-3890
+#      (412) 268-4387, fax: (412) 268-7395
+#      tech-transfer@andrew.cmu.edu
+#
+# 4. Redistributions of any form whatsoever must retain the following
+#    acknowledgment:
+#    "This product includes software developed by Computing Services
+#     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+#
+# CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+# THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+# FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+# AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+# OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 use strict;
 use warnings;
@@ -54,7 +93,16 @@ sub add_perl {
 
   elsif (ref($val) eq 'HASH') {
     my $child = $Self->add_kvlist($key);
-    $child->add_perl($_, $val->{$_}) for keys %$val;
+    $child->add_perl($_, $val->{$_}) for sort keys %$val;
+  }
+
+  elsif (ref($val) eq 'REF') {
+    my $item = $$val;
+    if (ref($item) eq 'ARRAY') {
+      $Self->add_file($key, @$item);
+    } else {
+      die "Unknown file format " . ref($item);
+    }
   }
 
   else {
@@ -77,6 +125,7 @@ sub add_list {
 
   return $res;
 }
+  
 
 sub add_kvlist {
   my $Self = shift;
@@ -220,9 +269,10 @@ sub parse_string {
 
 sub _printastring {
   my $str = shift;
+  return 'NIL' unless defined $str;
   if (length($str) < 1024) {
     # atom - actually it's more than this, but this will do
-    if ($str =~ m/^\\?[A-Za-z0-9][A-Za-z0-9_]*$/) {
+    if ($str =~ m/^\\?[A-Za-z0-9][A-Za-z0-9_]*$/ and $str ne 'NIL') {
       return $str;
     }
     # quotable
@@ -230,7 +280,7 @@ sub _printastring {
       return '"' . $str . '"';
     }
   }
-  return '{' . length($str) . "}\r\n" . $str;
+  return '{' . length($str) . "+}\r\n" . $str;
 }
 
 sub as_string {
@@ -262,26 +312,12 @@ sub as_perl {
   elsif ($Self->{type} eq 'list') {
     return [ map { $_->as_perl() } @{$Self->{data}} ];
   }
+  elsif ($Self->{type} eq 'file') {
+    return \[ $Self->{partition}, $Self->{guid}, $Self->{size}, $Self->{data} ];
+  }
   else {
     return $Self->{data};
   }
-}
-
-sub parse_io {
-  my $class = shift;
-  my $io = shift;
-  my $parsekey = shift;
-
-  my $line = $io->getline();
-  while ($line =~ m/(\d+)\+?\}$/m) {
-    my $length = $1;
-    my $buf;
-    my $res = $io->read($buf, $length);
-    die "didn't get data" unless $res eq $length;
-    $line .= $buf;
-  }
-
-  return $class->parse_string($line, $parsekey);
 }
 
 sub anyevent_read_type {
