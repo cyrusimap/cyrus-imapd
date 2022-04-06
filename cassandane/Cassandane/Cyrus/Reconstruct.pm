@@ -45,9 +45,11 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
-use Cyrus::IndexFile;
 use IO::File;
 use JSON;
+
+use lib '../perl/imap';
+use Cyrus::IndexFile;
 
 sub new
 {
