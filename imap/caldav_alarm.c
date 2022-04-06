@@ -126,7 +126,7 @@ EXPORTED int caldav_alarm_done(void)
     "CREATE INDEX IF NOT EXISTS checktime ON events (nextcheck);" \
     "CREATE INDEX IF NOT EXISTS idx_type ON events (type);"
 
-#define CMD_CREATE(name)                                \
+#define CMD_CREATE_TABLE(name)                          \
     "CREATE TABLE IF NOT EXISTS " name " ("             \
     " mboxname TEXT NOT NULL,"                          \
     " imap_uid INTEGER NOT NULL,"                       \
@@ -138,13 +138,16 @@ EXPORTED int caldav_alarm_done(void)
     " last_err TEXT,"                                   \
     " PRIMARY KEY (mboxname, imap_uid)"                 \
     ");"                                                \
+
+#define CMD_CREATE(name)                                \
+    CMD_CREATE_TABLE(name)                              \
     CMD_CREATE_INDEXES
 
 
 #define DBVERSION 4
 
 #define CMD_UPGRADEv4                                      \
-    CMD_CREATE("new_events")                               \
+    CMD_CREATE_TABLE("new_events")                         \
     "INSERT INTO new_events"                               \
     " SELECT *, 1, 0, 0, 0, NULL FROM events"              \
     "  WHERE mboxname LIKE 'user.%.#calendars.%';"         \
