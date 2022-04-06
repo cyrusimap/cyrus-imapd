@@ -1121,8 +1121,10 @@ static void preserve_jmap_permissions(icalcomponent *ical,
             nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
 
             if (!strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_MAYINVITESELF) ||
-                !strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_MAYINVITEOTHERS))
+                !strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_MAYINVITEOTHERS)) {
                 icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
         }
     }
 
