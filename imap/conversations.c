@@ -2695,18 +2695,22 @@ EXPORTED int conversation_update(struct conversations_state *state,
                 if (dfolderexists > 0 && ecounts->post.unseen) {
                     // email just got added here and is unseen
                     _apply_delta(&status.emailunseen, 1);
+                    dirty = 1;
                 }
                 else if (dfolderexists < 0 && ecounts->pre.unseen) {
                     // email just got deleted here and was unseen
                     _apply_delta(&status.emailunseen, -1);
+                    dirty = 1;
                 }
                 else if (dfolderexists == 0 && dunseen > 0) {
                     // email was seen and got unseen
                     _apply_delta(&status.emailunseen, 1);
+                    dirty = 1;
                 }
                 else if (dfolderexists == 0 && dunseen < 0) {
                     // email was unseen and got seen
                     _apply_delta(&status.emailunseen, -1);
+                    dirty = 1;
                 }
             }
             else if (dfolderunseen) {
@@ -2743,10 +2747,12 @@ EXPORTED int conversation_update(struct conversations_state *state,
                 if (dunseen > 0) {
                     // email was seen and got unseen
                     _apply_delta(&status.emailunseen, 1);
+                    dirty = 1;
                 }
                 if (dunseen < 0) {
                     // email was unseen and got seen
                     _apply_delta(&status.emailunseen, -1);
+                    dirty = 1;
                 }
             }
 
