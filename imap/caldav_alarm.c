@@ -146,7 +146,15 @@ EXPORTED int caldav_alarm_done(void)
 #define CMD_UPGRADEv4                                      \
     CMD_CREATE("new_events")                               \
     "INSERT INTO new_events"                               \
-    " SELECT *, 1, 0, 0, 0, NULL FROM events;"             \
+    " SELECT *, 1, 0, 0, 0, NULL FROM events"              \
+    "  WHERE mboxname LIKE 'user.%.#calendars.%';"         \
+    "INSERT INTO new_events"                               \
+    " SELECT *, 2, 0, 0, 0, NULL FROM events"              \
+    "  WHERE mboxname NOT LIKE 'user.%.#calendars.%'"      \
+    "    AND mboxname NOT LIKE 'user.%.#jmapsubmission';"  \
+    "INSERT INTO new_events"                               \
+    " SELECT *, 3, 0, 0, 0, NULL FROM events"              \
+    "  WHERE mboxname LIKE 'user.%.#jmapsubmission';"      \
     "DROP TABLE events;"                                   \
     "ALTER TABLE new_events RENAME TO events;"             \
     CMD_CREATE_INDEXES
