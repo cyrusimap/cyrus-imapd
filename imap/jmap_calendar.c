@@ -3450,6 +3450,11 @@ gotevent:
         json_object_set_new(jsevent, "calendarIds", json_pack("{s:b}",
                     strarray_nth(boxes, -1), 1));
     }
+    if (jmap_wantprop(props, "isOrigin")) {
+        json_object_set_new(jsevent, "isOrigin",
+                json_boolean(jmapical_is_origin(jsevent,
+                        &rock->schedule_addresses)));
+    }
 
     /* Update event properties based on JMAP request capabilities */
     const char *linkid;
@@ -3822,6 +3827,11 @@ static const jmap_property_t event_props[] = {
     },
     {
         "hideAttendees",
+        JMAP_URN_CALENDARS,
+        0
+    },
+    {
+        "isOrigin",
         JMAP_URN_CALENDARS,
         0
     },
@@ -4377,6 +4387,12 @@ static int createevent_toical(jmap_req_t *req,
 
     create->ical = jmapical_toical(create->jsevent, NULL, parser->invalid,
             create->serverset, &create->comp, jmapctx);
+
+    if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+        json_object_set_new(create->serverset, "isOrigin",
+                json_boolean(jmapical_is_origin(create->jsevent,
+                        &create->schedule_addresses)));
+    }
 
 done:
     jmapical_context_free(&jmapctx);
@@ -5176,7 +5192,9 @@ struct updateevent {
 
 static int updateevent_apply_patch(jmap_req_t *req,
                                    struct updateevent *update,
-                                   json_t *invalid, json_t **err)
+                                   json_t *invalid,
+                                   json_t *serverset,
+                                   json_t **err)
 
 
 {
@@ -5286,6 +5304,14 @@ static int updateevent_apply_patch(jmap_req_t *req,
         merge_missing_vevents(newical, update->oldical);
 
     update->newical = newical;
+
+    if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+        int old_is_origin = jmapical_is_origin(old_event, update->schedule_addresses);
+        int new_is_origin = jmapical_is_origin(new_event, update->schedule_addresses);
+        if (old_is_origin != new_is_origin) {
+            json_object_set_new(serverset, "isOrigin", json_boolean(new_is_origin));
+        }
+    }
 
 done:
     if (myoldical && myoldical != update->oldical)
@@ -5503,7 +5529,7 @@ static void setcalendarevents_update(jmap_req_t *req,
     update.mbentry = mbentry;
     update.cdata = cdata;
     update.schedule_addresses = &schedule_addresses;
-    r = updateevent_apply_patch(req, &update, parser.invalid, err);
+    r = updateevent_apply_patch(req, &update, parser.invalid, serverset, err);
     if (json_array_size(parser.invalid) || *err) {
         r = 0;
         goto done;
