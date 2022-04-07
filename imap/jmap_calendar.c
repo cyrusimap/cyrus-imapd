@@ -4490,6 +4490,29 @@ done:
     return r;
 }
 
+static int calendar_has_sharees(const mbentry_t *mbentry)
+{
+    if (!mbentry->acl) return 0;
+
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    const char *ownerid = mbname_userid(mbname);
+
+    strarray_t *acls = strarray_split(mbentry->acl, "\t", STRARRAY_TRIM);
+    int has_sharees = 0;
+    for (int i = 0; i < strarray_size(acls); i += 2) {
+        const char *userid = strarray_nth(acls, i);
+        if (strcmp(ownerid, userid) && !is_system_user(userid)) {
+            has_sharees = 1;
+            break;
+        }
+    }
+
+    mbname_free(&mbname);
+    strarray_free(acls);
+
+    return has_sharees;
+}
+
 static int createevent_store(jmap_req_t *req,
                              struct jmap_parser *parser,
                              struct createevent *create,
@@ -4600,18 +4623,20 @@ static int createevent_store(jmap_req_t *req,
     }
     r = 0;
 
-    // Create notification
-    json_t *myevent = json_deep_copy(create->jsevent);
-    jmapical_remove_peruserprops(myevent);
-    r2 = jmap_create_caleventnotif(notifmbox, req->userid, req->authstate,
-            mailbox_name(mbox), "created", create->ical_uid,
-            &create->schedule_addresses, NULL,
-            is_draft, myevent, NULL);
-    if (r2) {
-        xsyslog(LOG_WARNING, "could not create notification",
-                "uid=%s error=%s", create->ical_uid, error_message(r2));
+    if (calendar_has_sharees(mbox->mbentry)) {
+        // Create notification
+        json_t *myevent = json_deep_copy(create->jsevent);
+        jmapical_remove_peruserprops(myevent);
+        r2 = jmap_create_caleventnotif(notifmbox, req->userid, req->authstate,
+                mailbox_name(mbox), "created", create->ical_uid,
+                &create->schedule_addresses, NULL,
+                is_draft, myevent, NULL);
+        if (r2) {
+            xsyslog(LOG_WARNING, "could not create notification",
+                    "uid=%s error=%s", create->ical_uid, error_message(r2));
+        }
+        json_decref(myevent);
     }
-    json_decref(myevent);
 
     // Set server-set properties
     struct jmap_caleventid eid = {
@@ -5536,22 +5561,25 @@ static void setcalendarevents_update(jmap_req_t *req,
                 mbox, resource, record.createdmodseq,
                 db, PERMS_NOKEEP, req->userid,
                 NULL, &del_imapflags, &schedule_addresses);
-        if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
-            json_t *patch_copy = json_deep_copy(event_patch);
-            jmapical_remove_peruserprops(patch_copy);
-            jmapical_remove_peruserprops(update.old_event);
-            if (json_object_size(patch_copy)) {
-                int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
-                        req->authstate, mailbox_name(mbox), "updated",
-                        eid->ical_uid, &schedule_addresses, NULL,
-                        record.system_flags & FLAG_DRAFT,
-                        update.old_event, patch_copy);
-                if (r2) {
-                    xsyslog(LOG_WARNING, "could not create notification",
-                            "uid=%s error=%s", eid->ical_uid, error_message(r2));
+        if (calendar_has_sharees(mbox->mbentry)) {
+            // Create notification
+            if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
+                json_t *patch_copy = json_deep_copy(event_patch);
+                jmapical_remove_peruserprops(patch_copy);
+                jmapical_remove_peruserprops(update.old_event);
+                if (json_object_size(patch_copy)) {
+                    int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
+                            req->authstate, mailbox_name(mbox), "updated",
+                            eid->ical_uid, &schedule_addresses, NULL,
+                            record.system_flags & FLAG_DRAFT,
+                            update.old_event, patch_copy);
+                    if (r2) {
+                        xsyslog(LOG_WARNING, "could not create notification",
+                                "uid=%s error=%s", eid->ical_uid, error_message(r2));
+                    }
                 }
+                json_decref(patch_copy);
             }
-            json_decref(patch_copy);
         }
     }
     transaction_free(&txn);
@@ -5864,15 +5892,17 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         r = 0;
     }
 
-    /* Create notification */
-    jmapical_remove_peruserprops(old_event);
-    int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
-            req->authstate, mailbox_name(mbox), "destroyed",
-            eid->ical_uid, &schedule_addresses, NULL,
-            record.system_flags & FLAG_DRAFT, old_event, NULL);
-    if (r2) {
-        xsyslog(LOG_WARNING, "could not create notification",
-                "uid=%s error=%s", eid->ical_uid, error_message(r2));
+    if (calendar_has_sharees(mbox->mbentry)) {
+        /* Create notification */
+        jmapical_remove_peruserprops(old_event);
+        int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
+                req->authstate, mailbox_name(mbox), "destroyed",
+                eid->ical_uid, &schedule_addresses, NULL,
+                record.system_flags & FLAG_DRAFT, old_event, NULL);
+        if (r2) {
+            xsyslog(LOG_WARNING, "could not create notification",
+                    "uid=%s error=%s", eid->ical_uid, error_message(r2));
+        }
     }
 
     /* Create mboxevent */
