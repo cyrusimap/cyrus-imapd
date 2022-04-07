@@ -276,6 +276,8 @@ extern int jmapical_duration_from_string(const char *val, struct jmapical_durati
 
 extern void jmapical_remove_peruserprops(json_t *jevent);
 
+extern int jmapical_is_origin(json_t *jsevent, const strarray_t *schedule_addresses);
+
 #ifdef __cplusplus
 }
 #endif
