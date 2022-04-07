@@ -146,26 +146,12 @@ EXPORTED int caldav_alarm_done(void)
 
 #define DBVERSION 4
 
-#define CMD_UPGRADEv4                                      \
-    CMD_CREATE_TABLE("new_events")                         \
-    "INSERT INTO new_events"                               \
-    " SELECT *, 1, 0, 0, 0, NULL FROM events"              \
-    "  WHERE mboxname LIKE 'user.%.#calendars.%';"         \
-    "INSERT INTO new_events"                               \
-    " SELECT *, 2, 0, 0, 0, NULL FROM events"              \
-    "  WHERE mboxname NOT LIKE 'user.%.#calendars.%'"      \
-    "    AND mboxname NOT LIKE 'user.%.#jmapsubmission';"  \
-    "INSERT INTO new_events"                               \
-    " SELECT *, 3, 0, 0, 0, NULL FROM events"              \
-    "  WHERE mboxname LIKE 'user.%.#jmapsubmission';"      \
-    "DROP TABLE events;"                                   \
-    "ALTER TABLE new_events RENAME TO events;"             \
-    CMD_CREATE_INDEXES
+static int upgradev4(sqldb_t *db);
 
 static struct sqldb_upgrade upgrade[] = {
     /* Don't upgrade to version 2. */
     /* Don't upgrade to version 3.  This was an intermediate DB version */
-    { 4, CMD_UPGRADEv4, NULL },
+    { 4, NULL, &upgradev4 },
     /* always finish with an empty row */
     { 0, NULL, NULL }
 };
@@ -2096,4 +2082,77 @@ EXPORTED int caldav_alarm_upgrade()
     caldav_alarm_close(alarmdb);
 
     return rc;
+}
+
+
+#define CMD_UPGRADEv4_SET_TYPE_LIKE                        \
+    "INSERT INTO new_events"                               \
+    " SELECT *, :type, 0, 0, 0, NULL FROM events"          \
+    "  WHERE mboxname LIKE :mboxpat1 ;"
+
+#define CMD_UPGRADEv4_SET_TYPE_NOT_LIKE                    \
+    "INSERT INTO new_events"                               \
+    " SELECT *, :type, 0, 0, 0, NULL FROM events"          \
+    "  WHERE mboxname NOT LIKE :mboxpat1"                  \
+    "    AND mboxname NOT LIKE :mboxpat2 ;"
+
+#define CMD_UPGRADEv4_FINISH                               \
+    "DROP TABLE events;"                                   \
+    "ALTER TABLE new_events RENAME TO events;"             \
+     CMD_CREATE_INDEXES
+
+static int upgradev4(sqldb_t *db)
+{
+    struct sqldb_bindval bval[] = {
+        { ":type",     SQLITE_INTEGER, { .i = 0    } },
+        { ":mboxpat1", SQLITE_TEXT,    { .s = NULL } },
+        { ":mboxpat2", SQLITE_TEXT,    { .s = NULL } },
+        { NULL,        SQLITE_NULL,    { .s = NULL } } };
+    struct buf calpat = BUF_INITIALIZER;
+    struct buf subpat = BUF_INITIALIZER;
+    int r = 0;
+
+    if (db->version == 2) {
+        buf_printf(&calpat, "%%.%s.%%",
+                   config_getstring(IMAPOPT_CALENDARPREFIX));
+
+        buf_printf(&subpat, "%%.%s",
+                   config_getstring(IMAPOPT_JMAPSUBMISSIONFOLDER));
+
+        /* Create new table */
+        r = sqldb_exec(db, CMD_CREATE_TABLE("new_events"), NULL, NULL, NULL);
+        if (r) goto done;
+
+        /* Rewrite calendar alarm records */
+        bval[0].val.i = ALARM_CALENDAR;
+        bval[1].val.s = buf_cstring(&calpat);
+        r = sqldb_exec(db, CMD_UPGRADEv4_SET_TYPE_LIKE, bval, NULL, NULL);
+        if (r) goto done;
+
+        /* Rewrite JMAP submission records */
+        bval[0].val.i = ALARM_SEND;
+        bval[1].val.s = buf_cstring(&subpat);
+        r = sqldb_exec(db, CMD_UPGRADEv4_SET_TYPE_LIKE, bval, NULL, NULL);
+        if (r) goto done;
+
+        /* Rewrite JMAP snooze records */
+        bval[0].val.i = ALARM_SNOOZE;
+        bval[1].val.s = buf_cstring(&calpat);
+        bval[2].val.s = buf_cstring(&subpat);
+        r = sqldb_exec(db, CMD_UPGRADEv4_SET_TYPE_NOT_LIKE, bval, NULL, NULL);
+        if (r) goto done;
+
+        /* Drop old table, rename new table, and create indexes.
+
+           XXX  We avoid using sqldb_exec() because sqlite3_prepare_v2()
+           XXX  only supports one command at a time.
+        */
+        r = sqlite3_exec(db->db, CMD_UPGRADEv4_FINISH, NULL, NULL, NULL);
+    }
+
+  done:
+    buf_free(&calpat);
+    buf_free(&subpat);
+
+    return r;
 }
