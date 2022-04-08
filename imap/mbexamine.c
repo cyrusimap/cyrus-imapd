@@ -157,16 +157,10 @@ int main(int argc, char **argv)
     if (optind == argc) {
         strlcpy(buf, "*", sizeof(buf));
         r = mboxlist_findall(&mbexamine_namespace, buf, 1, 0, 0, cb, &ok_count);
-        if (r) {
-            fprintf(stderr, "%s: %s\n", buf, error_message(r));
-        }
     }
 
     for (i = optind; i < argc; i++) {
         r = mboxlist_findall(&mbexamine_namespace, argv[i], 1, 0, 0, cb, &ok_count);
-        if (r) {
-            fprintf(stderr, "%s: %s\n", argv[i], error_message(r));
-        }
     }
 
     cyrus_done();
@@ -224,7 +218,10 @@ static int do_examine(struct findall_data *data, void *rock)
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        fprintf(stderr, "%s: %s\n", extname, error_message(r));
+        return r;
+    }
 
     printf(" Mailbox Header Info:\n");
     printf("  Path to mailbox: %s\n", mailbox_datapath(mailbox, 0));
@@ -399,7 +396,10 @@ static int do_quota(struct findall_data *data, void *rock)
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        fprintf(stderr, "%s: %s\n", extname, error_message(r));
+        return r;
+    }
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     const message_t *msg;
@@ -472,10 +472,14 @@ static int do_compare(struct findall_data *data, void *rock)
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        fprintf(stderr, "%s: %s\n", extname, error_message(r));
+        return r;
+    }
 
     if (mailbox->i.minor_version < 7) {
-        printf("Mailbox version is too old for comparison\n");
+        fprintf(stderr, "%s: Mailbox version is too old for comparison\n",
+                        extname);
         goto done;
     }
 
@@ -607,6 +611,10 @@ static int do_compare(struct findall_data *data, void *rock)
     free(uids);
 
     if (!r && ok_count) (*ok_count) ++;
+
+    if (r) {
+        fprintf(stderr, "%s: %s\n", extname, error_message(r));
+    }
 
     return r;
 }
