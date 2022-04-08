@@ -111,7 +111,7 @@ int main(int argc, char **argv)
     struct buf buf = BUF_INITIALIZER;
     char *alt_config = NULL;
     mbentry_t *mbentry;
-    enum enum_value config_search_engine = IMAPOPT_ZERO;
+    enum enum_value config_search_engine = config_getenum(IMAPOPT_ZERO);
 
     progname = basename(argv[0]);
 
