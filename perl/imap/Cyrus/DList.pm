@@ -280,7 +280,7 @@ sub _printastring {
       return '"' . $str . '"';
     }
   }
-  return '{' . length($str) . "}\r\n" . $str;
+  return '{' . length($str) . "+}\r\n" . $str;
 }
 
 sub as_string {
