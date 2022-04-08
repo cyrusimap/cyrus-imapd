@@ -80,6 +80,8 @@ static struct namespace reloc_namespace;
 static const char *progname = NULL;
 
 /* forward declarations */
+static int add_xapian_paths(const char *userid, const char *userpath,
+                            strarray_t *oldpaths, strarray_t *newpaths);
 static int find_p(const mbentry_t *mbentry, void *rock);
 static void get_searchparts(const char *key, const char *val, void *rock);
 static int relocate(const char *old, const char *new);
@@ -87,6 +89,11 @@ static void usage(void);
 
 static int quiet = 0;
 static int nochanges = 0;
+
+struct mboxlist_rock {
+    ptrarray_t *mboxlist;
+    int matched;
+};
 
 struct search_rock {
     const char *userid;
@@ -104,6 +111,7 @@ int main(int argc, char **argv)
     struct buf buf = BUF_INITIALIZER;
     char *alt_config = NULL;
     mbentry_t *mbentry;
+    enum enum_value config_search_engine = IMAPOPT_ZERO;
 
     progname = basename(argv[0]);
 
@@ -132,6 +140,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "relocate_by_id", 0, CONFIG_NEED_PARTITION_DATA);
     global_sasl_init(1, 0, NULL);
+    config_search_engine = config_getenum(IMAPOPT_SEARCH_ENGINE);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&reloc_namespace, 1)) != 0) {
@@ -149,19 +158,41 @@ int main(int argc, char **argv)
     }
 
     for (i = optind; i < argc; i++) {
-        ptrarray_t *mboxlist = ptrarray_new();
+        struct mboxlist_rock mboxlist_rock = { ptrarray_new(), 0 };
         int flags =
             MBOXTREE_TOMBSTONES | MBOXTREE_DELETED | MBOXTREE_INTERMEDIATES;
 
         /* Make a list of all mailboxes in tree */
-        if (dousers)
-            r = mboxlist_usermboxtree(argv[i], NULL, find_p, mboxlist, flags);
-        else
-            r = mboxlist_mboxtree(argv[i], find_p, mboxlist, flags);
+        if (dousers) {
+            r = mboxlist_usermboxtree(argv[i], NULL, find_p, &mboxlist_rock, flags);
+        }
+        else {
+            char *intname = mboxname_from_external(argv[i], &reloc_namespace, NULL);
+            r = mboxlist_mboxtree(intname, find_p, &mboxlist_rock, flags);
+            free(intname);
+        }
+
+        /* Make sure we have some work to do */
+        if (!mboxlist_rock.matched) {
+            /* usage error: nothing found with this name */
+            fprintf(stderr, "%s: %s not found\n",
+                            argv[i],
+                            dousers ? "user" : "mailbox");
+            ptrarray_free(mboxlist_rock.mboxlist);
+            continue;
+        }
+        else if (!ptrarray_size(mboxlist_rock.mboxlist)) {
+            /* everything below this name already relocated */
+            fprintf(stderr, "%s: %s already relocated\n",
+                            argv[i],
+                            dousers ? "user" : "mailbox");
+            ptrarray_free(mboxlist_rock.mboxlist);
+            continue;
+        }
 
         /* Process each mailbox in reverse order (children first) */
         struct buf part_buf = BUF_INITIALIZER;
-        while ((mbentry = ptrarray_pop(mboxlist))) {
+        while ((mbentry = ptrarray_pop(mboxlist_rock.mboxlist))) {
             const char *partition = mbentry->partition;
             const char *uniqueid = mbentry->uniqueid;
             const char *name = mbentry->name;
@@ -262,50 +293,12 @@ int main(int argc, char **argv)
                     strarray_append(newpaths, buf_cstring(&buf));
                 }
 
-                /* Add xapian tier paths */
-                char *activefname = user_hash_meta(userid, FNAME_XAPIANSUFFIX);
-                struct mappedfile *activefile = NULL;
-
-                r = mappedfile_open(&activefile, activefname, 0);
-                if (r) {
-                    fprintf(stderr,
-                            "Failed to open activefile for %s: %s\n",
-                            activefname, error_message(r));
-                    free(activefname);
-                    goto cleanup;
+                if (config_search_engine == IMAP_ENUM_SEARCH_ENGINE_XAPIAN) {
+                    /* Add xapian tier paths */
+                    r = add_xapian_paths(userid, userpath, oldpaths, newpaths);
+                    if (r) goto cleanup;
                 }
-
-                strarray_t *items = strarray_nsplit(mappedfile_base(activefile),
-                        mappedfile_size(activefile), NULL, 1);
-
-                struct buf buf = BUF_INITIALIZER;
-                if (items) {
-                    struct search_rock rock = {
-                        userid, userpath,
-                        STRARRAY_INITIALIZER,
-                        ARRAYU64_INITIALIZER,
-                        oldpaths, newpaths,
-                    };
-                    int j;
-                    for (j = 0; j < strarray_size(items); j++) {
-                        const char *item = strarray_nth(items, j);
-                        const char *col = strrchr(item, ':');
-                        if (!col) continue;
-                        buf_setmap(&buf, item, col-item);
-                        strarray_append(&rock.tiernames, buf_cstring(&buf));
-                        arrayu64_append(&rock.tiergens, atoi(col+1));
-                    }
-                    config_foreachoverflowstring(get_searchparts, &rock);
-
-                    strarray_fini(&rock.tiernames);
-                    arrayu64_fini(&rock.tiergens);
-                }
-                strarray_free(items);
-                buf_free(&buf);
-
-                mappedfile_unlock(activefile);
-                mappedfile_close(&activefile);
-                free(activefname);
+                /* squat index, if any, was taken care of earlier as metadata */
             }
 
             /* Relocate our list of paths */
@@ -375,7 +368,7 @@ int main(int argc, char **argv)
             free(extname);
             free(userid);
         }
-        ptrarray_free(mboxlist);
+        ptrarray_free(mboxlist_rock.mboxlist);
         buf_free(&part_buf);
     }
 
@@ -407,12 +400,15 @@ static void usage(void)
  * Append mailboxes needing relocation to our array */
 static int find_p(const mbentry_t *mbentry, void *rock)
 {
-    ptrarray_t *mboxlist = (ptrarray_t *) rock;
+    struct mboxlist_rock *mboxlist_rock = (struct mboxlist_rock *) rock;
 
     if (mbentry->mbtype & MBTYPE_DELETED) {
         /* skip tombstones */
         return 0;
     }
+
+    /* lookup has found something (whether or not it needs relocating) */
+    mboxlist_rock->matched ++;
 
     if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
         mbentry_t *mbentry_copy = NULL;
@@ -445,7 +441,7 @@ static int find_p(const mbentry_t *mbentry, void *rock)
             mbentry_copy = mboxlist_entry_copy(mbentry);
         }
 
-        ptrarray_push(mboxlist, mbentry_copy);
+        ptrarray_push(mboxlist_rock->mboxlist, mbentry_copy);
     }
 
     return 0;
@@ -523,4 +519,56 @@ done:
     free(tier);
     free(basedir);
     buf_free(&buf);
+}
+
+static int add_xapian_paths(const char *userid, const char *userpath,
+                            strarray_t *oldpaths, strarray_t *newpaths)
+{
+    char *activefname = user_hash_meta(userid, FNAME_XAPIANSUFFIX);
+    struct mappedfile *activefile = NULL;
+    int r;
+
+    r = mappedfile_open(&activefile, activefname,
+                        MAPPEDFILE_CREATE | MAPPEDFILE_RW);
+    if (r) {
+        fprintf(stderr,
+                "Failed to open activefile for %s: %s\n",
+                activefname, error_message(r));
+        free(activefname);
+        return r;
+    }
+
+    strarray_t *items = strarray_nsplit(mappedfile_base(activefile),
+                                        mappedfile_size(activefile), NULL, 1);
+
+    struct buf buf = BUF_INITIALIZER;
+    if (items) {
+        struct search_rock rock = {
+            userid, userpath,
+            STRARRAY_INITIALIZER,
+            ARRAYU64_INITIALIZER,
+            oldpaths, newpaths,
+        };
+        int j;
+        for (j = 0; j < strarray_size(items); j++) {
+            const char *item = strarray_nth(items, j);
+            const char *col = strrchr(item, ':');
+            if (!col) continue;
+            buf_setmap(&buf, item, col-item);
+            strarray_append(&rock.tiernames, buf_cstring(&buf));
+            arrayu64_append(&rock.tiergens, atoi(col+1));
+        }
+        config_foreachoverflowstring(get_searchparts, &rock);
+
+        strarray_fini(&rock.tiernames);
+        arrayu64_fini(&rock.tiergens);
+    }
+    strarray_free(items);
+    buf_free(&buf);
+
+    mappedfile_unlock(activefile);
+    mappedfile_close(&activefile);
+    free(activefname);
+
+    return 0;
 }
