@@ -564,28 +564,30 @@ static const char *deliver_merge_reply(icalcomponent *ical,
 
 
 static int deliver_merge_request(const char *attendee,
-                                 icalcomponent *ical, icalcomponent *request)
+                                 icalcomponent *ical,     // current iCalendar
+                                 icalcomponent *request)  // iTIP request
 {
     int deliver_inbox = 0;
-    struct hash_table comp_table;
-    icalcomponent *comp, *itip, *master = NULL;
+    struct hash_table comp_table, *tz_table, *override_table;
+    icalcomponent *tz, *comp, *itip, *master = NULL;
     icalcomponent_kind kind = ICAL_NO_COMPONENT;
     icalproperty *prop;
     icalparameter *param;
     const char *tzid, *recurid, *organizer = NULL;
+    int itip_is_all_instances = 0;
 
-    /* Add each VTIMEZONE of old object to hash table for comparison */
-    construct_hash_table(&comp_table, 10, 1);
-    for (comp =
-             icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-         comp;
-         comp =
-             icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
-        prop = icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY);
+    /* Add each VTIMEZONE of current object to hash table for comparison */
+    tz_table = construct_hash_table(&comp_table, 10, 1);
+    for (tz = icalcomponent_get_first_component(ical,
+                                                ICAL_VTIMEZONE_COMPONENT);
+         tz;
+         tz = icalcomponent_get_next_component(ical,
+                                               ICAL_VTIMEZONE_COMPONENT)) {
+        prop = icalcomponent_get_first_property(tz, ICAL_TZID_PROPERTY);
         tzid = icalproperty_get_tzid(prop);
         if (!tzid) continue;
 
-        hash_insert(tzid, comp, &comp_table);
+        hash_insert(tzid, tz, tz_table);
     }
 
     /* Process each VTIMEZONE in the iTIP request */
@@ -599,21 +601,21 @@ static int deliver_merge_request(const char *attendee,
         tzid = icalproperty_get_tzid(prop);
         if (!tzid) continue;
 
-        comp = hash_lookup(tzid, &comp_table);
-        if (comp) {
-            /* Remove component from old object */
-            icalcomponent_remove_component(ical, comp);
-            icalcomponent_free(comp);
+        tz = hash_lookup(tzid, tz_table);
+        if (tz) {
+            /* Remove tz from current object */
+            icalcomponent_remove_component(ical, tz);
+            icalcomponent_free(tz);
         }
 
-        /* Add new/modified component from iTIP request */
+        /* Add new/modified tz from iTIP request to current object */
         icalcomponent_add_component(ical, icalcomponent_clone(itip));
     }
 
-    free_hash_table(&comp_table, NULL);
+    free_hash_table(tz_table, NULL);
 
-    /* Add each component of old object to hash table for comparison */
-    construct_hash_table(&comp_table, 10, 1);
+    /* Add each override component of current object to hash table */
+    override_table = construct_hash_table(&comp_table, 10, 1);
     comp = icalcomponent_get_first_real_component(ical);
     if (comp) {
         kind = icalcomponent_isa(comp);
@@ -622,41 +624,51 @@ static int deliver_merge_request(const char *attendee,
     for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
         prop =
             icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
-        else {
-            recurid = "";
-            master = icalcomponent_clone(comp);
+        if (prop) {
+            recurid = icalproperty_get_value_as_string(prop);
+            hash_insert(recurid, comp, override_table);
         }
-
-        hash_insert(recurid, comp, &comp_table);
+        else {
+            master = comp;
+        }
     }
 
-    /* Process each component in the iTIP request */
+    /* Process each "real" component in the iTIP request */
     itip = icalcomponent_get_first_real_component(request);
     if (kind == ICAL_NO_COMPONENT) kind = icalcomponent_isa(itip);
     for (; itip; itip = icalcomponent_get_next_component(request, kind)) {
+        /* Clone the new/modified component from iTIP request */
         icalcomponent *new_comp = icalcomponent_clone(itip);
 
-        /* Lookup this comp in the hash table */
         prop =
             icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
-        if (prop) recurid = icalproperty_get_value_as_string(prop);
-        else recurid = "";
+        if (prop) {
+            /* Lookup this iTIP comp in the hash table of current obj overrides.
+               We acually remove it from the hash table because those that are
+               left behind are those that may be removed from the current object
+               (see end of loop). */
+            recurid = icalproperty_get_value_as_string(prop);
+            comp = hash_del(recurid, override_table);
+        }
+        else {
+            comp = master;
+            itip_is_all_instances = 1;
+        }
 
-        comp = hash_lookup(recurid, &comp_table);
         if (comp) {
-            int old_seq, new_seq;
+            /* Component exists in current object */
+            int cur_seq, new_seq;
 
             /* Check if this is something more than an update */
             /* XXX  Probably need to check PARTSTAT=NEEDS-ACTION
                and RSVP=TRUE as well */
-            old_seq = icalcomponent_get_sequence(comp);
+            cur_seq = icalcomponent_get_sequence(comp);
             new_seq = icalcomponent_get_sequence(itip);
-            if (new_seq > old_seq) deliver_inbox = 1;
+            if (new_seq > cur_seq) deliver_inbox = 1;
             else if (partstat_changed(comp, itip, organizer)) deliver_inbox = 1;
 
             /* Copy over any COMPLETED, PERCENT-COMPLETE,
-               or TRANSP properties */
+               or TRANSP properties from current component to iTIP component */
             prop =
                 icalcomponent_get_first_property(comp, ICAL_COMPLETED_PROPERTY);
             if (prop) {
@@ -677,7 +689,7 @@ static int deliver_merge_request(const char *attendee,
                                            icalproperty_clone(prop));
             }
 
-            /* Copy over VALARMs */
+            /* Copy over VALARMs from current component to iTIP component */
             icalcomponent *alarm;
             for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
                  alarm;
@@ -685,7 +697,8 @@ static int deliver_merge_request(const char *attendee,
                 icalcomponent_add_component(new_comp, icalcomponent_clone(alarm));
             }
 
-            /* Copy over any ORGANIZER;SCHEDULE-STATUS */
+            /* Copy over any ORGANIZER;SCHEDULE-STATUS
+               from current component to iTIP component */
             /* XXX  Do we only do this iff PARTSTAT!=NEEDS-ACTION */
             prop =
                 icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
@@ -698,12 +711,17 @@ static int deliver_merge_request(const char *attendee,
                 icalproperty_add_parameter(prop, param);
             }
 
-            /* Remove component from old object */
+            if (master == comp) {
+                /* Use updated master component since we will remove the old */
+                master = new_comp;
+            }
+
+            /* Remove component from current object */
             icalcomponent_remove_component(ical, comp);
             icalcomponent_free(comp);
         }
         else {
-            /* New component */
+            /* Component does NOT exist in current object */
             deliver_inbox = 1;
 
             if (master) {
@@ -753,12 +771,32 @@ static int deliver_merge_request(const char *attendee,
             }
         }
 
-        /* Add new/modified component from iTIP request */
+        /* Add new/modified component from iTIP request to current object */
         icalcomponent_add_component(ical, new_comp);
     }
 
-    free_hash_table(&comp_table, NULL);
-    if (master) icalcomponent_free(master);
+    if (itip_is_all_instances) {
+        /* Remove components of current object that are not present in the
+           iTIP request (those that remain in the current comp hash table). */
+        icalcomponent *next = NULL;
+
+        for (comp = icalcomponent_get_first_real_component(ical);
+             comp; comp = next) {
+            next = icalcomponent_get_next_component(ical, kind);
+            prop = icalcomponent_get_first_property(comp,
+                                                    ICAL_RECURRENCEID_PROPERTY);
+            if (!prop) continue;
+
+            recurid = icalproperty_get_value_as_string(prop);
+
+            if (hash_lookup(recurid, override_table)) {
+                icalcomponent_remove_component(ical, comp);
+                icalcomponent_free(comp);
+            }
+        }
+    }
+
+    free_hash_table(override_table, NULL);
 
     return deliver_inbox;
 }
