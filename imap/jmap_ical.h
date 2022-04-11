@@ -119,6 +119,10 @@ struct jmapical_ctx {
         int allow_method;
         json_t *replyto;
     } to_ical;
+    struct {
+        int no_guess;
+        int ignore_orphans;
+    } timezones;
     const strarray_t *schedule_addresses;
 };
 
@@ -174,8 +178,10 @@ void icalcomponent_add_required_timezones(icalcomponent *ical);
  * iCalendar data that embeds non-standard VTIMEZONES */
 typedef struct jstimezones jstimezones_t;
 
-/* Create a resolver for VTIMEZONEs embedded in VCALENDAR ical. */
-extern jstimezones_t *jstimezones_new(icalcomponent *ical);
+/* Create a resolver for VTIMEZONEs embedded in VCALENDAR ical.
+ * If no_guess is true, then the resolver does not attempt to
+ * guess IANA timezone identifiers for non-IANA timezones. */
+extern jstimezones_t *jstimezones_new(icalcomponent *ical, int no_guess);
 
 /* Resolve tzid to a timezone.
  *

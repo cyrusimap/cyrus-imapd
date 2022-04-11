@@ -3403,7 +3403,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         icalcomponent_add_component(rock->ical, ical_instance);
     }
 
-    jstzones = jstimezones_new(rock->ical);
+    jstzones = jstimezones_new(rock->ical, 0);
 
     /* Convert to JMAP */
     context_begin_cdata(jmapctx, rock->mbentry, cdata);
@@ -4940,7 +4940,7 @@ static void updateevent_apply_patch_event(json_t *old_event,
                                           json_t *invalid,
                                           json_t **err)
 {
-    jstimezones_t *jstzones = jstimezones_new(oldical);
+    jstimezones_t *jstzones = jstimezones_new(oldical, 1);
     json_t *new_event = NULL;
 
     if (eventpatch_updates_recurrenceoverrides(event_patch)) {
@@ -5253,6 +5253,8 @@ static int updateevent_apply_patch(jmap_req_t *req,
     struct jmapical_ctx *jmapctx = jmapical_context_new(req,
             update->schedule_addresses);
     jmapctx->to_ical.serverset = update->serverset;
+    jmapctx->timezones.no_guess = 1;
+    jmapctx->timezones.ignore_orphans = 1;
     context_begin_cdata(jmapctx, update->mbentry, update->cdata);
     old_event = jmapical_tojmap(myoldical, NULL, jmapctx);
     if (!old_event) {
