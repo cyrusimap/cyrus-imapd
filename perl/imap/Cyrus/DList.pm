@@ -1,5 +1,5 @@
 #!/usr/bin/perl -c
-#  Copyright (c) 2017 Fastmail.  All rights reserved.
+#  Copyright (c) 2017-2022 Fastmail.  All rights reserved.
 #
 # Author: Bron Gondwana <brong@fastmail.fm>
 #
@@ -280,7 +280,7 @@ sub _printastring {
       return '"' . $str . '"';
     }
   }
-  return '{' . length($str) . "}\r\n" . $str;
+  return '{' . length($str) . "+}\r\n" . $str;
 }
 
 sub as_string {

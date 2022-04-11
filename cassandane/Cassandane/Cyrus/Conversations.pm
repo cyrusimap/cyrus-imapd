@@ -50,6 +50,8 @@ use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
                                   from_rfc822
                                   to_rfc3501 from_rfc3501);
+
+use lib '../perl/imap';
 use Cyrus::IndexFile;
 
 sub new
