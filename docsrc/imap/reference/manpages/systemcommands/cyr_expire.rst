@@ -20,6 +20,8 @@ Synopsis
     [ **-D** *delete-duration* ] [ **-E** *expire-duration* ] [ **-X** *expunge-duration* ]
     [ **-p** *mailbox-pre‐fix* ] [ **-u** *username* ] [ **-t** ] [ **-v** ]
     [ **-a** ] [ **-c** ] [ **-x** ]
+    [ **-L** or **--longlock** *lock-duration*]
+    [ **--jmap-notif** *delete-duration*]
 
 Description
 ===========
@@ -32,7 +34,8 @@ on Cyrus databases, specifically:
 - cleanse mailboxes of partially expunged messages (when using the "delayed" expunge mode), and
 - remove deleted mailboxes (when using the "delayed" delete mode), and
 - expire entries from conversations databases, and
-- archive messages from mailbox.
+- archive messages from mailbox, and
+- delete stale JMAP notifications.
 
 There are various annotations that **cyr_expire** respects:
 
@@ -157,6 +160,26 @@ Options
     Skip the annotation lookup, so all ``/vendor/cmu/cyrus-imapd/expire``
     annotations are ignored entirely.  It behaves as if they were not
     set, so only *expire-days* is considered for all mailboxes.
+
+.. option:: --jmap-notif delete-duration
+
+    Delete JMAP notifications that are older than delete-duration seconds.
+
+    |v3-new-feature|
+
+.. option:: -L --longlock lock-duration
+
+    Lock a mailbox at most lock-duration seconds. Expunging and deleting
+    mailbox entries requires an exclusive lock on the mailbox, and
+    client requests may block until the lock is released. This option
+    allows avoiding other processes to wait excessively long for large
+    mailboxes. The minimum lock-duration value are two seconds.
+    Remaining work is left until the next execution of cyr_expire.
+
+    This option only is supported for jmap.
+
+    |v3-new-feature|
+
 
 Examples
 ========

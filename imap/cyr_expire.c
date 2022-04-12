@@ -63,6 +63,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <libgen.h>
+#include <getopt.h>
 
 #include <sasl/sasl.h>
 
@@ -96,6 +97,7 @@ struct arguments {
     int delete_seconds;
     int expire_seconds;
     int expunge_seconds;
+    int lock_seconds;
 
     int do_cid_expire;
 
@@ -107,6 +109,9 @@ struct arguments {
     const char *altconfig;
     const char *mbox_prefix;
     const char *userid;
+
+    /* jmap */
+    int jmap_notif_seconds;
 
     char *freeme; /* for mbox_prefix */
 };
@@ -208,6 +213,9 @@ static void cyr_expire_cleanup(struct cyr_expire_ctx *ctx)
     cyrus_done();
 }
 
+#define OPTNAME_JMAP_NOTIF "jmap-notif"
+#define OPTNAME_LOCK "longlock"
+
 static void usage(void)
 {
     fprintf(stderr, "Usage: %s [OPTIONS] {mailbox|users}\n", progname);
@@ -226,7 +234,9 @@ static void usage(void)
     fprintf(stderr, "-A <archive-duration>    \n");
     fprintf(stderr, "-D <delete-duration>     \n");
     fprintf(stderr, "-E <expire-duration>     \n");
+    fprintf(stderr, "-L, --" OPTNAME_LOCK "=<lock-duration >= 2s>\n");
     fprintf(stderr, "-X <expunge-duration>    \n");
+    fprintf(stderr, "--" OPTNAME_JMAP_NOTIF"=<delete-duration>\n");
 
     fprintf(stderr, "\n");
 
@@ -504,7 +514,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
 
     verbosep("cleaning up expunged messages in %s\n", mbentry->name);
 
-    r = mailbox_expunge_cleanup(mailbox, erock->expunge_mark, &numexpunged);
+    r = mailbox_expunge_cleanup(mailbox, NULL, erock->expunge_mark, &numexpunged);
 
     erock->messages_expunged += numexpunged;
     erock->mailboxes_seen++;
@@ -761,6 +771,112 @@ static int do_duplicate_prune(struct cyr_expire_ctx *ctx)
     return ret;
 }
 
+struct jnotif_rock {
+    struct cyr_expire_ctx *ctx;
+    time_t before;
+};
+
+static int jnotif_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct jnotif_rock *rock = vrock;
+
+    if ((mbentry->mbtype & MBTYPE_JMAPNOTIFY) == 0) return 0;
+
+    // Lock the mailbox.
+    struct mailbox *mbox = NULL;
+    int r = mailbox_open_iwl(mbentry->name, &mbox);
+    if (r) {
+        xsyslog(LOG_ERR, "mailbox open failed", "mboxname=<%s> err=<%s>",
+                mbentry->name, error_message(r));
+        goto done;
+    }
+    unsigned long nrecords = mbox->i.num_records;
+
+    // Get current time for reporting.
+    struct timespec start = {0};
+    if (clock_gettime(CLOCK_MONOTONIC, &start) < 0) {
+        xsyslog(LOG_ERR, "can not get current time", NULL);
+        goto done;
+    }
+    struct timespec until = {0};
+
+    // Initialize message iterator.
+    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
+    if (rock->ctx->args.lock_seconds > 1) {
+        until = start;
+        until.tv_sec += rock->ctx->args.lock_seconds / 2;
+        mailbox_iter_timer(iter, until, 1000);
+    }
+
+    // Expunge notifications.
+    time_t expunge_mark = 0;
+    message_t *msg;
+    while ((msg = (message_t *)mailbox_iter_step(iter))) {
+        struct index_record record = *msg_record(msg);
+        if (record.internaldate < rock->before) {
+            record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+            mailbox_rewrite_index_record(mbox, &record);
+            expunge_mark = record.last_updated;
+        }
+    }
+    mailbox_iter_done(&iter);
+    if (!expunge_mark) goto done;
+
+    // Cleanup expunged notifications.
+    unsigned ndeleted = 0;
+    iter = mailbox_iter_init(mbox, 0, 0);
+    if (rock->ctx->args.lock_seconds > 1) {
+        until.tv_sec += rock->ctx->args.lock_seconds / 2;
+        mailbox_iter_timer(iter, until, 1000);
+    }
+    r = mailbox_expunge_cleanup(mbox, iter, expunge_mark, &ndeleted);
+    mailbox_iter_done(&iter);
+    if (r) {
+        xsyslog(LOG_ERR, "mailbox expunge cleanup failed",
+                "mboxname=<%s> err=<%s>", mbentry->name, error_message(r));
+        goto done;
+    }
+
+    // Report outcome.
+    struct timespec end = {0};
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    verbosep("Deleted %u of %lu JMAP notifications from %s (%lld seconds)\n",
+             ndeleted, nrecords, mbentry->name,
+             (long long)(end.tv_sec - start.tv_sec));
+
+done:
+    mailbox_close(&mbox);
+    return r;
+}
+
+static int do_jmap(struct cyr_expire_ctx *ctx)
+{
+    int r = 0;
+
+    if (ctx->args.jmap_notif_seconds >= 0) {
+
+        verbosep("Removing JMAP notifications older than %0.2f days\n",
+                 ((double)ctx->args.jmap_notif_seconds/SECS_IN_A_DAY));
+
+        struct jnotif_rock rock = {
+            .ctx = ctx,
+            .before = time(NULL) - ctx->args.jmap_notif_seconds,
+        };
+        if (ctx->args.userid) {
+            r = mboxlist_usermboxtree(
+                ctx->args.userid, NULL, jnotif_cb, &rock, 0);
+        }
+        else {
+            r = mboxlist_allmbox(NULL, jnotif_cb, &rock, 0);
+        }
+        if (r) goto done;
+    }
+
+done:
+    libcyrus_run_delayed();
+    return r;
+}
+
 static int parse_args(int argc, char *argv[], struct arguments *args)
 {
     extern char *optarg;
@@ -770,10 +886,22 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
     args->delete_seconds = -1;
     args->expire_seconds = -1;
     args->expunge_seconds = -1;
+    args->lock_seconds = -1;
     args->do_expunge = true;
     args->do_cid_expire = -1;
+    args->jmap_notif_seconds = -1;
 
-    while ((opt = getopt(argc, argv, "C:D:E:X:A:p:u:vaxtch")) != EOF) {
+    static const char *short_options = "C:D:E:X:A:p:u:vaxtc";
+
+    static struct option long_options[] = {
+        { OPTNAME_JMAP_NOTIF, required_argument, 0, 0 },
+        { OPTNAME_LOCK, required_argument, 0, 'L' },
+        { 0 }
+    };
+
+    int option_index = 0;
+
+    while ((opt = getopt_long(argc, argv, short_options, long_options, &option_index)) != EOF) {
         switch (opt) {
         case 'A':
             if (!parse_duration(optarg, &args->archive_seconds)) usage();
@@ -796,6 +924,13 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
         case 'X':
             if (!parse_duration(optarg, &args->expunge_seconds))
                 usage();
+            break;
+
+        case 'L':
+            if (!parse_duration(optarg, &args->lock_seconds) ||
+                args->lock_seconds < 2) {
+                usage();
+            }
             break;
 
         case 'a':
@@ -828,7 +963,21 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
             args->do_expunge = false;
             break;
 
+        case 0:
+            {
+                const char *optname = long_options[option_index].name;
+                if (!strcmp(optname, OPTNAME_JMAP_NOTIF)) {
+                    int secs = 0;
+                    if (!parse_duration(optarg, &secs)) {
+                        usage();
+                    }
+                    args->jmap_notif_seconds = secs;
+                }
+                break;
+            }
+
         case 'h':
+
         default:
             usage();
             break;
@@ -839,6 +988,7 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
         args->delete_seconds  == -1 &&
         args->expire_seconds  == -1 &&
         args->expunge_seconds == -1 &&
+        (args->jmap_notif_seconds == -1 || args->mbox_prefix) &&
         !args->do_userflags) {
         /* TODO: Print a more useful error message here. */
         fprintf(stderr, "Missing arguments.\n");
@@ -896,16 +1046,26 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    do_archive(&ctx);
+    if (ctx.args.jmap_notif_seconds >= 0) {
+        do_jmap(&ctx);
+    }
 
-    do_expunge(&ctx);
+    if (ctx.args.archive_seconds != -1 ||
+        ctx.args.delete_seconds  != -1 ||
+        ctx.args.expire_seconds  != -1 ||
+        ctx.args.expunge_seconds != -1) {
 
-    do_cid_expire(&ctx);
+        do_archive(&ctx);
 
-    do_delete(&ctx);
+        do_expunge(&ctx);
 
-    /* purge deliver.db entries of expired messages */
-    do_duplicate_prune(&ctx);
+        do_cid_expire(&ctx);
+
+        do_delete(&ctx);
+
+        /* purge deliver.db entries of expired messages */
+        do_duplicate_prune(&ctx);
+    }
 
     shut_down(0);
 }

@@ -136,6 +136,8 @@ struct mailbox_iter {
     uint32_t num_records;
     unsigned skipflags;
     seqset_t *uidset;
+    struct timespec until;
+    unsigned nchecktime;
 };
 
 
@@ -5198,7 +5200,7 @@ done:
             mboxname_setmodseq(mailbox_name(mailbox), deletedmodseq, mailbox_mbtype(mailbox),
                                MBOXMODSEQ_ISDELETE);
         }
-    }       
+    }
 
     return r;
 }
@@ -5518,17 +5520,21 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
     return 0;
 }
 
-EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
-                            unsigned *ndeleted)
+EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox,
+                                     struct mailbox_iter *iter,
+                                     time_t expunge_mark,
+                                     unsigned *ndeleted)
 {
     int dirty = 0;
     unsigned numdeleted = 0;
     const message_t *msg;
     time_t first_expunged = 0;
     int r = 0;
+    struct mailbox_iter *myiter = NULL;
 
     /* run the actual expunge phase */
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+    if (!iter) iter = myiter = mailbox_iter_init(mailbox, 0, 0);
+
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* already unlinked, skip it (but dirty so we mark a repack is needed) */
@@ -5564,7 +5570,7 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mar
             break;
         }
     }
-    mailbox_iter_done(&iter);
+    if (myiter) mailbox_iter_done(&myiter);
 
     if (dirty) {
         mailbox_index_dirty(mailbox);
@@ -7894,11 +7900,34 @@ EXPORTED void mailbox_iter_uidset(struct mailbox_iter *iter, seqset_t *seq)
     mailbox_iter_startuid(iter, seqset_first(seq));
 }
 
+EXPORTED void mailbox_iter_timer(struct mailbox_iter *iter,
+                                 struct timespec until,
+                                 unsigned nchecktime)
+{
+    iter->until = until;
+    iter->nchecktime = nchecktime;
+}
+
 EXPORTED const message_t *mailbox_iter_step(struct mailbox_iter *iter)
 {
     if (mailbox_wait_cb) mailbox_wait_cb(mailbox_wait_cb_rock);
 
     for (iter->recno++; iter->recno <= iter->num_records; iter->recno++) {
+
+        // Check timer, if any
+        if ((iter->until.tv_sec || iter->until.tv_nsec) &&
+            ((!iter->nchecktime || (iter->recno % iter->nchecktime) == 0))) {
+            struct timespec now;
+            if (clock_gettime(CLOCK_MONOTONIC, &now) >= 0 &&
+                (now.tv_sec > iter->until.tv_sec ||
+                 (now.tv_sec == iter->until.tv_sec &&
+                  now.tv_nsec > iter->until.tv_nsec))) {
+                // timer expired
+                iter->nchecktime = 0;
+                break;
+            }
+        }
+
         message_set_from_mailbox(iter->mailbox, iter->recno, iter->msg);
         const struct index_record *record = msg_record(iter->msg);
         if (!record->uid) continue; /* can happen on damaged mailboxes */
