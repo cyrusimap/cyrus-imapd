@@ -403,36 +403,73 @@ HIDDEN icalcomponent *master_to_recurrence(icalcomponent *master,
 }
 
 
-static const char *deliver_merge_reply(icalcomponent *ical,
-                                       icalcomponent *reply)
+static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalendar
+                                       icalcomponent *reply) // iTIP reply
 {
-    struct hash_table comp_table;
+    struct hash_table override_table;
     icalcomponent *comp, *itip, *master = NULL;
     icalcomponent_kind kind;
     icalproperty *prop, *att;
     icalparameter *param;
     icalparameter_partstat partstat = ICAL_PARTSTAT_NONE;
     const char *attendee = NULL, *cn = NULL;
-    icaltimezone *utc_zone = icaltimezone_get_utc_timezone();
     icaltimezone *startzone = NULL;
     icaltimetype dtstart;
+    ptrarray_t rrules = PTRARRAY_INITIALIZER;
+    struct hash_table rdate_table = HASH_TABLE_INITIALIZER;
 
-    /* Add each component of old object to hash table for comparison */
-    construct_hash_table(&comp_table, 10, 1);
+    /* Add each override component of current object to hash table for lookup */
+    construct_hash_table(&override_table, 10, 1);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
     do {
         icaltimetype recurid = icalcomponent_get_recurrenceid_with_zone(comp);
 
-        if (icaltime_is_null_time(recurid)) {
-            master = comp;
-            dtstart = icalcomponent_get_dtstart(master);
-            startzone = (icaltimezone *) icaltime_get_timezone(dtstart);
+        if (!icaltime_is_null_time(recurid)) {
+            hash_insert(icaltime_as_ical_string(recurid), comp, &override_table);
         }
         else {
-            /* Convert RECURRENCE-ID to UTC */
-            recurid = icaltime_convert_to_zone(recurid, utc_zone);
-            hash_insert(icaltime_as_ical_string(recurid), comp, &comp_table);
+            /* Master component - get recurrence info */
+            master = comp;
+
+            construct_hash_table(&rdate_table, 10, 1);
+
+            for (prop = icalcomponent_get_first_property(master,
+                                                         ICAL_ANY_PROPERTY);
+                 prop;
+                 prop = icalcomponent_get_next_property(master,
+                                                        ICAL_ANY_PROPERTY)) {
+                switch(icalproperty_isa(prop)) {
+                case ICAL_DTSTART_PROPERTY:
+                    dtstart = icalproperty_get_datetime_with_component(prop,
+                                                                       master);
+                    startzone = (icaltimezone *) icaltime_get_timezone(dtstart);
+                    break;
+
+                case ICAL_RRULE_PROPERTY: {
+                    struct icalrecurrencetype rrule =
+                        icalproperty_get_rrule(prop);
+                    ptrarray_append(&rrules, &rrule);
+                    break;
+                }
+
+                case ICAL_RDATE_PROPERTY: {
+                    /* Note: This assumes that RDATE;TZID == DTSTART;TZID */
+                    struct icaldatetimeperiodtype rdate =
+                        icalproperty_get_rdate(prop);
+
+                    recurid= !icaltime_is_null_time(rdate.time) ?
+                        rdate.time : rdate.period.start;
+
+                    hash_insert(icaltime_as_ical_string(recurid),
+                                (void *) 1, &rdate_table);
+                    break;
+                }
+
+                default:
+                    break;
+                }
+            }
         }
 
     } while ((comp = icalcomponent_get_next_component(ical, kind)));
@@ -449,14 +486,14 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             icalcomponent_get_first_property(itip, ICAL_DTSTAMP_PROPERTY);
         icaltimetype recurid = icalcomponent_get_recurrenceid_with_zone(itip);
 
-        /* Lookup this comp in the hash table */
         if (icaltime_is_null_time(recurid)) {
             comp = master;
         }
         else {
-            /* Convert RECURRENCE-ID to UTC */
-            recurid = icaltime_convert_to_zone(recurid, utc_zone);
-            comp = hash_lookup(icaltime_as_ical_string(recurid), &comp_table);
+            /* Convert RECURRENCE-ID to DTSTART time zone
+               and lookup in the override hash table */
+            recurid = icaltime_convert_to_zone(recurid, startzone);
+            comp = hash_lookup(icaltime_as_ical_string(recurid), &override_table);
         }
 
         if (!comp) {
@@ -466,28 +503,30 @@ static const char *deliver_merge_reply(icalcomponent *ical,
                 continue;
             }
 
-            icaltimetype occur = icaltime_null_time();
-            icalproperty *rrule =
-                icalcomponent_get_first_property(master, ICAL_RRULE_PROPERTY);
+            /* Lookup RECURRENCE-ID in RDATE hash table */
+            if (!hash_lookup(icaltime_as_ical_string(recurid), &rdate_table)) {
+                int i, valid = 0, size = ptrarray_size(&rrules);
 
-            if (rrule) {
-                icalrecur_iterator *ritr =
-                    icalrecur_iterator_new(icalproperty_get_rrule(rrule), dtstart);
+                /* Does it correspond to an occurrence of an RRULE? */
+                for (i = 0; !valid && i < size; i++) {
+                    struct icalrecurrencetype *rrule = ptrarray_nth(&rrules, i);
+                    icalrecur_iterator *ritr =
+                        icalrecur_iterator_new(*rrule, dtstart);
 
-                /* Convert RECURRENCE-ID to DTSTART time zone */
-                recurid = icaltime_convert_to_zone(recurid, startzone);
+                    icalrecur_iterator_set_start(ritr, recurid);
+                    valid = !icaltime_compare(recurid,
+                                              icalrecur_iterator_next(ritr));
+                    icalrecur_iterator_free(ritr);
+                }
 
-                icalrecur_iterator_set_start(ritr, recurid);
-                occur = icalrecur_iterator_next(ritr);
-                icalrecur_iterator_free(ritr);
+                if (!valid) {
+                    /* RECURRENCE-ID is not a valid occurrence */
+                    continue;
+                }
             }
 
-            if (icaltime_compare(occur, recurid) != 0) {
-                /* RECURRENCE-ID is not a valid occurrence */
-                continue;
-            }
-
-            /* create a new recurrence from master component. */
+            /* Create a new override from the master component
+               and add it to the current object */
             icalproperty *recuridp = icalproperty_new_recurrenceid(recurid);
             const char *tzid = icaltimezone_get_location(startzone);
             if (tzid) {
@@ -502,8 +541,9 @@ static const char *deliver_merge_reply(icalcomponent *ical,
                 icalcomponent_remove_property(comp, prop);
                 icalproperty_free(prop);
             }
-            if (sequence) icalcomponent_add_property(comp,
-                                                     icalproperty_clone(sequence));
+            if (sequence) {
+                icalcomponent_add_property(comp, icalproperty_clone(sequence));
+            }
         }
         else if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) {
             /* This component has been cancelled - ignore the reply */
@@ -557,7 +597,9 @@ static const char *deliver_merge_reply(icalcomponent *ical,
         if (kind == ICAL_VPOLL_COMPONENT) deliver_merge_vpoll_reply(comp, itip);
     }
 
-    free_hash_table(&comp_table, NULL);
+    free_hash_table(&override_table, NULL);
+    free_hash_table(&rdate_table, NULL);
+    ptrarray_fini(&rrules);
 
     return attendee;
 }
