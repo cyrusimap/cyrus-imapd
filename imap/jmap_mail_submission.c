@@ -1121,6 +1121,18 @@ static int getsubmission(struct jmap_get *get,
             json_object_del(sub, "envelope");
         }
 
+        /* created */
+        if (jmap_wantprop(get->props, "created")) {
+            char datestr[RFC3339_DATETIME_MAX];
+            time_t t;
+
+            r = message_get_savedate(msg, &t);
+            if (r) goto done;
+
+            time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+            json_object_set_new(sub, "created", json_string(datestr));
+        }
+
         /* sendAt */
         if (jmap_wantprop(get->props, "sendAt")) {
             char datestr[RFC3339_DATETIME_MAX];
@@ -1236,8 +1248,15 @@ static const jmap_property_t submission_props[] = {
         NULL,
         JMAP_PROP_SERVER_SET
     },
+
+    /* FM extensions */
     {
         "onSend",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "created",
         NULL,
         JMAP_PROP_IMMUTABLE
     },
@@ -1720,7 +1739,9 @@ static void _emailsubmission_filter_parse(jmap_req_t *req __attribute__((unused)
             }
         }
         else if (!strcmp(field, "before") ||
-                 !strcmp(field, "after")) {
+                 !strcmp(field, "after") ||
+                 !strcmp(field, "createdBefore") ||
+                 !strcmp(field, "createdAfter")) {
             if (!json_is_utcdate(arg)) {
                 jmap_parser_invalid(parser, field);
             }
@@ -1742,6 +1763,7 @@ static int _emailsubmission_comparator_parse(jmap_req_t *req __attribute__((unus
     }
     if (!strcmp(comp->property, "emailId") ||
         !strcmp(comp->property, "threadId") ||
+        !strcmp(comp->property, "created") ||
         !strcmp(comp->property, "sentAt")) {
         return 1;
     }
@@ -1763,6 +1785,8 @@ typedef struct submission_filter {
     const char *undoStatus;
     time_t before;
     time_t after;
+    time_t createdBefore;
+    time_t createdAfter;
 } submission_filter;
 
 /* Parse the JMAP EmailSubmission FilterCondition in arg.
@@ -1773,8 +1797,8 @@ static void *submission_filter_build(json_t *arg)
     submission_filter *f =
         (submission_filter *) xzmalloc(sizeof(struct submission_filter));
 
-    f->before = eternity;
-    f->after = epoch;
+    f->createdBefore = f->before = eternity;
+    f->createdAfter  = f->after  = epoch;
 
     /* identityIds */
     json_t *identityIds = json_object_get(arg, "identityIds");
@@ -1837,6 +1861,20 @@ static void *submission_filter_build(json_t *arg)
         time_from_iso8601(utcDate, &f->after);
     }
 
+    /* createdBefore */
+    if (JNOTNULL(json_object_get(arg, "createdBefore"))) {
+        const char *utcDate;
+        jmap_readprop(arg, "createdBefore", 0, NULL, "s", &utcDate);
+        time_from_iso8601(utcDate, &f->createdBefore);
+    }
+
+    /* createdAfter */
+    if (JNOTNULL(json_object_get(arg, "createdAfter"))) {
+        const char *utcDate;
+        jmap_readprop(arg, "createdAfter", 0, NULL, "s", &utcDate);
+        time_from_iso8601(utcDate, &f->createdAfter);
+    }
+
     return f;
 }
 
@@ -1859,6 +1897,12 @@ static int submission_filter_match(void *vf, void *rock)
 
     /* after */
     if (record->internaldate < f->after) return 0;
+
+    /* createdBefore */
+    if (record->savedate >= f->createdBefore) return 0;
+
+    /* createdAfter */
+    if (record->savedate < f->createdAfter) return 0;
 
     /* undoStatus */
     if (f->undoStatus) {
@@ -1946,6 +1990,9 @@ static struct sortcrit *sub_buildsort(json_t *sort, int *need_submission)
         else if (!strcmp(prop, "sentAt")) {
             sortcrit[i].key = SORT_ARRIVAL;
         }
+        else if (!strcmp(prop, "created")) {
+            sortcrit[i].key = SORT_SAVEDATE;
+        }
     }
 
     i = json_array_size(sort);
@@ -1957,6 +2004,7 @@ static struct sortcrit *sub_buildsort(json_t *sort, int *need_submission)
 struct sub_match {
     char id[JMAP_SUBID_SIZE];
     uint32_t uid;
+    time_t created;
     time_t sentAt;
     const char *emailId;
     const char *threadId;
@@ -1979,6 +2027,9 @@ static int sub_sort_compare(const void **vp1, const void **vp2)
         reverse = sortcrit[i].flags & SORT_REVERSE;
 
         switch (sortcrit[i].key) {
+        case SORT_SAVEDATE:
+            ret = m1->created - m2->created;
+            break;
         case SORT_ARRIVAL:
             ret = m1->sentAt - m2->sentAt;
             break;
@@ -2098,6 +2149,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         /* Create id from message UID, using 'S' prefix */
         sprintf(match->id, "S%u", record->uid);
         match->uid = record->uid;
+        match->created = record->savedate;
         match->sentAt = record->internaldate;
         match->emailId = sfrock.emailId;
         match->threadId = sfrock.threadId;

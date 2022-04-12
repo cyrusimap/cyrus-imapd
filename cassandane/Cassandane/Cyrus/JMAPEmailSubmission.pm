@@ -1241,6 +1241,87 @@ sub test_emailsubmission_query
     $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
 }
 
+sub test_emailsubmission_query_long
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+
+    xlog $self, "Generate emails via IMAP";
+    $self->make_message("foo1", body => "a email") or die;
+    $self->make_message("foo2", body => "a email") or die;
+    $self->make_message("foo3", body => "a email") or die;
+
+    xlog $self, "get email ids";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
+    my $emailid1 = $res->[0][1]->{ids}[0];
+    my $emailid2 = $res->[0][1]->{ids}[1];
+    my $emailid3 = $res->[0][1]->{ids}[2];
+
+    xlog $self, "create an email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid1,
+            }
+       }
+    }, "R1" ] ] );
+    my $msgsubid1 = $res->[0][1]->{created}{1}{id};
+
+    sleep 1;
+
+    my $now = DateTime->now();
+    my $datestr = $now->strftime('%Y-%m-%dT%TZ');
+
+    xlog $self, "create 2 more email submissions";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '2' => {
+                identityId => $identityid,
+                emailId  => $emailid2,
+            },
+            '3' => {
+                identityId => $identityid,
+                emailId  => $emailid3,
+            }
+       }
+    }, "R1" ] ] );
+    my $msgsubid2 = $res->[0][1]->{created}{2}{id};
+    my $msgsubid3 = $res->[0][1]->{created}{3}{id};
+
+    xlog $self, "filter email submission list based on created time";
+    $res = $jmap->CallMethods([['EmailSubmission/query', {
+                    filter => {
+                        createdBefore => $datestr,
+                    }
+                }, "R1"]]);
+
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals($msgsubid1, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter email submission list based on undoStatus";
+    $res = $jmap->CallMethods([['EmailSubmission/query', {
+                    filter => {
+                        undoStatus => 'pending',
+                    }
+                }, "R1"]]);
+
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+
+    xlog $self, "sort email submission list based on created";
+    $res = $jmap->CallMethods([['EmailSubmission/query', {
+                    sort => [{ property => "created",
+                               isAscending => JSON::false }],
+                }, "R1"]]);
+
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals($msgsubid1, $res->[0][1]{ids}[2]);
+}
+
 sub test_emailsubmission_querychanges
     :min_version_3_1 :needs_component_jmap
 {
