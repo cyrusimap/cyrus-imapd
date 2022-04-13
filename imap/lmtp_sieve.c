@@ -1516,7 +1516,11 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     case ICAL_VPOLL_COMPONENT:
         switch (meth) {
         case ICAL_METHOD_POLLSTATUS:
-            if (kind != ICAL_VPOLL_COMPONENT) goto unsupported_method;
+        case ICAL_METHOD_ADD:
+            if (kind == ICAL_VPOLL_COMPONENT) {
+                if (meth == ICAL_METHOD_ADD) goto unsupported_method;
+            }
+            else if (meth == ICAL_METHOD_POLLSTATUS) goto unsupported_method;
 
             GCC_FALLTHROUGH
 

@@ -928,6 +928,66 @@ static int deliver_merge_cancel(const char *recipient,
 }
 
 
+static int deliver_merge_add(const char *recipient,
+                             icalcomponent *ical, icalcomponent *add)
+{
+    icalcomponent *comp, *itip, *master_comp = NULL;
+    icalcomponent_kind kind = ICAL_NO_COMPONENT;
+    icalproperty *prop;
+
+    /* Find master component of old object */
+    comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
+
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!prop) {
+            master_comp = comp;
+            break;
+        }
+    }
+    if (!master_comp) return HTTP_NOT_FOUND;
+
+    /* Process component in the iTIP request */
+    itip = icalcomponent_get_first_real_component(add);
+
+    /* Make sure this component refers to our recipient */
+    prop = find_attendee(itip, recipient);
+    if (!prop) return HTTP_FORBIDDEN;
+
+    /* Set RDATE on master component */
+    prop = icalcomponent_get_first_property(itip, ICAL_DTSTART_PROPERTY);
+    icaltimetype dtstart = icalproperty_get_dtstart(prop);
+    icalparameter *tzid =
+        icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+    struct icaldurationtype duration = icalcomponent_get_duration(itip);
+    struct icaldatetimeperiodtype rdate = {
+        ICALTIMETYPE_INITIALIZER,
+        ICALPERIODTYPE_INITIALIZER
+    };
+
+    if (!icaldurationtype_is_null_duration(duration) &&
+        icaldurationtype_as_int(duration) !=
+        icaldurationtype_as_int(icalcomponent_get_duration(master_comp))) {
+        /* Change in event duration */
+        rdate.period.start = dtstart;
+        rdate.period.duration = duration;
+    }
+    else {
+        rdate.time = dtstart;
+    }
+
+    prop = icalproperty_new_rdate(rdate);
+    if (tzid) {
+        icalproperty_add_parameter(prop, icalparameter_clone(tzid));
+    }
+
+    icalcomponent_add_property(master_comp, prop);
+
+    return 0;
+}
+
+
 /* Deliver scheduling object to local recipient */
 HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                                                       const char *sender,
@@ -1077,14 +1137,16 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         SCHED_STATUS(sched_data, REQSTAT_PERMFAIL, SCHEDSTAT_PERMFAIL);
         goto done;
     }
-    else if (method == ICAL_METHOD_CANCEL || method == ICAL_METHOD_POLLSTATUS) {
+    else if (method == ICAL_METHOD_ADD ||
+             method == ICAL_METHOD_CANCEL ||
+             method == ICAL_METHOD_POLLSTATUS) {
         /* Can't find object belonging to attendee - we're done */
         SCHED_STATUS(sched_data, REQSTAT_SUCCESS, SCHEDSTAT_DELIVERED);
         result = SCHED_DELIVER_NOACTION;
         goto done;
     }
     else if (SCHED_UPDATES_ONLY(sched_data)) {
-        /* Can't find object belonging to attendee - ignore request */
+        /* Configured to NOT process invites - ignore request */
         SCHED_STATUS(sched_data, REQSTAT_NOPRIVS, SCHEDSTAT_NOPRIVS);
         result = SCHED_DELIVER_NOACTION;
         goto done;
@@ -1262,6 +1324,11 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     case ICAL_METHOD_REQUEST:
         deliver_inbox = deliver_merge_request(recipient, ical, itip);
+        break;
+
+    case ICAL_METHOD_ADD:
+        r = deliver_merge_add(recipient, ical, itip);
+        if (r) goto inbox;
         break;
 
     case ICAL_METHOD_POLLSTATUS:
