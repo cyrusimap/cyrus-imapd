@@ -1383,7 +1383,7 @@ static void clean_component(icalcomponent *comp)
  * If the property exists in only 1 comp, then they are not equal.
  * if the property is RDATE or EXDATE, create an XORed CRC32 of all
  *   property strings for each component (order irrelevant) and compare the CRCs.
- * Otherwise compare the two property strings.
+ * Otherwise compare the two normalized property strings.
  */
 static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
                         icalproperty_kind kind)
@@ -1405,20 +1405,35 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
         uint32_t old_crc = 0, new_crc = 0;
 
         do {
-            str = icalproperty_get_value_as_string(oldprop);
+            icalproperty *myoldprop = icalproperty_clone(oldprop);
+            icalproperty_normalize(myoldprop);
+            str = icalproperty_as_ical_string(myoldprop);
             if (str) old_crc ^= crc32_cstring(str);
+            icalproperty_free(myoldprop);
         } while ((oldprop = icalcomponent_get_next_property(oldical, kind)));
 
         do {
-            str = icalproperty_get_value_as_string(newprop);
+            icalproperty *mynewprop = icalproperty_clone(newprop);
+            icalproperty_normalize(mynewprop);
+            str = icalproperty_as_ical_string(mynewprop);
             if (str) new_crc ^= crc32_cstring(str);
+            icalproperty_free(mynewprop);
         } while ((newprop = icalcomponent_get_next_property(newical, kind)));
 
         return (old_crc != new_crc);
     }
     else {
-        return (strcmpsafe(icalproperty_get_value_as_string(oldprop),
-                           icalproperty_get_value_as_string(newprop)) != 0);
+        icalproperty *myoldprop = icalproperty_clone(oldprop);
+        icalproperty_normalize(myoldprop);
+        icalproperty *mynewprop = icalproperty_clone(newprop);
+        icalproperty_normalize(mynewprop);
+
+        int cmp = strcmpsafe(icalproperty_as_ical_string(myoldprop),
+                             icalproperty_as_ical_string(mynewprop));
+
+        icalproperty_free(myoldprop);
+        icalproperty_free(mynewprop);
+        return cmp != 0;
     }
 }
 
