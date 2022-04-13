@@ -594,6 +594,9 @@ static void _emailsubmission_create(jmap_req_t *req,
     if (json_object_get(emailsubmission, "threadId")) {
         jmap_parser_invalid(&parser, "threadId");
     }
+    if (json_object_get(emailsubmission, "created")) {
+        jmap_parser_invalid(&parser, "created");
+    }
     if (json_object_get(emailsubmission, "sendAt")) {
         jmap_parser_invalid(&parser, "sendAt");
     }
