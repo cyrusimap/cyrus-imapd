@@ -1124,17 +1124,26 @@ static int getsubmission(jmap_req_t *req, struct jmap_get *get,
             json_object_del(sub, "envelope");
         }
 
-        /* created */
-        if (jmap_is_using(req, JMAP_MAIL_EXTENSION) &&
-            jmap_wantprop(get->props, "created")) {
-            char datestr[RFC3339_DATETIME_MAX];
-            time_t t;
+        if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+            /* onSend */
+            if (!jmap_wantprop(get->props, "onSend")) {
+                json_object_del(sub, "onSend");
+            }
 
-            r = message_get_savedate(msg, &t);
-            if (r) goto done;
+            /* created */
+            if (jmap_wantprop(get->props, "created")) {
+                char datestr[RFC3339_DATETIME_MAX];
+                time_t t;
 
-            time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
-            json_object_set_new(sub, "created", json_string(datestr));
+                r = message_get_savedate(msg, &t);
+                if (r) goto done;
+
+                time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+                json_object_set_new(sub, "created", json_string(datestr));
+            }
+        }
+        else {
+            json_object_del(sub, "onSend");
         }
 
         /* sendAt */
