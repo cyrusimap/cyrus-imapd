@@ -356,7 +356,7 @@ static int ensure_submission_collection(const char *accountid,
     return r;
 }
 
-static int store_submission(struct mailbox *mailbox,
+static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
                             struct buf *msg, time_t holduntil,
                             json_t *emailsubmission,
                             json_t **new_submission)
@@ -447,7 +447,8 @@ static int store_submission(struct mailbox *mailbox,
     }
 
     /* Append the message to the mailbox */
-    r = append_fromstage(&as, &body, stage, internaldate, 0, &flags, 0, /*annots*/NULL);
+    r = append_fromstage_full(&as, &body, stage, internaldate, now,
+                              /*cmodseq*/0, &flags, /*nolink*/0, /*annots*/NULL);
 
     if (r) {
         append_abort(&as);
@@ -476,6 +477,13 @@ static int store_submission(struct mailbox *mailbox,
          "undoStatus", (holduntil ? "pending" : "final"),
          "sendAt", sendat
     );
+
+    if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+        char created[RFC3339_DATETIME_MAX];
+        time_to_rfc3339(now, created, RFC3339_DATETIME_MAX);
+
+        json_object_set(*new_submission, "created", json_string(created));
+    }
 
   done:
     if (body) {
@@ -882,7 +890,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     /* Replace any creation id with actual emailId */
     json_object_set_new(emailsubmission, "emailId", json_string(msgid));
 
-    r = store_submission(submbox, &buf, holduntil,
+    r = store_submission(req, submbox, &buf, holduntil,
                          emailsubmission, new_submission);
 
 done:
