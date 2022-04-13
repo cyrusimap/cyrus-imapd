@@ -1090,7 +1090,7 @@ done:
     message_unref(&msg);
 }
 
-static int getsubmission(struct jmap_get *get,
+static int getsubmission(jmap_req_t *req, struct jmap_get *get,
                          const char *id, message_t *msg)
 {
     json_t *sub = NULL;
@@ -1122,7 +1122,8 @@ static int getsubmission(struct jmap_get *get,
         }
 
         /* created */
-        if (jmap_wantprop(get->props, "created")) {
+        if (jmap_is_using(req, JMAP_MAIL_EXTENSION) &&
+            jmap_wantprop(get->props, "created")) {
             char datestr[RFC3339_DATETIME_MAX];
             time_t t;
 
@@ -1252,13 +1253,13 @@ static const jmap_property_t submission_props[] = {
     /* FM extensions */
     {
         "onSend",
-        NULL,
+        JMAP_MAIL_EXTENSION,
         JMAP_PROP_IMMUTABLE
     },
     {
         "created",
-        NULL,
-        JMAP_PROP_IMMUTABLE
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     },
     { NULL, NULL, 0 }
 };
@@ -1311,7 +1312,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
                 continue;
             }
 
-            r = getsubmission(&get, id, msg);
+            r = getsubmission(req, &get, id, msg);
             message_unref(&msg);
         }
     }
@@ -1327,7 +1328,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
 
             /* Create id from message UID, using 'S' prefix */
             sprintf(id, "S%u", uid);
-            r = getsubmission(&get, id, (message_t *) msg);
+            r = getsubmission(req, &get, id, (message_t *) msg);
         }
         mailbox_iter_done(&iter);
     }
@@ -1739,9 +1740,14 @@ static void _emailsubmission_filter_parse(jmap_req_t *req __attribute__((unused)
             }
         }
         else if (!strcmp(field, "before") ||
-                 !strcmp(field, "after") ||
-                 !strcmp(field, "createdBefore") ||
-                 !strcmp(field, "createdAfter")) {
+                 !strcmp(field, "after")) {
+            if (!json_is_utcdate(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (jmap_is_using(req, JMAP_MAIL_EXTENSION) &&
+                 (!strcmp(field, "createdBefore") ||
+                  !strcmp(field, "createdAfter"))) {
             if (!json_is_utcdate(arg)) {
                 jmap_parser_invalid(parser, field);
             }
@@ -1763,9 +1769,11 @@ static int _emailsubmission_comparator_parse(jmap_req_t *req __attribute__((unus
     }
     if (!strcmp(comp->property, "emailId") ||
         !strcmp(comp->property, "threadId") ||
-        !strcmp(comp->property, "created") ||
         !strcmp(comp->property, "sentAt")) {
         return 1;
+    }
+    if (!strcmp(comp->property, "created")) {
+        return jmap_is_using(req, JMAP_MAIL_EXTENSION);
     }
     return 0;
 }
