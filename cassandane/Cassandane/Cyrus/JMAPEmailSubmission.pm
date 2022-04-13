@@ -1580,8 +1580,7 @@ sub test_emailsubmission_scheduled_send
             properties => ["mailboxIds", "keywords"],
         }, "R2"],
     ] );
-$res = $jmap->CallMethods([['EmailSubmission/get', { ids => undef }, "R2"]]);
-return;
+
 
     xlog $self, "Check create and onSuccessUpdateEmail results";
     my $msgsubid1 = $res->[0][1]->{created}{1}{id};
