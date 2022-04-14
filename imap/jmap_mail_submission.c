@@ -482,7 +482,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
         char created[RFC3339_DATETIME_MAX];
         time_to_rfc3339(now, created, RFC3339_DATETIME_MAX);
 
-        json_object_set(*new_submission, "created", json_string(created));
+        json_object_set_new(*new_submission, "created", json_string(created));
     }
 
   done:
