@@ -868,7 +868,7 @@ static int deliver_merge_cancel(const char *recipient,
         }
         else {
             master_comp = comp;
-            hash_insert("", comp, &comp_table);  // needed for canceled count
+            hash_insert("", comp, &override_table);  // needed for canceled count
         }
     }
 
