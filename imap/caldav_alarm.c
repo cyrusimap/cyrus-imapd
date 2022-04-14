@@ -1798,13 +1798,22 @@ static int process_snoozed(struct caldav_alarm_data *data,
 static void process_unscheduled(struct caldav_alarm_data *data)
 {
     struct mboxevent *event = mboxevent_new(EVENT_MESSAGES_UNSCHEDULED);
-    char *userid = mboxname_to_userid(data->mboxname);
 
-    FILL_STRING_PARAM(event, EVENT_MESSAGES_UNSCHEDULED_USERID, userid);
-    FILL_UNSIGNED_PARAM(event, EVENT_MESSAGES_UNSCHEDULED_COUNT, data->num_retries);
+    if (event) {
+        char *userid = mboxname_to_userid(data->mboxname);
 
-    mboxevent_notify(&event);
-    mboxevent_free(&event);
+        FILL_STRING_PARAM(event, EVENT_MESSAGES_UNSCHEDULED_USERID, userid);
+        FILL_UNSIGNED_PARAM(event, EVENT_MESSAGES_UNSCHEDULED_COUNT, data->num_retries);
+
+        mboxevent_notify(&event);
+        mboxevent_free(&event);
+    }
+    else {
+        syslog(LOG_NOTICE,
+               "failed to create UNSCHEDULED notification for mailbox %s",
+               data->mboxname);
+
+    }
 
     caldav_alarm_delete_record(data->mboxname, data->imap_uid);
 }
