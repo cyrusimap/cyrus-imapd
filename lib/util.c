@@ -518,10 +518,13 @@ EXPORTED int removedir(const char *path)
  */
 EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused)))
 {
-    char *path = xstrdup(pathname);    /* make a copy to write into */
+    char *path = xstrdupnull(pathname);    /* make a copy to write into */
     char *p = path;
     int save_errno;
     struct stat sbuf;
+
+    if (!p || *p == '\0')
+        return -1;
 
     while ((p = strchr(p+1, '/'))) {
         *p = '\0';
