@@ -844,8 +844,7 @@ static int deliver_merge_request(const char *attendee,
 }
 
 
-static int deliver_merge_cancel(const char *recipient,
-                                icalcomponent *ical,    // current iCalendar
+static int deliver_merge_cancel(icalcomponent *ical,    // current iCalendar
                                 icalcomponent *cancel)  // iTIP cancel
 {
     struct hash_table override_table;
@@ -875,9 +874,6 @@ static int deliver_merge_cancel(const char *recipient,
     /* Process each component in the iTIP request */
     for (itip = icalcomponent_get_first_real_component(cancel);
          itip; itip = icalcomponent_get_next_component(cancel, kind)) {
-        /* Make sure this component refers to our recipient */
-        prop = find_attendee(itip, recipient);
-        if (!prop) continue;
 
         /* Lookup this comp in the hash table */
         prop = icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
@@ -929,8 +925,7 @@ static int deliver_merge_cancel(const char *recipient,
 }
 
 
-static int deliver_merge_add(const char *recipient,
-                             icalcomponent *ical,  // current iCalendar
+static int deliver_merge_add(icalcomponent *ical,  // current iCalendar
                              icalcomponent *add)   // iTIP add
 {
     icalcomponent *comp, *itip, *master_comp = NULL;
@@ -952,10 +947,6 @@ static int deliver_merge_add(const char *recipient,
 
     /* Process component in the iTIP request */
     itip = icalcomponent_get_first_real_component(add);
-
-    /* Make sure this component refers to our recipient */
-    prop = find_attendee(itip, recipient);
-    if (!prop) return HTTP_FORBIDDEN;
 
     /* Set RDATE on master component */
     prop = icalcomponent_get_first_property(itip, ICAL_DTSTART_PROPERTY);
@@ -1260,7 +1251,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     switch (method) {
     case ICAL_METHOD_CANCEL: {
-        int all_instances = deliver_merge_cancel(recipient, ical, itip);
+        int all_instances = deliver_merge_cancel(ical, itip);
 
         if (all_instances && SCHED_DELETE_CANCELED(sched_data)) {
             /* Expunge the resource */
@@ -1329,7 +1320,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         break;
 
     case ICAL_METHOD_ADD:
-        r = deliver_merge_add(recipient, ical, itip);
+        r = deliver_merge_add(ical, itip);
         if (r) goto inbox;
         break;
 
