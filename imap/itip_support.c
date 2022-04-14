@@ -845,17 +845,18 @@ static int deliver_merge_request(const char *attendee,
 
 
 static int deliver_merge_cancel(const char *recipient,
-                                icalcomponent *ical, icalcomponent *cancel)
+                                icalcomponent *ical,    // current iCalendar
+                                icalcomponent *cancel)  // iTIP cancel
 {
-    struct hash_table comp_table;
+    struct hash_table override_table;
     icalcomponent *comp, *itip, *master_comp = NULL;
     icalcomponent_kind kind = ICAL_NO_COMPONENT;
     icalproperty *prop;
     const char *recurid;
     int num_canceled = 0;
 
-    /* Add each override component of old object to hash table for comparison */
-    construct_hash_table(&comp_table, 10, 1);
+    /* Add each override component of current object to hash table */
+    construct_hash_table(&override_table, 10, 1);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
 
@@ -863,11 +864,11 @@ static int deliver_merge_cancel(const char *recipient,
         prop = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
         if (prop) {
             recurid = icalproperty_get_value_as_string(prop);
-            hash_insert(recurid, comp, &comp_table);
+            hash_insert(recurid, comp, &override_table);
         }
         else {
             master_comp = comp;
-            hash_insert("", comp, &comp_table);
+            hash_insert("", comp, &comp_table);  // needed for canceled count
         }
     }
 
@@ -881,9 +882,9 @@ static int deliver_merge_cancel(const char *recipient,
         /* Lookup this comp in the hash table */
         prop = icalcomponent_get_first_property(itip, ICAL_RECURRENCEID_PROPERTY);
         if (prop) {
-            /* Override */
+            /* Lookup this iTIP comp in the hash table of current obj overrides */
             recurid = icalproperty_get_value_as_string(prop);
-            comp = hash_lookup(recurid, &comp_table);
+            comp = hash_lookup(recurid, &override_table);
 
             if (comp) {
                 /* Set STATUS:CANCELLED on this component */
@@ -920,22 +921,23 @@ static int deliver_merge_cancel(const char *recipient,
     }
 
     /* Did we cancel all instances? */
-    int ret = (num_canceled >= hash_numrecords(&comp_table));
+    int ret = (num_canceled >= hash_numrecords(&override_table));
 
-    free_hash_table(&comp_table, NULL);
+    free_hash_table(&override_table, NULL);
 
     return ret;
 }
 
 
 static int deliver_merge_add(const char *recipient,
-                             icalcomponent *ical, icalcomponent *add)
+                             icalcomponent *ical,  // current iCalendar
+                             icalcomponent *add)   // iTIP add
 {
     icalcomponent *comp, *itip, *master_comp = NULL;
     icalcomponent_kind kind = ICAL_NO_COMPONENT;
     icalproperty *prop;
 
-    /* Find master component of old object */
+    /* Find master component of current object */
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
 
