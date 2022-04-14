@@ -10361,7 +10361,9 @@ static void _append_validate_mboxids(jmap_req_t *req,
             if (mbox_id) {
                 mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
             }
-            if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, need_rights)) {
+            if (!mbentry || mbentry->mbtype == MBTYPE_DELETED ||
+                    mboxname_isdeletedmailbox(mbentry->name, NULL) ||
+                    !jmap_hasrights_mbentry(req, mbentry, need_rights)) {
                 jmap_parser_invalid(parser, NULL);
                 is_valid = 0;
             }
@@ -11973,7 +11975,8 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
         json_object_foreach_safe(update->mailboxids, tmp, mbox_id, jval) {
             struct mailbox *mbox = NULL;
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
-            if (mbentry) {
+            if (mbentry && mbentry->mbtype != MBTYPE_DELETED &&
+                    !mboxname_isdeletedmailbox(mbentry->name, NULL)) {
                 int r = 0;
                 if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
                     struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
