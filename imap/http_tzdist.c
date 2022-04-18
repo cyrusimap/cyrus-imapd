@@ -800,10 +800,9 @@ static int action_capa(struct transaction_t *txn)
         struct zoneinfo info;
         struct mime_type_t *mime;
         json_t *formats;
-        int r;
 
         /* Get info record from the database */
-        if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
+        if (zoneinfo_lookup_info(&info)) return HTTP_SERVER_ERROR;
 
         buf_reset(&txn->buf);
         buf_printf(&txn->buf, "%s:%s", info.data->s, info.data->next->s);
@@ -917,7 +916,7 @@ static int action_leap(struct transaction_t *txn)
     struct zoneinfo info, leap;
 
     /* Get info record from the database */
-    if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
+    if (zoneinfo_lookup_info(&info)) return HTTP_SERVER_ERROR;
 
     /* Get leap record from the database */
     if ((r = zoneinfo_lookup_leap(&leap))) {
@@ -1047,7 +1046,7 @@ static int list_cb(const char *tzid, int tzidlen,
 /* Perform a list action */
 static int action_list(struct transaction_t *txn)
 {
-    int r, ret, precond;
+    int ret, precond;
     struct strlist *param;
     const char *pattern = NULL;
     struct resp_body_t *resp_body = &txn->resp_body;
@@ -1059,7 +1058,7 @@ static int action_list(struct transaction_t *txn)
     json_t *root = NULL;
 
     /* Get info record from the database */
-    if ((r = zoneinfo_lookup_info(&info))) return HTTP_SERVER_ERROR;
+    if (zoneinfo_lookup_info(&info)) return HTTP_SERVER_ERROR;
 
     /* Sanity check the parameters */
     if ((param = hash_lookup("pattern", &txn->req_qparams))) {
