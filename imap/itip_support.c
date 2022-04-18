@@ -560,7 +560,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
 
         /* Find matching attendee in existing object */
         for (prop = icalcomponent_get_first_invitee(comp);
-             prop && strcmp(attendee, icalproperty_get_invitee(prop));
+             prop && strcmpnull(attendee, icalproperty_get_invitee(prop));
              prop = icalcomponent_get_next_invitee(comp));
         if (!prop) {
             /* Attendee added themselves to this recurrence */
