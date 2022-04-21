@@ -78,4 +78,6 @@ extern int jmap_create_caldaveventnotif(struct transaction_t *txn,
                                         icalcomponent *oldical,
                                         icalcomponent *newical);
 
+extern int calendar_has_sharees(const mbentry_t *mbentry);
+
 #endif /* JMAP_NOTIF_H */

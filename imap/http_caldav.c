@@ -1552,16 +1552,18 @@ static int caldav_delete_cal(struct transaction_t *txn,
     }
 
 #ifdef WITH_JMAP
-    if (!ical) ical = record_to_ical(mailbox, record, &schedule_addresses);
-    if (ical) {
-        icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-        if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
-            int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
+    if (calendar_has_sharees(mailbox->mbentry)) {
+        if (!ical) ical = record_to_ical(mailbox, record, &schedule_addresses);
+        if (ical) {
+            icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+            if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+                int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
                     httpd_authstate, mailbox_name(mailbox),
                     cdata->ical_uid, &schedule_addresses, is_draft, ical, NULL);
-            if (r2) {
-                xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
-                        "error=%s", error_message(r2));
+                if (r2) {
+                    xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
+                            "error=%s", error_message(r2));
+                }
             }
         }
     }
@@ -4017,7 +4019,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                                     db, flags, httpd_userid, NULL, NULL,
                                     &schedule_addresses);
 #ifdef WITH_JMAP
-        if (kind == ICAL_VEVENT_COMPONENT) {
+        if (kind == ICAL_VEVENT_COMPONENT &&
+            calendar_has_sharees(mailbox->mbentry)) {
             if (!oldical && cdata->dav.imap_uid) {
                 syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
                 /* Load message containing the resource and parse iCal data */
