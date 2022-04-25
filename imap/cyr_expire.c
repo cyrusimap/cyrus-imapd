@@ -780,7 +780,7 @@ static int jnotif_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct jnotif_rock *rock = vrock;
 
-    if ((mbentry->mbtype & MBTYPE_JMAPNOTIFY) == 0) return 0;
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_JMAPNOTIFY) return 0;
 
     // Lock the mailbox.
     struct mailbox *mbox = NULL;
