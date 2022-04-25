@@ -5322,7 +5322,6 @@ done:
         icalcomponent_free(myoldical);
     if (floatingtz_is_malloced)
         icaltimezone_free(floatingtz, 1);
-    jstimezones_free(&update->jstzones);
     jmapical_context_free(&jmapctx);
     json_decref(old_event);
     json_decref(new_event);
@@ -5679,6 +5678,7 @@ done:
     if (update.oldical)
         icalcomponent_free(update.oldical);
     json_decref(update.old_event);
+    jstimezones_free(&update.jstzones);
 
     if (mbox) jmap_closembox(req, &mbox);
     if (dstmbox) jmap_closembox(req, &dstmbox);
