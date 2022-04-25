@@ -1634,7 +1634,7 @@ const char *priority_to_string(int priority)
 
 
 /* The entrypoint for bytecode evaluation */
-int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
+int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                   void *sc, void *m, variable_list_t *variables,
                   action_list_t *actions, notify_list_t *notify_list,
                   duptrack_list_t *duptrack_list, const char **errmsg)
@@ -1643,7 +1643,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
     int op;
     int version;
     int requires = 0;
-    int implicit_keep = 1;
+    int is_incl = (impl_keep_p != NULL);
+    int implicit_keep = is_incl ? *impl_keep_p : 1;
 
     sieve_bytecode_t *bc_cur = exe->bc_cur;
     bytecode_input_t *bc = (bytecode_input_t *) bc_cur->data;
@@ -2250,7 +2251,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 break;
             }
 
-            res = sieve_eval_bc(exe, 1, i, sc, m, variables, actions,
+            res = sieve_eval_bc(exe, &implicit_keep, i, sc, m, variables, actions,
 				notify_list, duptrack_list, errmsg);
             break;
         }
@@ -2523,7 +2524,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
   done:
     bc_cur->is_executing = 0;
 
-    if (!res && implicit_keep) {
+    if (is_incl) {
+        *impl_keep_p = implicit_keep;
+    }
+    else if (!res && implicit_keep) {
         strarray_t *actionflags = strarray_dup(variables->var);
         struct buf *headers = NULL;
 
