@@ -4386,7 +4386,7 @@ static int createevent_toical(jmap_req_t *req,
     }
 
     create->ical = jmapical_toical(create->jsevent, NULL, parser->invalid,
-            create->serverset, &create->comp, jmapctx);
+            create->serverset, &create->comp, NULL, jmapctx);
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_set_new(create->serverset, "isOrigin",
@@ -5188,6 +5188,8 @@ struct updateevent {
     json_t *old_event;
     icalcomponent *oldical;
     icalcomponent *newical;
+
+    jstimezones_t *jstzones;
 };
 
 static int updateevent_apply_patch(jmap_req_t *req,
@@ -5296,7 +5298,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
 
     /* Convert to iCalendar */
     icalcomponent *newical = jmapical_toical(new_event, myoldical,
-            invalid, update->serverset, NULL, jmapctx);
+            invalid, update->serverset, NULL, &update->jstzones, jmapctx);
     if (!newical || json_array_size(invalid)) {
         if (newical) icalcomponent_free(newical);
         goto done;
@@ -5320,6 +5322,7 @@ done:
         icalcomponent_free(myoldical);
     if (floatingtz_is_malloced)
         icaltimezone_free(floatingtz, 1);
+    jstimezones_free(&update->jstzones);
     jmapical_context_free(&jmapctx);
     json_decref(old_event);
     json_decref(new_event);

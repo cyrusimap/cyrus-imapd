@@ -5661,6 +5661,76 @@ sub test_calendarevent_set_schedule_reply
     $self->assert($ical =~ "METHOD:REPLY");
 }
 
+sub test_calendarevent_set_schedule_reply_custom_tz
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $uid = "xxaaasdfasfhialskdjflaksjfdalskdfja";
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:Microsoft Exchange Server 2010
+BEGIN:VTIMEZONE
+TZID:(UTC-06:00) Central Time (US & Canada)
+BEGIN:STANDARD
+DTSTART:16010101T020000
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0600
+RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T020000
+TZOFFSETFROM:-0600
+TZOFFSETTO:-0400
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+ORGANIZER;X-JMAP-ID=org;CN="Bugs Bunny":MAILTO:bugs\@example.com
+ATTENDEE;X-JMAP-ID=att;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;
+ CN="Cassandane":MAILTO:cassandane\@example.com
+DESCRIPTION;LANGUAGE=en-US:\n
+UID:$uid
+SUMMARY;LANGUAGE=en-US:foo
+DTSTART;TZID="(UTC-06:00) Central Time (US & Canada)":20220420T080000
+DURATION:PT1H
+DTSTAMP:20220419T175315Z
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $event = $self->putandget_vevent($uid, $ical);
+    my $id = $event->{id};
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "send reply as attendee to organizer";
+    my $res = $jmap->CallMethods([['CalendarEvent/set', {
+        sendSchedulingMessages => JSON::true,
+        update => {
+            $id => {
+                'participants/att/participationStatus' => "tentative",
+            }
+        }
+    }, "R1"]]);
+
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    my $payload = decode_json($imip->{MESSAGE});
+    $ical = $payload->{ical};
+
+    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REPLY");
+}
+
 sub test_calendarevent_set_schedule_destroy
     :min_version_3_1 :needs_component_jmap
 {

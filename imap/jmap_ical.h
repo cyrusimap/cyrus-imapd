@@ -94,6 +94,8 @@ extern "C" {
 #define JMAPICAL_XPARAM_COMMENT       "X-COMMENT" /*used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
 
+typedef struct jstimezones jstimezones_t;
+
 struct jmapical_ctx {
     jmap_req_t *req;
     struct buf buf;
@@ -156,6 +158,7 @@ icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
                                json_t *invalid,
                                json_t *serverset,
                                icalcomponent **compptr,
+                               jstimezones_t **jstzonesp,
                                struct jmapical_ctx *jmapctx);
 
 
