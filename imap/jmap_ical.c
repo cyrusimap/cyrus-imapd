@@ -255,7 +255,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
                                   icalcomponent *maincomp,
                                   struct icalcomps *oldcomps,
                                   icaltimetype now,
-                                  jstimezones_t **jtzcache,
+                                  jstimezones_t **jtzcachep,
                                   struct jmapical_ctx *jmapctx);
 
 static char *_emailalert_recipient(const char *userid)
