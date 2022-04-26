@@ -332,21 +332,23 @@ static int jmap_parse_path(const char *path, struct request_target_t *tgt,
         char *inbox = mboxname_user_mbox(httpd_userid, NULL);
         int r = proxy_mlookup(inbox, &tgt->mbentry, NULL, NULL);
 
-        free(inbox);
-
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s", inbox, error_message(r));
+        }
+        free(inbox);
 
-            switch (r) {
-            case IMAP_PERMISSION_DENIED:
-                return HTTP_FORBIDDEN;
+        switch (r) {
+        case 0:
+            break;
 
-            case IMAP_MAILBOX_NONEXISTENT:
-                return HTTP_NOT_FOUND;
+        case IMAP_PERMISSION_DENIED:
+            return HTTP_FORBIDDEN;
 
-            default:
-                return HTTP_SERVER_ERROR;
-            }
+        case IMAP_MAILBOX_NONEXISTENT:
+            return HTTP_NOT_FOUND;
+
+        default:
+            return HTTP_SERVER_ERROR;
         }
     }
 
