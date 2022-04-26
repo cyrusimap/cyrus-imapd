@@ -11179,6 +11179,7 @@ static int jmap_calendarpreferences_get(struct jmap_req *req)
     struct jmap_get get;
     json_t *err = NULL;
     struct buf buf = BUF_INITIALIZER;
+    char *calhomename = NULL;
     mbentry_t *mbcalhome = NULL;
     int r = 0;
 
@@ -11196,9 +11197,8 @@ static int jmap_calendarpreferences_get(struct jmap_req *req)
     }
 
     /* Check ACL */
-    char *calhomename = caldav_mboxname(req->accountid, NULL);
+    calhomename = caldav_mboxname(req->accountid, NULL);
     r = mboxlist_lookup(calhomename, &mbcalhome, NULL);
-    free(calhomename);
     if (r) {
         jmap_error(req, jmap_server_error(r));
         xsyslog(LOG_INFO, "cannot lookup calendar home",
@@ -11264,6 +11264,7 @@ static int jmap_calendarpreferences_get(struct jmap_req *req)
 
 done:
     mboxlist_entry_free(&mbcalhome);
+    free(calhomename);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
     buf_free(&buf);
