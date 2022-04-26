@@ -1534,6 +1534,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     struct buf buf = BUF_INITIALIZER;
     json_t *submission = NULL, *identity, *envelope, *onSend;
     smtpclient_t *sm = NULL;
+    int do_move = 0;
     int r = 0;
 
     syslog(LOG_DEBUG, "processing future release for mailbox %s uid %u",
@@ -1638,6 +1639,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         else if (onSend) {
             /* Move the scheduled message back into Drafts mailbox.
                Use INBOX as a fallback. */
+            do_move = 1;
             userid = mboxname_to_userid(data->mboxname);
 
             char *destname = mboxlist_find_specialuse("\\Drafts", userid);
@@ -1665,6 +1667,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
 
         /* Get any onSend instructions */
         if (onSend) {
+            do_move = 1;
             destmboxid =
                 json_string_value(json_object_get(onSend, "moveToMailboxId"));
             setkeywords = json_deep_copy(json_object_get(onSend, "setKeywords"));
@@ -1689,7 +1692,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
 
     caldav_alarm_delete_record(mailbox_name(mailbox), record->uid);
 
-    if (destmboxid) {
+    if (do_move) {
         /* Move the scheduled message into the specified mailbox */
         if (!userid) userid = mboxname_to_userid(data->mboxname);
 
