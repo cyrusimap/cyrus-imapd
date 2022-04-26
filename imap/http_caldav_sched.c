@@ -804,7 +804,7 @@ int sched_busytime_query(struct transaction_t *txn,
     xmlNodePtr root = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
     struct propfind_ctx fctx;
-    struct freebusy_filter calfilter;
+    struct freebusy_filter calfilter = {0};
     struct hash_table remote_table;
     struct caldav_sched_param *remote = NULL;
 
@@ -841,7 +841,6 @@ int sched_busytime_query(struct transaction_t *txn,
     ensure_ns(ns, NS_DAV, root, XML_NS_DAV, "D");
 
     /* Populate our filter and propfind context for local attendees */
-    memset(&calfilter, 0, sizeof(struct freebusy_filter));
     calfilter.start = icalcomponent_get_dtstart(comp);
     calfilter.end = icalcomponent_get_dtend(comp);
     calfilter.flags = CHECK_CAL_TRANSP | CHECK_USER_AVAIL;
