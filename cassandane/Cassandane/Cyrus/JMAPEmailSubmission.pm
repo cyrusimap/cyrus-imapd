@@ -1436,7 +1436,6 @@ sub test_emailsubmission_scheduled_send
     my $schedid = $res->[1][1]{created}{"2"}{id};
     my $sentid = $res->[1][1]{created}{"3"}{id};
 
-
     xlog $self, "Verify Scheduled mailbox rights";
     my $myRights = $res->[1][1]{created}{"2"}{myRights};
     $self->assert_deep_equals({
@@ -1452,7 +1451,6 @@ sub test_emailsubmission_scheduled_send
         mayRename => JSON::false
     }, $myRights);
 
-
     xlog $self, "Try to create a child of Scheduled mailbox";
     $res = $jmap->CallMethods([
         [ 'Mailbox/set', {
@@ -1466,7 +1464,6 @@ sub test_emailsubmission_scheduled_send
     ]);
     $self->assert_not_null($res->[0][1]->{notCreated}{1});
 
-
     xlog $self, "Try to destroy Scheduled mailbox";
     $res = $jmap->CallMethods([
         [ 'Mailbox/set', {
@@ -1474,7 +1471,6 @@ sub test_emailsubmission_scheduled_send
          }, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]->{notDestroyed}{$schedid});
-
 
     xlog $self, "Create 2 draft emails";
     $res = $jmap->CallMethods([
@@ -1515,7 +1511,6 @@ sub test_emailsubmission_scheduled_send
     ]);
     my $emailid1 = $res->[0][1]->{created}{m1}{id};
     my $emailid2 = $res->[0][1]->{created}{m2}{id};
-
 
     xlog $self, "Create 2 email submissions";
     $res = $jmap->CallMethods( [
@@ -1581,7 +1576,6 @@ sub test_emailsubmission_scheduled_send
         }, "R2"],
     ] );
 
-
     xlog $self, "Check create and onSuccessUpdateEmail results";
     my $msgsubid1 = $res->[0][1]->{created}{1}{id};
     my $msgsubid2 = $res->[0][1]->{created}{2}{id};
@@ -1593,11 +1587,9 @@ sub test_emailsubmission_scheduled_send
                          $res->[2][1]->{list}[0]->{mailboxIds}{$schedid});
     $self->assert_null($res->[2][1]->{list}[0]->{mailboxIds}{$draftsid});
 
-
     xlog $self, "Verify 2 events were added to the alarmdb";
     my $alarmdata = $self->{instance}->getalarmdb();
     $self->assert_num_equals(2, scalar @$alarmdata);
-
 
     xlog $self, "Cancel email submission 2";
     $res = $jmap->CallMethods( [
@@ -1624,7 +1616,6 @@ sub test_emailsubmission_scheduled_send
         }, "R2"],
     ] );
 
-
     xlog $self, "Check update and onSuccessUpdateEmail results";
     $self->assert_not_null($res->[0][1]->{updated}{$msgsubid2});
 
@@ -1641,12 +1632,10 @@ sub test_emailsubmission_scheduled_send
     $alarmdata = $self->{instance}->getalarmdb();
     $self->assert_num_equals(1, scalar @$alarmdata);
 
-
     xlog $self, "Trigger delivery of email submission";
     my $now = DateTime->now();
     $self->{instance}->run_command({ cyrus => 1 },
                                    'calalarmd', '-t' => $now->epoch() + 60 );
-
 
     xlog $self, "Check onSend results";
     $res = $jmap->CallMethods( [
@@ -1669,7 +1658,6 @@ sub test_emailsubmission_scheduled_send
                          $res->[1][1]->{list}[0]->{keywords}{'$sent'});
     $self->assert_equals(JSON::null,
                          $res->[1][1]->{list}[0]->{keywords}{'$draft'});
-
 
     xlog $self, "Verify no events left in the alarmdb";
     $alarmdata = $self->{instance}->getalarmdb();
@@ -1716,7 +1704,6 @@ sub test_emailsubmission_scheduled_send_fail
     my $schedid = $res->[1][1]{created}{"2"}{id};
     my $sentid = $res->[1][1]{created}{"3"}{id};
 
-
     xlog $self, "Create draft email";
     $res = $jmap->CallMethods([
         ['Email/set', {
@@ -1740,7 +1727,6 @@ sub test_emailsubmission_scheduled_send_fail
         }, 'R1'],
     ]);
     my $emailid1 = $res->[0][1]->{created}{m1}{id};
-
 
     xlog $self, "Create email submission";
     $res = $jmap->CallMethods( [
@@ -1781,7 +1767,6 @@ sub test_emailsubmission_scheduled_send_fail
         }, "R2"],
     ] );
 
-
     xlog $self, "Check create and onSuccessUpdateEmail results";
     my $msgsubid1 = $res->[0][1]->{created}{1}{id};
     $self->assert_str_equals('pending', $res->[0][1]->{created}{1}{undoStatus});
@@ -1792,21 +1777,17 @@ sub test_emailsubmission_scheduled_send_fail
                          $res->[2][1]->{list}[0]->{mailboxIds}{$schedid});
     $self->assert_null($res->[2][1]->{list}[0]->{mailboxIds}{$draftsid});
 
-
     xlog $self, "Verify 1 event was added to the alarmdb";
     my $alarmdata = $self->{instance}->getalarmdb();
     $self->assert_num_equals(1, scalar @$alarmdata);
 
-
     xlog $self, "Set up a permanent SMTP failre";
     $self->{instance}->set_smtpd({ begin_data => ["554", "5.3.0 [jmapError:forbiddenToSend] try later"] });
-
 
     xlog $self, "Trigger delivery of email submission";
     my $now = DateTime->now();
     $self->{instance}->run_command({ cyrus => 1 },
                                    'calalarmd', '-t' => $now->epoch() + 60 );
-
 
     xlog $self, "Make sure message was moved back to Drafts";
     $res = $jmap->CallMethods( [
@@ -1828,11 +1809,9 @@ sub test_emailsubmission_scheduled_send_fail
     $self->assert_equals(JSON::null,
                          $res->[1][1]->{list}[0]->{keywords}{'$sent'});
 
-
     xlog $self, "Verify 1 event left in the alarmdb";
     $alarmdata = $self->{instance}->getalarmdb();
     $self->assert_num_equals(1, scalar @$alarmdata);
-
 
     xlog $self, "Trigger delivery of unscheduled notification";
     $self->{instance}->run_command({ cyrus => 1 },
@@ -1850,7 +1829,6 @@ sub test_emailsubmission_scheduled_send_fail
     $self->assert_not_null($unscheduled);
     $self->assert_str_equals("cassandane", $unscheduled->{userId});
     $self->assert_num_equals(1, $unscheduled->{count});
-
 
     xlog $self, "Verify no events left in the alarmdb";
     $alarmdata = $self->{instance}->getalarmdb();
@@ -1897,7 +1875,6 @@ sub test_emailsubmission_scheduled_send_no_move
     my $schedid = $res->[1][1]{created}{"2"}{id};
     my $sentid = $res->[1][1]{created}{"3"}{id};
 
-
     xlog $self, "Create draft email";
     $res = $jmap->CallMethods([
         ['Email/set', {
@@ -1921,7 +1898,6 @@ sub test_emailsubmission_scheduled_send_no_move
         }, 'R1'],
     ]);
     my $emailid1 = $res->[0][1]->{created}{m1}{id};
-
 
     xlog $self, "Create email submission";
     $res = $jmap->CallMethods( [
@@ -1961,7 +1937,6 @@ sub test_emailsubmission_scheduled_send_no_move
         }, "R2"],
     ] );
 
-
     xlog $self, "Check create and onSuccessUpdateEmail results";
     my $msgsubid1 = $res->[0][1]->{created}{1}{id};
     $self->assert_str_equals('pending', $res->[0][1]->{created}{1}{undoStatus});
@@ -1972,17 +1947,14 @@ sub test_emailsubmission_scheduled_send_no_move
                          $res->[2][1]->{list}[0]->{mailboxIds}{$schedid});
     $self->assert_null($res->[2][1]->{list}[0]->{mailboxIds}{$draftsid});
 
-
     xlog $self, "Verify 1 event was added to the alarmdb";
     my $alarmdata = $self->{instance}->getalarmdb();
     $self->assert_num_equals(1, scalar @$alarmdata);
-
 
     xlog $self, "Trigger delivery of email submission";
     my $now = DateTime->now();
     $self->{instance}->run_command({ cyrus => 1 },
                                    'calalarmd', '-t' => $now->epoch() + 60 );
-
 
     xlog $self, "Check onSend results";
     $res = $jmap->CallMethods( [
@@ -1999,7 +1971,6 @@ sub test_emailsubmission_scheduled_send_no_move
 
     $self->assert_num_equals(1, scalar @{$res->[1][1]->{notFound}});
     $self->assert_equals($emailid1, $res->[1][1]->{notFound}[0]);
-
 
     xlog $self, "Verify no events left in the alarmdb";
     $alarmdata = $self->{instance}->getalarmdb();
