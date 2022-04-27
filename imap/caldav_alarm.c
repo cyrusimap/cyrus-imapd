@@ -57,6 +57,7 @@
 #include "http_dav.h"
 #include "ical_support.h"
 #include "jmap_util.h"
+#include "json_support.h"
 #include "libconfig.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
@@ -1569,6 +1570,10 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     envelope = json_object_get(submission, "envelope");
     identity = json_object_get(submission, "identityId");
     onSend = json_object_get(submission, "onSend");
+    if (JNULL(onSend)) {
+        /* Treat onSend:null as non-existent */
+        onSend = NULL;
+    }
 
     /* Load message */
     r = message_get_field(m, "rawbody", MESSAGE_RAW, &buf);
