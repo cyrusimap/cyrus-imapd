@@ -3041,7 +3041,7 @@ static void quic_dispatch(struct service *s, int si)
             while (iovcnt--) {
                 total_len += iov[iovcnt].iov_len;
             }
-            
+
             syslog(LOG_DEBUG,
                    "quic_dispatch(): sent %zd of %zd bytes: %m", nwrite, total_len);
         }

@@ -367,7 +367,7 @@ static void close_conn(void *conn)
         nghttp3_conn_del((nghttp3_conn *) http_conn->sess_ctx);
     }
 }
-    
+
 static ssize_t read_stream(void *conn, int64_t stream_id,
                            const uint8_t *src, size_t srclen, int fin)
 {
@@ -381,7 +381,7 @@ static ssize_t read_stream(void *conn, int64_t stream_id,
 
     return n;
 }
-    
+
 static struct quic_app_context h3 = {
     NULL,  // conn
     0,     // timeout
@@ -471,7 +471,7 @@ HIDDEN void http3_input(struct http_connection *conn)
         http3_output(conn);
     }
 }
- 
+
 static void begin_resp_headers(struct transaction_t *txn, long code)
 {
     struct http3_stream *strm = (struct http3_stream *) txn->strm_ctx;
@@ -491,7 +491,6 @@ static void begin_resp_headers(struct transaction_t *txn, long code)
 
     if (code) simple_hdr(txn, ":status", "%.3s", error_message(code));
 }
-
 
 static void add_resp_header(struct transaction_t *txn,
                             const char *name, struct buf *value)
@@ -587,10 +586,8 @@ static nghttp3_ssize read_data(nghttp3_conn *conn __attribute__((unused)),
     syslog(LOG_DEBUG,
            "H3 read_data: id=%ld, n=%ld, flags=0x%X", stream_id, n, *pflags);
 
-    return n; 
+    return n;
 }
-
-
 
 static int end_resp_headers(struct transaction_t *txn, long code)
 {
@@ -662,7 +659,6 @@ static int end_resp_headers(struct transaction_t *txn, long code)
 
     return r;
 }
-
 
 static int resp_body_chunk(struct transaction_t *txn,
                            const char *data, unsigned datalen,
