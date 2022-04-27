@@ -247,11 +247,11 @@ static int recv_header_cb(nghttp3_conn *conn __attribute__((unused)),
 }
 
 static int end_headers_cb(nghttp3_conn *conn __attribute__((unused)),
-                          int64_t stream_id,
+                          int64_t stream_id, int fin,
                           void *conn_user_data __attribute__((unused)),
                           void *stream_user_data)
 {
-    syslog(LOG_DEBUG, "H3 end_headers(%ld)", stream_id);
+  syslog(LOG_DEBUG, "H3 end_headers(%ld, %d)", stream_id, fin);
 
     struct transaction_t *txn = stream_user_data;
 
