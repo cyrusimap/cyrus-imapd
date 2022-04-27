@@ -530,6 +530,31 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
+sub test_dup_fileinto_implicit_keep_flags
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Testing duplicate suppression between 'fileinto' & 'keep'";
+
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "copy", "imap4flags"];
+fileinto :copy :flags "\\\\Seen" "INBOX";
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Check that only last copy of the message made it to INBOX";
+    $self->{store}->set_folder('INBOX');
+    $msg1->set_attribute(flags => [ '\\Recent' ]);
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
 sub test_deliver_fileinto_autocreate_globalshared
     :needs_component_sieve :NoStartInstances :NoAltNameSpace
 {
