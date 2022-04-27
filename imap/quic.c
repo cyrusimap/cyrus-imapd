@@ -388,8 +388,9 @@ static ngtcp2_callbacks callbacks = {
     NULL, // recv_datagram
     NULL, // ack_datagram
     NULL, // lost_datagram
-    NULL, // get_path_challenge_data
+    ngtcp2_crypto_get_path_challenge_data_cb,
     NULL, // stream_stop_sending
+    ngtcp2_crypto_version_negotiation_cb
 };
 
 static void send_data(int sock, ngtcp2_path *path, uint8_t *data, ssize_t nwrite)
@@ -541,7 +542,8 @@ ioerror:
                 nwrite = ngtcp2_crypto_write_connection_close(data, sizeof(data),
                                                               hd.version,
                                                               &hd.scid, &hd.dcid,
-                                                              NGTCP2_INVALID_TOKEN);
+                                                              NGTCP2_INVALID_TOKEN,
+                                                              NULL, 0);
 
                 syslog(LOG_DEBUG, "ngtcp2_crypto_write_connection_close(): %ld",
                        nwrite);
@@ -633,14 +635,14 @@ HIDDEN void quic_close(struct quic_context *ctx)
         uint8_t data[USHRT_MAX];
         ssize_t nwrite;
         ngtcp2_path_storage ps;
+        ngtcp2_connection_close_error ccerr = {.type = NGTCP2_APPLICATION_ERROR};
 
         ngtcp2_path_storage_zero(&ps);
 
         nwrite = ngtcp2_conn_write_connection_close(ctx->qconn,
                                                     &ps.path, NULL,
                                                     data, sizeof(data),
-                                                    NGTCP2_APPLICATION_ERROR,
-                                                    timestamp());
+                                                    &ccerr, timestamp());
 
         syslog(LOG_DEBUG, "ngtcp2_conn_write_connection_close(): %zd", nwrite);
 
