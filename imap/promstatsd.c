@@ -177,10 +177,12 @@ static int promdir_foreach(promdir_foreach_cb *proc, enum promdir_foreach_mode m
         r = mappedfile_open(&mf, fname, 0);
         if (r) continue;
         r = mappedfile_readlock(mf);
-        if (!r) {
-            memcpy(&stats, mappedfile_base(mf), mappedfile_size(mf));
-            mappedfile_unlock(mf);
+        if (r) {
+            mappedfile_close(&mf);
+            continue;
         }
+        memcpy(&stats, mappedfile_base(mf), mappedfile_size(mf));
+        mappedfile_unlock(mf);
         mappedfile_close(&mf);
 
         r = proc(&stats, rock);
