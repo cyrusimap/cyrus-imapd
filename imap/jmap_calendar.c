@@ -4665,9 +4665,11 @@ static int createevent_store(jmap_req_t *req,
     json_object_set_new(create->serverset, "uid",
             json_string(eid.ical_uid));
 
-    char *xhref = jmap_xhref(mailbox_name(mbox), create->resourcename);
-    json_object_set_new(create->serverset, "x-href", json_string(xhref));
-    xzfree(xhref);
+    {
+        char *xhref = jmap_xhref(mailbox_name(mbox), create->resourcename);
+        json_object_set_new(create->serverset, "x-href", json_string(xhref));
+        free(xhref);
+    }
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         struct index_record record;
