@@ -601,7 +601,7 @@ int dav_check_precond(struct transaction_t *txn, struct meth_params *params,
                       const char *etag, time_t lastmod);
 int dav_premethod(struct transaction_t *txn);
 unsigned get_preferences(struct transaction_t *txn);
-struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types);
+struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types) __attribute__((nonnull(1)));
 
 int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
                    const char *mimetype);

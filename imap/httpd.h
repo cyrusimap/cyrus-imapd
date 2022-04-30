@@ -587,7 +587,7 @@ extern int ws_enabled;
 
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
                            const char **errstr);
-extern struct accept *parse_accept(const char **hdr);
+struct accept *parse_accept(const char **hdr) __attribute__((nonnull));
 extern void free_accept(struct accept *a);
 extern void parse_query_params(struct transaction_t *txn, const char *query);
 extern time_t calc_compile_time(const char *time, const char *date);
