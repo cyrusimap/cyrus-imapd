@@ -181,7 +181,7 @@ extern const char *smtpclient_has_ext(smtpclient_t *sm, const char *name);
 extern unsigned smtpclient_get_resp_code(smtpclient_t *sm);
 
 /* Return the text of the last SMTP response, or NULL if empty */
-extern const char *smtpclient_get_resp_text(smtpclient_t *sm);
+__attribute__((nonnull)) const char *smtpclient_get_resp_text(smtpclient_t *sm);
 
 
 #endif

@@ -48,15 +48,15 @@
 /* for free() */
 #include <stdlib.h>
 
-extern void *xmalloc (size_t size);
-extern void *xzmalloc (size_t size);
-extern void *xcalloc (size_t nmemb, size_t size);
-extern void *xrealloc (void *ptr, size_t size);
-extern char *xstrdup (const char *str);
+__attribute__((malloc, warn_unused_result)) void *xmalloc (size_t size);
+__attribute__((malloc, warn_unused_result)) void *xzmalloc (size_t size);
+__attribute__((malloc, warn_unused_result)) void *xcalloc (size_t nmemb, size_t size);
+__attribute__((warn_unused_result)) void *xrealloc (void *ptr, size_t size);
+__attribute__((malloc, warn_unused_result)) char *xstrdup (const char *str);
 extern char *xstrdupnull (const char *str);
-extern char *xstrdupsafe (const char *str);
-extern char *xstrndup (const char *str, size_t len);
-extern void *xmemdup (const void *ptr, size_t size);
+__attribute__((malloc, warn_unused_result)) char *xstrdupsafe (const char *str);
+__attribute__((malloc, warn_unused_result)) char *xstrndup (const char *str, size_t len);
+__attribute__((malloc, warn_unused_result)) void *xmemdup (const void *ptr, size_t size);
 
 // free a pointer and also zero it
 #define xzfree(ptr) do { \
