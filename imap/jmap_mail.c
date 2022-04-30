@@ -809,12 +809,11 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
     if (bodies->textlist.count == 1) {
         int is_encoding_problem = 0;
         struct body *textbody = ptrarray_nth(&bodies->textlist, 0);
-        char *text = _decode_to_utf8(textbody->charset_id,
-                                     msg_buf->s + textbody->content_offset,
-                                     textbody->content_size,
-                                     textbody->encoding,
-                                     &is_encoding_problem);
-        return text;
+        return _decode_to_utf8(textbody->charset_id,
+                               msg_buf->s + textbody->content_offset,
+                               textbody->content_size,
+                               textbody->encoding,
+                               &is_encoding_problem);
     }
 
     /* Concatenate all plain text bodies and replace any
