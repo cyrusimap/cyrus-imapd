@@ -592,7 +592,7 @@ extern void free_accept(struct accept *a);
 extern void parse_query_params(struct transaction_t *txn, const char *query);
 extern time_t calc_compile_time(const char *time, const char *date);
 extern const char *http_statusline(unsigned ver, long code);
-extern char *httpdate_gen(char *buf, size_t len, time_t t);
+void httpdate_gen(char *buf, size_t len, time_t t) __attribute__((nonnull));
 extern void simple_hdr(struct transaction_t *txn,
                        const char *name, const char *value, ...)
                       __attribute__((format(printf, 3, 4)));
