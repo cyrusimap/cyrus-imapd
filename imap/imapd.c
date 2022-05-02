@@ -14779,9 +14779,9 @@ static void cmd_xapplepushservice(const char *tag,
     mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
-    buf_release(&applepushserviceargs->aps_account_id);
-    buf_release(&applepushserviceargs->aps_device_token);
-    buf_release(&applepushserviceargs->aps_subtopic);
+    buf_free(&applepushserviceargs->aps_account_id);
+    buf_free(&applepushserviceargs->aps_device_token);
+    buf_free(&applepushserviceargs->aps_subtopic);
     strarray_fini(&applepushserviceargs->mailboxes);
     strarray_fini(&notif_mailboxes);
 }
