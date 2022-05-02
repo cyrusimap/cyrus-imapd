@@ -54,36 +54,36 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -d userid
+.. option:: -d, --dump
 
     Dump the conversations database which corresponds to the user *userid*
     to standard output in an ASCII format.  The resulting file can be
     used to recreate a database using the **-u** option.
 
-.. option:: -u userid
+.. option:: -u, --undump
 
     "Undumps" the conversations database corresponding to the user *userid*,
     i.e. replaces all the entries with data from ASCII records parsed
     from standard input.  The output from the **-d** option can be used
     as input.
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Be more verbose when running.
 
-.. option:: -r
+.. option:: -r, --recursive
 
     Be recursive; apply the main operation to every user.  Warning: do
     not combine with **-u**, it will not do what you expect.
 
-.. option:: -z
+.. option:: -z, --clear
 
     Remove all conversation information from the conversations database
     for user *userid*, and from all the user's mailboxes.  The
     information can all be recalculated (eventually) from message
     headers, using the **-b** option.
 
-.. option:: -b
+.. option:: -b, --rebuild
 
     Rebuild all conversation information in the conversations database
     for user *userid*, and in all the user's mailboxes, from the header
@@ -97,17 +97,17 @@ Options
     from *cyrus.cache* files so it does not need to read every single
     message file.
 
-.. option:: -R
+.. option:: -R, --update-counts
 
     Recalculate counts of messages stored in existing conversations in
     the conversations database for user *userid*.  This is a limited
     subset of **-b**; in particular it does not create conversations or
     assign messages to conversations.
 
-.. option:: -S
+.. option:: -S, --split
 
     If given with **-b**, allows splitting of conversations during the
-    rewrite.   Only do this is changing the maximum conversation size
+    rewrite.   Only do this if changing the maximum conversation size
     and you need to split those existing conversations.
 
 Examples
