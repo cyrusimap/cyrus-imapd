@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -107,7 +108,7 @@ static void process_seen(const char *path, const char *user);
 static void process_subs(const char *path, const char *user);
 static int do_mailbox(struct findall_data *data, void *rock);
 
-int main(int argc,char **argv)
+int main(int argc, char **argv)
 {
     int opt, r;
     int report_days = 30;
@@ -116,11 +117,27 @@ int main(int argc,char **argv)
     char *alt_config = NULL;
     time_t now = time(0);
 
+    /* keep these in alphabetical order */
+    static const char *const short_options = "C:D:d:lop:u";
+
+    static const struct option long_options[] = {
+        /* n.b. no long form for -C option */
+        { "date", required_argument, NULL, 'D' },
+        { "days", required_argument, NULL, 'd' },
+        { "detailed", no_argument, NULL, 'l' },
+        { "no-subscribers", no_argument, NULL, 'o' },
+        { "prune-seen", required_argument, NULL, 'p' },
+        { "include-userids", no_argument, NULL, 'u' },
+        { 0, 0, 0, 0 },
+    };
+
     strcpy(pattern, "*");
 
     report_end_time = now;
 
-    while ((opt = getopt(argc, argv, "C:oud:D:p:l")) != EOF) {
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
