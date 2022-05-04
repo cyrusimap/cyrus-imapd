@@ -124,6 +124,7 @@ struct protocol_t imap_csync_protocol =
           { "SASL-IR", CAPA_SASL_IR },
           { "X-REPLICATION", CAPA_REPLICATION },
           { "X-SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
+          { "X-REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },
           { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
@@ -142,6 +143,7 @@ struct protocol_t csync_protocol =
           { "STARTTLS", CAPA_STARTTLS },
           { "COMPRESS=DEFLATE", CAPA_COMPRESS },
           { "SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
+          { "REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },
           { NULL, 0 } } },
       { "STARTTLS", "OK", "NO", 1 },
       { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
@@ -4177,6 +4179,13 @@ int sync_apply_capabilities(struct dlist *kin, struct sync_state *sstate)
             sstate->flags |= SYNC_FLAG_SIEVE_MAILBOX;
             dlist_setatom(kout, NULL, capa);
         }
+
+        if (!strcasecmp(capa, "REPLICATION-ARCHIVE")) {
+            if (config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) {
+                sstate->flags |= SYNC_FLAG_ARCHIVE;
+                dlist_setatom(kout, NULL, capa);
+            }
+        }
     }
 
     sync_send_response(kout, sstate->pout);
@@ -8051,9 +8060,31 @@ connected:
     }
 #endif
 
+    unsigned capabilities = 0;
+
     if (CAPA(backend, CAPA_SIEVE_MAILBOX)) {
         syslog(LOG_INFO, "Destination supports #sieve mailbox");
-        sync_do_enable(sync_cs, CAPA_SIEVE_MAILBOX);
+        capabilities |= CAPA_SIEVE_MAILBOX;
+    }
+
+    if (sync_cs->flags & SYNC_FLAG_ARCHIVE) {
+        if (CAPA(backend, CAPA_REPLICATION_ARCHIVE)) {
+            syslog(LOG_INFO, "Destination supports replication to archive");
+            capabilities |= CAPA_REPLICATION_ARCHIVE;
+            sync_cs->flags &= ~SYNC_FLAG_ARCHIVE;
+        }
+        else {
+            syslog(LOG_NOTICE, "Destination doesn't support replication to archive");
+        }
+    }
+
+    if (capabilities) {
+        sync_do_enable(sync_cs, capabilities);
+
+        if (capabilities & CAPA_REPLICATION_ARCHIVE && !(sync_cs->flags & SYNC_FLAG_ARCHIVE)) {
+            syslog(LOG_NOTICE, "Replication to archive requested but destination didn't enable it");
+            return IMAP_REMOTE_DENIED;
+        }
     }
 
     /* Set inactivity timer */
@@ -8170,6 +8201,9 @@ int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
     if (capabilities & CAPA_SIEVE_MAILBOX) {
         dlist_setatom(kl, NULL, "SIEVE-MAILBOX");
     }
+    if (capabilities & CAPA_REPLICATION_ARCHIVE) {
+        dlist_setatom(kl, NULL, "REPLICATION-ARCHIVE");
+    }
 
     sync_send_apply(kl, sync_cs->backend->out);
     dlist_free(&kl);
@@ -8191,6 +8225,8 @@ int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
 
                 if (!strcasecmp(capa, "SIEVE-MAILBOX"))
                     sync_cs->flags |= SYNC_FLAG_SIEVE_MAILBOX;
+                if (!strcasecmp(capa, "REPLICATION-ARCHIVE"))
+                    sync_cs->flags |= SYNC_FLAG_ARCHIVE;
             }
         }
     }

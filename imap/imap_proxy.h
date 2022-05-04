@@ -57,15 +57,16 @@ enum {
 
 enum {
     /* IMAP capabilities */
-    CAPA_IDLE           = (1 << 3),
-    CAPA_MUPDATE        = (1 << 4),
-    CAPA_MULTIAPPEND    = (1 << 5),
-    CAPA_ACLRIGHTS      = (1 << 6),
-    CAPA_LISTEXTENDED   = (1 << 7),
-    CAPA_SASL_IR        = (1 << 8),
-    CAPA_REPLICATION    = (1 << 9),
-    CAPA_METADATA       = (1 << 10),
-    CAPA_SIEVE_MAILBOX  = (1 << 11),
+    CAPA_IDLE                = (1 << 3),
+    CAPA_MUPDATE             = (1 << 4),
+    CAPA_MULTIAPPEND         = (1 << 5),
+    CAPA_ACLRIGHTS           = (1 << 6),
+    CAPA_LISTEXTENDED        = (1 << 7),
+    CAPA_SASL_IR             = (1 << 8),
+    CAPA_REPLICATION         = (1 << 9),
+    CAPA_METADATA            = (1 << 10),
+    CAPA_SIEVE_MAILBOX       = (1 << 11),
+    CAPA_REPLICATION_ARCHIVE = (1 << 12),
 };
 
 extern struct protocol_t imap_protocol;
