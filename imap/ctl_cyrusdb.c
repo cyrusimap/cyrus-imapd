@@ -129,7 +129,7 @@ static void usage(void)
 static int fixmbox(const mbentry_t *mbentry,
                    void *rock __attribute__((unused)))
 {
-    int r;
+    int r, r2;
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if (mbentry->mbtype & MBTYPE_RESERVE) {
@@ -164,6 +164,60 @@ static int fixmbox(const mbentry_t *mbentry,
         mboxlist_entry_free(&copy);
     }
 
+    /* make sure every mbentry has a uniqueid!  */
+    if (!mbentry->uniqueid) {
+        struct mailbox *mailbox = NULL;
+        mbentry_t *copy = NULL;
+
+        r = mailbox_open_from_mbe(mbentry, &mailbox);
+        if (r) {
+            /* XXX what does it mean if there's an mbentry, but the mailbox
+             * XXX was not openable?
+             */
+            syslog(LOG_DEBUG, "%s: mailbox_open_from_mbe %s returned %s",
+                              __func__, mbentry->name, error_message(r));
+            goto skip_uniqueid;
+        }
+
+        if (!mailbox->h.uniqueid) {
+            /* yikes, no uniqueid in header either! */
+            mailbox_make_uniqueid(mailbox);
+            xsyslog(LOG_INFO, "mailbox header had no uniqueid, creating one",
+                              "mboxname=<%s> newuniqueid=<%s>",
+                              mbentry->name, mailbox->h.uniqueid);
+        }
+
+        copy = mboxlist_entry_copy(mbentry);
+        copy->uniqueid = xstrdup(mailbox->h.uniqueid);
+        xsyslog(LOG_INFO, "mbentry had no uniqueid, setting from header",
+                          "mboxname=<%s> newuniqueid=<%s>",
+                          copy->name, copy->uniqueid);
+
+        r = mboxlist_updatelock(copy, /*localonly*/1);
+        if (r) {
+            xsyslog(LOG_ERR, "failed to update mboxlist",
+                             "mboxname=<%s> error=<%s>",
+                             mbentry->name, error_message(r));
+            r2 = mailbox_abort(mailbox);
+            if (r2) {
+                xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
+                                 "error=<%s>", cyrusdb_strerror(r2));
+            }
+        }
+        else {
+            r2 = mailbox_commit(mailbox);
+            if (r2) {
+                xsyslog(LOG_ERR, "DBERROR: error committing transaction",
+                                 "error=<%s>", cyrusdb_strerror(r2));
+            }
+        }
+        mailbox_close(&mailbox);
+        mboxlist_entry_free(&copy);
+
+skip_uniqueid:
+        ;   /* hush "label at end of compound statement" warning */
+    }
+
     return 0;
 }
 
@@ -172,7 +226,7 @@ static void process_mboxlist(int *upgraded)
     /* upgrade database to new mailboxes-by-id records */
     mboxlist_upgrade(upgraded);
 
-    /* build a list of mailboxes - we're using internal names here */
+    /* run fixmbox across all mboxlist entries */
     mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_INTERMEDIATES);
 
     /* enable or disable RACLs per config */
