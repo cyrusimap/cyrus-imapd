@@ -168,6 +168,17 @@ Options
     compression if both ends support it.  Set this flag when you want
     to abort if compression is not available.
 
+.. option:: -a
+
+    Request the replicate-to-archive feature. If the remote end has the
+    ``archive_enabled`` option set, then it will stage incoming replication on
+    the archive partition instead of the spool partition. If the remote end
+    does not support it, replication will proceed as though **-a** was not
+    provided.  This option is useful when standing up a new replica of an
+    existing server, as most of the stored mail is likely older than the
+    archive threshold and so is destined for the archive partition anyway. By
+    staging on that partition, Cyrus can avoid a cross-partition copy for every
+    message.
 
 Examples
 ========
