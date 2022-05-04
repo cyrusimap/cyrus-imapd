@@ -134,6 +134,7 @@ static int sync_logfd = -1;
 static int sync_starttls_done = 0;
 static int sync_compress_done = 0;
 static int sync_sieve_mailbox_enabled = 0;
+static int sync_archive_enabled = 0;
 
 static int opt_force = 0;
 
@@ -224,6 +225,7 @@ static void sync_reset(void)
     sync_compress_done = 0;
 
     sync_sieve_mailbox_enabled = 0;
+    sync_archive_enabled = 0;
 
     saslprops_reset(&saslprops);
 }
@@ -557,7 +559,7 @@ static void cmdloop(void)
             }
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Apply")) {
-                kl = sync_parseline(sync_in, /*isarchive*/ 0);
+                kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
                     cmd_apply(kl, reserve_list);
                     dlist_free(&kl);
@@ -585,7 +587,7 @@ static void cmdloop(void)
         case 'G':
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
-                kl = sync_parseline(sync_in, /*isarchive*/ 0);
+                kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
                     cmd_get(kl);
                     dlist_free(&kl);
@@ -629,7 +631,7 @@ static void cmdloop(void)
             }
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Restore")) {
-                kl = sync_parseline(sync_in, /*isarchive*/ 0);
+                kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
                     cmd_restore(kl, reserve_list);
                     dlist_free(&kl);
@@ -988,11 +990,17 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
     if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
+    }
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
 
     if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
         sync_sieve_mailbox_enabled = 1;
+    }
+    if (sync_state.flags & SYNC_FLAG_ARCHIVE) {
+        sync_archive_enabled = 1;
     }
 
     sync_checkpoint(sync_in);
@@ -1013,6 +1021,9 @@ static void cmd_get(struct dlist *kin)
     if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
+    }
 
     const char *resp = sync_get(kin, &sync_state);
     prot_printf(sync_out, "%s\r\n", resp);
@@ -1031,6 +1042,9 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
 
     if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
     }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);

@@ -193,6 +193,7 @@ static int imapd_compress_done = 0; /* have we done a successful compress? */
 static const char *plaintextloginalert = NULL;
 static int ignorequota = 0;
 static int sync_sieve_mailbox_enabled = 0;
+static int sync_archive_enabled = 0;
 
 #define QUIRK_SEARCHFUZZY (1<<0)
 static struct id_data {
@@ -2082,7 +2083,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Syncapply")) {
                 if (!imapd_userisadmin) goto badcmd;
 
-                struct dlist *kl = sync_parseline(imapd_in, /*isarchive*/ 0);
+                struct dlist *kl = sync_parseline(imapd_in, sync_archive_enabled);
 
                 if (kl) {
                     cmd_syncapply(tag.s, kl, reserve_list);
@@ -2093,7 +2094,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Syncget")) {
                 if (!imapd_userisadmin) goto badcmd;
 
-                struct dlist *kl = sync_parseline(imapd_in, /*isarchive*/ 0);
+                struct dlist *kl = sync_parseline(imapd_in, sync_archive_enabled);
 
                 if (kl) {
                     cmd_syncget(tag.s, kl);
@@ -2112,7 +2113,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Syncrestore")) {
                 if (!imapd_userisadmin) goto badcmd;
 
-                struct dlist *kl = sync_parseline(imapd_in, /*isarchive*/ 0);
+                struct dlist *kl = sync_parseline(imapd_in, sync_archive_enabled);
 
                 if (kl) {
                     cmd_syncrestore(tag.s, kl, reserve_list);
@@ -3009,6 +3010,7 @@ static void cmd_unauthenticate(char *tag)
     /* Reset client-enabled extensions */
     client_capa = 0;
     sync_sieve_mailbox_enabled = 0;
+    sync_archive_enabled = 0;
 
     /* Send response
        (MUST be done with current SASL and/or commpression layer still active) */
@@ -14544,6 +14546,9 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
+    }
 
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -14556,6 +14561,9 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
 
     if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
         sync_sieve_mailbox_enabled = 1;
+    }
+    if (sync_state.flags & SYNC_FLAG_ARCHIVE) {
+        sync_archive_enabled = 1;
     }
 
     // chaining!
@@ -14581,6 +14589,9 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
 
     if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
     }
 
     /* administrators only please */
@@ -14693,6 +14704,9 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
 
     if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
     }
 
     /* administrators only please */
