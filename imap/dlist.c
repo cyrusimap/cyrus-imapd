@@ -175,7 +175,7 @@ EXPORTED const char *dlist_reserve_path(const char *part, int isarchive, int isb
 
 static int reservefile(struct protstream *in, const char *part,
                        struct message_guid *guid, unsigned long size,
-                       int isbackup, const char **fname)
+                       int isarchive, int isbackup, const char **fname)
 {
     static struct message_guid debug_writefail_guid = MESSAGE_GUID_INITIALIZER;
     FILE *file;
@@ -197,7 +197,7 @@ static int reservefile(struct protstream *in, const char *part,
     }
 
     /* XXX - write to a temporary file then move in to place! */
-    *fname = dlist_reserve_path(part, /*isarchive*/0, isbackup, guid);
+    *fname = dlist_reserve_path(part, isarchive, isbackup, guid);
 
     /* remove any duplicates if they're still here */
     unlink(*fname);
@@ -1101,7 +1101,7 @@ static char next_nonspace(struct protstream *in, char c)
     return c;
 }
 
-EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isbackup,
+EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive, int isbackup,
                           struct protstream *in)
 {
     struct dlist *dl = NULL;
@@ -1129,7 +1129,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isbackup,
         while (c != ')') {
             struct dlist *di = NULL;
             prot_ungetc(c, in);
-            c = dlist_parse(&di, 0, isbackup, in);
+            c = dlist_parse(&di, 0, isarchive, isbackup, in);
             if (di) dlist_stitch(dl, di);
             c = next_nonspace(in, c);
             if (c == EOF) goto fail;
@@ -1145,7 +1145,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isbackup,
             while (c != ')') {
                 struct dlist *di = NULL;
                 prot_ungetc(c, in);
-                c = dlist_parse(&di, 1, isbackup, in);
+                c = dlist_parse(&di, 1, isarchive, isbackup, in);
                 if (di) dlist_stitch(dl, di);
                 c = next_nonspace(in, c);
                 if (c == EOF) goto fail;
@@ -1166,7 +1166,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isbackup,
             if (c == '\r') c = prot_getc(in);
             if (c != '\n') goto fail;
             if (!message_guid_decode(&tmp_guid, gbuf.s)) goto fail;
-            if (reservefile(in, pbuf.s, &tmp_guid, size, isbackup, &fname)) goto fail;
+            if (reservefile(in, pbuf.s, &tmp_guid, size, isarchive, isbackup, &fname)) goto fail;
             dl = dlist_setfile(NULL, kbuf.s, pbuf.s, &tmp_guid, size, fname);
             /* file literal */
         }
@@ -1205,7 +1205,7 @@ fail:
 EXPORTED int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in)
 {
-    int c = dlist_parse(dlp, parsekey, 0, in);
+    int c = dlist_parse(dlp, parsekey, 0, 0, in);
 
     /* make a list with one item */
     if (*dlp && !dlist_isatomlist(*dlp)) {
@@ -1226,7 +1226,7 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey, int isbackup,
 
     stream = prot_readmap(base, len);
     prot_setisclient(stream, 1); /* don't sync literals */
-    c = dlist_parse(&dl, parsekey, isbackup, stream);
+    c = dlist_parse(&dl, parsekey, /*isarchive*/ 0, isbackup, stream);
     prot_free(stream);
 
     if (c != EOF) {

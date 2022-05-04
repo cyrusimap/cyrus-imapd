@@ -137,7 +137,7 @@ static void notify_dlist(const char *sockpath, const char *method,
     prot_printf(out, "\r\n");
     prot_flush(out);
 
-    c = dlist_parse(&res, 1, 0, in);
+    c = dlist_parse(&res, 1, 0, 0, in);
     if (c == '\r') c = prot_getc(in);
     /* XXX - do something with the response?  Like have NOTIFY answer */
     if (c == '\n' && res && res->name) {
