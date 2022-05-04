@@ -969,6 +969,13 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
         snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
                  config_partitiondir(p->name), (unsigned long)getpid());
         rmdir(buf);
+
+        if (config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) {
+            /* and the archive partition too */
+            snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
+                    config_archivepartitiondir(p->name), (unsigned long)getpid());
+            rmdir(buf);
+        }
     }
     partition_list_free(pl);
 
