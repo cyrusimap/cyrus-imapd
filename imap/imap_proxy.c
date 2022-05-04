@@ -102,6 +102,7 @@ struct protocol_t imap_protocol =
           { "SASL-IR", CAPA_SASL_IR },
           { "X-REPLICATION", CAPA_REPLICATION },
           { "X-SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
+          { "X-REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },
           /* Need to bump MAX_CAPA in protocol.h if this array is extended */
           { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },

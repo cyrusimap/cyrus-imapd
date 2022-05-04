@@ -381,6 +381,7 @@ static struct capa_struct base_capabilities[] = {
     { "X-CREATEDMODSEQ",       2 }, /* Cyrus custom */
     { "X-REPLICATION",         2 }, /* Cyrus custom */
     { "X-SIEVE-MAILBOX",       2 }, /* Cyrus custom */
+    { "X-REPLICATION-ARCHIVE", 2 }, /* Cyrus custom */
     { "XLIST",                 2 }, /* not standard */
     { "XMOVE",                 2 }, /* not standard */
 
