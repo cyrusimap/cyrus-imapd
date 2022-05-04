@@ -671,6 +671,12 @@ AC_ARG_ENABLE(pcre,
 if test "$enable_sieve" != "no"; then
         AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
 
+        if test "x$HAVE_SQLITE" != x1; then
+            AC_MSG_ERROR([Need sqlite3 for sieve])
+        else
+            use_sqlite="yes"
+        fi
+
         dnl Sieve configure stuff
         AC_PROG_YACC
         AM_PROG_LEX
