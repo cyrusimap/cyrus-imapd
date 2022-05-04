@@ -109,6 +109,7 @@ static int sync_once       = 0;
 static int background      = 0;
 static int do_compress     = 0;
 static int no_copyback     = 0;
+static int archive         = 0;
 
 static char *prev_userid;
 
@@ -469,7 +470,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRNumsozOAp:1")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRNumsozOAp:1a")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -580,6 +581,10 @@ int main(int argc, char **argv)
             partition = optarg;
             break;
 
+        case 'a':
+            archive = 1;
+            break;
+
         default:
             usage("sync_client", NULL);
         }
@@ -591,6 +596,7 @@ int main(int argc, char **argv)
     if (verbose) flags |= SYNC_FLAG_VERBOSE;
     if (verbose_logging) flags |= SYNC_FLAG_LOGGING;
     if (no_copyback) flags |= SYNC_FLAG_NO_COPYBACK;
+    if (archive) flags |= SYNC_FLAG_ARCHIVE;
 
     /* fork if required */
     if (background && !input_filename && !getenv("CYRUS_ISDAEMON")) {
