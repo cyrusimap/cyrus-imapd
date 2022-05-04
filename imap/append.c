@@ -439,7 +439,7 @@ static int callout_receive_reply(const char *callout,
     prot_setisclient(p, 1);
 
     /* read and parse the reply as a dlist */
-    c = dlist_parse(results, /*parsekeys*/0, /*isbackup*/0, p);
+    c = dlist_parse(results, /*parsekeys*/0, /*isarchive*/0, /*isbackup*/0, p);
     r = (c == EOF ? IMAP_SYS_ERROR : 0);
 
 out:

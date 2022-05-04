@@ -557,7 +557,7 @@ static void cmdloop(void)
             }
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Apply")) {
-                kl = sync_parseline(sync_in);
+                kl = sync_parseline(sync_in, /*isarchive*/ 0);
                 if (kl) {
                     cmd_apply(kl, reserve_list);
                     dlist_free(&kl);
@@ -585,7 +585,7 @@ static void cmdloop(void)
         case 'G':
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
-                kl = sync_parseline(sync_in);
+                kl = sync_parseline(sync_in, /*isarchive*/ 0);
                 if (kl) {
                     cmd_get(kl);
                     dlist_free(&kl);
@@ -629,7 +629,7 @@ static void cmdloop(void)
             }
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Restore")) {
-                kl = sync_parseline(sync_in);
+                kl = sync_parseline(sync_in, /*isarchive*/ 0);
                 if (kl) {
                     cmd_restore(kl, reserve_list);
                     dlist_free(&kl);

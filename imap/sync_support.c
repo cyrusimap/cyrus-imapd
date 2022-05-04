@@ -1830,12 +1830,12 @@ void sync_eatline(struct protstream *pin, int c)
     }
 }
 
-struct dlist *sync_parseline(struct protstream *in)
+struct dlist *sync_parseline(struct protstream *in, int isarchive)
 {
     struct dlist *dl = NULL;
     int c;
 
-    c = dlist_parse(&dl, 1, 0, in);
+    c = dlist_parse(&dl, 1, isarchive, 0, in);
 
     /* end line - or fail */
     if (c == '\r') c = prot_getc(in);
@@ -2051,7 +2051,7 @@ int sync_parse_response(const char *cmd, struct protstream *in,
 
     kl = dlist_newlist(NULL, cmd);
     while (!strcmp(response.s, "*")) {
-        struct dlist *item = sync_parseline(in);
+        struct dlist *item = sync_parseline(in, /*isarchive*/ 0);
         if (!item) goto parse_err;
         dlist_stitch(kl, item);
         if ((c = getword(in, &response)) == EOF)

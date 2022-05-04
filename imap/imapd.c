@@ -2082,7 +2082,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Syncapply")) {
                 if (!imapd_userisadmin) goto badcmd;
 
-                struct dlist *kl = sync_parseline(imapd_in);
+                struct dlist *kl = sync_parseline(imapd_in, /*isarchive*/ 0);
 
                 if (kl) {
                     cmd_syncapply(tag.s, kl, reserve_list);
@@ -2093,7 +2093,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Syncget")) {
                 if (!imapd_userisadmin) goto badcmd;
 
-                struct dlist *kl = sync_parseline(imapd_in);
+                struct dlist *kl = sync_parseline(imapd_in, /*isarchive*/ 0);
 
                 if (kl) {
                     cmd_syncget(tag.s, kl);
@@ -2112,7 +2112,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Syncrestore")) {
                 if (!imapd_userisadmin) goto badcmd;
 
-                struct dlist *kl = sync_parseline(imapd_in);
+                struct dlist *kl = sync_parseline(imapd_in, /*isarchive*/ 0);
 
                 if (kl) {
                     cmd_syncrestore(tag.s, kl, reserve_list);
