@@ -3957,5 +3957,83 @@ EOF
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}[0]{contactIds}});
 }
 
+sub test_contact_get_avatar_v4
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "create a v4 contact with a photo";
+    my $id = '816ad14a-f9ef-43a8-9039-b57bf321de1f';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+PRODID:+//IDN bitfire.at//DAVx5/4.2.0.3-gplay ez-vcard/0.11.3
+UID:$id
+FN:Foo
+N:;Foo;;;
+PHOTO:data:;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAA
+ XNSR0IArs4c6QAAAAlwSFlzAAALEwAACxMBAJqcGAAAAnBpVFh0WE1MOmNvbS5hZG9iZS54bXA
+ AAAAAADx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb
+ 3JlIDUuNC4wIj4KICAgPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk
+ 5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4KICAgICAgPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvd
+ XQ9IiIKICAgICAgICAgICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzE
+ uMC8iCiAgICAgICAgICAgIHhtbG5zOnhtcD0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL
+ yI+CiAgICAgICAgIDx0aWZmOllSZXNvbHV0aW9uPjcyPC90aWZmOllSZXNvbHV0aW9uPgogICA
+ gICAgICA8dGlmZjpDb21wcmVzc2lvbj41PC90aWZmOkNvbXByZXNzaW9uPgogICAgICAgICA8d
+ GlmZjpYUmVzb2x1dGlvbj43MjwvdGlmZjpYUmVzb2x1dGlvbj4KICAgICAgICAgPHhtcDpDcmV
+ hdG9yVG9vbD5GbHlpbmcgTWVhdCBBY29ybiA2LjU8L3htcDpDcmVhdG9yVG9vbD4KICAgICAgI
+ CAgPHhtcDpNb2RpZnlEYXRlPjIwMTktMDgtMDZUMTU6NDc6MjA8L3htcDpNb2RpZnlEYXRlPgo
+ gICAgICA8L3JkZjpEZXNjcmlwdGlvbj4KICAgPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KqD94O
+ gAAA3xJREFUWAm9V01oE0EUfrP5pdY20BZtm9LEHiIEbC3SqsU2VahUaRMP4s+lKUUJglhFwWN
+ A1IMIPdWAgu1Jb00RqT8HU7yoiERPvdlAoReRVrDGJt3xzSa7SXdnk02TOJDsm2/ee9+8N29md
+ gkYbaEFF4gkAAL+KHShWb3GlMAiUBoHQqMQGY5pxjkA4WDbodCCD0AII+nA9oEiPUoSIEAYIkM
+ zhTT1JxB85wDbJjP2F3JgYOwrZi4Ij4fiPF3+BC696QKBxtBAm2aeFyMYIeO8bGgnUA1yeYIEZ
+ iFyMih32VPI70A1yRkRhTG4/GoynzOXAbbm1hSr4PZ8harIRByUd0kuA7a/4f9BfsDdCGMnvM8
+ n5747WHBmKUK2xym5VpVos05311jheGcbtDTsYsieTbCwpQhnM4D7vIqts6MpedHn+ZMll5gog
+ FQLJmBrb9p6xuNfO3seln45pR9vvBjmddbB+1uHU7W1NbafSdGi0rf3XLiZEMCeCqgGlG69ZQP
+ m+u9BtP8uOKy/FdyI8PCcN/35di/1NNnUxIq5KNAALgH1KYiO4Hd+hGX/BAScH3Q0cjCLeunOQ
+ OrGYKvZbia5XZZTUSRCiY/VgEtBCghGsmEkahVFvZC92VS4fpeXjVKiVntm27Dk817OxvxKL6y
+ 0Pk1P9LlNmG7dtVaT5vcz50A+YlS2t8PIqfsgOPbt3AdysRpYN8qp6LVeBej+hORHFWinghkIx
+ A2/bGDU4HmCi3Zsp3waO5aBZQ3KA7JRV5IcadZxAiTG41MwFnXnW4COB3hzlFyvihueQAmNCZC
+ 0RHmDEoZRi91fyk75RgpPfk4TRBLNnFSh1zPSy0JWid1cw4fcPxrqbI0cu0pB649Gmh3ZLSSGc
+ UOMMc/svu7ZvzdtMQnVJMfahynGx4oQ8O1kudZujfiPdECftwWQvKy9Lfks/JewppPSBJTLgr2
+ hJE32b3h9tBW2LX8UK2IwMtIcY54yGUBh6ox7TTBtjaJY+sHEPBlthF6XyZmJkgHZ/srLlS4qm
+ mLYr+yeyxDMYuEFM2LmX8mADE6fdsaJsOXDfkUzQSiMq8kZp2YCDGSTsKWTLjwo5lm/zJbAgA5
+ OjzbP8PxolkCtFHqx6kOlMOID6rEi/QRGHdYjlm2LTkBWDM2tuoiF4qc5fp6Dzuc5wCIF/DwHE
+ s0vNNkH7/kPm8LoeIwG1jYAAAAASUVORK5CYII=
+REV:20220504T040120Z
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['Contact/get', {
+            properties => ['avatar', 'x-hasPhoto'],
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{list}[0]{id});
+    $self->assert_not_null($res->[0][1]{list}[0]{avatar});
+    $self->assert_equals("image/png", $res->[0][1]{list}[0]{avatar}{type});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{'x-hasPhoto'});
+}
+
 
 1;
