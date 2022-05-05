@@ -1764,9 +1764,9 @@ EXPORTED void mboxevent_set_applepushservice(struct mboxevent *event,
                                              const char *userid)
 {
     FILL_UNSIGNED_PARAM(event, EVENT_APPLEPUSHSERVICE_VERSION,      applepushserviceargs->aps_version);
-    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_ACCOUNT_ID,   (char *) buf_cstring(&applepushserviceargs->aps_account_id));
-    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_DEVICE_TOKEN, (char *) buf_cstring(&applepushserviceargs->aps_device_token));
-    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_SUBTOPIC,     (char *) buf_cstring(&applepushserviceargs->aps_subtopic));
+    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_ACCOUNT_ID,   buf_releasenull(&applepushserviceargs->aps_account_id));
+    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_DEVICE_TOKEN, buf_releasenull(&applepushserviceargs->aps_device_token));
+    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_SUBTOPIC,     buf_releasenull(&applepushserviceargs->aps_subtopic));
     FILL_ARRAY_PARAM(event,    EVENT_APPLEPUSHSERVICE_MAILBOXES,    mailboxes);
 
     FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(userid));
