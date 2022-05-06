@@ -180,12 +180,15 @@ static void print_json(const mbname_t *mbname, const mbentry_t *mbentry)
         json_object_set_new(juser, "sub", json_string(val));
         free(val);
 
+#ifdef USE_XAPIAN
         val = user_hash_meta(userid, "xapianactive");
         json_object_set_new(juser, "xapianactive", json_string(val));
         free(val);
+#endif /* USE_XAPIAN */
 
         json_object_set_new(jres, "user", juser);
 
+#ifdef USE_XAPIAN
         // xapian tiers
         json_t *jxapian = json_object();
         strarray_t tiers = STRARRAY_INITIALIZER;
@@ -202,6 +205,7 @@ static void print_json(const mbname_t *mbname, const mbentry_t *mbentry)
         strarray_fini(&tiers);
 
         json_object_set_new(jres, "xapian", jxapian);
+#endif /* USE_XAPIAN */
     }
 
     // mailbox paths
