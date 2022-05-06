@@ -1042,6 +1042,11 @@ static int mailbox_open_advanced(const char *name,
         goto done;
     }
 
+    if (!mbentry->uniqueid) {
+        xsyslog(LOG_NOTICE, "mbentry has no uniqueid, needs reconstruct",
+                            "mboxname=<%s>", mailbox->name);
+    }
+
     mailbox->part = xstrdup(mbentry->partition);
 
     /* Note that the header does have the ACL information, but it is only
@@ -1356,7 +1361,12 @@ static int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
         if (!tab || tab > eol) tab = eol;
         mailbox->uniqueid = xstrndup(p, tab - p);
     }
-    /* else, uniqueid needs to be generated when we know the uidvalidity */
+    else {
+        /* ancient cyrus.header file without a uniqueid field! */
+        xsyslog(LOG_NOTICE, "mailbox header has no uniqueid, needs reconstruct",
+                            "mboxname=<%s>",
+                            mailbox->name);
+    }
 
     /* Read names of user flags */
     p = eol + 1;
