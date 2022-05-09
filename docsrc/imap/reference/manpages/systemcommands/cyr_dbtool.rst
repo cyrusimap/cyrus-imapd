@@ -76,11 +76,6 @@ Options
 
     Create the database file if it doesn't already exist.
 
-.. option:: -o
-
-    Store all the output in memory and only print it once the transaction
-    is completed.
-
 .. option:: -T
 
     Use a transaction to do the action (most especially for 'show') - the
