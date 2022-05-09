@@ -53,6 +53,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -763,8 +764,27 @@ static int do_duplicate_prune(struct cyr_expire_ctx *ctx)
 
 static int parse_args(int argc, char *argv[], struct arguments *args)
 {
-    extern char *optarg;
     int opt;
+
+    /* keep this in alphabetical order */
+    static const char *const short_options = "A:C:D:E:X:achp:tu:vx";
+
+    static const struct option long_options[] = {
+        { "archive-duration", required_argument, NULL, 'A' },
+        /* n.b. no long option for -C */
+        { "delete-duration", required_argument, NULL, 'D' },
+        { "expire-duration", required_argument, NULL, 'E' },
+        { "expunge-duration", required_argument, NULL, 'X' },
+        { "ignore-annotations", no_argument, NULL, 'a' },
+        { "no-conversations", no_argument, NULL, 'c' },
+        { "help", no_argument, NULL, 'h' },
+        { "prefix", required_argument, NULL, 'p' },
+        { "prune-userflags", required_argument, NULL, 't' },
+        { "userid", required_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "no-expunge", no_argument, NULL, 'x' },
+        { 0, 0, 0, 0 },
+    };
 
     args->archive_seconds = -1;
     args->delete_seconds = -1;
@@ -773,7 +793,9 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
     args->do_expunge = true;
     args->do_cid_expire = -1;
 
-    while ((opt = getopt(argc, argv, "C:D:E:X:A:p:u:vaxtch")) != EOF) {
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'A':
             if (!parse_duration(optarg, &args->archive_seconds)) usage();

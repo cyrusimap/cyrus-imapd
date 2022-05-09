@@ -84,7 +84,7 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -A archive-duration
+.. option:: -A archive-duration, --archive-duration=archive-duration
 
     Archive non-flagged messages older than *archive-duration* to the
     archive partition, allowing mailbox messages to be split between fast
@@ -95,7 +95,7 @@ Options
 
     |v3-new-feature|
 
-.. option:: -D delete-duration
+.. option:: -D delete-duration, --delete-duration=delete-duration
 
     Remove previously deleted mailboxes older than *delete-duration*
     (when using the "delayed" delete mode).
@@ -106,53 +106,53 @@ Options
     This value is only used for entries which do not have a
     corresponding ``/verdor/cmu/cyrus-imapd/delete`` mailbox annotation.
 
-.. option:: -E expire-duration
+.. option:: -E expire-duration, --expire-duration=expire-duration
 
     Prune the duplicate database of entries older than *expire-duration*.
     This value is only used for entries which do not have a corresponding
     ``/vendor/cmu/cyrus-imapd/expire`` mailbox annotation.
     Format is the same as delete-duration.
 
-.. option:: -X expunge-duration
+.. option:: -X expunge-duration, --expunge-duration=expunge-duration
 
     Expunge previously deleted messages older than *expunge-duration*
     (when using the "delayed" expunge mode).
     Format is the same as delete-duration.
 
-.. option:: -c
+.. option:: -c, --no-conversations
 
     Do not expire conversation database entries, even if the conversations
     feature is enabled.
 
     |v3-new-feature|
 
-.. option:: -x
+.. option:: -x, --no-expunge
 
     Do not expunge messages even if using delayed expunge mode.  This
     reduces IO traffic considerably, allowing ``cyr_expire`` to be run
     frequently to clean up the duplicate database without overloading
     the machine.
 
-.. option:: -p mailbox-prefix
+.. option:: -p mailbox-prefix, --prefix=mailbox-prefix
 
     Only find mailboxes starting with this prefix,  e.g.
     "user.justgotspammedlots".
 
-.. option:: -u userid
+.. option:: -u userid, --userid=userid
 
     Only find mailboxes belonging to this user,  e.g.
     "justgotspammedlots@example.com".
 
-.. option:: -t
+.. option:: -t, --prune-userflags
 
     Remove any user flags which are not used by remaining (not expunged)
     messages.
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Enable verbose output.
 
-.. option:: -a
+.. option:: -a, --ignore-annotations
 
     Skip the annotation lookup, so all ``/vendor/cmu/cyrus-imapd/expire``
     annotations are ignored entirely.  It behaves as if they were not
