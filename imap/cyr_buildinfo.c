@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -331,8 +332,18 @@ int main(int argc, char *argv[])
     struct buf buf = BUF_INITIALIZER;
     json_t *bi;
 
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { 0, 0, 0, 0 },
+    };
+
     /* Parse arguments */
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file. We don't care but don't bark for -C. */
             break;
