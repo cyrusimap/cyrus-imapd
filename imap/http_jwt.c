@@ -328,14 +328,14 @@ static int validate_pkey_type(struct jwt *jwt, EVP_PKEY *pkey)
     if (!jwt->nid)
         return 0;
 
-    if (jwt->nid == EVP_PKEY_base_id(pkey))
-        return 1;
-
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
     if (jwt->nid == EVP_PKEY_HMAC && EVP_PKEY_is_a(pkey, "HMAC"))
         return 1;
 
     if (jwt->nid == EVP_PKEY_RSA && EVP_PKEY_is_a(pkey, "RSA"))
+        return 1;
+#else
+    if (jwt->nid == EVP_PKEY_base_id(pkey))
         return 1;
 #endif
 
