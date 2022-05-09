@@ -36,12 +36,12 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -d
+.. option:: -d, --dump
 
     Dump the contents of the database to standard output in a portable
     flat-text format.
 
-.. option:: -f filename
+.. option:: -f filename, --filename=filename
 
     Use the database specified by *filename* instead of the default
     (*configdirectory*/**deliver.db**).
