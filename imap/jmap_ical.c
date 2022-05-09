@@ -706,7 +706,7 @@ static void remove_icalxprop(icalcomponent *comp, const char *name)
     }
 }
 
-static const char *xjmapid_from_icalm(struct buf *dst, icalproperty *prop)
+static void xjmapid_from_icalm(struct buf *dst, icalproperty *prop)
 {
     buf_reset(dst);
     const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
@@ -715,7 +715,7 @@ static const char *xjmapid_from_icalm(struct buf *dst, icalproperty *prop)
         id = sha1hexstr(icalproperty_as_ical_string(prop), keybuf);
     }
     if (id) buf_setcstr(dst, id);
-    return buf_cstring(dst);
+    buf_cstring(dst);
 }
 
 static char *xjmapid_from_ical(icalproperty *prop)
