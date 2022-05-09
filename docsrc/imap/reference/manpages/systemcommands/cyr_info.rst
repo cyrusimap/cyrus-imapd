@@ -81,11 +81,11 @@ Options
 
     Read service specifications from *config-file* (cyrus.conf format).
 
-.. option:: -n servicename
+.. option:: -n name, --service=name
 
     Read the configuration as if for the service named *name*.
 
-.. option:: -s version
+.. option:: -s version, --since=version
 
     Highlight configuration options that have been added or whose behaviour
     has been modified since *version*.  Use this option after a server upgrade,
