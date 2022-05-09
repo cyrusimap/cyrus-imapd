@@ -46,6 +46,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -74,9 +75,6 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-
-extern int optind;
-extern char *optarg;
 
 static int logdebug = 0;
 
@@ -169,7 +167,23 @@ int main(int argc, char **argv)
     char buf[1024];
     char *alt_config = NULL;
 
-    while ((opt = getopt(argc, argv, "C:df:r:m:a:F:eE:lqD")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:DE:F:a:def:lm:qr:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "debug", no_argument, NULL, 'D' }, /* XXX undocumented */
+        { "auth-id", required_argument, NULL, 'a' },
+        { "lmtp", no_argument, NULL, 'l' },
+        { "mailbox", required_argument, NULL, 'm' },
+        { "ignore-quota", no_argument, NULL, 'q' },
+        { "return-path", required_argument, NULL, 'r' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
