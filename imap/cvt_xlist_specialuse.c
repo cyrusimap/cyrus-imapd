@@ -43,6 +43,7 @@
 
 #include <config.h>
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sysexits.h>
@@ -161,7 +162,18 @@ int main (int argc, char **argv)
     hash_table xlist = HASH_TABLE_INITIALIZER;
     strarray_t patterns = STRARRAY_INITIALIZER;
 
-    while ((opt = getopt(argc, argv, "C:v")) != -1) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:v";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "verbose", no_argument, NULL, 'v' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C':
             alt_config = optarg;
