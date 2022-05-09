@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -93,11 +94,21 @@ done:
 
 int main(int argc, char *argv[])
 {
-    extern char *optarg;
     int opt;
     char *alt_config = NULL;
 
-    while ((opt = getopt(argc, argv, "C:d")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:d";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "delete", no_argument, NULL, 'd' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
