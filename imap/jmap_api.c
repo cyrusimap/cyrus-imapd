@@ -144,6 +144,7 @@ static json_t *extract_value(json_t *val, const char *path, ptrarray_t *pool)
         }
         p = jmap_pointer_decode(path, top - path);
         if (*p == '\0') {
+            free(p);
             return NULL;
         }
 
