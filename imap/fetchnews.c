@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdio.h>
 #include <string.h>
 #include <sysexits.h>
@@ -251,7 +252,6 @@ static int fetch(char *msgid, int bymsgid,
 
 int main(int argc, char *argv[])
 {
-    extern char *optarg;
     int opt;
     char *alt_config = NULL, *port = "119";
     const char *peer = NULL, *server = "localhost", *wildmat = "*";
@@ -266,7 +266,24 @@ int main(int argc, char *argv[])
     int newnews = 1;
     int y2k_compliant_date_format = 0;
 
-    while ((opt = getopt(argc, argv, "C:s:w:f:a:p:ny")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:a:f:np:s:w:y";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "auth-id", required_argument, NULL, 'a' },
+        { "newsstamp-file", required_argument, NULL, 'f' },
+        { "no-newnews", no_argument, NULL, 'n' },
+        { "password", required_argument, NULL, 'p' },
+        { "server", required_argument, NULL, 's' },
+        { "groups", required_argument, NULL, 'w' },
+        { "yyyy", no_argument, NULL, 'y' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
