@@ -35,7 +35,7 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -m
+.. option:: -m, --metadata
 
     Report on metadata partitions rather than message file partitions.
 
