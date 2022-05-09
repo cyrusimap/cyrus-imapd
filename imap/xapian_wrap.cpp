@@ -1933,6 +1933,7 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
             Xapian::Query *qq = xapian_query_new_match_internal(db, partnum, mystr);
             if (qq && q) {
                 *q |= *qq;
+                delete qq;
             }
             else if (!q) q = qq;
         }
