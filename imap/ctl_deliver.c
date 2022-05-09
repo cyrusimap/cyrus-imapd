@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
     char *days = NULL;
     enum { DUMP, PRUNE, NONE } op = NONE;
 
-    while ((opt = getopt(argc, argv, "C:drE:f:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:dE:f:")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
