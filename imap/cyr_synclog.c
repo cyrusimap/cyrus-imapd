@@ -44,6 +44,7 @@
 
 #include <config.h>
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sysexits.h>
@@ -84,7 +85,28 @@ int main(int argc, char *argv[])
     char cmd = '\0';
     int opt;
 
-    while ((opt = getopt(argc, argv, "C:uUvmMacqnsb")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:MUabcmnqsuv";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "unmailbox", no_argument, NULL, 'M' },
+        { "unuser", no_argument, NULL, 'U' },
+        { "append", no_argument, NULL, 'a' },
+        { "subscription", no_argument, NULL, 'b' },
+        { "acl", no_argument, NULL, 'c' },
+        { "mailbox", no_argument, NULL, 'm' },
+        { "annotation", no_argument, NULL, 'n' },
+        { "quota", no_argument, NULL, 'q' },
+        { "seen", no_argument, NULL, 's' },
+        { "user", no_argument, NULL, 'u' },
+        { "sieve", no_argument, NULL, 'v' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
