@@ -1478,9 +1478,9 @@ static struct opnode *opnode_deep_copy(const struct opnode *on)
     return clone;
 }
 
-static const char *opnode_serialise(struct buf *buf, const struct opnode *on)
+static void opnode_serialise(struct buf *buf, const struct opnode *on)
 {
-    if (!on) return "";
+    if (!on) return;
 
     buf_putc(buf, '(');
 
@@ -1527,8 +1527,7 @@ static const char *opnode_serialise(struct buf *buf, const struct opnode *on)
     }
 
     buf_putc(buf, ')');
-
-    return buf_cstring(buf);
+    buf_cstring(buf);
 }
 
 static void optimise_nodes(struct opnode *parent, struct opnode *on)
