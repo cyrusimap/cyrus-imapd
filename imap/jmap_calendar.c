@@ -4506,29 +4506,6 @@ done:
     return r;
 }
 
-static int calendar_has_sharees(const mbentry_t *mbentry)
-{
-    if (!mbentry->acl) return 0;
-
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
-    const char *ownerid = mbname_userid(mbname);
-
-    strarray_t *acls = strarray_split(mbentry->acl, "\t", STRARRAY_TRIM);
-    int has_sharees = 0;
-    for (int i = 0; i < strarray_size(acls); i += 2) {
-        const char *userid = strarray_nth(acls, i);
-        if (strcmp(ownerid, userid) && !is_system_user(userid)) {
-            has_sharees = 1;
-            break;
-        }
-    }
-
-    mbname_free(&mbname);
-    strarray_free(acls);
-
-    return has_sharees;
-}
-
 static int createevent_store(jmap_req_t *req,
                              struct jmap_parser *parser,
                              struct createevent *create,

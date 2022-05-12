@@ -5191,4 +5191,76 @@ EOF
     $self->assert(not ($response->{content} =~ m/SCHEDULE-FORCE-SEND/));
 }
 
+sub test_calendareventnotification_no_sharee
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create('user.cassandane.#jmapnotification') or die;
+    $admin->setacl('user.cassandane.#jmapnotification',
+        'cassandane' => 'lrswipkxtecdan') or die;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $href = "$CalendarId/uid1.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+DTEND:20160831T183000Z
+TRANSP:OPAQUE
+UID:uid1
+SUMMARY:foo
+DTSTART:20160831T153000Z
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    # annoyingly there's no "Request" that tells you the headers, so:
+  my %Headers = (
+    'Content-Type' => 'text/calendar',
+    'Authorization' => $CalDAV->auth_header(),
+  );
+
+  xlog "Create event";
+  my $Response = $CalDAV->{ua}->request('PUT', $CalDAV->request_url($href), {
+    content => $card,
+    headers => \%Headers,
+  });
+
+  $self->assert_num_equals(201, $Response->{status});
+  $self->assert_num_equals(0,
+      $admin->message_count('user.cassandane.#jmapnotification'));
+
+  xlog "Update event";
+  $card =~ s/foo/bar/s;
+  $Response = $CalDAV->{ua}->request('PUT', $CalDAV->request_url($href), {
+    content => $card,
+    headers => \%Headers,
+  });
+
+  $self->assert_num_equals(204, $Response->{status});
+  $self->assert_num_equals(0,
+      $admin->message_count('user.cassandane.#jmapnotification'));
+
+  xlog "Delete event";
+  $Response = $CalDAV->{ua}->request('DELETE', $CalDAV->request_url($href), {
+    headers => \%Headers,
+  });
+
+  $self->assert_num_equals(204, $Response->{status});
+  $self->assert_num_equals(0,
+      $admin->message_count('user.cassandane.#jmapnotification'));
+}
+
 1;
