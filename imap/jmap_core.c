@@ -68,7 +68,6 @@ static int jmap_core_echo(jmap_req_t *req);
 /* JMAP extension methods */
 static int jmap_blob_get(jmap_req_t *req);
 static int jmap_blob_lookup(jmap_req_t *req);
-static int jmap_blob_set(jmap_req_t *req);
 static int jmap_blob_upload(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
 static int jmap_usercounters_get(jmap_req_t *req);
@@ -101,12 +100,6 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
         JMAP_BLOB_EXTENSION,
         &jmap_blob_lookup,
         JMAP_NEED_CSTATE
-    },
-    {
-        "Blob/set",
-        JMAP_BLOB_EXTENSION,
-        &jmap_blob_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "Blob/upload",
@@ -959,36 +952,6 @@ static const jmap_property_t blob_upload_props[] = {
     { NULL, NULL, 0 }
 };
 
-static const jmap_property_t blob_set_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "data:asText",
-        NULL,
-        0
-    },
-    {
-        "data:asBase64",
-        NULL,
-        0
-    },
-    {
-        "catenate",
-        NULL,
-        0
-    },
-    {
-        "type",
-        NULL,
-        0
-    },
-
-    { NULL, NULL, 0 }
-};
-
 static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, int recurse, json_t **errp)
 {
     json_t *jitem;
@@ -1112,89 +1075,6 @@ static int _upload_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg
     }
 
     return 0;
-}
-
-static int jmap_blob_set(struct jmap_req *req)
-{
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
-    json_t *jerr = NULL;
-    int r = 0;
-    time_t now = time(NULL);
-
-    /* Parse arguments */
-    jmap_set_parse(req, &parser, blob_set_props, NULL, NULL, &set, &jerr);
-    if (jerr) {
-        jmap_error(req, jerr);
-        goto done;
-    }
-
-    /* create */
-    const char *key;
-    json_t *arg;
-    json_object_foreach(set.create, key, arg) {
-        json_t *err = NULL;
-        struct buf *buf = buf_new();
-        struct message_guid guidobj;
-        char datestr[RFC3339_DATETIME_MAX];
-        char blob_id[JMAP_BLOBID_SIZE];
-
-        int r = _set_arg_to_buf(req, buf, arg, 0, &err);
-
-        if (r || !buf_base(buf) || err) {
-            jerr = json_pack("{s:s}", "type", "invalidProperties");
-            if (!err && r == IMAP_MAILBOX_EXISTS)
-                err = json_string("Multiple properties provided");
-            if (r == IMAP_NOTFOUND)
-                json_object_set_new(jerr, "type", json_string("blobNotFound"));
-            if (err) json_object_set_new(jerr, "description", err);
-            json_object_set_new(set.not_created, key, jerr);
-            buf_destroy(buf);
-            continue;
-        }
-
-        json_t *jtype = json_object_get(arg, "type");
-        const char *type = json_string_value(jtype);
-        if (!type) type = "application/octet-stream";
-
-        message_guid_generate(&guidobj, buf_base(buf), buf_len(buf));
-        jmap_set_blobid(&guidobj, blob_id);
-        time_to_rfc3339(now, datestr, RFC3339_DATETIME_MAX);
-
-        // json_string_value into the request lasts the lifetime of the request, so it's
-        // safe to zerocopy these blobs!
-        hash_insert(blob_id, buf, req->inmemory_blobs);
-
-        json_object_set_new(set.created, key, json_pack("{s:s, s:s, s:i, s:s, s:s}",
-            "id", blob_id,
-            "blobId", blob_id,
-            "size", buf_len(buf),
-            "expires", datestr,
-            "type", type));
-
-        jmap_add_id(req, key, blob_id);
-    }
-
-    const char *uid;
-    json_object_foreach(set.update, uid, arg) {
-        jerr = json_pack("{s:s}", "type", "notFound");
-        json_object_set_new(set.not_updated, key, jerr);
-    }
-
-    size_t index;
-    json_t *juid;
-    json_array_foreach(set.destroy, index, juid) {
-        jerr = json_pack("{s:s}", "type", "notFound");
-        json_object_set_new(set.not_destroyed, json_string_value(juid), jerr);
-    }
-
-    set.old_state = set.new_state = 0;
-    jmap_ok(req, jmap_set_reply(&set));
-
-done:
-    jmap_parser_fini(&parser);
-    jmap_set_fini(&set);
-    return r;
 }
 
 static int jmap_blob_upload(struct jmap_req *req)
