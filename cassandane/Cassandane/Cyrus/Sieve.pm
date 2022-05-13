@@ -6197,7 +6197,7 @@ sub test_include_fileinto_implicit_keep_flags
     $self->{instance}->install_sieve_script(<<EOF
 require ["include"];
 include "foo";
-# Should implicit keep without \Seen, but with \Flagged
+# Should implicit keep without \\Seen, but with \\Flagged
 EOF
     );
 
