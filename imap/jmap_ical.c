@@ -255,7 +255,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
                                   icalcomponent *maincomp,
                                   struct icalcomps *oldcomps,
                                   icaltimetype now,
-                                  jstimezones_t *jtzcache,
+                                  jstimezones_t **jtzcachep,
                                   struct jmapical_ctx *jmapctx);
 
 static char *_emailalert_recipient(const char *userid)
@@ -6973,7 +6973,7 @@ static void overrides_to_ical(icalcomponent *comp,
                 jmap_parser_invalid(parser, "recurrenceId");
             }
             calendarevent_to_ical(excomp, parser, ex, comp, oldcomps,
-                    now, jstzones, jmapctx);
+                    now, &jstzones, jmapctx);
             jmap_parser_pop(parser);
 
             /* Add the exception */
@@ -7113,10 +7113,11 @@ static void calendarevent_to_ical(icalcomponent *comp,
                                   icalcomponent *maincomp,
                                   struct icalcomps *oldcomps,
                                   icaltimetype now,
-                                  jstimezones_t *jstzones,
+                                  jstimezones_t **jstzonesp,
                                   struct jmapical_ctx *jmapctx)
 {
     jstimezones_t myjstzones = JSTIMEZONES_INITIALIZER;
+    jstimezones_t *jstzones = NULL;
 
     /* Caller must set UID */
     const char *uid = icalcomponent_get_uid(comp);
@@ -7152,10 +7153,17 @@ static void calendarevent_to_ical(icalcomponent *comp,
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "timeZones");
     }
-    if (!jstzones) {
-        myjstzones.no_guess = jmapctx ? jmapctx->timezones.no_guess : 0;
-        jstimezones_add_vtimezones(&myjstzones, ical);
-        jstzones = &myjstzones;
+    if (!jstzonesp || !*jstzonesp) {
+        if (!jstzonesp) {
+            jstzones = &myjstzones;
+        } else {
+            *jstzonesp = jstzones = xzmalloc(sizeof(struct jstimezones));
+        }
+
+        jstzones->no_guess = jmapctx ? jmapctx->timezones.no_guess : 0;
+        jstimezones_add_vtimezones(jstzones, ical);
+    } else {
+        jstzones = *jstzonesp;
     }
 
     /* start, duration, timeZone, recurrenceId, recurrenceIdTimeZone */
@@ -7557,6 +7565,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical,
                 json_t *invalid,
                 json_t *serverset,
                 icalcomponent **compptr,
+                jstimezones_t **jstzonesp,
                 struct jmapical_ctx *jmapctx)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -7590,7 +7599,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical,
 
         /* Convert the JMAP calendar event to ical. */
         calendarevent_to_ical(comp, &parser, jsevent, NULL,
-                &oldcomps, now, NULL, jmapctx);
+                &oldcomps, now, jstzonesp, jmapctx);
         icalcomponent_add_required_timezones(ical);
     }
     else jmap_parser_invalid(&parser, "uid");
@@ -7674,7 +7683,7 @@ EXPORTED icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf)
         return NULL;
     }
 
-    ical = jmapical_toical(obj, NULL, NULL, NULL, NULL, NULL);
+    ical = jmapical_toical(obj, NULL, NULL, NULL, NULL, NULL, NULL);
 
     json_decref(obj);
 
