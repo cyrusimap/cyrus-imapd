@@ -6041,7 +6041,7 @@ sub test_calendarevent_copy
 
     $admintalk->setacl('user.other', admin => 'lrswipkxtecdan');
     $admintalk->setacl('user.other', other => 'lrswipkxtecdn');
-    
+
     xlog $self, "create source calendar";
     my $srcCalendarId = $caldav->NewCalendar({name => 'Source Calendar'});
     $self->assert_not_null($srcCalendarId);
@@ -12081,7 +12081,55 @@ sub test_calendareventnotification_changes
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
+    # Need to share calendar, otherwise no notification is created
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
     my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayWriteOwn => JSON::true,
+                            mayAdmin => JSON::false
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $res = $jmap->CallMethods([
         ['CalendarEventNotification/get', {
         }, 'R1'],
     ]);
