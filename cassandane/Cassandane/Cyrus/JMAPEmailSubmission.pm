@@ -1472,7 +1472,7 @@ sub test_emailsubmission_scheduled_send
     ]);
     $self->assert_not_null($res->[0][1]->{notDestroyed}{$schedid});
 
-    xlog $self, "Create 2 draft emails";
+    xlog $self, "Create 2 draft emails and one in the Scheduled mailbox";
     $res = $jmap->CallMethods([
         ['Email/set', {
             create => {
@@ -1506,11 +1506,24 @@ sub test_emailsubmission_scheduled_send
                     }],
                     subject => 'bar',
                 },
+                'm3' => {
+                    mailboxIds => {
+                        $schedid => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'cassandane@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'fail',
+                },
             },
         }, 'R1'],
     ]);
     my $emailid1 = $res->[0][1]->{created}{m1}{id};
     my $emailid2 = $res->[0][1]->{created}{m2}{id};
+    $self->assert_not_null($res->[0][1]->{notCreated}{m3});
 
     xlog $self, "Create 2 email submissions";
     $res = $jmap->CallMethods( [
@@ -1590,6 +1603,14 @@ sub test_emailsubmission_scheduled_send
     xlog $self, "Verify 2 events were added to the alarmdb";
     my $alarmdata = $self->{instance}->getalarmdb();
     $self->assert_num_equals(2, scalar @$alarmdata);
+
+    xlog $self, "Try to destroy email in Scheduled mailbox";
+    $res = $jmap->CallMethods([
+        [ 'Email/set', {
+            destroy => [ "$emailid1" ]
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]->{notDestroyed}{$emailid1});
 
     xlog $self, "Cancel email submission 2";
     $res = $jmap->CallMethods( [

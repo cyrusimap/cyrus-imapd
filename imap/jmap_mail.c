@@ -12965,6 +12965,7 @@ static void _email_destroy_bulk(jmap_req_t *req,
     strarray_t email_ids = STRARRAY_INITIALIZER;
     const char *scheduled_uniqueid = NULL;
     const mbentry_t *scheduled_mbe = NULL;
+    int is_shared = strcmp(req->accountid, req->userid);
     size_t iz;
     json_t *jval;
     int i;
@@ -12980,11 +12981,13 @@ static void _email_destroy_bulk(jmap_req_t *req,
     }
     _email_mboxrecs_read(req, req->cstate, &email_ids, not_destroyed, &mboxrecs);
 
-    /* Check mailbox ACL for shared accounts. */
-    if (strcmp(req->accountid, req->userid)) {
+    /* Check mailbox ACL for shared accounts.
+       Also prevent removal from $Scheduled mailbox */
+    if (is_shared || scheduled_uniqueid) {
         for (i = 0; i < ptrarray_size(mboxrecs); i++) {
             struct email_mboxrec *mboxrec = ptrarray_nth(mboxrecs, i);
-            if (!jmap_hasrights(req, mboxrec->mboxname, JACL_REMOVEITEMS) ||
+            if ((is_shared &&
+                 !jmap_hasrights(req, mboxrec->mboxname, JACL_REMOVEITEMS)) ||
                 !strcmpnull(scheduled_uniqueid, mboxrec->mbox_id)) {
                 /* Mark all messages of this mailbox as failed */
                 int j;
