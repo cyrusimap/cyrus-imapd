@@ -1615,7 +1615,6 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
                         int *layerbits, char **authid, SSL **ret,
                         SSL_SESSION **sess)
 {
-    int     sts;
     const SSL_CIPHER *cipher;
     X509   *peer;
     const char *tls_protocol = NULL;
@@ -1668,7 +1667,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     if (sess && *sess)  /* Reuse a session if we have one */
         SSL_set_session(tls_conn, *sess);
 
-    if ((sts = SSL_connect(tls_conn)) <= 0) {
+    if (SSL_connect(tls_conn) <= 0) {
         SSL_SESSION *session = SSL_get_session(tls_conn);
         if (session) {
             SSL_CTX_remove_session(c_ctx, session);

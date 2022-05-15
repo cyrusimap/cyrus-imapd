@@ -3130,7 +3130,7 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
     if (c == EOF) goto done;
 
     /* check for multipart */
-    if ((c = prot_peek(strm)) == '(') {
+    if (prot_peek(strm) == '(') {
 
         body->type = xstrdup("MULTIPART");
         do {

@@ -257,7 +257,6 @@ static void test_sync_wait(const char *mboxname)
     struct stat sb;
     clock_t start;
     int status = 0;
-    int r;
 #define TIMEOUT     (30 * CLOCKS_PER_SEC)
 
     if (!test_sync_mode)
@@ -269,7 +268,7 @@ static void test_sync_wait(const char *mboxname)
     filename = strconcat(config_dir, "/quota-sync/", mboxname, (char *)NULL);
     start = sclock();
 
-    while ((r = stat(filename, &sb)) < 0 && errno == ENOENT) {
+    while (stat(filename, &sb) < 0 && errno == ENOENT) {
         if (sclock() - start > TIMEOUT) {
             status = 2;
             break;
