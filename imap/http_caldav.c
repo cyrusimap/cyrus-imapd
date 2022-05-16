@@ -3653,7 +3653,9 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
             error->precond = CALDAV_VALID_DATA;
             return HTTP_FORBIDDEN;
         }
-        if (icaltime_compare(dtend, dtstart) < 1) {
+        if (icaltime_compare(dtend, dtstart) < 0) {
+            /* NOTE: Per RFC 5545, DTEND != DTSTART, but this occurs
+               frequently enough in the wild for us to allow it */
             error->desc = "DTEND must occur after DTSTART";
             error->precond = CALDAV_VALID_DATA;
             return HTTP_FORBIDDEN;
