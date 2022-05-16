@@ -3539,7 +3539,7 @@ static void feedpeer(char *peer, message_data_t *msg)
     char *user, *pass, *host, *port, *wild, *path, *s;
     int oldform = 0;
     struct wildmat *wmat = NULL, *w;
-    int len, err, n, feed = 1;
+    int len, n, feed = 1;
     struct addrinfo hints, *res, *res0;
     int sock = -1;
     struct protstream *pin, *pout;
@@ -3621,7 +3621,7 @@ static void feedpeer(char *peer, message_data_t *msg)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
     if (!port || !*port) port = "119";
-    if ((err = getaddrinfo(host, port, &hints, &res0)) != 0) {
+    if (getaddrinfo(host, port, &hints, &res0) != 0) {
         syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", host, port);
         return;
     }

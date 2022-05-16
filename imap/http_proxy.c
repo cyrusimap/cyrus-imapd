@@ -1419,8 +1419,6 @@ EXPORTED int http_proxy_check_input(struct http_connection *conn,
             }
 
             if (pout) {
-                const char *err;
-
                 do {
                     char buf[4096];
                     int c = prot_read(pin, buf, sizeof(buf));
@@ -1432,7 +1430,7 @@ EXPORTED int http_proxy_check_input(struct http_connection *conn,
                         prot_write(serverout, buf, c);
                 } while (pin->cnt > 0);
 
-                if ((err = prot_error(pin)) != NULL) {
+                if (prot_error(pin) != NULL) {
                     if (pin != clientin) {
                         /* we're pipelining, and the server connection closed */
                         ptrarray_remove(pipes, idx);

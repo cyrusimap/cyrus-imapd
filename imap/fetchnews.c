@@ -134,14 +134,14 @@ static void usage(void)
 int init_net(const char *host, char *port,
              struct protstream **in, struct protstream **out)
 {
-    int sock = -1, err;
+    int sock = -1;
     struct addrinfo hints, *res, *res0;
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
-    if ((err = getaddrinfo(host, port, &hints, &res0)) != 0) {
+    if (getaddrinfo(host, port, &hints, &res0) != 0) {
         syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", host, port);
         return -1;
     }

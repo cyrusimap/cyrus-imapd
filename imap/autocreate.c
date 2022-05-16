@@ -199,7 +199,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     bytecode_info_t *bc = NULL;
     char *err = NULL;
     FILE *in_stream = NULL, *out_fp;
-    int out_fd = -1, in_fd = -1, r, w;
+    int out_fd = -1, in_fd = -1, r;
     int do_compile = 0;
     const char *compiled_source_script = NULL;
     const char *sievename = get_script_name(source_script);
@@ -286,7 +286,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
         if ((in_fd = open(compiled_source_script, O_RDONLY)) != -1) {
             do {
                 r = read(in_fd, buf, sizeof(buf));
-                w = write(out_fd, buf, r);
+                int w = write(out_fd, buf, r);
                 if ( w < 0 || w != r) {
                     syslog(LOG_ERR, "autocreate_sieve: Error writing to file"
                            "%s: %m", script_names.bctmpname);
@@ -449,7 +449,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
         }
 
         while ((r = read(in_fd, buf, sizeof(buf))) > 0) {
-            if ((w = write(out_fd,buf,r)) < 0) {
+            if (write(out_fd, buf, r) < 0) {
                 syslog(LOG_WARNING, "autocreate_sieve: Error writing to file:"
                        "%s: %m", script_names.tmpname2);
                 xclose(out_fd);

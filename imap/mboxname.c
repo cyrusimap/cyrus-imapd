@@ -829,7 +829,7 @@ EXPORTED mbname_t *mbname_from_path(const char *path)
 
             if (!absolute) {
                 /* Add submailbox(es) */
-                strarray_t *subs = subs = strarray_split(path, "/", 0);
+                strarray_t *subs = strarray_split(path, "/", 0);
                 int i;
 
                 for (i = 0; i < strarray_size(subs); i++) {
@@ -3223,7 +3223,7 @@ EXPORTED modseq_t mboxname_readraclmodseq(const char *mboxname)
         return 0;  // raclmodseq is only defined on user inboxes
 
     mbname_t *mbname = mbname_from_intname(mboxname);
-    char *fname = fname = mboxname_conf_getpath(mbname, "counters");
+    char *fname = mboxname_conf_getpath(mbname, "counters");
 
     int r = mboxname_read_fcounters(fname, &counters);
 
