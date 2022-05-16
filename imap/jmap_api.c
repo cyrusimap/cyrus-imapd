@@ -650,6 +650,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
     ptrarray_t method_calls = PTRARRAY_INITIALIZER;
     ptrarray_t processed_methods = PTRARRAY_INITIALIZER;
     strarray_t using_capabilities = STRARRAY_INITIALIZER;
+    strarray_t scheduled_emails = STRARRAY_INITIALIZER;
 
     /* Validate Request object */
     if ((ret = validate_request(txn, jreq, settings))) {
@@ -821,6 +822,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         req.using_capabilities = &using_capabilities;
         req.inmemory_blobs = &inmemory_blobs;
         req.settings = settings;
+        req.scheduled_emails = &scheduled_emails;
 
         if (do_perf) {
             struct rusage usage;
@@ -913,6 +915,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
     json_decref(resp);
     strarray_fini(&methods);
     strarray_fini(&using_capabilities);
+    strarray_fini(&scheduled_emails);
 
     return ret;
 }

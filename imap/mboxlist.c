@@ -1870,6 +1870,16 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     else {
         r = mboxlist_create_acl(mboxname, &acl);
         if (r) goto done;
+
+        if (flags & MBOXLIST_CREATE_SETFLAGS_ONLY) {
+            /* Remove 'ipkxte' from ALL users */
+            r = cyrus_acl_set(&acl, "-anyone", ACL_MODE_ADD,
+                              ACL_INSERT | ACL_POST |
+                              ACL_CREATE | ACL_DELETEMBOX |
+                              ACL_DELETEMSG | ACL_EXPUNGE,
+                              NULL, NULL);
+            if (r) goto done;
+        }
     }
 
     r = mboxlist_create_partition(mboxname, mbentry->partition, &newpartition);

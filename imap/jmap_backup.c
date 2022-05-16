@@ -282,6 +282,7 @@ struct restore_rock {
     struct mailbox *mailbox;
     int keep_open;
     int result;
+    void *context;
 };
 
 struct restore_info {
@@ -841,7 +842,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         { carddav_open_userid(req->accountid), BUF_INITIALIZER, NULL };
     struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK, 0,
                                   &contact_resource_name, &restore_contact,
-                                  &crock, NULL, 0, 0 };
+                                  &crock, NULL, 0, 0, NULL };
 
     if (restore.mode & DRY_RUN) {
         /* Treat as regular collection since we won't create group vCard */
@@ -1330,7 +1331,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
           caldav_mboxname(req->accountid, SCHED_OUTBOX) };
     struct restore_rock rrock = { req, &restore, MBTYPE_CALENDAR, 0,
                                   &ical_resource_name, &restore_ical,
-                                  &crock, NULL, 0, 0 };
+                                  &crock, NULL, 0, 0, NULL };
 
     r = mboxlist_mboxtree(calhomeset, restore_calendar_cb, &rrock,
                           MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
@@ -1419,7 +1420,7 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         char *notes = mboxname_user_mbox(req->accountid, subfolder);
         struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
                                       &note_resource_name, &restore_note,
-                                      NULL, NULL, 0, 0 };
+                                      NULL, NULL, 0, 0, NULL };
 
         r = mboxlist_mboxtree(notes, restore_collection_cb,
                               &rrock, MBOXTREE_SKIP_CHILDREN);
@@ -1502,6 +1503,7 @@ static void mailbox_plan_free(void *data)
 static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 {
     struct restore_rock *rrock = (struct restore_rock *) rock;
+    const char *sched_mboxname = (const char *) rrock->context;
     int log_level = rrock->jrestore->log_level;
     struct mail_rock *mrock = rrock->rock;
     struct mailbox *mailbox = NULL;
@@ -1521,6 +1523,12 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
     if (mboxname_isnotesmailbox(mbentry->name, MBTYPE_EMAIL)) {
         syslog(log_level, "skipping '%s': Notes mailbox", mbentry->name);
+
+        return 0;
+    }
+
+    if (!strcmpnull(mbentry->name, sched_mboxname)) {
+        syslog(log_level, "skipping '%s': \\Scheduled mailbox", mbentry->name);
 
         return 0;
     }
@@ -2066,7 +2074,9 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
         construct_hash_table(&mailboxes, 32, 0),
         BUF_INITIALIZER };
     struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
-                                  NULL, NULL, &mrock, NULL, 0, 0 };
+                                  NULL, NULL, &mrock, NULL, 0, 0,
+                                  mboxlist_find_specialuse("\\Scheduled",
+                                                           req->accountid) };
 
     /* Find all destroyed messages within our window -
        remove $restored flag from all messages as a side-effect */
@@ -2107,6 +2117,8 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     else {
         jmap_ok(req, jmap_restore_reply(&restore));
     }
+
+    free(rrock.context);
 
 done:
     jmap_parser_fini(&parser);

@@ -6731,6 +6731,10 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     if (!r && ismove && !(imapd_index->myrights & ACL_EXPUNGE))
         r = IMAP_PERMISSION_DENIED;
 
+    /* don't allow copying into \Scheduled mailbox */
+    else if (mboxname_isscheduledmailbox(intname, 0))
+        r = IMAP_PERMISSION_DENIED;
+
     /* local mailbox -> local mailbox */
     if (!r) {
         r = index_copy(imapd_index, sequence, usinguid, intname,
@@ -6840,6 +6844,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     int r = 0;
     int mbtype = MBTYPE_EMAIL;
     int options = 0;
+    unsigned flags = MBOXLIST_CREATE_NOTIFY;
     const char *partition = NULL;
     const char *server = NULL;
     const char *uniqueid = NULL;
@@ -6900,6 +6905,8 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
         if (strstr(buf_cstring(&specialuse), "\\Snoozed"))
             options |= OPT_IMAP_HAS_ALARMS;
+        else if (strstr(buf_cstring(&specialuse), "\\Scheduled"))
+            flags |= MBOXLIST_CREATE_SETFLAGS_ONLY;
     }
 
     // A non-admin is not allowed to specify the server nor partition on which
@@ -7111,7 +7118,6 @@ localcreate:
     if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
 
     mbentry_t mbentry = MBENTRY_INITIALIZER;
-    unsigned flags = MBOXLIST_CREATE_NOTIFY;
     if (localonly) flags |= MBOXLIST_CREATE_LOCALONLY | MBOXLIST_CREATE_FORCEUSER;
 
     if (!r && (parent || !mbname_userid(mbname))) {

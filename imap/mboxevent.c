@@ -89,6 +89,8 @@
 
 #define APPLEPUSHSERVICE_EVENTS (EVENT_APPLEPUSHSERVICE|EVENT_APPLEPUSHSERVICE_DAV)
 
+#define JMAP_EVENTS    (EVENT_MESSAGES_UNSCHEDULED)
+
 
 static const char *notifier = NULL;
 static struct namespace namespace;
@@ -186,6 +188,10 @@ static struct mboxevent event_template =
     { EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_UNIQUEID, "mailboxUniqueId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_APPLEPUSHSERVICE_DAV_EXPIRY,           "expiry",          EVENT_PARAM_INT,    { 0 }, 0 },
 
+    /* messages unscheduled send params for calalarmd/notifyd */
+    { EVENT_MESSAGES_UNSCHEDULED_USERID, "userId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_MESSAGES_UNSCHEDULED_COUNT,  "count",  EVENT_PARAM_INT,    { 0 }, 0 },
+
     /* always at end to let the parser to easily truncate this part */
     /* 31 */ { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, { 0 }, 0 }
   },
@@ -257,6 +263,9 @@ EXPORTED int mboxevent_init(void)
 
     if (groups & IMAP_ENUM_EVENT_GROUPS_APPLEPUSHSERVICE)
         enabled_events |= APPLEPUSHSERVICE_EVENTS;
+
+    if (groups & IMAP_ENUM_EVENT_GROUPS_JMAP)
+        enabled_events |= JMAP_EVENTS;
 
     mboxevent_initialized = 1;
 
@@ -502,6 +511,16 @@ static int mboxevent_expected_applepushservice_dav_param(enum event_param param)
     }
 }
 
+static int mboxevent_expected_schedsend_failed_param(enum event_param param) {
+    switch (param) {
+    case EVENT_MESSAGES_UNSCHEDULED_USERID:
+    case EVENT_MESSAGES_UNSCHEDULED_COUNT:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 static int mboxevent_expected_param(enum event_type type, enum event_param param)
 {
     if (type == EVENT_CALENDAR_ALARM)
@@ -511,6 +530,9 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         return mboxevent_expected_applepushservice_param(param);
     if (type == EVENT_APPLEPUSHSERVICE_DAV)
         return mboxevent_expected_applepushservice_dav_param(param);
+
+    if (type == EVENT_MESSAGES_UNSCHEDULED)
+        return mboxevent_expected_schedsend_failed_param(param);
 
     switch (param) {
     case EVENT_BODYSTRUCTURE:
@@ -1850,6 +1872,8 @@ static const char *event_to_name(enum event_type type)
         return "ApplePushServiceDAV";
     case EVENT_MAILBOX_MODSEQ:
         return "MailboxModseq";
+    case EVENT_MESSAGES_UNSCHEDULED:
+        return "MessagesUnscheduled";
     default:
         fatal("Unknown message event", EX_SOFTWARE);
     }

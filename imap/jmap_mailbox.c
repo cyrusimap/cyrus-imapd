@@ -94,6 +94,7 @@ static struct rolesort_data ROLESORT[] = {
     { "sent", 5 },
     { "junk", 6 },
     { "trash", 7 },
+    { "scheduled", 8 },
     { "xtemplates", 9 },
     { NULL, 10 }  // default
 };
@@ -2289,14 +2290,26 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     newmbentry.mbtype = MBTYPE_EMAIL;
 
     uint32_t options = 0;
+    unsigned flags = MBOXLIST_CREATE_KEEP_INTERMEDIARIES;
     if (args->is_seenshared > 0) options |= OPT_IMAP_SHAREDSEEN;
-    if (args->specialuse && !strcmp("\\Snoozed", args->specialuse))
-        options |= OPT_IMAP_HAS_ALARMS;
+    if (args->specialuse) {
+        if (!strcmp("\\Snoozed", args->specialuse))
+            options |= OPT_IMAP_HAS_ALARMS;
+        else if (!strcmp("\\Scheduled", args->specialuse)) {
+            flags |= MBOXLIST_CREATE_SETFLAGS_ONLY;
+
+            /* Flush any empty entry for "scheduled" role in mboxid_byrole hash --
+               If jmap_findmbox_role("scheduled") was called before this
+               Mailbox/set{create}, we would have created an entry with no mboxid */
+            if (req->mboxid_byrole) {
+                free(hash_del("scheduled", req->mboxid_byrole));
+            }
+        }
+    }
 
     r = mboxlist_createmailbox(&newmbentry, options, 0/*highestmodseq*/,
                                0/*isadmin*/, req->userid, req->authstate,
-                               MBOXLIST_CREATE_KEEP_INTERMEDIARIES,
-                               args->shareWith ? &mailbox : NULL);
+                               flags, args->shareWith ? &mailbox : NULL);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                 mboxname, error_message(r));
@@ -2911,7 +2924,6 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
         result->err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
-
 
     /* Check ACL */
     if (!jmap_hasrights_mbentry(req, mbentry, JACL_DELETE)) {

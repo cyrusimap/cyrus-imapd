@@ -1,0 +1,17 @@
+Description:
+
+Adds support for a new read-only \Scheduled mailbox that contains
+emails created via JMAP EmailSubmission/set that are to be sent
+at a later date/time.  Also extends the JMAP EmailSubmission object
+with optional instructions for moving the message into another mailbox
+after it has been sent.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.

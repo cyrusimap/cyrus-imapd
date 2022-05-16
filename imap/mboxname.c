@@ -1689,6 +1689,36 @@ EXPORTED int mboxname_issievemailbox(const char *name, int mbtype)
     return res;
 }
 
+/*
+ * If (internal) mailbox 'name' is a user's \Scheduled mailbox
+ * returns boolean
+ */
+EXPORTED int mboxname_isscheduledmailbox(const char *name, int mbtype)
+{
+    if (mbtype_isa(mbtype) != MBTYPE_EMAIL) return 0;  /* Only works on backends */
+
+    char *userid = mboxname_to_userid(name);
+    struct buf attrib = BUF_INITIALIZER;
+    int res = 0;
+
+    annotatemore_lookup(name, "/specialuse", userid, &attrib);
+
+    if (attrib.len) {
+        strarray_t *uses = strarray_split(buf_cstring(&attrib),
+                                          " ", STRARRAY_TRIM);
+
+        if (strarray_find_case(uses, "\\Scheduled", 0) >= 0) {
+            res = 1;
+        }
+        strarray_free(uses);
+    }
+
+    buf_free(&attrib);
+    free(userid);
+
+    return res;
+}
+
 EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
 {
     if (!userid) return NULL;

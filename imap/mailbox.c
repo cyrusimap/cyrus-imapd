@@ -3880,6 +3880,8 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 #endif // WITH_DAV
 
 #ifdef WITH_JMAP
+#include "jmap_util.h"
+
 static int mailbox_update_email_alarms(struct mailbox *mailbox,
                                        const struct index_record *old,
                                        const struct index_record *new)
@@ -3909,7 +3911,23 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
         r = caldav_alarm_touch_record(mailbox, new, 0);
     }
     else {
-        r = caldav_alarm_add_record(mailbox, new, NULL);
+        message_t *m = message_new_from_record(mailbox, new);
+        struct buf buf = BUF_INITIALIZER;
+        json_t *submission = NULL;
+
+        /* Parse the submission object from the header field */
+        r = message_get_field(m, JMAP_SUBMISSION_HDR, MESSAGE_RAW, &buf);
+        if (!r) {
+            json_error_t jerr;
+            submission = json_loadb(buf_base(&buf), buf_len(&buf),
+                                    JSON_DISABLE_EOF_CHECK, &jerr);
+
+            r = caldav_alarm_add_record(mailbox, new, submission);
+            if (submission) json_decref(submission);
+        }
+
+        if (m) message_unref(&m);
+        buf_free(&buf);
     }
 
     return r;

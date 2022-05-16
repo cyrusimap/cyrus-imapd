@@ -57,6 +57,7 @@
 #include "http_dav.h"
 #include "ical_support.h"
 #include "jmap_util.h"
+#include "json_support.h"
 #include "libconfig.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
@@ -76,12 +77,17 @@ struct caldav_alarm_data {
     char *mboxname;
     uint32_t imap_uid;
     time_t nextcheck;
+    uint32_t type;
+    uint32_t num_rcpts;
+    uint32_t num_retries;
+    time_t last_run;
+    char *last_err;
 };
 
-void caldav_alarm_fini(struct caldav_alarm_data *alarmdata)
+static void caldav_alarm_fini(struct caldav_alarm_data *alarmdata)
 {
-    free(alarmdata->mboxname);
-    alarmdata->mboxname = NULL;
+    xzfree(alarmdata->mboxname);
+    xzfree(alarmdata->last_err);
 }
 
 struct get_alarm_rock {
@@ -117,33 +123,47 @@ EXPORTED int caldav_alarm_done(void)
 }
 
 
-#define CMD_CREATE                                      \
-    "CREATE TABLE IF NOT EXISTS events ("               \
+#define CMD_CREATE_INDEXES                                        \
+    "CREATE INDEX IF NOT EXISTS checktime ON events (nextcheck);" \
+    "CREATE INDEX IF NOT EXISTS idx_type ON events (type);"
+
+#define CMD_CREATE_TABLE(name)                          \
+    "CREATE TABLE IF NOT EXISTS " name " ("             \
     " mboxname TEXT NOT NULL,"                          \
     " imap_uid INTEGER NOT NULL,"                       \
     " nextcheck INTEGER NOT NULL,"                      \
+    " type INTEGER NOT NULL,"                           \
+    " num_rcpts INTEGER NOT NULL,"                      \
+    " num_retries INTEGER NOT NULL,"                    \
+    " last_run INTEGER NOT NULL,"                       \
+    " last_err TEXT,"                                   \
     " PRIMARY KEY (mboxname, imap_uid)"                 \
     ");"                                                \
-    "CREATE INDEX IF NOT EXISTS checktime ON events (nextcheck);"
+
+#define CMD_CREATE                                      \
+    CMD_CREATE_TABLE("events")                          \
+    CMD_CREATE_INDEXES
 
 
-#define DBVERSION 2
+#define DBVERSION 4
 
-/* the command loop will do the upgrade and then drop the old tables.
- * Sadly there's no other way to do it without creating a lock inversion! */
-#define CMD_UPGRADEv2 CMD_CREATE
+static int upgradev4(sqldb_t *db);
 
 static struct sqldb_upgrade upgrade[] = {
-    { 2, CMD_UPGRADEv2, NULL },
+    /* Don't upgrade to version 2. */
+    /* Don't upgrade to version 3.  This was an intermediate DB version */
+    { 4, NULL, &upgradev4 },
     /* always finish with an empty row */
     { 0, NULL, NULL }
 };
 
-#define CMD_REPLACE                              \
-    "REPLACE INTO events"                        \
-    " ( mboxname, imap_uid, nextcheck )"         \
-    " VALUES"                                    \
-    " ( :mboxname, :imap_uid, :nextcheck )"      \
+#define CMD_REPLACE                                            \
+    "REPLACE INTO events"                                      \
+    " ( mboxname, imap_uid, nextcheck, type, num_rcpts,"       \
+    "   num_retries, last_run, last_err)"                      \
+    " VALUES"                                                  \
+    " ( :mboxname, :imap_uid, :nextcheck, :type, :num_rcpts,"  \
+    "   :num_retries, :last_run, :last_err)"                   \
     ";"
 
 #define CMD_DELETE                               \
@@ -162,21 +182,23 @@ static struct sqldb_upgrade upgrade[] = {
     " mboxname LIKE :prefix"     \
     ";"
 
-#define CMD_SELECTUSER           \
-    "SELECT mboxname, imap_uid, nextcheck" \
-    " FROM events WHERE"                   \
-    " mboxname LIKE :prefix"               \
+#define CMD_SELECTUSER                                      \
+    "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts,"\
+    "  num_retries, last_run, last_err"                     \
+    " FROM events WHERE"                                    \
+    " mboxname LIKE :prefix"                                \
     ";"
 
-#define CMD_SELECT_ALARMS                                                \
-    "SELECT mboxname, imap_uid, nextcheck"                               \
-    " FROM events WHERE"                                                 \
-    " nextcheck < :before"                                               \
-    " ORDER BY mboxname, imap_uid, nextcheck"                            \
+#define CMD_SELECT_ALARMS                                   \
+    "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts,"\
+    "  num_retries, last_run, last_err"                     \
+    " FROM events WHERE"                                    \
+    " nextcheck < :before"                                  \
+    " ORDER BY mboxname, imap_uid, nextcheck"               \
     ";"
 
 static sqldb_t *my_alarmdb;
-int refcount;
+static int refcount;
 static struct mboxlock *my_alarmdb_lock;
 
 /* get a database handle to the alarm db */
@@ -248,6 +270,11 @@ static int copydb(sqlite3_stmt *stmt, void *rock)
         { ":mboxname",  SQLITE_TEXT,    { .s = (const char *)sqlite3_column_text(stmt, 0) } },
         { ":imap_uid",  SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 1)  } },
         { ":nextcheck", SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 2)  } },
+        { ":type",      SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 3)  } },
+        { ":num_rcpts", SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 4)  } },
+        { ":num_retries", SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 5)  } },
+        { ":last_run",  SQLITE_INTEGER, { .i = sqlite3_column_int(stmt, 6)  } },
+        { ":last_err",  SQLITE_TEXT,    { .s = (const char *)sqlite3_column_text(stmt, 7) } },
         { NULL,         SQLITE_NULL,    { .s = NULL      } }
     };
     return sqldb_exec(destdb, CMD_REPLACE, bval, NULL, NULL);
@@ -581,21 +608,31 @@ static int process_alarm_cb(icalcomponent *comp,
 }
 
 static int update_alarmdb(const char *mboxname,
-                          uint32_t imap_uid, time_t nextcheck)
+                          uint32_t imap_uid, time_t nextcheck,
+                          uint32_t type, uint32_t num_rcpts,
+                          uint32_t num_retries, time_t last_run,
+                          const char *last_err)
 {
     struct sqldb_bindval bval[] = {
-        { ":mboxname",  SQLITE_TEXT,    { .s = mboxname  } },
-        { ":imap_uid",  SQLITE_INTEGER, { .i = imap_uid  } },
-        { ":nextcheck", SQLITE_INTEGER, { .i = nextcheck } },
-        { NULL,         SQLITE_NULL,    { .s = NULL      } }
+        { ":mboxname",     SQLITE_TEXT,    { .s = mboxname     } },
+        { ":imap_uid",     SQLITE_INTEGER, { .i = imap_uid     } },
+        { ":nextcheck",    SQLITE_INTEGER, { .i = nextcheck    } },
+        { ":type",         SQLITE_INTEGER, { .i = type         } },
+        { ":num_rcpts",    SQLITE_INTEGER, { .i = num_rcpts    } },
+        { ":num_retries",  SQLITE_INTEGER, { .i = num_retries  } },
+        { ":last_run",     SQLITE_INTEGER, { .i = last_run     } },
+        { ":last_err",     SQLITE_TEXT,    { .s = last_err     } },
+        { NULL,            SQLITE_NULL,    { .s = NULL         } }
     };
 
     sqldb_t *alarmdb = caldav_alarm_open();
     if (!alarmdb) return -1;
     int rc = SQLITE_OK;
 
-    syslog(LOG_DEBUG, "update_alarmdb(%s:%u, " TIME_T_FMT ")",
-           mboxname, imap_uid, nextcheck);
+    syslog(LOG_DEBUG,
+           "update_alarmdb(%s:%u, " TIME_T_FMT ", %u, %u, %u, " TIME_T_FMT ", %s)",
+           mboxname, imap_uid, nextcheck, type, num_rcpts,
+           num_retries, last_run, last_err ? last_err : "NULL");
 
     if (nextcheck)
         rc = sqldb_exec(alarmdb, CMD_REPLACE, bval, NULL, NULL);
@@ -718,15 +755,27 @@ done:
     return 0;
 }
 
-static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid)
+static int has_alarms(void *data, struct mailbox *mailbox,
+                      uint32_t uid, unsigned *num_rcpts)
 {
     int has_alarms = 0;
 
     syslog(LOG_DEBUG, "checking for alarms in mailbox %s uid %u",
            mailbox_name(mailbox), uid);
 
-    if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) return 1;
+    if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
+        if (data && num_rcpts &&
+            mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_JMAPSUBMIT) {
+            json_t *submission = (json_t *) data;
+            json_t *envelope = json_object_get(submission, "envelope");
+            if (envelope) {
+                *num_rcpts = json_array_size(json_object_get(envelope, "rcptTo"));
+            }
+        }
+        return 1;
+    }
 
+    icalcomponent *ical = (icalcomponent *) data;
     if (ical) {
         /* Check iCalendar resource for VALARMs */
         icalcomponent *comp = icalcomponent_get_first_real_component(ical);
@@ -880,13 +929,39 @@ static int read_lastalarm(struct mailbox *mailbox,
     return r;
 }
 
+static enum alarm_type mbtype_to_alarm_type(uint32_t mbtype)
+{
+    enum alarm_type atype = 0;
+
+    switch (mbtype_isa(mbtype)) {
+    case MBTYPE_CALENDAR:
+        atype = ALARM_CALENDAR;
+        break;
+    case MBTYPE_EMAIL:
+        atype = ALARM_SNOOZE;
+        break;
+    case MBTYPE_JMAPSUBMIT:
+        atype = ALARM_SEND;
+        break;
+    default:
+        fatal("unknown alarm type", EX_SOFTWARE);
+    }
+
+    return atype;
+}
+
 /* add a calendar alarm */
 HIDDEN int caldav_alarm_add_record(struct mailbox *mailbox,
-                                     const struct index_record *record,
-                                     icalcomponent *ical)
+                                   const struct index_record *record,
+                                   void *data)
 {
-    if (has_alarms(ical, mailbox, record->uid))
-        update_alarmdb(mailbox_name(mailbox), record->uid, record->internaldate);
+    unsigned num_rcpts = 0;
+
+    if (has_alarms(data, mailbox, record->uid, &num_rcpts)) {
+        enum alarm_type atype = mbtype_to_alarm_type(mailbox_mbtype(mailbox));
+        update_alarmdb(mailbox_name(mailbox), record->uid, record->internaldate,
+                       atype, num_rcpts, 0, 0, NULL);
+    }
 
     return 0;
 }
@@ -895,10 +970,15 @@ EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
                                        const struct index_record *record,
                                        int force)
 {
+    unsigned num_rcpts = 0;
+
     /* if there are alarms in the annotations,
      * the next alarm may have become earlier, so get calalarmd to check again */
-    if (force || has_alarms(NULL, mailbox, record->uid))
-        return update_alarmdb(mailbox_name(mailbox), record->uid, record->last_updated);
+    if (force || has_alarms(NULL, mailbox, record->uid, &num_rcpts)) {
+        enum alarm_type atype = mbtype_to_alarm_type(mailbox_mbtype(mailbox));
+        return update_alarmdb(mailbox_name(mailbox), record->uid,
+                              record->last_updated, atype, num_rcpts, 0, 0, NULL);
+    }
 
     return 0;
 }
@@ -906,11 +986,15 @@ EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
 /* called by sync_support from sync_server -
  * set nextcheck in the calalarmdb based on the full state,
  * record + annotations, after the annotations have been updated too */
-EXPORTED int caldav_alarm_sync_nextcheck(struct mailbox *mailbox, const struct index_record *record)
+EXPORTED int caldav_alarm_sync_nextcheck(struct mailbox *mailbox,
+                                         const struct index_record *record)
 {
     struct lastalarm_data data;
-    if (!read_lastalarm(mailbox, record, &data))
-        return update_alarmdb(mailbox_name(mailbox), record->uid, data.nextcheck);
+    if (!read_lastalarm(mailbox, record, &data)) {
+        enum alarm_type atype = mbtype_to_alarm_type(mailbox_mbtype(mailbox));
+        return update_alarmdb(mailbox_name(mailbox), record->uid,
+                              data.nextcheck, atype, 0, 0, 0, NULL);
+    }
 
     /* if there's no lastalarm on the record, nuke any existing alarmdb entry */
     return caldav_alarm_delete_record(mailbox_name(mailbox), record->uid);
@@ -919,7 +1003,22 @@ EXPORTED int caldav_alarm_sync_nextcheck(struct mailbox *mailbox, const struct i
 /* delete all alarms matching the event */
 HIDDEN int caldav_alarm_delete_record(const char *mboxname, uint32_t imap_uid)
 {
-    return update_alarmdb(mboxname, imap_uid, 0);
+    return update_alarmdb(mboxname, imap_uid, 0, 0, 0, 0, 0, NULL);
+}
+
+static int caldav_alarm_bump_nextcheck(struct caldav_alarm_data *data,
+                                       time_t nextcheck,
+                                       time_t last_run, const char *last_err)
+{
+    uint32_t num_retries = data->num_retries;
+
+    if (last_err) num_retries++;
+    else last_err = data->last_err;
+
+    if (!last_run) last_run = data->last_run;
+
+    return update_alarmdb(data->mboxname, data->imap_uid, nextcheck, data->type,
+                          data->num_rcpts, num_retries, last_run, last_err);
 }
 
 /* delete all alarms matching the event */
@@ -973,9 +1072,14 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 
     if (nextcheck <= alarm->runtime) {
         struct caldav_alarm_data *data = xzmalloc(sizeof(struct caldav_alarm_data));
-        data->mboxname    = xstrdup((const char *) sqlite3_column_text(stmt, 0));
-        data->imap_uid    = sqlite3_column_int(stmt, 1);
-        data->nextcheck   = nextcheck;
+        data->mboxname     = xstrdup((const char *) sqlite3_column_text(stmt, 0));
+        data->imap_uid     = sqlite3_column_int(stmt, 1);
+        data->nextcheck    = nextcheck; // column 2
+        data->type         = sqlite3_column_int(stmt, 3);
+        data->num_rcpts    = sqlite3_column_int(stmt, 4);
+        data->num_retries  = sqlite3_column_int(stmt, 5);
+        data->last_run     = sqlite3_column_int(stmt, 6);
+        data->last_err     = xstrdupnull((const char *) sqlite3_column_text(stmt, 7));
         ptrarray_append(&alarm->list, data);
     }
     else if (nextcheck < alarm->next) {
@@ -1074,7 +1178,7 @@ static int process_valarms(struct mailbox *mailbox,
 
     /* check for bogus lastalarm data on record
        which actually shouldn't have it */
-    if (!has_alarms(ical, mailbox, record->uid)) {
+    if (!has_alarms(ical, mailbox, record->uid, NULL)) {
         syslog(LOG_NOTICE, "removing bogus lastalarm check "
                "for mailbox %s uid %u which has no alarms",
                mboxname, record->uid);
@@ -1133,7 +1237,8 @@ static int process_valarms(struct mailbox *mailbox,
     data.lastrun = runtime;
     if (!dryrun) write_lastalarm(mailbox, record, &data);
 
-    update_alarmdb(mboxname, record->uid, data.nextcheck);
+    update_alarmdb(mboxname, record->uid, data.nextcheck,
+                   ALARM_CALENDAR, 0, 0, 0, NULL);
 
 done_item:
     if (ical) icalcomponent_free(ical);
@@ -1142,12 +1247,295 @@ done_item:
 }
 
 #ifdef WITH_JMAP
-static int process_futurerelease(struct mailbox *mailbox,
-                                 struct index_record *record)
+static int move_to_mailboxid(struct mailbox *srcmbox,
+                             struct index_record *record,
+                             const char *destmboxid, time_t savedate,
+                             json_t *setkeywords, int is_snoozed)
+                           
+{
+    struct buf buf = BUF_INITIALIZER;
+    msgrecord_t *mr = NULL;
+    mbname_t *mbname = NULL;
+    struct appendstate as;
+    struct mailbox *destmbox = NULL;
+    struct auth_state *authstate = NULL;
+    const char *userid;
+    char *destname = NULL;
+    struct stagemsg *stage = NULL;
+    struct entryattlist *annots = NULL;
+    strarray_t *flags = NULL;
+    struct body *body = NULL;
+    FILE *f = NULL;
+    int r = 0;
+
+    syslog(LOG_DEBUG, "moving message %s:%u to mailboxid %s",
+           mailbox_name(srcmbox), record->uid, destmboxid);
+
+    mr = msgrecord_from_index_record(srcmbox, record);
+    if (!mr) goto done;
+
+    /* Fetch message */
+    r = msgrecord_get_body(mr, &buf);
+    if (r) goto done;
+
+    /* Fetch annotations */
+    r = msgrecord_extract_annots(mr, &annots);
+    if (r) goto done;
+
+    mbname = mbname_from_intname(mailbox_name(srcmbox));
+    mbname_set_boxes(mbname, NULL);
+    userid = mbname_userid(mbname);
+    authstate = auth_newstate(userid);
+
+    /* Fetch flags */
+    r = msgrecord_extract_flags(mr, userid, &flags);
+    if (r) goto done;
+
+    if (is_snoozed) {
+        /* Add \snoozed pseudo-flag */
+        strarray_add(flags, "\\snoozed");
+    }
+
+    /* (Un)set any client-supplied flags */
+    if (setkeywords) {
+        const char *key;
+        json_t *val;
+
+        json_object_foreach(setkeywords, key, val) {
+            const char *flag = jmap_keyword_to_imap(key);
+            if (flag) {
+                if (json_is_true(val)) strarray_add_case(flags, flag);
+                else strarray_remove_all_case(flags, flag);
+            }
+        }
+    }
+
+    /* Determine destination mailbox of moved email */
+    if (destmboxid) {
+        mbentry_t *mbentry = NULL;
+        r = mboxlist_lookup_by_uniqueid(destmboxid, &mbentry, NULL);
+        if (!r && mbentry &&
+            // MUST be an email mailbox
+            (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) &&
+            // MUST NOT be deleted
+            !(mbentry->mbtype & MBTYPE_DELETED) &&
+            // MUST be able to append messages
+            (cyrus_acl_myrights(authstate, mbentry->acl) & ACL_INSERT) &&
+            // MUST NOT be DELETED mailbox
+            !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
+            // MUST NOT be our source mailbox
+            strcmp(mbentry->name, mailbox_name(srcmbox))) {
+            destname = xstrdup(mbentry->name);
+        }
+        mboxlist_entry_free(&mbentry);
+
+        if (!destname && !is_snoozed) {
+            /* Fallback to \Sent mailbox */
+            destname = mboxlist_find_specialuse("\\Sent", userid);
+        }
+    }
+    else if (!is_snoozed) {
+        /* onSend with no destination, just remove from \Scheduled */
+        goto expunge;
+    }
+    if (!destname) {
+        /* Fallback to INBOX */
+        destname = xstrdup(mbname_intname(mbname));
+    }
+
+    /* Fetch message filename */
+    const char *fname;
+    r = msgrecord_get_fname(mr, &fname);
+    if (r) goto done;
+
+    /* Prepare to stage the message */
+    if (!(f = append_newstage_full(destname, time(0), 0, &stage, fname))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", destname);
+        r = IMAP_IOERROR;
+        goto done;
+    }
+    fclose(f);
+
+    r = mailbox_open_iwl(destname, &destmbox);
+    if (r) goto done;
+
+    /* XXX: should we look for an existing record with that GUID in the target folder
+     * first and just remove this copy if so?  Otherwise we could duplicate if the
+     * update fails between the append to the new mailbox and the expunge from Snoozed
+     */
+
+    r = append_setup_mbox(&as, destmbox, userid, authstate,
+                          ACL_INSERT, NULL, NULL, 0,
+                          is_snoozed ? EVENT_MESSAGE_NEW : EVENT_MESSAGE_APPEND);
+    if (r) goto done;
+
+    /* Append the message to the mailbox */
+    r = append_fromstage_full(&as, &body, stage, record->internaldate,
+                              savedate, 0, flags, 0, &annots);
+    if (r) {
+        append_abort(&as);
+        goto done;
+    }
+
+    r = append_commit(&as);
+    if (r) goto done;
+
+  expunge:
+    /* Expunge the resource from the source mailbox (also unset \snoozed) */
+    record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
+    if (is_snoozed) record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+    r = mailbox_rewrite_index_record(srcmbox, record);
+    if (r) {
+        syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
+               mailbox_name(srcmbox), record->uid, error_message(r));
+    }
+
+  done:
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    strarray_free(flags);
+    freeentryatts(annots);
+    append_removestage(stage);
+
+    mailbox_close(&destmbox);
+    if (authstate) auth_freestate(authstate);
+    if (mbname) mbname_free(&mbname);
+    if (mr) msgrecord_unref(&mr);
+    buf_free(&buf);
+    free(destname);
+
+    return r;
+}
+
+struct find_sched_rock {
+    char *userid;
+    char *mboxname;
+    uint32_t uid;
+};
+
+static int find_sched_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct find_sched_rock *frock = (struct find_sched_rock *) rock;
+    mbentry_t *mbentry = NULL;
+    int res = 0;
+
+    /* We're looking for whole, non-expunged messages */
+    if (rec->part ||
+        (rec->system_flags & FLAG_DELETED) ||
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        return 0;
+    }
+
+    /* Lookup mailbox and make sure it is \Scheduled */
+    conv_guidrec_mbentry(rec, &mbentry);
+
+    if (!mbentry) return 0;
+
+    if (mboxname_isscheduledmailbox(mbentry->name, mbentry->mbtype)) {
+        frock->mboxname = xstrdup(mbentry->name);
+        frock->uid = rec->uid;
+        res = IMAP_OK_COMPLETED;
+    }
+
+    mboxlist_entry_free(&mbentry);
+
+    return res;
+}
+
+static int find_scheduled_email(const char *emailid,
+                                struct find_sched_rock *frock)
+{
+    struct conversations_state *cstate = NULL;
+    int r;
+
+    if (emailid[0] != 'M' || strlen(emailid) != 25) {
+        return IMAP_NOTFOUND;
+    }
+
+    r = conversations_open_user(frock->userid, 1/*shared*/, &cstate);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open conversations for user %s",
+               frock->userid);
+        return r;
+    }
+
+    const char *guid = emailid + 1;
+    r = conversations_guid_foreach(cstate, guid, find_sched_cb, frock);
+    conversations_commit(&cstate);
+
+    if (r == IMAP_OK_COMPLETED) r = 0;
+    else if (!frock->mboxname) r = IMAP_NOTFOUND;
+
+    return r;
+}
+
+static int count_cb(sqlite3_stmt *stmt, void *rock)
+{
+    unsigned *count = (unsigned *) rock;
+
+    *count = sqlite3_column_int(stmt, 0);
+
+    return 0;
+}
+
+#define CMD_GET_UNSCHEDULED_COUNT \
+    "SELECT num_retries"          \
+    " FROM events WHERE"          \
+    "  mboxname = :mboxname AND"  \
+    "  imap_uid = :imap_uid AND"  \
+    "  type     = :type"          \
+    ";"
+
+static int update_unscheduled(const char *mboxname, time_t nextcheck)
+{
+    struct sqldb_bindval bval[] = {
+        { ":mboxname",     SQLITE_TEXT,    { .s = mboxname          } },
+        { ":imap_uid",     SQLITE_INTEGER, { .i = 0                 } },
+        { ":nextcheck",    SQLITE_INTEGER, { .i = nextcheck         } },
+        { ":type",         SQLITE_INTEGER, { .i = ALARM_UNSCHEDULED } },
+        { ":num_rcpts",    SQLITE_INTEGER, { .i = 0                 } },
+        { ":num_retries",  SQLITE_INTEGER, { .i = 0                 } },
+        { ":last_run",     SQLITE_INTEGER, { .i = 0                 } },
+        { ":last_err",     SQLITE_TEXT,    { .s = NULL              } },
+        { NULL,            SQLITE_NULL,    { .s = NULL              } }
+    };
+
+    sqldb_t *alarmdb = caldav_alarm_open();
+    if (!alarmdb) return -1;
+
+    syslog(LOG_DEBUG, "update_unscheduled(%s, " TIME_T_FMT ")",
+           mboxname, nextcheck);
+
+    unsigned count = 0;
+    int rc = sqldb_exec(alarmdb, CMD_GET_UNSCHEDULED_COUNT,
+                        bval, &count_cb, &count);
+
+    if (rc == SQLITE_OK) {
+        bval[5].val.i = ++count; // num_retries used as unscheduled count
+        rc = sqldb_exec(alarmdb, CMD_REPLACE, bval, NULL, NULL);
+    }
+
+    caldav_alarm_close(alarmdb);
+
+    if (rc == SQLITE_OK) return 0;
+
+    /* failed? */
+    return -1;
+}
+
+static int process_futurerelease(struct caldav_alarm_data *data,
+                                 struct mailbox *mailbox,
+                                 struct index_record *record,
+                                 time_t runtime)
+
 {
     message_t *m = message_new_from_record(mailbox, record);
     struct buf buf = BUF_INITIALIZER;
-    json_t *submission = NULL, *identity, *envelope;
+    json_t *submission = NULL, *identity, *envelope, *onSend;
+    smtpclient_t *sm = NULL;
+    int do_move = 0;
     int r = 0;
 
     syslog(LOG_DEBUG, "processing future release for mailbox %s uid %u",
@@ -1181,6 +1569,11 @@ static int process_futurerelease(struct mailbox *mailbox,
     }
     envelope = json_object_get(submission, "envelope");
     identity = json_object_get(submission, "identityId");
+    onSend = json_object_get(submission, "onSend");
+    if (JNULL(onSend)) {
+        /* Treat onSend:null as non-existent */
+        onSend = NULL;
+    }
 
     /* Load message */
     r = message_get_field(m, "rawbody", MESSAGE_RAW, &buf);
@@ -1191,44 +1584,165 @@ static int process_futurerelease(struct mailbox *mailbox,
     }
 
     /* Open the SMTP connection */
-    smtpclient_t *sm = NULL;
+    unsigned code = 0, cancel = 0;
+    const char *err = NULL;
     r = smtpclient_open(&sm);
     if (r) {
-        syslog(LOG_ERR, "smtpclient_open failed: %s", error_message(r));
-        goto done;
+        err = error_message(r);
+        syslog(LOG_ERR, "smtpclient_open failed: %s", err);
     }
-    smtpclient_set_auth(sm, json_string_value(identity));
+    else {
+        smtpclient_set_auth(sm, json_string_value(identity));
 
-    /* Prepare envelope */
-    smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
-    jmap_emailsubmission_envelope_to_smtp(&smtpenv, envelope);
+        /* Prepare envelope */
+        smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
+        jmap_emailsubmission_envelope_to_smtp(&smtpenv, envelope);
 
-    /* Send message */
-    r = smtpclient_send(sm, &smtpenv, &buf);
-    smtp_envelope_fini(&smtpenv);
-    smtpclient_close(&sm);
+        /* Send message */
+        r = smtpclient_send(sm, &smtpenv, &buf);
+        smtp_envelope_fini(&smtpenv);
+        if (r) {
+            /* Get the response code and error text.
+               We treat anything other than 5xx as a temp failure */
+            code = smtpclient_get_resp_code(sm);
+            if (code) {
+                err = smtpclient_get_resp_text(sm);
+                if (code >= 500) {
+                    /* Permanent failure */
+                    cancel = 1;
+                }
+            }
+            else {
+                err = error_message(r);
+            }
+            syslog(LOG_ERR, "smtpclient_send failed: %s", err);
+        }
+    }
+
+    const char *destmboxid = NULL;
+    json_t *setkeywords = NULL;
+    char *userid = NULL;
 
     if (r) {
-        syslog(LOG_ERR, "smtpclient_send failed: %s", error_message(r));
-        goto done;
-    }
+        /* Determine if we should retry (again) or cancel the submission.
+           We try at 5m, 15m, 30m, 60m after original scheduled time. */
+        unsigned duration;
+        switch (data->num_retries) {
+        case 0: duration =  300; break;
+        case 1: duration =  600; break;
+        case 2: duration =  900; break;
+        case 3: duration = 1800; break;
+        default: cancel = 1; break;
+        }
 
-    /* Mark the email as sent */
-    record->system_flags |= FLAG_ANSWERED;
-    if (config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
-        /* delete the EmailSubmission object immediately */
+        if (!cancel) {
+            /* Retry */
+            caldav_alarm_bump_nextcheck(data, runtime + duration, runtime, err);
+            if (sm) smtpclient_close(&sm);
+            goto done;
+        }
+        else if (onSend) {
+            /* Move the scheduled message back into Drafts mailbox.
+               Use INBOX as a fallback. */
+            do_move = 1;
+            userid = mboxname_to_userid(data->mboxname);
+
+            char *destname = mboxlist_find_specialuse("\\Drafts", userid);
+            mbentry_t *mbentry = NULL;
+
+            if (!destname) {
+                destname = mboxname_user_mbox(userid, NULL);
+            }
+
+            mboxlist_lookup(destname, &mbentry, NULL);
+            if (mbentry) {
+                buf_setcstr(&buf, mbentry->uniqueid);
+
+                destmboxid = buf_cstring(&buf);
+                setkeywords = json_pack("{ s:b }", "$draft", 1);
+
+                mboxlist_entry_free(&mbentry);
+            }
+            free(destname);
+        }
+    }
+    else {
+        /* Mark the email as sent */
+        record->system_flags |= FLAG_ANSWERED;
+
+        /* Get any onSend instructions */
+        if (onSend) {
+            do_move = 1;
+            destmboxid =
+                json_string_value(json_object_get(onSend, "moveToMailboxId"));
+            setkeywords = json_deep_copy(json_object_get(onSend, "setKeywords"));
+        }
+    }
+    if (sm) smtpclient_close(&sm);
+
+    if (cancel || config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
+        /* Delete the EmailSubmission object immediately */
         record->system_flags |= FLAG_DELETED;
         record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
     }
+
     r = mailbox_rewrite_index_record(mailbox, record);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: marking emailsubmission as sent (%s:%u) failed: %s",
+        syslog(LOG_ERR, "IOERROR: marking emailsubmission as %s (%s:%u) failed: %s",
+               cancel ? "cancelled" : "sent",
                mailbox_name(mailbox), record->uid, error_message(r));
         // email is already sent, so we don't want to try to send it again!
         // go ahead and delete the record still...
     }
 
     caldav_alarm_delete_record(mailbox_name(mailbox), record->uid);
+
+    if (do_move) {
+        /* Move the scheduled message into the specified mailbox */
+        if (!userid) userid = mboxname_to_userid(data->mboxname);
+
+        const char *emailid =
+            json_string_value(json_object_get(submission, "emailId"));
+        struct find_sched_rock frock = { userid, NULL, 0 };
+        struct mailbox *sched_mbox = NULL;
+        struct index_record sched_rec;
+
+        /* Locate email in \Scheduled mailbox */
+        r = find_scheduled_email(emailid, &frock);
+
+        if (r || !frock.mboxname) {
+            syslog(LOG_ERR,
+                   "IOERROR: failed to find \\Scheduled mailbox for user %s (%s)",
+                   frock.userid, error_message(r));
+        }
+        else if ((r = mailbox_open_iwl(frock.mboxname, &sched_mbox))) {
+            syslog(LOG_ERR, "IOERROR: failed to open %s: %s",
+                   frock.mboxname, error_message(r));
+        }
+        else if ((r = mailbox_find_index_record(sched_mbox,
+                                                frock.uid, &sched_rec))) {
+            syslog(LOG_ERR, "IOERROR: failed find message %u in %s: %s",
+                   frock.uid, frock.mboxname, error_message(r));
+        }
+        else {
+            r = move_to_mailboxid(sched_mbox, &sched_rec, destmboxid,
+                                  time(0), setkeywords, 0/*is_snoozed*/);
+
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to move %s:%u (%s)",
+                       frock.mboxname, frock.uid, error_message(r));
+
+            }
+            else if (cancel) {
+                update_unscheduled(data->mboxname, runtime + 300);
+            }
+        }
+
+        if (setkeywords) json_decref(setkeywords);
+        mailbox_close(&sched_mbox);
+        free(frock.mboxname);
+    }
+    free(userid);
 
   done:
     if (submission) json_decref(submission);
@@ -1238,26 +1752,14 @@ static int process_futurerelease(struct mailbox *mailbox,
     return r;
 }
 
-static int process_snoozed(struct mailbox *mailbox,
+static int process_snoozed(struct caldav_alarm_data *data,
+                           struct mailbox *mailbox,
                            struct index_record *record,
                            time_t runtime,
                            int dryrun)
 {
-    struct buf buf = BUF_INITIALIZER;
-    msgrecord_t *mr = NULL;
-    mbname_t *mbname = NULL;
-    struct appendstate as;
-    struct mailbox *destmbox = NULL;
-    struct auth_state *authstate = NULL;
-    const char *userid;
-    char *destname = NULL;
+    json_t *snoozed, *destmboxid, *setkeywords;
     time_t wakeup;
-    struct stagemsg *stage = NULL;
-    struct entryattlist *annots = NULL;
-    strarray_t *flags = NULL;
-    struct body *body = NULL;
-    FILE *f = NULL;
-    json_t *snoozed, *destmboxid, *keywords;
     int r = 0;
 
     syslog(LOG_DEBUG, "processing snoozed email for mailbox %s uid %u",
@@ -1267,166 +1769,76 @@ static int process_snoozed(struct mailbox *mailbox,
     snoozed = jmap_fetch_snoozed(mailbox_name(mailbox), record->uid);
     if (!snoozed) {
         // no worries, let's not try again
-        update_alarmdb(mailbox_name(mailbox), record->uid, 0);
+        caldav_alarm_delete_record(mailbox_name(mailbox), record->uid);
         goto done;
     }
 
+    /* Extract until (wakeup) */
     time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
                       &wakeup);
 
     /* Check runtime against wakeup and adjust as necessary */
     if (dryrun || wakeup > runtime) {
-        update_alarmdb(mailbox_name(mailbox), record->uid, wakeup);
+        caldav_alarm_bump_nextcheck(data, wakeup, 0, NULL);
         goto done;
     }
 
-    mr = msgrecord_from_index_record(mailbox, record);
-    if (!mr) goto done;
-
-    /* Fetch message */
-    r = msgrecord_get_body(mr, &buf);
-    if (r) goto done;
-
-    /* Fetch annotations */
-    r = msgrecord_extract_annots(mr, &annots);
-    if (r) goto done;
-
-    mbname = mbname_from_intname(mailbox_name(mailbox));
-    mbname_set_boxes(mbname, NULL);
-    userid = mbname_userid(mbname);
-    authstate = auth_newstate(userid);
-
-    /* Fetch flags */
-    r = msgrecord_extract_flags(mr, userid, &flags);
-    if (r) goto done;
-
-    /* Add \snoozed pseudo-flag */
-    strarray_add(flags, "\\snoozed");
-
-    /* (Un)set any client-supplied flags */
-    keywords = json_object_get(snoozed, "setKeywords");
-    if (keywords) {
-        const char *key;
-        json_t *val;
-
-        json_object_foreach(keywords, key, val) {
-            const char *flag = jmap_keyword_to_imap(key);
-            if (flag) {
-                if (json_is_true(val)) strarray_add_case(flags, flag);
-                else strarray_remove_all_case(flags, flag);
-            }
-        }
-    }
-
-    /* Determine destination mailbox of awakened email */
     destmboxid = json_object_get(snoozed, "moveToMailboxId");
-    if (destmboxid) {
-        mbentry_t *mbentry = NULL;
-        r = mboxlist_lookup_by_uniqueid(json_string_value(destmboxid),
-                                         &mbentry, NULL);
-        if (!r && mbentry &&
-            // MUST be an email mailbox
-            (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) &&
-            // MUST NOT be deleted
-            !(mbentry->mbtype & MBTYPE_DELETED) &&
-            // MUST be able to append messages
-            (cyrus_acl_myrights(authstate, mbentry->acl) & ACL_INSERT) &&
-            // MUST NOT be DELETED mailbox
-            !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
-            // MUST NOT be \Snoozed mailbox
-            strcmp(mbentry->name, mailbox_name(mailbox))) {
-            destname = xstrdup(mbentry->name);
-        }
-        mboxlist_entry_free(&mbentry);
-    }
-    if (!destname) {
-        destname = xstrdup(mbname_intname(mbname));
-    }
+    setkeywords = json_object_get(snoozed, "setKeywords");
 
-    /* Fetch message filename */
-    const char *fname;
-    r = msgrecord_get_fname(mr, &fname);
-    if (r) goto done;
+    r = move_to_mailboxid(mailbox, record, json_string_value(destmboxid),
+                          wakeup, setkeywords, 1/*is_snoozed*/);
 
-    /* Prepare to stage the message */
-    if (!(f = append_newstage_full(destname, runtime, 0, &stage, fname))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", destname);
-        r = IMAP_IOERROR;
-        goto done;
-    }
-    fclose(f);
-
-    r = mailbox_open_iwl(destname, &destmbox);
-    if (r) goto done;
-
-    /* XXX: should we look for an existing record with that GUID in the target folder
-     * first and just remove this copy if so?  Otherwise we could duplicate if the
-     * update fails between the append to the new mailbox and the expunge from Snoozed
-     */
-
-    r = append_setup_mbox(&as, destmbox, userid, authstate,
-                          ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_NEW);
-    if (r) goto done;
-
-    /* Extract until and use it as savedate */
-    time_t savedate;
-    time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
-                      &savedate);
-
-    /* Append the message to the mailbox */
-    r = append_fromstage_full(&as, &body, stage, record->internaldate,
-                              savedate, 0, flags, 0, &annots);
-    if (r) {
-        append_abort(&as);
-        goto done;
-    }
-
-    r = append_commit(&as);
-    if (r) goto done;
-
-    /* Expunge the resource from the \Snoozed mailbox (also unset \snoozed) */
-    record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
-    record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
-    r = mailbox_rewrite_index_record(mailbox, record);
-    if (r) {
-        syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
-               mailbox_name(mailbox), record->uid, error_message(r));
-    }
-
-  done:
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to unsnooze %s:%u (%s)",
                mailbox_name(mailbox), record->uid, error_message(r));
-        update_alarmdb(mailbox_name(mailbox), record->uid, runtime + 300); // try again in 5 minutes
+        /* try again in 5 minutes */
+        caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
     }
 
-    if (body) {
-        message_free_body(body);
-        free(body);
-    }
-    strarray_free(flags);
-    freeentryatts(annots);
-    append_removestage(stage);
-
-    mailbox_close(&destmbox);
-    if (authstate) auth_freestate(authstate);
-    if (mbname) mbname_free(&mbname);
-    if (mr) msgrecord_unref(&mr);
+ done:
     if (snoozed) json_decref(snoozed);
-    buf_free(&buf);
-    free(destname);
 
     return r;
 }
 #endif /* WITH_JMAP */
+
+static void process_unscheduled(struct caldav_alarm_data *data)
+{
+    struct mboxevent *event = mboxevent_new(EVENT_MESSAGES_UNSCHEDULED);
+
+    if (event) {
+        char *userid = mboxname_to_userid(data->mboxname);
+
+        FILL_STRING_PARAM(event, EVENT_MESSAGES_UNSCHEDULED_USERID, userid);
+        FILL_UNSIGNED_PARAM(event, EVENT_MESSAGES_UNSCHEDULED_COUNT, data->num_retries);
+
+        mboxevent_notify(&event);
+        mboxevent_free(&event);
+    }
+    else {
+        syslog(LOG_NOTICE,
+               "failed to create UNSCHEDULED notification for mailbox %s",
+               data->mboxname);
+
+    }
+
+    caldav_alarm_delete_record(data->mboxname, data->imap_uid);
+}
 
 static void process_one_record(struct caldav_alarm_data *data, time_t runtime, int dryrun)
 {
     int r;
     struct mailbox *mailbox = NULL;
 
-    syslog(LOG_DEBUG, "processing alarms for mailbox %s uid %u",
-           data->mboxname, data->imap_uid);
+    syslog(LOG_DEBUG,
+           "processing alarms for mailbox %s uid %u type %u retries %u",
+           data->mboxname, data->imap_uid, data->type, data->num_retries);
+
+    if (data->type == ALARM_UNSCHEDULED) {
+        process_unscheduled(data);
+        return;
+    }
 
     r = dryrun ? mailbox_open_irl(data->mboxname, &mailbox) : mailbox_open_iwl(data->mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -1439,7 +1851,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
         /* Temporary error - skip over this message for now and try again in 5 minutes */
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for uid %u (%s)",
                data->mboxname, data->imap_uid, error_message(r));
-        update_alarmdb(data->mboxname, data->imap_uid, runtime + 300);
+        caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
         return;
     }
 
@@ -1457,7 +1869,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
         syslog(LOG_ERR, "IOERROR: error reading mailbox %s uid %u (%s)",
                data->mboxname, data->imap_uid, error_message(r));
         /* XXX no index record? item deleted or transient error? */
-        update_alarmdb(data->mboxname, data->imap_uid, runtime + 300);
+        caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
         goto done;
     }
 
@@ -1469,31 +1881,35 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
         goto done;
     }
 
-    if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_CALENDAR) {
+    switch (data->type) {
+    case ALARM_CALENDAR: {
         icaltimezone *floatingtz = get_floatingtz(mailbox_name(mailbox), "");
         r = process_valarms(mailbox, &record, floatingtz, runtime, dryrun);
         if (floatingtz) icaltimezone_free(floatingtz, 1);
+        break;
     }
 #ifdef WITH_JMAP
-    else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_JMAPSUBMIT) {
+    case ALARM_SEND:
         if (record.internaldate > runtime || dryrun) {
-            update_alarmdb(data->mboxname, data->imap_uid, record.internaldate);
+            caldav_alarm_bump_nextcheck(data, record.internaldate, 0, NULL);
             goto done;
         }
-        r = process_futurerelease(mailbox, &record);
-    }
-    else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
+        r = process_futurerelease(data, mailbox, &record, runtime);
+        break;
+
+    case ALARM_SNOOZE:
         /* XXX  Check special-use flag on mailbox */
-        r = process_snoozed(mailbox, &record, runtime, dryrun);
-    }
+        r = process_snoozed(data, mailbox, &record, runtime, dryrun);
+        break;
 #endif
-    else {
+    default:
         /* XXX  Should never get here */
         syslog(LOG_ERR, "Unknown/unsupported alarm triggered for"
                " mailbox %s uid %u of type %d with options 0x%02x",
                data->mboxname, data->imap_uid,
                mailbox_mbtype(mailbox), mailbox->i.options);
         caldav_alarm_delete_record(data->mboxname, data->imap_uid);
+        break;
     }
 
 done:
@@ -1655,14 +2071,15 @@ EXPORTED int caldav_alarm_upgrade()
             icalcomponent *ical = record_to_ical(mailbox, record, NULL);
 
             if (ical) {
-                if (has_alarms(ical, mailbox, record->uid)) {
+                if (has_alarms(ical, mailbox, record->uid, NULL)) {
                     char *userid = mboxname_to_userid(mailbox_name(mailbox));
                     time_t nextcheck = process_alarms(mailbox_name(mailbox), record->uid,
                                                       userid, floatingtz, ical,
                                                       runtime, runtime, /*dryrun*/1);
                     free(userid);
 
-                    update_alarmdb(mailbox_name(mailbox), record->uid, nextcheck);
+                    update_alarmdb(mailbox_name(mailbox), record->uid, nextcheck,
+                                   ALARM_CALENDAR, 0, 0, 0, NULL);
                 }
                 icalcomponent_free(ical);
             }
@@ -1682,4 +2099,77 @@ EXPORTED int caldav_alarm_upgrade()
     caldav_alarm_close(alarmdb);
 
     return rc;
+}
+
+
+#define CMD_UPGRADEv4_SET_TYPE_LIKE                        \
+    "INSERT INTO new_events"                               \
+    " SELECT *, :type, 0, 0, 0, NULL FROM events"          \
+    "  WHERE mboxname LIKE :mboxpat1 ;"
+
+#define CMD_UPGRADEv4_SET_TYPE_NOT_LIKE                    \
+    "INSERT INTO new_events"                               \
+    " SELECT *, :type, 0, 0, 0, NULL FROM events"          \
+    "  WHERE mboxname NOT LIKE :mboxpat1"                  \
+    "    AND mboxname NOT LIKE :mboxpat2 ;"
+
+#define CMD_UPGRADEv4_FINISH                               \
+    "DROP TABLE events;"                                   \
+    "ALTER TABLE new_events RENAME TO events;"             \
+     CMD_CREATE_INDEXES
+
+static int upgradev4(sqldb_t *db)
+{
+    struct sqldb_bindval bval[] = {
+        { ":type",     SQLITE_INTEGER, { .i = 0    } },
+        { ":mboxpat1", SQLITE_TEXT,    { .s = NULL } },
+        { ":mboxpat2", SQLITE_TEXT,    { .s = NULL } },
+        { NULL,        SQLITE_NULL,    { .s = NULL } } };
+    struct buf calpat = BUF_INITIALIZER;
+    struct buf subpat = BUF_INITIALIZER;
+    int r = 0;
+
+    if (db->version == 2) {
+        buf_printf(&calpat, "%%.%s.%%",
+                   config_getstring(IMAPOPT_CALENDARPREFIX));
+
+        buf_printf(&subpat, "%%.%s",
+                   config_getstring(IMAPOPT_JMAPSUBMISSIONFOLDER));
+
+        /* Create new table */
+        r = sqldb_exec(db, CMD_CREATE_TABLE("new_events"), NULL, NULL, NULL);
+        if (r) goto done;
+
+        /* Rewrite calendar alarm records */
+        bval[0].val.i = ALARM_CALENDAR;
+        bval[1].val.s = buf_cstring(&calpat);
+        r = sqldb_exec(db, CMD_UPGRADEv4_SET_TYPE_LIKE, bval, NULL, NULL);
+        if (r) goto done;
+
+        /* Rewrite JMAP submission records */
+        bval[0].val.i = ALARM_SEND;
+        bval[1].val.s = buf_cstring(&subpat);
+        r = sqldb_exec(db, CMD_UPGRADEv4_SET_TYPE_LIKE, bval, NULL, NULL);
+        if (r) goto done;
+
+        /* Rewrite JMAP snooze records */
+        bval[0].val.i = ALARM_SNOOZE;
+        bval[1].val.s = buf_cstring(&calpat);
+        bval[2].val.s = buf_cstring(&subpat);
+        r = sqldb_exec(db, CMD_UPGRADEv4_SET_TYPE_NOT_LIKE, bval, NULL, NULL);
+        if (r) goto done;
+
+        /* Drop old table, rename new table, and create indexes.
+
+           XXX  We avoid using sqldb_exec() because sqlite3_prepare_v2()
+           XXX  only supports one command at a time.
+        */
+        r = sqlite3_exec(db->db, CMD_UPGRADEv4_FINISH, NULL, NULL, NULL);
+    }
+
+  done:
+    buf_free(&calpat);
+    buf_free(&subpat);
+
+    return r;
 }

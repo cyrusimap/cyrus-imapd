@@ -50,6 +50,13 @@
 #include "mailbox.h"
 #include <libical/ical.h>
 
+enum alarm_type {
+    ALARM_CALENDAR = 1,
+    ALARM_SNOOZE,
+    ALARM_SEND,
+    ALARM_UNSCHEDULED,
+};
+
 /* prepare for caldav alarm operations in this process */
 int caldav_alarm_init(void);
 
@@ -64,7 +71,7 @@ void caldav_alarm_rollback_reconstruct();
 /* add a calendar alarm */
 int caldav_alarm_add_record(struct mailbox *mailbox,
                             const struct index_record *record,
-                            icalcomponent *ical);
+                            void *data);
 
 /* make sure that the alarms match the annotation. If forced,
  * the event is not checked if it contains alarms */

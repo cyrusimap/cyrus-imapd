@@ -356,7 +356,7 @@ static int ensure_submission_collection(const char *accountid,
     return r;
 }
 
-static int store_submission(struct mailbox *mailbox,
+static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
                             struct buf *msg, time_t holduntil,
                             json_t *emailsubmission,
                             json_t **new_submission)
@@ -447,7 +447,8 @@ static int store_submission(struct mailbox *mailbox,
     }
 
     /* Append the message to the mailbox */
-    r = append_fromstage(&as, &body, stage, internaldate, 0, &flags, 0, /*annots*/NULL);
+    r = append_fromstage_full(&as, &body, stage, internaldate, now,
+                              /*cmodseq*/0, &flags, /*nolink*/0, /*annots*/NULL);
 
     if (r) {
         append_abort(&as);
@@ -476,6 +477,13 @@ static int store_submission(struct mailbox *mailbox,
          "undoStatus", (holduntil ? "pending" : "final"),
          "sendAt", sendat
     );
+
+    if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+        char created[RFC3339_DATETIME_MAX];
+        time_to_rfc3339(now, created, RFC3339_DATETIME_MAX);
+
+        json_object_set_new(*new_submission, "created", json_string(created));
+    }
 
   done:
     if (body) {
@@ -555,12 +563,47 @@ static void _emailsubmission_create(jmap_req_t *req,
         envelope = NULL;
     }
 
+    json_t *onSend = json_object_get(emailsubmission, "onSend");
+    if (JNOTNULL(onSend)) {
+        const char *field;
+        json_t *jval;
+
+        jmap_parser_push(&parser, "onSend");
+        json_object_foreach(onSend, field, jval) {
+            if (!strcmp(field, "moveToMailboxId")) {
+                if (JNOTNULL(jval) && !json_is_string(jval)) {
+                    jmap_parser_invalid(&parser, "moveToMailboxId");
+                }
+            }
+            else if (!strcmp(field, "setKeywords")) {
+                const char *keyword;
+                json_t *jbool;
+
+                jmap_parser_push(&parser, "setKeywords");
+                json_object_foreach(jval, keyword, jbool) {
+                    if (!json_is_boolean(jbool) ||
+                        !jmap_email_keyword_is_valid(keyword)) {
+                        jmap_parser_invalid(&parser, keyword);
+                    }
+                }
+                jmap_parser_pop(&parser);
+            }
+            else {
+                jmap_parser_invalid(&parser, field);
+            }
+        }
+        jmap_parser_pop(&parser);
+    }
+
     /* Reject read-only properties */
     if (json_object_get(emailsubmission, "id")) {
         jmap_parser_invalid(&parser, "id");
     }
     if (json_object_get(emailsubmission, "threadId")) {
         jmap_parser_invalid(&parser, "threadId");
+    }
+    if (json_object_get(emailsubmission, "created")) {
+        jmap_parser_invalid(&parser, "created");
     }
     if (json_object_get(emailsubmission, "sendAt")) {
         jmap_parser_invalid(&parser, "sendAt");
@@ -847,7 +890,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     /* Replace any creation id with actual emailId */
     json_object_set_new(emailsubmission, "emailId", json_string(msgid));
 
-    r = store_submission(submbox, &buf, holduntil,
+    r = store_submission(req, submbox, &buf, holduntil,
                          emailsubmission, new_submission);
 
 done:
@@ -1058,7 +1101,7 @@ done:
     message_unref(&msg);
 }
 
-static int getsubmission(struct jmap_get *get,
+static int getsubmission(jmap_req_t *req, struct jmap_get *get,
                          const char *id, message_t *msg)
 {
     json_t *sub = NULL;
@@ -1089,7 +1132,29 @@ static int getsubmission(struct jmap_get *get,
             json_object_del(sub, "envelope");
         }
 
-        /* senddAt */
+        if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+            /* onSend */
+            if (!jmap_wantprop(get->props, "onSend")) {
+                json_object_del(sub, "onSend");
+            }
+
+            /* created */
+            if (jmap_wantprop(get->props, "created")) {
+                char datestr[RFC3339_DATETIME_MAX];
+                time_t t;
+
+                r = message_get_savedate(msg, &t);
+                if (r) goto done;
+
+                time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+                json_object_set_new(sub, "created", json_string(datestr));
+            }
+        }
+        else {
+            json_object_del(sub, "onSend");
+        }
+
+        /* sendAt */
         if (jmap_wantprop(get->props, "sendAt")) {
             char datestr[RFC3339_DATETIME_MAX];
             time_t t;
@@ -1204,6 +1269,18 @@ static const jmap_property_t submission_props[] = {
         NULL,
         JMAP_PROP_SERVER_SET
     },
+
+    /* FM extensions */
+    {
+        "onSend",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "created",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
     { NULL, NULL, 0 }
 };
 
@@ -1255,7 +1332,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
                 continue;
             }
 
-            r = getsubmission(&get, id, msg);
+            r = getsubmission(req, &get, id, msg);
             message_unref(&msg);
         }
     }
@@ -1271,7 +1348,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
 
             /* Create id from message UID, using 'S' prefix */
             sprintf(id, "S%u", uid);
-            r = getsubmission(&get, id, (message_t *) msg);
+            r = getsubmission(req, &get, id, (message_t *) msg);
         }
         mailbox_iter_done(&iter);
     }
@@ -1523,7 +1600,13 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
                         id = json_string_value(json_object_get(jsuccess, "id"));
                 }
                 const char *emailid = json_string_value(json_object_get(success_emailids, id));
-                if (emailid) json_object_set(updateEmails, emailid, jemail);
+                if (emailid) {
+                    json_object_set(updateEmails, emailid, jemail);
+
+                    /* Add this email to scheduled email cache so Email/set{update}
+                       can override ACL check on $scheduled mailbox */
+                    strarray_append(req->scheduled_emails, emailid);
+                }
             }
 
             json_object_set_new(subargs, "update", updateEmails);
@@ -1682,6 +1765,13 @@ static void _emailsubmission_filter_parse(jmap_req_t *req __attribute__((unused)
                 jmap_parser_invalid(parser, field);
             }
         }
+        else if (jmap_is_using(req, JMAP_MAIL_EXTENSION) &&
+                 (!strcmp(field, "createdBefore") ||
+                  !strcmp(field, "createdAfter"))) {
+            if (!json_is_utcdate(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
         else {
             jmap_parser_invalid(parser, field);
         }
@@ -1702,6 +1792,9 @@ static int _emailsubmission_comparator_parse(jmap_req_t *req __attribute__((unus
         !strcmp(comp->property, "sentAt")) {
         return 1;
     }
+    if (!strcmp(comp->property, "created")) {
+        return jmap_is_using(req, JMAP_MAIL_EXTENSION);
+    }
     return 0;
 }
 
@@ -1720,6 +1813,8 @@ typedef struct submission_filter {
     const char *undoStatus;
     time_t before;
     time_t after;
+    time_t createdBefore;
+    time_t createdAfter;
 } submission_filter;
 
 /* Parse the JMAP EmailSubmission FilterCondition in arg.
@@ -1730,8 +1825,8 @@ static void *submission_filter_build(json_t *arg)
     submission_filter *f =
         (submission_filter *) xzmalloc(sizeof(struct submission_filter));
 
-    f->before = eternity;
-    f->after = epoch;
+    f->createdBefore = f->before = eternity;
+    f->createdAfter  = f->after  = epoch;
 
     /* identityIds */
     json_t *identityIds = json_object_get(arg, "identityIds");
@@ -1794,6 +1889,20 @@ static void *submission_filter_build(json_t *arg)
         time_from_iso8601(utcDate, &f->after);
     }
 
+    /* createdBefore */
+    if (JNOTNULL(json_object_get(arg, "createdBefore"))) {
+        const char *utcDate;
+        jmap_readprop(arg, "createdBefore", 0, NULL, "s", &utcDate);
+        time_from_iso8601(utcDate, &f->createdBefore);
+    }
+
+    /* createdAfter */
+    if (JNOTNULL(json_object_get(arg, "createdAfter"))) {
+        const char *utcDate;
+        jmap_readprop(arg, "createdAfter", 0, NULL, "s", &utcDate);
+        time_from_iso8601(utcDate, &f->createdAfter);
+    }
+
     return f;
 }
 
@@ -1816,6 +1925,12 @@ static int submission_filter_match(void *vf, void *rock)
 
     /* after */
     if (record->internaldate < f->after) return 0;
+
+    /* createdBefore */
+    if (record->savedate >= f->createdBefore) return 0;
+
+    /* createdAfter */
+    if (record->savedate < f->createdAfter) return 0;
 
     /* undoStatus */
     if (f->undoStatus) {
@@ -1903,6 +2018,9 @@ static struct sortcrit *sub_buildsort(json_t *sort, int *need_submission)
         else if (!strcmp(prop, "sentAt")) {
             sortcrit[i].key = SORT_ARRIVAL;
         }
+        else if (!strcmp(prop, "created")) {
+            sortcrit[i].key = SORT_SAVEDATE;
+        }
     }
 
     i = json_array_size(sort);
@@ -1914,6 +2032,7 @@ static struct sortcrit *sub_buildsort(json_t *sort, int *need_submission)
 struct sub_match {
     char id[JMAP_SUBID_SIZE];
     uint32_t uid;
+    time_t created;
     time_t sentAt;
     const char *emailId;
     const char *threadId;
@@ -1936,6 +2055,9 @@ static int sub_sort_compare(const void **vp1, const void **vp2)
         reverse = sortcrit[i].flags & SORT_REVERSE;
 
         switch (sortcrit[i].key) {
+        case SORT_SAVEDATE:
+            ret = m1->created - m2->created;
+            break;
         case SORT_ARRIVAL:
             ret = m1->sentAt - m2->sentAt;
             break;
@@ -2055,6 +2177,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         /* Create id from message UID, using 'S' prefix */
         sprintf(match->id, "S%u", record->uid);
         match->uid = record->uid;
+        match->created = record->savedate;
         match->sentAt = record->internaldate;
         match->emailId = sfrock.emailId;
         match->threadId = sfrock.threadId;

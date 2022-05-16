@@ -123,7 +123,7 @@ EXPORTED int append_check(const char *name,
 
     myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 
-    if ((myrights & aclcheck) != aclcheck) {
+    if ((myrights & aclcheck) != aclcheck || mboxname_isscheduledmailbox(name, 0)) {
         r = (myrights & ACL_LOOKUP) ?
           IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
         goto done;

@@ -327,6 +327,14 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
         if (state->examining)
             state->myrights &= ~ACL_READ_WRITE;
 
+        /* Only allow setting flags on \Scheduled mailbox */
+        if (mboxname_isscheduledmailbox(mailbox_name(state->mailbox),
+                                        mailbox_mbtype(state->mailbox))) {
+            state->myrights &= ~(ACL_INSERT | ACL_POST |
+                                 ACL_CREATE | ACL_DELETEMBOX |
+                                 ACL_DELETEMSG | ACL_EXPUNGE);
+        }
+
         state->internalseen = mailbox_internal_seen(state->mailbox,
                                                     state->userid);
     }
