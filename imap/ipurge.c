@@ -48,6 +48,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -64,12 +65,6 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-
-/* globals for getopt routines */
-extern char *optarg;
-extern int  optind;
-extern int  opterr;
-extern int  optopt;
 
 /* globals for callback functions */
 static int days = -1;
@@ -106,13 +101,35 @@ static void print_record(struct mailbox *mailbox,
 static void print_stats(mbox_stats_t *stats);
 
 int main (int argc, char *argv[]) {
-    int option;           /* getopt() returns an int */
     char *alt_config = NULL;
     int matchmailbox = 0;
-    int r;
+    int r, opt;
 
-    while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsMXionv")) != EOF) {
-        switch (option) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:MXb:d:fhik:m:nosvx";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "no-recursive", no_argument, NULL, 'M' },
+        { "delivery-time", no_argument, NULL, 'X' },
+        { "bytes", required_argument, NULL, 'b' },
+        { "days", required_argument, NULL, 'd' },
+        { "include-user-mailboxes", no_argument, NULL, 'f' },
+        { "invert-match", no_argument, NULL, 'i' },
+        { "kbytes", required_argument, NULL, 'k' },
+        { "mbytes", required_argument, NULL, 'm' },
+        { "dry-run", no_argument, NULL, 'n' },
+        { "only-deleted", no_argument, NULL, 'o' },
+        { "skip-flagged", no_argument, NULL, 's' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "exact-match", no_argument, NULL, 'x' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
