@@ -1393,7 +1393,7 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
     icalproperty *oldprop = icalcomponent_get_first_property(oldical, kind);
     icalproperty *newprop = icalcomponent_get_first_property(newical, kind);
 
-    if ((!oldprop != !newprop) &&
+    if ((!oldprop != !newprop) && /* property has different  presence in both */
         (icalcomponent_isa(oldical) == ICAL_VEVENT_COMPONENT) &&
         ((kind == ICAL_DTEND_PROPERTY) || (kind == ICAL_DURATION_PROPERTY))) {
         struct icaltimetype oldend = icalcomponent_get_dtend(oldical);
