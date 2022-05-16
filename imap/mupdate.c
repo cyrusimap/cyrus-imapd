@@ -2115,7 +2115,6 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     char *oldlocation = NULL;
     char *thislocation = NULL;
     char *tmp;
-    enum settype t = -1;
     int ret = 0;
 
     if (!mdata || !rock || !mdata->mailbox) return 1;
@@ -2133,7 +2132,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
             /* ret = -1; */
             goto done;
         }
-        m->t = t = SET_DELETE;
+        m->t = SET_DELETE;
 
         oldlocation = xstrdup(m->location);
     } else {
@@ -2151,9 +2150,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
             else m->acl[0] = '\0';
 
             if (!strncmp(rock, "MAILBOX", 6)) {
-                m->t = t = SET_ACTIVE;
+                m->t = SET_ACTIVE;
             } else if (!strncmp(rock, "RESERVE", 7)) {
-                m->t = t = SET_RESERVE;
+                m->t = SET_RESERVE;
             } else {
                 syslog(LOG_DEBUG,
                        "bad mupdate command in cmd_change: %s", rock);
@@ -2185,9 +2184,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
             }
 
             if (!strncmp(rock, "MAILBOX", 6)) {
-                newm->t = t = SET_ACTIVE;
+                newm->t = SET_ACTIVE;
             } else if (!strncmp(rock, "RESERVE", 7)) {
-                newm->t = t = SET_RESERVE;
+                newm->t = SET_RESERVE;
             } else {
                 syslog(LOG_DEBUG,
                        "bad mupdate command in cmd_change: %s", rock);

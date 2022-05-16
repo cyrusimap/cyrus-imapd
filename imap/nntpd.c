@@ -2473,7 +2473,6 @@ static void list_proxy(const char *server,
 {
     struct enum_rock *erock = (struct enum_rock *) rock;
     struct backend *be;
-    int r;
     char *result;
 
     be = proxy_findserver(server, &nntp_protocol,
@@ -2483,9 +2482,8 @@ static void list_proxy(const char *server,
 
     prot_printf(be->out, "LIST %s %s\r\n", erock->cmd, erock->wild);
 
-    r = read_response(be, 0, &result);
-    if (!r && !strncmp(result, "215 ", 4)) {
-        while (!(r = read_response(be, 0, &result)) && result[0] != '.') {
+    if (!read_response(be, 0, &result) && !strncmp(result, "215 ", 4)) {
+        while (!read_response(be, 0, &result) && result[0] != '.') {
             prot_printf(nntp_out, "%s", result);
         }
     }

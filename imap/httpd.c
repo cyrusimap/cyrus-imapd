@@ -4564,7 +4564,7 @@ EXPORTED int check_precond(struct transaction_t *txn,
 
     /* Step 5 */
     if (txn->flags.ranges &&  /* Only if we support Range requests */
-        txn->meth == METH_GET && (hdr = spool_getheader(hdrcache, "Range"))) {
+        txn->meth == METH_GET && spool_getheader(hdrcache, "Range")) {
 
         if ((hdr = spool_getheader(hdrcache, "If-Range"))) {
             time_from_rfc5322(hdr[0], &since, DATETIME_FULL); /* error OK here, could be an etag */

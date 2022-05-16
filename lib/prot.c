@@ -841,13 +841,13 @@ EXPORTED int prot_fill(struct protstream *s)
 EXPORTED int prot_flush(struct protstream *s)
 {
     if (!s->write) {
-        int c, save_dontblock = s->dontblock;
+        int save_dontblock = s->dontblock;
 
         /* Set stream to nonblocking mode */
         if (!save_dontblock) nonblock(s->fd, (s->dontblock = 1));
 
         /* Ingest any pending input */
-        while ((c = prot_fill(s)) != EOF);
+        while (prot_fill(s) != EOF);
 
         /* Reset stream to previous blocking mode */
         if (!save_dontblock) nonblock(s->fd, (s->dontblock = 0));
