@@ -5661,6 +5661,76 @@ sub test_calendarevent_set_schedule_reply
     $self->assert($ical =~ "METHOD:REPLY");
 }
 
+sub test_calendarevent_set_schedule_reply_custom_tz
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $uid = "xxaaasdfasfhialskdjflaksjfdalskdfja";
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:Microsoft Exchange Server 2010
+BEGIN:VTIMEZONE
+TZID:(UTC-06:00) Central Time (US & Canada)
+BEGIN:STANDARD
+DTSTART:16010101T020000
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0600
+RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T020000
+TZOFFSETFROM:-0600
+TZOFFSETTO:-0400
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+ORGANIZER;X-JMAP-ID=org;CN="Bugs Bunny":MAILTO:bugs\@example.com
+ATTENDEE;X-JMAP-ID=att;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;
+ CN="Cassandane":MAILTO:cassandane\@example.com
+DESCRIPTION;LANGUAGE=en-US:\n
+UID:$uid
+SUMMARY;LANGUAGE=en-US:foo
+DTSTART;TZID="(UTC-06:00) Central Time (US & Canada)":20220420T080000
+DURATION:PT1H
+DTSTAMP:20220419T175315Z
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $event = $self->putandget_vevent($uid, $ical);
+    my $id = $event->{id};
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "send reply as attendee to organizer";
+    my $res = $jmap->CallMethods([['CalendarEvent/set', {
+        sendSchedulingMessages => JSON::true,
+        update => {
+            $id => {
+                'participants/att/participationStatus' => "tentative",
+            }
+        }
+    }, "R1"]]);
+
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    my $payload = decode_json($imip->{MESSAGE});
+    $ical = $payload->{ical};
+
+    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REPLY");
+}
+
 sub test_calendarevent_set_schedule_destroy
     :min_version_3_1 :needs_component_jmap
 {
@@ -21120,6 +21190,179 @@ sub test_calendarevent_get_isorigin
 
     $self->assert_equals(JSON::false, $res->[0][1]{updated}{$eventNoReplyToId}{isOrigin});
     $self->assert_equals(JSON::false, $res->[1][1]{list}[0]{isOrigin});
+}
+
+sub test_calendarevent_set_preserve_microsoft_timezone
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event with Microsoft timezone via CalDAV";
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+PRODID:Microsoft Exchange Server 2010
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:AUS Eastern Standard Time
+BEGIN:STANDARD
+DTSTART:16010101T030000
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=1SU;BYMONTH=4
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T020000
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=1SU;BYMONTH=10
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:a0591c63-31c0-4c56-a8ab-9fe49dcbd3b0
+SUMMARY:test
+DTSTART;TZID=AUS Eastern Standard Time:20220412T080000
+DTEND;TZID=AUS Eastern Standard Time:20220412T083000
+SEQUENCE:1
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $ics = '/dav/calendars/user/cassandane/Default/test.ics';
+    $caldav->Request('PUT', $ics, $ical, 'Content-Type' => 'text/calendar');
+
+    xlog "Assert timeZone is mapped to IANA timezone";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => ['timeZone'],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[1][1]{list}[0]{id};
+    $self->assert_not_null($eventId);
+    $self->assert_str_equals('Australia/Sydney', $res->[1][1]{list}[0]{timeZone});
+
+    xlog "Update event title, keep timeZone untouched";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => 'updatedTitle',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Assert VTIMEZONE is kept";
+    $res = $caldav->Request('GET', $ics);
+    $self->assert($res->{content} =~
+        m/DTSTART;TZID=AUS Eastern Standard Time:20220412T080000/);
+    $self->assert($res->{content} =~
+        m/TZID:AUS Eastern Standard Time/);
+
+    xlog "Update event timeZone to IANA identifier";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    timeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Assert VTIMEZONE got replaced";
+    $res = $caldav->Request('GET', $ics);
+    $self->assert(not $res->{content} =~
+        m/DTSTART;TZID=AUS Eastern Standard Time:20220412T080000/);
+    $self->assert(not $res->{content} =~
+        m/TZID:AUS Eastern Standard Time/);
+}
+
+sub test_calendarevent_set_no_preserve_iana_timezone
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event with custom IANA timezone via CalDAV";
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+PRODID://Foo/Bar
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Europe/Vienna
+BEGIN:STANDARD
+DTSTART:16010101T030000
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=1SU;BYMONTH=4
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T020000
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=1SU;BYMONTH=10
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:a0591c63-31c0-4c56-a8ab-9fe49dcbd3b0
+SUMMARY:test
+DTSTART;TZID=Europe/Vienna:20220412T080000
+DTEND;TZID=Europe/Vienna:20220412T083000
+SEQUENCE:1
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $ics = '/dav/calendars/user/cassandane/Default/test.ics';
+    $caldav->Request('PUT', $ics, $ical, 'Content-Type' => 'text/calendar');
+
+    xlog "Assert timeZone and UTC times are correct";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => ['timeZone', 'utcStart', 'utcEnd'],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[1][1]{list}[0]{id};
+    $self->assert_not_null($eventId);
+    $self->assert_str_equals('Europe/Vienna', $res->[1][1]{list}[0]{timeZone});
+    $self->assert_str_equals('2022-04-12T06:00:00Z', $res->[1][1]{list}[0]{utcStart});
+    $self->assert_str_equals('2022-04-12T06:30:00Z', $res->[1][1]{list}[0]{utcEnd});
+
+    xlog "Update event title, keep timeZone untouched";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => 'updatedTitle',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Assert VTIMEZONE got replaced";
+    $res = $caldav->Request('GET', $ics);
+    $self->assert(not $res->{content} =~ m/TZOFFSETFROM:\+1000/);
+    $self->assert($res->{content} =~ m/TZOFFSETFROM:\+0200/);
 }
 
 1;

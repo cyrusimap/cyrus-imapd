@@ -70,6 +70,7 @@
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "ical_support.h"
+#include "icu_wrap.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -230,12 +231,14 @@ typedef struct jstimezones {
     hash_table bytzid;
     hash_table byjstzid;
     ptrarray_t entries;
+    int no_guess;
 } jstimezones_t;
 
 #define JSTIMEZONES_INITIALIZER { \
     HASH_TABLE_INITIALIZER, \
     HASH_TABLE_INITIALIZER, \
-    PTRARRAY_INITIALIZER \
+    PTRARRAY_INITIALIZER, \
+    0 \
 }
 
 /* Forward declarations */
@@ -252,7 +255,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
                                   icalcomponent *maincomp,
                                   struct icalcomps *oldcomps,
                                   icaltimetype now,
-                                  jstimezones_t *jtzcache,
+                                  jstimezones_t **jtzcachep,
                                   struct jmapical_ctx *jmapctx);
 
 static char *_emailalert_recipient(const char *userid)
@@ -793,6 +796,32 @@ static int jstimezones_add_standard_timezone(jstimezones_t *jstzones, icaltimezo
     return jstimezones_add_timezone(jstzones, tz, tzid, tzid, 0);
 }
 
+static icaltimezone *get_cyrus_timezone_from_tzid(const char *tzid, int no_guess)
+{
+    if (!tzid)
+        return NULL;
+
+    /* Use UTC singleton for Etc/UTC */
+    if (!strcmp(tzid, "Etc/UTC") || !strcmp(tzid, "UTC"))
+        return icaltimezone_get_utc_timezone();
+
+    icaltimezone *tz = icaltimezone_get_builtin_timezone(tzid);
+    if (tz == NULL)
+        tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+    if (tz == NULL && !no_guess) {
+        /* see if its a MS Windows TZID */
+        char *icutzid = icu_getIDForWindowsID(tzid);
+        if (icutzid) {
+            tz = icaltimezone_get_builtin_timezone(icutzid);
+            if (tz == NULL)
+                tz = icaltimezone_get_builtin_timezone_from_tzid(icutzid);
+            free(icutzid);
+        }
+    }
+    return tz;
+}
+
+
 HIDDEN icaltimezone *jstimezones_lookup_tzid(jstimezones_t *jstzones, const char *tzid)
 {
     if (!tzid) return NULL;
@@ -809,7 +838,8 @@ HIDDEN icaltimezone *jstimezones_lookup_tzid(jstimezones_t *jstzones, const char
     }
 
     /* Lookup in standard timezones */
-    icaltimezone *stdtz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+    icaltimezone *stdtz = get_cyrus_timezone_from_tzid(tzid,
+            jstzones ? jstzones->no_guess : 0);
     if (jstzones && stdtz) {
         jstimezones_add_standard_timezone(jstzones, stdtz);
     }
@@ -864,7 +894,7 @@ static const char *jstimezones_get_jstzid(jstimezones_t *jstzones, const char *t
         }
     }
     if (!stdtz) {
-        stdtz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+        stdtz = get_cyrus_timezone_from_tzid(tzid, jstzones ? jstzones->no_guess : 0);
         if (jstzones && stdtz) {
             jstimezones_add_standard_timezone(jstzones, stdtz);
         }
@@ -887,45 +917,50 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
          vtz;
          vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
 
-        /* Ignore IANA and Windows timezone ids */
         prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
         if (!prop) continue;
         const char *tzid = icalproperty_get_tzid(prop);
         if (!tzid || !*tzid) continue;
-        icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+
+        icaltimezone *tz = get_cyrus_timezone_from_tzid(tzid, jstzones->no_guess);
         if (tz) {
             // cache standard timezone
             jstimezones_add_standard_timezone(jstzones, tz);
             continue;
         }
+
         // found a custom timezone
         count++;
     }
     if (!count) return;
 
 #ifdef HAVE_GUESSTZ
-    /* Determine the timespan of the event */
-    const icaltimezone *utc = icaltimezone_get_utc_timezone();
-    unsigned is_recurring = 0;
-    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-    if (!comp) return;
-    struct icalperiodtype span = icalrecurrenceset_get_utc_timespan(ical,
-            icalcomponent_isa(comp), NULL, &is_recurring, NULL, NULL);
-    if (icaltime_as_timet_with_zone(span.end, utc) == caldav_epoch) {
-        span.end = icaltime_null_time();
-    }
-
-    /* Open database to guess IANA timezones */
     guesstz_t *gtz = NULL;
-    if (config_getstring(IMAPOPT_ZONEINFO_DIR)) {
-        char *fname = strconcat(config_getstring(IMAPOPT_ZONEINFO_DIR),
-                                "/guesstz.db", NULL);
-        gtz = guesstz_open(fname);
-        free(fname);
-        if (guesstz_error(gtz)) {
-            xsyslog(LOG_ERR, "can't open guesstz database",
-                    "err<%s>", guesstz_error(gtz));
-            guesstz_close(&gtz);
+    struct icalperiodtype guess_span;
+
+    if (!jstzones->no_guess) {
+        /* Determine the timespan of the event */
+        const icaltimezone *utc = icaltimezone_get_utc_timezone();
+        unsigned is_recurring = 0;
+        icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+        if (!comp) return;
+        guess_span = icalrecurrenceset_get_utc_timespan(ical,
+                icalcomponent_isa(comp), NULL, &is_recurring, NULL, NULL);
+        if (icaltime_as_timet_with_zone(guess_span.end, utc) == caldav_epoch) {
+            guess_span.end = icaltime_null_time();
+        }
+
+        /* Open database to guess IANA timezones */
+        if (config_getstring(IMAPOPT_ZONEINFO_DIR)) {
+            char *fname = strconcat(config_getstring(IMAPOPT_ZONEINFO_DIR),
+                    "/guesstz.db", NULL);
+            gtz = guesstz_open(fname);
+            free(fname);
+            if (guesstz_error(gtz)) {
+                xsyslog(LOG_ERR, "can't open guesstz database",
+                        "err<%s>", guesstz_error(gtz));
+                guesstz_close(&gtz);
+            }
         }
     }
 #endif
@@ -938,11 +973,11 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
          vtz;
          vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
 
-        /* Ignore IANA and Windows timezone ids */
+        /* Ignore standard timezones */
         prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
         if (!prop) continue;
         const char *tzid = icalproperty_get_tzid(prop);
-        if (!tzid || !*tzid || icaltimezone_get_cyrus_timezone_from_tzid(tzid)) {
+        if (!tzid || !*tzid || get_cyrus_timezone_from_tzid(tzid, jstzones->no_guess)) {
             continue;
         }
 
@@ -959,7 +994,7 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
         if (!jstzid) {
 #ifdef HAVE_GUESSTZ
             if (gtz) {
-                char *ianaid = guesstz_guess(gtz, myvtz, span.start, span.end);
+                char *ianaid = guesstz_guess(gtz, myvtz, guess_span.start, guess_span.end);
                 if (ianaid) buf_setcstr(&idbuf, ianaid);
                 free(ianaid);
             }
@@ -1006,9 +1041,10 @@ static void jstimezones_fini(jstimezones_t *jstzones)
     ptrarray_fini(&jstzones->entries);
 }
 
-HIDDEN jstimezones_t *jstimezones_new(icalcomponent *ical)
+HIDDEN jstimezones_t *jstimezones_new(icalcomponent *ical, int no_guess)
 {
     jstimezones_t *jstzones = xzmalloc(sizeof(struct jstimezones));
+    jstzones->no_guess = no_guess;
     jstimezones_add_vtimezones(jstzones, ical);
     return jstzones;
 }
@@ -1337,7 +1373,7 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess,
             icalvalue *val = icalproperty_get_value(prop);
             icaltimetype dt = icalvalue_get_datetime(val);
             tzid = dt.zone ? icaltimezone_get_location((icaltimezone*) dt.zone) : NULL;
-            tzid = tzid && icaltimezone_get_cyrus_timezone_from_tzid(tzid) ? tzid : NULL;
+            tzid = tzid && jstimezones_lookup_tzid(jstzones, tzid) ? tzid : NULL;
         } else if (tz == icaltimezone_get_utc_timezone()) {
             /* XXX  libical may not set tzid or location */
             return tzid;
@@ -1402,7 +1438,7 @@ static struct icaltimetype dtend_from_ical(icalcomponent *comp,
     if (end_prop) {
         dtend = icalproperty_get_dtend(end_prop);
         const char *tzid = tzid_from_icalprop(end_prop, 1, jstzones);
-        icaltimezone* tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+        icaltimezone* tz = jstimezones_lookup_tzid(jstzones, tzid);
         if (tz && tz != dtend.zone) {
             icaltimezone *utc = icaltimezone_get_utc_timezone();
             if (dtend.zone != utc) {
@@ -3372,6 +3408,7 @@ calendarevent_from_ical(icalcomponent *comp,
 
     /* Read custom timezones */
     if (!jstzones) {
+        myjstzones.no_guess = jmapctx ? jmapctx->timezones.no_guess : 0;
         icalcomponent *ical = icalcomponent_get_parent(comp);
         jstimezones_add_vtimezones(&myjstzones, ical);
         jstzones = &myjstzones;
@@ -6655,7 +6692,8 @@ static void timezonerule_to_ical(icalcomponent *tzrule, struct jmap_parser *pars
 static void timezones_to_ical(icalcomponent *ical,
                               struct jmap_parser *parser,
                               json_t *jevent,
-                              json_t *jtimezones)
+                              json_t *jtimezones,
+                              struct jmapical_ctx *jmapctx)
 {
     icaltimezone *utc = icaltimezone_get_utc_timezone();
 
@@ -6671,18 +6709,12 @@ static void timezones_to_ical(icalcomponent *ical,
 
         jmap_parser_push(parser, jstzid);
 
-        size_t invalid_count = json_array_size(parser->invalid);
-
         icalcomponent *tzcomp = icalcomponent_new_vtimezone();
 
         validate_type(parser, jtimezone, "TimeZone");
 
         const char *tzid = json_string_value(json_object_get(jtimezone, "tzId"));
-        /* Don't allow IANA and Windows timezone ids */
-        if (icaltimezone_get_cyrus_timezone_from_tzid(tzid)) {
-            jmap_parser_invalid(parser, "tzId");
-        }
-        else if (tzid) {
+        if (tzid) {
             icalcomponent_add_property(tzcomp, icalproperty_new_tzid(tzid));
         }
         else jmap_parser_invalid(parser, "tzId");
@@ -6779,13 +6811,16 @@ static void timezones_to_ical(icalcomponent *ical,
             jmap_parser_invalid(parser, "daylight");
         }
 
-        if (invalid_count == json_array_size(parser->invalid)) {
-            if (strarray_find(&custom_jstzids, jstzid, 0) < 0) {
-                jmap_parser_invalid(parser, NULL);
-            }
-        }
-
         jmap_parser_pop(parser);
+
+        if (strarray_find(&custom_jstzids, jstzid, 0) < 0) {
+            // this timezone is not referenced by any known property
+            if (jmapctx && !jmapctx->timezones.ignore_orphans) {
+                jmap_parser_invalid(parser, jstzid);
+            }
+            icalcomponent_free(tzcomp);
+            continue;
+        }
 
         icalcomponent_add_component(ical, tzcomp);
     }
@@ -6938,7 +6973,7 @@ static void overrides_to_ical(icalcomponent *comp,
                 jmap_parser_invalid(parser, "recurrenceId");
             }
             calendarevent_to_ical(excomp, parser, ex, comp, oldcomps,
-                    now, jstzones, jmapctx);
+                    now, &jstzones, jmapctx);
             jmap_parser_pop(parser);
 
             /* Add the exception */
@@ -7078,10 +7113,11 @@ static void calendarevent_to_ical(icalcomponent *comp,
                                   icalcomponent *maincomp,
                                   struct icalcomps *oldcomps,
                                   icaltimetype now,
-                                  jstimezones_t *jstzones,
+                                  jstimezones_t **jstzonesp,
                                   struct jmapical_ctx *jmapctx)
 {
     jstimezones_t myjstzones = JSTIMEZONES_INITIALIZER;
+    jstimezones_t *jstzones = NULL;
 
     /* Caller must set UID */
     const char *uid = icalcomponent_get_uid(comp);
@@ -7113,13 +7149,21 @@ static void calendarevent_to_ical(icalcomponent *comp,
     icalcomponent *ical = icalcomponent_get_parent(comp);
     jprop = json_object_get(event, "timeZones");
     if (json_is_object(jprop)) {
-        timezones_to_ical(ical, parser, event, jprop);
+        timezones_to_ical(ical, parser, event, jprop, jmapctx);
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "timeZones");
     }
-    if (!jstzones) {
-        jstimezones_add_vtimezones(&myjstzones, ical);
-        jstzones = &myjstzones;
+    if (!jstzonesp || !*jstzonesp) {
+        if (!jstzonesp) {
+            jstzones = &myjstzones;
+        } else {
+            *jstzonesp = jstzones = xzmalloc(sizeof(struct jstimezones));
+        }
+
+        jstzones->no_guess = jmapctx ? jmapctx->timezones.no_guess : 0;
+        jstimezones_add_vtimezones(jstzones, ical);
+    } else {
+        jstzones = *jstzonesp;
     }
 
     /* start, duration, timeZone, recurrenceId, recurrenceIdTimeZone */
@@ -7521,6 +7565,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical,
                 json_t *invalid,
                 json_t *serverset,
                 icalcomponent **compptr,
+                jstimezones_t **jstzonesp,
                 struct jmapical_ctx *jmapctx)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -7554,7 +7599,7 @@ jmapical_toical(json_t *jsevent, icalcomponent *oldical,
 
         /* Convert the JMAP calendar event to ical. */
         calendarevent_to_ical(comp, &parser, jsevent, NULL,
-                &oldcomps, now, NULL, jmapctx);
+                &oldcomps, now, jstzonesp, jmapctx);
         icalcomponent_add_required_timezones(ical);
     }
     else jmap_parser_invalid(&parser, "uid");
@@ -7638,7 +7683,7 @@ EXPORTED icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf)
         return NULL;
     }
 
-    ical = jmapical_toical(obj, NULL, NULL, NULL, NULL, NULL);
+    ical = jmapical_toical(obj, NULL, NULL, NULL, NULL, NULL, NULL);
 
     json_decref(obj);
 
