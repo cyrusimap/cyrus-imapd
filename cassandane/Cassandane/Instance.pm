@@ -602,8 +602,10 @@ sub _list_pid_files
     my ($self) = @_;
 
     my $rundir = $self->{basedir} . "/run";
-    opendir(RUNDIR, $rundir)
-        or die "Cannot open run directory $rundir: $!";
+    if (!opendir(RUNDIR, $rundir)) {
+        return if $!{ENOENT}; # no run dir? never started
+        die "Cannot open run directory $rundir: $!";
+    }
 
     my @pidfiles;
     while ($_ = readdir(RUNDIR))
@@ -1485,7 +1487,7 @@ sub stop
 
     $self->_init_basedir_and_name();
 
-    return if ($self->{_stopped});
+    return if ($self->{_stopped} || !$self->{_started});
     $self->{_stopped} = 1;
 
     my @errors;
