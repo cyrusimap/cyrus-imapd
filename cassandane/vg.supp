@@ -80,3 +80,17 @@
     fun:service_init
     fun:main
 }
+{
+   # should only be necessary for valgrind versions < 3.17.0
+   # https://valgrind.org/docs/manual/dist.news.html:
+   #
+   #    422623 epoll_ctl warns for uninitialized padding on non-amd64 64bit arches
+   #
+   # https://bugs.kde.org/show_bug.cgi?id=422623
+   aarch64-linux-gnu-libnss-epoll_ctl
+   Memcheck:Param
+   epoll_ctl(event)
+   fun:epoll_ctl
+   obj:/usr/lib/aarch64-linux-gnu/libnss_systemd.so.2
+   ...
+}
