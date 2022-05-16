@@ -74,6 +74,15 @@ sub alloc
     die "No ports remaining";
 }
 
+sub free
+{
+    my ($port) = @_;
+
+    return unless defined $base_port;
+
+    $allocated{$port} = 0;
+}
+
 sub free_all
 {
     return unless defined $base_port;
