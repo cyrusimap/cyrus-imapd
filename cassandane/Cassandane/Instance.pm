@@ -1039,7 +1039,8 @@ sub set_smtpd {
     }
 }
 
-sub _start_smtpd {
+sub _start_smtpd
+{
     my ($self) = @_;
 
     my $basedir = $self->{basedir};
@@ -1074,19 +1075,28 @@ sub _start_smtpd {
     }
 
     # Parent process.
-    $self->{smtphost} = $host . ':' . $port;
 
-    # XXX give the child a moment to actually start up before we start
-    # XXX assuming it has
+    # give the child a moment to actually start up
     sleep 1;
 
-    xlog "started smtpd as $smtppid";
-    push @{$self->{_shutdowncallbacks}}, sub {
-        local *__ANON__ = "kill_smtpd";
-        my $self = shift;
-        xlog "killing smtpd $smtppid";
-        kill(15, $smtppid);
-        waitpid($smtppid, 0);
+    # and then make sure it did!
+    my $waitstatus = waitpid($smtppid, WNOHANG);
+    if ($waitstatus == 0) {
+        $self->{smtphost} = $host . ':' . $port;
+
+        xlog "started smtpd as $smtppid";
+        push @{$self->{_shutdowncallbacks}}, sub {
+            local *__ANON__ = "kill_smtpd";
+            my $self = shift;
+            xlog "killing smtpd $smtppid";
+            kill(15, $smtppid);
+            waitpid($smtppid, 0);
+        };
+    }
+    else {
+        # child process already exited, something has gone wrong
+        Cassandane::PortManager::free($port);
+        die "smtpd with pid=$smtppid failed to start";
     }
 }
 
