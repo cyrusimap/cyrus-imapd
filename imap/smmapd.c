@@ -385,7 +385,7 @@ static int begin_handling(void)
             errstring = "request size doesn't match length";
             r = IMAP_PROTOCOL_ERROR;
         }
-        if (!r && (c = prot_getc(map_in)) != ',') {
+        if (!r && prot_getc(map_in) != ',') {
             errstring = "missing terminator";
             r = IMAP_PROTOCOL_ERROR;
         }
@@ -448,4 +448,3 @@ static int begin_handling(void)
 
     return 0;
 }
-

@@ -624,15 +624,14 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
     struct imclient_cmdcallback **cmdcb, *cmdcbtemp;
     const char *plainbuf;
     unsigned plainlen;
-    int result;
 
     assert(imclient);
     assert(buf);
 
     if (imclient->saslcompleted == 1) {
         /* decrypt what we have */
-        if ((result = sasl_decode(imclient->saslconn, buf, len,
-                        &plainbuf, &plainlen)) != SASL_OK) {
+        if (sasl_decode(imclient->saslconn, buf, len,
+              &plainbuf, &plainlen) != SASL_OK) {
             (void) shutdown(imclient->fd, 0);
         }
 

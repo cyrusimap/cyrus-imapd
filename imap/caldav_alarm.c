@@ -1151,7 +1151,7 @@ static int process_valarms(struct mailbox *mailbox,
                             icaltimezone *floatingtz, time_t runtime,
                             int dryrun)
 {
-    icalcomponent *ical = ical = record_to_ical(mailbox, record, NULL);
+    icalcomponent *ical = record_to_ical(mailbox, record, NULL);
     const char *mboxname = mailbox_name(mailbox);
 
     if (!ical) {

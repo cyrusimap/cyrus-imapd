@@ -1233,8 +1233,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                     icalcomponent_get_first_property(comp,
                                                      ICAL_ORGANIZER_PROPERTY);
                 if (prop) {
-                    const char *organizer =
-                        organizer = icalproperty_get_organizer(prop);
+                    const char *organizer = icalproperty_get_organizer(prop);
                     if (organizer) {
                         if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
                         if (strcasecmp(cdata->organizer, organizer)) reject = 1;

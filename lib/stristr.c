@@ -33,7 +33,6 @@ EXPORTED char *stristr(const char *String, const char *Pattern)
       size_t  slen, plen;
 
       for (start = (char *)String,
-           pptr  = (char *)Pattern,
            slen  = strlen(String),
            plen  = strlen(Pattern);
 
