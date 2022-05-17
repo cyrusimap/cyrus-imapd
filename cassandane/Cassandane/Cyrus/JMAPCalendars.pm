@@ -7804,11 +7804,11 @@ EOF
     ];
 
     my $res = $jmap->CallMethods([
-        ['Blob/set',
+        ['Blob/upload',
            { create => {
-               "ical1" => { 'data:asText' => $ical1, type => 'text/calendar' },
-               "ical2" => { 'data:asText' => $ical2, type => 'text/calendar' },
-               "junk" => { 'data:asText' => 'foo bar', type => 'text/calendar' }
+               "ical1" => { data => [{'data:asText' => $ical1}], type => 'text/calendar' },
+               "ical2" => { data => [{'data:asText' => $ical2}], type => 'text/calendar' },
+               "junk" => { data => [{'data:asText' => 'foo bar'}], type => 'text/calendar' }
              } }, 'R0'],
         ['CalendarEvent/parse', {
             blobIds => [ "#ical1", "foo", "#junk", "#ical2" ],
@@ -7817,7 +7817,7 @@ EOF
          }, "R1"]],
         $using);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Blob/set', $res->[0][0]);
+    $self->assert_str_equals('Blob/upload', $res->[0][0]);
     $self->assert_str_equals('R0', $res->[0][2]);
 
     $self->assert_str_equals('CalendarEvent/parse', $res->[1][0]);

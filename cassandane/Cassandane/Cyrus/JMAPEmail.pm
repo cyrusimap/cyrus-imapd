@@ -19704,7 +19704,7 @@ EOF
 
     xlog $self, "do the lot!";
     $res = $jmap->CallMethods([
-            ['Blob/set', { create => { "a" => { 'data:asText' => $email } } }, 'R0'],
+            ['Blob/upload', { create => { "a" => { data => [{'data:asText' => $email }] } } }, 'R0'],
             ['Email/import', {
             emails => {
                 "1" => {
@@ -19728,7 +19728,7 @@ EOF
     close(FH);
 
     $res = $jmap->CallMethods([
-            ['Blob/set', { create => { "img" => { 'data:asBase64' => encode_base64($binary, ''), type => 'image/gif' } } }, 'R0'],
+            ['Blob/upload', { create => { "img" => { data => [{'data:asBase64' => encode_base64($binary, '')}], type => 'image/gif' } } }, 'R0'],
             ['Email/set', {
             create => {
                 "2" => {

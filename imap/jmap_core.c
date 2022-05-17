@@ -68,7 +68,7 @@ static int jmap_core_echo(jmap_req_t *req);
 /* JMAP extension methods */
 static int jmap_blob_get(jmap_req_t *req);
 static int jmap_blob_lookup(jmap_req_t *req);
-static int jmap_blob_set(jmap_req_t *req);
+static int jmap_blob_upload(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
 static int jmap_usercounters_get(jmap_req_t *req);
 
@@ -102,9 +102,9 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
         JMAP_NEED_CSTATE
     },
     {
-        "Blob/set",
+        "Blob/upload",
         JMAP_BLOB_EXTENSION,
-        &jmap_blob_set,
+        &jmap_blob_upload,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
@@ -932,24 +932,14 @@ done:
     return 0;
 }
 
-static const jmap_property_t blob_set_props[] = {
+static const jmap_property_t blob_upload_props[] = {
     {
         "id",
         NULL,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
     },
     {
-        "data:asText",
-        NULL,
-        0
-    },
-    {
-        "data:asBase64",
-        NULL,
-        0
-    },
-    {
-        "catenate",
+        "data",
         NULL,
         0
     },
@@ -1063,7 +1053,31 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
     return 0;
 }
 
-static int jmap_blob_set(struct jmap_req *req)
+static int _upload_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, json_t **errp)
+{
+    if (JNOTNULL(arg) && json_is_array(arg)) {
+        size_t limit = config_getint(IMAPOPT_JMAP_MAX_CATENATE_ITEMS);
+        if (json_array_size(arg) > limit) {
+            *errp = json_string("too many catenate items");
+            return IMAP_QUOTA_EXCEEDED;
+        }
+        size_t i;
+        json_t *val;
+        json_array_foreach(arg, i, val) {
+            struct buf subbuf = BUF_INITIALIZER;
+            // NOTE: we'll have to remove catenate later
+            int r = _set_arg_to_buf(req, &subbuf, val, 1, errp);
+            buf_appendmap(buf, buf_base(&subbuf), buf_len(&subbuf));
+            buf_free(&subbuf);
+            if (*errp) return r; // exact code doesn't matter, err will be checked
+            if (r) return r;
+        }
+    }
+
+    return 0;
+}
+
+static int jmap_blob_upload(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -1072,8 +1086,22 @@ static int jmap_blob_set(struct jmap_req *req)
     time_t now = time(NULL);
 
     /* Parse arguments */
-    jmap_set_parse(req, &parser, blob_set_props, NULL, NULL, &set, &jerr);
+    jmap_set_parse(req, &parser, blob_upload_props, NULL, NULL, &set, &jerr);
     if (jerr) {
+        jmap_error(req, jerr);
+        goto done;
+    }
+
+    if (json_object_size(set.update)) {
+        jerr = json_pack("{s:s}", "type", "invalidProperties");
+        json_object_set_new(jerr, "description", json_string("may not specify update with Blob/upload"));
+        jmap_error(req, jerr);
+        goto done;
+    }
+
+    if (json_object_size(set.destroy)) {
+        jerr = json_pack("{s:s}", "type", "invalidProperties");
+        json_object_set_new(jerr, "description", json_string("may not specify destroy with Blob/upload"));
         jmap_error(req, jerr);
         goto done;
     }
@@ -1088,9 +1116,10 @@ static int jmap_blob_set(struct jmap_req *req)
         char datestr[RFC3339_DATETIME_MAX];
         char blob_id[JMAP_BLOBID_SIZE];
 
-        int r = _set_arg_to_buf(req, buf, arg, 0, &err);
+        json_t *jdata = json_object_get(arg, "data");
+        int r = _upload_arg_to_buf(req, buf, jdata, &err);
 
-        if (r || !buf_base(buf) || err) {
+        if (r || err) {
             jerr = json_pack("{s:s}", "type", "invalidProperties");
             if (!err && r == IMAP_MAILBOX_EXISTS)
                 err = json_string("Multiple properties provided");
@@ -1124,21 +1153,12 @@ static int jmap_blob_set(struct jmap_req *req)
         jmap_add_id(req, key, blob_id);
     }
 
-    const char *uid;
-    json_object_foreach(set.update, uid, arg) {
-        jerr = json_pack("{s:s}", "type", "notFound");
-        json_object_set_new(set.not_updated, key, jerr);
-    }
-
-    size_t index;
-    json_t *juid;
-    json_array_foreach(set.destroy, index, juid) {
-        jerr = json_pack("{s:s}", "type", "notFound");
-        json_object_set_new(set.not_destroyed, json_string_value(juid), jerr);
-    }
-
-    set.old_state = set.new_state = 0;
-    jmap_ok(req, jmap_set_reply(&set));
+    json_t *res = json_object();
+    json_object_set(res, "created", json_object_size(set.created) ?
+            set.created : json_null());
+    json_object_set(res, "notCreated", json_object_size(set.not_created) ?
+            set.not_created : json_null());
+    jmap_ok(req, res);
 
 done:
     jmap_parser_fini(&parser);
