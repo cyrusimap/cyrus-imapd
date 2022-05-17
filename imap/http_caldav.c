@@ -3663,7 +3663,7 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
     }
     else {
         /* Make sure DURATION > 0 */
-        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+        prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
         if (prop) {
             struct icaldurationtype duration = icalproperty_get_duration(prop);
 
