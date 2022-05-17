@@ -1378,6 +1378,9 @@ static void clean_component(icalcomponent *comp)
  * Compare the properties of the given kind in two components.
  * Returns 0 if equal, 1 otherwise.
  *
+ * If the component is VEVENT and the DTEND/DURATION property
+ *   has been added or removed, compare the calculated end times and timezones
+ *   (an end time calculated from DURATION will have the same tz as DTSTART).
  * If the property exists in neither comp, then they are equal.
  * If the property exists in only 1 comp, then they are not equal.
  * if the property is RDATE or EXDATE, create an XORed CRC32 of all
@@ -1389,6 +1392,17 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 {
     icalproperty *oldprop = icalcomponent_get_first_property(oldical, kind);
     icalproperty *newprop = icalcomponent_get_first_property(newical, kind);
+
+    if ((!oldprop != !newprop) &&  /* property has different presence in each */
+        (icalcomponent_isa(oldical) == ICAL_VEVENT_COMPONENT) &&
+        ((kind == ICAL_DTEND_PROPERTY) || (kind == ICAL_DURATION_PROPERTY))) {
+        struct icaltimetype oldend = icalcomponent_get_dtend(oldical);
+        struct icaltimetype newend = icalcomponent_get_dtend(newical);
+
+        return ((oldend.zone != newend.zone) ||
+                icaltime_compare(icalcomponent_get_dtend(oldical),
+                                 icalcomponent_get_dtend(newical)));
+    }
 
     if (!oldprop) return (newprop != NULL);
     else if (!newprop) return 1;

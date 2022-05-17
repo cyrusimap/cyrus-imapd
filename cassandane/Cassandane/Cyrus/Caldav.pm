@@ -1320,6 +1320,202 @@ EOF
     );
 }
 
+sub test_invite_switch_duration_to_dtend
+    :VirtDomains :min_version_3_7 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DURATION:PT3H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "create event using DURATION";
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is sent to attendee";
+    $self->assert_caldav_notified(
+        { recipient => "friend\@example.com",
+          is_update => JSON::false, method => 'REQUEST' },
+    );
+
+    xlog $self, "update event using DTEND";
+    $card =~ s|DURATION:PT3H|DTEND;TZID=Australia/Melbourne:20160831T183000|;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is NOT sent to attendee";
+    my $newdata = $self->{instance}->getnotify();
+    my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    $self->assert_num_equals(0, scalar(@imip));
+
+    xlog $self, "update event using DURATION";
+    $card =~ s|DTEND;TZID=Australia/Melbourne:20160831T183000|DURATION:PT3H|;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is NOT sent to attendee";
+    $newdata = $self->{instance}->getnotify();
+    @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    $self->assert_num_equals(0, scalar(@imip));
+
+    xlog $self, "update event using DTEND with different TZID";
+    $card =~ s|DURATION:PT3H|DTEND;TZID=Australia/Sydney:20160831T183000|;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is sent to attendee";
+    $self->assert_caldav_notified(
+        { recipient => "friend\@example.com",
+          is_update => JSON::true, method => 'REQUEST' },
+    );
+
+    xlog $self, "update event using DURATION";
+    $card =~ s|DTEND;TZID=Australia/Sydney:20160831T183000|DURATION:PT3H|;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is sent to attendee";
+    $self->assert_caldav_notified(
+        { recipient => "friend\@example.com",
+          is_update => JSON::true, method => 'REQUEST' },
+    );
+
+    xlog $self, "update event using DTEND with same TZID";
+    $card =~ s|DURATION:PT3H|DTEND;TZID=Australia/Melbourne:20160831T183000|;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is NOT sent to attendee";
+    $newdata = $self->{instance}->getnotify();
+    @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    $self->assert_num_equals(0, scalar(@imip));
+
+    xlog $self, "update event changing TZID on DTEND";
+    $card =~ s|DTEND;TZID=Australia/Melbourne|DTEND;TZID=Australia/Sydney|;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is sent to attendee";
+    $self->assert_caldav_notified(
+        { recipient => "friend\@example.com",
+          is_update => JSON::true, method => 'REQUEST' },
+    );
+}
+
+sub test_invite_switch_implicit_allday_to_dtend
+    :VirtDomains :min_version_3_7 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;VALUE=DATE:20160831
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "create implicit allday event";
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is sent to attendee";
+    $self->assert_caldav_notified(
+        { recipient => "friend\@example.com",
+          is_update => JSON::false, method => 'REQUEST' },
+    );
+
+    xlog $self, "update event using DTEND";
+    $card =~ s|DTSTAMP|DTEND;VALUE=DATE:20160901\r\nDTSTAMP|;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is NOT sent to attendee";
+    my $newdata = $self->{instance}->getnotify();
+    my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    $self->assert_num_equals(0, scalar(@imip));
+
+    xlog $self, "update event removing DTEND";
+    $card =~ s|DTEND;VALUE=DATE:20160901\r\n||;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is NOT sent to attendee";
+    $newdata = $self->{instance}->getnotify();
+    @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    $self->assert_num_equals(0, scalar(@imip));
+
+    xlog $self, "update event to be multiple days";
+    $card =~ s|DTSTAMP|DTEND;VALUE=DATE:20160902\r\nDTSTAMP|;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is sent to attendee";
+    $newdata = $self->{instance}->getnotify();
+    @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    $self->assert_num_equals(1, scalar(@imip));
+
+    xlog $self, "update event removing DTEND";
+    $card =~ s|DTEND;VALUE=DATE:20160902\r\n||;
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "make sure an invite is sent to attendee";
+    $newdata = $self->{instance}->getnotify();
+    @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    $self->assert_num_equals(1, scalar(@imip));
+}
+
 sub test_invite_from_nonsched
     :VirtDomains :min_version_3_0 :needs_component_httpd
 {
