@@ -472,32 +472,44 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         return 0;
     }
 
-    other = hash_lookup(mailbox->uniqueid, &unqid_table);
-    if (other) {
-        mbentry_t *oldmbentry = NULL;
-        /* check that the old one still exists! */
-        r = mboxlist_lookup(other, &oldmbentry, NULL);
-        if (!r && !strcmpsafe(oldmbentry->uniqueid, mailbox->uniqueid)) {
-            /* uniqueid change required! */
-            if (updateuniqueids) {
-                mailbox_make_uniqueid(mailbox);
-                syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
-                        other, mailbox->name, oldmbentry->uniqueid, mailbox->uniqueid);
-            }
-            else {
-                syslog (LOG_ERR, "uniqueid clash with %s for %s (%s)",
-                        other, mailbox->name, mailbox->uniqueid);
-            }
-        }
-        mboxlist_entry_free(&oldmbentry);
-    }
-
-    hash_insert(mailbox->uniqueid, xstrdup(mailbox->name), &unqid_table);
-
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &recon_namespace, NULL);
     if (!(reconstruct_flags & RECONSTRUCT_QUIET))
         printf("%s\n", extname);
+
+    if (mailbox->uniqueid) {
+        other = hash_lookup(mailbox->uniqueid, &unqid_table);
+        if (other) {
+            mbentry_t *oldmbentry = NULL;
+            /* check that the old one still exists! */
+            r = mboxlist_lookup(other, &oldmbentry, NULL);
+            if (!r && !strcmpsafe(oldmbentry->uniqueid, mailbox->uniqueid)) {
+                /* uniqueid change required! */
+                if (updateuniqueids) {
+                    mailbox_make_uniqueid(mailbox);
+                    syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
+                            other, mailbox->name, oldmbentry->uniqueid, mailbox->uniqueid);
+                }
+                else {
+                    syslog (LOG_ERR, "uniqueid clash with %s for %s (%s)",
+                            other, mailbox->name, mailbox->uniqueid);
+                }
+            }
+            mboxlist_entry_free(&oldmbentry);
+        }
+
+        hash_insert(mailbox->uniqueid, xstrdup(mailbox->name), &unqid_table);
+    }
+    else {
+        /* We should only get here for -V (setversion) or -n (no changes)
+         * modes.  Otherwise, mailbox_reconstruct() should have dealt with it
+         * already.
+         * It would be nice if -V would also ensure there's a uniqueid, but
+         * that change would require a refactor that's already on 3.6 but too
+         * intrusive to backport.
+         */
+        printf("%s has no uniqueid, needs real reconstruct\n", extname);
+    }
 
     strncpy(outpath, mailbox_meta_fname(mailbox, META_HEADER), MAX_MAILBOX_NAME);
 
