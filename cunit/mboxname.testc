@@ -836,6 +836,222 @@ static void test_common_ancestor(void)
     CU_ASSERT_PTR_NULL(ancestor);
 }
 
+#define mboxname_isa_helper(isa, results) do {                          \
+    int *r = results;                                                   \
+                                                                        \
+    imapopts[IMAPOPT_NOTESMAILBOX].val.s = "Notes";                     \
+                                                                        \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo", 0));                          \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.A", 0));                        \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.Notes", 0));                    \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#addressbooks", 0));            \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#addressbooks",                 \
+                              MBTYPE_COLLECTION));                      \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#addressbooks.A", 0));          \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#addressbooks.A",               \
+                              MBTYPE_ADDRESSBOOK));                     \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#calendars", 0));               \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#calendars",                    \
+                              MBTYPE_COLLECTION));                      \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#calendars.A", 0));             \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#calendars.A",                  \
+                              MBTYPE_CALENDAR));                        \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#drive", 0));                   \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#drive",                        \
+                              MBTYPE_COLLECTION));                      \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#drive.A", 0));                 \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#drive.A",                      \
+                              MBTYPE_COLLECTION));                      \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#notifications", 0));           \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#notifications",                \
+                              MBTYPE_COLLECTION));                      \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#jmap", 0));                    \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#jmap",                         \
+                              MBTYPE_COLLECTION));                      \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#jmapnotification", 0));        \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#jmapnotification",             \
+                              MBTYPE_JMAPNOTIFY));                      \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#jmappushsubscription", 0));    \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#jmappushsubscription",         \
+                              MBTYPE_JMAPPUSHSUB));                     \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#jmapsubmission", 0));          \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#jmapsubmission",               \
+                              MBTYPE_JMAPSUBMIT));                      \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#sieve", 0));                   \
+    CU_ASSERT_EQUAL(*r++, isa("user.foo.#sieve",                        \
+                              MBTYPE_SIEVE));                           \
+} while(0)
+
+static void test_isnotesmailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  1,
+        /* Addressbook   */  0, 0, 0, 0,  /* Calendar           */  0, 0, 0, 0,
+        /* DAV drive     */  0, 0, 0, 0,  /* DAV Notifications  */  0, 0,
+        /* JMAP Upload   */  0, 0,        /* JMAP Notifications */  0, 0,
+        /* JMAP Push Sub */  0, 0,        /* JMAP Submissions   */  0, 0,
+        /* Sieve         */  0, 0
+    };
+
+    mboxname_isa_helper(mboxname_isnotesmailbox, results);
+}
+
+static void test_iscalendarmailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  0,
+        /* Addressbook   */  0, 0, 0, 0,  /* Calendar           */  1, 1, 1, 1,
+        /* DAV drive     */  0, 0, 0, 0,  /* DAV Notifications  */  0, 0,
+        /* JMAP Upload   */  0, 0,        /* JMAP Notifications */  0, 0,
+        /* JMAP Push Sub */  0, 0,        /* JMAP Submissions   */  0, 0,
+        /* Sieve         */  0, 0
+    };
+
+    mboxname_isa_helper(mboxname_iscalendarmailbox, results);
+}
+
+static void test_isaddressbookmailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  0,
+        /* Addressbook   */  1, 1, 1, 1,  /* Calendar           */  0, 0, 0, 0,
+        /* DAV drive     */  0, 0, 0, 0,  /* DAV Notifications  */  0, 0,
+        /* JMAP Upload   */  0, 0,        /* JMAP Notifications */  0, 0,
+        /* JMAP Push Sub */  0, 0,        /* JMAP Submissions   */  0, 0,
+        /* Sieve         */  0, 0
+    };
+
+    mboxname_isa_helper(mboxname_isaddressbookmailbox, results);
+}
+
+static void test_isdavdrivemailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  0,
+        /* Addressbook   */  0, 0, 0, 0,  /* Calendar           */  0, 0, 0, 0,
+        /* DAV drive     */  1, 1, 1, 1,  /* DAV Notifications  */  0, 0,
+        /* JMAP Upload   */  0, 0,        /* JMAP Notifications */  0, 0,
+        /* JMAP Push Sub */  0, 0,        /* JMAP Submissions   */  0, 0,
+        /* Sieve         */  0, 0
+    };
+
+    mboxname_isa_helper(mboxname_isdavdrivemailbox, results);
+}
+
+static void test_isdavnotificationsmailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  0,
+        /* Addressbook   */  0, 0, 0, 0,  /* Calendar           */  0, 0, 0, 0,
+        /* DAV drive     */  0, 0, 0, 0,  /* DAV Notifications  */  1, 1,
+        /* JMAP Upload   */  0, 0,        /* JMAP Notifications */  0, 0,
+        /* JMAP Push Sub */  0, 0,        /* JMAP Submissions   */  0, 0,
+        /* Sieve         */  0, 0
+    };
+
+    mboxname_isa_helper(mboxname_isdavnotificationsmailbox, results);
+}
+
+static void test_isjmapuploadmailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  0,
+        /* Addressbook   */  0, 0, 0, 0,  /* Calendar           */  0, 0, 0, 0,
+        /* DAV drive     */  0, 0, 0, 0,  /* DAV Notifications  */  0, 0,
+        /* JMAP Upload   */  1, 1,        /* JMAP Notifications */  0, 0,
+        /* JMAP Push Sub */  0, 0,        /* JMAP Submissions   */  0, 0,
+        /* Sieve         */  0, 0
+    };
+
+    mboxname_isa_helper(mboxname_isjmapuploadmailbox, results);
+}
+
+static void test_isjmapnotificationsmailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  0,
+        /* Addressbook   */  0, 0, 0, 0,  /* Calendar           */  0, 0, 0, 0,
+        /* DAV drive     */  0, 0, 0, 0,  /* DAV Notifications  */  0, 0,
+        /* JMAP Upload   */  0, 0,        /* JMAP Notifications */  1, 1,
+        /* JMAP Push Sub */  0, 0,        /* JMAP Submissions   */  0, 0,
+        /* Sieve         */  0, 0
+    };
+
+    mboxname_isa_helper(mboxname_isjmapnotificationsmailbox, results);
+}
+
+static void test_ispushsubscriptionmailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  0,
+        /* Addressbook   */  0, 0, 0, 0,  /* Calendar           */  0, 0, 0, 0,
+        /* DAV drive     */  0, 0, 0, 0,  /* DAV Notifications  */  0, 0,
+        /* JMAP Upload   */  0, 0,        /* JMAP Notifications */  0, 0,
+        /* JMAP Push Sub */  1, 1,        /* JMAP Submissions   */  0, 0,
+        /* Sieve         */  0, 0
+    };
+
+    mboxname_isa_helper(mboxname_ispushsubscriptionmailbox, results);
+}
+
+static void test_issubmissionmailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  0,
+        /* Addressbook   */  0, 0, 0, 0,  /* Calendar           */  0, 0, 0, 0,
+        /* DAV drive     */  0, 0, 0, 0,  /* DAV Notifications  */  0, 0,
+        /* JMAP Upload   */  0, 0,        /* JMAP Notifications */  0, 0,
+        /* JMAP Push Sub */  0, 0,        /* JMAP Submissions   */  1, 1,
+        /* Sieve         */  0, 0
+    };
+
+    mboxname_isa_helper(mboxname_issubmissionmailbox, results);
+}
+
+static void test_issievemailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  0,
+        /* Addressbook   */  0, 0, 0, 0,  /* Calendar           */  0, 0, 0, 0,
+        /* DAV drive     */  0, 0, 0, 0,  /* DAV Notifications  */  0, 0,
+        /* JMAP Upload   */  0, 0,        /* JMAP Notifications */  0, 0,
+        /* JMAP Push Sub */  0, 0,        /* JMAP Submissions   */  0, 0,
+        /* Sieve         */  1, 1
+    };
+
+    mboxname_isa_helper(mboxname_issievemailbox, results);
+}
+
+static void test_isnonimapmailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  0,
+        /* Addressbook   */  1, 1, 1, 1,  /* Calendar           */  1, 1, 1, 1,
+        /* DAV drive     */  1, 1, 1, 1,  /* DAV Notifications  */  1, 1,
+        /* JMAP Upload   */  1, 1,        /* JMAP Notifications */  1, 1,
+        /* JMAP Push Sub */  1, 1,        /* JMAP Submissions   */  1, 1,
+        /* Sieve         */  1, 1
+    };
+
+    mboxname_isa_helper(mboxname_isnonimapmailbox, results);
+}
+
+static void test_isnondeliverymailbox(void)
+{
+    int results[] = {
+        /* Email         */  0, 0,        /* Notes              */  1,
+        /* Addressbook   */  1, 1, 1, 1,  /* Calendar           */  1, 1, 1, 1,
+        /* DAV drive     */  1, 1, 1, 1,  /* DAV Notifications  */  1, 1,
+        /* JMAP Upload   */  1, 1,        /* JMAP Notifications */  1, 1,
+        /* JMAP Push Sub */  1, 1,        /* JMAP Submissions   */  1, 1,
+        /* Sieve         */  1, 1
+    };
+
+    mboxname_isa_helper(mboxname_isnondeliverymailbox, results);
+
+    CU_ASSERT_EQUAL(1, mboxname_isdeletedmailbox("DELETED.user.foo.A", NULL));
+}
+
 
 
 static enum enum_value old_config_virtdomains;
