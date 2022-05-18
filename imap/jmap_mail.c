@@ -2885,8 +2885,7 @@ static void emailsearch_init(struct emailsearch *search,
         search->sort = _email_buildsort(jsort, &search->sort_savedate);
     }
     else {
-        struct sortcrit *sort = search->sort;
-        sort = xzmalloc(3 * sizeof(struct sortcrit));
+        struct sortcrit *sort = xzmalloc(3 * sizeof(struct sortcrit));
         sort[0].key = SORT_ARRIVAL;
         sort[0].flags |= SORT_REVERSE;
         sort[1].key = SORT_GUID;
@@ -7435,7 +7434,6 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
 
     /* FastMail extension properties */
     if (jmap_wantprop(bodyprops, "imageSize")) {
-        json_t *imagesize = json_null();
         if (msg->mr && msg->imagesize_by_partid == NULL) {
             /* This is the first attempt to read the vendor annotation.
              * Load the annotation value, if any, for top-level messages.
@@ -7446,7 +7444,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
             if (!msg->imagesize_by_partid)
                 msg->imagesize_by_partid = json_null();
         }
-        imagesize = json_object_get(msg->imagesize_by_partid, part->part_id);
+        json_t *imagesize = json_object_get(msg->imagesize_by_partid, part->part_id);
         json_object_set(jbodypart, "imageSize", imagesize ? imagesize : json_null());
     }
     if (jmap_wantprop(bodyprops, "isDeleted")) {

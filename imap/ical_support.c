@@ -553,9 +553,9 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
                                                     ICAL_RDATE_PROPERTY)) {
             struct icaldatetimeperiodtype rdate =
                 icalproperty_get_datetimeperiod(prop);
-            icaltimetype mystart = rdate.time;
-            icaltimetype myend = rdate.time;
+            icaltimetype mystart, myend;
             if (icalperiodtype_is_null_period(rdate.period)) {
+                mystart = rdate.time;
                 myend = icaltime_add(mystart, event_length);
             }
             else {

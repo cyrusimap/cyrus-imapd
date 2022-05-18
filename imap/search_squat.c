@@ -397,10 +397,9 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 
 static int add_unindexed(SquatBuilderData *bb)
 {
-    struct opstack *top = opstack_top(bb);
     int r = 0;
+    struct opstack *top = opstack_push(bb, /*doesn't matter*/0);
 
-    top = opstack_push(bb, /*doesn't matter*/0);
     bv_setall(&top->msg_vector);
     bv_clear(&top->msg_vector, 0);  /* UID 0 is not valid */
     bb->part_types = "tfcbsmh";

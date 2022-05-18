@@ -1311,7 +1311,7 @@ static void update_refcount(const char *mid, short *op,
 static int open_attachments(const char *userid, struct mailbox **attachments,
                             struct webdav_db **webdavdb)
 {
-    char *mailboxname = mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
+    char *mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
     int r, ret = 0;
 
     /* Open attachments collection for writing */

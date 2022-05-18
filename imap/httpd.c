@@ -3300,9 +3300,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         simple_hdr(txn, "Content-Type", "%s", resp_body->type);
         if (resp_body->dispo.fname) {
             /* Construct Content-Disposition header */
-            const unsigned char *p = (const unsigned char *)resp_body->dispo.fname;
             char *encfname = NULL;
-            for (p = (unsigned char *)resp_body->dispo.fname; p && *p; p++) {
+            for (const unsigned char *p = (unsigned char *)resp_body->dispo.fname; p && *p; p++) {
                 if (*p >= 0x80) {
                     encfname = charset_encode_mimexvalue(resp_body->dispo.fname, NULL);
                     break;
