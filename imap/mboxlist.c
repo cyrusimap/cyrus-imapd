@@ -5423,6 +5423,21 @@ static int _foreach_cb(void *rock,
     mbentry->name = xstrndup(key, keylen);
     mbentry->mbtype |= MBTYPE_LEGACY_DIRS;
 
+    if (!mbentry->uniqueid) {
+        /* Fetch uniqueid from cyrus.header */
+        struct mailbox *mailbox = NULL;
+        int r = mailbox_open_from_mbe(mbentry, &mailbox);
+        if (r) {
+            mboxlist_entry_free(&mbentry);
+            return r;
+        }
+        if (!mailbox_uniqueid(mailbox)) {
+            mailbox_make_uniqueid(mailbox);
+        }
+        mbentry->uniqueid = xstrdup(mailbox_uniqueid(mailbox));
+        mailbox_close(&mailbox);
+    }
+
     int idx = 0;
     ptrarray_t *pa = hash_lookup(mbentry->uniqueid, urock->ids);
     if (!pa) {
