@@ -7369,6 +7369,9 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
                                        imapd_authstate, mboxevent,
                                        MBOXLIST_DELETE_LOCALONLY);
         }
+        else if (!isadmin && mbname_issystem(mbname)) {
+            r = IMAP_PERMISSION_DENIED;
+        }
         else {
             delete_user = mboxname_isusermailbox(mbname_intname(mbname), 1);
             int delflags = (1-force) ? MBOXLIST_DELETE_CHECKACL : 0;
