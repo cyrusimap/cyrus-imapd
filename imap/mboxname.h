@@ -44,6 +44,7 @@
 #define INCLUDED_MBOXNAME_H
 
 #include "auth.h"
+#include "libconfig.h"
 #include "strarray.h"
 #include "util.h"
 
@@ -155,91 +156,109 @@ int mboxname_isusertrash(const char *name);
  * If (internal) mailbox 'name' is in the DELETED namespace.
  * If timestampp is not NULL, the delete timestamp encoded in
  * the name is parsed and filled in.
- * returns boolean
+ * returns non-zero
  */
 int mboxname_isdeletedmailbox(const char *name, time_t *timestampp);
 
 /*
- * If (internal) mailbox 'name' is a CALENDAR mailbox
- * returns boolean
+ * If (internal) mailbox ('name', 'mbtype') is a ('prefix', 'need_mbtype') mailbox
+ * returns non-zero
  */
-int mboxname_iscalendarmailbox(const char *name, int mbtype);
+int mboxname_isa(const char *name, int mbtype,
+                 enum imapopt prefix, int need_mbtype);
+
+/*
+ * If (internal) mailbox 'name' is a CALENDAR mailbox
+ * returns non-zero
+ */
+#define mboxname_iscalendarmailbox(name, mbtype) \
+    mboxname_isa(name, mbtype, IMAPOPT_CALENDARPREFIX, MBTYPE_CALENDAR)
 
 /*
  * If (internal) mailbox 'name' is a ADDRESSBOOK mailbox
- * returns boolean
+ * returns non-zero
  */
-int mboxname_isaddressbookmailbox(const char *name, int mbtype);
+#define mboxname_isaddressbookmailbox(name, mbtype) \
+    mboxname_isa(name, mbtype, IMAPOPT_ADDRESSBOOKPREFIX, MBTYPE_ADDRESSBOOK)
 
 /*
  * If (internal) mailbox 'name' is a DAVDRIVE mailbox
- * returns boolean
+ * returns non-zero
  */
-int mboxname_isdavdrivemailbox(const char *name, int mbtype);
+#define mboxname_isdavdrivemailbox(name, mbtype) \
+    mboxname_isa(name, mbtype, IMAPOPT_DAVDRIVEPREFIX, MBTYPE_COLLECTION)
 
 /*
  * If (internal) mailbox 'name' is a DAVNOTIFICATIONS mailbox
- * returns boolean
+ * returns non-zero
  */
-int mboxname_isdavnotificationsmailbox(const char *name, int mbtype);
+#define mboxname_isdavnotificationsmailbox(name, mbtype) \
+    mboxname_isa(name, mbtype, IMAPOPT_DAVNOTIFICATIONSPREFIX, MBTYPE_COLLECTION)
 
 /* If (internal) mailbox is a user's top-level Notes mailbox,
- * returns boolean
+ * returns non-zero
  */
-int mboxname_isnotesmailbox(const char *name, int mbtype);
+#define mboxname_isnotesmailbox(name, mbtype) \
+    mboxname_isa(name, mbtype, IMAPOPT_NOTESMAILBOX, MBTYPE_EMAIL)
 
 /*
  * If (internal) mailbox 'name' is a user's #jmapsubmission mailbox
- * returns boolean
+ * returns non-zero
  */
-int mboxname_issubmissionmailbox(const char *name, int mbtype);
+#define mboxname_issubmissionmailbox(name, mbtype) \
+    mboxname_isa(name, mbtype, IMAPOPT_JMAPSUBMISSIONFOLDER, MBTYPE_JMAPSUBMIT)
 
 /*
  * If (internal) mailbox 'name' is a user's #jmappushsubscription mailbox
- * returns boolean
+ * returns non-zero
  */
-int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype);
+#define mboxname_ispushsubscriptionmailbox(name, mbtype) \
+    mboxname_isa(name, mbtype, IMAPOPT_JMAPPUSHSUBSCRIPTIONFOLDER, MBTYPE_JMAPPUSHSUB)
 
 /*
  * If (internal) mailbox 'name' is a user's #jmap upload mailbox
- * returns boolean
+ * returns non-zero
  */
-int mboxname_isjmapuploadmailbox(const char *name, int mbtype);
+#define mboxname_isjmapuploadmailbox(name, mbtype) \
+    mboxname_isa(name, mbtype, IMAPOPT_JMAPUPLOADFOLDER, MBTYPE_COLLECTION)
 
 /*
  * If (internal) mailbox 'name' is a user's #jmap notifications mailbox
- * returns boolean
+ * returns non-zero
  */
-int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype);
+#define mboxname_isjmapnotificationsmailbox(name, mbtype) \
+    mboxname_isa(name, mbtype, IMAPOPT_JMAPNOTIFICATIONFOLDER, MBTYPE_JMAPNOTIFY)
 
 /*
  * If (internal) mailbox 'name' is a user's #sieve mailbox
- * returns boolean
+ * returns non-zero
  */
-int mboxname_issievemailbox(const char *name, int mbtype);
+#define mboxname_issievemailbox(name, mbtype) \
+    mboxname_isa(name, mbtype, IMAPOPT_SIEVE_FOLDER, MBTYPE_SIEVE)
+
+/*
+ * If (internal) mailbox 'name' is a user's non-IMAP mailbox
+ * returns non-zero
+ */
+int mboxname_isnonimapmailbox(const char *name, int mbtype);
+
+/*
+ * If (internal) mailbox 'name' is a user's non-delivery mailbox
+ * returns non-zero
+ */
+int mboxname_isnondeliverymailbox(const char *name, int mbtype);
 
 /*
  * If (internal) mailbox 'name' is a user's \Scheduled mailbox
- * returns boolean
+ * returns non-zero
  */
 int mboxname_isscheduledmailbox(const char *name, int mbtype);
 
-#define mboxname_isnonimapmailbox(name, mbtype)            \
-    (mboxname_iscalendarmailbox(name, mbtype)              \
-     || mboxname_isaddressbookmailbox(name, mbtype)        \
-     || mboxname_isdavdrivemailbox(name, mbtype)           \
-     || mboxname_isdavnotificationsmailbox(name, mbtype)   \
-     || mboxname_issubmissionmailbox(name, mbtype)         \
-     || mboxname_ispushsubscriptionmailbox(name, mbtype)   \
-     || mboxname_isjmapuploadmailbox(name, mbtype)         \
-     || mboxname_isjmapnotificationsmailbox(name, mbtype)  \
-     || mboxname_issievemailbox(name, mbtype))
-
-#define mboxname_isnondeliverymailbox(name, mbtype)        \
-    (mboxname_isnonimapmailbox(name, mbtype)               \
-     || mboxname_isnotesmailbox(name, mbtype)              \
-     || mboxname_isscheduledmailbox(name, mbtype)          \
-     || mboxname_isdeletedmailbox(name, NULL))
+/*
+ * If 'mbname' is a user's 'system' mailbox (toplevel non-IMAP)
+ * returns non-zero
+ */
+int mbname_issystem(const mbname_t *mbname);
 
 /* check if one mboxname is a parent or same as the other */
 int mboxname_is_prefix(const char *longstr, const char *shortstr);

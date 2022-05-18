@@ -1499,60 +1499,94 @@ EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
     return res ? 1 : 0;
 }
 
-/*
- * If (internal) mailbox 'name' is a CALENDAR mailbox
- * returns boolean
- */
-EXPORTED int mboxname_iscalendarmailbox(const char *name, int mbtype)
+#define PREFIX_FLAG_NONIMAP     (1<<0)
+
+static const struct mailbox_prefix {
+    enum imapopt opt;
+    unsigned flags : 1;
+
+} mailbox_prefixes[] = {
+    { IMAPOPT_NOTESMAILBOX,               0                   },
+    { IMAPOPT_CALENDARPREFIX,             PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_ADDRESSBOOKPREFIX,          PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_DAVDRIVEPREFIX,             PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_DAVNOTIFICATIONSPREFIX,     PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_JMAPNOTIFICATIONFOLDER,     PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_JMAPSUBMISSIONFOLDER,       PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_JMAPPUSHSUBSCRIPTIONFOLDER, PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_JMAPUPLOADFOLDER,           PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_SIEVE_FOLDER,               PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_ZERO,                       0                   }
+};
+
+static int _mbname_prefix_isanyof(const mbname_t *mbname,
+                                  const struct mailbox_prefix prefixes[],
+                                  unsigned flags)
 {
-    if (mbtype_isa(mbtype) == MBTYPE_CALENDAR) return 1;  /* Only works on backends */
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
     const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
 
-    mbname_free(&mbname);
-    return res;
+    if (strarray_size(boxes)) {
+        int i;
+
+        for (i = 0; prefixes[i].opt != IMAPOPT_ZERO; i++) {
+            if (flags && !(flags & prefixes[i].flags)) continue;
+
+            const char *prefix = config_getstring(prefixes[i].opt);
+
+            if (!strcmpsafe(prefix, strarray_nth(boxes, 0))) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 /*
- * If (internal) mailbox 'name' is a ADDRESSBOOK mailbox
- * returns boolean
+ * If 'mbname' is a user's 'system' mailbox (toplevel non-IMAP)
+ * returns non-zero
  */
-EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
+EXPORTED int mbname_issystem(const mbname_t *mbname)
 {
-    if (mbtype_isa(mbtype) == MBTYPE_ADDRESSBOOK) return 1;  /* Only works on backends */
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
+    return (strarray_size(mbname_boxes(mbname)) == 1 &&
+            _mbname_prefix_isanyof(mbname, mailbox_prefixes, PREFIX_FLAG_NONIMAP));
 }
 
 /*
- * If (internal) mailbox 'name' is a DAVDRIVE mailbox
- * returns boolean
+ * If (internal) mailbox ('name', 'mbtype') is a ('prefix', 'need_mbtype') mailbox
+ * returns non-zero
  */
-EXPORTED int mboxname_isdavdrivemailbox(const char *name, int mbtype)
+EXPORTED int mboxname_isa(const char *name, int mbtype,
+                          enum imapopt prefix, int need_mbtype)
 {
     mbtype = mbtype_isa(mbtype);
 
-    if (mbtype &&
-        mbtype != MBTYPE_COLLECTION) return 0;  /* Only works on backends */
-    int res = 0;
+    if (mbtype) {
+        /* Only works on backends */
+        switch (need_mbtype) {
+        case MBTYPE_EMAIL:       // Email, Notes
+        case MBTYPE_COLLECTION:  // DAV drive, DAV notifications, JMAP upload
+            /* mbtype/prefix ratio is 1 to many,
+               so we can only be deterministic on non-matching mbtype */
+            if (mbtype != need_mbtype) return 0;
+            break;
 
+        default:
+            /* mbtype/prefix ratio is 1 to 1,
+               so we can be deterministic on matching mbtype */
+            if (mbtype == need_mbtype) return 1;
+            break;
+        }
+    }
+
+    int res = 0;
     mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_DAVDRIVEPREFIX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+    const struct mailbox_prefix prefixes[] = {
+        { prefix,       0 },
+        { IMAPOPT_ZERO, 0 }
+    };
+
+    if (_mbname_prefix_isanyof(mbname, prefixes, 0))
         res = 1;
 
     mbname_free(&mbname);
@@ -1560,21 +1594,17 @@ EXPORTED int mboxname_isdavdrivemailbox(const char *name, int mbtype)
 }
 
 /*
- * If (internal) mailbox 'name' is a DAVNOTIFICATIONS mailbox
- * returns boolean
+ * If (internal) mailbox 'name' is a user's non-delivery mailbox
+ * returns non-zero
  */
-EXPORTED int mboxname_isdavnotificationsmailbox(const char *name, int mbtype)
+EXPORTED int mboxname_isnonimapmailbox(const char *name, int mbtype)
 {
-    mbtype = mbtype_isa(mbtype);
+    if (mbtype_isa(mbtype) != MBTYPE_EMAIL) return 1;  /* Only works on backends */
 
-    if (mbtype &&
-        mbtype != MBTYPE_COLLECTION) return 0;  /* Only works on backends */
     int res = 0;
-
     mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+
+    if (_mbname_prefix_isanyof(mbname, mailbox_prefixes, PREFIX_FLAG_NONIMAP))
         res = 1;
 
     mbname_free(&mbname);
@@ -1582,127 +1612,27 @@ EXPORTED int mboxname_isdavnotificationsmailbox(const char *name, int mbtype)
 }
 
 /*
- * If (internal) mailbox 'name' is a JMAPNOTIFICATIONS mailbox
- * returns boolean
+ * If (internal) mailbox 'name' is a user's non-delivery mailbox
+ * returns non-zero
  */
-EXPORTED int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype)
+EXPORTED int mboxname_isnondeliverymailbox(const char *name, int mbtype)
 {
-    if (mbtype_isa(mbtype) == MBTYPE_JMAPNOTIFY) return 1;  /* Only works on backends */
-    int res = 0;
+    if (mbtype_isa(mbtype) != MBTYPE_EMAIL) return 1;  /* Only works on backends */
 
+    int res = 0;
     mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_JMAPNOTIFICATIONFOLDER);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+
+    if (mbname_isdeleted(mbname) ||
+        _mbname_prefix_isanyof(mbname, mailbox_prefixes, 0)) {
         res = 1;
+    }
 
     mbname_free(&mbname);
     return res;
 }
 
-/*
- * If (internal) mailbox 'name' is a user's "Notes" mailbox
- * returns boolean
- */
-EXPORTED int mboxname_isnotesmailbox(const char *name, int mbtype __attribute__((unused)))
+static int _mboxname_isspecialuse(const char *name, const char *specialuse)
 {
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_NOTESMAILBOX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's #jmapsubmission mailbox
- * returns boolean
- */
-EXPORTED int mboxname_issubmissionmailbox(const char *name, int mbtype)
-{
-    if (mbtype_isa(mbtype) == MBTYPE_JMAPSUBMIT) return 1;  /* Only works on backends */
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_JMAPSUBMISSIONFOLDER);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's #jmappushsubscription mailbox
- * returns boolean
- */
-EXPORTED int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype)
-{
-    if (mbtype_isa(mbtype) == MBTYPE_JMAPPUSHSUB) return 1;  /* Only works on backends */
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_JMAPPUSHSUBSCRIPTIONFOLDER);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's #jmap upload mailbox
- * returns boolean
- */
-EXPORTED int mboxname_isjmapuploadmailbox(const char *name, int mbtype __attribute__((unused)))
-{
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_JMAPUPLOADFOLDER);
-
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's #sieve mailbox
- * returns boolean
- */
-EXPORTED int mboxname_issievemailbox(const char *name, int mbtype)
-{
-    if (mbtype_isa(mbtype) == MBTYPE_SIEVE) return 1;  /* Only works on backends */
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_SIEVE_FOLDER);
-
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's \Scheduled mailbox
- * returns boolean
- */
-EXPORTED int mboxname_isscheduledmailbox(const char *name, int mbtype)
-{
-    if (mbtype_isa(mbtype) != MBTYPE_EMAIL) return 0;  /* Only works on backends */
-
     char *userid = mboxname_to_userid(name);
     struct buf attrib = BUF_INITIALIZER;
     int res = 0;
@@ -1713,7 +1643,7 @@ EXPORTED int mboxname_isscheduledmailbox(const char *name, int mbtype)
         strarray_t *uses = strarray_split(buf_cstring(&attrib),
                                           " ", STRARRAY_TRIM);
 
-        if (strarray_find_case(uses, "\\Scheduled", 0) >= 0) {
+        if (strarray_find_case(uses, specialuse, 0) >= 0) {
             res = 1;
         }
         strarray_free(uses);
@@ -1723,6 +1653,17 @@ EXPORTED int mboxname_isscheduledmailbox(const char *name, int mbtype)
     free(userid);
 
     return res;
+}
+
+/*
+ * If (internal) mailbox 'name' is a user's \Scheduled mailbox
+ * returns non-zero
+ */
+EXPORTED int mboxname_isscheduledmailbox(const char *name, int mbtype)
+{
+    if (mbtype_isa(mbtype) != MBTYPE_EMAIL) return 0;  /* Only works on backends */
+
+    return _mboxname_isspecialuse(name, "\\Scheduled");
 }
 
 EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
