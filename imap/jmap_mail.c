@@ -6255,6 +6255,13 @@ static int _email_keywords_add_msgrecord(struct email_keywords *keywords,
     if (r) goto done;
 
     int read_seendb = !mailbox_internal_seen(mbox, keywords->userid);
+    if (read_seendb && !keywords->seendb) {
+        xsyslog(LOG_ERR, "mailbox requires seen.db but no database found",
+                "userid=<%s> mailbox_uniqueid=<%s> mailbox_name=<%s>",
+                keywords->userid, mailbox_uniqueid(mbox), mailbox_name(mbox));
+        r = IMAP_INTERNAL;
+        goto done;
+    }
 
     /* Read system flags */
     if ((system_flags & FLAG_DRAFT))
