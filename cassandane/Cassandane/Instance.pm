@@ -1491,6 +1491,15 @@ sub send_sighup
     return 1;
 }
 
+#
+# n.b. If you are stopping the instance intending to restart it again later,
+# you must set:
+#     $instance->{'re_use_dir'} => 1
+# before restarting, otherwise it will wipe and re-initialise its basedir
+# during startup, probably ruining whatever you were trying to do.  It
+# will still use the same directory name though, so it won't be obvious
+# from the logs that this is happening!
+#
 sub stop
 {
     my ($self) = @_;
