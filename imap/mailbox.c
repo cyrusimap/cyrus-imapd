@@ -6148,6 +6148,9 @@ static int mailbox_reconstruct_uniqueid(struct mailbox *mailbox, int flags)
                 mailbox_set_uniqueid(mailbox, mbentry->uniqueid);
             }
             else {
+                if (!mailbox->uniqueid) {
+                    mailbox_make_uniqueid(mailbox);
+                }
                 free(mbentry->uniqueid);
                 mbentry->uniqueid = xstrdup(mailbox->uniqueid);
                 r = mboxlist_update(mbentry, 0);
