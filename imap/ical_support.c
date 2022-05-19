@@ -2359,7 +2359,7 @@ static void icalproperty_get_isstd_isgmt(icalproperty *prop,
 EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
                                                        icaltimetype *startp, icaltimetype *endp,
                                                        icalarray *obsarray,
-                                                       struct observance **proleptic,
+                                                       struct observance *proleptic,
                                                        icalcomponent **eternal_std,
                                                        icalcomponent **eternal_dst,
                                                        icaltimetype *last_dtstart,
@@ -2847,7 +2847,9 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
         }
     }
 
-    if (proleptic) *proleptic = &tombstone;
+    if (proleptic) {
+        memcpy(proleptic, &tombstone, sizeof(struct observance));
+    }
 }
 
 static icaltimezone *tz_from_tzid(const char *tzid)

@@ -181,7 +181,7 @@ struct observance {
 extern void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
                                                      icaltimetype *startp, icaltimetype *endp,
                                                      icalarray *obsarray,
-                                                     struct observance **proleptic,
+                                                     struct observance *proleptic,
                                                      icalcomponent **eternal_std,
                                                      icalcomponent **eternal_dst,
                                                      icaltimetype *last_dtstart,

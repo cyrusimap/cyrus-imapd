@@ -1513,7 +1513,7 @@ static int action_expand(struct transaction_t *txn)
         const char *path, *msg_base = NULL;
         size_t msg_size = 0;
         icalcomponent *ical, *vtz;
-        struct observance *proleptic;
+        struct observance proleptic;
         icalarray *obsarray;
         json_t *jobsarray;
         unsigned n;
@@ -1543,8 +1543,8 @@ static int action_expand(struct transaction_t *txn)
         if (zdump) {
             struct buf *body = &txn->resp_body.payload;
             struct icaldurationtype off = icaldurationtype_null_duration();
-            const char *prev_name = proleptic->name;
-            int prev_isdst = proleptic->is_daylight;
+            const char *prev_name = proleptic.name;
+            int prev_isdst = proleptic.is_daylight;
 
             for (n = 0; n < obsarray->num_elements; n++) {
                 struct observance *obs = icalarray_element_at(obsarray, n);
@@ -1908,7 +1908,7 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
 {
     icalcomponent *vtz, *eternal_std = NULL, *eternal_dst = NULL;
     icalarray *obsarray;
-    struct observance *proleptic;
+    struct observance proleptic;
     icaltimetype start = icaltime_null_time();
     icaltimetype end = icaltime_from_day_of_year(1, 2100);
     icaltimetype last_dtstart = icaltime_null_time();
@@ -1970,7 +1970,7 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
        The first using 32-bit times and the second using 64-bit times. */
     for (do_bit64 = 0; do_bit64 <= 1; do_bit64++) {
         long long int epoch = do_bit64 ? BIG_BANG : INT32_MIN;
-        struct observance *prev_obs = proleptic;
+        struct observance *prev_obs = &proleptic;
         bit32 timecnt = 0, typecnt = 0;
         int leapidx = 2;
         size_t n;
@@ -1996,7 +1996,7 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
                 break;
             }
             else if (!timecnt) {
-                if (t > epoch && proleptic->onset.year < 0) {
+                if (t > epoch && proleptic.onset.year < 0) {
                     /* Insert a tombstone prior to first real transition */
                     t = epoch;
                     obs = prev_obs;
