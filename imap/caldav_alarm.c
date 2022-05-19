@@ -1605,14 +1605,15 @@ static int process_futurerelease(struct caldav_alarm_data *data,
             /* Get the response code and error text.
                We treat anything other than 5xx as a temp failure */
             code = smtpclient_get_resp_code(sm);
+            if (code >= 500) {
+                /* Permanent failure */
+                cancel = 1;
+            }
+            err = NULL;
             if (code) {
                 err = smtpclient_get_resp_text(sm);
-                if (code >= 500) {
-                    /* Permanent failure */
-                    cancel = 1;
-                }
             }
-            else {
+            if (!err) {
                 err = error_message(r);
             }
             syslog(LOG_ERR, "smtpclient_send failed: %s", err);

@@ -794,7 +794,7 @@ EXPORTED unsigned smtpclient_get_resp_code(smtpclient_t *sm)
 
 EXPORTED const char *smtpclient_get_resp_text(smtpclient_t *sm)
 {
-    return buf_cstring(&sm->resp.text);
+    return buf_cstringnull_ifempty(&sm->resp.text);
 }
 
 /* SMTP backend implementations */
