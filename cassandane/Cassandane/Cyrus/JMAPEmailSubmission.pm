@@ -1242,7 +1242,7 @@ sub test_emailsubmission_query
 }
 
 sub test_emailsubmission_query_long
-    :min_version_3_7 :needs_component_jmap
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1400,7 +1400,7 @@ sub test_emailsubmission_onsuccess_not_using
 }
 
 sub test_emailsubmission_scheduled_send
-    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd
+    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1686,7 +1686,7 @@ sub test_emailsubmission_scheduled_send
 }
 
 sub test_emailsubmission_scheduled_send_fail
-    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd
+    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1857,7 +1857,7 @@ sub test_emailsubmission_scheduled_send_fail
 }
 
 sub test_emailsubmission_scheduled_send_no_move
-    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd
+    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1999,7 +1999,7 @@ sub test_emailsubmission_scheduled_send_no_move
 }
 
 sub test_emailsubmission_scheduled_send_null_onsend
-    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd
+    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
