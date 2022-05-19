@@ -1424,7 +1424,8 @@ struct jmapseen_attrdata {
         enum jmapseen_source {
             jmapseen_unknown = 0,
             jmapseen_flags,
-            jmapseen_db
+            jmapseen_db,
+            jmapseen_ignore
         } seen_source;
     } *folders;
     int numfolders;
@@ -1437,6 +1438,22 @@ struct jmapseen_mboxdata {
     struct conversations_state *cstate;
     int foldernum;
 };
+
+static const char *jmapseen_source_as_string(enum jmapseen_source seen_source)
+{
+    switch (seen_source) {
+        case jmapseen_unknown:
+            return "unknown";
+        case jmapseen_flags:
+            return "flags";
+        case jmapseen_db:
+            return "db";
+        case jmapseen_ignore:
+            return "ignore";
+        default:
+            return "invalid";
+    }
+}
 
 static void emailsearch_jmapseen_internalise(struct index_state *state,
                                              const union search_value *v,
@@ -1490,9 +1507,22 @@ static void emailsearch_jmapseen_internalise(struct index_state *state,
         *internalisedp = md;
 
         // Determine where to read seen flags from for this mailbox
-        ad->folders[md->foldernum].seen_source =
-            mailbox_internal_seen(state->mailbox, ad->userid) ?
-            jmapseen_flags : jmapseen_db;
+        enum jmapseen_source seen_source;
+        if (mboxname_isnondeliverymailbox(mailbox_name(state->mailbox),
+                                          mailbox_mbtype(state->mailbox))) {
+            seen_source = jmapseen_ignore;
+        }
+        else if (mailbox_internal_seen(state->mailbox, ad->userid)) {
+            seen_source = jmapseen_flags;
+        }
+        else {
+            seen_source = jmapseen_db;
+        }
+        ad->folders[md->foldernum].seen_source = seen_source;
+
+        xsyslog(LOG_DEBUG, "determined $seen source for mailbox",
+                "seen_source=<%s> mboxname=<%s>",
+                jmapseen_source_as_string(seen_source), mailbox_name(state->mailbox));
     }
 }
 
@@ -1502,32 +1532,8 @@ static int jmapseen_has_seenflag(struct jmapseen_attrdata *ad,
                                  uint32_t uid,
                                  uint32_t system_flags)
 {
-    if (ad->folders[foldernum].seen_source == jmapseen_unknown) {
-        // don't know where to read seen flags for this mailbox from
-        const char *mboxname = conversations_folder_mboxname(cstate, foldernum);
-        if (mboxname_userownsmailbox(ad->userid, mboxname)) {
-            // owners always store seen in flags
-            ad->folders[foldernum].seen_source = jmapseen_flags;
-        }
-        else {
-            // need to open mailbox to read OPT_SHAREDSEEN
-            struct mailbox *mbox = NULL;
-            int r = mailbox_open_irlnb(mboxname, &mbox); // non-blocking
-            if (!r) {
-                ad->folders[foldernum].seen_source =
-                    mailbox_internal_seen(mbox, ad->userid) ?
-                    jmapseen_flags : jmapseen_db;
-                mailbox_close(&mbox);
-            }
-            else if (r) {
-                // could try later for locked mailboxes, but
-                // let's not amplify mailbox open attempts
-                xsyslog(LOG_ERR, "can not open mailbox, fall back to system flags",
-                        "mboxname=<%s> err=<%s>", mboxname, error_message(r));
-                ad->folders[foldernum].seen_source = jmapseen_flags;
-            }
-        }
-    }
+    if (ad->folders[foldernum].seen_source == jmapseen_ignore)
+        return 0;
 
     if (ad->folders[foldernum].seen_source == jmapseen_flags) {
         // read seen flag from system flags
@@ -1572,6 +1578,12 @@ static int jmapseen_has_seenflag(struct jmapseen_attrdata *ad,
         }
     }
 
+    if (ad->folders[foldernum].seen_source == jmapseen_unknown) {
+        xsyslog(LOG_ERR, "unknown seen flag source. falling back to system flags",
+                "userid=<%s> mboxid=<%s>",
+                ad->userid, conversations_folder_uniqueid(cstate, foldernum));
+    }
+
     // fall back
     return !!(system_flags & FLAG_SEEN);
 }
@@ -1587,13 +1599,52 @@ static int jmapseen_guid_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct jmapseen_guid_counts *counts = rock;
 
+    if (counts->ad->folders[rec->foldernum].seen_source == jmapseen_unknown) {
+        // determine where to read seen flags for this mailbox from
+        const char *mboxname = conversations_folder_mboxname(counts->md->cstate, rec->foldernum);
+        enum jmapseen_source seen_source;
+        if (mboxname_isnondeliverymailbox(mboxname, 0)) {
+            // not a regular mailbox - ignore
+            seen_source = jmapseen_ignore;
+        }
+        else if (mboxname_userownsmailbox(counts->ad->userid, mboxname)) {
+            // owners always store seen in flags
+            seen_source = jmapseen_flags;
+        }
+        else {
+            // need to open mailbox to read OPT_SHAREDSEEN
+            struct mailbox *mbox = NULL;
+            int r = mailbox_open_irlnb(mboxname, &mbox); // non-blocking
+            if (!r) {
+                seen_source = mailbox_internal_seen(mbox, counts->ad->userid) ?
+                    jmapseen_flags : jmapseen_db;
+                mailbox_close(&mbox);
+            }
+            else if (r) {
+                // could try later for locked mailboxes, but
+                // let's not amplify mailbox open attempts
+                xsyslog(LOG_ERR, "can not open mailbox, fall back to system flags",
+                        "mboxname=<%s> err=<%s>", mboxname, error_message(r));
+                seen_source = jmapseen_flags;
+            }
+        }
+        counts->ad->folders[rec->foldernum].seen_source = seen_source;
+
+        xsyslog(LOG_DEBUG, "determined $seen source for mailbox",
+                "seen_source=<%s> mboxname=<%s>",
+                jmapseen_source_as_string(seen_source), mboxname);
+    }
+
+    if (counts->ad->folders[rec->foldernum].seen_source == jmapseen_ignore)
+        return 0;
+
     if (!(rec->system_flags & FLAG_DELETED) &&
         !(rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
 
         counts->exists++;
 
-        if (jmapseen_has_seenflag(counts->ad, counts->md->cstate,
-                    rec->foldernum, rec->uid, rec->system_flags))
+        if (jmapseen_has_seenflag(counts->ad, counts->md->cstate, rec->foldernum,
+                    rec->uid, rec->system_flags))
             counts->seen++;
     }
 
