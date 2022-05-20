@@ -854,32 +854,35 @@ static void _emailsubmission_create(jmap_req_t *req,
             char *err = NULL;
             const char *p;
 
-            if (smtpclient_has_ext(*sm, "ENHANCEDSTATUSCODES")) {
-                p = strchr(desc, ' ');
-                if (p) {
-                    desc = p+1;
-                    while (*desc == ' ') desc++;  /* trim leading whitespace */
+            if (desc) {
+                if (smtpclient_has_ext(*sm, "ENHANCEDSTATUSCODES")) {
+                    p = strchr(desc, ' ');
+                    if (p) {
+                        desc = p+1;
+                        while (*desc == ' ') desc++;  /* trim leading whitespace */
+                    }
                 }
-            }
-            if ((p = strstr(desc, "[jmapError:"))) {
-                p += 11;
-                const char *q = strchr(p, ']');
-                if (q) {
-                    err = xstrndup(p, q - p);
-                    desc = q+1;
-                    while (*desc == ' ') desc++;  /* trim leading whitespace */
+                if ((p = strstr(desc, "[jmapError:"))) {
+                    p += 11;
+                    const char *q = strchr(p, ']');
+                    if (q) {
+                        err = xstrndup(p, q - p);
+                        desc = q+1;
+                        while (*desc == ' ') desc++;  /* trim leading whitespace */
+                    }
                 }
             }
             if (!err) err = xstrdup("forbiddenToSend");
             *set_err = json_pack("{s:s s:s}",
-                                 "type", err, "description", desc);
+                                 "type", err,
+                                 "description", desc ? desc : error_message(r));
             free(err);
             break;
         }
 
         default:
             *set_err = json_pack("{s:s s:s}", "type", "forbiddenToSend",
-                                 "description", desc);
+                                 "description", desc ? desc : error_message(r));
             break;
         }
     }
