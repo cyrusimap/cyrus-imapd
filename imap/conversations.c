@@ -2330,15 +2330,33 @@ static int conversations_set_guid(struct conversations_state *state,
     return r;
 }
 
+struct read_emailcounts_rock {
+    struct conversations_state *cstate;
+    struct emailcounts *ecounts;
+};
+
 static int _read_emailcounts_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct emailcounts *ecounts = (struct emailcounts *)rock;
     if (rec->part) return 0;
+
+    struct emailcounts *ecounts = ((struct read_emailcounts_rock*)rock)->ecounts;
+    struct conversations_state *cstate = ((struct read_emailcounts_rock*)rock)->cstate;
 
     struct emailcountitems *i = ecounts->ispost ? &ecounts->post : &ecounts->pre;
 
     i->numrecords++;
     if (rec->foldernum == ecounts->foldernum) i->foldernumrecords++;
+
+    // only count in regular IMAP mailboxes
+    if (!bv_isset(&ecounts->mbtype_known, rec->foldernum)) {
+        const char *mboxname = conversations_folder_mboxname(cstate, rec->foldernum);
+        if (mboxname && !mboxname_isnondeliverymailbox(mboxname, 0)) {
+            bv_set(&ecounts->mbtype_mail, rec->foldernum);
+        }
+        bv_set(&ecounts->mbtype_known, rec->foldernum);
+    }
+    if (!bv_isset(&ecounts->mbtype_mail, rec->foldernum))
+        return 0;
 
     // the rest only counts non-deleted records
     if (rec->version > 0 &&
@@ -2362,6 +2380,8 @@ static int _read_emailcounts_cb(const conv_guidrec_t *rec, void *rock)
 EXPORTED void emailcounts_fini(struct emailcounts *ecounts)
 {
     bv_fini(&ecounts->exists_foldernums);
+    bv_fini(&ecounts->mbtype_known);
+    bv_fini(&ecounts->mbtype_mail);
     static struct emailcounts init = EMAILCOUNTS_INIT;
     *ecounts = init;
 }
@@ -2436,10 +2456,13 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         conversation_folder_number(cstate, CONV_FOLDER_KEY_MBOX(cstate, mailbox), /*create*/1);
     ecounts.trashfolder = cstate->trashfolder;
     bv_setsize(&ecounts.exists_foldernums, conversations_num_folders(cstate));
+    bv_setsize(&ecounts.mbtype_known, conversations_num_folders(cstate));
+    bv_setsize(&ecounts.mbtype_mail, conversations_num_folders(cstate));
 
     /* count the email state before making GUID changes */
+    struct read_emailcounts_rock rock = { cstate, &ecounts };
     r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
-                                   _read_emailcounts_cb, &ecounts);
+                                   _read_emailcounts_cb, &rock);
     if (r) goto done;
 
     // always update the GUID information first, as it's used for search
@@ -2462,7 +2485,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     /* we've made any set_guid, so count the state again! */
     ecounts.ispost = 1;
     r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
-                                   _read_emailcounts_cb, &ecounts);
+                                   _read_emailcounts_cb, &rock);
     if (r) goto done;
 
     // check sanity limits

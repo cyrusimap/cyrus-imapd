@@ -209,9 +209,12 @@ struct emailcounts {
     struct emailcountitems pre;
     struct emailcountitems post;
     bitvector_t exists_foldernums;
+    bitvector_t mbtype_known;
+    bitvector_t mbtype_mail;
 };
 
-#define EMAILCOUNTS_INIT { -1, -1, 0, EMAILCOUNTITEMS_INIT, EMAILCOUNTITEMS_INIT, BV_INITIALIZER }
+#define EMAILCOUNTS_INIT { -1, -1, 0, EMAILCOUNTITEMS_INIT, EMAILCOUNTITEMS_INIT, \
+                           BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER }
 
 extern void emailcounts_fini(struct emailcounts *ecounts);
 
