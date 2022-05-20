@@ -77,14 +77,19 @@ sub make_header {
   my $Self = shift;
   my $ds = shift;
 
+  # NOTE: no tab separator if no uniqueid!
+  my $qr_uuid = $ds->{QuotaRoot};
+  $qr_uuid .= "\t$ds->{UniqueId}" if $ds->{UniqueId};
+
   # NOTE: acl and flags should have '' as the last element!
   my $flags = join(" ", @{$ds->{Flags}}, '');
   my $acl = join("\t", @{$ds->{ACL}}, '');
+
   my $buf = <<EOF;
 $HL1
 $HL2
 $HL3
-$ds->{QuotaRoot}	$ds->{UniqueId}
+$qr_uuid
 $flags
 $acl
 EOF
