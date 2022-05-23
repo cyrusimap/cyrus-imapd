@@ -5699,6 +5699,58 @@ sub test_email_query_issue2905
     $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
 }
 
+sub test_email_query_cached_collapsed_uncollapsed
+    :min_version_3_7 :needs_component_sieve :needs_component_jmap
+    :JMAPQueryCacheMaxAge1s :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create emails";
+    $res = $self->make_message("foo 1") || die;
+    $res = $self->make_message("foo 2") || die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+    ];
+
+
+    xlog $self, "Query uncollapsed threads";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            subject => 'foo',
+        },
+        sort => [{ property => 'subject' }],
+        collapseThreads => JSON::false,
+        limit => 1,
+    }, 'R1']], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    #$self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+
+    xlog $self, "Query collapsed threads";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            subject => 'foo',
+        },
+        sort => [{ property => 'subject' }],
+        collapseThreads => JSON::true,
+        limit => 1,
+    }, 'R1']], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+}
+
 sub test_email_query_inmailboxid_conjunction
     :min_version_3_1 :needs_component_sieve :needs_component_jmap
     :JMAPExtensions
