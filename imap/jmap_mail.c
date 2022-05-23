@@ -4250,12 +4250,15 @@ static void emailquery_cache_ensure(struct emailquery *q,
         qc->uncollapsed_matches =
             xmalloc(sizeof(struct emailquery_match) * qc->qr.total_ceiling);
         qc->uncollapsed_len = 0;
-        if (q->collapse_threads) {
+    }
+    if (q->collapse_threads) {
+        if (!qc->collapsed_matches) {
             qc->collapsed_matches =
                 xmalloc(sizeof(struct emailquery_match) * qc->qr.total_ceiling);
             qc->collapsed_len = 0;
-            qc->seen_threads = hashset_new(sizeof(conversation_id_t));
         }
+        if (!qc->seen_threads)
+            qc->seen_threads = hashset_new(sizeof(conversation_id_t));
     }
 
     // fill the caches
