@@ -1609,7 +1609,6 @@ static int process_futurerelease(struct caldav_alarm_data *data,
                 /* Permanent failure */
                 cancel = 1;
             }
-            err = NULL;
             if (code) {
                 err = smtpclient_get_resp_text(sm);
             }
