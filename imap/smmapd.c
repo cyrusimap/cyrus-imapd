@@ -277,7 +277,7 @@ static int verify_user(const char *key, struct auth_state *authstate)
     if ((mbentry->mbtype & MBTYPE_REMOTE)) {
         struct hostent *hp;
         struct sockaddr_in sin,sfrom;
-        char buf[512];
+        char buf[2048];
         int soc, rc;
         socklen_t x;
         /* XXX  Perhaps we should support the VRFY command in lmtpd
@@ -319,11 +319,11 @@ static int verify_user(const char *key, struct auth_state *authstate)
             goto done;
         }
 
-        sprintf(buf,SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
+        snprintf(buf,sizeof(buf),SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
         sendto(soc,buf,strlen(buf),0,(struct sockaddr *)&sin,sizeof(sin));
 
         x = sizeof(sfrom);
-        rc = recvfrom(soc,buf,512,0,(struct sockaddr *)&sfrom,&x);
+        rc = recvfrom(soc,buf,sizeof(buf)-1,0,(struct sockaddr *)&sfrom,&x);
 
         close(soc);
 
