@@ -62,6 +62,8 @@
 
 #include "http_jwt.h"
 
+#ifdef HAVE_SSL
+
 static int is_enabled = 0;
 
 static ptrarray_t pkeys = PTRARRAY_INITIALIZER;
@@ -576,3 +578,35 @@ done:
     buf_free(&jwt.buf);
     return status;
 }
+
+#else /* !HAVE_SSL */
+
+HIDDEN int http_jwt_init(const char *keydir __attribute__((unused)),
+                         int age __attribute__((unused)))
+{
+    xsyslog(LOG_NOTICE,
+            "JSON Web Token authentication is disabled (no OpenSSL)", NULL);
+    return 0;
+}
+
+HIDDEN int http_jwt_is_enabled(void)
+{
+    return 0;
+}
+
+HIDDEN int http_jwt_auth(const char *in __attribute__((unused)),
+                         size_t inlen __attribute__((unused)),
+                         char *out __attribute__((unused)),
+                         size_t outlen __attribute__((unused)))
+{
+    xsyslog(LOG_INFO,
+            "JSON Web Token authentication is disabled (no OpenSSL)", NULL);
+    return SASL_BADAUTH;
+}
+
+HIDDEN int http_jwt_reset(void)
+{
+    return 0;
+}
+
+#endif /* HAVE_SSL */
