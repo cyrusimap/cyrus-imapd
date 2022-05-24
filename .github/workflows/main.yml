@@ -1,0 +1,35 @@
+name: Cyrus IMAP CI
+
+on:
+  push:
+    branches: [ $default-branch ]
+  pull_request:
+    branches: [ $default-branch ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+        image: cyrusimapdocker/cyrus-buster:latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: configure and build
+      run: |
+        cd ${{ github.workspace }}
+        ./tools/build-with-cyruslibs.sh
+    - name: update jmap test suite
+      run: |
+        pushd /srv/JMAP-TestSuite.git
+        git fetch
+        git checkout origin/master
+        git clean -f -x -d
+        cpanm --installdeps .
+        popd
+    - name: run cassandane
+      run: |
+        pushd ${{ github.workspace }}/cassandane
+        cp -af cassandane.ini.dockertests cassandane.ini
+        chown cyrus:mail cassandane.ini
+        make
+        ./testrunner.pl -f pretty -j 4
+        popd
