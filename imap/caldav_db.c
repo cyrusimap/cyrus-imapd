@@ -965,15 +965,17 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
 
         kind = icalcomponent_isa(comp);
 
-        const char *icalstr = icalcomponent_as_ical_string(comp);
+
+        icalproperty *recurid_prop =
+            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+
+        const char *icalstr = icalcomponent_as_ical_string(recurid_prop ? comp: ical);
         struct message_guid guid = MESSAGE_GUID_INITIALIZER;
         message_guid_generate(&guid, icalstr, strlen(icalstr));
         strarray_append(&strpool, message_guid_encode(&guid));
         const char *ical_guid = strarray_nth(&strpool, -1);
 
-        icalproperty *prop =
-            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-        if (!prop) {
+        if (!recurid_prop) {
             /* Found main component */
             dynarray_truncate(&new_jscals, 0);
             struct caldav_jscal jscal = {
@@ -991,7 +993,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
         }
 
         /* Found recurrence instance */
-        icaltimetype recurid = icalproperty_get_recurrenceid(prop);
+        icaltimetype recurid = icalproperty_get_recurrenceid(recurid_prop);
 
         /* Resolve duplicate recurrence ids by picking the first */
         icaltimetype hash_recurid = recurid;
