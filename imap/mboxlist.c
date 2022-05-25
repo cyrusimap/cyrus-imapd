@@ -5356,9 +5356,9 @@ static int _check_rec_cb(void *rock,
 
     switch (key[0]) {
     case '$':
-        /* Verify that we have a $RACL$ or $RUNQ$ record */
+        /* Verify that we have a $RACL or $RUNQ record */
         if (keylen >= 6 &&
-            (!strncmp(key, "$RACL$", 6) || !strncmp(key, "$RUNQ$", 6))) {
+            (!strncmp(key, "$RACL", 5) || !strncmp(key, "$RUNQ", 5))) {
             *do_upgrade = 1;
             r = CYRUSDB_DONE;
         }
@@ -5486,7 +5486,7 @@ static void _upgrade_cb(const char *key __attribute__((unused)),
 
 EXPORTED int mboxlist_upgrade(int *upgraded)
 {
-    int r, r2 = 0, do_upgrade = 0;
+    int r, r2 = 0, do_upgrade = 1;
     struct buf buf = BUF_INITIALIZER;
     struct db *old = NULL;
     struct txn *tid = NULL;
