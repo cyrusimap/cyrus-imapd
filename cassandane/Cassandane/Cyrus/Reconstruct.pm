@@ -395,6 +395,21 @@ sub test_reconstruct_uniqueid_from_header
     $self->assert_does_not_match(
         qr{mbentry has no uniqueid, needs reconstruct},
         $syslog);
+
+    # mbentry should have the same uniqueid as before
+    (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', 'user.cassandane']);
+    $dlist = Cyrus::DList->parse_string($mbentry);
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals($uniqueid, $hash->{I});
+
+    # runq entry should be back
+    my ($key, $value) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $runq]);
+    $self->assert_str_equals($runq, $key);
+    $self->assert_str_equals(q{}, $value);
 }
 
 sub test_reconstruct_uniqueid_from_mbentry
@@ -557,14 +572,25 @@ sub test_reconstruct_create_missing_uniqueid
     $res = $imaptalk->getmetadata("INBOX", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
+    $self->assert_not_null($res->{INBOX}{$entry});
     my $newuniqueid = $res->{INBOX}{$entry};
     $self->assert_str_not_equals($uniqueid, $newuniqueid);
 
-    # XXX look for the new uniqueid in mbentry!
-    my %updated = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip", ['SHOW']);
-    $self->assert_not_null($updated{'user.cassandane'});
-    $self->assert_matches(qr{\b$newuniqueid\b}, $updated{'user.cassandane'});
+    # mbentry should have the new uniqueid
+    my (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', 'user.cassandane']);
+    my $dlist = Cyrus::DList->parse_string($mbentry);
+    my $hash = $dlist->as_perl();
+    $self->assert_str_equals($newuniqueid, $hash->{I});
+
+    # new runq entry should exist
+    my $newrunq = "\$RUNQ\$$newuniqueid\$user.cassandane";
+    my ($key, $value) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $newrunq]);
+    $self->assert_str_equals($newrunq, $key);
+    $self->assert_str_equals(q{}, $value);
 }
 
 1;
