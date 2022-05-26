@@ -7391,6 +7391,9 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
                 tgt.namespace = txn->req_tgt.namespace;
 
                 r = rparams->parse_path(uri->path, &tgt, &resultstr);
+                if (!r && !tgt.mbentry) {
+                    r = HTTP_FORBIDDEN;
+                }
                 xmlFreeURI(uri);
             }
             if (r) {
