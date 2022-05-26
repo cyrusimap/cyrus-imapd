@@ -327,6 +327,70 @@ EOF
     $self->assert_not_null($res->{"{DAV:}response"});
 }
 
+sub test_multiget
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+
+    my $Str = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($Str);
+
+    my $path = $CardDAV->NewContact($Id, $VCard);
+
+    my $xml = <<EOF;
+<C:addressbook-multiget xmlns:D="DAV:"
+                    xmlns:C="urn:ietf:params:xml:ns:carddav">
+    <D:prop>
+      <D:getetag/>
+      <C:address-data content-type="text/vcard" version="3.0"/>
+    </D:prop>
+    <D:href>nonsense</D:href>
+    <D:href>/dav/addressbooks/</D:href>
+    <D:href>/dav/addressbooks/user/</D:href>
+    <D:href>/dav/addressbooks/user/cassandane/</D:href>
+    <D:href>/dav/addressbooks/user/cassandane/$Id</D:href>
+    <D:href>/dav/addressbooks/user/cassandane/$path</D:href>
+    <D:href>/dav/addressbooks/user/cassandane/$Id/nonexistent</D:href>
+    <D:href>/dav/addressbooks/user/cassandane/nonexistent</D:href>
+</C:addressbook-multiget>
+EOF
+
+    my $res = $CardDAV->Request('REPORT', "/dav/addressbooks/user/cassandane/$Id", $xml, Depth => 0, 'Content-Type' => 'text/xml');
+
+    $self->assert_not_null($res->{"{DAV:}response"});
+    $self->assert_str_equals('nonsense', $res->{"{DAV:}response"}[0]{"{DAV:}href"}{content});
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $res->{"{DAV:}response"}[0]{"{DAV:}status"}{content});
+    $self->assert_str_equals('/dav/addressbooks/', $res->{"{DAV:}response"}[1]{"{DAV:}href"}{content});
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $res->{"{DAV:}response"}[1]{"{DAV:}status"}{content});
+    $self->assert_str_equals('/dav/addressbooks/user/', $res->{"{DAV:}response"}[2]{"{DAV:}href"}{content});
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $res->{"{DAV:}response"}[2]{"{DAV:}status"}{content});
+    $self->assert_str_equals('/dav/addressbooks/user/cassandane/', $res->{"{DAV:}response"}[3]{"{DAV:}href"}{content});
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $res->{"{DAV:}response"}[3]{"{DAV:}status"}{content});
+    $self->assert_str_equals("/dav/addressbooks/user/cassandane/$Id/", $res->{"{DAV:}response"}[4]{"{DAV:}href"}{content});
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $res->{"{DAV:}response"}[4]{"{DAV:}status"}{content});
+    $self->assert_str_equals("/dav/addressbooks/user/cassandane/$path", $res->{"{DAV:}response"}[5]{"{DAV:}href"}{content});
+    $self->assert_str_equals('HTTP/1.1 200 OK', $res->{"{DAV:}response"}[5]{"{DAV:}propstat"}[0]{"{DAV:}status"}{content});
+    $self->assert_str_equals("/dav/addressbooks/user/cassandane/$Id/nonexistent", $res->{"{DAV:}response"}[6]{"{DAV:}href"}{content});
+    $self->assert_str_equals('HTTP/1.1 404 Not Found', $res->{"{DAV:}response"}[6]{"{DAV:}status"}{content});
+    $self->assert_str_equals('/dav/addressbooks/user/cassandane/nonexistent/', $res->{"{DAV:}response"}[7]{"{DAV:}href"}{content});
+    $self->assert_str_equals('HTTP/1.1 404 Not Found', $res->{"{DAV:}response"}[7]{"{DAV:}status"}{content});
+}
+
 sub test_sharing_samedomain
     :VirtDomains :FastMailSharing :ReverseACLs :min_version_3_0
     :needs_component_httpd

@@ -7373,17 +7373,18 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             !xmlStrcmp(node->name, BAD_CAST "href")) {
             xmlChar *href = xmlNodeListGetString(inroot->doc, node->children, 1);
             xmlURIPtr uri;
-            struct request_target_t tgt;
+            struct request_target_t tgt = { 0 };
             struct dav_data *ddata;
             const char *resultstr = NULL;
 
-            memset(&tgt, 0, sizeof(struct request_target_t));
+            fctx->req_tgt = &tgt;
 
             /* Parse the URI */
             uri = parse_uri(METH_REPORT, (const char *) href,
                             1 /* path required */, &resultstr);
-            xmlFree(href);
             if (!uri) {
+                /* Non get-able target */
+                strlcpy(tgt.path, (const char *) href, sizeof(tgt.path));
                 r = HTTP_FORBIDDEN;
             }
             else {
@@ -7391,11 +7392,15 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
                 tgt.namespace = txn->req_tgt.namespace;
 
                 r = rparams->parse_path(uri->path, &tgt, &resultstr);
-                if (!r && !tgt.mbentry) {
+                xmlFreeURI(uri);
+
+                if (!r && !(tgt.mbentry && tgt.resource)) {
+                    /* Non get-able target */
                     r = HTTP_FORBIDDEN;
                 }
-                xmlFreeURI(uri);
             }
+            xmlFree(href);
+
             if (r) {
                 if (r == HTTP_MOVED)
                     xml_add_response(fctx, HTTP_MOVED, 0, NULL, resultstr);
@@ -7404,7 +7409,6 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
                 goto next;
             }
 
-            fctx->req_tgt = &tgt;
             fctx->mbentry = tgt.mbentry;
 
             /* Check if we already have this mailbox open */
