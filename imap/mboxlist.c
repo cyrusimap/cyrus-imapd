@@ -5356,9 +5356,9 @@ static int _check_rec_cb(void *rock,
 
     switch (key[0]) {
     case '$':
-        /* Verify that we have a $RACL$ or $RUNQ$ record */
+        /* Verify that we have a $RACL or $RUNQ record */
         if (keylen >= 6 &&
-            (!strncmp(key, "$RACL$", 6) || !strncmp(key, "$RUNQ$", 6))) {
+            (!strncmp(key, "$RACL", 5) || !strncmp(key, "$RUNQ", 5))) {
             *do_upgrade = 1;
             r = CYRUSDB_DONE;
         }
@@ -5418,10 +5418,30 @@ static int _foreach_cb(void *rock,
     }
 
     r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
-    if (r) return r;
+    if (r) {
+        syslog(LOG_WARNING, "Failed to parse mailboxes.db entry for '%.*s'",
+               (int) keylen, key);
+        return 0;
+    }
 
     mbentry->name = xstrndup(key, keylen);
     mbentry->mbtype |= MBTYPE_LEGACY_DIRS;
+
+    if (!mbentry->uniqueid) {
+        /* Fetch uniqueid from cyrus.header */
+        struct mailbox *mailbox = NULL;
+        int r = mailbox_open_from_mbe(mbentry, &mailbox);
+        if (r) {
+            syslog(LOG_WARNING, "Failed to open mailbox '%s'", mbentry->name);
+            mboxlist_entry_free(&mbentry);
+            return 0;
+        }
+        if (!mailbox_uniqueid(mailbox)) {
+            mailbox_make_uniqueid(mailbox);
+        }
+        mbentry->uniqueid = xstrdup(mailbox_uniqueid(mailbox));
+        mailbox_close(&mailbox);
+    }
 
     int idx = 0;
     ptrarray_t *pa = hash_lookup(mbentry->uniqueid, urock->ids);
@@ -5444,7 +5464,7 @@ static int _foreach_cb(void *rock,
     }
     ptrarray_insert(pa, idx, mbentry);
 
-    return r;
+    return 0;
 }
 
 static void _upgrade_cb(const char *key __attribute__((unused)),
@@ -5471,13 +5491,14 @@ static void _upgrade_cb(const char *key __attribute__((unused)),
 
 EXPORTED int mboxlist_upgrade(int *upgraded)
 {
-    int r, r2 = 0, do_upgrade = 0;
+    int r, r2 = 0, do_upgrade = 1;
     struct buf buf = BUF_INITIALIZER;
-    struct db *backup = NULL;
+    struct db *old = NULL;
     struct txn *tid = NULL;
     hash_table ids = HASH_TABLE_INITIALIZER;
     struct upgrade_rock urock = { NULL, NULL, NULL, &tid, &ids, &r };
-    char *fname;
+    char *fname = NULL;
+    const char *newfname;
 
     if (upgraded) *upgraded = 0;
 
@@ -5486,38 +5507,35 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     r = cyrusdb_foreach(mbdb, "", 0, NULL, _check_rec_cb, &do_upgrade, NULL);
     mboxlist_close();
 
-    if (r != CYRUSDB_DONE) return r;
+    if (r && r != CYRUSDB_DONE) return r;
     else if (!do_upgrade) return 0;
 
     /* create db file names */
     fname = mboxlist_fname();
     buf_setcstr(&buf, fname);
-    buf_appendcstr(&buf, ".OLD");
+    buf_appendcstr(&buf, ".NEW");
+    newfname = buf_cstring(&buf);
 
-    /* rename db file to backup */
-    r = rename(fname, buf_cstring(&buf));
-    free(fname);
-    if (r) goto done;
-
-    /* open backup db file */
-    r = cyrusdb_open(DB, buf_cstring(&buf), 0, &backup);
+    /* open old db file */
+    r = cyrusdb_open(DB, fname, 0, &old);
 
     if (r) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", buf_cstring(&buf),
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
                cyrusdb_strerror(r));
         fatal("can't open mailboxes file", EX_TEMPFAIL);
     }
 
     /* open a new db file */
-    mboxlist_open(NULL);
+    unlink(newfname);
+    mboxlist_open(newfname);
 
     /* perform upgrade from backup to new db */
     construct_hash_table(&ids, 4096, 0);
-    r = cyrusdb_foreach(backup, "", 0, NULL, _foreach_cb, &urock, NULL);
+    r = cyrusdb_foreach(old, "", 0, NULL, _foreach_cb, &urock, NULL);
 
-    r2 = cyrusdb_close(backup);
+    r2 = cyrusdb_close(old);
     if (r2) {
-        syslog(LOG_ERR, "DBERROR: error closing %s: %s", buf_cstring(&buf),
+        syslog(LOG_ERR, "DBERROR: error closing %s: %s", fname,
                cyrusdb_strerror(r2));
     }
 
@@ -5540,10 +5558,13 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
 
     mboxlist_close();
 
+    /* rename new db file */
+    if (!r) r = rename(newfname, fname);
+
     if (!r && upgraded) *upgraded = 1;
 
-  done:
     buf_free(&buf);
+    free(fname);
 
     return r;
 }

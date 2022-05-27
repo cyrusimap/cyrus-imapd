@@ -1005,6 +1005,7 @@ static int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype, i
 static int mailbox_open_advanced(const char *name,
                                  int locktype,
                                  int index_locktype,
+                                 const mbentry_t *mbe,
                                  struct mailbox **mailboxptr)
 {
     mbentry_t *mbentry = NULL;
@@ -1050,7 +1051,8 @@ static int mailbox_open_advanced(const char *name,
         free(userid);
     }
 
-    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+    if (mbe) mbentry = mboxlist_entry_copy(mbe);
+    else r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
 
     if (!r && mbentry->mbtype & MBTYPE_DELETED)
         r = IMAP_MAILBOX_NONEXISTENT;
@@ -1058,6 +1060,7 @@ static int mailbox_open_advanced(const char *name,
     if (r) {
         if (mailbox->local_namespacelock)
             mboxname_release(&mailbox->local_namespacelock);
+        mboxlist_entry_free(&mbentry);
         remove_listitem(listitem);
         return r;
     }
@@ -1123,13 +1126,13 @@ done:
 EXPORTED int mailbox_open_irl(const char *name, struct mailbox **mailboxptr)
 {
     return mailbox_open_advanced(name, LOCK_SHARED, LOCK_SHARED,
-                                 mailboxptr);
+                                 NULL, mailboxptr);
 }
 
 EXPORTED int mailbox_open_iwl(const char *name, struct mailbox **mailboxptr)
 {
     return mailbox_open_advanced(name, LOCK_SHARED, LOCK_EXCLUSIVE,
-                                 mailboxptr);
+                                 NULL, mailboxptr);
 }
 
 EXPORTED int mailbox_open_irlnb(const char *name, struct mailbox **mailboxptr)
@@ -1138,13 +1141,19 @@ EXPORTED int mailbox_open_irlnb(const char *name, struct mailbox **mailboxptr)
                                  LOCK_SHARED|LOCK_NONBLOCK,
                                  /* cannot do nonblocking lock on index...why? */
                                  LOCK_SHARED,
-                                 mailboxptr);
+                                 NULL, mailboxptr);
 }
 
 EXPORTED int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
 {
     return mailbox_open_advanced(name, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE,
-                                 mailboxptr);
+                                 NULL, mailboxptr);
+}
+
+EXPORTED int mailbox_open_from_mbe(const mbentry_t *mbe, struct mailbox **mailboxptr)
+{
+    return mailbox_open_advanced(mbe->name, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE,
+                                 mbe, mailboxptr);
 }
 
 EXPORTED const char *mailbox_name(const struct mailbox *mailbox)
@@ -1154,7 +1163,9 @@ EXPORTED const char *mailbox_name(const struct mailbox *mailbox)
 
 EXPORTED const char *mailbox_uniqueid(const struct mailbox *mailbox)
 {
-    return mailbox->mbentry->uniqueid;
+    mbentry_t *mbentry = mailbox->mbentry;
+
+    return mbentry->uniqueid ? mbentry->uniqueid : mailbox->h.uniqueid;
 }
 
 EXPORTED const char *mailbox_partition(const struct mailbox *mailbox)
