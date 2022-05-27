@@ -40,11 +40,15 @@
 package Cassandane::Cyrus::Reconstruct;
 use strict;
 use warnings;
+use Data::Dumper;
+use File::Copy;
+use File::Slurp;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
+use Cyrus::HeaderFile;
 use Cyrus::IndexFile;
 use IO::File;
 use JSON;
@@ -313,6 +317,280 @@ sub test_reconstruct_snoozed
         }
     }
     close($fh);
+}
+
+sub test_reconstruct_uniqueid_from_header
+    :min_version_3_4 :max_version_3_4
+{
+    my ($self) = @_;
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+
+    # first start will set up cassandane user
+    my $basedir = $self->{instance}->get_basedir();
+    my $mailboxes_db = "$basedir/conf/mailboxes.db";
+    $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
+
+    # find out the uniqueid of the inbox
+    my $imaptalk = $self->{store}->get_client();
+    my $res = $imaptalk->getmetadata("INBOX", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $uniqueid = $res->{INBOX}{$entry};
+    $self->assert_not_null($uniqueid);
+    $imaptalk->logout();
+    undef $imaptalk;
+
+    # lose that uniqueid from mailboxes.db
+    my $runq = "\$RUNQ\$$uniqueid\$user.cassandane";
+    $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
+                                     [ 'DELETE', $runq ]);
+    my (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', 'user.cassandane']);
+    my $dlist = Cyrus::DList->parse_string($mbentry);
+    my $hash = $dlist->as_perl();
+    $self->assert_str_equals($uniqueid, $hash->{I});
+    $hash->{I} = 'NIL';
+    $dlist = Cyrus::DList->new_perl('', $hash);
+    $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        [ 'SET', 'user.cassandane', $dlist->as_string() ]);
+
+    my %updated = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip", ['SHOW']);
+    xlog "updated mailboxes.db: " . Dumper \%updated;
+
+    # expect a "needs reconstruct" syslog when user opens mailbox
+    $self->{instance}->getsyslog();
+    $imaptalk = $self->{store}->get_client();
+    $imaptalk->select('INBOX');
+    $imaptalk->logout();
+    undef $imaptalk;
+    my $syslog = join(q{}, $self->{instance}->getsyslog());
+    $self->assert_matches(qr{mbentry has no uniqueid, needs reconstruct},
+                          $syslog);
+
+    # run reconstruct, expect it to put the uniqueid back
+    my $reconstruct_out = "$basedir/reconstruct.out";
+    my $reconstruct_err = "$basedir/reconstruct.err";
+    $self->{instance}->run_command(
+        { cyrus => 1,
+          redirects => {
+            stderr => $reconstruct_err,
+            stdout => $reconstruct_out,
+          },
+        },
+        'reconstruct', 'user.cassandane');
+    $self->assert(-z $reconstruct_err, "reconstruct reported errors");
+    $self->assert_matches(qr{user.cassandane: update uniqueid from header},
+                          scalar read_file($reconstruct_out));
+
+    # no more "needs reconstruct" syslog when user opens mailbox
+    $self->{instance}->getsyslog();
+    $imaptalk = $self->{store}->get_client();
+    $imaptalk->select('INBOX');
+    $imaptalk->logout();
+    undef $imaptalk;
+    $syslog = join(q{}, $self->{instance}->getsyslog());
+    $self->assert_does_not_match(
+        qr{mbentry has no uniqueid, needs reconstruct},
+        $syslog);
+
+    # mbentry should have the same uniqueid as before
+    (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', 'user.cassandane']);
+    $dlist = Cyrus::DList->parse_string($mbentry);
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals($uniqueid, $hash->{I});
+
+    # runq entry should be back
+    my ($key, $value) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $runq]);
+    $self->assert_str_equals($runq, $key);
+    $self->assert_str_equals(q{}, $value);
+}
+
+sub test_reconstruct_uniqueid_from_mbentry
+    :min_version_3_4 :max_version_3_4
+{
+    my ($self) = @_;
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+
+    # first start will set up cassandane user
+    my $basedir = $self->{instance}->get_basedir();
+    my $mailboxes_db = "$basedir/conf/mailboxes.db";
+    $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
+
+    # find out the uniqueid of the inbox
+    my $imaptalk = $self->{store}->get_client();
+    my $res = $imaptalk->getmetadata("INBOX", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $uniqueid = $res->{INBOX}{$entry};
+    $self->assert_not_null($uniqueid);
+    $imaptalk->logout();
+    undef $imaptalk;
+
+    # lose uniqueid from cyrus.header
+    # XXX really ought to do this with locking...
+    my $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
+                       . '/cyrus.header';
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+    copy($cyrus_header, "$cyrus_header.OLD");
+    my $hf = Cyrus::HeaderFile->new_file("$cyrus_header.OLD");
+    $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
+    $hf->{header}->{UniqueId} = undef;
+    my $out = IO::File->new($cyrus_header, 'w');
+    $hf->write_header($out, $hf->{header});
+
+    # expect mailbox to not be selectable
+    $imaptalk = $self->{store}->get_client();
+    $imaptalk->select('INBOX');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{Mailbox has an invalid format},
+                          $imaptalk->get_last_error());
+    $imaptalk->logout();
+    undef $imaptalk;
+
+    # will have logged an IOERROR, don't get stuck on it later!
+    $self->{instance}->getsyslog();
+
+    # reconstruct with -M to put the uniqueid back, using the mbentry copy
+    my $reconstruct_out = "$basedir/reconstruct.out";
+    my $reconstruct_err = "$basedir/reconstruct.err";
+    $self->{instance}->run_command(
+        { cyrus => 1,
+          redirects => {
+            stderr => $reconstruct_err,
+            stdout => $reconstruct_out,
+          },
+        },
+        'reconstruct', '-M', 'user.cassandane');
+    $self->assert(-z $reconstruct_err, "reconstruct reported errors");
+    # n.b. reconstruct doesn't change its report for the direction it
+    # occurred in...
+    $self->assert_matches(qr{user.cassandane: update uniqueid from header},
+                          scalar read_file($reconstruct_out));
+
+    # no more "needs reconstruct" syslog when user opens mailbox
+    $self->{instance}->getsyslog();
+    $imaptalk = $self->{store}->get_client();
+    $imaptalk->select('INBOX');
+    $imaptalk->logout();
+    undef $imaptalk;
+    my $syslog = join(q{}, $self->{instance}->getsyslog());
+    $self->assert_does_not_match(
+        qr{mbentry has no uniqueid, needs reconstruct},
+        $syslog);
+
+    # should be able to getmetadata the uniqueid, and it should match the
+    # original one
+    $imaptalk = $self->{store}->get_client();
+    $res = $imaptalk->getmetadata("INBOX", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_str_equals($uniqueid, $res->{INBOX}{$entry});
+}
+
+sub test_reconstruct_create_missing_uniqueid
+    :min_version_3_4 :max_version_3_4
+{
+    my ($self) = @_;
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+
+    # first start will set up cassandane user
+    my $basedir = $self->{instance}->get_basedir();
+    my $mailboxes_db = "$basedir/conf/mailboxes.db";
+    $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
+
+    # find out the uniqueid of the inbox
+    my $imaptalk = $self->{store}->get_client();
+    my $res = $imaptalk->getmetadata("INBOX", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $uniqueid = $res->{INBOX}{$entry};
+    $self->assert_not_null($uniqueid);
+    $imaptalk->logout();
+    undef $imaptalk;
+
+    # lose uniqueid from cyrus.header
+    # XXX really ought to do this with locking...
+    my $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
+                       . '/cyrus.header';
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+    copy($cyrus_header, "$cyrus_header.OLD");
+    my $hf = Cyrus::HeaderFile->new_file("$cyrus_header.OLD");
+    $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
+    $hf->{header}->{UniqueId} = undef;
+    my $out = IO::File->new($cyrus_header, 'w');
+    $hf->write_header($out, $hf->{header});
+
+    # expect mailbox to not be selectable
+    $imaptalk = $self->{store}->get_client();
+    $imaptalk->select('INBOX');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{Mailbox has an invalid format},
+                          $imaptalk->get_last_error());
+    $imaptalk->logout();
+    undef $imaptalk;
+
+    # will have logged an IOERROR, don't get stuck on it later!
+    $self->{instance}->getsyslog();
+
+    # reconstruct should ignore the mbentry and create a new uniqueid
+    my $reconstruct_out = "$basedir/reconstruct.out";
+    my $reconstruct_err = "$basedir/reconstruct.err";
+    $self->{instance}->run_command(
+        { cyrus => 1,
+          redirects => {
+            stderr => $reconstruct_err,
+            stdout => $reconstruct_out,
+          },
+        },
+        'reconstruct', 'user.cassandane');
+    $self->assert(-z $reconstruct_err, "reconstruct reported errors");
+    # n.b. reconstruct doesn't change its report for the direction it
+    # occurred in...
+    $self->assert_matches(qr{user.cassandane: update uniqueid from header},
+                          scalar read_file($reconstruct_out));
+
+    # no more "needs reconstruct" syslog when user opens mailbox
+    $self->{instance}->getsyslog();
+    $imaptalk = $self->{store}->get_client();
+    $imaptalk->select('INBOX');
+    $imaptalk->logout();
+    undef $imaptalk;
+    my $syslog = join(q{}, $self->{instance}->getsyslog());
+    $self->assert_does_not_match(
+        qr{mbentry has no uniqueid, needs reconstruct},
+        $syslog);
+
+    # should be able to getmetadata the uniqueid, and it should be different
+    $imaptalk = $self->{store}->get_client();
+    $res = $imaptalk->getmetadata("INBOX", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->{INBOX}{$entry});
+    my $newuniqueid = $res->{INBOX}{$entry};
+    $self->assert_str_not_equals($uniqueid, $newuniqueid);
+
+    # mbentry should have the new uniqueid
+    my (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', 'user.cassandane']);
+    my $dlist = Cyrus::DList->parse_string($mbentry);
+    my $hash = $dlist->as_perl();
+    $self->assert_str_equals($newuniqueid, $hash->{I});
+
+    # new runq entry should exist
+    my $newrunq = "\$RUNQ\$$newuniqueid\$user.cassandane";
+    my ($key, $value) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $newrunq]);
+    $self->assert_str_equals($newrunq, $key);
+    $self->assert_str_equals(q{}, $value);
 }
 
 1;
