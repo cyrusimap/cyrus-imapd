@@ -5418,7 +5418,11 @@ static int _foreach_cb(void *rock,
     }
 
     r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
-    if (r) return r;
+    if (r) {
+        syslog(LOG_WARNING, "Failed to parse mailboxes.db entry for '%.*s'",
+               (int) keylen, key);
+        return 0;
+    }
 
     mbentry->name = xstrndup(key, keylen);
     mbentry->mbtype |= MBTYPE_LEGACY_DIRS;
@@ -5428,8 +5432,9 @@ static int _foreach_cb(void *rock,
         struct mailbox *mailbox = NULL;
         int r = mailbox_open_from_mbe(mbentry, &mailbox);
         if (r) {
+            syslog(LOG_WARNING, "Failed to open mailbox '%s'", mbentry->name);
             mboxlist_entry_free(&mbentry);
-            return r;
+            return 0;
         }
         if (!mailbox_uniqueid(mailbox)) {
             mailbox_make_uniqueid(mailbox);
@@ -5459,7 +5464,7 @@ static int _foreach_cb(void *rock,
     }
     ptrarray_insert(pa, idx, mbentry);
 
-    return r;
+    return 0;
 }
 
 static void _upgrade_cb(const char *key __attribute__((unused)),
@@ -5502,7 +5507,7 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     r = cyrusdb_foreach(mbdb, "", 0, NULL, _check_rec_cb, &do_upgrade, NULL);
     mboxlist_close();
 
-    if (r != CYRUSDB_DONE) return r;
+    if (r && r != CYRUSDB_DONE) return r;
     else if (!do_upgrade) return 0;
 
     /* create db file names */
