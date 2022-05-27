@@ -1283,7 +1283,7 @@ static void _delayed_cleanup(void *rock)
     if (in_shutdown) goto done;
 
     int r = mailbox_open_advanced(mboxname, LOCK_EXCLUSIVE|LOCK_NONBLOCK,
-                                  LOCK_EXCLUSIVE, &mailbox);
+                                  LOCK_EXCLUSIVE, NULL, &mailbox);
     if (r) goto done;
 
     if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK) {
