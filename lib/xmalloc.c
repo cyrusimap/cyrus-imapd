@@ -56,7 +56,6 @@ EXPORTED void* xmalloc(size_t size)
     if (ret != NULL) return ret;
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
-    return 0; /*NOTREACHED*/
 }
 
 EXPORTED void* xzmalloc(size_t size)
@@ -80,7 +79,6 @@ EXPORTED void *xrealloc (void* ptr, size_t size)
     if (ret != NULL) return ret;
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
-    return 0; /*NOTREACHED*/
 }
 
 EXPORTED char *xstrdup(const char* str)

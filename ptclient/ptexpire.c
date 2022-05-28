@@ -125,7 +125,6 @@ int main(int argc, char *argv[])
                     "\n");
             syslog(LOG_ERR, "Invalid command line option");
             exit(-1);
-            break;
             /* just pass through */
         }
     }

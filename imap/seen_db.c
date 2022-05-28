@@ -222,17 +222,14 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
         syslog(LOG_DEBUG, "deadlock in seen database for '%s/%s'",
                seendb->user, uniqueid);
         return IMAP_AGAIN;
-        break;
     case CYRUSDB_NOTFOUND:
         memset(sd, 0, sizeof(struct seendata));
         sd->seenuids = xstrdup("");
         return 0;
-        break;
     default:
         syslog(LOG_ERR, "DBERROR: error fetching txn %s",
                cyrusdb_strerror(r));
         return IMAP_IOERROR;
-        break;
     }
 
     parse_data(data, datalen, sd);

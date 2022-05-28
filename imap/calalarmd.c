@@ -111,7 +111,6 @@ int main(int argc, char **argv)
         default:
             fprintf(stderr, "invalid argument\n");
             exit(EX_USAGE);
-            break;
         }
     }
 

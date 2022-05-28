@@ -338,7 +338,6 @@ int timlex(struct buf *outstr, unsigned long *outnum,  struct protstream *stream
       case '\n':
         lexer_state=LEXER_STATE_NORMAL;
         return EOL;
-        break;
       default:
         return ch;
       }

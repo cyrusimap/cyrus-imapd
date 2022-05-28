@@ -891,8 +891,7 @@ static void cmdloop(void)
                 mode = ARTICLE_BODY;
                 goto article;
             }
-            else goto badcmd;
-            break;
+            goto badcmd;
 
         case 'C':
             if (!strcmp(cmd.s, "Capabilities")) {
@@ -1307,8 +1306,7 @@ static void cmdloop(void)
                 prot_printf(nntp_out, "205 Connection closing\r\n");
                 return;
             }
-            else goto badcmd;
-            break;
+            goto badcmd;
 
         case 'S':
             if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
@@ -1339,8 +1337,7 @@ static void cmdloop(void)
                 mode = POST_TAKETHIS;
                 goto ihave;
             }
-            else goto badcmd;
-            break;
+            goto badcmd;
 
         case 'X':
             if (!strcmp(cmd.s, "Xhdr")) {

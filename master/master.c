@@ -782,7 +782,6 @@ static void run_startup(const char *name, const strarray_t *cmd)
     switch (pid = fork()) {
     case -1:
         fatalf(1, "can't fork process to run startup: %m");
-        break;
 
     case 0:
         /* Child - Release our pidfile lock. */
@@ -1280,7 +1279,6 @@ static void spawn_schedule(struct timeval now)
                 execv(path, a->exec->data);
                 syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
                 exit(EX_OSERR);
-                break;
 
             default:
                 /* we don't wait for it to complete */
