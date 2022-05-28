@@ -1012,7 +1012,7 @@ int main(int argc, char *argv[])
 
     case CHECKPOINT:
         syslog(LOG_NOTICE, "checkpointing mboxlist");
-        mboxlist_init(MBOXLIST_SYNC);
+        mboxlist_init();
         mboxlist_open(NULL);
         mboxlist_close();
         mboxlist_done();
@@ -1024,7 +1024,7 @@ int main(int argc, char *argv[])
         GCC_FALLTHROUGH
 
     case DUMP:
-        mboxlist_init(0);
+        mboxlist_init();
         mboxlist_open(mboxdb_fname);
 
         do_dump(op, partition, dopurge, dointermediary);
@@ -1039,7 +1039,7 @@ int main(int argc, char *argv[])
         break;
 
     case UNDUMP:
-        mboxlist_init(0);
+        mboxlist_init();
         mboxlist_open(mboxdb_fname);
 
         do_undump();
@@ -1049,7 +1049,7 @@ int main(int argc, char *argv[])
         break;
 
     case VERIFY:
-        mboxlist_init(0);
+        mboxlist_init();
         mboxlist_open(mboxdb_fname);
 
         do_verify();
