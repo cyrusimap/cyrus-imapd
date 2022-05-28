@@ -118,7 +118,7 @@ static int compdb(const void *v1, const void *v2)
     return ((char *)db1->archiver - (char *)db2->archiver);
 }
 
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -c\n");
     fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -r [-x]\n");

@@ -85,7 +85,7 @@ static int add_xapian_paths(const char *userid, const char *userpath,
 static int find_p(const mbentry_t *mbentry, void *rock);
 static void get_searchparts(const char *key, const char *val, void *rock);
 static int relocate(const char *old, const char *new);
-static void usage(void);
+static void usage(void) __attribute__((noreturn));
 
 static int quiet = 0;
 static int nochanges = 0;

@@ -217,7 +217,7 @@ EXPORTED void fatal(const char *s, int code)
     shut_down(code);
 }
 
-static void usage(void)
+static  __attribute__((noreturn)) void usage(void)
 {
     syslog(LOG_ERR, "usage: notifyd [-C <alt_config>]");
     exit(EX_USAGE);
@@ -254,7 +254,7 @@ EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unus
 }
 
 /* Called by service API to shut down the service */
-EXPORTED void service_abort(int error)
+EXPORTED __attribute__((noreturn)) void service_abort(int error)
 {
     shut_down(error);
 }

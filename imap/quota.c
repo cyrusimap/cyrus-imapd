@@ -101,7 +101,7 @@ struct quotaentry {
 };
 
 /* forward declarations */
-static void usage(void);
+static void usage(void) __attribute__((noreturn));
 static void reportquota(void);
 static int buildquotalist(char *domain, char **roots, int nroots, int isuser);
 static int fixquotas(char *domain, char **roots, int nroots, int isuser);

@@ -216,7 +216,7 @@ static void cmd_starttls(struct conn *C, const char *tag);
 #ifdef HAVE_ZLIB
 static void cmd_compress(struct conn *C, const char *tag, const char *alg);
 #endif
-void shut_down(int code);
+void shut_down(int code) __attribute__((noreturn));
 static int reset_saslconn(struct conn *c);
 static void database_init(void);
 static void sendupdates(struct conn *C, int flushnow);
@@ -596,7 +596,7 @@ int service_init(int argc, char **argv,
 }
 
 /* Called by service API to shut down the service */
-void service_abort(int error)
+ __attribute__((noreturn)) void service_abort(int error)
 {
 #ifdef HAVE_SSL
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
@@ -2069,7 +2069,6 @@ void cmd_compress(struct conn *C __attribute__((unused)),
 }
 #endif /* HAVE_ZLIB */
 
-void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     in_shutdown = 1;

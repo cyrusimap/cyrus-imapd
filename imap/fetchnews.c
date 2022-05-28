@@ -123,7 +123,7 @@ static int newsrc_done(void)
     return r;
 }
 
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr,
             "fetchnews [-C <altconfig>] [-s <server>] [-n] [-y] [-w <wildmat>] [-f <tstamp file>]\n"

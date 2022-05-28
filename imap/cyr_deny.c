@@ -65,7 +65,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "Usage: cyr_deny [-C <altconfig>] [ -s services ] [ -m message ] user\n");
     fprintf(stderr, "       cyr_deny [-C <altconfig>] -a user\n");

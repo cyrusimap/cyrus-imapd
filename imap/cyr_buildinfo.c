@@ -61,7 +61,7 @@
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
 /* Print usage info on stderr and exit */
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "cyr_buildinfo [-C <file>] [format]\n");
     fprintf(stderr, "Where format is one of:\n");

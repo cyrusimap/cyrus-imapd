@@ -116,10 +116,10 @@ struct reconstruct_rock {
 static const char *progname = NULL;
 
 /* forward declarations */
-static void do_mboxlist(void);
+static void do_mboxlist(void) __attribute__((noreturn));
 static int do_reconstruct_p(const mbentry_t *mbentry, void *rock);
 static int do_reconstruct(struct findall_data *data, void *rock);
-static void usage(void);
+static void usage(void) __attribute__((noreturn));
 
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 

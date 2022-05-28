@@ -75,7 +75,7 @@ EXPORTED void fatal(const char *error, int code)
 }
 
 static const char *argv0 = NULL;
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "    %s [options] compact [mode] backup...\n", argv0);

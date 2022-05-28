@@ -120,7 +120,7 @@ static int verify_user(const mbname_t *mbname,
                        struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
 
-void shut_down(int code);
+void shut_down(int code) __attribute__((noreturn));
 
 static FILE *spoolfile(message_data_t *msgdata);
 static void removespool(message_data_t *msgdata);
@@ -136,7 +136,7 @@ static struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
                             &spoolfile, &removespool, &lmtpd_namespace,
                             0, 1, 0 };
 
-static void usage(void);
+static void usage(void) __attribute__((noreturn));
 
 /* global state */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
@@ -318,7 +318,7 @@ int service_main(int argc, char **argv,
 }
 
 /* Called by service API to shut down the service */
-void service_abort(int error)
+__attribute__((noreturn)) void service_abort(int error)
 {
     shut_down(error);
 }
@@ -1001,7 +1001,6 @@ EXPORTED void fatal(const char* s, int code)
 /*
  * Cleanly shut down and exit
  */
-void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     int i;

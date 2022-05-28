@@ -63,7 +63,7 @@
 #include "map.h"
 #include "xmalloc.h"
 
-static void usage(void)
+static __attribute__((noreturn)) void usage(void)
 {
     fprintf(stderr, "chk_cyrus [-C <altconfig>] partition\n");
     exit(-1);
