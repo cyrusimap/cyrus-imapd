@@ -1725,8 +1725,10 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
 
         if (!partition) {
             mboxlist_entry_free(&mbentry);
-            mboxlist_findparent_allow_all(mboxname, &mbentry);
-            partition = xstrdupnull(mbentry->partition);
+            r = mboxlist_findparent_allow_all(mboxname, &mbentry);
+            if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+            if (r) goto out;
+            if (mbentry) partition = xstrdupnull(mbentry->partition);
         }
 
         mbentry_t newmbentry = MBENTRY_INITIALIZER;
