@@ -521,11 +521,13 @@ static void _emailsubmission_create(jmap_req_t *req,
     /* identityId */
     const char *identityid = NULL;
     json_t *jidentityId = json_object_get(emailsubmission, "identityId");
-    if (json_is_string(jidentityId)) {
-        identityid = json_string_value(jidentityId);
-    }
-    else {
-        jmap_parser_invalid(&parser, "identityId");
+    if (JNOTNULL(jidentityId)) {
+        if (json_is_string(jidentityId)) {
+            identityid = json_string_value(jidentityId);
+        }
+        else {
+            jmap_parser_invalid(&parser, "identityId");
+        }
     }
 
     /* envelope */
@@ -792,7 +794,8 @@ static void _emailsubmission_create(jmap_req_t *req,
         if (r) goto done;
     }
     smtpclient_set_auth(*sm, req->userid);
-    smtpclient_set_jmapid(*sm, identityid);
+
+    if (identityid) smtpclient_set_jmapid(*sm, identityid);
 
     /* Prepare envelope */
     smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;

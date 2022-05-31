@@ -2074,7 +2074,6 @@ sub test_emailsubmission_scheduled_send_null_onsend
         [ 'EmailSubmission/set', {
             create => {
                 '1' => {
-                    identityId => $identityid,
                     emailId  => $emailid1,
                     envelope => {
                         mailFrom => {
