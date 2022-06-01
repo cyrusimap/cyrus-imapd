@@ -9,9 +9,8 @@ Enabling improved_mboxlist_sort
 
 You can't enable and disable ``improved_mboxlist_sort`` on a live
 system. You need to dump and load the necessary database after stopping
-and before starting the master process.  Note that you should move or
-rename the original mailboxes.db out of the way between dumping the old
-and loading the new.
+and before starting the master process.  Rename the original mailboxes.db
+out of the way between dumping the old and loading the new.
 
 Dumping the mailboxes.db file
 

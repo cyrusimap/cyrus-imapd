@@ -48,6 +48,7 @@ use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
 use File::Basename;
 use File::stat;
+use JSON;
 use POSIX qw(geteuid :signal_h :sys_wait_h :errno_h);
 use DateTime;
 use BSD::Resource;
@@ -2628,10 +2629,11 @@ sub run_dbcommand
 
 sub read_mailboxes_db
 {
-    my ($self) = @_;
+    my ($self, $params) = @_;
 
     # run ctl_mboxlist -d to dump mailboxes.db to a file
-    my $outfile = $self->get_basedir() . "/$$-ctl_mboxlist.out";
+    my $outfile = $params->{outfile}
+                  || $self->get_basedir() . "/$$-ctl_mboxlist.out";
     $self->run_command({
         cyrus => 1,
         redirects => {
@@ -2639,46 +2641,12 @@ sub read_mailboxes_db
         },
     }, 'ctl_mboxlist', '-d');
 
-    my $records = {};
-
+    local $/;
     open my $fh, '<', $outfile or die "$outfile: $!";
-    foreach my $line (<$fh>) {
-        if ($line =~ m {
-                ^
-                ([^\t]*)                # mailbox
-                \t                      # one tab
-                (\d+)                   # mbtype
-                \x20                    # one space
-                ([^\x20]+)              # (server!)partition
-                \x20                    # one space
-                (.*)                    # acl
-                $
-            }x)
-        {
-            my ($server, $partition);
-
-            if (index($3, '!') != -1) {
-                ($server, $partition) = split /!/, $3;
-            }
-            else {
-                $partition = $3;
-            }
-
-            $records->{$1} = {
-                mbtype => $2,
-                server => $server,
-                partition => $partition,
-                acl => { split /\t/, $4 },
-            };
-        }
-        else {
-            xlog "failed to parse ctl_mboxlist -d output: <$line>";
-            die "failed to parse ctl_mboxlist -d output";
-        }
-    }
+    my $json_data = <$fh>;
     close $fh;
 
-    return $records;
+    return JSON::decode_json($json_data);
 }
 
 1;

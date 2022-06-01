@@ -2171,21 +2171,10 @@ sub test_no_tombstones
         [ 'delete' => 'INBOX/Tombstone' ],
     ]);
 
-    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
-
-    my $mbtype_deleted = 1 << 7;
     my $tombstone_name = 'user.cassandane.INBOX.Tombstone';
 
-    my ($maj, $min) = Cassandane::Instance->get_version();
-    if ($maj < 3) {
-        $tombstone_name = 'user.cassandane.Tombstone';
-    }
-    if ($maj < 3 || ($maj == 3 && $min < 5)) {
-        $mbtype_deleted = 1 << 4;
-    }
-
-    $self->assert_bits_set($mbtype_deleted,
-                           $mailboxesdb->{$tombstone_name}->{mbtype});
+    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
+    $self->assert_matches(qr{d}, $mailboxesdb->{$tombstone_name}->{mbtype});
 
     # basic list
     my $data = $imaptalk->list("", "*");
@@ -2230,17 +2219,10 @@ sub test_no_inbox_tombstone
     $admintalk->rename("user/cassandane", "user/cassandane-old");
     $self->assert_equals('ok', $admintalk->get_last_completion_response());
 
-    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
-    my $mbtype_deleted = 1 << 7;
     my $tombstone_name = 'user.cassandane';
 
-    my ($maj, $min) = Cassandane::Instance->get_version();
-    if ($maj < 3 || ($maj == 3 && $min < 5)) {
-        $mbtype_deleted = 1 << 4;
-    }
-
-    $self->assert_bits_set($mbtype_deleted,
-                           $mailboxesdb->{$tombstone_name}->{mbtype});
+    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
+    $self->assert_matches(qr{d}, $mailboxesdb->{$tombstone_name}->{mbtype});
 
     my $imaptalk = $self->{store}->get_client();
 

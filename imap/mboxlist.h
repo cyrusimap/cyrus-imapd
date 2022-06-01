@@ -103,7 +103,10 @@
 
 #define HOSTNAME_SIZE 512
 
-/* each mailbox has the following data */
+/* Each mailbox has the following data.
+ * If you change or extend this struct, you MUST also update the
+ * dump and undump implementations in ctl_mboxlist.c!
+ */
 struct mboxlist_entry {
     char *name;
     char *ext_name;
@@ -128,6 +131,10 @@ struct mboxlist_entry {
 
 typedef struct mboxlist_entry mbentry_t;
 
+/* Each name_history entry has the following data.
+ * If you change or extend this struct, you MUST also update the
+ * dump and undump implementations in ctl_mboxlist.c!
+ */
 typedef struct {
     char *name;
     time_t mtime;
