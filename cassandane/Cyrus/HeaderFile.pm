@@ -12,6 +12,8 @@ use IO::File::fcntl;
 use IO::Handle;
 use File::Temp;
 use Data::Dumper;
+
+use lib '.';
 use Cyrus::DList;
 
 our $HL1 = qq{\241\002\213\015Cyrus mailbox header};
