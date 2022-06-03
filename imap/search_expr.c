@@ -201,17 +201,13 @@ EXPORTED void search_expr_append(search_expr_t *parent, search_expr_t *e)
     append(parent, e);
 }
 
-/*
- * Recursively free a search expression tree including the given node
- * and all descendent nodes.
- */
-EXPORTED void search_expr_free(search_expr_t *e)
+static void search_expr_free_nnodes(search_expr_t *e, unsigned *nnodes)
 {
     if (!e) return;
     while (e->children) {
         search_expr_t *child = e->children;
         search_expr_detach(e, child);
-        search_expr_free(child);
+        search_expr_free_nnodes(child, nnodes);
     }
     if (e->attr) {
         if (e->attr->internalise) e->attr->internalise(NULL, NULL,
@@ -220,7 +216,17 @@ EXPORTED void search_expr_free(search_expr_t *e)
             e->attr->free(&e->value, (struct search_attr**)&e->attr);
         }
     }
+    if (nnodes && *nnodes > 0) *nnodes -= 1;
     free(e);
+}
+
+/*
+ * Recursively free a search expression tree including the given node
+ * and all descendent nodes.
+ */
+EXPORTED void search_expr_free(search_expr_t *e)
+{
+    search_expr_free_nnodes(e, NULL);
 }
 
 /*
@@ -541,7 +547,7 @@ static int apply_demorgan(search_expr_t **ep, search_expr_t **prevp, unsigned *n
     child->op = (child->op == SEOP_AND ? SEOP_OR : SEOP_AND);
     for (grandp = &child->children ; *grandp ; grandp = &(*grandp)->next)
         interpolate(grandp, SEOP_NOT, nnodes);
-    search_expr_free(elide(ep));
+    search_expr_free_nnodes(elide(ep), nnodes);
 
     return complexity_check(1, nnodes);
 }
@@ -567,8 +573,8 @@ static int apply_distribution(search_expr_t **ep, search_expr_t **prevp, unsigne
         append(newor, newand);
     }
 
-    search_expr_free(and);
-    search_expr_free(or);
+    search_expr_free_nnodes(and, nnodes);
+    search_expr_free_nnodes(or, nnodes);
 
     return complexity_check(r, nnodes);
 }
@@ -582,23 +588,23 @@ static int invert(search_expr_t **ep, search_expr_t **prevp, unsigned *nnodes)
 }
 
 /* combine compatible boolean parent and child nodes */
-static void combine(search_expr_t **ep, search_expr_t **prevp)
+static void combine(search_expr_t **ep, search_expr_t **prevp, unsigned *nnodes)
 {
     switch ((*ep)->op) {
     case SEOP_NOT:
-        search_expr_free(elide(prevp));
-        search_expr_free(elide(ep));
+        search_expr_free_nnodes(elide(prevp), nnodes);
+        search_expr_free_nnodes(elide(ep), nnodes);
         break;
     case SEOP_AND:
     case SEOP_OR:
-        search_expr_free(elide(prevp));
+        search_expr_free_nnodes(elide(prevp), nnodes);
         break;
     default:
         break;
     }
 }
 
-static int detrivialise(search_expr_t **ep)
+static int detrivialise(search_expr_t **ep, unsigned *nnodes)
 {
     if (!ep || !*ep) return 0;
 
@@ -608,7 +614,7 @@ static int detrivialise(search_expr_t **ep)
     search_expr_t *c, *next;
     for (c = e->children; c; c = next) {
         next = c->next;
-        int r2 = detrivialise(&c);
+        int r2 = detrivialise(&c, nnodes);
         if (!r2) r = r2;
     }
 
@@ -633,7 +639,7 @@ static int detrivialise(search_expr_t **ep)
                     }
                     else if (c->op == noop) {
                         search_expr_detach(e, c);
-                        search_expr_free(c);
+                        search_expr_free_nnodes(c, nnodes);
                         r = 1;
                     }
                 }
@@ -657,7 +663,7 @@ static int detrivialise(search_expr_t **ep)
 
     for (c = detached_children; c; c = next) {
         next = c->next;
-        search_expr_free(c);
+        search_expr_free_nnodes(c, nnodes);
     }
 
     if (e->op == SEOP_AND || e->op == SEOP_OR) {
@@ -668,7 +674,7 @@ static int detrivialise(search_expr_t **ep)
                 c = e->children;
                 e->children = NULL;
                 search_expr_detach(e->parent, e);
-                search_expr_free(e);
+                search_expr_free_nnodes(e, nnodes);
                 c->next = p->children;
                 p->children = c;
                 c->parent = p;
@@ -676,7 +682,7 @@ static int detrivialise(search_expr_t **ep)
             else {
                 *ep = e->children;
                 e->children = NULL;
-                search_expr_free(e);
+                search_expr_free_nnodes(e, nnodes);
             }
             r = 1;
         }
@@ -691,7 +697,7 @@ static int detrivialise(search_expr_t **ep)
 
 EXPORTED void search_expr_detrivialise(search_expr_t **ep)
 {
-    detrivialise(ep); // ignore return code
+    detrivialise(ep, NULL); // ignore return code
 }
 
 /*
@@ -704,9 +710,17 @@ static int normalise(search_expr_t **ep, unsigned *nnodes)
     int depth;
     int changed = -1;
     int r;
+    unsigned nnodes_last_collect = *nnodes;
 
 restart:
     changed++;
+
+    if (*nnodes > 2 * nnodes_last_collect + 1) {
+        int r2 = detrivialise(ep, nnodes);
+        if (r2 < 0) return -1;
+        if (r2 > 0) changed++;
+        nnodes_last_collect = *nnodes;
+    }
 
 #if DEBUG
     the_focus = *ep;
@@ -720,7 +734,7 @@ restart:
     if (!has_enough_children(*ep)) {
         /* eliminate trivial nodes: AND and ORs with
          * a single child, NOTs with none */
-        search_expr_free(elide(ep));
+        search_expr_free_nnodes(elide(ep), nnodes);
         goto restart;
     }
 
@@ -729,7 +743,7 @@ restart:
     {
         int child_depth = dnf_depth(*prevp);
         if (child_depth == depth) {
-            combine(ep, prevp);
+            combine(ep, prevp, nnodes);
             goto restart;
         }
         if (child_depth < depth) {
@@ -902,7 +916,7 @@ static int search_expr_normalise_nnodes(search_expr_t **ep, unsigned *nnodes)
 #endif
     r = normalise(ep, nnodes);
     if (r >= 0) {
-        int r2 = detrivialise(ep);
+        int r2 = detrivialise(ep, nnodes);
         if (!r) r = r2;
     }
     sort_children(*ep);
