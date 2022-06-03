@@ -321,7 +321,7 @@ sub test_reconstruct_snoozed
 }
 
 sub test_reconstruct_uniqueid_from_header
-    :min_version_3_4 :max_version_3_4
+    :min_version_3_2 :max_version_3_2
 {
     my ($self) = @_;
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
@@ -342,9 +342,6 @@ sub test_reconstruct_uniqueid_from_header
     undef $imaptalk;
 
     # lose that uniqueid from mailboxes.db
-    my $runq = "\$RUNQ\$$uniqueid\$user.cassandane";
-    $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
-                                     [ 'DELETE', $runq ]);
     my (undef, $mbentry) = $self->{instance}->run_dbcommand(
         $mailboxes_db, "twoskip",
         ['SHOW', 'user.cassandane']);
@@ -368,8 +365,9 @@ sub test_reconstruct_uniqueid_from_header
     $imaptalk->logout();
     undef $imaptalk;
     my $syslog = join(q{}, $self->{instance}->getsyslog());
-    $self->assert_matches(qr{mbentry has no uniqueid, needs reconstruct},
-                          $syslog);
+    $self->assert_matches(
+        qr{mbentry [^\s]+ has no uniqueid, needs reconstruct},
+        $syslog);
 
     # run reconstruct, expect it to put the uniqueid back
     my $reconstruct_out = "$basedir/reconstruct.out";
@@ -394,7 +392,7 @@ sub test_reconstruct_uniqueid_from_header
     undef $imaptalk;
     $syslog = join(q{}, $self->{instance}->getsyslog());
     $self->assert_does_not_match(
-        qr{mbentry has no uniqueid, needs reconstruct},
+        qr{mbentry [^\s]+ has no uniqueid, needs reconstruct},
         $syslog);
 
     # mbentry should have the same uniqueid as before
@@ -404,17 +402,10 @@ sub test_reconstruct_uniqueid_from_header
     $dlist = Cyrus::DList->parse_string($mbentry);
     $hash = $dlist->as_perl();
     $self->assert_str_equals($uniqueid, $hash->{I});
-
-    # runq entry should be back
-    my ($key, $value) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        ['SHOW', $runq]);
-    $self->assert_str_equals($runq, $key);
-    $self->assert_str_equals(q{}, $value);
 }
 
 sub test_reconstruct_uniqueid_from_mbentry
-    :min_version_3_4 :max_version_3_4
+    :min_version_3_2 :max_version_3_2
 {
     my ($self) = @_;
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
@@ -496,7 +487,7 @@ sub test_reconstruct_uniqueid_from_mbentry
 }
 
 sub test_reconstruct_create_missing_uniqueid
-    :min_version_3_4 :max_version_3_4
+    :min_version_3_2 :max_version_3_2
 {
     my ($self) = @_;
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
@@ -565,7 +556,7 @@ sub test_reconstruct_create_missing_uniqueid
     undef $imaptalk;
     my $syslog = join(q{}, $self->{instance}->getsyslog());
     $self->assert_does_not_match(
-        qr{mbentry has no uniqueid, needs reconstruct},
+        qr{mbentry [^\s]+ has no uniqueid, needs reconstruct},
         $syslog);
 
     # should be able to getmetadata the uniqueid, and it should be different
@@ -584,14 +575,6 @@ sub test_reconstruct_create_missing_uniqueid
     my $dlist = Cyrus::DList->parse_string($mbentry);
     my $hash = $dlist->as_perl();
     $self->assert_str_equals($newuniqueid, $hash->{I});
-
-    # new runq entry should exist
-    my $newrunq = "\$RUNQ\$$newuniqueid\$user.cassandane";
-    my ($key, $value) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        ['SHOW', $newrunq]);
-    $self->assert_str_equals($newrunq, $key);
-    $self->assert_str_equals(q{}, $value);
 }
 
 1;
