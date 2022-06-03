@@ -2254,17 +2254,17 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         enum search_op op = SEOP_UNKNOWN;
 
         if (!strcmp("AND", s)) {
-            op = SEOP_AND;
+            this = search_expr_new(parent, SEOP_AND);
         } else if (!strcmp("OR", s)) {
-            op = SEOP_OR;
+            this = search_expr_new(parent, SEOP_OR);
         } else if (!strcmp("NOT", s)) {
             op = SEOP_NOT;
+            this = search_expr_new(parent, SEOP_AND);
         }
 
-        this = search_expr_new(parent, op);
-        e = op == SEOP_NOT ? search_expr_new(this, SEOP_OR) : this;
 
         json_array_foreach(json_object_get(filter, "conditions"), i, val) {
+            e = op != SEOP_UNKNOWN ? search_expr_new(this, op) : this;
             _email_buildsearchexpr(req, val, e, contactgroups, want_expunged,
                     search_attrs, perf_filters);
         }
