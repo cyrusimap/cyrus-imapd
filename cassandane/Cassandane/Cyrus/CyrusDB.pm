@@ -124,7 +124,7 @@ sub test_mboxlistdb_skiplist
 }
 
 sub test_recover_uniqueid_from_header
-    :min_version_3_4 :max_version_3_4
+    :min_version_3_2 :max_version_3_2
 {
     my ($self) = @_;
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
@@ -151,9 +151,6 @@ sub test_recover_uniqueid_from_header
     $self->{instance}->{re_use_dir} = 1;
 
     # lose that uniqueid from mailboxes.db
-    my $runq = "\$RUNQ\$$uniqueid\$user.cassandane";
-    $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
-                                     [ 'DELETE', $runq ]);
     my (undef, $mbentry) = $self->{instance}->run_dbcommand(
         $mailboxes_db, "twoskip",
         ['SHOW', 'user.cassandane']);
@@ -178,11 +175,12 @@ sub test_recover_uniqueid_from_header
 
     # should have still existed in cyrus.header
     $self->assert_does_not_match(
-        qr{mailbox header had no uniqueid, creating one}, $syslog);
+        qr{mailbox [^\s]+ header had no uniqueid, creating }, $syslog);
 
     # expect to find the log line
-    $self->assert_matches(qr{mbentry had no uniqueid, setting from header},
-                          $syslog);
+    $self->assert_matches(
+        qr{mbentry [^\s]+ had no uniqueid, setting [^\s]+ from header},
+        $syslog);
 
     # header should have the same uniqueid as before
     $imaptalk = $self->{store}->get_client();
@@ -198,17 +196,10 @@ sub test_recover_uniqueid_from_header
     $dlist = Cyrus::DList->parse_string($mbentry);
     $hash = $dlist->as_perl();
     $self->assert_str_equals($uniqueid, $hash->{I});
-
-    # runq entry should be back
-    my ($key, $value) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        ['SHOW', $runq]);
-    $self->assert_str_equals($runq, $key);
-    $self->assert_str_equals(q{}, $value);
 }
 
 sub test_recover_create_missing_uniqueid
-    :min_version_3_4 :max_version_3_4
+    :min_version_3_2 :max_version_3_2
 {
     my ($self) = @_;
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
@@ -234,9 +225,6 @@ sub test_recover_create_missing_uniqueid
     $self->{instance}->{re_use_dir} = 1;
 
     # lose that uniqueid from mailboxes.db
-    my $runq = "\$RUNQ\$$uniqueid\$user.cassandane";
-    $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
-                                     [ 'DELETE', $runq ]);
     my (undef, $mbentry) = $self->{instance}->run_dbcommand(
         $mailboxes_db, "twoskip",
         ['SHOW', 'user.cassandane']);
@@ -271,12 +259,14 @@ sub test_recover_create_missing_uniqueid
     my $syslog = join(q{}, $self->{instance}->getsyslog());
 
     # expect to find it was missing in the header
-    $self->assert_matches(qr{mailbox header had no uniqueid, creating one},
-                          $syslog);
+    $self->assert_matches(
+        qr{mailbox [^\s]+ header had no uniqueid, creating},
+        $syslog);
 
     # expect to find it was missing from mbentry
-    $self->assert_matches(qr{mbentry had no uniqueid, setting from header},
-                          $syslog);
+    $self->assert_matches(
+        qr{mbentry [^\s]+ had no uniqueid, setting [^\s]+ from header},
+        $syslog);
 
     # should not be the same uniqueid as before
     $imaptalk = $self->{store}->get_client();
@@ -294,14 +284,6 @@ sub test_recover_create_missing_uniqueid
     $dlist = Cyrus::DList->parse_string($mbentry);
     $hash = $dlist->as_perl();
     $self->assert_str_equals($newuniqueid, $hash->{I});
-
-    # new runq entry should exist
-    my $newrunq = "\$RUNQ\$$newuniqueid\$user.cassandane";
-    my ($key, $value) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        ['SHOW', $newrunq]);
-    $self->assert_str_equals($newrunq, $key);
-    $self->assert_str_equals(q{}, $value);
 }
 
 1;
