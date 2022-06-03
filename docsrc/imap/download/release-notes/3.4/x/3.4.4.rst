@@ -1,0 +1,36 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.4.4 Release Notes
+==============================
+
+Download from GitHub:
+
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.4/cyrus-imapd-3.4.4.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.4/cyrus-imapd-3.4.4.tar.gz.sig
+
+.. _relnotes-3.4.4-changes:
+
+Changes since 3.4.3
+===================
+
+Build changes
+-------------
+
+* None
+
+Bug fixes
+---------
+
+* Fixed :issue:`3318`: assertion failures when using twoskip for subscriptions
+  databases (thanks David Murray)
+* Fixed :issue:`3941`: sieve implicit keep causing duplicates when include
+  statement used
+* Fixed :issue:`4123`: XS Perl modules failed to compile against Perl 5.36
+
+Other changes
+-------------
+
+* :issue:`4100`: `ctl_cyrusdb -r` and `reconstruct` now ensure the "uniqueid"
+  field is present in and synchronised between mailboxes.db and cyrus.header.
+* Cassandane can now read configuration options from the environment
