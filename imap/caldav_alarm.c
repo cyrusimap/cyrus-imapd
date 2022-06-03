@@ -870,6 +870,29 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
 {
     icalcomponent *myical = NULL;
 
+    /* Disable alarms for SECONDLY and MINUTELY recurrences */
+    for (icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+         comp;
+         comp = icalcomponent_get_next_component(ical, icalcomponent_isa(comp))) {
+
+        icalproperty *prop;
+        for (prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+
+            struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
+            if (rrule.freq == ICAL_SECONDLY_RECURRENCE ||
+                rrule.freq == ICAL_MINUTELY_RECURRENCE) {
+                xsyslog(LOG_NOTICE,
+                        "Disabling alarms for high frequence calendar entry",
+                        "freq=<%s> mboxname=<%s> imap_uid=<%d>",
+                        icalrecur_freq_to_string(rrule.freq),
+                        mboxname, imap_uid);
+                return 0;
+            }
+        }
+    }
+
     /* Add default alarms */
     if (icalcomponent_read_usedefaultalerts(ical) > 0) {
         static const char *withtime_annot =

@@ -3000,4 +3000,67 @@ EOF
     $self->assert_alarms();
 }
 
+sub test_disable_high_freq
+    :min_version_3_7 :needs_component_calalarmd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Etc/UTC');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%SZ');
+
+    # create hourly, minutely and secondly occurring events
+    for my $freq (qw(HOURLY MINUTELY SECONDLY)) {
+        my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9-$freq";
+        my $href = "$CalendarId/$uuid.ics";
+        my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+TRANSP:OPAQUE
+SUMMARY:$freq
+DTSTART:$start
+RRULE:FREQ=$freq
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:PT0S
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+        $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+    }
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    # assert that only the HOURLY event creates an alarm. If SECONDLY would
+    # not be disabled, this test would take a couple of seconds and the
+    # notifications would include the SECONDLY and MINUTELY alarms, too.
+    $self->assert_alarms({summary => 'HOURLY', start => $start });
+}
+
 1;
