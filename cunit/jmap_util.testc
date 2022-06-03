@@ -145,7 +145,6 @@ static void test_decode_to_utf8(void)
         int want_is_encoding_problem;
     };
 
-
     // this is all about "Adélaïde"
 
     struct testcase tcs[] = {{
@@ -189,6 +188,18 @@ static void test_decode_to_utf8(void)
         0.51,
         "Ad""\xef\xbf\xbd""la""\xef\xbf\xbd""de",
         0
+    }, {
+        // Multi-byte UTF-8 with invalid byte sequence:
+        // "Hello,😛🪐world🍎🏓!💾," "\xc3\x28"
+        "SGVsbG8s8J+Ym/CfqpB3b3JsZPCfjY7wn4+TIfCfkr4swyg=",
+        "utf-8",
+        ENCODING_BASE64,
+        0.0,
+        "\x48\x65\x6c\x6c\x6f\x2c\xf0\x9f\x98\x9b\xf0\x9f"
+        "\xaa\x90\x77\x6f\x72\x6c\x64\xf0\x9f\x8d\x8e\xf0"
+        "\x9f\x8f\x93\x21\xf0\x9f\x92\xbe"
+        "," "\xef\xbf\xbd" "(",
+        1
     }, {
         NULL, NULL, ENCODING_UNKNOWN, 0.0, NULL, 0
     }};

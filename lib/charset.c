@@ -3982,7 +3982,7 @@ EXPORTED struct char_counts charset_count_validutf8(const char *data, size_t dat
         datalen = INT32_MAX;
     }
 
-    struct char_counts counts = { 0, 0, 0 };
+    struct char_counts counts = { 0 };
     int32_t i = 0;
     int32_t length = (int32_t) datalen;
     const uint8_t *data8 = (const uint8_t *) data;
@@ -3990,10 +3990,14 @@ EXPORTED struct char_counts charset_count_validutf8(const char *data, size_t dat
     while (i < length) {
         UChar32 c;
         U8_NEXT(data8, i, length, c);
+        counts.total++;
         if (c == 0xfffd)
             counts.replacement++;
-        else if (c >= 0)
+        else if (c >= 0) {
             counts.valid++;
+            if (u_iscntrl(c))
+                counts.cntrl++;
+        }
         else
             counts.invalid++;
     }

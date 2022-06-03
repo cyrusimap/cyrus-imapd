@@ -176,9 +176,11 @@ extern int charset_extract(int (*cb)(const struct buf *text, void *rock),
 EXPORTED char *charset_extract_plain(const char *html);
 
 struct char_counts {
+    size_t total;
     size_t valid;
     size_t replacement;
     size_t invalid;
+    size_t cntrl;
 };
 
 /* Count the number of valid, invalid and replacement UTF-8 characters

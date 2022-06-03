@@ -702,15 +702,7 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
         }
     }
     else if (!charset_id || !strcasecmp("US-ASCII", charset_id)) {
-        int has_cntrl = 0;
-        size_t i;
-        for (i = 0; i < textlen; i++) {
-            if (iscntrl(text[i])) {
-                has_cntrl = 1;
-                break;
-            }
-        }
-        if (has_cntrl) {
+        if (counts.cntrl) {
             /* Could be ISO-2022-JP */
             charset_t guess_cs = charset_lookupname("ISO-2022-JP");
             if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
@@ -740,6 +732,7 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
         if (!obj) goto done;
         detect_reset(&d);
 
+
         struct buf buf = BUF_INITIALIZER;
         charset_decode(&buf, data, datalen, encoding);
         buf_cstring(&buf);
@@ -751,14 +744,29 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
                     struct char_counts guess_counts =
                         charset_count_validutf8(guess, strlen(guess));
                     if ((guess_counts.valid > counts.valid) &&
-                        (obj->confidence >= confidence)) {
-                        free(text);
-                        text = guess;
-                        counts = guess_counts;
+                            (obj->confidence >= confidence)) {
+                        // libchardet might have guessed a single-byte character encoding,
+                        // which will result in a large number of valid characters and no
+                        // invalid or replacement characters. An indicator that the guess
+                        // was wrong is if the number of printable characters decreased
+                        // in relation to all valid characters, including control chars.
+                        double printable = counts.valid ?
+                            1.0 * (counts.valid - counts.cntrl) / counts.valid
+                            : 0;
+                        double guess_printable = guess_counts.valid ?
+                            1.0 * (guess_counts.valid - guess_counts.cntrl) / guess_counts.valid
+                            : 0;
+
+                        if ((guess_counts.replacement <= counts.replacement) &&
+                            (!guess_counts.invalid || guess_counts.invalid < counts.invalid) &&
+                                guess_printable >= printable) {
+                            free(text);
+                            text = guess;
+                            guess = NULL;
+                            counts = guess_counts;
+                        }
                     }
-                    else {
-                        free(guess);
-                    }
+                    free(guess);
                 }
                 charset_free(&guess_cs);
             }
