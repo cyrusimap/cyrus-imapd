@@ -1,6 +1,13 @@
 #!perl
 use Cassandane::Tiny;
 
+# a case where ANOTHER user moved an email from a folder with sharedseen
+# enabled to a folder with different seen options enabled caused an IOERROR
+# and DBERROR because the seen db was in a transaction, and hence led to
+# this in the logs:
+#
+# IOERROR: append_addseen failed to open DB for foo@example.com
+
 sub test_email_move_shared_fromsharedseen
     :min_version_3_1 :needs_component_sieve :needs_component_jmap
 {

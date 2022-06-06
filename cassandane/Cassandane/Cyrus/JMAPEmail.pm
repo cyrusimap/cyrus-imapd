@@ -164,13 +164,6 @@ sub defaultprops_for_email_get
     return ( "id", "blobId", "threadId", "mailboxIds", "keywords", "size", "receivedAt", "messageId", "inReplyTo", "references", "sender", "from", "to", "cc", "bcc", "replyTo", "subject", "sentAt", "hasAttachment", "preview", "bodyValues", "textBody", "htmlBody", "attachments" );
 }
 
-# a case where ANOTHER user moved an email from a folder with sharedseen
-# enabled to a folder with different seen options enabled caused an IOERROR
-# and DBERROR because the seen db was in a transaction, and hence led to
-# this in the logs:
-#
-# IOERROR: append_addseen failed to open DB for foo@example.com
-
 sub download
 {
     my ($self, $accountid, $blobid) = @_;
