@@ -379,4 +379,6 @@ sub _set_quotalimits
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 }
 
+use Cassandane::Tiny::Loader 'tiny-tests/JMAPEmail';
+
 1;
