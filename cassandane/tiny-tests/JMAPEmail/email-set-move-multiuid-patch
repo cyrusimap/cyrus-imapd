@@ -1,0 +1,81 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_move_multiuid_patch
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Set up mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                "a" => { name => "a", parentId => undef },
+            },
+        }, 'R2'],
+    ]);
+    my $srcMboxId = $res->[0][1]{ids}[0];
+    $self->assert_not_null($srcMboxId);
+    my $dstMboxId = $res->[1][1]{created}{a}{id};
+    $self->assert_not_null($dstMboxId);
+
+
+    xlog "Append same message twice to inbox";
+    my $rawMessage = <<"EOF";
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test\r
+EOF
+    $imap->append('INBOX', $rawMessage) || die $@;
+    $imap->append('INBOX', $rawMessage) || die $@;
+    my $msgCount = $imap->message_count("INBOX");
+    $self->assert_num_equals(2, $msgCount);
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'mailboxIds' ],
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    my $emailId = $res->[0][1]{ids}[0];
+    $self->assert_deep_equals(
+        { $srcMboxId => JSON::true },
+        $res->[1][1]{list}[0]{mailboxIds}
+    );
+
+    xlog "Move email to destination mailbox with mailboxIds patch";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId => {
+                    'mailboxIds/' . $srcMboxId => undef,
+                    'mailboxIds/' . $dstMboxId => JSON::true,
+                },
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => [$emailId],
+            properties => [ 'mailboxIds' ],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
+    $self->assert_deep_equals(
+        { $dstMboxId => JSON::true },
+        $res->[1][1]{list}[0]{mailboxIds}
+    );
+}

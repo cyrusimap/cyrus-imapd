@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_upload
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create drafts mailbox";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+
+    my $data = $jmap->Upload("a message with some text", "text/rubbish");
+    $self->assert_matches(qr/^G44911b55c3b83ca05db9659d7a8e8b7b/, $data->{blobId});
+    $self->assert_num_equals(24, $data->{size});
+    $self->assert_str_equals("text/rubbish", $data->{type});
+
+    my $msgresp = $jmap->CallMethods([
+      ['Email/set', { create => { "2" => {
+        mailboxIds =>  { $draftsmbox => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+        ],
+        subject => "Memo",
+        textBody => [{partId => '1'}],
+        htmlBody => [{partId => '2'}],
+        bodyValues => {
+            1 => {
+                value => "I'm givin' ya one last chance ta surrenda!"
+            },
+            2 => {
+                value => "<html>I'm givin' ya one last chance ta surrenda!</html>"
+            },
+        },
+        attachments => [{
+            blobId => $data->{blobId},
+            name => "test.txt",
+        }],
+        keywords => { '$draft' => JSON::true },
+      } } }, 'R2'],
+    ]);
+
+    $self->assert_not_null($msgresp->[0][1]{created});
+}

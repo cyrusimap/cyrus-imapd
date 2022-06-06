@@ -1,0 +1,79 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_keywords
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "Create IMAP mailbox and message A";
+    $talk->create('INBOX.A') || die;
+    $store->set_folder('INBOX.A');
+    $self->make_message('A') || die;
+
+    xlog $self, "Create IMAP mailbox B and copy message A to B";
+    $talk->create('INBOX.B') || die;
+    $talk->copy('1:*', 'INBOX.B');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids'}
+        }, 'R2' ]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    my $jmapmsg = $res->[1][1]{list}[0];
+    $self->assert_not_null($jmapmsg);
+
+    # Keywords are empty by default
+    my $keywords = {};
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+
+    xlog $self, "Set \\Seen on message A";
+    $store->set_folder('INBOX.A');
+    $talk->store('1', '+flags', '(\\Seen)');
+
+    # Seen must only be set if ALL messages are seen.
+    $res = $jmap->CallMethods([
+        ['Email/get', { 'ids' => [ $jmapmsg->{id} ] }, 'R2' ]
+    ]);
+    $jmapmsg = $res->[0][1]{list}[0];
+    $keywords = {};
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+
+    xlog $self, "Set \\Seen on message B";
+    $store->set_folder('INBOX.B');
+    $store->_select();
+    $talk->store('1', '+flags', '(\\Seen)');
+
+    # Seen must only be set if ALL messages are seen.
+    $res = $jmap->CallMethods([
+        ['Email/get', { 'ids' => [ $jmapmsg->{id} ] }, 'R2' ]
+    ]);
+    $jmapmsg = $res->[0][1]{list}[0];
+    $keywords = {
+        '$seen' => JSON::true,
+    };
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+
+    xlog $self, "Set \\Flagged on message B";
+    $store->set_folder('INBOX.B');
+    $store->_select();
+    $talk->store('1', '+flags', '(\\Flagged)');
+
+    # Any other keyword is set if set on any IMAP message of this email.
+    $res = $jmap->CallMethods([
+        ['Email/get', { 'ids' => [ $jmapmsg->{id} ] }, 'R2' ]
+    ]);
+    $jmapmsg = $res->[0][1]{list}[0];
+    $keywords = {
+        '$seen' => JSON::true,
+        '$flagged' => JSON::true,
+    };
+    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+}

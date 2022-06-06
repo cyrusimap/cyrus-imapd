@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_intermediary_create
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "Create mailboxes";
+    $imap->create("INBOX.i1.foo") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxId1 = $mboxByName{'i1'}->{id};
+
+    xlog $self, "Create email in intermediary mailbox";
+    my $email =  {
+        mailboxIds => {
+            $mboxId1 => JSON::true
+        },
+        from => [{
+            email => q{test1@local},
+            name => q{}
+        }],
+        to => [{
+            email => q{test2@local},
+            name => '',
+        }],
+        subject => 'foo',
+    };
+
+    xlog $self, "create and get email";
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+        ['Email/get', { ids => [ "#1" ] }, "R2" ],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{1});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mailboxIds}{$mboxId1});
+}

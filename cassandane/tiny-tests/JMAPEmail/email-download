@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_download
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "Generate a email in INBOX via IMAP";
+    my $body = "--047d7b33dd729737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $body .= "\r\n";
+    $body .= "some text";
+    $body .= "\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/html;charset=\"UTF-8\"\r\n";
+    $body .= "\r\n";
+    $body .= "<p>some HTML text</p>";
+    $body .= "\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348--\r\n";
+    $self->make_message("foo",
+        mime_type => "multipart/alternative",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body
+    );
+
+    xlog $self, "get email";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'blobId' ],
+        }, 'R2'],
+    ]);
+    my $msg = $res->[1][1]->{list}[0];
+
+    my $blob = $jmap->Download({ accept => 'message/rfc822' }, 'cassandane', $msg->{blobId});
+    $self->assert_str_equals('message/rfc822', $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+}

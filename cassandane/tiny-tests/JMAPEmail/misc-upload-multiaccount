@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_upload_multiaccount
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Create user and share mailbox
+    $self->{instance}->create_user("foo");
+    $admintalk->setacl("user.foo", "cassandane", "lrwikxd") or die;
+
+    # Create user but don't share mailbox
+    $self->{instance}->create_user("bar");
+
+    my @res = $jmap->Upload("a email with some text", "text/rubbish", "foo");
+    $self->assert_str_equals('201', $res[0]->{status});
+
+    @res = $jmap->Upload("a email with some text", "text/rubbish", "bar");
+    $self->assert_str_equals('404', $res[0]->{status});
+}

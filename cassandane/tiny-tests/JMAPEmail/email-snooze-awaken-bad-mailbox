@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_snooze_awaken_bad_mailbox
+    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd
+    :needs_component_sieve :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # snoozed property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    xlog $self, "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
+
+    xlog $self, "Get email id, Inbox id, and create snoozed & awaken mailboxes";
+    my $res = $jmap->CallMethods([
+        [ 'Email/query', {}, "R0" ],
+        [ 'Mailbox/query', {filter => {role => 'inbox'}}, "R1"],
+        [ 'Mailbox/set', {
+            create => {
+                "1" => {
+                    name => "snoozed",
+                    parentId => undef,
+                    role => "snoozed"
+                },
+                "2" => {
+                    name => "awaken",
+                    parentId => undef
+                }
+            }}, "R2" ]
+    ]);
+    my $emailId = $res->[0][1]->{ids}[0];
+    my $inbox = $res->[1][1]->{ids}[0];
+    my $snoozedmbox = $res->[2][1]{created}{"1"}{id};
+    my $awakenmbox = $res->[2][1]{created}{"2"}{id};
+
+    xlog $self, "Snooze email and destroy awaken mailbox";   
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => 30));
+    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+
+    $res = $jmap->CallMethods([
+        [ 'Email/set', {
+            update => { $emailId => {
+                "mailboxIds/$inbox" => undef,
+                "mailboxIds/$snoozedmbox" => $JSON::true,
+                "snoozed" => { "until" => "$datestr",
+                                   "moveToMailboxId" => "$awakenmbox" }
+            }}
+         }, 'R3' ],
+        [ 'Mailbox/set', { destroy => [ $awakenmbox ] }, "R4"]
+    ]);
+
+    xlog $self, "Trigger awakening of snoozed email";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $maildate->epoch() + 30 );
+
+    xlog $self, "Verify email was awakened to Inbox";   
+    $res = $jmap->CallMethods([
+        [ 'Email/get',
+          { ids => [ $emailId ], properties => [ 'mailboxIds' ] }, "R7" ]
+    ]);
+    my $msg = $res->[0][1]->{list}[0];
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_equals(JSON::true, $msg->{mailboxIds}{"$inbox"});
+}

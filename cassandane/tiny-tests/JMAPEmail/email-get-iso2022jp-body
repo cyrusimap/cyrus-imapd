@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_iso2022jp_body
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    open(my $F, 'data/mime/iso-2022-jp.eml') || die $!;
+    $imap->append('INBOX', $F) || die $@;
+    close($F);
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['bodyValues', 'preview'],
+            fetchAllBodyValues => JSON::true,
+        }, 'R2'],
+    ]);
+
+use utf8;
+    $self->assert_str_equals("シニアソフトウェアエンジニア\n",
+        $res->[1][1]{list}[0]{bodyValues}{1}{value});
+    $self->assert_str_equals("シニアソフトウェアエンジニア ",
+        $res->[1][1]{list}[0]{preview});
+no utf8;
+}

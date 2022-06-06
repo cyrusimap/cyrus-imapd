@@ -1,0 +1,92 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_guidsearch_only_email_mailboxes
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/contacts',
+    ];
+
+    xlog $self, "create email, calendar event and contact";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                '1' => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'from@local'
+                    }],
+                    to => [{
+                        name => '', email => 'to@local'
+                    }],
+                    subject => 'test',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                '2' => {
+                    calendarIds => {
+                        Default => JSON::true
+                    },
+                    start => '2020-02-25T11:00:00',
+                    timeZone => 'Australia/Melbourne',
+                    title => 'test',
+                }
+            }
+        }, 'R2'],
+        ['Contact/set', {
+            create => {
+                "3" => {
+                    lastName => "test",
+                }
+            }
+        }, 'R3'],
+    ], $using);
+    my $emailId = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($emailId);
+    my $eventId = $res->[1][1]->{created}{2}{id};
+    $self->assert_not_null($eventId);
+    my $contactId = $res->[2][1]->{created}{3}{id};
+    $self->assert_not_null($contactId);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Query emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                text => 'test',
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
+}

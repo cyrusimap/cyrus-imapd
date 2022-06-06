@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_multimailboxes_expunged
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :DelayedExpunge
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $now = DateTime->now();
+
+    xlog $self, "Generate a email in INBOX via IMAP";
+    my $res = $self->make_message("foo") || die;
+    my $uid = $res->{attrs}->{uid};
+    my $msg;
+
+    xlog $self, "get email";
+    $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2'],
+    ]);
+    $msg = $res->[1][1]{list}[0];
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+
+    xlog $self, "Create target mailbox";
+    $talk->create("INBOX.target");
+
+    xlog $self, "Copy email into INBOX.target";
+    $talk->copy($uid, "INBOX.target");
+
+    xlog $self, "get email";
+    $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2'],
+    ]);
+    $msg = $res->[1][1]{list}[0];
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
+    my $val = join(',', sort keys %{$msg->{mailboxIds}});
+
+    xlog $self, "Move the message to target2";
+    $talk->create("INBOX.target2");
+    $talk->copy($uid, "INBOX.target2");
+
+    xlog $self, "and move it back again!";
+    $talk->select("INBOX.target2");
+    $talk->move("1:*", "INBOX");
+
+    # and finally delete the SECOND copy by UID sorting
+    xlog $self, "and delete one of them";
+    $talk->select("INBOX");
+    $talk->store('2', "+flags", "\\Deleted");
+    $talk->expunge();
+
+    xlog $self, "check that email is still in both mailboxes";
+    $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2'],
+    ]);
+    $msg = $res->[1][1]{list}[0];
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_str_equals($val, join(',', sort keys %{$msg->{mailboxIds}}));
+}

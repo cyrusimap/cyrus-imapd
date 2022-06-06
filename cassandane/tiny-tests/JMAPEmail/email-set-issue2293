@@ -1,0 +1,79 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_issue2293
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $inboxid = $self->getinbox()->{id};
+
+    my $email =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { email => q{test1@robmtest.vm}, name => q{} } ],
+        to => [ {
+            email => q{foo@bar.com},
+            name => "asd \x{529b}\x{9928}\x{5fc5}  asd \x{30ec}\x{30f1}\x{30b9}"
+        } ],
+    };
+
+    xlog $self, "create and get email";
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+        ['Email/get', { ids => [ "#1" ] }, "R2" ],
+    ]);
+    my $ret = $res->[1][1]->{list}[0];
+    $self->assert_str_equals($email->{to}[0]{email}, $ret->{to}[0]{email});
+    $self->assert_str_equals($email->{to}[0]{name}, $ret->{to}[0]{name});
+
+
+    xlog $self, "create and get email";
+    $email->{to}[0]{name} = "asd \x{529b}\x{9928}\x{5fc5}  asd \x{30ec}\x{30f1}\x{30b9} asd  \x{3b1}\x{3bc}\x{3b5}\x{3c4}";
+
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+        ['Email/get', { ids => [ "#1" ] }, "R2" ],
+    ]);
+    $ret = $res->[1][1]->{list}[0];
+    $self->assert_str_equals($email->{to}[0]{email}, $ret->{to}[0]{email});
+    $self->assert_str_equals($email->{to}[0]{name}, $ret->{to}[0]{name});
+
+    xlog $self, "create and get email";
+    my $to = [{
+        name => "abcdefghijklmnopqrstuvwxyz1",
+        email => q{abcdefghijklmnopqrstuvwxyz1@local},
+    }, {
+        name => "abcdefghijklmnopqrstuvwxyz2",
+        email => q{abcdefghijklmnopqrstuvwxyz2@local},
+    }, {
+        name => "abcdefghijklmnopqrstuvwxyz3",
+        email => q{abcdefghijklmnopqrstuvwxyz3@local},
+    }, {
+        name => "abcdefghijklmnopqrstuvwxyz4",
+        email => q{abcdefghijklmnopqrstuvwxyz4@local},
+    }, {
+        name => "abcdefghijklmnopqrstuvwxyz5",
+        email => q{abcdefghijklmnopqrstuvwxyz5@local},
+    }, {
+        name => "abcdefghijklmnopqrstuvwxyz6",
+        email => q{abcdefghijklmnopqrstuvwxyz6@local},
+    }, {
+        name => "abcdefghijklmnopqrstuvwxyz7",
+        email => q{abcdefghijklmnopqrstuvwxyz7@local},
+    }, {
+        name => "abcdefghijklmnopqrstuvwxyz8",
+        email => q{abcdefghijklmnopqrstuvwxyz8@local},
+    }, {
+        name => "abcdefghijklmnopqrstuvwxyz9",
+        email => q{abcdefghijklmnopqrstuvwxyz9@local},
+    }];
+    $email->{to} = $to;
+
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+        ['Email/get', { ids => [ "#1" ] }, "R2" ],
+    ]);
+    $ret = $res->[1][1]->{list}[0];
+    $self->assert_deep_equals($email->{to}, $ret->{to});
+}

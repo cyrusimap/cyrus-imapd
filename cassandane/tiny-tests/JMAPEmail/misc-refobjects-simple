@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_refobjects_simple
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "get email state";
+    my $res = $jmap->CallMethods([['Email/get', { ids => [] }, "R1"]]);
+    my $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "Generate a email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+
+    xlog $self, "get email updates and email using reference";
+    $res = $jmap->CallMethods([
+        ['Email/changes', {
+            sinceState => $state,
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/changes',
+                path => '/created',
+            },
+        }, 'R2'],
+    ]);
+
+    # assert that the changed id equals the id of the returned email
+    $self->assert_str_equals($res->[0][1]{created}[0], $res->[1][1]{list}[0]{id});
+}

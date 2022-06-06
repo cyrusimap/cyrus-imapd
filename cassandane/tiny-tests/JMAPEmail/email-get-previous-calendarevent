@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_previous_calendarevent
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    my $instance = $self->{instance};
+
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $rawMessage = <<'EOF';
+From: from@local
+To: to@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/related;
+ boundary=c4683f7a320d4d20902b000486fbdf9b
+X-ME-Cal-Method: request
+X-ME-Cal-UID: 40d6fe3c-6a51-489e-823e-3ea22f427a3e
+X-ME-Cal-Exists: DD2213E6-DEF3-11EB-934C-60C33F81E4B9
+X-ME-Cal-Previous: ewogICAgIkB0eXBlIjogImpzZXZlbnQiLAogICAgInN0YXJ0IjogIjIwMTYtMDktMjhUMTY6MDA6
+ MDAiLAogICAgInRpbWVab25lIjogIkV1cm9wZS9WaWVubmEiLAogICAgImR1cmF0aW9uIjogIlBU
+ MUgiLAogICAgInNob3dXaXRob3V0VGltZSI6IGZhbHNlLAogICAgInVpZCI6ICI0MGQ2ZmUzYy02
+ YTUxLTQ4OWUtODIzZS0zZWEyMmY0MjdhM2UiLAogICAgInJlbGF0ZWRUbyI6IG51bGwsCiAgICAi
+ cHJvZElkIjogIi0vL0FwcGxlIEluYy4vL01hYyBPUyBYIDEwLjkuNS8vRU4iLAogICAgImNyZWF0
+ ZWQiOiAiMjAxNS0wOS0yOFQxMjo1MjoxMloiLAogICAgInVwZGF0ZWQiOiAiMjAxNS0wOS0yOFQx
+ MzoyNDozNFoiLAogICAgInNlcXVlbmNlIjogMCwKICAgICJwcmlvcml0eSI6IDAsCiAgICAidGl0
+ bGUiOiAidGVzdCIsCiAgICAiZGVzY3JpcHRpb25Db250ZW50VHlwZSI6ICJ0ZXh0L3BsYWluIiwK
+ ICAgICJrZXl3b3JkcyI6IG51bGwsCiAgICAibGlua3MiOiBudWxsLAogICAgImxvY2FsZSI6IG51
+ bGwsCiAgICAibG9jYXRpb25zIjogbnVsbCwKICAgICJ2aXJ0dWFsTG9jYXRpb25zIjogbnVsbCwK
+ ICAgICJyZWN1cnJlbmNlUnVsZSI6IG51bGwsCiAgICAic3RhdHVzIjogImNvbmZpcm1lZCIsCiAg
+ ICAiZnJlZUJ1c3lTdGF0dXMiOiAiYnVzeSIsCiAgICAicHJpdmFjeSI6ICJwdWJsaWMiLAogICAg
+ InBhcnRpY2lwYW50cyI6IG51bGwsCiAgICAidXNlRGVmYXVsdEFsZXJ0cyI6IGZhbHNlLAogICAg
+ ImFsZXJ0cyI6IG51bGwsCiAgICAicmVjdXJyZW5jZU92ZXJyaWRlcyI6IG51bGwKfQo=
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/plain
+
+test
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/calendar;charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DTEND;TZID=Europe/Vienna:20160928T170000
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:
+SUMMARY:updatedTest
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+
+
+--c4683f7a320d4d20902b000486fbdf9b--
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+            properties => ['calendarEvents', 'previousCalendarEvent'],
+        }, 'R2'],
+    ], $using);
+
+    $self->assert_str_equals('test',
+        $res->[1][1]{list}[0]{previousCalendarEvent}{title});
+    $self->assert_str_equals('updatedTest',
+        $res->[1][1]{list}[0]{calendarEvents}{2}[0]{title});
+
+    $self->assert_str_equals('40d6fe3c-6a51-489e-823e-3ea22f427a3e',
+        $res->[1][1]{list}[0]{previousCalendarEvent}{uid});
+    $self->assert_str_equals('40d6fe3c-6a51-489e-823e-3ea22f427a3e',
+        $res->[1][1]{list}[0]{calendarEvents}{2}[0]{uid});
+}

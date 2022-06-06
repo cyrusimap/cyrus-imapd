@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_attachmentname
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create drafts mailbox";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+
+    # create a email with an attachment
+    my $logofile = abs_path('data/logo.gif');
+    open(FH, "<$logofile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+    my $data = $jmap->Upload($binary, "image/gif");
+
+    $res = $jmap->CallMethods([
+      ['Email/set', { create => {
+                  "1" => {
+                      mailboxIds => {$draftsmbox =>  JSON::true},
+                      from => [ { name => "", email => "sam\@acme.local" } ] ,
+                      to => [ { name => "", email => "bugs\@acme.local" } ],
+                      subject => "msg1",
+                      textBody => [{ partId => '1' }],
+                      bodyValues => { '1' => { value => "foo" } },
+                      attachments => [{
+                              blobId => $data->{blobId},
+                              name => "R\N{LATIN SMALL LETTER U WITH DIAERESIS}bezahl.txt",
+                      }],
+                      keywords => { '$draft' => JSON::true },
+                  },
+              }}, 'R2'],
+    ]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ];
+
+    xlog $self, "filter attachmentName";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            attachmentName => "r\N{LATIN SMALL LETTER U WITH DIAERESIS}bezahl",
+        },
+    }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
+}

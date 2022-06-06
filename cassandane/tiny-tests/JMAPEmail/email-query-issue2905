@@ -1,0 +1,113 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_issue2905
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPQueryCacheMaxAge1s
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "create emails";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    from => [{ email => q{foo1@bar} }],
+                    to => [{ email => q{bar1@foo} }],
+                    subject => "email1",
+                    keywords => {
+                        '$flagged' => JSON::true
+                    },
+                    bodyStructure => {
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        "1" => {
+                            value => "email1 body",
+                        },
+                    },
+                },
+                email2 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    from => [{ email => q{foo2@bar} }],
+                    to => [{ email => q{bar2@foo} }],
+                    subject => "email2",
+                    keywords => {
+                        '$flagged' => JSON::true
+                    },
+                    bodyStructure => {
+                        partId => '2',
+                    },
+                    bodyValues => {
+                        "2" => {
+                            value => "email2 body",
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $emailId1 = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($emailId1);
+    my $emailId2 = $res->[0][1]{created}{email2}{id};
+    $self->assert_not_null($emailId2);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        # Run query with mutable search
+        ['Email/query', {
+            filter => {
+                hasKeyword => '$flagged',
+            },
+        }, 'R1'],
+        # Remove $flagged keyword from email2
+        ['Email/set', {
+            update => {
+                $emailId2 => {
+                    'keywords/$flagged' => undef,
+                },
+            },
+        }, 'R2'],
+        # Re-run query with mutable search
+        ['Email/query', {
+            filter => {
+                hasKeyword => '$flagged',
+            },
+        }, 'R3'],
+    ]);
+
+    # Assert first query.
+    my $queryState = $res->[0][1]->{queryState};
+    $self->assert_not_null($queryState);
+    $self->assert_equals(JSON::false, $res->[0][1]->{canCalculateChanges});
+
+    # Assert email update.
+    $self->assert(exists $res->[1][1]->{updated}{$emailId2});
+
+    # Assert second query.
+    $self->assert_str_not_equals($queryState, $res->[2][1]->{queryState});
+    $self->assert_equals(JSON::false, $res->[2][1]->{canCalculateChanges});
+
+    $res = $jmap->CallMethods([
+        ['Email/queryChanges', {
+            sinceQueryState => $queryState,
+            filter => {
+                hasKeyword => '$flagged',
+            },
+        }, 'R1']
+    ]);
+
+    # Assert queryChanges error.
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}

@@ -1,0 +1,96 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_changes_shared
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $store = $self->{store};
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "create user and share inbox";
+    $self->{instance}->create_user("foo");
+    $admintalk->setacl("user.foo", "cassandane", "lrwkxd") or die;
+
+    xlog $self, "create non-shared mailbox box1";
+    $admintalk->create("user.foo.box1") or die;
+    $admintalk->setacl("user.foo.box1", "cassandane", "") or die;
+
+    xlog $self, "get email state";
+    $res = $jmap->CallMethods([['Email/get', { accountId => 'foo', ids => []}, "R1"]]);
+    my $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "get email updates (expect empty changes)";
+    $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    # This could be the same as oldState, or not, as we might leak
+    # unshared modseqs (but not the according mail!).
+    $self->assert_not_null($res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    xlog $self, "Generate a email in shared account INBOX via IMAP";
+    $self->{adminstore}->set_folder('user.foo');
+    $self->make_message("Email A", store => $self->{adminstore}) || die;
+
+    xlog $self, "get email updates";
+    $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]->{newState};
+    my $ida = $res->[0][1]{created}[0];
+
+    xlog $self, "create email in non-shared mailbox";
+    $self->{adminstore}->set_folder('user.foo.box1');
+    $self->make_message("Email B", store => $self->{adminstore}) || die;
+
+    xlog $self, "get email updates (expect empty changes)";
+    $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    # This could be the same as oldState, or not, as we might leak
+    # unshared modseqs (but not the according mail!).
+    $self->assert_not_null($res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    xlog $self, "share private mailbox box1";
+    $admintalk->setacl("user.foo.box1", "cassandane", "lr") or die;
+
+    xlog $self, "get email updates";
+    $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "delete email $ida";
+    $res = $jmap->CallMethods([['Email/set', { accountId => 'foo', destroy => [ $ida ] }, "R1"]]);
+    $self->assert_str_equals($ida, $res->[0][1]->{destroyed}[0]);
+
+    xlog $self, "get email updates";
+    $res = $jmap->CallMethods([['Email/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($ida, $res->[0][1]{destroyed}[0]);
+    $state = $res->[0][1]->{newState};
+}

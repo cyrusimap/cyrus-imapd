@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_querychanges_basic_mb
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inboxid = $self->getinbox()->{id};
+
+    xlog $self, "Generate some email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+    $self->make_message("Email B") || die;
+    $self->make_message("Email C") || die;
+    $self->make_message("Email D") || die;
+
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+    }, 'R1']]);
+
+    $talk->select("INBOX");
+    $talk->store("3", "+flags", "(\\Flagged)");
+
+    my $old = $res->[0][1];
+
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+        sinceQueryState => $old->{queryState},
+    }, 'R2']]);
+
+    my $new = $res->[0][1];
+    $self->assert_str_equals($old->{queryState}, $new->{oldQueryState});
+    $self->assert_str_not_equals($old->{queryState}, $new->{newQueryState});
+    $self->assert_num_equals(1, scalar @{$new->{added}});
+    $self->assert_num_equals(1, scalar @{$new->{removed}});
+    $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
+    $self->assert_str_equals($new->{removed}[0], $old->{ids}[$new->{added}[0]{index}]);
+}

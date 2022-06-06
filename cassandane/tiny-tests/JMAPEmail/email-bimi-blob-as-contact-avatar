@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_bimi_blob_as_contact_avatar
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # bimiBlobId property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    push @using, 'https://cyrusimap.org/ns/jmap/contacts';
+    $jmap->DefaultUsing(\@using);
+
+    my $bimifile = abs_path('data/FM_BIMI.svg');
+    open(FH, "<$bimifile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+
+    $self->make_message("foo",
+        mime_type => 'text/plain',
+        extra_headers => [
+            ['BIMI-Indicator', encode_base64($binary, '')],
+        ],
+        body => 'foo',
+    ) || die;
+
+    xlog $self, "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog $self, "get email";
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => $ids,
+        properties => ['bimiBlobId'],
+    }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    my $blobid = $msg->{bimiBlobId};
+    $self->assert_not_null($blobid);
+
+    my $blob = $jmap->Download({ accept => 'image/svg+xml' },
+                               'cassandane', $blobid);
+    $self->assert_str_equals('image/svg+xml',
+                             $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+    $self->assert_equals($binary, $blob->{content});
+
+    my $contact = {
+        firstName => "first",
+        lastName => "last",
+        avatar => {
+            blobId => $blobid,
+            size => $blob->{headers}->{'content-length'},
+            type => 'image/svg+xml',
+            name => JSON::null
+        }
+    };
+
+    $res = $jmap->CallMethods([['Contact/set',
+                                {create => {"1" => $contact }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    $self->assert_not_null($res->[0][1]{created}{"1"}{avatar}{blobId});
+}

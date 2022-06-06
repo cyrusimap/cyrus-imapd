@@ -1,0 +1,96 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_blob_set_singlecommand
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $email = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+
+    xlog $self, "create drafts mailbox";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/blob',
+    ];
+
+    xlog $self, "do the lot!";
+    $res = $jmap->CallMethods([
+            ['Blob/upload', { create => { "a" => { data => [{'data:asText' => $email }] } } }, 'R0'],
+            ['Email/import', {
+            emails => {
+                "1" => {
+                    blobId => '#a',
+                    mailboxIds => { $draftsmbox => JSON::true},
+                    keywords => {
+                        '$draft' => JSON::true,
+                    },
+                },
+            },
+        }, "R1"]
+    ], $using);
+
+    my $msg = $res->[1][1]->{created}{"1"};
+    $self->assert_not_null($msg);
+
+    my $logofile = abs_path('data/logo.gif');
+    open(FH, "<$logofile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+
+    $res = $jmap->CallMethods([
+            ['Blob/upload', { create => { "img" => { data => [{'data:asBase64' => encode_base64($binary, '')}], type => 'image/gif' } } }, 'R0'],
+            ['Email/set', {
+            create => {
+                "2" => {
+                    mailboxIds =>  { $draftsmbox => JSON::true },
+                    from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+                    to => [
+                        { name => "Bugs Bunny", email => "bugs\@acme.local" },
+                    ],
+                    subject => "Memo",
+                    textBody => [{ partId => '1' }],
+                    bodyValues => {
+                        '1' => {
+                            value => "I'm givin' ya one last chance ta surrenda!"
+                        }
+                    },
+                    attachments => [{
+                        blobId => '#img',
+                        name => "logo.gif",
+                    }],
+                    keywords => { '$draft' => JSON::true },
+      } } }, 'R1'],
+    ], $using);
+
+    $msg = $res->[1][1]->{created}{"2"};
+    $self->assert_not_null($msg);
+}

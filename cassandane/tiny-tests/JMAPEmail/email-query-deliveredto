@@ -1,0 +1,107 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_deliveredto
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $rawMessage = <<'EOF';
+From: <from@local>
+To: to@local
+Bcc: bcc@local
+X-Delivered-To: deliveredto@local
+Subject: match1
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+match1
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    $rawMessage = <<'EOF';
+From: <from@local>
+To: to@local
+Bcc: bcc@local
+X-Original-Delivered-To: deliveredto@local
+Subject: match2
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+match2
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    $rawMessage = <<'EOF';
+From: <from@local>
+To: to@local
+Subject: nomatch
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+nomatch
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => { },
+            sort => [{
+                property => 'subject',
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+    my $match1Id = $res->[0][1]{ids}[0];
+    $self->assert_not_null($match1Id);
+    my $match2Id = $res->[0][1]{ids}[1];
+    $self->assert_not_null($match2Id);
+    my $noMatchId = $res->[0][1]{ids}[2];
+    $self->assert_not_null($noMatchId);
+
+    xlog "Query with JMAP search";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                deliveredTo => 'deliveredto@local',
+            },
+            sort => [{
+                property => 'subject',
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_deep_equals([$match1Id,$match2Id], $res->[0][1]{ids});
+
+    xlog "Query with IMAP search";
+    $imap->select('INBOX');
+    my $uids = $imap->search(
+        'deliveredto', { Quote => 'deliveredto@local' },
+    ) || die;
+    $self->assert_deep_equals([1,2], $uids);
+
+    xlog "Query with fuzzy IMAP search";
+    $imap->select('INBOX');
+    $uids = $imap->search(
+        'fuzzy', 'deliveredto', { Quote => 'deliveredto@local' },
+    ) || die;
+    $self->assert_deep_equals([1,2], $uids);
+}

@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_mailbox_alias
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    # Create mailboxes
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                "drafts" => {
+                    name => "Drafts",
+                    parentId => undef,
+                    role => "drafts"
+                },
+                "trash" => {
+                    name => "Trash",
+                    parentId => undef,
+                    role => "trash"
+                }
+            }
+        }, "R1"]
+    ]);
+    my $draftsMboxId = $res->[0][1]{created}{drafts}{id};
+    $self->assert_not_null($draftsMboxId);
+    my $trashMboxId = $res->[0][1]{created}{trash}{id};
+    $self->assert_not_null($trashMboxId);
+
+    # Create email in mailbox using role as id
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                "1" => {
+                    mailboxIds => {
+                        '$drafts' => JSON::true
+                    },
+                    from => [{ email => q{from@local}, name => q{} } ],
+                    to => [{ email => q{to@local}, name => q{} } ],
+                }
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => [ "#1" ],
+            properties => ['mailboxIds'],
+        }, "R2" ],
+    ]);
+    $self->assert_num_equals(1, scalar keys %{$res->[1][1]{list}[0]{mailboxIds}});
+    $self->assert_not_null($res->[1][1]{list}[0]{mailboxIds}{$draftsMboxId});
+    my $emailId = $res->[0][1]{created}{1}{id};
+
+    # Move email to mailbox using role as id
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId => {
+                    'mailboxIds/$drafts' => undef,
+                    'mailboxIds/$trash' => JSON::true
+                }
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => [ $emailId ],
+            properties => ['mailboxIds'],
+        }, "R2" ],
+    ]);
+    $self->assert_num_equals(1, scalar keys %{$res->[1][1]{list}[0]{mailboxIds}});
+    $self->assert_not_null($res->[1][1]{list}[0]{mailboxIds}{$trashMboxId});
+}

@@ -1,0 +1,75 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_contactgroup_filter_no_dnf
+    :min_version_3_4 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/contacts',
+    ];
+
+    my $ncontacts = 100;
+    my $createContacts = {};
+    for (my $i = 1; $i <= $ncontacts; $i++) {
+        $createContacts->{"contact$i"} = {
+            emails => [{
+                type => 'personal',
+                value => "contact$i\@local",
+            }],
+        };
+    }
+
+    my @contactCreationIds = map { "#$_" } keys %{$createContacts};
+
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => $createContacts,
+        }, 'R1'],
+        ['ContactGroup/set', {
+            create => {
+                contactGroup => {
+                    name => 'contactGroup',
+                    contactIds => \@contactCreationIds,
+                },
+            }
+        }, 'R2'],
+    ], $using);
+    $self->assert_num_equals($ncontacts, scalar keys %{$res->[0][1]{created}});
+    my $contactGroupId = $res->[1][1]{created}{contactGroup}{id};
+    $self->assert_not_null($contactGroupId);
+
+    $self->make_message("msg-contact", from => Cassandane::Address->new(
+        localpart => 'contact1', domain => 'local'
+    )) or die;
+    $self->make_message("msg-nocontact", from => Cassandane::Address->new(
+        localpart => 'nocontact', domain => 'local'
+    )) or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    fromContactGroupId => $contactGroupId,
+                }],
+            },
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+            properties => ['subject'],
+        }, 'R2']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals('msg-nocontact', $res->[1][1]{list}[0]{subject});
+}

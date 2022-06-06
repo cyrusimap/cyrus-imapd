@@ -1,0 +1,166 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_headers
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $inboxid = $self->getinbox()->{id};
+
+    my $text = "x";
+
+    # Prepare test headers
+    my $headers = {
+        'header:X-TextHeader8bit' => {
+            format  => 'asText',
+            value   => "I feel \N{WHITE SMILING FACE}",
+            wantRaw => " =?UTF-8?Q?I_feel_=E2=98=BA?="
+        },
+        'header:X-TextHeaderFold' => {
+            format  => 'asText',
+            value   => "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus dictum facilisis feugiat.",
+            wantRaw   => " Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus dictum\r\n facilisis feugiat.",
+        },
+        'header:X-TextHeaderEncodeNoWSP' => {
+            format  => 'asText',
+            value   => "x" x 80,
+            wantRaw => " =?UTF-8?Q?" . ("x" x 62) . "?=\r\n =?UTF-8?Q?" . ("x" x 18) . "?="
+        },
+        'header:X-TextHeaderEncodeLongLine' => {
+            format  => 'asText',
+            value   => "xxx " . ("x" x 80) . " xxx",
+            wantRaw => " =?UTF-8?Q?xxx_" . ("x" x 58) . "?=\r\n =?UTF-8?Q?" . ("x" x 22) . "_xxx?=",
+        },
+        'header:X-TextHeaderShort' => {
+            format  => 'asText',
+            value   => "x",
+            wantRaw => " x"
+        },
+       'header:X-MsgIdsShort' => {
+           format => 'asMessageIds',
+           value  => [ 'foobar@ba' ],
+           wantRaw => " <foobar\@ba>",
+       },
+       'header:X-MsgIdsLong' => {
+           format => 'asMessageIds',
+           value  => [
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+           ],
+           wantRaw => (" <foobar\@ba>" x 5)."\r\n".(" <foobar\@ba>" x 3),
+       },
+       'header:X-AddrsShort' => {
+           format => 'asAddresses',
+           value => [{ 'name' => 'foo', email => 'bar@local' }],
+           wantRaw => ' foo <bar@local>',
+       },
+       'header:X-AddrsQuoted' => {
+           format => 'asAddresses',
+           value => [{ 'name' => 'Foo Bar', email => 'quotbar@local' }],
+           wantRaw => ' "Foo Bar" <quotbar@local>',
+       },
+       'header:X-Addrs8bit' => {
+           format => 'asAddresses',
+           value => [{ 'name' => "Rudi R\N{LATIN SMALL LETTER U WITH DIAERESIS}be", email => 'bar@local' }],
+           wantRaw => ' =?UTF-8?Q?Rudi_R=C3=BCbe?= <bar@local>',
+       },
+       'header:X-AddrsLong' => {
+           format => 'asAddresses',
+           value => [{
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }, {
+               'name' => 'foo', email => 'bar@local'
+           }],
+           wantRaw => (' foo <bar@local>,' x 3)."\r\n".(' foo <bar@local>,' x 4)."\r\n".' foo <bar@local>',
+       },
+       'header:X-URLsShort' => {
+           format => 'asURLs',
+           value => [ 'foourl' ],
+           wantRaw => ' <foourl>',
+       },
+       'header:X-URLsLong' => {
+           format => 'asURLs',
+           value => [
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+               'foourl',
+           ],
+           wantRaw => (' <foourl>,' x 6)."\r\n".(' <foourl>,' x 4).' <foourl>',
+       },
+    };
+
+    # header fold/encode behaviour has changed -- discard some tests for
+    # older cyruses
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj == 3 && $min < 5)) {
+        delete $headers->{'header:X-TextHeaderFold'};
+    }
+
+    # Prepare test email
+    my $email =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { email => q{test1@robmtest.vm}, name => q{} } ],
+    };
+    while( my ($k, $v) = each %$headers ) {
+        $email->{$k.':'.$v->{format}} = $v->{value},
+    }
+
+    my @properties = keys %$headers;
+    while( my ($k, $v) = each %$headers ) {
+        push @properties, $k.':'.$v->{format};
+    }
+
+
+    # Create and get mail
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+        ['Email/get', {
+            ids => [ "#1" ],
+            properties => \@properties,
+        }, "R2" ],
+    ]);
+    my $msg = $res->[1][1]{list}[0];
+
+    # Validate header values
+    while( my ($k, $v) = each %$headers ) {
+        xlog $self, "Validating $k";
+        my $raw = $msg->{$k};
+        my $val = $msg->{$k.':'.$v->{format}};
+        # Check raw header
+        $self->assert_str_equals($v->{wantRaw}, $raw);
+        # Check formatted header
+        if (ref $v->{value} eq 'ARRAY') {
+            $self->assert_deep_equals($v->{value}, $val);
+        } else {
+            $self->assert_str_equals($v->{value}, $val);
+        }
+    }
+}

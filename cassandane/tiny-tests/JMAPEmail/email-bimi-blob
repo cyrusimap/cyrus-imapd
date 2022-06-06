@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_bimi_blob
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # bimiBlobId property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $bimifile = abs_path('data/FM_BIMI.svg');
+    open(FH, "<$bimifile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+
+    $self->make_message("foo",
+        mime_type => 'text/plain',
+        extra_headers => [
+            ['BIMI-Indicator', encode_base64($binary, '')],
+        ],
+        body => 'foo',
+    ) || die;
+
+    xlog $self, "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog $self, "get email";
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => $ids,
+        properties => ['bimiBlobId'],
+    }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    my $blobid = $msg->{bimiBlobId};
+    $self->assert_not_null($blobid);
+
+    my $blob = $jmap->Download({ accept => 'image/svg+xml' },
+                               'cassandane', $blobid);
+    $self->assert_str_equals('image/svg+xml',
+                             $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+    $self->assert_equals($binary, $blob->{content});
+}

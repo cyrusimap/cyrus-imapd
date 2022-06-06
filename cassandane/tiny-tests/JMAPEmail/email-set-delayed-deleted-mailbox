@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_delayed_deleted_mailbox
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Create mailbox A";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+            }
+        }, 'R1'],
+    ]);
+    my $mboxA = $res->[0][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+
+    xlog "Create an email in Inbox";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    messageId => ['email1@local'],
+                    subject => 'test',
+                    keywords => {
+                        '$seen' => JSON::true,
+                    },
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $email1 = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($email1);
+
+    xlog "Destroy mailbox A";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [ $mboxA ],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$mboxA], $res->[0][1]{destroyed});
+
+    xlog "Can't move email to destroyed mailbox A";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $email1 => {
+                    mailboxIds => {
+                        $mboxA => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals(['mailboxIds'],
+        $res->[0][1]{notUpdated}{$email1}{properties});
+
+    xlog "Can't create an email in destroyed mailbox A";;
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email2 => {
+                    mailboxIds => {
+                        $mboxA => JSON::true,
+                    },
+                    messageId => ['email2@local'],
+                    subject => 'test',
+                    keywords => {
+                        '$seen' => JSON::true,
+                    },
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals(['mailboxIds'],
+            $res->[0][1]{notCreated}{email2}{properties});
+}

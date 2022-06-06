@@ -1,0 +1,185 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_attachment_name
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog $self, "Generate a email in $inbox via IMAP";
+    my %exp_sub;
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body = "".
+    "--sub\r\n".
+    "Content-Type: image/jpeg\r\n".
+    "Content-Disposition: attachment; filename\r\n\t=\"image1.jpg\"\r\n".
+    "Content-Transfer-Encoding: base64\r\n".
+    "\r\n" .
+    "beefc0de".
+    "\r\n--sub\r\n".
+    "Content-Type: image/tiff\r\n".
+    "Content-Transfer-Encoding: base64\r\n".
+    "\r\n" .
+    "abc=".
+    "\r\n--sub\r\n".
+    "Content-Type: application/x-excel\r\n".
+    "Content-Transfer-Encoding: base64\r\n".
+    "Content-Disposition: attachment; filename\r\n\t=\"f.xls\"\r\n".
+    "\r\n" .
+    "012312312313".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test1;name=y.dat\r\n".
+    "Content-Disposition: attachment; filename=z.dat\r\n".
+    "\r\n" .
+    "test1".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test2;name*0=looo;name*1=ooong;name*2=.name\r\n".
+    "\r\n" .
+    "test2".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test3\r\n".
+    "Content-Disposition: attachment; filename*0=cont;\r\n filename*1=inue\r\n".
+    "\r\n" .
+    "test3".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test4; name=\"=?utf-8?Q?=F0=9F=98=80=2Etxt?=\"\r\n".
+    "\r\n" .
+    "test4".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test5\r\n".
+    "Content-Disposition: attachment; filename*0*=utf-8''%F0%9F%98%80;\r\n filename*1=\".txt\"\r\n".
+    "\r\n" .
+    "test5".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test6\r\n" .
+    "Content-Disposition: attachment;\r\n".
+    " filename*0*=\"Unencoded ' char\";\r\n" .
+    " filename*1*=\".txt\"\r\n" .
+    "\r\n" .
+    "test6".
+
+    # RFC 2045, section 5.1. requires quoted-string for parameter
+    # values with tspecial or whitespace, but some clients ignore
+    # this. The following tests check Cyrus leniently accept this.
+
+    "\r\n--sub\r\n".
+    "Content-Type: application/test7; name==?iso-8859-1?b?Q2Fm6S5kb2M=?=\r\n".
+    "Content-Disposition: attachment; filename==?iso-8859-1?b?Q2Fm6S5kb2M=?=\r\n".
+    "\r\n" .
+    "test7".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test8; name= foo \r\n".
+    "\r\n" .
+    "test8".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test9; name=foo bar\r\n".
+    "\r\n" .
+    "test9".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test10; name=foo bar\r\n\t baz \r\n".
+    "\r\n" .
+    "test10".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test11; name=\r\n\t baz \r\n".
+    "\r\n" .
+    "test11".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test12; name= \r\n\t  \r\n".
+    "\r\n" .
+    "test12".
+
+    "\r\n--sub\r\n".
+    "Content-Type: application/test13\r\n".
+    "Content-Disposition: attachment; filename=\"q\\\".dat\"\r\n".
+    "\r\n" .
+    "test13".
+
+    # Some clients send raw UTF-8 characters in MIME parameters.
+    # The following test checks Cyrus leniently accept this.
+    "\r\n--sub\r\n".
+    "Content-Type: application/test14; name=😀.txt\r\n".
+    "\r\n" .
+    "test14".
+
+    "\r\n--sub--\r\n";
+
+    $exp_sub{A} = $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => $body
+    );
+    $talk->store('1', '+flags', '($HasAttachment)');
+
+    xlog $self, "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog $self, "get email";
+    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    $self->assert_equals(JSON::true, $msg->{hasAttachment});
+
+    # Assert embedded email support
+    my %m = map { $_->{type} => $_ } @{$msg->{attachments}};
+    my $att;
+
+    $att = $m{"image/tiff"};
+    $self->assert_null($att->{name});
+
+    $att = $m{"application/x-excel"};
+    $self->assert_str_equals("f.xls", $att->{name});
+
+    $att = $m{"image/jpeg"};
+    $self->assert_str_equals("image1.jpg", $att->{name});
+
+    $att = $m{"application/test1"};
+    $self->assert_str_equals("z.dat", $att->{name});
+
+    $att = $m{"application/test2"};
+    $self->assert_str_equals("loooooong.name", $att->{name});
+
+    $att = $m{"application/test3"};
+    $self->assert_str_equals("continue", $att->{name});
+
+    $att = $m{"application/test4"};
+    $self->assert_str_equals("\N{GRINNING FACE}.txt", $att->{name});
+
+    $att = $m{"application/test5"};
+    $self->assert_str_equals("\N{GRINNING FACE}.txt", $att->{name});
+
+    $att = $m{"application/test6"};
+    $self->assert_str_equals("Unencoded ' char.txt", $att->{name});
+
+    $att = $m{"application/test7"};
+    $self->assert_str_equals("Caf\N{LATIN SMALL LETTER E WITH ACUTE}.doc", $att->{name});
+
+    $att = $m{"application/test8"};
+    $self->assert_str_equals("foo", $att->{name});
+
+    $att = $m{"application/test9"};
+    $self->assert_str_equals("foo bar", $att->{name});
+
+    $att = $m{"application/test10"};
+    $self->assert_str_equals("foo bar\t baz", $att->{name});
+
+    $att = $m{"application/test11"};
+    $self->assert_str_equals("baz", $att->{name});
+
+    $att = $m{"application/test12"};
+    $self->assert_null($att->{name});
+
+    $att = $m{"application/test13"};
+    $self->assert_str_equals('q".dat', $att->{name});
+
+    $att = $m{"application/test14"};
+    $self->assert_str_equals("\N{GRINNING FACE}.txt", $att->{name});
+}

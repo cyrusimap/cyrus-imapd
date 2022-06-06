@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_mailboxids
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $inboxid = $self->getinbox()->{id};
+    $self->assert_not_null($inboxid);
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => {
+            "1" => { name => "drafts", parentId => undef, role => "drafts" },
+        }}, "R1"]
+    ]);
+    my $draftsid = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftsid);
+
+    my $msg =  {
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
+        subject => "Memo",
+        textBody => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "I'm givin' ya one last chance ta surrenda!" }},
+        keywords => { '$draft' => JSON::true },
+    };
+
+    # Not OK: at least one mailbox must be specified
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
+    $msg->{mailboxIds} = {};
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
+
+    # OK: drafts mailbox isn't required (anymore)
+    $msg->{mailboxIds} = { $inboxid => JSON::true },
+    $msg->{subject} = "Email 1";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{created}{"1"});
+
+    # OK: drafts mailbox is OK to create in
+    $msg->{mailboxIds} = { $draftsid => JSON::true },
+    $msg->{subject} = "Email 2";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{created}{"1"});
+
+    # OK: drafts mailbox is OK to create in, as is for multiple mailboxes
+    $msg->{mailboxIds} = { $draftsid => JSON::true, $inboxid => JSON::true },
+    $msg->{subject} = "Email 3";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{created}{"1"});
+}

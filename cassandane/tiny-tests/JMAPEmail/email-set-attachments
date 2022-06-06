@@ -1,0 +1,157 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_attachments
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    # Generate a email to have some blob ids
+    xlog $self, "Generate a email in $inbox via IMAP";
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: text/plain; charset=UTF-8\r\n"
+          . "Content-Disposition: inline\r\n" . "\r\n"
+          . "some text"
+          . "\r\n--sub\r\n"
+          . "Content-Type: image/jpeg;foo=bar\r\n"
+          . "Content-Disposition: attachment\r\n"
+          . "Content-Transfer-Encoding: base64\r\n" . "\r\n"
+          . "beefc0de"
+          . "\r\n--sub\r\n"
+          . "Content-Type: image/png\r\n"
+          . "Content-Disposition: attachment\r\n"
+          . "Content-Transfer-Encoding: base64\r\n"
+          . "\r\n"
+          . "f00bae=="
+          . "\r\n--sub--\r\n",
+    );
+
+    xlog $self, "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog $self, "get email";
+    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
+    my $blobJpeg = $m{"image/jpeg"}->{blobId};
+    my $blobPng = $m{"image/png"}->{blobId};
+    $self->assert_not_null($blobJpeg);
+    $self->assert_not_null($blobPng);
+
+    xlog $self, "create drafts mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+    my $shortfname = "test\N{GRINNING FACE}.jpg";
+    my $longfname = "a_very_long_filename_thats_looking_quite_bogus_but_in_fact_is_absolutely_valid\N{GRINNING FACE}!.bin";
+
+    my $draft =  {
+        mailboxIds =>  { $draftsmbox => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
+        subject => "Memo",
+        htmlBody => [{ partId => '1' }],
+        bodyValues => {
+            '1' => {
+                value => "<html>I'm givin' ya one last chance ta surrenda! ".
+                         "<img src=\"cid:foo\@local\"></html>",
+            },
+        },
+        attachments => [{
+            blobId => $blobJpeg,
+            name => $shortfname,
+            type => 'image/jpeg',
+        }, {
+            blobId => $blobPng,
+            cid => "foo\@local",
+            type => 'image/png',
+            disposition => 'inline',
+        }, {
+            blobId => $blobJpeg,
+            type => "application/test",
+            name => $longfname,
+        }, {
+            blobId => $blobPng,
+            type => "application/test2",
+            name => "simple",
+        }],
+        keywords => { '$draft' => JSON::true },
+    };
+
+    my $wantBodyStructure = {
+        type => 'multipart/mixed',
+        name => undef,
+        cid => undef,
+        disposition => undef,
+        subParts => [{
+            type => 'multipart/related',
+            name => undef,
+            cid => undef,
+            disposition => undef,
+            subParts => [{
+                type => 'text/html',
+                name => undef,
+                cid => undef,
+                disposition => undef,
+                subParts => [],
+            },{
+                type => 'image/png',
+                cid => "foo\@local",
+                disposition => 'inline',
+                name => undef,
+                subParts => [],
+            }],
+        },{
+            type => 'image/jpeg',
+            name => $shortfname,
+            cid => undef,
+            disposition => 'attachment',
+            subParts => [],
+        },{
+            type => 'application/test',
+            name => $longfname,
+            cid => undef,
+            disposition => 'attachment',
+            subParts => [],
+        },{
+            type => 'application/test2',
+            name => 'simple',
+            cid => undef,
+            disposition => 'attachment',
+            subParts => [],
+        }]
+    };
+
+    xlog $self, "Create a draft";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "Get draft $id";
+    $res = $jmap->CallMethods([['Email/get', {
+            ids => [$id],
+            properties => ['bodyStructure'],
+            bodyProperties => ['type', 'name', 'cid','disposition', 'subParts'],
+    }, "R1"]]);
+    $msg = $res->[0][1]->{list}[0];
+
+    $self->assert_deep_equals($wantBodyStructure, $msg->{bodyStructure});
+}

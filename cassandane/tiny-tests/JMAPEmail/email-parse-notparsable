@@ -1,0 +1,24 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_parse_notparsable
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $rawEmail = ""
+    ."To:foo\@bar.local\r\n"
+    ."Date: Date: Wed, 7 Dec 2016 00:21:50 -0500\r\n"
+    ."\r\n"
+    ."Some\nbogus\nbody";
+
+    my $data = $jmap->Upload($rawEmail, "application/data");
+    my $blobId = $data->{blobId};
+
+    my $res = $jmap->CallMethods([['Email/parse', { blobIds => [ $blobId ] }, 'R1']]);
+    $self->assert_str_equals($blobId, $res->[0][1]{notParsable}[0]);
+}

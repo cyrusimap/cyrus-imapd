@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_unicodefdfx
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :SearchLanguage
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # Unicode block FDFX for Arabic contains some code points that
+    # make Cyrus search form blow up the stem word length over the
+    # allowed limit of 200 bytes. This test asserts that Cyrus doesn't
+    # choke on these and still indexes the unstemmed form.
+
+    my $file = abs_path('data/mime/unicodefdfx.eml');
+    open(FH, "<$file");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+    my $data = $jmap->Upload($binary, "message/rfc822");
+    my $blobId = $data->{blobId};
+
+    my $res = $jmap->CallMethods([
+		['Email/import', {
+			emails => {
+				"1" => {
+					blobId => $blobId,
+					mailboxIds => {
+						'$inbox' =>  JSON::true},
+				},
+			},
+		}, "R1"]
+	]);
+    $self->assert_not_null($res->[0][1]{created}{1});
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    # As seen in the wild: multiple U+FDFA codepoints without separating
+    # spaces. The unstemmed form in UTF-8 is about 30 bytes long, but
+    # the stemmed term in Cyrus search form is 270 bytes long.
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                body => "" .
+                    "\N{ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM}" .
+                    "\N{ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM}" .
+                    "\N{ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM}" .
+                    "\N{ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM}" .
+                    "\N{ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM}" .
+                    "\N{ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM}" .
+                    "\N{ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM}" .
+                    "\N{ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM}" .
+                    "\N{ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM}",
+            },
+        }, 'R1']
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+}

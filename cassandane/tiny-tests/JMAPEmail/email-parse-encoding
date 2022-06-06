@@ -1,0 +1,93 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_parse_encoding
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $decodedBody = "\N{LATIN SMALL LETTER A WITH GRAVE} la carte";
+    my $encodedBody = '=C3=A0 la carte';
+    $encodedBody =~ s/\r?\n/\r\n/gs;
+
+    my $Header = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+EOF
+    $Header =~ s/\r?\n/\r\n/gs;
+    my $emailBlob = $Header . "\r\n" . $encodedBody;
+
+    my $email;
+    my $res;
+    my $partId;
+
+    $self->make_message("foo",
+        mime_type => "multipart/mixed;boundary=1234567",
+        body => ""
+        . "--1234567\r\n"
+        . "Content-Type: text/plain; charset=utf-8\r\n"
+        . "Content-Transfer-Encoding: quoted-printable\r\n"
+        . "\r\n"
+        . $encodedBody
+        . "\r\n--1234567\r\n"
+        . "Content-Type: message/rfc822\r\n"
+        . "\r\n"
+        . "X-Header: ignore\r\n" # make this blob id unique
+        . $emailBlob
+        . "\r\n--1234567--\r\n"
+    );
+
+    # Assert content decoding for top-level message.
+    xlog $self, "get email";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['bodyValues', 'bodyStructure', 'textBody'],
+            bodyProperties => ['partId', 'blobId'],
+            fetchAllBodyValues => JSON::true,
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
+    $email = $res->[1][1]->{list}[0];
+    $partId = $email->{textBody}[0]{partId};
+    $self->assert_str_equals($decodedBody, $email->{bodyValues}{$partId}{value});
+
+    # Assert content decoding for embedded message.
+    xlog $self, "parse embedded email";
+    my $embeddedBlobId = $email->{bodyStructure}{subParts}[1]{blobId};
+    $res = $jmap->CallMethods([['Email/parse', {
+        blobIds => [ $email->{bodyStructure}{subParts}[1]{blobId} ],
+        properties => ['bodyValues', 'textBody'],
+        fetchAllBodyValues => JSON::true,
+    }, 'R1']]);
+    $email = $res->[0][1]{parsed}{$embeddedBlobId};
+    $partId = $email->{textBody}[0]{partId};
+    $self->assert_str_equals($decodedBody, $email->{bodyValues}{$partId}{value});
+
+    # Assert content decoding for message blob.
+    my $data = $jmap->Upload($emailBlob, "application/data");
+    my $blobId = $data->{blobId};
+
+    $res = $jmap->CallMethods([['Email/parse', {
+        blobIds => [ $blobId ],
+        properties => ['bodyValues', 'textBody'],
+        fetchAllBodyValues => JSON::true,
+    }, 'R1']]);
+    $email = $res->[0][1]{parsed}{$blobId};
+    $partId = $email->{textBody}[0]{partId};
+    $self->assert_str_equals($decodedBody, $email->{bodyValues}{$partId}{value});
+}

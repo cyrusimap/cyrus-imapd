@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_cid
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    $self->make_message("msg1",
+        mime_type => "multipart/mixed",
+        mime_boundary => "boundary",
+        body => ""
+        . "--boundary\r\n"
+        . "Content-Type: text/plain\r\n"
+        . "\r\n"
+        . "body"
+        . "\r\n"
+        . "--boundary\r\n"
+        . "Content-Type: image/png\r\n"
+        . "Content-Id: <1234567890\@local>\r\n"
+        . "\r\n"
+        . "data"
+        . "\r\n"
+        . "--boundary\r\n"
+        . "Content-Type: image/png\r\n"
+        . "Content-Id: <1234567890>\r\n"
+        . "\r\n"
+        . "data"
+        . "\r\n"
+        . "--boundary\r\n"
+        . "Content-Type: image/png\r\n"
+        . "Content-Id: 1234567890\r\n"
+        . "\r\n"
+        . "data"
+        . "\r\n"
+        . "--boundary--\r\n"
+    ) || die;
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'bodyStructure' ],
+            bodyProperties => ['partId', 'cid'],
+        }, 'R2'],
+    ]);
+    my $bodyStructure = $res->[1][1]{list}[0]{bodyStructure};
+
+    $self->assert_null($bodyStructure->{subParts}[0]{cid});
+    $self->assert_str_equals('1234567890@local', $bodyStructure->{subParts}[1]{cid});
+    $self->assert_str_equals('1234567890', $bodyStructure->{subParts}[2]{cid});
+    $self->assert_str_equals('1234567890', $bodyStructure->{subParts}[3]{cid});
+
+}

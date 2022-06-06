@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_blobencoding
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "Upload a data blob";
+    my $logofile = abs_path('data/logo.gif');
+    open(FH, "<$logofile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+    my $data = $jmap->Upload($binary, "image/gif");
+    my $dataBlobId = $data->{blobId};
+
+    my $emailBlob = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $emailBlob =~ s/\r?\n/\r\n/gs;
+    $data = $jmap->Upload($emailBlob, "application/octet");
+    my $rfc822Blobid = $data->{blobId};
+
+    xlog $self, "Create email with body structure";
+    my $inboxid = $self->getinbox()->{id};
+    my $email = {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [{ name => "Test", email => q{foo@bar} }],
+        subject => "test",
+        textBody => [{
+            type => 'text/plain',
+            partId => '1',
+        }],
+        bodyValues => {
+            '1' => {
+                value => "A text body",
+            },
+        },
+        attachments => [{
+            type => 'image/gif',
+            blobId => $dataBlobId,
+        }, {
+            type => 'message/rfc822',
+            blobId => $rfc822Blobid,
+        }],
+    };
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => { '1' => $email } }, 'R1'],
+        ['Email/get', {
+            ids => [ '#1' ],
+            properties => [ 'bodyStructure' ],
+            bodyProperties => [ 'type', 'header:Content-Transfer-Encoding' ],
+        }, 'R2' ],
+    ]);
+
+    my $gotPart;
+    $gotPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[1];
+    $self->assert_str_equals('message/rfc822', $gotPart->{type});
+    $self->assert_str_equals(' 7BIT', $gotPart->{'header:Content-Transfer-Encoding'});
+    $gotPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[2];
+    $self->assert_str_equals('image/gif', $gotPart->{type});
+    $self->assert_str_equals(' BASE64', uc($gotPart->{'header:Content-Transfer-Encoding'}));
+}

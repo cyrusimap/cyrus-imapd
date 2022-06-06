@@ -26,7 +26,7 @@ LINE: while ($_ = shift @lines) {
     my $file = $1 =~ s/_/-/gr;
     say $file;
 
-    my @test_buffer;
+    my @test_buffer = $_;
 
     while ($_ = shift @lines) {
       push @test_buffer, $_;

@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_header_last_value
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    $self->make_message("msg", extra_headers => [
+        ['x-tra', 'Fri, 21 Nov 1997 09:55:06 -0600'],
+        ['x-tra', 'Thu, 22 Aug 2019 23:12:06 -0600'],
+    ]) || die;
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['header:x-tra:asDate']
+        }, 'R2'],
+    ]);
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min >= 4)) {
+        $self->assert_str_equals('2019-08-22T23:12:06-06:00',
+                                 $res->[1][1]{list}[0]{'header:x-tra:asDate'});
+    } else {
+        $self->assert_str_equals('2019-08-23T05:12:06Z',
+                                 $res->[1][1]{list}[0]{'header:x-tra:asDate'});
+    }
+}

@@ -1,0 +1,222 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_bodystructure
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "boundary_1",
+        body => ""
+        # body A
+          . "\r\n--boundary_1\r\n"
+          . "X-Body-Id:A\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "Content-Disposition: inline\r\n"
+          . "\r\n"
+          . "A"
+        # multipart/mixed
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: multipart/mixed; boundary=\"boundary_1_1\"\r\n"
+        # multipart/alternative
+          . "\r\n--boundary_1_1\r\n"
+          . "Content-Type: multipart/alternative; boundary=\"boundary_1_1_1\"\r\n"
+        # multipart/mixed
+          . "\r\n--boundary_1_1_1\r\n"
+          . "Content-Type: multipart/mixed; boundary=\"boundary_1_1_1_1\"\r\n"
+        # body B
+          . "\r\n--boundary_1_1_1_1\r\n"
+          . "X-Body-Id:B\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "Content-Disposition: inline\r\n"
+          . "\r\n"
+          . "B"
+        # body C
+          . "\r\n--boundary_1_1_1_1\r\n"
+          . "X-Body-Id:C\r\n"
+          . "Content-Type: image/jpeg\r\n"
+          . "Content-Disposition: inline\r\n"
+          . "\r\n"
+          . "C"
+        # body D
+          . "\r\n--boundary_1_1_1_1\r\n"
+          . "X-Body-Id:D\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "Content-Disposition: inline\r\n"
+          . "\r\n"
+          . "D"
+        # end multipart/mixed
+          . "\r\n--boundary_1_1_1_1--\r\n"
+        # multipart/mixed
+          . "\r\n--boundary_1_1_1\r\n"
+          . "Content-Type: multipart/related; boundary=\"boundary_1_1_1_2\"\r\n"
+        # body E
+          . "\r\n--boundary_1_1_1_2\r\n"
+          . "X-Body-Id:E\r\n"
+          . "Content-Type: text/html\r\n"
+          . "\r\n"
+          . "E"
+        # body F
+          . "\r\n--boundary_1_1_1_2\r\n"
+          . "X-Body-Id:F\r\n"
+          . "Content-Type: image/jpeg\r\n"
+          . "\r\n"
+          . "F"
+        # end multipart/mixed
+          . "\r\n--boundary_1_1_1_2--\r\n"
+        # end multipart/alternative
+          . "\r\n--boundary_1_1_1--\r\n"
+        # body G
+          . "\r\n--boundary_1_1\r\n"
+          . "X-Body-Id:G\r\n"
+          . "Content-Type: image/jpeg\r\n"
+          . "Content-Disposition: attachment\r\n"
+          . "\r\n"
+          . "G"
+        # body H
+          . "\r\n--boundary_1_1\r\n"
+          . "X-Body-Id:H\r\n"
+          . "Content-Type: application/x-excel\r\n"
+          . "\r\n"
+          . "H"
+        # body J
+          . "\r\n--boundary_1_1\r\n"
+          . "Content-Type: message/rfc822\r\n"
+          . "X-Body-Id:J\r\n"
+          . "\r\n"
+          . "From: foo\@local\r\n"
+          . "Date: Thu, 10 May 2018 15:15:38 +0200\r\n"
+          . "\r\n"
+          . "J"
+          . "\r\n--boundary_1_1--\r\n"
+        # body K
+          . "\r\n--boundary_1\r\n"
+          . "X-Body-Id:K\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "Content-Disposition: inline\r\n"
+          . "\r\n"
+          . "K"
+          . "\r\n--boundary_1--\r\n"
+    ) || die;
+
+    my $bodyA = {
+        'header:x-body-id' => 'A',
+        type => 'text/plain',
+        disposition => 'inline',
+    };
+    my $bodyB = {
+        'header:x-body-id' => 'B',
+        type => 'text/plain',
+        disposition => 'inline',
+    };
+    my $bodyC = {
+        'header:x-body-id' => 'C',
+        type => 'image/jpeg',
+        disposition => 'inline',
+    };
+    my $bodyD = {
+        'header:x-body-id' => 'D',
+        type => 'text/plain',
+        disposition => 'inline',
+    };
+    my $bodyE = {
+        'header:x-body-id' => 'E',
+        type => 'text/html',
+        disposition => undef,
+    };
+    my $bodyF = {
+        'header:x-body-id' => 'F',
+        type => 'image/jpeg',
+        disposition => undef,
+    };
+    my $bodyG = {
+        'header:x-body-id' => 'G',
+        type => 'image/jpeg',
+        disposition => 'attachment',
+    };
+    my $bodyH = {
+        'header:x-body-id' => 'H',
+        type => 'application/x-excel',
+        disposition => undef,
+    };
+    my $bodyJ = {
+        'header:x-body-id' => 'J',
+        type => 'message/rfc822',
+        disposition => undef,
+    };
+    my $bodyK = {
+        'header:x-body-id' => 'K',
+        type => 'text/plain',
+        disposition => 'inline',
+    };
+
+    my $wantBodyStructure = {
+        'header:x-body-id' => undef,
+        type => 'multipart/mixed',
+        disposition => undef,
+        subParts => [
+            $bodyA,
+            {
+                'header:x-body-id' => undef,
+                type => 'multipart/mixed',
+                disposition => undef,
+                subParts => [
+                    {
+                        'header:x-body-id' => undef,
+                        type => 'multipart/alternative',
+                        disposition => undef,
+                        subParts => [
+                            {
+                                'header:x-body-id' => undef,
+                                type => 'multipart/mixed',
+                                disposition => undef,
+                                subParts => [
+                                    $bodyB,
+                                    $bodyC,
+                                    $bodyD,
+                                ],
+                            },
+                            {
+                                'header:x-body-id' => undef,
+                                type => 'multipart/related',
+                                disposition => undef,
+                                subParts => [
+                                    $bodyE,
+                                    $bodyF,
+                                ],
+                            },
+                        ],
+                    },
+                    $bodyG,
+                    $bodyH,
+                    $bodyJ,
+                ],
+            },
+            $bodyK,
+        ],
+    };
+
+    my $wantTextBody = [ $bodyA, $bodyB, $bodyC, $bodyD, $bodyK ];
+    my $wantHtmlBody = [ $bodyA, $bodyE, $bodyK ];
+    my $wantAttachments = [ $bodyC, $bodyF, $bodyG, $bodyH, $bodyJ ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['bodyStructure', 'textBody', 'htmlBody', 'attachments' ],
+            bodyProperties => ['type', 'disposition', 'header:x-body-id'],
+        }, 'R2' ],
+    ]);
+    my $msg = $res->[1][1]{list}[0];
+    $self->assert_deep_equals($wantBodyStructure, $msg->{bodyStructure});
+    $self->assert_deep_equals($wantTextBody, $msg->{textBody});
+    $self->assert_deep_equals($wantHtmlBody, $msg->{htmlBody});
+    $self->assert_deep_equals($wantAttachments, $msg->{attachments});
+}

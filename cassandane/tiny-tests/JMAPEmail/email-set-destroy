@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_destroy
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create mailboxes";
+    my $res = $jmap->CallMethods(
+        [
+            [
+                'Mailbox/set',
+                {
+                    create => {
+                        "1" => {
+                            name     => "drafts",
+                            parentId => undef,
+                            role     => "drafts"
+                        },
+                        "2" => {
+                            name     => "foo",
+                            parentId => undef,
+                        },
+                        "3" => {
+                            name     => "bar",
+                            parentId => undef,
+                        },
+                    }
+                },
+                "R1"
+            ]
+        ]
+    );
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null( $res->[0][1]{created} );
+    my $mailboxids = {
+        $res->[0][1]{created}{"1"}{id} => JSON::true,
+        $res->[0][1]{created}{"2"}{id} => JSON::true,
+        $res->[0][1]{created}{"3"}{id} => JSON::true,
+    };
+
+    xlog $self, "Create a draft";
+    my $draft = {
+        mailboxIds => $mailboxids,
+        from       => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
+        to         => [ { name => "Bugs Bunny", email => "bugs\@acme.local" } ],
+        subject    => "created",
+        textBody   => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "Oh!!! I *hate* that Rabbit." }},
+        keywords => { '$draft' => JSON::true },
+    };
+    $res = $jmap->CallMethods(
+        [ [ 'Email/set', { create => { "1" => $draft } }, "R1" ] ],
+    );
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "Get draft $id";
+    $res = $jmap->CallMethods( [ [ 'Email/get', { ids => [$id] }, "R1" ] ]);
+    $self->assert_num_equals(3, scalar keys %{$res->[0][1]->{list}[0]{mailboxIds}});
+
+    xlog $self, "Destroy draft $id";
+    $res = $jmap->CallMethods(
+        [ [ 'Email/set', { destroy => [ $id ] }, "R1" ] ],
+    );
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "Get draft $id";
+    $res = $jmap->CallMethods( [ [ 'Email/get', { ids => [$id] }, "R1" ] ]);
+    $self->assert_str_equals($id, $res->[0][1]->{notFound}[0]);
+
+    xlog $self, "Get emails";
+    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+}

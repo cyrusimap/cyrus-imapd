@@ -1,0 +1,102 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_implementation_email_query
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    # These assertions are implementation-specific. Breaking them
+    # isn't necessarly a regression, but change them with caution.
+
+    my $now = DateTime->now();
+
+    xlog $self, "Generate a email in INBOX via IMAP";
+    my $res = $self->make_message("foo") || die;
+    my $uid = $res->{attrs}->{uid};
+    my $msg;
+
+    my $inbox = $self->getinbox();
+
+    xlog $self, "non-filtered query can calculate changes";
+    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    $self->assert($res->[0][1]{canCalculateChanges});
+
+    xlog $self, "inMailbox query can calculate changes";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+          filter => { inMailbox => $inbox->{id} },
+          sort => [ {
+            isAscending => $JSON::false,
+            property => 'receivedAt',
+          } ],
+        }, "R1"],
+    ]);
+    $self->assert_equals(JSON::true, $res->[0][1]{canCalculateChanges});
+
+    xlog $self, "inMailbox query can calculate changes with mutable sort";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+          filter => { inMailbox => $inbox->{id} },
+          sort => [ {
+            property => "someInThreadHaveKeyword",
+            keyword => "\$seen",
+            isAscending => $JSON::false,
+          }, {
+            property => 'receivedAt',
+            isAscending => $JSON::false,
+          } ],
+        }, "R1"],
+    ]);
+    $self->assert_equals(JSON::true, $res->[0][1]{canCalculateChanges});
+
+    xlog $self, "inMailbox query with keyword can not calculate changes";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+          filter => {
+            conditions => [
+              { inMailbox => $inbox->{id} },
+              { conditions => [ { allInThreadHaveKeyword => "\$seen" } ],
+                operator => 'NOT',
+              },
+            ],
+            operator => 'AND',
+          },
+            sort => [ {
+                isAscending => $JSON::false,
+                property => 'receivedAt',
+            } ],
+        }, "R1"],
+    ]);
+    $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
+
+    xlog $self, "negated inMailbox query can not calculate changes";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+          filter => {
+            operator => 'NOT',
+            conditions => [
+              { inMailbox => $inbox->{id} },
+            ],
+          },
+        }, "R1"],
+    ]);
+    $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
+
+    xlog $self, "inMailboxOtherThan query can not calculate changes";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+          filter => {
+            operator => 'NOT',
+            conditions => [
+              { inMailboxOtherThan => [$inbox->{id}] },
+            ],
+          },
+        }, "R1"],
+    ]);
+    $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
+}

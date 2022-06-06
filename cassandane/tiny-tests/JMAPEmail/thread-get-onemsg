@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_thread_get_onemsg
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $draftsmbox;
+    my $state;
+    my $threadA;
+    my $threadB;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create drafts mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $draftsmbox = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftsmbox);
+
+    xlog $self, "get thread state";
+    $res = $jmap->CallMethods([['Thread/get', { ids => [ 'no' ] }, "R1"]]);
+    $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    my $email = <<'EOF';
+Return-Path: <Hannah.Smith@gmail.com>
+Received: from gateway (gateway.vmtom.com [10.0.0.1])
+    by ahost (ahost.vmtom.com[10.0.0.2]); Wed, 07 Dec 2016 11:43:25 +1100
+Received: from mail.gmail.com (mail.gmail.com [192.168.0.1])
+    by gateway.vmtom.com (gateway.vmtom.com [10.0.0.1]); Wed, 07 Dec 2016 11:43:25 +1100
+Mime-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+Subject: Email A
+From: Hannah V. Smith <Hannah.Smith@gmail.com>
+Message-ID: <fake.1481071405.58492@gmail.com>
+Date: Wed, 07 Dec 2016 11:43:25 +1100
+To: Test User <test@vmtom.com>
+X-Cassandane-Unique: 294f71c341218d36d4bda75aad56599b7be3d15b
+
+a
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
+    my $blobid = $data->{blobId};
+    xlog $self, "import email from blob $blobid";
+    $res = $jmap->CallMethods([['Email/import', {
+        emails => {
+            "1" => {
+                blobId => $blobid,
+                mailboxIds => {$draftsmbox =>  JSON::true},
+                keywords => {
+                    '$draft' => JSON::true,
+                },
+            },
+        },
+    }, "R1"]]);
+
+    xlog $self, "get thread updates";
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+}

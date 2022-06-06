@@ -1,0 +1,214 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_language
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :needs_component_sieve :SearchLanguage :needs_dependency_cld2
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+use utf8;
+
+    my @testEmailBodies = ({
+        id => 'de',
+        bodyStructure => {
+            type => 'text/plain',
+            partId => 'part1',
+        },
+        bodyValues => {
+            part1 => {
+                value =>  <<'EOF'
+Jemand mußte Josef K. verleumdet haben, denn ohne daß er etwas Böses getan
+hätte, wurde er eines Morgens verhaftet. Die Köchin der Frau Grubach,
+seiner Zimmervermieterin, die ihm jeden Tag gegen acht Uhr früh das
+Frühstück brachte, kam diesmal nicht. Das war noch niemals geschehen. K.
+wartete noch ein Weilchen, sah von seinem Kopfkissen aus die alte Frau
+die ihm gegenüber wohnte und die ihn mit einer an ihr ganz ungewöhnli
+EOF
+            },
+        },
+    }, {
+        id => 'en',
+        bodyStructure => {
+            type => 'text/plain',
+            partId => 'part1',
+        },
+        bodyValues => {
+            part1 => {
+                value =>  <<'EOF'
+All human beings are born free and equal in dignity and rights. They are
+endowed with reason and conscience and should act towards one another in
+a spirit of brotherhood. Everyone has the right to life, liberty and security
+of person. No one shall be held in slavery or servitude; slavery and the
+slave trade shall be prohibited in all their forms. No one shall be
+subjected to torture or to cruel, inhuman or degrading treatment or punishment.
+EOF
+            },
+        },
+    }, {
+        id => 'fr',
+        bodyStructure => {
+            type => 'text/plain',
+            partId => 'part1',
+        },
+        bodyValues => {
+            part1 => {
+                value =>  <<'EOF'
+Hé quoi ! charmante Élise, vous devenez mélancolique, après les obligeantes
+assurances que vous avez eu la bonté de me donner de votre foi ? Je vous
+vois soupirer, hélas ! au milieu de ma joie ! Est-ce du regret, dites-moi,
+de m'avoir fait heureux ? et vous repentez-vous de cet engagement où mes
+feux ont pu vous contraindre ?
+EOF
+            },
+        },
+    }, {
+        id => 'fr-and-de',
+        bodyStructure => {
+            type => 'multipart/mixed',
+            subParts => [{
+                type => 'text/plain',
+                partId => 'part1',
+            }, {
+                type => 'text/plain',
+                partId => 'part2',
+            }],
+        },
+        bodyValues => {
+            part1 => {
+                value =>  <<'EOF'
+Non, Valère, je ne puis pas me repentir de tout ce que je fais pour
+vous. Je m'y sens entraîner par une trop douce puissance, et je n'ai
+pas même la force de souhaiter que les choses ne fussent pas. Mais, a
+vous dire vrai, le succès me donne de l'inquiétude ; et je crains fort
+de vous aimer un peu plus que je ne devrais.
+EOF
+            },
+            part2 => {
+                value => <<'EOF'
+Pfingsten, das liebliche Fest, war gekommen! es grünten und blühten
+Feld und Wald; auf Hügeln und Höhn, in Büschen und Hecken
+Übten ein fröhliches Lied die neuermunterten Vögel;
+Jede Wiese sproßte von Blumen in duftenden Gründen,
+Festlich heiter glänzte der Himmel und farbig die Erde.
+EOF
+            },
+        },
+    });
+
+no utf8;
+
+    my %emailIds;
+    foreach (@testEmailBodies) {
+        my $res = $jmap->CallMethods([
+            ['Email/set', {
+                create => {
+                    $_->{id} => {
+                        mailboxIds => {
+                            '$inbox' => JSON::true
+                        },
+                        from => [{ email => 'foo@local' }],
+                        to => [{ email => 'bar@local' }],
+                        subject => $_->{id},
+                        bodyStructure => $_->{bodyStructure},
+                        bodyValues => $_->{bodyValues},
+                    },
+                },
+            }, 'R1'],
+        ], $using);
+        $emailIds{$_->{id}} = $res->[0][1]{created}{$_->{id}}{id};
+        $self->assert_not_null($emailIds{$_->{id}});
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                language => 'fr',
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                operator => 'OR',
+                conditions => [{
+                    language => 'de',
+                }, {
+                    language => 'fr',
+                }],
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    language => 'de',
+                }, {
+                    language => 'fr',
+                }],
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                language => 'en',
+            },
+        }, 'R4'],
+        ['Email/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    language => 'de',
+                }],
+            },
+        }, 'R5'],
+        ['Email/query', {
+            filter => {
+                language => 'chr',
+            },
+        }, 'R6'],
+        ['Email/query', {
+            filter => {
+                language => 'xxxx',
+            },
+        }, 'R7'],
+    ], $using);
+
+    # fr
+    my @wantIds = sort ($emailIds{'fr'}, $emailIds{'fr-and-de'});
+    my @gotIds = sort @{$res->[0][1]->{ids}};
+    $self->assert_deep_equals(\@wantIds, \@gotIds);
+
+    # OR de,fr
+    @wantIds = sort ($emailIds{'fr'}, $emailIds{'de'}, $emailIds{'fr-and-de'});
+    @gotIds = sort @{$res->[1][1]->{ids}};
+    $self->assert_deep_equals(\@wantIds, \@gotIds);
+
+    # AND de,fr
+    $self->assert_deep_equals([$emailIds{'fr-and-de'}], $res->[2][1]->{ids});
+
+    # en
+    $self->assert_deep_equals([$emailIds{'en'}], $res->[3][1]->{ids});
+
+    # NOT de
+    @wantIds = sort ($emailIds{'en'}, $emailIds{'fr'});
+    @gotIds = sort @{$res->[4][1]->{ids}};
+    $self->assert_deep_equals(\@wantIds, \@gotIds);
+
+    # chr
+    $self->assert_deep_equals([], $res->[5][1]->{ids});
+
+    # xxxx
+    $self->assert_str_equals('invalidArguments', $res->[6][1]{type});
+}

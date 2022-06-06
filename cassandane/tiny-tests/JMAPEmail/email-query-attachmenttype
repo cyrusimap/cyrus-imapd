@@ -1,0 +1,177 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_attachmenttype
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $blobId = $jmap->Upload('some_data', "application/octet")->{blobId};
+
+    my $rfc822Msg = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $rfc822Msg =~ s/\r?\n/\r\n/gs;
+    my $rfc822MsgBlobId = $jmap->Upload($rfc822Msg, "message/rfc822")->{blobId};
+    $self->assert_not_null($rfc822MsgBlobId);
+
+    my $inboxid = $self->getinbox()->{id};
+
+    my $res = $jmap->CallMethods([
+      ['Email/set', { create => {
+        "1" => {
+          mailboxIds => {$inboxid => JSON::true},
+          from => [ { name => "", email => "sam\@acme.local" } ] ,
+          to => [ { name => "", email => "bugs\@acme.local" } ],
+          subject => "foo",
+          textBody => [{ partId => '1' }],
+          bodyValues => { '1' => { value => "foo" } },
+          attachments => [{
+            blobId => $blobId,
+            type => 'image/gif',
+          }],
+      },
+      "2" => {
+          mailboxIds => {$inboxid => JSON::true},
+          from => [ { name => "", email => "tweety\@acme.local" } ] ,
+          to => [ { name => "", email => "duffy\@acme.local" } ],
+          subject => "bar",
+          textBody => [{ partId => '1' }],
+          bodyValues => { '1' => { value => "bar" } },
+      },
+      "3" => {
+          mailboxIds => {$inboxid => JSON::true},
+          from => [ { name => "", email => "elmer\@acme.local" } ] ,
+          to => [ { name => "", email => "porky\@acme.local" } ],
+          subject => "baz",
+          textBody => [{ partId => '1' }],
+          bodyValues => { '1' => { value => "baz" } },
+          attachments => [{
+            blobId => $blobId,
+            type => 'application/msword',
+          }],
+      },
+      "4" => {
+          mailboxIds => {$inboxid => JSON::true},
+          from => [ { name => "", email => "elmer\@acme.local" } ] ,
+          to => [ { name => "", email => "porky\@acme.local" } ],
+          subject => "baz",
+          textBody => [{ partId => '1' }],
+          bodyValues => { '1' => { value => "baz" } },
+          attachments => [{
+            blobId => $blobId,
+            type => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          }],
+      },
+      "5" => {
+          mailboxIds => {$inboxid => JSON::true},
+          from => [ { name => "", email => "elmer\@acme.local" } ] ,
+          to => [ { name => "", email => "porky\@acme.local" } ],
+          subject => "embeddedmsg",
+          bodyStructure => {
+              subParts => [{
+                      partId => "text",
+                      type => "text/plain"
+                  },{
+                      blobId => $rfc822MsgBlobId,
+                      disposition => "attachment",
+                      type => "message/rfc822"
+                  }],
+              type => "multipart/mixed",
+          },
+          bodyValues => {
+              text => {
+                  value => "Hello World",
+              },
+          },
+      }
+      }}, 'R1']
+    ]);
+    my $idGif = $res->[0][1]{created}{"1"}{id};
+    my $idTxt = $res->[0][1]{created}{"2"}{id};
+    my $idDoc = $res->[0][1]{created}{"3"}{id};
+    my $idWord = $res->[0][1]{created}{"4"}{id};
+    my $idRfc822Msg = $res->[0][1]{created}{"5"}{id};
+    $self->assert_not_null($idGif);
+    $self->assert_not_null($idTxt);
+    $self->assert_not_null($idDoc);
+    $self->assert_not_null($idWord);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @testCases = ({
+        filter => {
+            attachmentType => 'image/gif',
+        },
+        wantIds => [$idGif],
+    }, {
+        filter => {
+            attachmentType => 'image',
+        },
+        wantIds => [$idGif],
+    }, {
+        filter => {
+            attachmentType => 'application/msword',
+        },
+        wantIds => [$idDoc],
+    }, {
+        filter => {
+            # this should be application/vnd... but Xapian has a 64 character limit on terms
+            # indexed, so application_vndopenxmlformatsofficedocumentwordprocessingmldocument
+            # never got indexed
+            attachmentType => 'vnd.openxmlformats-officedocument.wordprocessingml.document',
+        },
+        wantIds => [$idWord],
+    }, {
+        filter => {
+            attachmentType => 'document',
+        },
+        wantIds => [$idDoc, $idWord],
+    }, {
+        filter => {
+            operator => 'NOT',
+            conditions => [{
+                attachmentType => 'image',
+            }, {
+                attachmentType => 'document',
+            }],
+        },
+        wantIds => [$idTxt, $idRfc822Msg],
+    }, {
+        filter => {
+            attachmentType => 'email',
+        },
+        wantIds => [$idRfc822Msg],
+    });
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ];
+
+    foreach (@testCases) {
+        my $filter = $_->{filter};
+        my $wantIds = $_->{wantIds};
+        $res = $jmap->CallMethods([['Email/query', {
+            filter => $filter,
+        }, "R1"]], $using);
+        my @wantIds = sort @{$wantIds};
+        my @gotIds = sort @{$res->[0][1]->{ids}};
+        $self->assert_deep_equals(\@wantIds, \@gotIds);
+    }
+}

@@ -1,0 +1,214 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_notinmailboxid_attached
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imap->create("INBOX.A") or die;
+    $imap->create("INBOX.B") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdA = $mboxByName{'A'}->{id};
+    my $mboxIdB = $mboxByName{'B'}->{id};
+
+    xlog $self, "create emails";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'mA' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'covfefe@local'
+                    }],
+                    to => [{
+                        name => '', email => 'dest@local'
+                    }],
+                    subject => 'AB',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'this email contains xyzzy',
+                        }
+                    },
+                },
+            },
+        }, 'R1']
+    ]);
+
+    my $emailIdA = $res->[0][1]->{created}{mA}{id};
+    my $blobA = $res->[0][1]{created}{mA}{blobId};
+    $self->assert_not_null($emailIdA);
+    $self->assert_not_null($blobA);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { mB => {
+            bcc => undef,
+            bodyStructure => {
+                subParts => [{
+                    partId => "text",
+                    type => "text/plain"
+                },{
+                    blobId => $blobA,
+                    disposition => "attachment",
+                    type => "message/rfc822"
+                }],
+                type => "multipart/mixed",
+            },
+            bodyValues => {
+                text => {
+                    isTruncated => $JSON::false,
+                    value => "Hello World",
+                },
+            },
+            cc => undef,
+            from => [{
+                email => "foo\@example.com",
+                name => "Captain Foo",
+            }],
+            keywords => {
+                '$draft' => $JSON::true,
+                '$seen' => $JSON::true,
+            },
+            mailboxIds => {
+                $mboxIdB => $JSON::true,
+            },
+            messageId => ["9048d4db-bd84-4ea4-9be3-ae4a136c532d\@example.com"],
+            receivedAt => "2019-05-09T12:48:08Z",
+            references => undef,
+            replyTo => undef,
+            sentAt => "2019-05-09T14:48:08+02:00",
+            subject => "Hello again",
+            to => [{
+                email => "bar\@example.com",
+                name => "Private Bar",
+            }],
+        }}}, "S1"],
+    ]);
+    my $emailIdB = $res->[0][1]->{created}{mB}{id};
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Run queries";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                from => 'covfefe',
+                text => 'xyzzy',
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                from => 'covfefe',
+                text => 'xyzzy',
+                inMailbox => $mboxIdA,
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                from => 'covfefe',
+                text => 'xyzzy',
+                inMailboxOtherThan => [$mboxIdA],
+            },
+        }, 'R4'],
+        ['Email/query', {
+            filter => {
+                from => 'covfefe',
+                text => 'xyzzy',
+                inMailbox => $mboxIdB,
+            },
+        }, 'R5'],
+        ['Email/query', {
+            filter => {
+                from => 'covfefe',
+                text => 'xyzzy',
+                inMailboxOtherThan => [$mboxIdB],
+            },
+        }, 'R6'],
+    ]);
+
+    $self->assert_num_equals(2, scalar(@{$res->[0][1]{ids}}));
+    $self->assert_num_equals(1, scalar(@{$res->[1][1]{ids}}));
+    $self->assert_num_equals(1, scalar(@{$res->[2][1]{ids}}));
+    $self->assert_equals($emailIdA, $res->[2][1]{ids}[0]);
+    $self->assert_num_equals(0, scalar(@{$res->[3][1]{ids}}));
+    $self->assert_num_equals(0, scalar(@{$res->[4][1]{ids}}));
+    $self->assert_num_equals(1, scalar(@{$res->[5][1]{ids}}));
+    $self->assert_equals($emailIdA, $res->[5][1]{ids}[0]);
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    xlog "Run queries with extra using";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                from => 'covfefe',
+                text => 'xyzzy',
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                from => 'covfefe',
+                text => 'xyzzy',
+                inMailbox => $mboxIdA,
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                from => 'covfefe',
+                text => 'xyzzy',
+                inMailboxOtherThan => [$mboxIdA],
+            },
+        }, 'R4'],
+        ['Email/query', {
+            filter => {
+                from => 'covfefe',
+                text => 'xyzzy',
+                inMailbox => $mboxIdB,
+            },
+        }, 'R5'],
+        ['Email/query', {
+            filter => {
+                from => 'covfefe',
+                text => 'xyzzy',
+                inMailboxOtherThan => [$mboxIdB],
+            },
+        }, 'R6'],
+    ], $using);
+
+    $self->assert_num_equals(2, scalar(@{$res->[0][1]{ids}}));
+    $self->assert_num_equals(1, scalar(@{$res->[1][1]{ids}}));
+    $self->assert_num_equals(1, scalar(@{$res->[2][1]{ids}}));
+    $self->assert_equals($emailIdA, $res->[2][1]{ids}[0]);
+    $self->assert_num_equals(0, scalar(@{$res->[3][1]{ids}}));
+    $self->assert_num_equals(0, scalar(@{$res->[4][1]{ids}}));
+    $self->assert_num_equals(1, scalar(@{$res->[5][1]{ids}}));
+    $self->assert_equals($emailIdA, $res->[5][1]{ids}[0]);
+}

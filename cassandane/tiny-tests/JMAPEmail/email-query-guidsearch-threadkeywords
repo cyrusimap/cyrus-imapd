@@ -1,0 +1,148 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_guidsearch_threadkeywords
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name'],
+        }, "R1"]
+    ], $using);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+
+    xlog $self, "create emails";
+    my %emails = (
+        'allthread1' => {
+            subject => 'allthread',
+            keywords => {
+                '$flagged' => JSON::true,
+            },
+            messageId => ['allthread@local'],
+        },
+        'allthread2' => {
+            subject => 're: allthread',
+            keywords => {
+                '$flagged' => JSON::true,
+            },
+            references => ['allthread@local'],
+        },
+        'somethread1' => {
+            subject => 'somethread',
+            keywords => {
+                '$flagged' => JSON::true,
+            },
+            messageId => ['somethread@local'],
+        },
+        'somethread2' => {
+            subject => 're: somethread',
+            references => ['somethread@local'],
+        },
+        'nonethread1' => {
+            subject => 'nonethread',
+            messageId => ['nonethread@local'],
+        },
+        'nonethread2' => {
+            subject => 're: nonethread',
+            references => ['nonethread@local'],
+        },
+    );
+
+    while (my ($key, $val) = each %emails) {
+        my $email = {
+            mailboxIds => {
+                $inbox => JSON::true,
+            },
+            from => [{
+                    name => '', email => 'from@local'
+                }],
+            to => [{
+                    name => '', email => 'to@local'
+                }],
+            bodyStructure => {
+                type => 'text/plain',
+                partId => 'part1',
+            },
+            bodyValues => {
+                part1 => {
+                    value => 'test',
+                }
+            },
+        };
+        $email = { %$email, %$val };
+        $res = $jmap->CallMethods([
+            ['Email/set', {
+                create => {
+                    $key => $email,
+                },
+            }, 'R1'],
+        ], $using);
+        $self->assert_not_null($res->[0][1]->{created}{$key}{id});
+        $val->{id} = $res->[0][1]->{created}{$key}{id};
+        $self->assert_not_null($res->[0][1]->{created}{$key}{threadId});
+        $val->{threadId} = $res->[0][1]->{created}{$key}{threadId};
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Running query with guidsearch";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                body => 'test',
+                allInThreadHaveKeyword => '$flagged',
+            },
+            sort => [{
+                property => 'id',
+            }],
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                body => 'test',
+                someInThreadHaveKeyword => '$flagged',
+            },
+            sort => [{
+                property => 'id',
+            }],
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                body => 'test',
+                noneInThreadHaveKeyword => '$flagged',
+            },
+            sort => [{
+                property => 'id',
+            }],
+        }, 'R3'],
+    ], $using);
+
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    my @wantIds = sort $emails{allthread1}{id}, $emails{allthread2}{id};
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort $emails{somethread1}{id}, $emails{somethread2}{id},
+                    $emails{allthread1}{id}, $emails{allthread2}{id};
+    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emails{nonethread1}{id}, $emails{nonethread2}{id});
+    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+}

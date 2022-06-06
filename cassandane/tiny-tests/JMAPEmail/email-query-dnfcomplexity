@@ -1,0 +1,110 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_dnfcomplexity
+    :min_version_3_4 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions :SearchNormalizationMax20000 :SearchMaxTime1Sec
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $rawMessage = <<'EOF';
+From: <from@local>
+To: to@local
+Reply-To: replyto@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary=6c3338934661485f87537c19b5f9d933
+
+--6c3338934661485f87537c19b5f9d933
+Content-Type: text/plain
+
+text body
+
+--6c3338934661485f87537c19b5f9d933
+Content-Type: image/jpg
+Content-Disposition: attachment; filename="November.jpg"
+Content-Transfer-Encoding: base64
+
+ZGF0YQ==
+
+--6c3338934661485f87537c19b5f9d933
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="December.pdf"
+Content-Transfer-Encoding: base64
+
+ZGF0YQ==
+
+--6c3338934661485f87537c19b5f9d933--
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            position => 0,
+            calculateTotal => JSON::false,
+            limit => 30,
+            findAllInThread => JSON::true,
+            collapseThreads => JSON::true,
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::false
+            }],
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    hasAttachment => JSON::true
+                }, {
+                    operator => 'NOT',
+                    conditions => [{
+                        hasAttachment => JSON::true,
+                        attachmentType => 'pdf'
+                    }, {
+                        hasAttachment => JSON::true,
+                        attachmentType => 'presentation'
+                    }, {
+                        hasAttachment => JSON::true,
+                        attachmentType => 'email'
+                    }, {
+                        hasAttachment => JSON::true,
+                        attachmentType => 'spreadsheet'
+                    }, {
+                        attachmentType => 'document',
+                        hasAttachment => JSON::true
+                    }, {
+                        attachmentType => 'image',
+                        hasAttachment => JSON::true
+                    }, {
+                        attachmentType => 'presentation',
+                        hasAttachment => JSON::true
+                    }, {
+                        attachmentType => 'document',
+                        hasAttachment => JSON::true
+                    }, {
+                        hasAttachment => JSON::true,
+                        attachmentType => 'pdf'
+                    }],
+                }],
+            },
+        }, 'R0'],
+    ], $using);
+
+    $self->assert_str_equals('unsupportedFilter', $res->[0][1]{type});
+    $self->assert_str_equals('search too complex', $res->[0][1]{description});
+}
