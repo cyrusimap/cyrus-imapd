@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_virtuallocations_conference
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('locations-conference');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my $virtualLocations = $event->{virtualLocations};
+    $self->assert_num_equals(2, scalar (values %{$virtualLocations}));
+
+    my $loc1 = $virtualLocations->{loc1};
+    $self->assert_str_equals('Moderator dial-in', $loc1->{name});
+    $self->assert_str_equals('tel:+123451', $loc1->{uri});
+
+    my $loc2 = $virtualLocations->{loc2};
+    $self->assert_str_equals('Chat room', $loc2->{name});
+    $self->assert_str_equals('xmpp:chat123@conference.example.com', $loc2->{uri});
+}

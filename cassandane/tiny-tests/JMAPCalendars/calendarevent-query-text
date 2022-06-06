@@ -1,0 +1,124 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_query_text
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            calendarIds => {
+                                Default => JSON::true,
+                            },
+                            "title" => "foo",
+                            "description" => "bar",
+                            "locations" => {
+                                "loc1" => {
+                                    name => "baz",
+                                },
+                            },
+                            "freeBusyStatus" => "busy",
+                            "start"=> "2016-01-01T09:00:00",
+                            "duration"=> "PT1H",
+                            "timeZone" => "Europe/London",
+                            "showWithoutTime"=> JSON::false,
+                            "replyTo" => { imip => "mailto:tux\@local" },
+                            "participants" => {
+                                "tux" => {
+                                    name => "",
+                                    roles => {
+                                        'owner' => JSON::true,
+                                    },
+                                    locationId => "loc1",
+                                    sendTo => {
+                                        imip => 'tux@local',
+                                    },
+                                },
+                                "qux" => {
+                                    name => "Quuks",
+                                    roles => {
+                                        'attendee' => JSON::true,
+                                    },
+                                    sendTo => {
+                                        imip => 'qux@local',
+                                    },
+                                },
+                            },
+                            recurrenceRules => [{
+                                frequency => "monthly",
+                                count => 12,
+                            }],
+                            "recurrenceOverrides" => {
+                                "2016-04-01T10:00:00" => {
+                                    "description" => "blah",
+                                    "locations/loc1/name" => "blep",
+                                },
+                                "2016-05-01T10:00:00" => {
+                                    "title" => "boop",
+                                },
+                            },
+                        },
+                    }}, "R1"]]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id1);
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my %textqueries = (
+        title => "foo",
+        title => "boop",
+        description => "bar",
+        description => "blah",
+        location => "baz",
+        location => "blep",
+        owner => "tux",
+        owner => "tux\@local",
+        attendee => "qux",
+        attendee => "qux\@local",
+        attendee => "Quuks",
+    );
+
+    while (my ($propname, $propval) = each %textqueries) {
+
+        # Assert that catch-all text search matches
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        "filter" => {
+                            "text" => $propval,
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(1, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+        $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+        # Sanity check catch-all text search
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        "filter" => {
+                            "text" => "nope",
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(0, $res->[0][1]{total});
+
+        # Assert that search by property name matches
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        "filter" => {
+                            $propname => $propval,
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(1, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+        $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+        # Sanity check property name search
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        "filter" => {
+                            $propname => "nope",
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(0, $res->[0][1]{total});
+    }
+}

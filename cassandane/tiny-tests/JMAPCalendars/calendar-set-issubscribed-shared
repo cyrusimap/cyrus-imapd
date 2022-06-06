@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_issubscribed_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared account";
+    $admintalk->create("user.other");
+
+    $admintalk->setacl("user.other", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.other", other => 'lrswipkxtecdn');
+
+    xlog $self, "create and share default calendar";
+    my $othertalk = Net::CalDAVTalk->new(
+        user => "other",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    $admintalk->setacl('user.other.#calendars.Default', "cassandane" => 'lr') or die;
+
+    # Get calendar
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            accountId => 'other',
+            properties => ['isSubscribed']
+        }, 'R!'],
+    ]);
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{isSubscribed});
+    my $id = $res->[0][1]{list}[0]{id};
+
+    # Toggle isSubscribed on read-only shared calendar
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            accountId => 'other',
+            update => {
+                $id => {
+                    isSubscribed => JSON::true,
+                }
+            }
+        }, "R1"],
+        ['Calendar/get', {
+            accountId => 'other',
+            ids => [$id],
+            properties => ['isSubscribed']
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isSubscribed});
+}

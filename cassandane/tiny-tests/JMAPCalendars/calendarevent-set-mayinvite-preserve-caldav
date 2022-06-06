@@ -1,0 +1,88 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_mayinvite_preserve_caldav
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "create event with mayInviteSelf and mayInviteOthers set";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'eventuid',
+                    title => 'test',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                'owner' => JSON::true,
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                        someone => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                    },
+                    mayInviteSelf => JSON::true,
+                    mayInviteOthers => JSON::true,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event'],
+            properties => ['mayInviteSelf', 'mayInviteOthers'],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+    my $href = $res->[0][1]{created}{event}{'x-href'};
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mayInviteSelf});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mayInviteOthers});
+
+    xlog "remove mayInviteSelf via CalDAV";
+    my $ical = $caldav->Request('GET', $href)->{content};
+    $self->assert($ical =~ m/X-JMAP-MAY-INVITE-SELF;VALUE=BOOLEAN:TRUE/);
+
+    $ical = join("\r\n",
+        grep { !($_ =~ m/X-JMAP-MAY-INVITE-SELF;VALUE=BOOLEAN:TRUE/) }
+        split(/\r\n/, $ical)
+    );
+    $ical = join("\r\n",
+        grep { !($_ =~ m/X-JMAP-MAY-INVITE-OTHERS;VALUE=BOOLEAN:TRUE/) }
+        split(/\r\n/, $ical)
+    );
+    $res = $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+
+    xlog "assert mayInviteSelf and mayInviteOthers are preserved";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['mayInviteSelf', 'mayInviteOthers'],
+        }, 'R2'],
+    ]);
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{mayInviteSelf});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{mayInviteOthers});
+}

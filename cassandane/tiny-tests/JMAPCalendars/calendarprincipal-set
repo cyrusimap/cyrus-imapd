@@ -1,0 +1,79 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarprincipal_set
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Principal/set', {
+            create => {
+                principal1 => {
+                    timeZone => 'America/New_York',
+                },
+            },
+            update => {
+                cassandane => {
+                    name => 'Xyz',
+                },
+                principal2 => {
+                    timeZone => 'Europe/Berlin',
+                },
+            },
+            destroy => ['principal3'],
+        }, 'R1']
+    ]);
+
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notCreated}{principal1}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notUpdated}{principal2}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notDestroyed}{principal3}{type});
+
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{cassandane}{type});
+    $self->assert_deep_equals(['name'],
+        $res->[0][1]{notUpdated}{cassandane}{properties});
+
+    $res = $jmap->CallMethods([
+        ['Principal/get', {
+            ids => ['cassandane'],
+            properties => ['timeZone'],
+        }, 'R1'],
+        ['Principal/set', {
+            update => {
+                cassandane => {
+                    timeZone => 'Australia/Melbourne',
+                },
+            },
+        }, 'R2'],
+        ['Principal/get', {
+            ids => ['cassandane'],
+            properties => ['timeZone'],
+        }, 'R3']
+    ]);
+    $self->assert_null($res->[0][1]{list}[0]{timeZone});
+    $self->assert_deep_equals({}, $res->[1][1]{updated}{cassandane});
+    $self->assert_str_equals('Australia/Melbourne',
+        $res->[2][1]{list}[0]{timeZone});
+
+    $self->assert_not_null($res->[1][1]{oldState});
+    $self->assert_not_null($res->[1][1]{newState});
+    $self->assert_str_not_equals($res->[1][1]{oldState}, $res->[1][1]{newState});
+
+    my $oldState = $res->[1][1]{oldState};
+    $res = $jmap->CallMethods([
+        ['Principal/set', {
+            ifInState => $oldState,
+            update => {
+                cassandane => {
+                    timeZone => 'Asia/Tokyo',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
+}

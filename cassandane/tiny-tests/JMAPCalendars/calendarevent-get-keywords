@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_keywords
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('keywords');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my $keywords = {
+        'foo' => JSON::true,
+        'bar' => JSON::true,
+        'baz' => JSON::true,
+    };
+    $self->assert_deep_equals($keywords, $event->{keywords});
+}

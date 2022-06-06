@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_locations_apple
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('locations-apple');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my @locations = values %{$event->{locations}};
+    $self->assert_num_equals(1, scalar @locations);
+    $self->assert_str_equals("a place in Vienna", $locations[0]{name});
+    $self->assert_str_equals("geo:48.208304,16.371602", $locations[0]{coordinates});
+}

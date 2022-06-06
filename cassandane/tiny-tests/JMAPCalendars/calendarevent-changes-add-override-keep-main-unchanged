@@ -1,0 +1,136 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_changes_add_override_keep_main_unchanged
+    :min_version_3_7 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "added" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    xlog $self, "Fetch CalendarEvent state";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+        }, 'R1'],
+    ]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    my $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sally Sender <sender@example.net>
+To: Cassandane <cassandane@example.com>
+Message-ID: <7e017102-0caf-490a-bbdf-422141d34e75@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//CyrusIMAP.org/Cyrus
+METHOD:REQUEST
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:2730ae11-dbe9-43f5-a97b-47e039cb40a3
+SEQUENCE:1
+DTSTAMP:20220519T120822Z
+CREATED:20220519T120822Z
+DTSTART;TZID=America/New_York:20220519T160000
+DURATION:PT1H
+PRIORITY:0
+SUMMARY:test
+RRULE:FREQ=WEEKLY
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+ORGANIZER:mailto:organizer@example.com
+ATTENDEE;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:organizer@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:cassandane@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP invite for recurring main event";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    xlog $self, "Query changes";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/changes',
+                path => '/created',
+            },
+        }, 'R2'],
+    ]);
+    $state = $res->[0][1]{newState};
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_not_null($res->[1][1]{list}[0]{recurrenceRules});
+    $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
+
+    $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sally Sender <sender@example.net>
+To: Cassandane <cassandane@example.com>
+Message-ID: <7e017102-0caf-490a-bbdf-422141d34e75@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//CyrusIMAP.org/Cyrus
+METHOD:REQUEST
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=America/New_York:20220602T160000
+UID:2730ae11-dbe9-43f5-a97b-47e039cb40a3
+DTSTAMP:20220519T121052Z
+CREATED:20220519T120822Z
+DTSTART;TZID=America/New_York:20220603T160000
+DURATION:PT1H
+SEQUENCE:1
+PRIORITY:0
+SUMMARY:test
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+CLASS:PUBLIC
+ORGANIZER:mailto:organizer@example.com
+ATTENDEE;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:organizer@example.com
+ATTENDEE;PARTSTAT=ACCEPTED;RSVP=FALSE;X-SEQUENCE=1;X-DTSTAMP=20220519T120959Z:
+ mailto:cassandane@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP override without main event";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    xlog $self, "Query changes";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/changes',
+                path => '/updated',
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_not_null($res->[1][1]{list}[0]{recurrenceRules});
+    $self->assert_not_null($res->[1][1]{list}[0]{recurrenceOverrides});
+}

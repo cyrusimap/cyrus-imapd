@@ -1,0 +1,179 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_defaultalerts_etag_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Set default alerts on calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => {
+                        alert1 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT5M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Create other user and share owner calendar";
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.cassandane.#calendars.Default", "other", "lrsiwntex") or die;
+    my $service = $self->{instance}->get_service("http");
+    my $otherJMAP = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    my $otherCalDAV = Net::CalDAVTalk->new(
+        user => "other",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "Create event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "eventCass",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::true,
+                    color => 'yellow',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+    my $cassHref = $res->[0][1]{created}{1}{'x-href'};
+    $self->assert_not_null($cassHref);
+
+    xlog "Get event as other user";
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:mail',
+    ];
+    $res = $otherJMAP->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            properties => ['x-href'],
+        }, 'R1'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    my $otherHref = $res->[0][1]{list}[0]{'x-href'};
+    $self->assert_not_null($otherHref);
+
+    xlog "Set per-user prop to force per-user data split";
+    $res = $otherJMAP->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    color => 'green',
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Get ETag of event as cassandane";
+    my %Headers;
+    if ($CalDAV->{user}) {
+        $Headers{'Authorization'} = $CalDAV->auth_header();
+    }
+    my $cassURI = $CalDAV->request_url($cassHref);
+    my $ua = $CalDAV->ua();
+    my $Response = $ua->request('HEAD', $cassURI, {
+        headers => \%Headers,
+    });
+    my $cassETag = $Response->{headers}{etag};
+    $self->assert_not_null($cassETag);
+
+    xlog "Get ETag of event as other";
+    %Headers = ();
+    if ($otherCalDAV->{user}) {
+        $Headers{'Authorization'} = $otherCalDAV->auth_header();
+    }
+    my $otherURI = $otherCalDAV->request_url($otherHref);
+    my $otherUa = $otherCalDAV->ua();
+    $Response = $otherUa->request('HEAD', $otherURI, {
+        headers => \%Headers,
+    });
+    my $otherETag = $Response->{headers}{etag};
+    $self->assert_not_null($otherETag);
+
+    xlog "Update default alerts for cassandane";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => {
+                        alert2 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT10M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Refetch ETags of events";
+    %Headers = ();
+    if ($CalDAV->{user}) {
+        $Headers{'Authorization'} = $CalDAV->auth_header();
+    }
+    $Response = $CalDAV->{ua}->request('HEAD', $cassURI, {
+        headers => \%Headers,
+    });
+    $self->assert_not_null($Response->{headers}{etag});
+    $self->assert_str_not_equals($cassETag, $Response->{headers}{etag});
+
+    %Headers = ();
+    if ($otherCalDAV->{user}) {
+        $Headers{'Authorization'} = $otherCalDAV->auth_header();
+    }
+    $Response = $otherCalDAV->{ua}->request('HEAD', $otherURI, {
+        headers => \%Headers,
+    });
+    $self->assert_not_null($Response->{headers}{etag});
+    $self->assert_str_equals($otherETag, $Response->{headers}{etag});
+}

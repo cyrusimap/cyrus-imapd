@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_recurrenceoverrides
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('recurrenceoverrides');
+    my $aid = $id . "-alarmuid";
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my $o;
+
+    $o = $event->{recurrenceOverrides}->{"2016-12-24T20:00:00"};
+    $self->assert_not_null($o);
+
+    $self->assert(exists $event->{recurrenceOverrides}->{"2016-02-01T13:00:00"});
+    $self->assert_equals(JSON::true, $event->{recurrenceOverrides}->{"2016-02-01T13:00:00"}{excluded});
+
+    $o = $event->{recurrenceOverrides}->{"2016-05-01T13:00:00"};
+    $self->assert_not_null($o);
+    $self->assert_str_equals("foobarbazbla", $o->{"title"});
+    $self->assert_str_equals("2016-05-01T17:00:00", $o->{"start"});
+    $self->assert_str_equals("PT2H", $o->{"duration"});
+    $self->assert_not_null($o->{alerts}{$aid});
+
+    $o = $event->{recurrenceOverrides}->{"2016-09-01T13:00:00"};
+    $self->assert_not_null($o);
+    $self->assert_str_equals("foobarbazblabam", $o->{"title"});
+    $self->assert(not exists $o->{"start"});
+}

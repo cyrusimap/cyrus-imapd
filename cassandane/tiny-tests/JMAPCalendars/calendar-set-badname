@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_badname
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create calendar with excessively long name";
+    # Exceed the maximum allowed 256 byte length by 1.
+    my $badname = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum tincidunt risus quis urna aliquam sollicitudin. Pellentesque aliquet nisl ut neque viverra pellentesque. Donec tincidunt eros at ante malesuada porta. Nam sapien arcu, vehicula non posuere.";
+
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => { "1" => {
+                            name => $badname, color => "aqua",
+                            sortOrder => 1, isVisible => \1
+            }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    my $errType = $res->[0][1]{notCreated}{"1"}{type};
+    my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $self->assert_deep_equals(["name"], $errProp);
+}

@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_destroy_itip
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my %expectNotif = (
+        'NEEDS-ACTION' => 0,
+        'TENTATIVE' => 1,
+        'ACCEPTED' => 1,
+    );
+
+    while (my ($partstat, $wantNotif) = each %expectNotif) {
+
+        xlog "Create invite with PARTSTAT=$partstat";
+        my $uid = 'event' . $partstat . 'uid';
+        my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:$uid
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DURATION:PT1H
+DTSTAMP:20150928T132434Z
+SUMMARY:event
+LAST-MODIFIED:20150928T132434Z
+ORGANIZER:mailto:someone\@example.com
+ATTENDEE;RVSP=TRUE;PARTSTAT=$partstat:mailto:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+        $caldav->Request('PUT', "/dav/calendars/user/cassandane/Default/event$partstat.ics",
+            $ical, 'Content-Type' => 'text/calendar');
+
+        my $eventId = encode_eventid($uid);
+
+        xlog "Clean notifications";
+        $self->{instance}->getnotify();
+
+        xlog "Destroy event";
+        my $res = $jmap->CallMethods([
+            ['CalendarEvent/set', {
+                destroy => [ $eventId ],
+            }, 'R1'],
+        ]);
+        $self->assert_deep_equals([ $eventId ], $res->[0][1]{destroyed});
+
+        my $data = $self->{instance}->getnotify();
+        my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+        if ($wantNotif) {
+            xlog "Assert iTIP notification is sent";
+            $self->assert_not_null($notif);
+        } else {
+            xlog "Assert no iTIP notification is sent";
+            $self->assert_null($notif);
+        }
+    }
+}

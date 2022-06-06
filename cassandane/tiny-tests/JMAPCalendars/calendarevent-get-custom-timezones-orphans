@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_custom_timezones_orphans
+    :min_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('orphaned-timezones');
+
+    my $event = $self->putandget_vevent($id, $ical);
+
+    #$self->assert_num_equals(1, scalar keys %{$event->{timeZones}});
+    my @tzids = keys %{$event->{timeZones}};
+    $self->assert_deep_equals(['/customtzid'], \@tzids);
+}

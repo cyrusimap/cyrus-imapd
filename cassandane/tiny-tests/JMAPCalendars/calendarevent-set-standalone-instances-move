@@ -1,0 +1,100 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_standalone_instances_move
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create standalone instances";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+                instance2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance2',
+                    start => '2021-02-02T02:02:02',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-02-02T02:02:02',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+        ['Calendar/set', {
+            create => {
+                calendarA => {
+                    name => 'A',
+                },
+            },
+        }, 'R2'],
+    ]);
+    my $instance1Id = $res->[0][1]{created}{instance1}{id};
+    $self->assert_not_null($instance1Id);
+    my $instance2Id = $res->[0][1]{created}{instance2}{id};
+    $self->assert_not_null($instance2Id);
+    my $state = $res->[0][1]{newState};
+    my $calendarAId = $res->[1][1]{created}{calendarA}{id};
+    $self->assert_not_null($calendarAId);
+
+    xlog "Move standalone instance to other calendar";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $instance1Id => {
+                    calendarIds => {
+                        $calendarAId => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$instance1Id],
+            properties => ['calendarIds', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => [$instance2Id],
+            properties => ['calendarIds', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R3'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R4'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$instance1Id});
+    $self->assert_deep_equals({$calendarAId => JSON::true },
+        $res->[1][1]{list}[0]{calendarIds});
+
+    xlog "Moving one standalone instance also moves any other instances";
+    $self->assert_deep_equals({$calendarAId => JSON::true },
+        $res->[2][1]{list}[0]{calendarIds});
+
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[1][1]{state});
+    $self->assert_str_not_equals($state, $res->[2][1]{state});
+    $self->assert_str_not_equals($state, $res->[3][1]{newState});
+
+    $self->assert_deep_equals([], $res->[3][1]{created});
+    my @wantUpdated = sort ($instance1Id, $instance2Id);
+    my @haveUpdated = sort @{$res->[3][1]{updated}};
+    $self->assert_deep_equals(\@wantUpdated, \@haveUpdated);
+    $self->assert_deep_equals([], $res->[3][1]{destroyed});
+}

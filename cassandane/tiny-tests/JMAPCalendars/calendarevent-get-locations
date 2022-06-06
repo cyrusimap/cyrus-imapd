@@ -1,0 +1,15 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_locations
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('locations');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my @locations = values %{$event->{locations}};
+    $self->assert_num_equals(1, scalar @locations);
+    $self->assert_str_equals("A location with a comma,\nand a newline.", $locations[0]{name});
+}

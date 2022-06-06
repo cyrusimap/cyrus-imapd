@@ -1,0 +1,98 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarsharenotification_set
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create sharee
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    name => 'myname',
+                    "shareWith/manifold" => {
+                        mayReadFreeBusy => JSON::true,
+                        mayReadItems => JSON::true,
+                    },
+                },
+            },
+        }, "R1"]
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/get', {
+        }, 'R1']
+    ]);
+    my $notif = $res->[0][1]{list}[0];
+    my $notifId = $notif->{id};
+    $self->assert_not_null($notifId);
+    delete($notif->{id});
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/set', {
+            create => {
+                newnotif => $notif,
+            },
+            update => {
+                $notifId => $notif,
+            },
+        }, "R1"]
+    ]);
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notCreated}{newnotif}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notUpdated}{$notifId}{type});
+    $self->assert_not_null($res->[0][1]{newState});
+    my $state = $res->[0][1]{newState};
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/set', {
+            destroy => [$notifId, 'unknownId'],
+        }, "R1"]
+    ]);
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+    $self->assert_str_equals('notFound',
+        $res->[0][1]{notDestroyed}{unknownId}{type});
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/get', {
+            ids => [$notifId],
+        }, 'R1']
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals([$notifId], $res->[0][1]{notFound});
+}

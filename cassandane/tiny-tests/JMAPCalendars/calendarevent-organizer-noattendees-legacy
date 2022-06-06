@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_organizer_noattendees_legacy
+    :min_version_3_4 :max_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    # It's allowed to have an ORGANIZER even if there are no ATTENDEEs.
+    # The expected behaviour is that there's just a single organizer in the
+    # participants
+
+    my ($id, $ical) = $self->icalfile('organizer_noattendees');
+
+    my $event = $self->putandget_vevent($id, $ical);
+
+    my $wantParticipants = {
+        'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
+            '@type' => 'Participant',
+            name => 'Organizer',
+            roles => {
+                'owner' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:organizer@local',
+            },
+            expectReply => JSON::false,
+            participationStatus => 'needs-action',
+        },
+    };
+    $self->assert_deep_equals($wantParticipants, $event->{participants});
+    $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
+}

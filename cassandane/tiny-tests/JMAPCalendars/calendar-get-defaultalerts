@@ -1,0 +1,88 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_get_defaultalerts
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    # Set alerts via CalDAV.
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-datetime>
+BEGIN:VALARM
+UID:alert1
+TRIGGER:-PT5M
+ACTION:DISPLAY
+DESCRIPTION:alarmTime1
+END:VALARM
+BEGIN:VALARM
+UID:alert2
+TRIGGER:PT0M
+ACTION:DISPLAY
+DESCRIPTION:alarmTime2
+END:VALARM
+</C:default-alarm-vevent-datetime>
+    </D:prop>
+  </D:set>
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-date>
+BEGIN:VALARM
+UID:alert3
+TRIGGER:PT0S
+ACTION:DISPLAY
+DESCRIPTION:alarmDate1
+END:VALARM
+</C:default-alarm-vevent-date>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/Default",
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => ['Default'],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R1']
+    ]);
+    $self->assert_deep_equals({
+        alert1 => {
+            '@type' => 'Alert',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => '-PT5M',
+            },
+            action => 'display',
+        },
+        alert2 =>  {
+            '@type' => 'Alert',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        }
+    }, $res->[0][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_deep_equals({
+        alert3 => {
+            '@type' => 'Alert',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        },
+    }, $res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+}

@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_simple
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($uid, $ical) = $self->icalfile('simple');
+
+    my $event = $self->putandget_vevent($uid, $ical);
+    $self->assert_not_null($event);
+    $self->assert_str_equals('Event', $event->{q{@type}});
+    $self->assert_str_equals(encode_eventid($uid), $event->{id});
+    $self->assert_str_equals($uid, $event->{uid});
+    $self->assert_null($event->{relatedTo});
+    $self->assert_str_equals("yo", $event->{title});
+    $self->assert_str_equals("-//Apple Inc.//Mac OS X 10.9.5//EN", $event->{prodId});
+    $self->assert_str_equals("en", $event->{locale});
+    $self->assert_str_equals("turquoise", $event->{color});
+    $self->assert_str_equals("double yo", $event->{description});
+    $self->assert_str_equals("text/plain", $event->{descriptionContentType});
+    $self->assert_equals($event->{freeBusyStatus}, "free");
+    $self->assert_equals($event->{showWithoutTime}, JSON::false);
+    $self->assert_str_equals("2016-09-28T16:00:00", $event->{start});
+    $self->assert_str_equals("Etc/UTC", $event->{timeZone});
+    $self->assert_str_equals("PT1H", $event->{duration});
+    $self->assert_str_equals("2015-09-28T12:52:12Z", $event->{created});
+    $self->assert_str_equals("2015-09-28T13:24:34Z", $event->{updated});
+    $self->assert_num_equals(9, $event->{sequence});
+    $self->assert_num_equals(3, $event->{priority});
+    $self->assert_str_equals("public", $event->{privacy});
+}

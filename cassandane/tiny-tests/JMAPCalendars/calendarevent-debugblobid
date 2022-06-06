@@ -1,0 +1,149 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_debugblobid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create other user";
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.other");
+    $admintalk->setacl("user.other", admin => 'lrswipkxtecdan') or die;
+    $admintalk->setacl("user.other", other => 'lrswipkxtecdn') or die;
+
+    my $service = $self->{instance}->get_service("http");
+    my $otherJmap = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $otherJmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    xlog $self, "create calendar event in other users calendar";
+
+    my $res = $otherJmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event1uid1',
+                    title => "event1",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2019-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    alerts => {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => "start",
+                                offset => "-PT5M",
+                            },
+                            action => "email",
+                        },
+                    },
+                },
+            }
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+
+    xlog $self, "share calendar";
+
+    $admintalk->setacl("user.other.#calendars.Default", cassandane => 'lrswipkxtecdn') or die;
+
+    xlog $self, "set per-user event data for cassandane user";
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'other',
+            update => {
+                $eventId => {
+                    alerts => {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => "start",
+                                offset => "-PT10M",
+                            },
+                            action => "email",
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog $self, "get debugBlobId as regular user";
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ];
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'other',
+            ids => [$eventId],
+            properties => ['debugBlobId'],
+        }, 'R1']
+    ], $using);
+    my $debugBlobId = $res->[0][1]{list}[0]{debugBlobId};
+    $self->assert_not_null($debugBlobId);
+
+    xlog $self, "attempt to download debugBlob as non-admin (should fail)";
+
+    my $downloadUri = $jmap->downloaduri('other', $debugBlobId);
+    my %Headers = (
+        'Authorization' => $jmap->auth_header(),
+    );
+    my $RawResponse = $jmap->ua->get($downloadUri, { headers => \%Headers });
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawResponse);
+    }
+    $self->assert_str_equals('404', $RawResponse->{status});
+
+    xlog $self, "get debugBlobId as admin user";
+
+    my $adminJmap = Mail::JMAPTalk->new(
+        user => 'admin',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $res = $adminJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'other',
+            ids => [$eventId],
+            properties => ['debugBlobId'],
+        }, 'R1']
+    ], $using);
+    $debugBlobId = $res->[0][1]{list}[0]{debugBlobId};
+    $self->assert_not_null($debugBlobId);
+
+    xlog $self, "download debugBlob with userdata";
+
+    $res = $adminJmap->Download('other', $debugBlobId);
+    $self->assert_str_equals("multipart/mixed", substr($res->{headers}{'content-type'}, 0, 15));
+    $self->assert_num_not_equals(-1, index($res->{content}, 'SUMMARY:event1'));
+}

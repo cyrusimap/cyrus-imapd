@@ -1,0 +1,172 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarpreferences_participantidentity
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "No defaultParticipantIdentityId set";
+    my $res = $jmap->CallMethods([
+        ['CalendarPreferences/get', { }, 'R1'],
+    ]);
+    $self->assert_null($res->[0][1]{list}[0]{defaultParticipantIdentityId});
+
+    xlog 'Cyrus selects owner participant';
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2020-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    participants => {
+                        someone => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals({
+        imip => 'mailto:cassandane@example.com',
+    }, $res->[0][1]{created}{event1}{replyTo});
+
+    xlog "Set scheduling addresses via CalDAV";
+    my $xml = <<'EOF';
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+     <C:calendar-user-address-set>
+       <D:href>mailto:alias1@example.com</D:href>
+       <D:href>mailto:alias2@example.com</D:href>
+       <D:href>mailto:alias3@example.com</D:href>
+     </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/principals/user/cassandane",
+                       $xml, 'Content-Type' => 'text/xml');
+
+    xlog "No defaultParticipantIdentityId set";
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/get', { }, 'R1'],
+    ]);
+    $self->assert_null($res->[0][1]{list}[0]{defaultParticipantIdentityId});
+
+    xlog "Get participant identities";
+    $res = $jmap->CallMethods([
+        ['ParticipantIdentity/get', { }, 'R1'],
+    ]);
+    my $participantId = (grep {$_->{sendTo}{imip} eq 'mailto:alias2@example.com'}
+        @{$res->[0][1]{list}})[0]{id};
+    $self->assert_not_null($participantId);
+
+    xlog "Set participant identity as default";
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/set', {
+            update => {
+                singleton => {
+                    defaultParticipantIdentityId => $participantId,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{singleton});
+
+    xlog 'Cyrus uses default participant';
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event2 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2020-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    participants => {
+                        someone => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event2'],
+            properties => ['replyTo'],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals({
+        imip => 'mailto:alias2@example.com',
+    }, $res->[0][1]{created}{event2}{replyTo});
+
+    xlog "Updated scheduling addresses keep default participant";
+    $xml = <<'EOF';
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+     <C:calendar-user-address-set>
+       <D:href>mailto:alias1@example.com</D:href>
+       <D:href>mailto:alias2@example.com</D:href>
+       <D:href>mailto:alias3@example.com</D:href>
+       <D:href>mailto:alias4@example.com</D:href>
+     </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/principals/user/cassandane",
+                       $xml, 'Content-Type' => 'text/xml');
+
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/get', { }, 'R1']
+    ]);
+    $self->assert_str_equals($participantId,
+        $res->[0][1]{list}[0]{defaultParticipantIdentityId});
+
+    xlog "Removed default scheduling address reset default id";
+    $xml = <<'EOF';
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+     <C:calendar-user-address-set>
+       <D:href>mailto:alias4@example.com</D:href>
+       <D:href>mailto:alias5@example.com</D:href>
+     </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/principals/user/cassandane",
+                       $xml, 'Content-Type' => 'text/xml');
+
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/get', { }, 'R1']
+    ]);
+    $self->assert_null($res->[0][1]{list}[0]{defaultParticipantIdentityId});
+}

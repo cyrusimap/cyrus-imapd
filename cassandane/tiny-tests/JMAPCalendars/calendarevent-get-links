@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_links
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('links');
+    my $uri = "http://jmap.io/spec.html#calendar-events";
+
+    my $links = {
+        'fad3249914b09ede1558fa01004f4f8149559591' => {
+            '@type' => 'Link',
+            href => "http://jmap.io/spec.html#calendar-events",
+            contentType => "text/html",
+            size => 4480,
+            title => "the spec",
+            rel => "enclosure",
+            cid => '123456789asd',
+        },
+        '113fa6c507397df199a18d1371be615577f9117f' => {
+            '@type' => 'Link',
+            href => "http://example.com/some.url",
+        },
+        'describedby-attach' => {
+            '@type' => 'Link',
+            href => "http://describedby/attach",
+            rel => "describedby",
+        },
+        'describedby-url' => {
+            '@type' => 'Link',
+            href => "http://describedby/url",
+            rel => 'describedby',
+        }
+    };
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_deep_equals($links, $event->{links});
+}

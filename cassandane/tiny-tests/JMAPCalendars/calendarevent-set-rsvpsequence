@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_rsvpsequence
+    :min_version_3_1 :max_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my ($id, $ical) = $self->icalfile('rsvpsequence');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_not_null($event);
+    $self->assert_num_equals(1, $event->{sequence});
+
+    my $eventId = $event->{id};
+
+    # Update a partstat doesn't bump sequence.
+    my $res = $jmap->CallMethods([
+            ['CalendarEvent/set',{
+                update => {
+                    $eventId => {
+                        ('participants/me/participationStatus') => 'accepted',
+                    }
+                }
+            }, "R1"],
+            ['CalendarEvent/get',{
+                ids => [$eventId],
+                properties => ['sequence'],
+            }, "R2"],
+        ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_num_equals(1, $res->[1][1]{list}[0]->{sequence});
+
+    # Neither does setting a per-user property.
+    $res = $jmap->CallMethods([
+            ['CalendarEvent/set',{
+                update => {
+                    $eventId => {
+                        color => 'red',
+                        'alerts/alert1/trigger/offset' => '-PT10M',
+                    },
+                }
+            }, "R1"],
+            ['CalendarEvent/get',{
+                ids => [$eventId],
+                properties => ['sequence'],
+            }, "R2"],
+        ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_num_equals(1, $res->[1][1]{list}[0]->{sequence});
+
+    # But setting a property shared by all users does!
+    $res = $jmap->CallMethods([
+            ['CalendarEvent/set',{
+                update => {
+                    $eventId => {
+                        title => 'foo',
+                    },
+                }
+            }, "R1"],
+            ['CalendarEvent/get',{
+                ids => [$eventId],
+                properties => ['sequence'],
+            }, "R2"],
+        ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_num_not_equals(1, $res->[1][1]{list}[0]->{sequence});
+}

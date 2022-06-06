@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_locations
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $locations = {
+        # A couple of sparse locations
+        locA => {
+            name => "location A",
+            description => "my great description",
+        },
+        locB => {
+            name => "location B",
+        },
+        locC => {
+            coordinates => "geo:48.208304,16.371602",
+            name => "a place in Vienna",
+        },
+        locD => {
+            coordinates => "geo:48.208304,16.371602",
+        },
+        locE => {
+            name => "location E",
+            links => {
+                link1 => {
+                    href => 'https://foo.local',
+                    rel => "enclosure",
+                },
+                link2 => {
+                    href => 'https://bar.local',
+                    rel => "enclosure",
+                },
+            },
+        },
+        # A full-blown location
+        locG => {
+            name => "location G",
+            description => "a description",
+            timeZone => "Europe/Vienna",
+            coordinates => "geo:48.2010,16.3695,183",
+        },
+        # A location with name that needs escaping
+        locH => {
+            name => "location H,\nhas funny chars.",
+            description => "some boring\tdescription",
+            timeZone => "Europe/Vienna",
+        },
+    };
+    my $virtualLocations = {
+        locF => {
+            name => "location F",
+            description => "a description",
+            uri => "https://somewhere.local",
+        },
+    };
+
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "showWithoutTime"=> JSON::false,
+        "freeBusyStatus"=> "free",
+        "locations" => $locations,
+        "virtualLocations" => $virtualLocations,
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarIds} = $ret->{calendarIds};
+    $self->assert_normalized_event_equals($event, $ret);
+}

@@ -1,0 +1,186 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_imip
+    :needs_component_sieve :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :deletecanceled :outcome "outcome";
+    if string "\${outcome}" "added" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    # CREATE
+
+    my $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sally Sender <sender@example.net>
+To: Cassandane <cassandane@example.com>
+Message-ID: <6de280c9-edff-4019-8ebd-cfebc73f8201@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: 6de280c9-edff-4019-8ebd-cfebc73f8201
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP invite";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', { properties => ['id'] }, 'R1'],
+        ['CalendarEventNotification/get', { }, 'R2'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+
+    $self->assert_str_equals('sender@example.net',
+        $res->[1][1]{list}[0]{changedBy}{email});
+    $self->assert_str_equals('Sally Sender',
+        $res->[1][1]{list}[0]{changedBy}{name});
+    $self->assert_str_equals('created', $res->[1][1]{list}[0]{type});
+
+    my $state = $res->[1][1]{state};
+    $self->assert_not_null($state);
+
+    # UPDATE
+
+    $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sally Sender <sender@example.net>
+To: Cassandane <cassandane@example.com>
+Message-ID: <6de280c9-edff-4019-8ebd-cfebc73f8201@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: 6de280c9-edff-4019-8ebd-cfebc73f8201
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An updated event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:1
+ORGANIZER;CN=Test User:MAILTO:foo@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP update";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', { properties => ['id'] }, 'R1'],
+        ['CalendarEventNotification/changes', {
+            sinceState => $state },
+        'R2'],
+        ['CalendarEventNotification/get', {
+            '#ids' => {
+                resultOf => 'R2',
+                name => 'CalendarEventNotification/changes',
+                path => '/created'
+            },
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{list}});
+
+    $self->assert_str_equals('sender@example.net',
+        $res->[2][1]{list}[0]{changedBy}{email});
+    $self->assert_str_equals('Sally Sender',
+        $res->[2][1]{list}[0]{changedBy}{name});
+    $self->assert_str_equals('updated', $res->[2][1]{list}[0]{type});
+
+    $state = $res->[2][1]{state};
+    $self->assert_not_null($state);
+
+    # DELETE
+
+    $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 10:06:18 -0400
+From: Sally Sender <sender@example.net>
+To: Cassandane <cassandane@example.com>
+Message-ID: <6de280c9-edff-4019-8ebd-cfebc73f8202@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: 6de280c9-edff-4019-8ebd-cfebc73f8201
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:CANCEL
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:3
+ORGANIZER;CN=Test User:MAILTO:foo@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP cancellation";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id']
+        }, 'R1'],
+        ['CalendarEventNotification/changes', {
+            sinceState => $state },
+        'R2'],
+        ['CalendarEventNotification/get', {
+            '#ids' => {
+                resultOf => 'R2',
+                name => 'CalendarEventNotification/changes',
+                path => '/created'
+            },
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{list}});
+
+    $self->assert_str_equals('sender@example.net',
+        $res->[2][1]{list}[0]{changedBy}{email});
+    $self->assert_str_equals('Sally Sender',
+        $res->[2][1]{list}[0]{changedBy}{name});
+    $self->assert_str_equals('destroyed', $res->[2][1]{list}[0]{type});
+}

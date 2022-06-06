@@ -1,0 +1,104 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendaralert_notification_recurring
+    :min_version_3_5 :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    my $calendarId = $caldav->NewCalendar({name => 'foo'});
+    $self->assert_not_null($calendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
+
+    # define the event to start yesterday in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    $startdt->subtract(DateTime::Duration->new(days => 1));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $recurdt = $startdt->clone();
+    $recurdt->add(DateTime::Duration->new(days => 1));
+    my $recurid = $recurdt->strftime('%Y-%m-%dT%H:%M:%S');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger="PT0S";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$calendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART;TZID=Australia/Sydney:$start
+RRULE:FREQ=DAILY;COUNT=2
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+UID:E157A1FC-06BB-4495-933E-4E99C79A8649
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    my $data = $self->{instance}->getnotify();
+    my @events;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                push @events, $e;
+            }
+        }
+    }
+
+    $self->assert_num_equals(1, scalar @events);
+    $self->assert_str_equals('cassandane',
+        $events[0]{userId}); # accountId
+    $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+        $events[0]{uid});
+    $self->assert_str_equals(encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
+        $events[0]{calendarEventId});
+    $self->assert_str_equals($recurid, $events[0]{recurrenceId});
+    $self->assert_str_equals('E157A1FC-06BB-4495-933E-4E99C79A8649',
+        $events[0]{alertId});
+}

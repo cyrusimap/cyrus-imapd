@@ -1,0 +1,107 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_privacy_private_shared
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "share calendar";
+    my ($shareeJmap) = $self->create_user('sharee');
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteAll => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "get calendar event state as sharee";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane', ids => []
+        }, 'R1' ],
+    ]);
+    my $state = $res->[0][1]{state};
+
+    xlog "create private event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                privateEvent => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => '2021-01-01T01:00:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    title => 'privateEvent',
+                    privacy => 'private',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $privateEventId = $res->[0][1]{created}{privateEvent}{id};
+    $self->assert_not_null($privateEventId);
+
+    xlog "sharee sees event";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            properties => ['id'],
+        }, 'R1' ],
+        ['CalendarEvent/changes', {
+            accountId => 'cassandane',
+            sinceState => $state,
+        }, 'R1' ],
+        ['CalendarEvent/query', {
+            accountId => 'cassandane',
+        }, 'R2' ],
+    ]);
+    $self->assert_str_equals($privateEventId, $res->[0][1]{list}[0]{id});
+    $self->assert_deep_equals([$privateEventId], $res->[1][1]{created});
+    $self->assert_deep_equals([$privateEventId], $res->[2][1]{ids});
+
+    xlog "sharee can't update or destroy, or copy";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $privateEventId => {
+                    start => '2022-02-02T02:00:00',
+                },
+            },
+        }, 'R1' ],
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            destroy => [ $privateEventId ],
+        }, 'R2' ],
+        ['CalendarEvent/copy', {
+            accountId => 'sharee',
+            fromAccountId => 'cassandane',
+            create => {
+                privateEventCopy => {
+                    id => $privateEventId,
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                },
+            },
+        }, 'R3' ],
+    ]);
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notUpdated}{$privateEventId}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[1][1]{notDestroyed}{$privateEventId}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[2][1]{notCreated}{privateEventCopy}{type});
+}

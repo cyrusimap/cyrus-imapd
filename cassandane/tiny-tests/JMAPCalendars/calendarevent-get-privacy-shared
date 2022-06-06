@@ -1,0 +1,210 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_privacy_shared
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "share calendar";
+    my ($shareeJmap) = $self->create_user('sharee');
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteAll => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "create fullblown event for each privacy setting";
+    my $eventTemplate = {
+        calendarIds => {
+            'Default' => JSON::true,
+        },
+        color => 'blue',
+        created => '2020-12-21T07:47:00Z',
+        description => 'description',
+        duration => 'PT1H',
+        excludedRecurrenceRules => [{
+            frequency => 'daily',
+            interval => 2,
+            count => 1,
+        }],
+        keywords => {
+            keyword1 => JSON::true,
+        },
+        links => {
+            link1 => {
+                href => 'https://local/link1.jpg',
+            },
+        },
+        locale => 'en',
+        locations => {
+            loc1 => {
+                name => 'name',
+            },
+        },
+        participants => {
+            participant1 => {
+                sendTo => {
+                    imip => 'mailto:participant1@local',
+                },
+                roles => {
+                    attendee => JSON::true,
+                },
+            },
+        },
+        priority => 7,
+        prodId => '-//Foo//Bar//EN',
+        recurrenceOverrides => {
+            '2021-01-02T01:00:00' => {
+                title => 'overrideTitle',
+                duration => 'PT2H',
+            },
+        },
+        recurrenceRules => [{
+            frequency => 'daily',
+            count => 3,
+        }],
+        relatedTo => {
+            '3a996522-dfc3-484c-bea9-070c408143ea' => { },
+        },
+        replyTo => {
+            imip => 'mailto:orga@local',
+        },
+        sequence => 3,
+        showWithoutTime => JSON::true,
+        start => '2021-01-01T01:00:00',
+        status => 'tentative',
+        timeZone => 'Europe/Berlin',
+        title => 'title',
+        updated => '2020-12-21T07:47:00Z',
+        virtualLocations => {
+            virtloc1 => {
+                name => 'name',
+                uri => 'tel:+1-555-555-5555',
+            },
+        },
+    };
+
+    my @wantProperties = keys %{$eventTemplate};
+    push @wantProperties, 'calendarIds', 'isDraft', 'utcStart', 'utcEnd';
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                publicEvent => { ( privacy => 'public' ), %$eventTemplate },
+                privateEvent => { ( privacy => 'private' ), %$eventTemplate },
+                secretEvent => { ( privacy => 'secret' ), %$eventTemplate }
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#publicEvent'],
+            properties => \@wantProperties,
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => ['#privateEvent'],
+            properties => \@wantProperties,
+        }, 'R3'],
+        ['CalendarEvent/get', {
+            ids => ['#secretEvent'],
+            properties => \@wantProperties,
+        }, 'R4'],
+    ]);
+
+    my $publicEvent = $res->[1][1]{list}[0];
+    $self->assert_not_null($publicEvent);
+
+    my $privateEvent = $res->[2][1]{list}[0];
+    $self->assert_not_null($privateEvent);
+
+    my $secretEvent = $res->[3][1]{list}[0];
+    $self->assert_not_null($secretEvent);
+
+    xlog "calendar owner may see all events and properties";
+    foreach my $event ($publicEvent, $privateEvent, $secretEvent) {
+        foreach my $prop (keys %{$eventTemplate}) {
+            $self->assert_not_null($event->{$prop});
+        }
+    }
+
+    xlog "sharee may see all properties of public event";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$publicEvent->{id}],
+            properties => \@wantProperties,
+        }, 'R1'],
+    ]);
+    my $sharedPublicEvent = $res->[0][1]{list}[0];
+    delete($publicEvent->{'x-href'});
+    delete($sharedPublicEvent->{'x-href'});
+    delete($publicEvent->{'blobId'});
+    delete($sharedPublicEvent->{'blobId'});
+    delete($publicEvent->{'debugBlobId'});
+    delete($sharedPublicEvent->{'debugBlobId'});
+    $self->assert_deep_equals($publicEvent, $sharedPublicEvent);
+
+    xlog "sharee may only see public properties of private event";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$privateEvent->{id}],
+            properties => \@wantProperties,
+        }, 'R1'],
+    ]);
+    my $sharedPrivateEvent = $res->[0][1]{list}[0];
+    my %publicProps = (
+        '@type' => 1,
+        calendarIds => 1,
+        created => 1,
+        due => 1,
+        duration => 1,
+        estimatedDuration => 1,
+        excludedRecurrenceRules => 1,
+        freeBusyStatus => 1,
+        id => 1,
+        isDraft => 1,
+        privacy => 1,
+        recurrenceRules => 1,
+        recurrenceOverrides => 1,
+        sequence => 1,
+        showWithoutTime => 1,
+        start => 1,
+        timeZone => 1,
+        timeZones => 1,
+        uid => 1,
+        updated => 1,
+        utcStart => 1,
+        utcEnd => 1,
+    );
+    my @nonPublic;
+    foreach my $prop (keys %{$privateEvent}) {
+        if (not $publicProps{$prop}) {
+            push @nonPublic, $prop;
+        }
+    }
+    delete @{$privateEvent}{@nonPublic};
+    delete $privateEvent->{recurrenceOverrides}{'2021-01-02T01:00:00'}{title};
+    $self->assert_deep_equals($privateEvent, $sharedPrivateEvent);
+
+    xlog "sharee must not see secret event";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$secretEvent->{id}],
+            properties => \@wantProperties,
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([$secretEvent->{id}], $res->[0][1]{notFound});
+}
