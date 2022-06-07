@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_matchmime
+    :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+    :needs_component_sieve :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # Email/matchMime method
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $email = <<'EOF';
+From: sender@local
+To: recipient@local
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+X-tra: baz
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+Some body.
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+
+    my $res = $jmap->CallMethods([
+        ['Email/matchMime', {
+            mime => $email,
+            filter => {
+                subject => "test",
+                header => [ "X-tra", 'baz' ],
+            },
+        }, "R1"],
+    ]);
+
+    $self->assert_equals(JSON::true, $res->[0][1]{matches});
+
+    $res = $jmap->CallMethods([
+        ['Email/matchMime', {
+            mime => $email,
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    text => "body",
+                }, {
+                    header => [ "X-tra" ],
+                }],
+            },
+        }, "R1"],
+    ]);
+
+    $self->assert_equals(JSON::true, $res->[0][1]{matches});
+
+    $res = $jmap->CallMethods([
+        ['Email/matchMime', {
+            mime => $email,
+            filter => {
+                hasAttachment => JSON::true,
+            },
+        }, "R1"],
+    ]);
+
+    $self->assert_equals(JSON::false, $res->[0][1]{matches});
+}

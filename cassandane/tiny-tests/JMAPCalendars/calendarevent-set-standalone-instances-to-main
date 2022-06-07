@@ -1,0 +1,95 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_standalone_instances_to_main
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create standalone instance";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $instance1Id = $res->[0][1]{created}{instance1}{id};
+    $self->assert_not_null($instance1Id);
+    my $state = $res->[0][1]{newState};
+
+    xlog "Can't convert a standalone instance to a main event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $instance1Id => {
+                    recurrenceId => undef,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$instance1Id}{type});
+    $self->assert_deep_equals([
+            # XXX invalidProperties doesn't deduplicate,
+            # but we'll only change this when we merged
+            # this feature branch
+            'recurrenceId', 'recurrenceId', 'recurrenceIdTimeZone'
+    ], $res->[0][1]{notUpdated}{$instance1Id}{properties});
+
+    $self->assert_str_equals($state, $res->[1][1]{newState});
+    $self->assert_deep_equals([], $res->[1][1]{created});
+    $self->assert_deep_equals([], $res->[1][1]{updated});
+    $self->assert_deep_equals([], $res->[1][1]{destroyed});
+
+    xlog "Create main event with the same uid";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'mainevent1',
+                    start => '2020-12-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceRules => [{
+                        '@type' => 'RecurrenceRule',
+                        frequency => 'monthly',
+                        count => 3,
+                    }],
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R2'],
+    ]);
+    my $event1Id = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($event1Id);
+
+    $self->assert_str_not_equals($state, $res->[1][1]{newState});
+    $self->assert_deep_equals([$event1Id], $res->[1][1]{created});
+    $self->assert_deep_equals([], $res->[1][1]{updated});
+    $self->assert_deep_equals([$instance1Id], $res->[1][1]{destroyed});
+}

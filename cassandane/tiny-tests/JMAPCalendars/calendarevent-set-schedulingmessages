@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_schedulingmessages
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event1uidlocal',
+                    title => "event1",
+                    start => "2020-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                'owner' => JSON::true,
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                        attendee1 => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:attendee1@example.com',
+                            },
+                        },
+                    },
+                },
+            },
+            sendSchedulingMessages => JSON::false,
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
+
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_null($imip);
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => "updatedEvent1",
+                },
+            },
+            sendSchedulingMessages => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    $data = $self->{instance}->getnotify();
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    my $payload = decode_json($imip->{MESSAGE});
+    my $ical = $payload->{ical};
+
+    $self->assert_str_equals('attendee1@example.com', $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REQUEST");
+}

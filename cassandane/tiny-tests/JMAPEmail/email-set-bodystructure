@@ -1,0 +1,115 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_bodystructure
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "Generate a email in INBOX via IMAP";
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: text/plain; charset=UTF-8\r\n"
+          . "Content-Disposition: inline\r\n" . "\r\n"
+          . "some text"
+          . "\r\n--sub\r\n"
+          . "Content-Type: message/rfc822\r\n"
+          . "\r\n"
+          . "Return-Path: <Ava.Nguyen\@local>\r\n"
+          . "Mime-Version: 1.0\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "Content-Transfer-Encoding: 7bit\r\n"
+          . "Subject: bar\r\n"
+          . "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n"
+          . "Message-ID: <fake.1475639947.6507\@local>\r\n"
+          . "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n"
+          . "To: Test User <test\@local>\r\n"
+          . "\r\n"
+          . "An embedded email"
+          . "\r\n--sub--\r\n",
+    ) || die;
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['attachments', 'blobId'],
+        }, 'R2' ],
+    ]);
+    my $emailBlobId = $res->[1][1]->{list}[0]->{blobId};
+    my $embeddedEmailBlobId = $res->[1][1]->{list}[0]->{attachments}[0]{blobId};
+
+    xlog $self, "Upload a data blob";
+    my $binary = pack "H*", "beefcode";
+    my $data = $jmap->Upload($binary, "image/gif");
+    my $dataBlobId = $data->{blobId};
+
+    $self->assert_not_null($emailBlobId);
+    $self->assert_not_null($embeddedEmailBlobId);
+    $self->assert_not_null($dataBlobId);
+
+    my $bodyStructure = {
+        type => "multipart/alternative",
+        subParts => [{
+                type => 'text/plain',
+                partId => '1',
+            }, {
+                type => 'message/rfc822',
+                blobId => $embeddedEmailBlobId,
+            }, {
+                type => 'image/gif',
+                blobId => $dataBlobId,
+            }, {
+                # No type set
+                blobId => $dataBlobId,
+            }, {
+                type => 'message/rfc822',
+                blobId => $emailBlobId,
+        }],
+    };
+
+    xlog $self, "Create email with body structure";
+    my $inboxid = $self->getinbox()->{id};
+    my $email = {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [{ name => "Test", email => q{foo@bar} }],
+        subject => "test",
+        bodyStructure => $bodyStructure,
+        bodyValues => {
+            "1" => {
+                value => "A text body",
+            },
+        },
+    };
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { '1' => $email } }, 'R1'],
+        ['Email/get', {
+            ids => [ '#1' ],
+            properties => [ 'bodyStructure' ],
+            bodyProperties => [ 'partId', 'blobId', 'type' ],
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+    ]);
+
+    # Normalize server-set properties
+    my $gotBodyStructure = $res->[1][1]{list}[0]{bodyStructure};
+    $self->assert_str_equals('multipart/alternative', $gotBodyStructure->{type});
+    $self->assert_null($gotBodyStructure->{blobId});
+    $self->assert_str_equals('text/plain', $gotBodyStructure->{subParts}[0]{type});
+    $self->assert_not_null($gotBodyStructure->{subParts}[0]{blobId});
+    $self->assert_str_equals('message/rfc822', $gotBodyStructure->{subParts}[1]{type});
+    $self->assert_str_equals($embeddedEmailBlobId, $gotBodyStructure->{subParts}[1]{blobId});
+    $self->assert_str_equals('image/gif', $gotBodyStructure->{subParts}[2]{type});
+    $self->assert_str_equals($dataBlobId, $gotBodyStructure->{subParts}[2]{blobId});
+    # Default type is text/plain if no Content-Type header is set
+    $self->assert_str_equals('text/plain', $gotBodyStructure->{subParts}[3]{type});
+    $self->assert_str_equals($dataBlobId, $gotBodyStructure->{subParts}[3]{blobId});
+    $self->assert_str_equals('message/rfc822', $gotBodyStructure->{subParts}[4]{type});
+    $self->assert_str_equals($emailBlobId, $gotBodyStructure->{subParts}[4]{blobId});
+}

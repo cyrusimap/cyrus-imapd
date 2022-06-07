@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_text_crlf
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $inboxid = $self->getinbox()->{id};
+
+    my $text = "ab\r\ncde\rfgh\nij";
+    my $want = "ab\ncdefgh\nij";
+
+    my $email =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { email => q{test1@robmtest.vm}, name => q{} } ],
+        to => [ {
+            email => q{foo@bar.com},
+            name => "foo",
+        } ],
+        textBody => [{partId => '1'}],
+        bodyValues => {1 => { value => $text }},
+    };
+
+    xlog $self, "create and get email";
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+        ['Email/get', { ids => [ "#1" ], fetchAllBodyValues => JSON::true }, "R2" ],
+    ]);
+    my $ret = $res->[1][1]->{list}[0];
+    my $got = $ret->{bodyValues}{$ret->{textBody}[0]{partId}}{value};
+    $self->assert_str_equals($want, $got);
+}

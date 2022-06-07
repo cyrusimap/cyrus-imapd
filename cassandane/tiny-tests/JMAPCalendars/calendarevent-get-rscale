@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_rscale
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('rscale');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_not_null($event);
+    $self->assert_str_equals("Some day in Adar I", $event->{title});
+    $self->assert_str_equals("yearly", $event->{recurrenceRules}[0]{frequency});
+    $self->assert_str_equals("hebrew", $event->{recurrenceRules}[0]{rscale});
+    $self->assert_str_equals("forward", $event->{recurrenceRules}[0]{skip});
+    $self->assert_num_equals(8, $event->{recurrenceRules}[0]{byMonthDay}[0]);
+    $self->assert_str_equals("5L", $event->{recurrenceRules}[0]{byMonth}[0]);
+}

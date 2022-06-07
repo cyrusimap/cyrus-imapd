@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_privacy_ignore_override
+    :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Ignore overriden privacy in CalendarEvent/set";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event1uidlocal',
+                    title => 'event1',
+                    start => '2020-01-01T09:00:00',
+                    timeZone => 'Europe/Vienna',
+                    duration => 'PT1H',
+                    privacy => 'private',
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 3,
+                    }],
+                    recurrenceOverrides => {
+                        '2020-01-02T09:00:00' => {
+                            title => 'event1Override',
+                            privacy => 'secret',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $xhref = $res->[0][1]{created}{event1}{'x-href'};
+    $self->assert_not_null($xhref);
+
+    $res = $caldav->Request('GET', $xhref);
+    $self->assert($res->{content} =~ m/CLASS:PRIVATE/);
+    $self->assert(not $res->{content} =~ m/CLASS:CONFIDENTIAL/);
+}

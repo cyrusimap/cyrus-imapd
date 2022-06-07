@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_upload_sametype
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $lazy = "the quick brown fox jumped over the lazy dog";
+
+    my $data = $jmap->Upload($lazy, "text/plain; charset=us-ascii");
+    my $blobid = $data->{blobId};
+
+    $data = $jmap->Upload($lazy, "TEXT/PLAIN; charset=US-Ascii");
+    my $blobid2 = $data->{blobId};
+
+    $self->assert_str_equals($blobid, $blobid2);
+}

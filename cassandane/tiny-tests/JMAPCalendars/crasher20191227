@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_crasher20191227
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 =>  {
+                    calendarIds => {
+                        $calid => JSON::true,
+                    },
+                    "title"=> "title",
+                    "description"=> "description",
+                    "start"=> "2015-11-07T09:00:00",
+                    "duration"=> "PT2H",
+                    "timeZone" => "Europe/London",
+                    "showWithoutTime"=> JSON::false,
+                    recurrenceRules => [{
+                        frequency => 'weekly',
+                    }],
+                    recurrenceOverrides => {
+                        '2015-11-14T09:00:00' => {
+                            title => 'foo',
+                        },
+                    },
+                    "freeBusyStatus"=> "busy",
+                    "status" => "confirmed",
+                    "alerts" =>  {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => "start",
+                                offset => "-PT5M",
+                            },
+                            acknowledged => "2015-11-07T08:57:00Z",
+                            action => "email",
+                        },
+                    },
+                    "useDefaultAlerts" => JSON::true,
+                },
+            },
+        }, 'R1']
+    ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'recurrenceOverrides/2015-11-14T09:00:00' => {
+                        alerts => undef,
+                    }
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+}

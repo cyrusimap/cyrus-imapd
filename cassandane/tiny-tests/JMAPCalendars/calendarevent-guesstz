@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_guesstz
+    :min_version_3_5 :needs_component_jmap :needs_dependency_guesstz
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $eventId = '123456789';
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+PRODID: -//xxx//yyy//EN
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Custom
+BEGIN:DAYLIGHT
+TZOFFSETFROM:-0500
+TZOFFSETTO:-0400
+DTSTART:20070311T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0500
+DTSTART:20071104T020000
+RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:$eventId
+DTSTAMP:20201226T180609
+DTSTART;TZID=Custom:20201227T140000
+DURATION:PT1H
+SUMMARY:A summary
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $event = $self->putandget_vevent($eventId,
+        $ical, ['timeZone', 'timeZones']);
+    $self->assert_str_equals('America/New_York', $event->{timeZone});
+    $self->assert_null($event->{timeZones});
+}

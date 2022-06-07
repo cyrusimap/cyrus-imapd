@@ -1,0 +1,155 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_blobid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create other user";
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.other");
+    $admintalk->setacl("user.other", admin => 'lrswipkxtecdan') or die;
+    $admintalk->setacl("user.other", other => 'lrswipkxtecdn') or die;
+
+    my $service = $self->{instance}->get_service("http");
+    my $otherJmap = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $otherJmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    xlog $self, "create calendar event in other users calendar";
+
+    my $res = $otherJmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event1uid1',
+                    title => "event1",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2019-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    alerts => {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => "start",
+                                offset => "-PT5M",
+                            },
+                            action => "email",
+                        },
+                    },
+                },
+            }
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+
+    xlog $self, "share calendar";
+
+    $admintalk->setacl("user.other.#calendars.Default", cassandane => 'lrswipkxtecdn') or die;
+
+    xlog $self, "set per-user event data for cassandane user";
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'other',
+            update => {
+                $eventId => {
+                    alerts => {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => "start",
+                                offset => "-PT10M",
+                            },
+                            action => "email",
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog $self, "get event blobIds for cassandane and other user";
+
+    $res = $otherJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'other',
+            ids => [$eventId],
+            properties => ['blobId'],
+        }, 'R1']
+    ]);
+
+    # fetch a second time to make sure this works with a cached response
+    $res = $otherJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'other',
+            ids => [$eventId],
+            properties => ['blobId'],
+        }, 'R1']
+    ]);
+    my $otherBlobId = $res->[0][1]{list}[0]{blobId};
+    $self->assert_not_null($otherBlobId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'other',
+            ids => [$eventId],
+            properties => ['blobId'],
+        }, 'R1']
+    ]);
+    my $cassBlobId = $res->[0][1]{list}[0]{blobId};
+    $self->assert_not_null($cassBlobId);
+
+    xlog $self, "compare blob ids";
+
+    $self->assert_str_not_equals($otherBlobId, $cassBlobId);
+
+    xlog $self, "download blob with userdata";
+
+    $res = $jmap->Download('other', $cassBlobId);
+    $self->assert_str_equals("BEGIN:VCALENDAR", substr($res->{content}, 0, 15));
+    $self->assert_num_not_equals(-1, index($res->{content}, 'TRIGGER:-PT10M'));
+
+    xlog $self, "update event";
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'other',
+            update => {
+                $eventId => {
+                    title => 'updatedTitle',
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => 'other',
+            ids => [$eventId],
+            properties => ['blobId'],
+        }, 'R1'],
+
+    ]);
+    $self->assert_str_equals($res->[0][1]{updated}{$eventId}{blobId},
+        $res->[1][1]{list}[0]{blobId});
+    $self->assert_str_not_equals($cassBlobId, $res->[1][1]{list}[0]{blobId});
+}

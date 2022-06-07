@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_move_keywords
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog $self, "Generate an email via IMAP";
+    my %exp_sub;
+    $exp_sub{A} = $self->make_message(
+        "foo", body => "a email",
+    );
+    xlog $self, "Set flags on message";
+    $store->set_folder('INBOX');
+    $talk->store('1', '+flags', '($foo \\Flagged)');
+
+    xlog $self, "get email";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {}, 'R1'],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids'},
+            properties => [ 'keywords', 'mailboxIds' ],
+        }, 'R2' ]
+    ]);
+    my $msg = $res->[1][1]->{list}[0];
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    my $msgId = $msg->{id};
+    my $inboxId = (keys %{$msg->{mailboxIds}})[0];
+    $self->assert_not_null($inboxId);
+    my $keywords = $msg->{keywords};
+
+    xlog $self, "create Archive mailbox";
+    $res = $jmap->CallMethods([ ['Mailbox/get', {}, 'R1'], ]);
+    my $mboxState = $res->[0][1]{state};
+    $talk->create("INBOX.Archive", "(USE (\\Archive))") || die;
+    $res = $jmap->CallMethods([
+        ['Mailbox/changes', {sinceState => $mboxState }, 'R1'],
+    ]);
+    my $archiveId = $res->[0][1]{created}[0];
+    $self->assert_not_null($archiveId);
+    $self->assert_deep_equals([], $res->[0][1]->{updated});
+    $self->assert_deep_equals([], $res->[0][1]->{destroyed});
+
+    xlog $self, "move email to Archive";
+    xlog $self, "update email";
+    $res = $jmap->CallMethods([
+        ['Email/set', { update => {
+            $msgId => {
+                mailboxIds => { $archiveId => JSON::true }
+            },
+        }}, "R1"],
+        ['Email/get', { ids => [ $msgId ], properties => ['keywords'] }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$msgId});
+    $self->assert_deep_equals($keywords, $res->[1][1]{list}[0]{keywords});
+}

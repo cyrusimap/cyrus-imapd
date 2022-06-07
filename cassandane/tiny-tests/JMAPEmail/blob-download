@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_blob_download
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $logofile = abs_path('data/logo.gif');
+    open(FH, "<$logofile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+    my $data = $jmap->Upload($binary, "image/gif");
+
+    my $blob = $jmap->Download({ accept => 'image/gif' }, 'cassandane', $data->{blobId});
+    $self->assert_str_equals('image/gif', $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+    $self->assert_equals($binary, $blob->{content});
+}

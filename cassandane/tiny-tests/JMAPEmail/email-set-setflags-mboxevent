@@ -1,0 +1,159 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_setflags_mboxevent
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                "A" => {
+                    name => "A",
+                },
+                "B" => {
+                    name => "B",
+                },
+            },
+        }, "R1"]
+    ]);
+    my $mboxIdA = $res->[0][1]{created}{A}{id};
+    $self->assert_not_null($mboxIdA);
+    my $mboxIdB = $res->[0][1]{created}{B}{id};
+    $self->assert_not_null($mboxIdB);
+
+    xlog $self, "Create emails";
+    # Use separate requests for deterministic order of UIDs.
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                msgA1 => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true
+                    },
+                    from => [{
+                            email => q{test1@local},
+                            name => q{}
+                        }],
+                    to => [{
+                            email => q{test2@local},
+                            name => '',
+                        }],
+                    subject => 'msgA1',
+                    keywords => {
+                        '$seen' => JSON::true,
+                    },
+                },
+            }
+        }, "R1"],
+        ['Email/set', {
+            create => {
+                msgA2 => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true
+                    },
+                    from => [{
+                            email => q{test1@local},
+                            name => q{}
+                        }],
+                    to => [{
+                            email => q{test2@local},
+                            name => '',
+                        }],
+                    subject => 'msgA2',
+                },
+            }
+        }, "R2"],
+        ['Email/set', {
+            create => {
+                msgB1 => {
+                    mailboxIds => {
+                        $mboxIdB => JSON::true
+                    },
+                    from => [{
+                            email => q{test1@local},
+                            name => q{}
+                        }],
+                    to => [{
+                            email => q{test2@local},
+                            name => '',
+                        }],
+                    keywords => {
+                        baz => JSON::true,
+                    },
+                    subject => 'msgB1',
+                },
+            }
+        }, "R3"],
+    ]);
+    my $emailIdA1 = $res->[0][1]{created}{msgA1}{id};
+    $self->assert_not_null($emailIdA1);
+    my $emailIdA2 = $res->[1][1]{created}{msgA2}{id};
+    $self->assert_not_null($emailIdA2);
+    my $emailIdB1 = $res->[2][1]{created}{msgB1}{id};
+    $self->assert_not_null($emailIdB1);
+
+    # Clear notification cache
+    $self->{instance}->getnotify();
+
+    # Update emails
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailIdA1 => {
+                    'keywords/$seen' => undef,
+                    'keywords/foo' => JSON::true,
+                },
+                $emailIdA2 => {
+                    keywords => {
+                        'bar' => JSON::true,
+                    },
+                },
+                $emailIdB1 => {
+                    'keywords/baz' => undef,
+                },
+            }
+        }, "R1"],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$emailIdA1});
+    $self->assert(exists $res->[0][1]{updated}{$emailIdA2});
+    $self->assert(exists $res->[0][1]{updated}{$emailIdB1});
+
+    # Gather notifications
+    my $data = $self->{instance}->getnotify();
+    if ($self->{replica}) {
+        my $more = $self->{replica}->getnotify();
+        push @$data, @$more;
+    }
+
+    # Assert notifications
+    my %flagsClearEvents;
+    my %flagsSetEvents;
+    foreach (@$data) {
+        my $event = decode_json($_->{MESSAGE});
+        if ($event->{event} eq "FlagsClear") {
+            $flagsClearEvents{$event->{mailboxID}} = $event;
+        }
+        elsif ($event->{event} eq "FlagsSet") {
+            $flagsSetEvents{$event->{mailboxID}} = $event;
+        }
+    }
+
+    # Assert mailbox A events.
+    $self->assert_str_equals('1:2', $flagsSetEvents{$mboxIdA}{uidset});
+    $self->assert_num_not_equals(-1, index($flagsSetEvents{$mboxIdA}{flagNames}, 'foo'));
+    $self->assert_num_not_equals(-1, index($flagsSetEvents{$mboxIdA}{flagNames}, 'bar'));
+    $self->assert_str_equals('1', $flagsClearEvents{$mboxIdA}{uidset});
+    $self->assert_str_equals('\Seen', $flagsClearEvents{$mboxIdA}{flagNames});
+
+    # Assert mailbox B events.
+    $self->assert(not exists $flagsSetEvents{$mboxIdB});
+    $self->assert_str_equals('1', $flagsClearEvents{$mboxIdB}{uidset});
+    $self->assert_str_equals('baz', $flagsClearEvents{$mboxIdB}{flagNames});
+}

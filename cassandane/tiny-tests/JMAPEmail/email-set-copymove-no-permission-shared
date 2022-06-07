@@ -1,0 +1,89 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_copymove_no_permission_shared
+    :min_version_3_5 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.other");
+    $admin->setacl("user.other", admin => 'lrswipkxtecdan') or die;
+    $admin->setacl("user.other", other => 'lrswipkxtecdn') or die;
+
+    my $service = $self->{instance}->get_service("http");
+    my $otherJmap = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $otherJmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+    ]);
+
+    my $res = $otherJmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+            },
+        }, 'R1'],
+        ['Email/set', {
+            create => {
+                'email' => {
+                    mailboxIds => {
+                        '#mboxA' => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'email',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $mboxA = $res->[0][1]->{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[0][1]->{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    my $email = $res->[1][1]->{created}{email}{id};
+    $self->assert_not_null($email);
+
+    $admin->setacl("user.other.A", cassandane => 'lrs') or die;
+    $admin->setacl("user.other.B", cassandane => 'lrswitedn') or die;
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            accountId => 'other',
+            update => {
+                $email => {
+                    'mailboxIds/'.$mboxA => undef,
+                    'mailboxIds/'.$mboxB => JSON::true,
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('forbidden', $res->[0][1]{notUpdated}{$email}{type});
+}

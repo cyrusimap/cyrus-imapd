@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create calendar";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => { "1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Calendar/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{created});
+
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get calendar $id";
+    $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals('foo', $res->[0][1]{list}[0]{name});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isVisible});
+
+    xlog $self, "update calendar $id";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {update => {"$id" => {
+                            name => "bar",
+                            isVisible => \0
+            }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    xlog $self, "get calendar $id";
+    $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
+    $self->assert_str_equals('bar', $res->[0][1]{list}[0]{name});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{isVisible});
+
+    xlog $self, "destroy calendar $id";
+    $res = $jmap->CallMethods([['Calendar/set', {destroy => ["$id"]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{destroyed});
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "get calendar $id";
+    $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
+}

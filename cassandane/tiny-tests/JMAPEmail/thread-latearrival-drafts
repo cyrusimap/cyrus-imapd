@@ -1,0 +1,143 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_thread_latearrival_drafts
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my %exp;
+    my $dt;
+    my $res;
+    my $state;
+
+    my $jmap = $self->{jmap};
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -8));
+    $exp{A} = $self->make_message("Email A", date => $dt, body => 'a') || die;
+
+    xlog $self, "get thread state";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' }, properties => ['threadId'] }, 'R2' ],
+        ['Thread/get', { '#ids' => { resultOf => 'R2', name => 'Email/get', path => '/list/*/threadId' } }, 'R3'],
+    ]);
+    $state = $res->[2][1]{state};
+    $self->assert_not_null($state);
+    my $threadid = $res->[2][1]{list}[0]{id};
+    $self->assert_not_null($threadid);
+
+    my $inreplyheader = [['In-Reply-To' => $exp{A}->messageid()]];
+
+    xlog $self, "create drafts mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftsmbox);
+
+    xlog $self, "generating email B";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -5));
+    $exp{B} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "b");
+
+    xlog $self, "generating email C";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -2));
+    $exp{C} = $self->make_message("Re: Email A", references => [ $exp{A}, $exp{B} ], date => $dt, body => "c");
+
+    xlog $self, "generating email D (before C)";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -3));
+    $exp{D} = $self->make_message("Re: Email A", extra_headers => $inreplyheader, date => $dt, body => "d");
+
+    xlog $self, "Generate draft email E replying to A";
+    $self->{store}->set_folder("INBOX.drafts");
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -4));
+    $exp{E} = $self->{gen}->generate(subject => "Re: Email A", extra_headers => $inreplyheader, date => $dt, body => "e");
+    $self->{store}->write_begin();
+    $self->{store}->write_message($exp{E}, flags => ["\\Draft"]);
+    $self->{store}->write_end();
+
+    xlog $self, "fetch emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+    ]);
+
+    # Map messages by body contents
+    my %m = map { $_->{bodyValues}{$_->{textBody}[0]{partId}}{value} => $_ } @{$res->[1][1]{list}};
+    my $msgA = $m{"a"};
+    my $msgB = $m{"b"};
+    my $msgC = $m{"c"};
+    my $msgD = $m{"d"};
+    my $msgE = $m{"e"};
+    $self->assert_not_null($msgA);
+    $self->assert_not_null($msgB);
+    $self->assert_not_null($msgC);
+    $self->assert_not_null($msgD);
+    $self->assert_not_null($msgE);
+
+    my %map = (
+        A => $msgA->{id},
+        B => $msgB->{id},
+        C => $msgC->{id},
+        D => $msgD->{id},
+        E => $msgE->{id},
+    );
+
+    # check thread ordering
+    $res = $jmap->CallMethods([
+        ['Thread/get', { 'ids' => [$threadid] }, 'R3'],
+    ]);
+    $self->assert_deep_equals([$map{A},$map{B},$map{E},$map{D},$map{C}],
+                              $res->[0][1]{list}[0]{emailIds});
+
+    # now deliver something late that's earlier than the draft
+
+    xlog $self, "generating email F (late arrival)";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -6));
+    $exp{F} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "f");
+
+    xlog $self, "fetch emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+    ]);
+
+    # Map messages by body contents
+    %m = map { $_->{bodyValues}{$_->{textBody}[0]{partId}}{value} => $_ } @{$res->[1][1]{list}};
+    my $msgF = $m{"f"};
+    $self->assert_not_null($msgF);
+
+    $map{F} = $msgF->{id};
+
+    # check thread ordering - this message should appear after F and before B
+    $res = $jmap->CallMethods([
+        ['Thread/get', { 'ids' => [$threadid] }, 'R3'],
+    ]);
+    $self->assert_deep_equals([$map{A},$map{F},$map{B},$map{E},$map{D},$map{C}],
+                              $res->[0][1]{list}[0]{emailIds});
+}

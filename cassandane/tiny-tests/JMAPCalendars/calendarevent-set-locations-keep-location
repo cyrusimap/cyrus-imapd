@@ -1,0 +1,98 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_locations_keep_location
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "PUT iCalendar event with apple location";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:6de280c9-edff-4019-8ebd-cfebc73f8201
+SUMMARY:test
+DTSTART;TZID=American/New_York:20210923T153000
+DURATION:PT1H
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+LOCATION:mainloc
+X-APPLE-STRUCTURED-LOCATION
+ ;VALUE=URI
+ ;X-APPLE-RADIUS=14140.1607181516
+ ;X-TITLE="mainloc"
+ :geo:48.208304,16.371602
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    xlog "Assert locations in CalendarEvent";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['locations', 'x-href']
+        }, 'R1'],
+    ]);
+
+    my $eventId = $res->[0][1]{list}[0]{id};
+    my $locations = $res->[0][1]{list}[0]{locations};
+    $self->assert_num_equals(1, scalar values %{$locations});
+    $self->assert_deep_equals({
+        '@type' => 'Location',
+        name => 'mainloc',
+        coordinates => 'geo:48.208304,16.371602',
+    }, (values %{$locations})[0]);
+    my $xhref = $res->[0][1]{list}[0]{'x-href'};
+    $self->assert_not_null($xhref);
+
+    xlog "Add location but preserve existing one";
+    $locations->{'newlocation'} = {
+        '@type' => 'Location',
+        name => 'newloc',
+        coordinates => 'geo:27.175015,78.042155',
+    };
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    locations => $locations,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    $res = $caldav->Request('GET', $xhref);
+
+    my $vcal = Data::ICal->new(data => $res->{content});
+    my %vcomps = map { $_->ical_entry_type() => $_ } @{$vcal->entries()};
+    my $vevent = $vcomps{'VEVENT'};
+
+    my $props = $vevent->property('X-APPLE-STRUCTURED-LOCATION');
+    $self->assert_num_equals(1, scalar @{$props});
+    $self->assert_not_null($props->[0]->parameters()->{'X-APPLE-RADIUS'});
+    $self->assert_str_equals('geo:48.208304,16.371602', $props->[0]->value());
+
+    $props = $vevent->property('LOCATION');
+    $self->assert_num_equals(1, scalar @{$props});
+    $self->assert_str_equals('mainloc', $props->[0]->value());
+
+    $props = $vevent->property('X-JMAP-LOCATION');
+    $self->assert_num_equals(1, scalar @{$props});
+    $self->assert_str_equals('newloc', $props->[0]->value());
+
+    xlog "Assert locations in CalendarEvent";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['locations', 'x-href']
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals($locations, $res->[0][1]{list}[0]{locations});
+}

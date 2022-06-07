@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_state
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create with invalid state token";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    ifInState => "badstate",
+                    create => { "1" => { name => "foo" }}
+                }, "R1"]
+        ]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
+
+    xlog $self, "create with wrong state token";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    ifInState => "987654321",
+                    create => { "1" => { name => "foo" }}
+                }, "R1"]
+        ]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
+
+    xlog $self, "create calendar";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', { create => { "1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+
+    my $id = $res->[0][1]{created}{"1"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog $self, "update calendar $id with current state";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    ifInState => $state,
+                    update => {"$id" => {name => "bar"}}
+            }, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+
+    my $oldState = $state;
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "setCalendar noops must keep state";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {}, "R1"],
+            ['Calendar/set', {}, "R2"],
+            ['Calendar/set', {}, "R3"]
+    ]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+
+    xlog $self, "update calendar $id with expired state";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    ifInState => $oldState,
+                    update => {"$id" => {name => "baz"}}
+            }, "R1"]
+    ]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals("stateMismatch", $res->[0][1]{type});
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    xlog $self, "get calendar $id to make sure state didn't change";
+    $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]{state});
+    $self->assert_str_equals('bar', $res->[0][1]{list}[0]{name});
+
+    xlog $self, "destroy calendar $id with expired state";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    ifInState => $oldState,
+                    destroy => [$id]
+            }, "R1"]
+    ]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals("stateMismatch", $res->[0][1]{type});
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    xlog $self, "destroy calendar $id with current state";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    ifInState => $state,
+                    destroy => [$id]
+            }, "R1"]
+    ]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+}

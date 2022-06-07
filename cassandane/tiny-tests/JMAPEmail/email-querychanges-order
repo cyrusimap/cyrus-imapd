@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_querychanges_order
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "Generate a email in INBOX via IMAP";
+    $self->make_message("A") || die;
+
+    # First order descending by subject. We expect Email/queryChanges
+    # to return any items added after 'state' to show up at the start of
+    # the result list.
+    my $sort = [{ property => "subject", isAscending => JSON::false }];
+
+    xlog $self, "Get email id and state";
+    $res = $jmap->CallMethods([['Email/query', { sort => $sort }, "R1"]]);
+    my $ida = $res->[0][1]->{ids}[0];
+    $self->assert_not_null($ida);
+    $state = $res->[0][1]->{queryState};
+
+    xlog $self, "Generate a email in INBOX via IMAP";
+    $self->make_message("B") || die;
+
+    xlog $self, "Fetch updated list";
+    $res = $jmap->CallMethods([['Email/query', { sort => $sort }, "R1"]]);
+    my $idb = $res->[0][1]->{ids}[0];
+    $self->assert_str_not_equals($ida, $idb);
+
+    xlog $self, "get email list updates";
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, sort => $sort }, "R1"]]);
+    $self->assert_equals($idb, $res->[0][1]{added}[0]{id});
+    $self->assert_num_equals(0, $res->[0][1]{added}[0]{index});
+
+    # Now restart with sorting by ascending subject. We refetch the state
+    # just to be sure. Then we expect an additional item to show up at the
+    # end of the result list.
+    xlog $self, "Fetch reverse sorted list and state";
+    $sort = [{ property => "subject" }];
+    $res = $jmap->CallMethods([['Email/query', { sort => $sort }, "R1"]]);
+    $ida = $res->[0][1]->{ids}[0];
+    $self->assert_str_not_equals($ida, $idb);
+    $idb = $res->[0][1]->{ids}[1];
+    $state = $res->[0][1]->{queryState};
+
+    xlog $self, "Generate a email in INBOX via IMAP";
+    $self->make_message("C") || die;
+
+    xlog $self, "get email list updates";
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, sort => $sort }, "R1"]]);
+    $self->assert_str_not_equals($ida, $res->[0][1]{added}[0]{id});
+    $self->assert_str_not_equals($idb, $res->[0][1]{added}[0]{id});
+    $self->assert_num_equals(2, $res->[0][1]{added}[0]{index});
+}

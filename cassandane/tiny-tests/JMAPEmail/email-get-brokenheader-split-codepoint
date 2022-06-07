@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_brokenheader_split_codepoint
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $email = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: =?UTF-8?Q?=F0=9F=98=80=F0=9F=98=83=F0=9F=98=84=F0=9F=98=81=F0=9F=98=86=F0?=
+ =?UTF-8?Q?=9F=98=85=F0=9F=98=82=F0=9F=A4=A3=E2=98=BA=EF=B8=8F=F0=9F=98=8A?=
+  =?UTF-8?Q?=F0=9F=98=87?=
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: foobar
+
+This is a test email.
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
+    my $blobid = $data->{blobId};
+    my $inboxid = $self->getinbox()->{id};
+
+    my $wantSubject = '😀😃😄😁😆😅😂🤣☺️😊😇';
+    utf8::decode($wantSubject);
+
+    xlog $self, "import and get email from blob $blobid";
+    my $res = $jmap->CallMethods([['Email/import', {
+        emails => {
+            "1" => {
+                blobId => $blobid,
+                mailboxIds => {$inboxid =>  JSON::true},
+            },
+        },
+    }, "R1"], ["Email/get", {
+        ids => ["#1"],
+        properties => ['subject'],
+    }, "R2" ]]);
+
+    $self->assert_str_equals($wantSubject, $res->[1][1]{list}[0]{subject});
+}

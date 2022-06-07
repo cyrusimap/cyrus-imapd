@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_refobjects_extended
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "Generate a email in INBOX via IMAP";
+    foreach my $i (1..10) {
+        $self->make_message("Email$i") || die;
+    }
+
+    xlog $self, "get email properties using reference";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{ property => 'receivedAt', isAscending => JSON::false }],
+            collapseThreads => JSON::true,
+            position => 0,
+            limit => 10,
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+            properties => [ 'threadId' ],
+        }, 'R2'],
+        ['Thread/get', {
+            '#ids' => {
+                resultOf => 'R2',
+                name => 'Email/get',
+                path => '/list/*/threadId',
+            },
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(10, scalar @{$res->[2][1]{list}});
+}

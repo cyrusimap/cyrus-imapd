@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarprincipal_query
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("manifold");
+    # Trigger creation of default calendar
+    my $http = $self->{instance}->get_service("http");
+    Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    $admintalk->setacl("user.manifold", "cassandane", "lr") or die;
+    $admintalk->setacl("user.manifold.#calendars", "cassandane", "lr") or die;
+    $admintalk->setacl("user.manifold.#calendars.Default", "cassandane" => 'lr') or die;
+
+    xlog "test filters";
+    my $res = $jmap->CallMethods([
+        ['Principal/query', {
+            filter => {
+                name => 'Test',
+                email => 'cassandane@example.com',
+                text => 'User',
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals(['cassandane'], $res->[0][1]{ids});
+
+    xlog "test sorting";
+    $res = $jmap->CallMethods([
+        ['Principal/query', {
+            sort => [{
+                property => 'id',
+            }],
+        }, 'R1'],
+        ['Principal/query', {
+            sort => [{
+                property => 'id',
+                isAscending => JSON::false,
+            }],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals(['cassandane', 'manifold'], $res->[0][1]{ids});
+    $self->assert_deep_equals(['manifold', 'cassandane'], $res->[1][1]{ids});
+}

@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_utcstart_customtz
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    # Set custom calendar timezone. DST starts on December 1 at 2am.
+    my $CalendarId = $CalDAV->NewCalendar({name => 'mycalendar'});
+    $self->assert_not_null($CalendarId);
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:calendar-timezone>
+BEGIN:VCALENDAR
+PRODID:-//Example Corp.//CalDAV Client//EN
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Test
+LAST-MODIFIED:19870101T000000Z
+BEGIN:STANDARD
+DTSTART:19670601T020000
+RRULE:FREQ=YEARLY;BYMONTHDAY=1;BYMONTH=6
+TZOFFSETFROM:-0700
+TZOFFSETTO:-0800
+TZNAME:TST
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19871201T020000
+RRULE:FREQ=YEARLY;BYMONTHDAY=1;BYMONTH=12
+TZOFFSETFROM:-0800
+TZOFFSETTO:-0700
+TZNAME:TST
+END:DAYLIGHT
+END:VTIMEZONE
+END:VCALENDAR
+</C:calendar-timezone>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/Default",
+                       $proppatchXml, 'Content-Type' => 'text/xml');
+
+    # Create floating time event.
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2019-11-30T23:30:00",
+                    duration => "PT6H",
+                    timeZone => undef,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#1'],
+            properties => ['utcStart', 'utcEnd', 'timeZone'],
+        }, 'R2']
+    ]);
+    my $eventId1 = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId1);
+    my $event = $res->[1][1]{list}[0];
+    $self->assert_not_null($event);
+
+    # Floating event time falls back to custom calendar time zone.
+    $self->assert_str_equals('2019-12-01T07:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-01T12:30:00Z', $event->{utcEnd});
+
+    # Assert event updates.
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId1 => {
+                    utcStart => "2019-12-01T06:30:00Z",
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId1],
+            properties => ['start', 'utcStart', 'utcEnd', 'timeZone', 'duration'],
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId1});
+
+    $event = $res->[1][1]{list}[0];
+    $self->assert_str_equals('2019-11-30T22:30:00', $event->{start});
+    $self->assert_str_equals('2019-12-01T06:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-01T11:30:00Z', $event->{utcEnd});
+    $self->assert_null($event->{timeZone});
+    $self->assert_str_equals('PT6H', $event->{duration});
+}

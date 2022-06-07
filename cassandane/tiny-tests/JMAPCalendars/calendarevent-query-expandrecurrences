@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_query_expandrecurrences
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    xlog $self, "create events";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    calendarIds => {
+                        $calid => JSON::true,
+                    },
+                    uid => 'event1uid',
+                    title => "event1",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2019-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRules => [{
+                        frequency => 'weekly',
+                        count => 3,
+                    }, {
+                        frequency => 'hourly',
+                        byHour => [9, 14, 22],
+                        count => 2,
+                    }],
+                    recurrenceOverrides => {
+                        '2019-01-08T09:00:00' => {
+                            start => '2019-01-08T12:00:00',
+                        },
+                        '2019-01-03T13:00:00' => {
+                            title => 'rdate',
+                        },
+                    },
+                },
+                "2" => {
+                    calendarIds => {
+                        $calid => JSON::true,
+                    },
+                    uid => 'event2uid',
+                    title => "event2",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2019-01-02T11:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                },
+            }
+        }, 'R1']
+    ]);
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            filter => {
+                before => '2019-02-01T00:00:00',
+            },
+            sort => [{
+                property => 'start',
+                isAscending => JSON::false,
+            }],
+            expandRecurrences => JSON::true,
+        }, 'R1']
+    ]);
+    $self->assert_num_equals(6, $res->[0][1]{total});
+    $self->assert_deep_equals([
+           encode_eventid('event1uid','20190115T090000'),
+           encode_eventid('event1uid','20190108T090000'),
+           encode_eventid('event1uid','20190103T130000'),
+           encode_eventid('event2uid'),
+           encode_eventid('event1uid','20190101T140000'),
+           encode_eventid('event1uid','20190101T090000'),
+    ], $res->[0][1]{ids});
+}

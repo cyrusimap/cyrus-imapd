@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_bcc
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $account = undef;
+    my $store = $self->{store};
+    my $mboxprefix = "INBOX";
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { accountId => $account }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create email1";
+    my $bcc1  = Cassandane::Address->new(localpart => 'needle', domain => 'local');
+    my $msg1 = $self->make_message('msg1', bcc => $bcc1);
+
+    my $bcc2  = Cassandane::Address->new(localpart => 'beetle', domain => 'local');
+    my $msg2 = $self->make_message('msg2', bcc => $bcc2);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "fetch emails without filter";
+    $res = $jmap->CallMethods([
+        ['Email/query', { accountId => $account }, 'R1'],
+        ['Email/get', {
+            accountId => $account,
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' }
+        }, 'R2'],
+    ]);
+
+    my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+    my $emailId1 = $m{"msg1"}->{id};
+    my $emailId2 = $m{"msg2"}->{id};
+    $self->assert_not_null($emailId1);
+    $self->assert_not_null($emailId2);
+
+    xlog $self, "filter text";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            text => "needle",
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
+
+    xlog $self, "filter NOT text";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            operator => "NOT",
+            conditions => [ {text => "needle"} ],
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[0]);
+
+    xlog $self, "filter bcc";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            bcc => "needle",
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
+
+    xlog $self, "filter NOT bcc";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            operator => "NOT",
+            conditions => [ {bcc => "needle"} ],
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[0]);
+}

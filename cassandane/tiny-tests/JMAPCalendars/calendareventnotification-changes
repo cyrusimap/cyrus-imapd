@@ -1,0 +1,138 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_changes
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    # Need to share calendar, otherwise no notification is created
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayWriteOwn => JSON::true,
+                            mayAdmin => JSON::false
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/get', {
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{list});
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/changes', {
+            sinceState => $state,
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    xlog "create notification that cassandane will see";
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DURATION:PT1H
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:
+SUMMARY:testitip
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/testitip.ics',
+        $ical, 'Content-Type' => 'text/calendar',
+               'Schedule-Sender-Address' => 'itipsender@local',
+               'Schedule-Sender-Name' => 'iTIP Sender',
+    );
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/changes', {
+            sinceState => $state,
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    my $notifId = $res->[0][1]{created}[0];
+    my $oldState = $state;
+    $state = $res->[0][1]{newState};
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/set', {
+            destroy => [$notifId],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/changes', {
+            sinceState => $state,
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+}

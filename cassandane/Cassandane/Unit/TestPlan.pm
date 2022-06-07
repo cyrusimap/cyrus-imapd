@@ -72,24 +72,44 @@ sub _is_allowed
     # Rules are:
     # deny if method has been explicitly denied
     return 0 if $self->{denied}->{$name};
+
+    # deny if test name matches any denied pattern
+    $name =~ $_ && return 0 for @{ $self->{denied_patterns} // [] };
+
     # allow if method has been explicitly allowed
     return 1 if $self->{allowed}->{$name};
+
+    # allow if test name matches any allowed patterns
+    my @allow_patterns = @{ $self->{allowed_patterns} // []};
+    $name =~ $_ && return 1 for @allow_patterns;
+
     # deny if anything is explicitly allowed
-    return 0 if scalar keys %{$self->{allowed}};
+    return 0 if %{$self->{allowed}} || @allow_patterns;
+
     # finally, allow
     return 1;
 }
 
 sub _deny
 {
-    my ($self, $name) = @_;
-    $self->{denied}->{$name} = 1;
+    my ($self, $test) = @_;
+    if (ref $test) {
+        push @{ $self->{denied_patterns} }, $test;
+    } else {
+        $self->{denied}->{$test} = 1;
+    }
+    return;
 }
 
 sub _allow
 {
-    my ($self, $name) = @_;
-    $self->{allowed}->{$name} = 1;
+    my ($self, $test) = @_;
+    if (ref $test) {
+        push @{ $self->{allowed_patterns} }, $test;
+    } else {
+        $self->{allowed}->{$test} = 1;
+    }
+    return;
 }
 
 package Cassandane::Unit::Worker;
@@ -569,8 +589,16 @@ sub _parse_test_spec
             my $test;
             ($fpath, $test) = ($fpath =~ m/^(.*)\/([^\/]+)$/);
             next unless defined $test;
-            return ($neg, 'f', "$fpath.pm", $test)
-                if ( -f "$fpath.pm" );
+
+            if ( -f "$fpath.pm" ) {
+                if ($test =~ /\*/) {
+                    my @hunks = split /\*+/, $test, -1;
+                    my $regex = join q{.*}, map {; quotemeta } @hunks;
+                    return ($neg, 'f', "$fpath.pm", qr{\A$regex\z});
+                } else {
+                    return ($neg, 'f', "$fpath.pm", $test)
+                }
+            }
         }
     }
 
@@ -622,7 +650,7 @@ sub schedule
         my ($neg, $type, $path, $test) = _parse_test_spec($name);
 
         # slow test explicitly requested by name, so turn off the filter
-        if (defined $test and $test =~ m/_slow$/ and not $neg) {
+        if (defined $test and ! ref $test and $test =~ m/_slow$/ and ! $neg) {
             xlog "$name was explicitly requested. Enabling slow tests!";
             $self->{skip_slow} = 0;
         }

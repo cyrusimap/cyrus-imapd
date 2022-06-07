@@ -1,0 +1,198 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_changes
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "create calendars A and B";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => {
+                        "1" => {
+                            name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
+                        },
+                        "2" => {
+                            name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
+                        }
+             }}, "R1"]
+    ]);
+    my $calidA = $res->[0][1]{created}{"1"}{id};
+    my $calidB = $res->[0][1]{created}{"2"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog $self, "create event #1 in calendar $calidA and event #2 in calendar $calidB";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            calendarIds => {
+                                $calidA => JSON::true,
+                            },
+                            "title" => "1",
+                            "description" => "",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                        },
+                        "2" => {
+                            calendarIds => {
+                                $calidB => JSON::true,
+                            },
+                            "title" => "2",
+                            "description" => "",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                        }
+                    }}, "R1"]]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+
+    xlog $self, "get calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "get zero calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {sinceState => $state}, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "update event #1 and #2";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
+                        $id1 => {
+                            calendarIds => {
+                                $calidA => JSON::true,
+                            },
+                            "title" => "1(updated)",
+                        },
+                        $id2 => {
+                            calendarIds => {
+                                $calidB => JSON::true,
+                            },
+                            "title" => "2(updated)",
+                        }
+                    }}, "R1"]]);
+    $self->assert_num_equals(2, scalar keys %{$res->[0][1]{updated}});
+
+    xlog $self, "get exactly one update";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+                    sinceState => $state,
+                    maxChanges => 1
+                }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]{hasMoreChanges});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "get the final update";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "update event #1 and destroy #2";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    update => {
+                        $id1 => {
+                            calendarIds => {
+                                $calidA => JSON::true,
+                            },
+                            "title" => "1(updated)",
+                            "description" => "",
+                        },
+                    },
+                    destroy => [ $id2 ]
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+
+    xlog $self, "get calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($id1, $res->[0][1]{updated}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id2, $res->[0][1]{destroyed}[0]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "get zero calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {sinceState => $state}, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "move event #1 from calendar $calidA to $calidB";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    update => {
+                        $id1 => {
+                            calendarIds => {
+                                $calidB => JSON::true,
+                            },
+                        },
+                    }
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
+
+    xlog $self, "get calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($id1, $res->[0][1]{updated}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "update and remove event #1";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    update => {
+                        $id1 => {
+                            calendarIds => {
+                                $calidB => JSON::true,
+                            },
+                            "title" => "1(goodbye)",
+                        },
+                    },
+                    destroy => [ $id1 ]
+                }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+
+    xlog $self, "get calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $state = $res->[0][1]{newState};
+}

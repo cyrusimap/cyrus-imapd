@@ -1,0 +1,90 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_create_ignore_uid_in_special_calendar
+    :min_version_3_7 :needs_component_jmap :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :deletecanceled :outcome "outcome";
+}
+EOF
+    );
+
+    my $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sally Sender <sender@example.net>
+To: Cassandane <cassandane@example.com>
+Message-ID: <7e017102-0caf-490a-bbdf-422141d34e75@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:7e017102-0caf-490a-bbdf-422141d34e75
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP invite";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    xlog "Lookup event uid";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id', 'uid'],
+        }, 'R0'],
+    ]);
+    my $eventId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($eventId);
+    my $eventUid = $res->[0][1]{list}[0]{uid};
+    $self->assert_not_null($eventUid);
+
+    xlog "Destroy event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            destroy => [$eventId],
+        }, 'R0'],
+    ]);
+    $self->assert_deep_equals([$eventId], $res->[0][1]{destroyed});
+
+    xlog "Create event having the same uid";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => $eventUid,
+                    title => 'test',
+                    start => '2021-01-01T01:01:01',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{event});
+}

@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_relatedto
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "uid" => "58ADE31-custom-UID",
+        "relatedTo" => {
+            "uid1" => { relation => {
+                'first' => JSON::true,
+            }},
+            "uid2" => { relation => {
+                'parent' => JSON::true,
+            }},
+            "uid3" => { relation => {
+                'x-unknown1' => JSON::true,
+                'x-unknown2' => JSON::true
+            }},
+            "uid4" => { relation => {} },
+        },
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "showWithoutTime"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "participants" => undef,
+        "alerts"=> undef,
+    };
+
+    my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($event, $ret);
+    $self->assert_num_equals(42, $event->{sequence});
+}

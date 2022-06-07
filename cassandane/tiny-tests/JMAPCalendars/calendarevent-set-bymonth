@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_bymonth
+    :min_version_3_1 :needs_component_jmap
+{
+        my ($self) = @_;
+
+        my $jmap = $self->{jmap};
+        my $calid = "Default";
+
+        my $event =  {
+                calendarIds => {
+                    $calid => JSON::true,
+                },
+                "start"=> "2010-02-12T00:00:00",
+                "recurrenceRules"=> [{
+                        "frequency"=> "monthly",
+                        "interval"=> 13,
+                        "byMonth"=> [
+                                "4L"
+                        ],
+                        "count"=> 3,
+                }],
+                "\@type"=> "Event",
+                "title"=> "",
+                "description"=> "",
+                "locations"=> undef,
+                "links"=> undef,
+                "showWithoutTime"=> JSON::false,
+                "duration"=> "PT0S",
+                "timeZone"=> undef,
+                "recurrenceOverrides"=> undef,
+                "status"=> "confirmed",
+                "freeBusyStatus"=> "busy",
+                "replyTo"=> undef,
+                "participants"=> undef,
+                "useDefaultAlerts"=> JSON::false,
+                "alerts"=> undef
+        };
+
+        my $ret = $self->createandget_event($event);
+        $self->assert_normalized_event_equals($event, $ret);
+}

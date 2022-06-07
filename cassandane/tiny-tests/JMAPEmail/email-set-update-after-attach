@@ -1,0 +1,99 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_update_after_attach
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $store = $self->{store};
+
+    my $talk = $self->{store}->get_client();
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/debug',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    $talk->create('INBOX.A') or die;
+    $talk->create('INBOX.B') or die;
+    $talk->create('INBOX.C') or die;
+
+    # Get mailboxes
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]], $using);
+    $self->assert_not_null($res);
+    my %mboxIdByName = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    # Create email in mailbox A
+    $store->set_folder('INBOX.A');
+    $self->make_message('Email1') || die;
+
+    $res = $jmap->CallMethods([['Email/query', {
+    }, 'R1']], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    my $emailId = $res->[0][1]->{ids}[0];
+    $self->assert_not_null($emailId);
+
+    $res = $jmap->CallMethods([['Email/get', { ids => [ $emailId ],
+    }, 'R1']], $using);
+    my $blobId = $res->[0][1]->{list}[0]{blobId};
+    $self->assert_not_null($blobId);
+
+    $res = $jmap->CallMethods([['Email/set', {
+        create => {
+            'k1' => {
+                mailboxIds => {
+                    $mboxIdByName{'B'} => JSON::true,
+                },
+                from => [{ name => "Test", email => q{test@local} }],
+                subject => "test",
+                bodyStructure => {
+                    type => "multipart/mixed",
+                    subParts => [{
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },{
+                        type => 'message/rfc822',
+                        blobId => $blobId,
+                    }],
+                },
+                bodyValues => {
+                    part1 => {
+                        value => 'world',
+                    }
+                },
+            },
+        },
+    }, 'R1']], $using);
+    my $newEmailId = $res->[0][1]{created}{k1}{id};
+    $self->assert_not_null($newEmailId);
+
+    # now move the new email into folder C
+    $res = $jmap->CallMethods([['Email/set', {
+        update => {
+            $emailId => {
+                # set to exact so it picks up the copy in B if we're being buggy
+                mailboxIds => { $mboxIdByName{'C'} => JSON::true },
+            },
+        },
+    }, 'R1']], $using);
+    $self->assert_not_null($res);
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
+    $self->assert_null($res->[0][1]{notUpdated});
+
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => [$emailId, $newEmailId],
+        properties => ['mailboxIds'],
+    }, "R1"]], $using);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{notFound}});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
+    my %emailById = map { $_->{id} => $_ } @{$res->[0][1]{list}};
+
+    # now we need to test for actual location
+    $self->assert_deep_equals({$mboxIdByName{'C'} => JSON::true},
+                              $emailById{$emailId}->{mailboxIds});
+    $self->assert_deep_equals({$mboxIdByName{'B'} => JSON::true},
+                              $emailById{$newEmailId}->{mailboxIds});
+}

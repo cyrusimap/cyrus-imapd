@@ -1,0 +1,156 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_defaultalerts_synctoken_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Create other user and share calendar";
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.cassandane.#calendars.Default", "other", "lrsiwntex") or die;
+    my $service = $self->{instance}->get_service("http");
+    my $otherJMAP = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
+    xlog "Set default alerts on calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => {
+                        alert1 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT5M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Create events without default alerts";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    alerts => {
+                        alert1 => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                offset => "-PT10M",
+                            },
+                         },
+                    },
+                },
+                2 => {
+                    uid => 'eventuid2local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event2",
+                    start => "2020-01-21T13:00:00",
+                    duration => "PT1H",
+                    timeZone => "Europe/Vienna",
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $event1Uid = $res->[0][1]{created}{1}{uid};
+    $self->assert_not_null($event1Uid);
+    my $event2Uid = $res->[0][1]{created}{2}{uid};
+    $self->assert_not_null($event2Uid);
+    my $event2Id = $res->[0][1]{created}{2}{id};
+    $self->assert_not_null($event2Id);
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ];
+
+    xlog "Set useDefaultAlerts to force per-user data split";
+    $res = $otherJMAP->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $event2Id => {
+                    color => 'green',
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]{updated}{$event2Id});
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $event2Id => {
+                    color => 'blue',
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]{updated}{$event2Id});
+
+    xlog "Fetch sync token";
+    my $Cal = $CalDAV->GetCalendar('Default');
+    my $syncToken = $Cal->{syncToken};
+    $self->assert_not_null($syncToken);
+
+    xlog "Update default alerts on calendar";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => {
+                        alert2 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT15M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Sync CalDAV changes";
+    my ($adds, $removes, $errors) = $CalDAV->SyncEvents('Default', syncToken => $syncToken);
+
+    $self->assert_num_equals(1, scalar @{$adds});
+    $self->assert_str_equals($adds->[0]{uid}, $event2Uid);
+    $self->assert_deep_equals($removes, []);
+    $self->assert_deep_equals($errors, []);
+}

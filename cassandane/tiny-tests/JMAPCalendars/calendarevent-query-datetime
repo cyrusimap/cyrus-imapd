@@ -1,0 +1,114 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_query_datetime
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    xlog $self, "create events";
+    my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        # Start: 2016-01-01T08:00:00Z End: 2016-01-01T09:00:00Z
+                        "1" => {
+                            calendarIds => {
+                                $calid => JSON::true,
+                            },
+                            "title" => "1",
+                            "description" => "",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::false,
+                            "start" => "2016-01-01T09:00:00",
+                            "timeZone" => "Europe/Vienna",
+                            "duration" => "PT1H",
+                        },
+                    }}, "R1"]]);
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    # Exact start and end match
+    $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T08:00:00",
+                        "before" => "2016-01-01T09:00:00",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+
+    # Check that boundaries are exclusive
+    $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T09:00:00",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(0, $res->[0][1]{total});
+    $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    "filter" => {
+                        "before" =>  "2016-01-01T08:00:00",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(0, $res->[0][1]{total});
+
+    # Embedded subrange matches
+    $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T08:15:00",
+                        "before" => "2016-01-01T08:45:00",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+
+    # Overlapping subrange matches
+    $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T08:15:00",
+                        "before" => "2016-01-01T09:15:00",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T07:45:00",
+                        "before" => "2016-01-01T08:15:00",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+
+    # Create an infinite recurring datetime event
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        # Start: 2017-01-01T08:00:00Z End: eternity
+                        "1" => {
+                            calendarIds => {
+                                $calid => JSON::true,
+                            },
+                            "title" => "e",
+                            "description" => "",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::false,
+                            "start" => "2017-01-01T09:00:00",
+                            "timeZone" => "Europe/Vienna",
+                            "duration" => "PT1H",
+                            "recurrenceRules" => [{
+                                "frequency" => "yearly",
+                            }],
+                        },
+                    }}, "R1"]]);
+    # Assert both events are found
+    $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    "filter" => {
+                        "after" =>  "2016-01-01T00:00:00",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    # Search close to eternity
+    $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    "filter" => {
+                        "after" =>  "2038-01-01T00:00:00",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+}

@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my ($id, $ical) = $self->icalfile('recurrenceoverrides-mixed-datetypes');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my $wantOverrides = {
+        "2018-05-01T00:00:00" => {
+            start    => "2018-05-02T17:00:00",
+            timeZone => "Europe/Vienna",
+            duration => "PT1H",
+            showWithoutTime => JSON::false,
+        }
+    };
+
+    # Validate main event.
+    $self->assert_str_equals('2016-01-01T00:00:00', $event->{start});
+    $self->assert_equals(JSON::true, $event->{showWithoutTime});
+    $self->assert_null($event->{timeZone});
+    $self->assert_str_equals('P1D', $event->{duration});
+    # Validate overrides.
+    $self->assert_deep_equals($wantOverrides, $event->{recurrenceOverrides});
+    my $eventId = $event->{id};
+
+    # Add recurrenceOverrides with showWithoutTime=true
+    # and showWithoutTime=false.
+    $self->assert_not_null($eventId);
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    "recurrenceOverrides/2019-09-01T00:00:00" => {
+                        start => "2019-09-02T00:00:00",
+                        duration => 'P2D',
+                    },
+                    "recurrenceOverrides/2019-10-01T00:00:00" => {
+                        start => "2019-10-02T15:00:00",
+                        timeZone => "Europe/London",
+                        duration => "PT2H",
+                        showWithoutTime => JSON::false,
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', { ids => [$eventId] }, 'R2'],
+    ]);
+
+    $wantOverrides->{'2019-09-01T00:00:00'} = {
+        start => "2019-09-02T00:00:00",
+        duration => 'P2D',
+    };
+    $wantOverrides->{'2019-10-01T00:00:00'} = {
+        start => "2019-10-02T15:00:00",
+        timeZone => "Europe/London",
+        duration => "PT2H",
+        showWithoutTime => JSON::false,
+    };
+    $event = $res->[1][1]{list}[0];
+    $self->assert_deep_equals($wantOverrides, $event->{recurrenceOverrides});
+}

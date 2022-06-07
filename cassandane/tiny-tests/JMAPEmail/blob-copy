@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_blob_copy
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # FIXME how to share just #jmap folder?
+    xlog $self, "create user foo and share inbox";
+    $self->{instance}->create_user("foo");
+    $admintalk->setacl("user.foo", "cassandane", "lrkintex") or die;
+
+    xlog $self, "upload blob in main account";
+    my $data = $jmap->Upload('somedata', "text/plain");
+    $self->assert_not_null($data);
+
+    xlog $self, "attempt to download from shared account (should fail)";
+    my $res = $self->download('foo', $data->{blobId});
+    $self->assert_str_equals('404', $res->{status});
+
+    xlog $self, "copy blob to shared account";
+    $res = $jmap->CallMethods([['Blob/copy', {
+        fromAccountId => 'cassandane',
+        accountId => 'foo',
+        blobIds => [ $data->{blobId} ],
+    }, 'R1']]);
+
+    xlog $self, "download from shared account";
+    $res = $self->download('foo', $data->{blobId});
+    $self->assert_str_equals('200', $res->{status});
+
+    xlog $self, "generate an email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+
+    xlog $self, "get email blob id";
+    $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'blobId' ],
+        }, 'R2']
+    ]);
+    my $msgblobId = $res->[1][1]->{list}[0]{blobId};
+
+    xlog $self, "copy Email blob to shared account";
+    $res = $jmap->CallMethods([['Blob/copy', {
+        fromAccountId => 'cassandane',
+        accountId => 'foo',
+        blobIds => [ $msgblobId ],
+    }, 'R1']]);
+
+    xlog $self, "download Email blob from shared account";
+    $res = $self->download('foo', $msgblobId);
+    $self->assert_str_equals('200', $res->{status});
+}

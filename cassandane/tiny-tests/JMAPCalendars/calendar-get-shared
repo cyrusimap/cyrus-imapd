@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_get_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared account";
+    $admintalk->create("user.manifold");
+
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    xlog $self, "create calendar";
+    my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog $self, "share to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lr') or die;
+
+    xlog $self, "get calendar";
+    my $res = $jmap->CallMethods([['Calendar/get', {accountId => 'manifold'}, "R1"]]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    $self->assert_str_equals("Manifold Calendar", $res->[0][1]{list}[0]->{name});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]->{myRights}{mayWriteAll});
+    my $id = $res->[0][1]{list}[0]->{id};
+
+    xlog $self, "refetch calendar";
+    $res = $jmap->CallMethods([['Calendar/get', {accountId => 'manifold', ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]->{id});
+
+    xlog $self, "create another shared calendar";
+    my $CalendarId2 = $mantalk->NewCalendar({name => 'Manifold Calendar 2'});
+    $self->assert_not_null($CalendarId2);
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lr') or die;
+
+    xlog $self, "remove access rights to calendar";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => '') or die;
+
+    xlog $self, "refetch calendar (should fail)";
+    $res = $jmap->CallMethods([['Calendar/get', {accountId => 'manifold', ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
+
+    xlog $self, "remove access rights to all shared calendars";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => '') or die;
+
+    xlog $self, "refetch calendar (should fail)";
+    $res = $jmap->CallMethods([['Calendar/get', {accountId => 'manifold', ids => [$id]}, "R1"]]);
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("accountNotFound", $res->[0][1]{type});
+}

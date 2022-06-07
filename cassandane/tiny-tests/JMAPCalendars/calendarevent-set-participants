@@ -1,0 +1,142 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_participants
+    :min_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "showWithoutTime"=> JSON::false,
+        "freeBusyStatus"=> "busy",
+        "status" => "confirmed",
+        "replyTo" => {
+            "imip" => "mailto:foo\@local",
+            "web" => "http://local/rsvp",
+
+        },
+        "participants" => {
+            'foo' => {
+                name => 'Foo',
+                kind => 'individual',
+                roles => {
+                    'owner' => JSON::true,
+                    'attendee' => JSON::true,
+                    'chair' => JSON::true,
+                },
+                locationId => 'loc1',
+                participationStatus => 'accepted',
+                expectReply => JSON::false,
+                links => {
+                    link1 => {
+                        href => 'https://somelink.local',
+                        rel => "enclosure",
+                    },
+                },
+                participationComment => 'Sure; see you "soon"!',
+                sendTo => {
+                    imip => 'mailto:foo@local',
+                },
+            },
+            'bar' => {
+                name => 'Bar',
+                kind => 'individual',
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                locationId => 'loc2',
+                participationStatus => 'needs-action',
+                expectReply => JSON::true,
+                delegatedTo => {
+                    'bam' => JSON::true,
+                },
+                memberOf => {
+                    'group' => JSON::true,
+                },
+                links => {
+                    link1 => {
+                        href => 'https://somelink.local',
+                        rel => "enclosure",
+                    },
+                },
+                email => 'bar2@local', # different email than sendTo
+                sendTo => {
+                    imip => 'mailto:bar@local',
+                },
+                invitedBy => 'foo',
+            },
+            'bam' => {
+                name => 'Bam',
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                delegatedFrom => {
+                    'bar' => JSON::true,
+                },
+                scheduleSequence => 7,
+                scheduleUpdated => '2018-07-06T05:03:02Z',
+                email => 'bam@local', # same email as sendTo
+                sendTo => {
+                    imip => 'mailto:bam@local',
+                },
+            },
+            'group' => {
+                name => 'Group',
+                kind => 'group',
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                email => 'group@local',
+                sendTo => {
+                    'imip' => 'mailto:groupimip@local',
+                    'other' => 'tel:+1-123-5555-1234',
+                },
+            },
+            'resource' => {
+                name => 'Some resource',
+                kind => 'resource',
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:resource@local',
+                },
+            },
+            'location' => {
+                name => 'Some location',
+                kind => 'location',
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                locationId => 'loc1',
+                sendTo => {
+                    imip => 'mailto:location@local',
+                },
+            },
+        },
+        locations => {
+            loc1 => {
+                name => 'location1',
+            },
+            loc2 => {
+                name => 'location2',
+            },
+        },
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{participants}{foo}{sendTo} = { imip => 'mailto:foo@local' };
+    delete $event->{method};
+    $self->assert_normalized_event_equals($event, $ret);
+}

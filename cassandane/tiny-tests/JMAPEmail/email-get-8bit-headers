@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_8bit_headers
+    :min_version_3_1 :needs_component_jmap :needs_dependency_chardet
+    :needs_component_sieve :NoMunge8Bit :RFC2047_UTF8
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    # Москва - столица России. - "Moscow is the capital of Russia."
+    my $wantSubject =
+        "\xd0\x9c\xd0\xbe\xd1\x81\xd0\xba\xd0\xb2\xd0\xb0\x20\x2d\x20\xd1".
+        "\x81\xd1\x82\xd0\xbe\xd0\xbb\xd0\xb8\xd1\x86\xd0\xb0\x20\xd0\xa0".
+        "\xd0\xbe\xd1\x81\xd1\x81\xd0\xb8\xd0\xb8\x2e";
+    utf8::decode($wantSubject) || die $@;
+
+    # Фёдор Михайлович Достоевский - "Fyódor Mikháylovich Dostoyévskiy"
+    my $wantName =
+        "\xd0\xa4\xd1\x91\xd0\xb4\xd0\xbe\xd1\x80\x20\xd0\x9c\xd0\xb8\xd1".
+        "\x85\xd0\xb0\xd0\xb9\xd0\xbb\xd0\xbe\xd0\xb2\xd0\xb8\xd1\x87\x20".
+        "\xd0\x94\xd0\xbe\xd1\x81\xd1\x82\xd0\xbe\xd0\xb5\xd0\xb2\xd1\x81".
+        "\xd0\xba\xd0\xb8\xd0\xb9";
+    utf8::decode($wantName) || die $@;
+
+    my $wantEmail = 'fyodor@local';
+
+    my @testCases = ({
+        file => 'data/mime/headers-utf8.bin',
+    }, {
+        file => 'data/mime/headers-koi8r.bin',
+    });
+
+    foreach (@testCases) {
+        open(my $F, $_->{file}) || die $!;
+        $imap->append('INBOX', $F) || die $@;
+        close($F);
+
+        my $res = $jmap->CallMethods([
+                ['Email/query', { }, "R1"],
+                ['Email/get', {
+                        '#ids' => {
+                            resultOf => 'R1',
+                            name => 'Email/query',
+                            path => '/ids'
+                        },
+                        properties => ['subject', 'from'],
+                    }, 'R2' ],
+                ['Email/set', {
+                        '#destroy' => {
+                            resultOf => 'R1',
+                            name => 'Email/query',
+                            path => '/ids'
+                        },
+                    }, 'R3' ],
+            ]);
+        my $email = $res->[1][1]{list}[0];
+        $self->assert_str_equals($wantSubject, $email->{subject});
+        $self->assert_str_equals($wantName, $email->{from}[0]{name});
+        $self->assert_str_equals($wantEmail, $email->{from}[0]{email});
+    }
+}

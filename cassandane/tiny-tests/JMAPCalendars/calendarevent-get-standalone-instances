@@ -1,0 +1,88 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_standalone_instances
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=America/New_York:20210101T060000
+DTSTART;TZID=Europe/Berlin:20210101T120000
+DURATION:PT1H
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:instance1
+SEQUENCE:0
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=America/New_York:20210301T060000
+DTSTART;TZID=America/New_York:20210301T080000
+DURATION:PT1H
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:instance2
+SEQUENCE:0
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => [
+                'recurrenceId',
+                'recurrenceIdTimeZone',
+                'start',
+                'timeZone',
+                'title',
+                'uid',
+            ],
+        }, 'R2'],
+    ]);
+
+    my %events = map { $_->{title} => $_ } @{$res->[1][1]{list}};
+    $self->assert_num_equals(2, scalar keys %events);
+    $self->assert_str_not_equals($events{instance1}{id}, $events{instance2}{id});
+
+    $self->assert_str_equals('2021-01-01T12:00:00',
+        $events{instance1}{start});
+    $self->assert_str_equals('Europe/Berlin',
+        $events{instance1}{timeZone});
+    $self->assert_str_equals('2021-01-01T06:00:00',
+        $events{instance1}{recurrenceId});
+    $self->assert_str_equals('America/New_York',
+        $events{instance1}{recurrenceIdTimeZone});
+    $self->assert_str_equals('2a358cee-6489-4f14-a57f-c104db4dc357',
+        $events{instance1}{uid});
+
+    $self->assert_str_equals('2021-03-01T08:00:00',
+        $events{instance2}{start});
+    $self->assert_str_equals('America/New_York',
+        $events{instance2}{timeZone});
+    $self->assert_str_equals('2021-03-01T06:00:00',
+        $events{instance2}{recurrenceId});
+    $self->assert_str_equals('America/New_York',
+        $events{instance2}{recurrenceIdTimeZone});
+    $self->assert_str_equals('2a358cee-6489-4f14-a57f-c104db4dc357',
+        $events{instance2}{uid});
+}

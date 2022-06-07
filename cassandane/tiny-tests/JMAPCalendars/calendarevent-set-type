@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_type
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "showWithoutTime"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "privacy" => "secret",
+        "participants" => undef,
+        "alerts"=> undef,
+    };
+
+    # Setting no type is OK, we'll just assume jsevent
+    my $res = $jmap->CallMethods([['CalendarEvent/set', {
+        create => {
+            "1" => $event,
+        }
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created}{"1"});
+
+    # Setting any type other jsevent type is NOT OK
+    $event->{q{@type}} = 'jstask';
+    $event->{uid} = '58ADE31-custom-UID-2';
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+        create => {
+            "1" => $event,
+        }
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{notCreated}{"1"});
+}

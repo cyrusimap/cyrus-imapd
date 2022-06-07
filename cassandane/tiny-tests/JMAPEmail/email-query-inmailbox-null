@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_inmailbox_null
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog $self, "generating email A";
+    $self->make_message("Email A") or die;
+
+    xlog $self, "call Email/query with null inMailbox";
+    my $res = $jmap->CallMethods([['Email/query', { filter => { inMailbox => undef } }, "R1"]]);
+    $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
+}

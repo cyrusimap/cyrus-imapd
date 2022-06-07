@@ -1,0 +1,104 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    my $body = "";
+    $body .= "Lorem ipsum dolor sit amet, consectetur adipiscing\r\n";
+    $body .= "elit. Nunc in fermentum nibh. Vivamus enim metus.";
+
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => -10));
+
+    xlog $self, "Generate a email in INBOX via IMAP";
+    my %exp_inbox;
+    my %params = (
+        date => $maildate,
+        from => Cassandane::Address->new(
+            name => "Sally Sender",
+            localpart => "sally",
+            domain => "local"
+        ),
+        to => Cassandane::Address->new(
+            name => "Tom To",
+            localpart => 'tom',
+            domain => 'local'
+        ),
+        cc => Cassandane::Address->new(
+            name => "Cindy CeeCee",
+            localpart => 'cindy',
+            domain => 'local'
+        ),
+        bcc => Cassandane::Address->new(
+            name => "Benny CarbonCopy",
+            localpart => 'benny',
+            domain => 'local'
+        ),
+        messageid => 'fake.123456789@local',
+        extra_headers => [
+            ['x-tra', "foo bar\r\n baz"],
+            ['sender', "Bla <blu\@local>"],
+        ],
+        body => $body
+    );
+    $self->make_message("Email A", %params) || die;
+
+    xlog $self, "get email list";
+    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+
+    my @props = $self->defaultprops_for_email_get();
+
+    push @props, "header:x-tra";
+
+    xlog $self, "get emails";
+    my $ids = $res->[0][1]->{ids};
+    $res = $jmap->CallMethods([['Email/get', { ids => $ids, properties => \@props }, "R1"]]);
+    my $msg = $res->[0][1]->{list}[0];
+
+    $self->assert_not_null($msg->{mailboxIds}{$inboxid});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_num_equals(0, scalar keys %{$msg->{keywords}});
+
+    $self->assert_str_equals('fake.123456789@local', $msg->{messageId}[0]);
+    $self->assert_str_equals(" foo bar\r\n baz", $msg->{'header:x-tra'});
+    $self->assert_deep_equals({
+            name => "Sally Sender",
+            email => "sally\@local"
+    }, $msg->{from}[0]);
+    $self->assert_deep_equals({
+            name => "Tom To",
+            email => "tom\@local"
+    }, $msg->{to}[0]);
+    $self->assert_num_equals(1, scalar @{$msg->{to}});
+    $self->assert_deep_equals({
+            name => "Cindy CeeCee",
+            email => "cindy\@local"
+    }, $msg->{cc}[0]);
+    $self->assert_num_equals(1, scalar @{$msg->{cc}});
+    $self->assert_deep_equals({
+            name => "Benny CarbonCopy",
+            email => "benny\@local"
+    }, $msg->{bcc}[0]);
+    $self->assert_num_equals(1, scalar @{$msg->{bcc}});
+    $self->assert_null($msg->{replyTo});
+    $self->assert_deep_equals([{
+            name => "Bla",
+            email => "blu\@local"
+    }], $msg->{sender});
+    $self->assert_str_equals("Email A", $msg->{subject});
+
+    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+    $self->assert_str_equals($datestr, $msg->{receivedAt});
+    $self->assert_not_null($msg->{size});
+}

@@ -1,0 +1,100 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_keywords
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create email";
+    $res = $self->make_message("foo") || die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "fetch emails without filter";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    my $fooid = $res->[0][1]->{ids}[0];
+
+    xlog $self, "fetch emails with \$seen flag";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            hasKeyword => '$seen',
+        }
+    }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+
+    xlog $self, "fetch emails without \$seen flag";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            notKeyword => '$seen',
+        }
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+
+    xlog $self, 'set $seen flag on email';
+    $res = $jmap->CallMethods([['Email/set', {
+        update => {
+            $fooid => {
+                keywords => { '$seen' => JSON::true },
+            },
+        }
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]->{updated}{$fooid});
+
+    xlog $self, "fetch emails with \$seen flag";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            hasKeyword => '$seen',
+        }
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+
+    xlog $self, "fetch emails without \$seen flag";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            notKeyword => '$seen',
+        }
+    }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+
+    xlog $self, "create email";
+    $res = $self->make_message("bar") || die;
+
+    xlog $self, "fetch emails without \$seen flag";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            notKeyword => '$seen',
+        }
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    my $barid = $res->[0][1]->{ids}[0];
+    $self->assert_str_not_equals($fooid, $barid);
+
+    xlog $self, "fetch emails sorted ascending by \$seen flag";
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [{ property => 'hasKeyword', keyword => '$seen' }],
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($barid, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($fooid, $res->[0][1]->{ids}[1]);
+
+    xlog $self, "fetch emails sorted descending by \$seen flag";
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [{ property => 'hasKeyword', keyword => '$seen', isAscending => JSON::false }],
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($fooid, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($barid, $res->[0][1]->{ids}[1]);
+}

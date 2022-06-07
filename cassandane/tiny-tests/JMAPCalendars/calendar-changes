@@ -1,0 +1,111 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_changes
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create calendar";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => {
+                        "1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+                        },
+                        "2" => {
+                            name => "bar",
+                            color => "aqua",
+                            sortOrder => 3,
+                            isVisible => \1
+                        }
+                    }}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog $self, "get calendar updates without changes";
+    $res = $jmap->CallMethods([['Calendar/changes', {
+                    "sinceState" => $state
+                }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_str_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals(0, scalar @{$res->[0][1]{destroyed}});
+
+    xlog $self, "update name of calendar $id1, destroy calendar $id2";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    ifInState => $state,
+                    update => {"$id1" => {name => "foo (upd)"}},
+                    destroy => [$id2]
+            }, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+
+    xlog $self, "get calendar updates";
+    $res = $jmap->CallMethods([['Calendar/changes', {
+                    "sinceState" => $state
+                }, "R1"]]);
+    $self->assert_str_equals("Calendar/changes", $res->[0][0]);
+    $self->assert_str_equals("R1", $res->[0][2]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($id1, $res->[0][1]{updated}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id2, $res->[0][1]{destroyed}[0]);
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "update color of calendar $id1";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', { update => { $id1 => { color => "aqua" }}}, "R1" ]
+        ]);
+    $self->assert(exists $res->[0][1]{updated}{$id1});
+
+    xlog $self, "get calendar updates";
+    $res = $jmap->CallMethods([['Calendar/changes', {
+                    "sinceState" => $state
+                }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($id1, $res->[0][1]{updated}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "update sortOrder of calendar $id1";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', { update => { $id1 => { sortOrder => 5 }}}, "R1" ]
+        ]);
+    $self->assert(exists $res->[0][1]{updated}{$id1});
+
+    xlog $self, "get calendar updates";
+    $res = $jmap->CallMethods([['Calendar/changes', {
+                    "sinceState" => $state,
+                }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($id1, $res->[0][1]{updated}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "get empty calendar updates";
+    $res = $jmap->CallMethods([['Calendar/changes', {
+                    "sinceState" => $state
+                }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+}

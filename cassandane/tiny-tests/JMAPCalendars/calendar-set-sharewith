@@ -1,0 +1,213 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_sharewith
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    # need to version-gate jmap features that aren't in 3.5...
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared account";
+    $admintalk->create("user.master");
+
+    my $mastalk = Net::CalDAVTalk->new(
+        user => "master",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl("user.master", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.master", master => 'lrswipkxtecdn');
+
+    xlog $self, "create calendar";
+    my $CalendarId = $mastalk->NewCalendar({name => 'Shared Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog $self, "share to user with permission to share";
+    $admintalk->setacl("user.master.#calendars.$CalendarId", "cassandane" => 'lrswipkxtecdan9') or die;
+
+    xlog $self, "create third account";
+    $admintalk->create("user.manifold");
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    xlog $self, "and a forth";
+    $admintalk->create("user.paraphrase");
+
+    $admintalk->setacl("user.paraphrase", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.paraphrase", paraphrase => 'lrswipkxtecdn');
+
+    # Call CalDAV once to create manifold's calendar home #calendars
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    # Call CalDAV once to create paraphrase's calendar home #calendars
+    my $partalk = Net::CalDAVTalk->new(
+        user => "paraphrase",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "sharee gives third user access to shared calendar";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'master',
+                    update => { "$CalendarId" => {
+                            "shareWith/manifold" => {
+                                mayReadFreeBusy => JSON::true,
+                                mayReadItems => JSON::true,
+                                mayUpdatePrivate => JSON::true,
+                            },
+                            "shareWith/paraphrase" => {
+                                mayReadFreeBusy => JSON::true,
+                                mayReadItems => JSON::true,
+                                mayWriteAll => JSON::true,
+                            },
+             }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Calendar/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog $self, "fetch invites";
+    my ($adds) = $mantalk->SyncEventLinks("/dav/notifications/user/manifold");
+    $self->assert_equals(1, scalar %$adds);
+    ($adds) = $partalk->SyncEventLinks("/dav/notifications/user/paraphrase");
+    $self->assert_equals(1, scalar %$adds);
+
+    xlog $self, "check ACL";
+    my $acl = $admintalk->getacl("user.master.#calendars.$CalendarId");
+    my %map = @$acl;
+    $self->assert_str_equals('lrswipkxtecdan9', $map{cassandane});
+    $self->assert_str_equals('lrw59', $map{manifold});
+    $self->assert_str_equals('lrswitedn79', $map{paraphrase});
+
+    xlog $self, "check Outbox ACL";
+    $acl = $admintalk->getacl("user.master.#calendars.Outbox");
+    %map = @$acl;
+    $self->assert_null($map{manifold});  # we don't create Outbox ACLs for read-only
+    $self->assert_str_equals('78', $map{paraphrase});
+
+    xlog $self, "check Principal ACL";
+    $acl = $admintalk->getacl("user.master.#calendars");
+    %map = @$acl;
+    # both users get ACLs on the Inbox
+    $self->assert_str_equals('lr', $map{manifold});
+    $self->assert_str_equals('lr', $map{paraphrase});
+
+    my $Name = $mantalk->GetProps('/dav/principals/user/master', 'D:displayname');
+    $self->assert_str_equals('master', $Name);
+    $Name = $partalk->GetProps('/dav/principals/user/master', 'D:displayname');
+    $self->assert_str_equals('master', $Name);
+
+    if ($maj > 3 || ($maj == 3 && $min >= 4)) {
+        xlog $self, "check ACL on JMAP upload folder";
+        $acl = $admintalk->getacl("user.master.#jmap");
+        %map = @$acl;
+        $self->assert_str_equals('lrswitedn', $map{cassandane});
+        $self->assert_str_equals('lrw', $map{manifold});
+        $self->assert_str_equals('lrswitedn', $map{paraphrase});
+    }
+
+    xlog $self, "Clear initial syslog";
+    $self->{instance}->getsyslog();
+
+    xlog $self, "Update sharewith just for manifold";
+    $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'master',
+                    update => { "$CalendarId" => {
+                            "shareWith/manifold/mayWriteAll" => JSON::true,
+             }}}, "R1"]
+    ]);
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/manifold\.\#notifications/, "@lines");
+        $self->assert((not grep { /paraphrase\.\#notifications/ } @lines), Data::Dumper::Dumper(\@lines));
+    }
+
+    if ($maj > 3 || ($maj == 3 && $min >= 4)) {
+        xlog $self, "check ACL on JMAP upload folder";
+        $acl = $admintalk->getacl("user.master.#jmap");
+        %map = @$acl;
+        $self->assert_str_equals('lrswitedn', $map{cassandane});
+        $self->assert_str_equals('lrswitedn', $map{manifold});
+        $self->assert_str_equals('lrswitedn', $map{paraphrase});
+    }
+
+    xlog $self, "Remove the access for paraphrase";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'master',
+                    update => { "$CalendarId" => {
+                            "shareWith/paraphrase" => undef,
+             }}}, "R1"]
+    ]);
+
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Calendar/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog $self, "check ACL";
+    $acl = $admintalk->getacl("user.master.#calendars.$CalendarId");
+    %map = @$acl;
+    $self->assert_str_equals('lrswipkxtecdan9', $map{cassandane});
+    $self->assert_str_equals('lrswitedn579', $map{manifold});
+    $self->assert_null($map{paraphrase});
+
+    xlog $self, "check Outbox ACL";
+    $acl = $admintalk->getacl("user.master.#calendars.Outbox");
+    %map = @$acl;
+    $self->assert_str_equals('78', $map{manifold});
+    $self->assert_null($map{paraphrase});
+
+    xlog $self, "check Principal ACL";
+    $acl = $admintalk->getacl("user.master.#calendars");
+    %map = @$acl;
+    # both users get ACLs on the Inbox
+    $self->assert_str_equals('lr', $map{manifold});
+    $self->assert_null($map{paraphrase});
+
+    xlog $self, "Check propfind";
+    $Name = eval { $partalk->GetProps('/dav/principals/user/master', 'D:displayname') };
+    my $error = $@;
+    $self->assert_null($Name);
+    $self->assert_matches(qr/403 Forbidden/, $error);
+
+    if ($maj > 3 || ($maj == 3 && $min >= 4)) {
+        xlog $self, "check ACL on JMAP upload folder";
+        $acl = $admintalk->getacl("user.master.#jmap");
+        %map = @$acl;
+        $self->assert_str_equals('lrswitedn', $map{cassandane});
+        $self->assert_str_equals('lrswitedn', $map{manifold});
+        $self->assert_null($map{paraphrase});
+    }
+}

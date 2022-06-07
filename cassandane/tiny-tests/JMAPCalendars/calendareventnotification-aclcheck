@@ -1,0 +1,111 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_aclcheck
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                sharedCalendar => {
+                    name => 'sharedCalendar',
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayWriteOwn => JSON::true,
+                            mayAdmin => JSON::false
+                        },
+                    },
+                },
+                unsharedCalendar => {
+                    name => 'unsharedCalendar',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $sharedCalendarId = $res->[0][1]{created}{sharedCalendar}{id};
+    $self->assert_not_null($sharedCalendarId);
+    my $unsharedCalendarId = $res->[0][1]{created}{unsharedCalendar}{id};
+    $self->assert_not_null($unsharedCalendarId);
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{list});
+    my $state = $res->[0][1]{state};
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                sharedEvent => {
+                    title => 'sharedEvent',
+                    calendarIds => {
+                        $sharedCalendarId => JSON::true,
+                    },
+                    start => '2011-01-01T04:05:06',
+                    duration => 'PT1H',
+                },
+                unsharedEvent => {
+                    title => 'unsharedEvent',
+                    calendarIds => {
+                        $unsharedCalendarId => JSON::true,
+                    },
+                    start => '2012-02-02T04:05:06',
+                    duration => 'PT1H',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $sharedEventId = $res->[0][1]{created}{sharedEvent}{id};
+    $self->assert_not_null($sharedEventId);
+    my $unsharedEventId = $res->[0][1]{created}{unsharedEvent}{id};
+    $self->assert_not_null($unsharedEventId);
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+            properties => ['calendarEventId'],
+        }, 'R1'],
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals($sharedEventId, $res->[0][1]{list}[0]{calendarEventId});
+    my $notifId = $res->[0][1]{list}[0]{id};
+    $self->assert_deep_equals([$notifId], $res->[1][1]{ids});
+}

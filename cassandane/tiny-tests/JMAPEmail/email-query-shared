@@ -1,0 +1,356 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_shared
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("test");
+    $admintalk->setacl("user.test", "cassandane", "lrwkx") or die;
+
+    # run tests for both the main and "test" account
+    foreach (undef, "test") {
+        my $account = $_;
+        my $store = defined $account ? $self->{adminstore} : $self->{store};
+        my $mboxprefix = defined $account ? "user.$account" : "INBOX";
+        my $talk = $store->get_client();
+
+        my $res = $jmap->CallMethods([['Mailbox/get', { accountId => $account }, "R1"]]);
+        my $inboxid = $res->[0][1]{list}[0]{id};
+
+        xlog $self, "create mailboxes";
+        $talk->create("$mboxprefix.A") || die;
+        $talk->create("$mboxprefix.B") || die;
+        $talk->create("$mboxprefix.C") || die;
+
+        $res = $jmap->CallMethods([['Mailbox/get', { accountId => $account }, "R1"]]);
+        my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+        my $mboxa = $m{"A"}->{id};
+        my $mboxb = $m{"B"}->{id};
+        my $mboxc = $m{"C"}->{id};
+        $self->assert_not_null($mboxa);
+        $self->assert_not_null($mboxb);
+        $self->assert_not_null($mboxc);
+
+        xlog $self, "create emails";
+        my %params;
+        $store->set_folder("$mboxprefix.A");
+        my $dtfoo = DateTime->new(
+            year       => 2016,
+            month      => 11,
+            day        => 1,
+            hour       => 7,
+            time_zone  => 'Etc/UTC',
+        );
+        my $bodyfoo = "A rather short email";
+        %params = (
+            date => $dtfoo,
+            body => $bodyfoo,
+            store => $store,
+        );
+        $res = $self->make_message("foo", %params) || die;
+        $talk->copy(1, "$mboxprefix.C") || die;
+
+        $store->set_folder("$mboxprefix.B");
+        my $dtbar = DateTime->new(
+            year       => 2016,
+            month      => 3,
+            day        => 1,
+            hour       => 19,
+            time_zone  => 'Etc/UTC',
+        );
+        my $bodybar = ""
+        . "In the context of electronic mail, emails are viewed as having an\r\n"
+        . "envelope and contents.  The envelope contains whatever information is\r\n"
+        . "needed to accomplish transmission and delivery.  (See [RFC5321] for a\r\n"
+        . "discussion of the envelope.)  The contents comprise the object to be\r\n"
+        . "delivered to the recipient.  This specification applies only to the\r\n"
+        . "format and some of the semantics of email contents.  It contains no\r\n"
+        . "specification of the information in the envelope.i\r\n"
+        . "\r\n"
+        . "However, some email systems may use information from the contents\r\n"
+        . "to create the envelope.  It is intended that this specification\r\n"
+        . "facilitate the acquisition of such information by programs.\r\n"
+        . "\r\n"
+        . "This specification is intended as a definition of what email\r\n"
+        . "content format is to be passed between systems.  Though some email\r\n"
+        . "systems locally store emails in this format (which eliminates the\r\n"
+        . "need for translation between formats) and others use formats that\r\n"
+        . "differ from the one specified in this specification, local storage is\r\n"
+        . "outside of the scope of this specification.\r\n";
+
+        %params = (
+            date => $dtbar,
+            body => $bodybar,
+            extra_headers => [
+                ['x-tra', "baz"],
+            ],
+            store => $store,
+        );
+        $self->make_message("bar", %params) || die;
+
+        xlog $self, "run squatter";
+        $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+        xlog $self, "fetch emails without filter";
+        $res = $jmap->CallMethods([
+                ['Email/query', { accountId => $account }, 'R1'],
+                ['Email/get', {
+                        accountId => $account,
+                        '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' }
+                    }, 'R2'],
+            ]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+        $self->assert_num_equals(2, scalar @{$res->[1][1]->{list}});
+
+        %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+        my $foo = $m{"foo"}->{id};
+        my $bar = $m{"bar"}->{id};
+        $self->assert_not_null($foo);
+        $self->assert_not_null($bar);
+
+        xlog $self, "filter text";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            text => "foo",
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter NOT text";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            operator => "NOT",
+                            conditions => [ {text => "foo"} ],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter mailbox A";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            inMailbox => $mboxa,
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter mailboxes";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            operator => 'OR',
+                            conditions => [
+                                {
+                                    inMailbox => $mboxa,
+                                },
+                                {
+                                    inMailbox => $mboxc,
+                                },
+                            ],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter mailboxes with not in";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            inMailboxOtherThan => [$mboxb],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter mailboxes with not in";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            inMailboxOtherThan => [$mboxa],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+
+        xlog $self, "filter mailboxes with not in";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            inMailboxOtherThan => [$mboxa, $mboxc],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter mailboxes";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            operator => 'AND',
+                            conditions => [
+                                {
+                                    inMailbox => $mboxa,
+                                },
+                                {
+                                    inMailbox => $mboxb,
+                                },
+                                {
+                                    inMailbox => $mboxc,
+                                },
+                            ],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+
+        xlog $self, "filter not in mailbox A";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            operator => 'NOT',
+                            conditions => [
+                                {
+                                    inMailbox => $mboxa,
+                                },
+                            ],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter by before";
+        my $dtbefore = $dtfoo->clone()->subtract(seconds => 1);
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter by after",
+        my $dtafter = $dtbar->clone()->add(seconds => 1);
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            after => $dtafter->strftime('%Y-%m-%dT%TZ'),
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter by after and before",
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            after => $dtafter->strftime('%Y-%m-%dT%TZ'),
+                            before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+
+        xlog $self, "filter by minSize";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            minSize => length($bodybar),
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter by maxSize";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            maxSize => length($bodybar),
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter by header";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            header => [ "x-tra" ],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "filter by header and value";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        filter => {
+                            header => [ "x-tra", "bam" ],
+                        },
+                    }, "R1"]]);
+        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+
+        xlog $self, "sort by ascending receivedAt";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        sort => [{ property => "receivedAt" }],
+                    }, "R1"]]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
+        $self->assert_str_equals($foo, $res->[0][1]->{ids}[1]);
+
+        xlog $self, "sort by descending receivedAt";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        sort => [{ property => "receivedAt", isAscending => JSON::false, }],
+                    }, "R1"]]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[1]);
+
+        xlog $self, "sort by ascending size";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        sort => [{ property => "size" }],
+                    }, "R1"]]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[1]);
+
+        xlog $self, "sort by descending size";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        sort => [{ property => "size", isAscending => JSON::false }],
+                    }, "R1"]]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
+        $self->assert_str_equals($foo, $res->[0][1]->{ids}[1]);
+
+        xlog $self, "sort by ascending id";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        sort => [{ property => "id" }],
+                    }, "R1"]]);
+        my @ids = sort ($foo, $bar);
+        $self->assert_deep_equals(\@ids, $res->[0][1]->{ids});
+
+        xlog $self, "sort by descending id";
+        $res = $jmap->CallMethods([['Email/query', {
+                        accountId => $account,
+                        sort => [{ property => "id", isAscending => JSON::false }],
+                    }, "R1"]]);
+        @ids = reverse sort ($foo, $bar);
+        $self->assert_deep_equals(\@ids, $res->[0][1]->{ids});
+
+        xlog $self, "delete mailboxes";
+        $talk->delete("$mboxprefix.A") or die;
+        $talk->delete("$mboxprefix.B") or die;
+        $talk->delete("$mboxprefix.C") or die;
+    }
+}

@@ -1,0 +1,111 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_sharewith_acl
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create("user.test1");
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                '1' => {
+                    name => 'A',
+                }
+            },
+        }, 'R1'],
+    ]);
+    my $calendarId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($calendarId);
+
+    my @testCases = ({
+        rights => {
+            mayReadFreeBusy => JSON::true,
+        },
+        acl => '9',
+    }, {
+        rights => {
+            mayReadItems => JSON::true,
+        },
+        acl => 'lrw',
+    }, {
+        rights => {
+            mayWriteAll => JSON::true,
+        },
+        acl => 'switedn7',
+        wantRights => {
+            mayWriteAll => JSON::true,
+            mayWriteOwn => JSON::true,
+            mayUpdatePrivate => JSON::true,
+            mayRSVP => JSON::true,
+        },
+    }, {
+        rights => {
+            mayWriteOwn => JSON::true,
+        },
+        acl => 'w6',
+    }, {
+        rights => {
+            mayUpdatePrivate => JSON::true,
+        },
+        acl => 'w5',
+    }, {
+        rights => {
+            mayRSVP => JSON::true,
+        },
+        acl => 'w7',
+    }, {
+        rights => {
+            mayAdmin => JSON::true,
+        },
+        acl => 'wa',
+   }, {
+        rights => {
+            mayDelete => JSON::true,
+        },
+        acl => 'wxc',
+    });
+
+    foreach(@testCases) {
+
+        xlog "Run test for acl $_->{acl}";
+
+        $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                update => {
+                    $calendarId => {
+                        shareWith => {
+                            test1 => $_->{rights},
+                        },
+                    },
+                },
+            }, 'R1'],
+            ['Calendar/get', {
+                ids => [$calendarId],
+                properties => ['shareWith'],
+            }, 'R2'],
+        ]);
+
+        $_->{wantRights} ||= $_->{rights};
+
+        my %mergedrights = ((
+            mayReadFreeBusy => JSON::false,
+            mayReadItems => JSON::false,
+            mayWriteAll => JSON::false,
+            mayWriteOwn => JSON::false,
+            mayUpdatePrivate => JSON::false,
+            mayRSVP => JSON::false,
+            mayAdmin => JSON::false,
+            mayDelete => JSON::false,
+        ), %{$_->{wantRights}});
+
+        $self->assert_deep_equals(\%mergedrights,
+            $res->[1][1]{list}[0]{shareWith}{test1});
+        my %acl = @{$admin->getacl("user.cassandane.#calendars.$calendarId")};
+        $self->assert_str_equals($_->{acl}, $acl{test1});
+    }
+}

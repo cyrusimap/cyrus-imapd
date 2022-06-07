@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_cached
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPQueryCacheMaxAge1s :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create emails";
+    $res = $self->make_message("foo 1") || die;
+    $res = $self->make_message("foo 2") || die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $query1 = {
+        filter => {
+            subject => 'foo',
+        },
+        sort => [{ property => 'subject' }],
+    };
+
+    my $query2 = {
+        filter => {
+            subject => 'foo',
+        },
+        sort => [{ property => 'subject', isAscending => JSON::false }],
+    };
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    xlog $self, "run query #1";
+    $res = $jmap->CallMethods([['Email/query', $query1, 'R1']], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+
+    xlog $self, "re-run query #1";
+    $res = $jmap->CallMethods([['Email/query', $query1, 'R1']], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{isCached});
+
+    xlog $self, "run query #2";
+    $res = $jmap->CallMethods([['Email/query', $query2, 'R1']], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+
+    xlog $self, "re-run query #2";
+    $res = $jmap->CallMethods([['Email/query', $query2, 'R1']], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{isCached});
+
+    xlog $self, "change Email state";
+    $res = $self->make_message("foo 3") || die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "re-run query #2";
+    $res = $jmap->CallMethods([['Email/query', $query2, 'R1']], $using);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+}

@@ -1,0 +1,187 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_findallinthread
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    xlog "Create three top-level thread emails";
+    my %createEmails;
+    for (my $i = 1; $i <= 3; $i++) {
+        $createEmails{$i} = {
+            mailboxIds => {
+                '$inbox' => JSON::true
+            },
+            from => [{ email => "$i\@local" }],
+            to => [{ email => "$i\@local" }],
+            messageId => ["email$i\@local"],
+            subject => "email$i",
+            bodyStructure => {
+                partId => '1',
+            },
+            bodyValues => {
+                "1" => {
+                    value => "email$i body",
+                },
+            },
+        }
+    }
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => \%createEmails,
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(3, scalar keys %{$res->[0][1]{created}});
+    my $emailId1 = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($emailId1);
+    my $threadId1 = $res->[0][1]{created}{1}{threadId};
+    $self->assert_not_null($threadId1);
+    my $emailId2 = $res->[0][1]{created}{2}{id};
+    $self->assert_not_null($emailId2);
+    my $threadId2 = $res->[0][1]{created}{2}{threadId};
+    $self->assert_not_null($threadId2);
+    my $emailId3 = $res->[0][1]{created}{3}{id};
+    $self->assert_not_null($emailId3);
+    my $threadId3 = $res->[0][1]{created}{3}{threadId};
+    $self->assert_not_null($threadId3);
+
+    xlog "Create reference emails to top-level emails";
+    %createEmails = ();
+    foreach (qw/21 22 31/) {
+        my $ref = substr($_, 0, 1);
+        $createEmails{$_} = {
+            mailboxIds => {
+                '$inbox' => JSON::true
+            },
+            from => [{ email => "$_\@local" }],
+            to => [{ email => "$_\@local" }],
+            messageId => ["email$_\@local"],
+            subject => "Re: email$ref",
+            references => ["email$ref\@local"],
+            bodyStructure => {
+                partId => '1',
+            },
+            bodyValues => {
+                "1" => {
+                    value => "email$_ body",
+                },
+            },
+        }
+    }
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => \%createEmails,
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(3, scalar keys %{$res->[0][1]{created}});
+    my $emailId21 = $res->[0][1]{created}{21}{id};
+    $self->assert_not_null($emailId21);
+    my $emailId22 = $res->[0][1]{created}{22}{id};
+    $self->assert_not_null($emailId22);
+    my $emailId31 = $res->[0][1]{created}{31}{id};
+    $self->assert_not_null($emailId31);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Query emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                body => 'body',
+            },
+            sort => [{
+                property => 'id',
+            }],
+            collapseThreads => JSON::true,
+            findAllInThread => JSON::true,
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                body => 'body',
+            },
+            sort => [{
+                property => 'id',
+            }],
+            collapseThreads => JSON::true,
+            findAllInThread => JSON::true,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+    ], $using);
+
+    my @emailIdsThread1 = sort ($emailId1);
+    my @emailIdsThread2 = sort ($emailId2, $emailId21, $emailId22);
+    my @emailIdsThread3 = sort ($emailId3, $emailId31);
+
+    my $wantThreadIdToEmailIds = {
+        $threadId1 => \@emailIdsThread1,
+        $threadId2 => \@emailIdsThread2,
+        $threadId3 => \@emailIdsThread3,
+    };
+
+    my %gotThreadIdToEmailIds;
+    while (my ($threadId, $emailIds) = each %{$res->[0][1]{threadIdToEmailIds}}) {
+        my @emailIds = sort @{$emailIds};
+        $gotThreadIdToEmailIds{$threadId} = \@emailIds;
+    }
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals($wantThreadIdToEmailIds, \%gotThreadIdToEmailIds);
+
+    %gotThreadIdToEmailIds = ();
+    while (my ($threadId, $emailIds) = each %{$res->[1][1]{threadIdToEmailIds}}) {
+        my @emailIds = sort @{$emailIds};
+        $gotThreadIdToEmailIds{$threadId} = \@emailIds;
+    }
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals($wantThreadIdToEmailIds, \%gotThreadIdToEmailIds);
+
+    xlog "Assert empty result";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                body => 'nope',
+            },
+            findAllInThread => JSON::true,
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                body => 'nope',
+            },
+            findAllInThread => JSON::true,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+    ], $using);
+    $self->assert_deep_equals({}, $res->[0][1]{threadIdToEmailIds});
+    $self->assert_deep_equals({}, $res->[1][1]{threadIdToEmailIds});
+
+    xlog "Assert threadIdToEmailIds isn't set if not requested";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                body => 'body',
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                body => 'body',
+            },
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+    ], $using);
+    $self->assert_null($res->[0][1]{threadIdToEmailIds});
+    $self->assert_null($res->[1][1]{threadIdToEmailIds});
+}

@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_schedule_omit
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "create event";
+    my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+        "1" => {
+            calendarIds => {
+                Default => JSON::true,
+            },
+            "title" => "foo",
+            "description" => "foo's description",
+            "freeBusyStatus" => "busy",
+            "showWithoutTime" => JSON::false,
+            "start" => "2015-10-06T16:45:00",
+            "timeZone" => "Australia/Melbourne",
+            "duration" => "PT1H",
+            "replyTo" => { imip => "mailto:bugs\@example.com" },
+            "participants" => {
+                "org" => {
+                    "name" => "Bugs Bunny",
+                    "email" => "bugs\@example.com",
+                     roles => {
+                        'owner' => JSON::true,
+                    },
+                },
+                "att" => {
+                    "name" => "Cassandane",
+                    "email" => "cassandane\@example.com",
+                    roles => {
+                        'attendee' => JSON::true,
+                    },
+                },
+            },
+        }
+    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    # delete event as attendee without setting any partstat.
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+        destroy => [$id],
+    }, "R1"]]);
+
+    # assert no notification is sent.
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_null($imip);
+}

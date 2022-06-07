@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_update_mailbox_creationid
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    # Create emails
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                "msg1" => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    from => [{ email => q{from1@local}, name => q{} } ],
+                    to => [{ email => q{to1@local}, name => q{} } ],
+                },
+                "msg2" => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    from => [{ email => q{from2@local}, name => q{} } ],
+                    to => [{ email => q{to2@local}, name => q{} } ],
+                }
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => [ '#msg1', '#msg2' ],
+            properties => ['mailboxIds'],
+        }, "R2" ],
+    ]);
+    my $msg1Id = $res->[0][1]{created}{msg1}{id};
+    $self->assert_not_null($msg1Id);
+    my $msg2Id = $res->[0][1]{created}{msg2}{id};
+    $self->assert_not_null($msg2Id);
+    my $inboxId = (keys %{$res->[1][1]{list}[0]{mailboxIds}})[0];
+    $self->assert_not_null($inboxId);
+
+    # Move emails using mailbox creation id
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                "mboxX" => {
+                    name => "X",
+                    parentId => undef,
+                },
+            }
+        }, "R1"],
+        ['Email/set', {
+            update => {
+                $msg1Id => {
+                    mailboxIds => {
+                        '#mboxX' => JSON::true
+                    }
+                },
+                $msg2Id => {
+                    'mailboxIds/#mboxX' => JSON::true,
+                    'mailboxIds/' . $inboxId => undef,
+                }
+            },
+        }, 'R2'],
+        ['Email/get', {
+            ids => [ $msg1Id, $msg2Id ],
+            properties => ['mailboxIds'],
+        }, "R3" ],
+    ]);
+    my $mboxId = $res->[0][1]{created}{mboxX}{id};
+    $self->assert_not_null($mboxId);
+
+    $self->assert(exists $res->[1][1]{updated}{$msg1Id});
+    $self->assert(exists $res->[1][1]{updated}{$msg2Id});
+
+    my @mailboxIds = keys %{$res->[2][1]{list}[0]{mailboxIds}};
+    $self->assert_num_equals(1, scalar @mailboxIds);
+    $self->assert_str_equals($mboxId, $mailboxIds[0]);
+
+    @mailboxIds = keys %{$res->[2][1]{list}[1]{mailboxIds}};
+    $self->assert_num_equals(1, scalar @mailboxIds);
+    $self->assert_str_equals($mboxId, $mailboxIds[0]);
+}

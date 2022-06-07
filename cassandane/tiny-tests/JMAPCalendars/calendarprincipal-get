@@ -1,0 +1,109 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarprincipal_get
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    # Set timezone
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:calendar-timezone>
+BEGIN:VCALENDAR
+PRODID:-//CyrusIMAP.org//Cyrus 1.0//EN
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Europe/Berlin
+COMMENT:[DE] Germany (most areas)
+LAST-MODIFIED:20200820T145616Z
+X-LIC-LOCATION:Europe/Berlin
+X-PROLEPTIC-TZNAME:LMT
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+005328
+TZOFFSETTO:+0100
+DTSTART:18930401T000000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZNAME:CEST
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+DTSTART:19810329T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZNAME:CET
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+DTSTART:19961027T030000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+END:STANDARD
+END:VTIMEZONE
+END:VCALENDAR
+</C:calendar-timezone>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane",
+                       $proppatchXml, 'Content-Type' => 'text/xml');
+
+    # Set description
+    $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:calendar-description>A description</C:calendar-description>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane",
+                       $proppatchXml, 'Content-Type' => 'text/xml');
+
+    # Set name
+    $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<D:displayname>Cassandane User</D:displayname>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/principals/user/cassandane",
+                       $proppatchXml, 'Content-Type' => 'text/xml');
+
+
+    my $res = $jmap->CallMethods([
+        ['Principal/get', {
+            ids => ['cassandane', 'nope'],
+        }, 'R1']
+    ]);
+    my $p = $res->[0][1]{list}[0];
+
+    $self->assert_not_null($p->{account});
+    delete ($p->{account});
+    $self->assert_deep_equals({
+        id => 'cassandane',
+        name => 'Cassandane User',
+        description => 'A description',
+        email => 'cassandane@example.com',
+        type => 'individual',
+        timeZone => 'Europe/Berlin',
+        mayGetAvailability => JSON::true,
+        accountId => 'cassandane',
+        sendTo => {
+            imip => 'mailto:cassandane@example.com',
+        },
+    }, $p);
+    $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
+}

@@ -1,0 +1,90 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_filename
+    :min_version_3_4 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "Upload a data blob";
+    my $binary = pack "H*", "beefcode";
+    my $data = $jmap->Upload($binary, "image/gif");
+    my $dataBlobId = $data->{blobId};
+
+    my @testcases = ({
+        name   => 'foo',
+        wantCt => ' image/gif; name="foo"',
+        wantCd => ' attachment;filename="foo"',
+    }, {
+        name   => "I feel \N{WHITE SMILING FACE}",
+        wantCt => ' image/gif; name="=?UTF-8?Q?I_feel_=E2=98=BA?="',
+        wantCd => " attachment;filename*=utf-8''I%20feel%20%E2%98%BA",
+    }, {
+        name   => "foo" . ("_foo" x 20),
+        wantCt => " image/gif;\r\n name=\"=?UTF-8?Q?foo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffo?=\r\n =?UTF-8?Q?o=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo?=\"",
+        wantCd => " attachment;\r\n filename*0=\"foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_f\";\r\n filename*1=\"oo_foo_foo_foo_foo_foo\"",
+    }, {
+        name   => "foo" . ("_foo" x 20) . "\N{WHITE SMILING FACE}",
+        wantCt => " image/gif;\r\n name=\"=?UTF-8?Q?foo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffo?=\r\n =?UTF-8?Q?o=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo?=\r\n =?UTF-8?Q?=E2=98=BA?=\"",
+        wantCd => " attachment;\r\n filename*0*=utf-8\'\'foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_foo_fo;\r\n filename*1*=o_foo_foo_foo_foo_foo_foo_foo%E2%98%BA",
+    }, {
+        name   => 'Incoming Email Flow.xml',
+        wantCt => ' image/gif; name="Incoming Email Flow.xml"',
+        wantCd => ' attachment;filename="Incoming Email Flow.xml"',
+    }, {
+        name   => 'a"b\c.txt',
+        wantCt => ' image/gif; name="a\"b\\\\c.txt"',
+        wantCd => ' attachment;filename="a\"b\\\\c.txt"',
+    });
+
+    foreach my $tc (@testcases) {
+        xlog $self, "Checking name $tc->{name}";
+        my $bodyStructure = {
+            type => "multipart/alternative",
+            subParts => [{
+                    type => 'text/plain',
+                    partId => '1',
+                }, {
+                    type => 'image/gif',
+                    disposition => 'attachment',
+                    name => $tc->{name},
+                    blobId => $dataBlobId,
+                }],
+        };
+
+        xlog $self, "Create email with body structure";
+        my $inboxid = $self->getinbox()->{id};
+        my $email = {
+            mailboxIds => { $inboxid => JSON::true },
+            from => [{ name => "Test", email => q{foo@bar} }],
+            subject => "test",
+            bodyStructure => $bodyStructure,
+            bodyValues => {
+                "1" => {
+                    value => "A text body",
+                },
+            },
+        };
+        my $res = $jmap->CallMethods([
+                ['Email/set', { create => { '1' => $email } }, 'R1'],
+                ['Email/get', {
+                        ids => [ '#1' ],
+                        properties => [ 'bodyStructure' ],
+                        bodyProperties => [ 'partId', 'blobId', 'type', 'name', 'disposition', 'header:Content-Type', 'header:Content-Disposition' ],
+                        fetchAllBodyValues => JSON::true,
+                    }, 'R2' ],
+            ]);
+
+        my $gotBodyStructure = $res->[1][1]{list}[0]{bodyStructure};
+        my $gotName = $gotBodyStructure->{subParts}[1]{name};
+        $self->assert_str_equals($tc->{name}, $gotName);
+        my $gotCt = $gotBodyStructure->{subParts}[1]{'header:Content-Type'};
+        $self->assert_str_equals($tc->{wantCt}, $gotCt);
+        my $gotCd = $gotBodyStructure->{subParts}[1]{'header:Content-Disposition'};
+        $self->assert_str_equals($tc->{wantCd}, $gotCd);
+    }
+}

@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_cached_evict_slow
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPQueryCacheMaxAge1s :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    $self->make_message("foo") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                text => 'foo',
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                text => 'foo',
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{isCached});
+
+    sleep(2);
+
+    $res = $jmap->CallMethods([
+        ['Identity/get', {
+            # evict cache
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                text => 'foo',
+            },
+        }, 'R2'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[1][1]->{performance}{details}{isCached});
+}

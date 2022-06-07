@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_date
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    from => [{ email => q{foo@bar} }],
+                    to => [{ email => q{bar@foo} }],
+                    sentAt => '2019-05-02T03:15:00+07:00',
+                    subject => "test",
+                    bodyStructure => {
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        "1" => {
+                            value => "A text body",
+                        },
+                    },
+                }
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => ['#email1'],
+            properties => ['sentAt', 'header:Date'],
+        }, 'R2'],
+    ]);
+    my $email = $res->[1][1]{list}[0];
+    $self->assert_str_equals('2019-05-02T03:15:00+07:00', $email->{sentAt});
+    $self->assert_str_equals(' Thu, 02 May 2019 03:15:00 +0700', $email->{'header:Date'});
+}

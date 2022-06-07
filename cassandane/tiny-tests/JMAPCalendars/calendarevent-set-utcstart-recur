@@ -1,0 +1,185 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_utcstart_recur
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $proplist = [
+        'start',
+        'utcStart',
+        'utcEnd',
+        'timeZone',
+        'duration',
+        'recurrenceOverrides',
+        'title'
+    ];
+
+    # Assert event creation.
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    utcStart => "2019-12-10T23:30:00Z",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 5,
+                    }],
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#1'],
+            properties => $proplist,
+        }, 'R2']
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+
+    my $event = $res->[1][1]{list}[0];
+    $self->assert_str_equals('2019-12-11T10:30:00', $event->{start});
+    $self->assert_str_equals('2019-12-10T23:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-11T00:30:00Z', $event->{utcEnd});
+    $self->assert_str_equals('Australia/Melbourne', $event->{timeZone});
+    $self->assert_str_equals('PT1H', $event->{duration});
+
+    # Updating utcStart on a recurring event with no overrides is OK.
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    utcStart => "2019-12-11T01:30:00Z",
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => $proplist,
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    $event = $res->[1][1]{list}[0];
+    $self->assert_str_equals('2019-12-11T12:30:00', $event->{start});
+    $self->assert_str_equals('2019-12-11T01:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-11T02:30:00Z', $event->{utcEnd});
+    $self->assert_str_equals('Australia/Melbourne', $event->{timeZone});
+    $self->assert_str_equals('PT1H', $event->{duration});
+
+    # Updating utcStart on a expanded recurrence instance is OK.
+    my $eventInstanceId = encode_eventid('eventuid1local', '20191213T123000');
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventInstanceId => {
+                    utcStart => "2019-12-13T03:30:00Z",
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventInstanceId],
+            properties => $proplist,
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventInstanceId});
+
+    $event = $res->[1][1]{list}[0];
+    $self->assert_str_equals('2019-12-13T14:30:00', $event->{start});
+    $self->assert_str_equals('2019-12-13T03:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-13T04:30:00Z', $event->{utcEnd});
+    $self->assert_str_equals('Australia/Melbourne', $event->{timeZone});
+    $self->assert_str_equals('PT1H', $event->{duration});
+
+    # Now the event has a recurrenceOverride
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => $proplist,
+        }, 'R2']
+    ]);
+    $event = $res->[0][1]{list}[0];
+
+    # Main event times are unchanged.
+    $self->assert_str_equals('2019-12-11T12:30:00', $event->{start});
+    $self->assert_str_equals('2019-12-11T01:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-11T02:30:00Z', $event->{utcEnd});
+    $self->assert_str_equals('Australia/Melbourne', $event->{timeZone});
+    $self->assert_str_equals('PT1H', $event->{duration});
+
+    # Overriden instance times have changed.
+    my $override = $event->{recurrenceOverrides}{'2019-12-13T12:30:00'};
+    $self->assert_str_equals('2019-12-13T14:30:00', $override->{start});
+    $self->assert_str_equals('2019-12-13T03:30:00Z', $override->{utcStart});
+    $self->assert_str_equals('2019-12-13T04:30:00Z', $override->{utcEnd});
+
+    # It's OK to loop back a recurring event with overrides and UTC times.
+    $event->{title} = 'updated title';
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => $event,
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => $proplist,
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_deep_equals($event, $res->[1][1]{list}[0]);
+
+    # But it is not OK to update UTC times in a recurring event with overrides.
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    utcStart => '2021-01-01T11:00:00Z',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    recurrenceOverrides => {
+                        '2019-12-13T12:30:00' => {
+                            utcStart => '2021-01-01T11:00:00Z',
+                        },
+                    },
+                },
+            },
+        }, 'R2'],
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'recurrenceOverrides/2019-12-13T12:30:00' => {
+                        utcStart => '2021-01-01T11:00:00Z',
+                    },
+                },
+            },
+        }, 'R3'],
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'recurrenceOverrides/2019-12-13T12:30:00/utcStart' => '2021-01-01T11:00:00Z',
+                },
+            },
+        }, 'R4'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => $proplist,
+        }, 'R5']
+    ]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$eventId});
+    $self->assert_not_null($res->[1][1]{notUpdated}{$eventId});
+    $self->assert_not_null($res->[2][1]{notUpdated}{$eventId});
+    $self->assert_not_null($res->[3][1]{notUpdated}{$eventId});
+}

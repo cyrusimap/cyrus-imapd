@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_import_zerobyte
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # A bogus email with an unencoded zero byte
+    my $email = <<"EOF";
+From: \"Some Example Sender\" <example\@local>\r\n
+To: baseball\@local\r\n
+Subject: test email\r\n
+Date: Wed, 7 Dec 2016 22:11:11 +1100\r\n
+MIME-Version: 1.0\r\n
+Content-Type: text/plain; charset="UTF-8"\r\n
+\r\n
+This is a test email with a \x{0}-byte.\r\n
+EOF
+
+    my $data = $jmap->Upload($email, "message/rfc822");
+    my $blobid = $data->{blobId};
+
+    xlog $self, "create drafts mailbox";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftsmbox);
+
+    xlog $self, "import email from blob $blobid";
+    $res = $jmap->CallMethods([['Email/import', {
+            emails => {
+                "1" => {
+                    blobId => $blobid,
+                    mailboxIds => {$draftsmbox =>  JSON::true},
+                    keywords => {
+                        '$draft' => JSON::true,
+                    },
+                },
+            },
+        }, "R1"]]);
+    $self->assert_str_equals("invalidEmail", $res->[0][1]{notCreated}{1}{type});
+}

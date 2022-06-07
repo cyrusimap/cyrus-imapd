@@ -1,0 +1,93 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarpreferences_set
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                calendar => {
+                    name => 'Test',
+                },
+            }
+        }, 'R1'],
+    ]);
+    my $calendarId = $res->[0][1]{created}{calendar}{id};
+    $self->assert_not_null($calendarId);
+
+    xlog "Fetch participant identities";
+    $res = $jmap->CallMethods([
+        ['ParticipantIdentity/get', {
+        }, 'R1'],
+    ]);
+    my $participantId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($participantId);
+
+    xlog "Fetch preferences";
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/get', {
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([{
+        id => 'singleton',
+        defaultCalendarId => undef,
+        defaultParticipantIdentityId => undef,
+    }], $res->[0][1]{list});
+    my $state = $res->[0][1]{state};
+
+    xlog "Set preferences";
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/set', {
+            update => {
+                singleton => {
+                    defaultCalendarId => $calendarId,
+                    defaultParticipantIdentityId => $participantId,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{singleton});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+
+    xlog "Fetch preferences by id";
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/get', {
+            ids => ['singleton'],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([{
+        id => 'singleton',
+        defaultCalendarId => $calendarId,
+        defaultParticipantIdentityId => $participantId,
+    }], $res->[0][1]{list});
+
+    xlog "Unset preferences";
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/set', {
+            update => {
+                singleton => {
+                    defaultCalendarId => undef,
+                    defaultParticipantIdentityId => undef,
+                },
+            },
+        }, 'R1'],
+        ['CalendarPreferences/get', {
+            ids => ['singleton'],
+        }, 'R2'],
+    ]);
+    xlog "Setting defaultCalendarId to null assigns a new default calendar";
+    $self->assert_not_null($res->[0][1]{updated}{singleton}{defaultCalendarId});
+    $self->assert_deep_equals([{
+        id => 'singleton',
+        defaultCalendarId => $res->[0][1]{updated}{singleton}{defaultCalendarId},
+        defaultParticipantIdentityId => undef,
+    }], $res->[1][1]{list});
+}

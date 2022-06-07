@@ -1,0 +1,227 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared account";
+    $admintalk->create("user.manifold");
+
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    xlog $self, "create calendar";
+    my $CalendarId1 = $mantalk->NewCalendar({name => 'Manifold Calendar'});
+    $self->assert_not_null($CalendarId1);
+
+    xlog $self, "share $CalendarId1 read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lr') or die;
+
+    my $event =  {
+        calendarIds => {
+            $CalendarId1 => JSON::true,
+        },
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "showWithoutTime"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "participants" => undef,
+        "alerts" => {
+            'foo' => {
+                '@type' => 'Alert',
+                trigger => {
+                    '@type' => 'OffsetTrigger',
+                    relativeTo => "start",
+                    offset => "-PT5M",
+                },
+                action => "email"
+            }
+        }
+    };
+
+    my $event2 =  {
+        calendarIds => {
+            $CalendarId1 => JSON::true,
+        },
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo2",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "showWithoutTime"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "participants" => undef,
+        "alerts" => {
+            'foo' => {
+                trigger => {
+                    '@type' => 'OffsetTrigger',
+                    relativeTo => "start",
+                    offset => "-PT5M",
+                },
+                action => "email"
+            }
+        }
+    };
+
+    xlog $self, "create event (should fail)";
+    my $res = $jmap->CallMethods([['CalendarEvent/set',{
+                    accountId => 'manifold',
+                    create => {"1" => $event}},
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{notCreated}{1});
+
+    xlog $self, "share $CalendarId1 read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "create event";
+    $res = $jmap->CallMethods([['CalendarEvent/set',{
+                    accountId => 'manifold',
+                    create => {"1" => $event}},
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get calendar event $id";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {
+                    accountId => 'manifold',
+                    ids => [$id]},
+    "R1"]]);
+    my $ret = $res->[0][1]{list}[0];
+    $self->assert_normalized_event_equals($event, $ret);
+
+    xlog $self, "update event";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    accountId => 'manifold',
+                    update => {
+                        $id => {
+                            calendarIds => {
+                                $CalendarId1 => JSON::true,
+                            },
+                            "title" => "foo2",
+                        },
+    }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog $self, "get calendar event $id";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {
+                    accountId => 'manifold',
+                    ids => [$id]},
+    "R1"]]);
+    $ret = $res->[0][1]{list}[0];
+    $self->assert_normalized_event_equals($event2, $ret);
+
+    xlog $self, "share $CalendarId1 read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lr') or die;
+
+    xlog $self, "update event (should fail)";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    accountId => 'manifold',
+                    update => {
+                        $id => {
+                            calendarIds => {
+                                $CalendarId1 => JSON::true,
+                            },
+                            "title" => "1(updated)",
+                        },
+    }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{notUpdated}{$id});
+
+    xlog $self, "share calendar home read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "create another calendar";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'manifold',
+                    create => { "2" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $CalendarId2 = $res->[0][1]{created}{"2"}{id};
+    $self->assert_not_null($CalendarId2);
+
+    xlog $self, "share $CalendarId1 read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "share $CalendarId2 read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lr') or die;
+
+    xlog $self, "move event (should fail)";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    accountId => 'manifold',
+                    update => {
+                        $id => {
+                            calendarIds => {
+                                $CalendarId2 => JSON::true,
+                            },
+                            "title" => "1(updated)",
+                        },
+    }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{notUpdated}{$id});
+
+    xlog $self, "share $CalendarId2 read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "move event";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    accountId => 'manifold',
+                    update => {
+                        $id => {
+                            calendarIds => {
+                                $CalendarId2 => JSON::true,
+                            },
+                            "title" => "1(updated)",
+                        },
+    }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    xlog $self, "share $CalendarId2 read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lr') or die;
+
+    xlog $self, "destroy event (should fail)";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    accountId => 'manifold',
+                    destroy => [ $id ],
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{notDestroyed}{$id});
+
+    xlog $self, "share $CalendarId2 read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "destroy event";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    accountId => 'manifold',
+                    destroy => [ $id ],
+    }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+}

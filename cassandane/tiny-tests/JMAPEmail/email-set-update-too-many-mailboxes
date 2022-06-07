@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_update_too_many_mailboxes
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $store = $self->{store};
+    my $talk = $self->{store}->get_client();
+
+    my $inboxId = $self->getinbox()->{id};
+
+    # Create email in INBOX
+    $self->make_message('Email') || die;
+
+    my $res = $jmap->CallMethods([['Email/query', { }, 'R1']]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    my $emailId = $res->[0][1]->{ids}[0];
+
+    my $accountCapabilities = $self->get_account_capabilities();
+    my $mailCapabilities = $accountCapabilities->{'urn:ietf:params:jmap:mail'};
+    my $maxMailboxesPerEmail = $mailCapabilities->{maxMailboxesPerEmail};
+    $self->assert($maxMailboxesPerEmail > 0);
+
+    # Create and get mailboxes
+    for (my $i = 1; $i < $maxMailboxesPerEmail + 2; $i++) {
+        $talk->create("INBOX.mbox$i") or die;
+    }
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    my %mboxIds = map { $_->{id} => JSON::true } @{$res->[0][1]{list}};
+
+    # remove from INBOX
+    delete $mboxIds{$inboxId};
+
+    # Move mailbox to too many mailboxes
+    $res = $jmap->CallMethods([['Email/set', {
+        update => {
+            $emailId => {
+                mailboxIds => \%mboxIds,
+            },
+        },
+   }, 'R1']]);
+   $self->assert_str_equals('tooManyMailboxes', $res->[0][1]{notUpdated}{$emailId}{type});
+}

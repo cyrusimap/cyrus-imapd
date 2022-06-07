@@ -1,0 +1,105 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_itip_rsvp_organizer_change
+    :min_version_3_7 :needs_component_jmap :needs_component_sieve
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :deletecanceled :outcome "outcome";
+}
+EOF
+    );
+
+    my $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sally Sender <sender@example.net>
+To: Cassandane <cassandane@example.com>
+Message-ID: <7e017102-0caf-490a-bbdf-422141d34e75@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:7e017102-0caf-490a-bbdf-422141d34e75
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=American/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User;X-JMAP-ID=organizerA:MAILTO:organizerA@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=cassandane:MAILTO:cassandane@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP invite";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    xlog "Clear notifications";
+    $self->{instance}->getnotify();
+
+    xlog "Accept invitation in JMAP";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id', 'participants'],
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($eventId);
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'participants/cassandane/participationStatus' => 'accepted',
+                },
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Assert that iTIP notification is sent";
+    my $data = $self->{instance}->getnotify();
+    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($notif);
+
+    xlog "Clear notifications";
+    $self->{instance}->getnotify();
+
+    xlog "Change organizer in JMAP";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    replyTo => {
+                        imip => 'mailto:organizerB@example.net',
+                    },
+                    'participants/organizerA' => undef,
+                },
+            }
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ $eventId ],
+            properties => [ 'replyTo' ],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_deep_equals({
+        imip => 'mailto:organizerB@example.net',
+    }, $res->[1][1]{list}[0]{replyTo});
+
+    xlog "Assert that iTIP notification is sent";
+    $data = $self->{instance}->getnotify();
+    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($notif);
+}

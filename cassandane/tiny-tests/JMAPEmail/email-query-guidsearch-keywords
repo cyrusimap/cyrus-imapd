@@ -1,0 +1,147 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_guidsearch_keywords
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    xlog $self, "create emails";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'mA' => {
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    subject => 'Answered',
+                    keywords => {
+                        '$Answered' => JSON::true,
+                    },
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mD' => {
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    subject => 'Draft',
+                    keywords => {
+                        '$Draft' => JSON::true,
+                    },
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mF' => {
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    subject => 'Flagged',
+                    keywords => {
+                        '$Flagged' => JSON::true,
+                    },
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $emailIdA = $res->[0][1]->{created}{mA}{id};
+    $self->assert_not_null($emailIdA);
+    my $emailIdD = $res->[0][1]->{created}{mD}{id};
+    $self->assert_not_null($emailIdD);
+    my $emailIdF = $res->[0][1]->{created}{mF}{id};
+    $self->assert_not_null($emailIdF);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @wantIds;
+
+    xlog $self, "query draft emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                from => 'foo@local',
+                hasKeyword => '$draft',
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdD);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+
+    xlog $self, "query anything but draft emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                from => 'foo@local',
+                notKeyword => '$draft',
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdA, $emailIdF);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+}

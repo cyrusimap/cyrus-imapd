@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_upload_bin
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create drafts mailbox";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+
+    my $logofile = abs_path('data/logo.gif');
+    open(FH, "<$logofile");
+    local $/ = undef;
+    my $binary = <FH>;
+    close(FH);
+    my $data = $jmap->Upload($binary, "image/gif");
+
+    my $msgresp = $jmap->CallMethods([
+      ['Email/set', { create => { "2" => {
+        mailboxIds =>  { $draftsmbox => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+        ],
+        subject => "Memo",
+        textBody => [{ partId => '1' }],
+        bodyValues => { 1 => { value => "I'm givin' ya one last chance ta surrenda!" }},
+        attachments => [{
+            blobId => $data->{blobId},
+            name => "logo.gif",
+        }],
+        keywords => { '$draft' => JSON::true },
+      } } }, 'R2'],
+    ]);
+
+    $self->assert_not_null($msgresp->[0][1]{created});
+
+    # XXX - fetch back the parts
+}

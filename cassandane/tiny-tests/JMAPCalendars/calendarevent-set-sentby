@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_sentby
+    :needs_component_sieve :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event1uidlocal',
+                    title => "event1",
+                    start => "2020-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    sentBy => 'sender@example.net',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event1', '#event2'],
+            properties => ['sentBy'],
+        }, 'R3'],
+    ]);
+    $self->assert_str_equals('sender@example.net', $res->[1][1]{list}[0]{sentBy});
+}

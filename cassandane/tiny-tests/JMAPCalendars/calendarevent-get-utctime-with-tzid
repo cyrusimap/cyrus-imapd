@@ -1,0 +1,17 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_utctime_with_tzid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    # As seen on the wires...
+    my ($id, $ical) = $self->icalfile('utctime-with-tzid');
+
+    my $event = $self->putandget_vevent($id, $ical, ['timeZone', 'start', 'duration']);
+    $self->assert_not_null($event);
+    $self->assert_str_equals('Europe/Vienna', $event->{timeZone});
+    $self->assert_str_equals('2019-12-19T19:00:00', $event->{start});
+    $self->assert_str_equals('PT2H20M', $event->{duration});
+}

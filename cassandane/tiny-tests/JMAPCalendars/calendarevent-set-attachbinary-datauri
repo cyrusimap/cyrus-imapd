@@ -1,0 +1,87 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_attachbinary_datauri
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create event with data: URI in Link.href";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2019-12-10T23:30:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    links => {
+                        link => {
+                            href =>'data:text/plain;base64,aGVsbG8=',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+            properties => ['links', 'x-href'],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
+
+    xlog "Fetch event without Cyrus extension";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+            properties => ['links'],
+        }, 'R1'],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+    ]);
+    my $linkWithoutExt = (values %{$res->[0][1]{list}[0]{links}})[0];
+    $self->assert_str_equals('data:text/plain;base64,aGVsbG8=',
+        $linkWithoutExt->{href});
+    $self->assert_null($linkWithoutExt->{blobId});
+    $self->assert_str_equals('text/plain',
+        $linkWithoutExt->{contentType});
+
+    xlog "Fetch event with Cyrus extension";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+            properties => ['links', 'x-href'],
+        }, 'R1'],
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+    my $linkWithExt = (values %{$res->[0][1]{list}[0]{links}})[0];
+    $self->assert_null($linkWithExt->{href});
+    $self->assert_not_null($linkWithExt->{blobId});
+    $self->assert_str_equals('text/plain', $linkWithExt->{contentType});
+    my $xhref = $res->[0][1]{list}[0]{'x-href'};
+    $self->assert_not_null($xhref);
+
+    xlog "Assert ATTACH BINARY in VEVENT";
+    my $caldavResponse = $caldav->Request('GET', $xhref);
+    my $ical = Data::ICal->new(data => $caldavResponse->{content});
+    my %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
+    my $vevent = $entries{'VEVENT'};
+    $self->assert_not_null($vevent);
+
+    my $attach = $vevent->property('ATTACH');
+    $self->assert_num_equals(1, scalar @{$attach});
+    $self->assert_str_equals('BINARY', $attach->[0]->parameters()->{VALUE});
+}

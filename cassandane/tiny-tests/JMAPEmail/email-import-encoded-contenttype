@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_import_encoded_contenttype
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    # Very old macOS Mail.app versions encode the complete
+    # Content-Type header value, when they really should
+    # just encode its file name parameter value.
+    # See: https://github.com/cyrusimap/cyrus-imapd/issues/2622
+
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $email = <<'EOF';
+From: example@example.com
+To: example@example.biz
+Subject: This is a test
+Message-Id: <15288246899.CBDb71cE.3455@cyrus-dev>
+Date: Tue, 12 Jun 2018 13:31:29 -0400
+MIME-Version: 1.0
+Content-Type: multipart/mixed;boundary=123456789
+
+--123456789
+Content-Type: text/html
+
+This is a mixed message.
+
+--123456789
+Content-Type: =?utf-8?B?aW1hZ2UvcG5nOyBuYW1lPSJr?=
+ =?utf-8?B?w6RmZXIucG5nIg==?=
+
+data
+
+--123456789--
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+    my $blobId = $jmap->Upload($email, "message/rfc822")->{blobId};
+
+    my $inboxId = $self->getinbox()->{id};
+
+    my $res = $jmap->CallMethods([['Email/import', {
+        emails => {
+            "1" => {
+                blobId => $blobId,
+                mailboxIds => {$inboxId =>  JSON::true},
+            },
+        },
+    }, "R1"], ["Email/get", { ids => ["#1", "#2"], properties => ['bodyStructure'] }, "R2" ]]);
+
+    my $msg = $res->[1][1]{list}[0];
+    $self->assert_equals('image/png', $msg->{bodyStructure}{subParts}[1]{type});
+    $self->assert_equals("k\N{LATIN SMALL LETTER A WITH DIAERESIS}fer.png", $msg->{bodyStructure}{subParts}[1]{name});
+}

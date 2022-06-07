@@ -1,0 +1,175 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_writeown
+    :needs_component_jmap :min_version_0_0 :max_version_0_0
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Create sharee user";
+    my $admin = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("sharee");
+    my $service = $self->{instance}->get_service("http");
+    my $shareeJmap = Mail::JMAPTalk->new(
+        user => 'sharee',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $shareeJmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteOwn => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Create events";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                eventCassOwner => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    title => 'eventCassOwner',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        part1 => {
+                            '@type' => 'Participant',
+                            sendTo => {
+                                imip => 'mailto:part1@local',
+                            },
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                        },
+                    },
+                    start => '2021-01-01T01:00:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                },
+                eventShareeOwner => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    title => 'eventShareeOwner',
+                    replyTo => {
+                        imip => 'mailto:sharee@example.com',
+                    },
+                    participants => {
+                        part1 => {
+                            '@type' => 'Participant',
+                            sendTo => {
+                                imip => 'mailto:part1@local',
+                            },
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                        },
+                    },
+                    start => '2021-01-01T01:00:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                },
+                eventNoOwner => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    title => 'eventNoOwner',
+                    start => '2021-01-02T01:00:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventCassOwner = $res->[0][1]{created}{eventCassOwner}{id};
+    $self->assert_not_null($eventCassOwner);
+    my $eventShareeOwner = $res->[0][1]{created}{eventShareeOwner}{id};
+    $self->assert_not_null($eventShareeOwner);
+    my $eventNoOwner = $res->[0][1]{created}{eventNoOwner}{id};
+    $self->assert_not_null($eventNoOwner);
+
+    xlog "Update private event properties as sharee";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventCassOwner => {
+                    color => 'pink',
+                },
+                $eventShareeOwner => {
+                    color => 'pink',
+                },
+                $eventNoOwner => {
+                    color => 'pink',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventCassOwner});
+    $self->assert(exists $res->[0][1]{updated}{$eventShareeOwner});
+    $self->assert(exists $res->[0][1]{updated}{$eventNoOwner});
+
+    xlog "Update non-private event properties as sharee";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventCassOwner => {
+                    title => 'eventCassOwnerUpdated',
+                },
+                $eventShareeOwner => {
+                    title => 'eventShareeOwnerUpdated',
+                },
+                $eventNoOwner => {
+                    title => 'eventNoOwnerUpdated',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notUpdated}{$eventCassOwner}{type});
+    $self->assert(exists $res->[0][1]{updated}{$eventShareeOwner});
+    $self->assert(exists $res->[0][1]{updated}{$eventNoOwner});
+
+    xlog "Destroy events as sharee";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            destroy => [
+                $eventCassOwner,
+                $eventShareeOwner,
+                $eventNoOwner,
+            ],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notDestroyed}{$eventCassOwner}{type});
+    $self->assert(grep /$eventShareeOwner/, @{$res->[0][1]{destroyed}});
+    $self->assert(grep /$eventNoOwner/, @{$res->[0][1]{destroyed}});
+}

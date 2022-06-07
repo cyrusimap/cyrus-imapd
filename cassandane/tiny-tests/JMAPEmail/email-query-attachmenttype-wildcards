@@ -1,0 +1,123 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_attachmenttype_wildcards
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message("msg1",
+        mime_type => "multipart/mixed",
+        mime_boundary => "123456789",
+        body => ""
+          . "--123456789\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "msg1"
+          . "\r\n--123456789\r\n"
+          . "Content-Type: application/rtf\r\n"
+          . "\r\n"
+          . "data"
+          . "\r\n--123456789--\r\n",
+    );
+
+    $self->make_message("msg2",
+        mime_type => "multipart/mixed",
+        mime_boundary => "123456789",
+        body => ""
+          . "--123456789\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "msg1"
+          . "\r\n--123456789\r\n"
+          . "Content-Type: text/rtf\r\n"
+          . "\r\n"
+          . "data"
+          . "\r\n--123456789--\r\n",
+    );
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [ 'subject' ],
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
+    my %emails = map { $_->{subject} => $_->{id} } @{$res->[1][1]{list}};
+
+    my @tests = ({
+        filter => {
+            attachmentType => 'text/plain',
+        },
+        wantIds => [ $emails{'msg1'}, $emails{'msg2'} ],
+    }, {
+        filter => {
+            attachmentType => 'application/rtf',
+        },
+        wantIds => [ $emails{'msg1'} ],
+    }, {
+        filter => {
+            attachmentType => 'text/rtf',
+        },
+        wantIds => [ $emails{'msg2'} ],
+    }, {
+        filter => {
+            attachmentType => 'text',
+        },
+        wantIds => [ $emails{'msg1'}, $emails{'msg2'} ],
+    }, {
+        filter => {
+            attachmentType => 'application',
+        },
+        wantIds => [ $emails{'msg1'} ],
+    }, {
+        filter => {
+            attachmentType => 'plain',
+        },
+        wantIds => [ $emails{'msg1'}, $emails{'msg2'} ],
+    }, {
+        filter => {
+            attachmentType => 'rtf',
+        },
+        wantIds => [ $emails{'msg1'}, $emails{'msg2'} ],
+    }, {
+        filter => {
+            attachmentType => 'application/*',
+        },
+        wantIds => [ $emails{'msg1'} ],
+    }, {
+        filter => {
+            attachmentType => '*/rtf',
+        },
+        wantIds => [ $emails{'msg1'}, $emails{'msg2'} ],
+    });
+
+    foreach (@tests) {
+        my $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => $_->{filter},
+            }, 'R1'],
+        ], $using);
+        my @gotIds = sort @{$res->[0][1]->{ids}};
+        my @wantIds = sort @{$_->{wantIds}};
+        $self->assert_deep_equals(\@wantIds, \@gotIds);
+    }
+}

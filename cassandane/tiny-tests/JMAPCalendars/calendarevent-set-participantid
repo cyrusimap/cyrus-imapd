@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_participantid
+    :min_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $participants = {
+        "foo" => {
+            email => 'foo@local',
+            roles => {
+                'attendee' => JSON::true,
+            },
+            locationId => "locX",
+            sendTo => {
+                imip => 'mailto:foo@local',
+            },
+        },
+        "you" => {
+            name => "Cassandane",
+            email => 'cassandane@example.com',
+            roles => {
+                'owner' => JSON::true,
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:cassandane@example.com',
+            },
+        },
+    };
+
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "showWithoutTime"=> JSON::false,
+        "freeBusyStatus"=> "busy",
+        "status" => "confirmed",
+        "replyTo" => { imip => "mailto:cassandane\@example.com" },
+        "participants" => $participants,
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarIds} = $ret->{calendarIds};
+    delete($ret->{participants}{foo}{scheduleStatus});
+
+    $self->assert_normalized_event_equals($event, $ret);
+
+    # check that we can fetch again a second time and still have the same data
+    my $res = $jmap->CallMethods([['CalendarEvent/get', { ids => [ $event->{id} ] }, 'R1']]);
+    $ret = $res->[0][1]{list}[0];
+    delete($ret->{participants}{foo}{scheduleStatus});
+    $self->assert_normalized_event_equals($event, $ret);
+}

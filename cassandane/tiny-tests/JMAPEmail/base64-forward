@@ -1,0 +1,112 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_base64_forward
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    # Generate a email to have some blob ids
+    xlog $self, "Generate a email in $inbox via IMAP";
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: text/plain; charset=UTF-8\r\n"
+          . "some text"
+          . "\r\n--sub\r\n"
+          . "Content-Type: image/jpeg\r\n"
+          . "Content-Transfer-Encoding: base64\r\n" . "\r\n"
+          . "beefc0de"
+          . "\r\n--sub--\r\n",
+    );
+
+    xlog $self, "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog $self, "get email";
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => $ids,
+        properties => ['bodyStructure', 'mailboxIds'],
+    }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    my $blobid = $msg->{bodyStructure}{subParts}[1]{blobId};
+    $self->assert_not_null($blobid);
+    my $size = $msg->{bodyStructure}{subParts}[1]{size};
+    $self->assert_num_equals(6, $size);
+
+    $res = $jmap->Download('cassandane', $blobid);
+    $self->assert_str_equals("beefc0de", encode_base64($res->{content}, ''));
+
+    # now create a new message referencing this blobId:
+
+    $res = $jmap->CallMethods([['Email/set', {
+        create => {
+            k1 => {
+                bcc => undef,
+                bodyStructure => {
+                    subParts => [{
+                        partId => 'text',
+                        type => 'text/plain',
+                    },{
+                        blobId => $blobid,
+                        cid => undef,
+                        disposition => 'attachment',
+                        height => undef,
+                        name => 'foobar.jpg',
+                        size => $size,
+                        type => 'image/jpeg',
+                        width => undef,
+                    }],
+                    type => 'multipart/mixed',
+                },
+                bodyValues => {
+                    text => {
+                        isTruncated => $JSON::false,
+                        value => "Hello world",
+                    },
+                },
+                cc => undef,
+                inReplyTo => undef,
+                mailboxIds => $msg->{mailboxIds},
+                from => [ {email => 'foo@example.com', name => 'foo' } ],
+                keywords => { '$draft' => $JSON::true, '$seen' => $JSON::true },
+                receivedAt => '2018-06-26T03:10:07Z',
+                references => undef,
+                replyTo => undef,
+                sentAt => '2018-06-26T03:10:07Z',
+                subject => 'test email',
+                to => [ {email => 'foo@example.com', name => 'foo' } ],
+            },
+        },
+    }, "R1"]]);
+
+    my $id = $res->[0][1]{created}{k1}{id};
+    $self->assert_not_null($id);
+
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => [$id],
+        properties => ['bodyStructure'],
+    }, "R1"]]);
+    $msg = $res->[0][1]{list}[0];
+
+    my $newpart = $msg->{bodyStructure}{subParts}[1];
+    $self->assert_str_equals("foobar.jpg", $newpart->{name});
+    $self->assert_str_equals("image/jpeg", $newpart->{type});
+    $self->assert_num_equals(6, $newpart->{size});
+
+    # XXX - in theory, this IS allowed to change
+    if ($newpart->{blobId} ne $blobid) {
+        $res = $jmap->Download('cassandane', $blobid);
+        # but this isn't!
+        $self->assert_str_equals("beefc0de", encode_base64($res->{content}, ''));
+    }
+}

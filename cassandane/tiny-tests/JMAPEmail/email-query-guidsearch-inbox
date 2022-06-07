@@ -1,0 +1,161 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_guidsearch_inbox
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    xlog "Create message in mailbox A";
+    my $email = <<'EOF';
+From: from@local
+To: to@local
+Subject: email1
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+email1
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
+    my $blobId = $data->{blobId};
+    $self->assert_not_null($blobId);
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+        }, "R1"],
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => "A",
+                }
+            }
+        }, "R2"]
+    ], $using);
+    my $inboxId = $res->[0][1]{ids}[0];
+    $self->assert_not_null($inboxId);
+    my $mboxId = $res->[1][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxId);
+
+    $res = $jmap->CallMethods([
+        ['Email/import', {
+            emails => {
+                email1 => {
+                    blobId => $blobId,
+                    mailboxIds => {
+                        $mboxId => JSON::true
+                    },
+                },
+            },
+        }, "R1"],
+    ], $using);
+    $self->assert_str_equals("Email/import", $res->[0][0]);
+    my $email1Id = $res->[0][1]->{created}{email1}{id};
+    $self->assert_not_null($email1Id);
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Query inMailbox=inbox";
+    $res = $jmap->CallMethods([
+        ['Email/get', {
+            ids => [$email1Id],
+            properties => ['mailboxIds'],
+        }, "R1"],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    inMailbox => $inboxId,
+                }],
+            },
+        }, "R2"],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    inMailbox => $inboxId,
+                    subject => 'email1',
+                }],
+            },
+        }, "R3"],
+    ], $using);
+    $self->assert_deep_equals({
+        $mboxId => JSON::true,
+    }, $res->[0][1]{list}[0]{mailboxIds});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals([], $res->[1][1]{ids});
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj ==3 && $min < 5)) {
+        $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+    }
+    else {
+        # Due to improved JMAP Email query optimizer
+        $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isGuidSearch});
+    }
+
+    $self->assert_deep_equals([], $res->[2][1]{ids});
+
+    xlog "Create message in inbox";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email2 => {
+                    mailboxIds => {
+                        $inboxId => JSON::true,
+                    },
+                    subject => 'email2',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'email2',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $email2Id = $res->[0][1]->{created}{email2}{id};
+    $self->assert_not_null($email2Id);
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Rerun query inMailbox=inbox";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    inMailbox => $inboxId,
+                }],
+            },
+        }, "R1"],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    inMailbox => $inboxId,
+                    subject => 'email2',
+                }],
+            },
+        }, "R1"],
+    ], $using);
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals([$email2Id], $res->[0][1]{ids});
+    $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals([$email2Id], $res->[1][1]{ids});
+}

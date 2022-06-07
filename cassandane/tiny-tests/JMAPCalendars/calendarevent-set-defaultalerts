@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_defaultalerts
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    xlog "Set default alerts on calendar and event";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => {
+                        alert1 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT5M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                    defaultAlertsWithoutTime => {
+                        alert2 => {
+                           '@type' => 'Alert',
+                           trigger => {
+                               '@type' => 'OffsetTrigger',
+                               relativeTo => 'start',
+                               offset => 'PT0S',
+                           },
+                           action => 'display',
+                       },
+                    },
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::true,
+                },
+                2 => {
+                    uid => 'eventuid2local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event2",
+                    start => "2020-01-19T00:00:00",
+                    showWithoutTime => JSON::true,
+                    duration => "P1D",
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+    my $event1Href = $res->[1][1]{created}{1}{'x-href'};
+    $self->assert_not_null($event1Href);
+    my $event2Href = $res->[1][1]{created}{2}{'x-href'};
+    $self->assert_not_null($event2Href);
+
+    my $CaldavResponse = $CalDAV->Request('GET', $event1Href);
+    my $icaldata = $CaldavResponse->{content};
+    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT5M/, $icaldata);
+
+    $CaldavResponse = $CalDAV->Request('GET', $event2Href);
+    $icaldata = $CaldavResponse->{content};
+    $self->assert_matches(qr/TRIGGER;RELATED=START:PT0S/, $icaldata);
+}

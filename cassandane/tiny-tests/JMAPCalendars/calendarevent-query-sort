@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_query_sort
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                '1' => {
+                    calendarIds => {
+                        $calid => JSON::true,
+                    },
+                    'uid' => 'event1uid',
+                    'title' => 'event1',
+                    'start' => '2019-10-01T10:00:00',
+                    'timeZone' => 'Etc/UTC',
+                },
+                '2' => {
+                    calendarIds => {
+                        $calid => JSON::true,
+                    },
+                    'uid' => 'event2uid',
+                    'title' => 'event2',
+                    'start' => '2018-10-01T12:00:00',
+                    'timeZone' => 'Etc/UTC',
+                },
+        }
+    }, 'R1']]);
+    my $eventId1 = $res->[0][1]{created}{1}{id};
+    my $eventId2 = $res->[0][1]{created}{2}{id};
+    $self->assert_not_null($eventId1);
+    $self->assert_not_null($eventId2);
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            sort => [{
+                property => 'start',
+                isAscending => JSON::true,
+            }]
+        }, 'R1']
+    ]);
+    $self->assert_deep_equals([$eventId2,$eventId1], $res->[0][1]{ids});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            sort => [{
+                property => 'start',
+                isAscending => JSON::false,
+            }]
+        }, 'R1']
+    ]);
+    $self->assert_deep_equals([$eventId1,$eventId2], $res->[0][1]{ids});
+
+}
