@@ -704,22 +704,28 @@ EXPORTED void search_expr_detrivialise(search_expr_t **ep)
  * Top-level normalisation step.  Returns 1 if it changed the subtree, 0
  * if it didn't, and -1 on error (such as exceeding a complexity limit).
  */
-static int normalise(search_expr_t **ep, unsigned *nnodes)
+static int normalise(search_expr_t **ep, unsigned *nnodes, unsigned *nnodes_last_collect)
 {
     search_expr_t **prevp;
     int depth;
     int changed = -1;
     int r;
-    unsigned nnodes_last_collect = *nnodes;
+    char is_root = !nnodes_last_collect;
+    if (is_root) {
+        unsigned nnodes_last_collect_value = *nnodes;
+        nnodes_last_collect = &nnodes_last_collect_value;
+    }
 
 restart:
     changed++;
 
-    if (*nnodes > 2 * nnodes_last_collect + 1) {
-        int r2 = detrivialise(ep, nnodes);
-        if (r2 < 0) return -1;
-        if (r2 > 0) changed++;
-        nnodes_last_collect = *nnodes;
+    if (*nnodes > 2 * *nnodes_last_collect + 1) {
+        if (!is_root) return -2;
+
+        r = detrivialise(ep, nnodes);
+        *nnodes_last_collect = *nnodes;
+        if (r < 0) return -1;
+        if (r > 0) changed++;
     }
 
 #if DEBUG
@@ -751,7 +757,11 @@ restart:
             if (r < 0) return -1;
             goto restart;
         }
-        r = normalise(prevp, nnodes);
+        r = normalise(prevp, nnodes, nnodes_last_collect);
+        if (r == -2) {
+            if (is_root) goto restart;
+            return -2;
+        }
         if (r < 0) return -1;
         if (r > 0) goto restart;
     }
@@ -914,7 +924,7 @@ static int search_expr_normalise_nnodes(search_expr_t **ep, unsigned *nnodes)
 #if DEBUG
     the_rootp = ep;
 #endif
-    r = normalise(ep, nnodes);
+    r = normalise(ep, nnodes, NULL);
     if (r >= 0) {
         int r2 = detrivialise(ep, nnodes);
         if (!r) r = r2;
