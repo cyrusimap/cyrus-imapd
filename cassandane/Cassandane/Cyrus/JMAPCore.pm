@@ -478,12 +478,24 @@ sub test_identity_get
         'urn:ietf:params:jmap:submission',
     ];
 
-    my $res = $jmap->CallMethods([['Identity/get', {}, "R1"]], $using);
+    my $res = $jmap->CallMethods([
+        ['Identity/get', { }, 'R1'],
+        ['Identity/get', { ids => undef }, 'R2'],
+        ['Identity/get', { ids => [] }, 'R3'],
+    ], $using);
 
     $self->assert_str_equals('Identity/get', $res->[0][0]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_str_equals('cassandane', $res->[0][1]{list}[0]{id}); $self->assert_not_null($res->[0][1]->{state});
+    $self->assert_str_equals('cassandane', $res->[0][1]{list}[0]{id});
+    $self->assert_not_null($res->[0][1]->{state});
     $self->assert_str_equals('R1', $res->[0][2]);
+
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_str_equals('cassandane', $res->[1][1]{list}[0]{id});
+    $self->assert_not_null($res->[1][1]->{state});
+
+    $self->assert_deep_equals([], $res->[2][1]{list});
+    $self->assert_not_null($res->[2][1]->{state});
 }
 
 sub test_sessionstate
