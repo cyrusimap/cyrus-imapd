@@ -4133,6 +4133,10 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
         else if (r == IMAP_MESSAGE_TOO_LARGE) {
             respcode = "[TOOBIG] ";
         }
+        else if (r == IMAP_USERFLAG_EXHAUSTED ||
+                 r == IMAP_CONVERSATION_GUIDLIMIT) {
+            respcode = "[LIMIT] ";
+        }
         else if (r == IMAP_MAILBOX_NONEXISTENT &&
                  mboxlist_createmailboxcheck(intname, 0, 0,
                                              imapd_userisadmin,
