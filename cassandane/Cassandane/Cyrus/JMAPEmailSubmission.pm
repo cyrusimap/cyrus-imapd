@@ -1649,6 +1649,13 @@ sub test_emailsubmission_scheduled_send
     $self->assert_null($res->[2][1]->{list}[0]->{mailboxIds}{$schedid});
 
     
+    xlog $self, "Destroy canceled email submission 2 (now in Drafts) ";
+    $res = $jmap->CallMethods( [ [ 'Email/set', {
+        destroy => [ $emailid2 ],
+    }, "R1" ] ] );
+    $self->assert_str_equals($emailid2, $res->[0][1]->{destroyed}[0]);
+
+
     xlog $self, "Verify an event was removed from the alarmdb";
     $alarmdata = $self->{instance}->getalarmdb();
     $self->assert_num_equals(1, scalar @$alarmdata);

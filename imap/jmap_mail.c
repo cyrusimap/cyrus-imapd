@@ -10908,6 +10908,12 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
     /* don't process emails that have this email attached! */
     if (rec->part) goto done;
 
+    /* don't process emails that have been expunged */
+    if ((rec->system_flags & FLAG_DELETED) ||
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        goto done;
+    }
+
     conv_guidrec_mbentry(rec, &mbentry);
 
     if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)) {
