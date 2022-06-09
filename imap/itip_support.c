@@ -1007,9 +1007,11 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     icalcomponent_kind kind;
     icalcomponent *comp;
     icalproperty *prop;
-    struct transaction_t txn;
     enum sched_deliver_outcome result = SCHED_DELIVER_ERROR;
     strarray_t recipient_addresses = STRARRAY_INITIALIZER;
+
+    /* Start with an empty (clean) transaction */
+    struct transaction_t txn = { .userid = userid };
 
     strarray_append(&recipient_addresses, recipient);
 
@@ -1019,9 +1021,11 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     if (icalp) *icalp = NULL;
     if (attendeep) *attendeep = NULL;
 
-    /* Start with an empty (clean) transaction */
-    memset(&txn, 0, sizeof(struct transaction_t));
-    txn.userid = userid;
+    if (!strcmp(sender, recipient)) {
+        /* Ignore iTIP sent from and to the same address */
+        result = SCHED_DELIVER_NOACTION;
+        goto done;
+    }
 
     /* Create header cache */
     txn.req_hdrs = spool_new_hdrcache();
