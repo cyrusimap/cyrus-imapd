@@ -5313,8 +5313,72 @@ int updateevent_check_exists_cb(void *vrock __attribute__((unused)),
     return CYRUSDB_DONE;
 }
 
+struct itip_rock {
+    struct mailbox *inbox;
+    const char *uid;
+    const char *recurid;
+};
+
+static int remove_itip_cb(void *rock, struct caldav_data *cdata)
+{
+    struct itip_rock *irock = (struct itip_rock *) rock;
+    struct index_record record = { 0 };
+    icalcomponent *itip = NULL;
+    int match = 0;
+
+    if (!strcmp(cdata->ical_uid, irock->uid) &&
+        !mailbox_find_index_record(irock->inbox, cdata->dav.imap_uid, &record)) {
+        if (!irock->recurid) {
+            match = 1;
+        }
+        else if ((itip = record_to_ical(irock->inbox, &record, NULL))) {
+            /* See if the iTIP contains this RECURRENCE-ID */
+            icalcomponent *comp = icalcomponent_get_first_real_component(itip);
+            icalcomponent_kind kind = icalcomponent_isa(comp);
+
+            for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
+                icalproperty *recurid =
+                    icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+                if (recurid &&
+                    !strcmp(irock->recurid,
+                            icalproperty_get_value_as_string(recurid))) {
+                    match = 1;
+                    break;
+                }
+            }
+            icalcomponent_free(itip);
+        }
+    }
+
+    if (match) {
+        /* Expunge the resource from mailbox. */
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        int r = mailbox_rewrite_index_record(irock->inbox, &record);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_rewrite_index_record (%s:%u) failed: %s",
+                   mailbox_name(irock->inbox), cdata->dav.imap_uid,
+                   error_message(r));
+        }
+    }
+
+    return 0;
+}
+
+static void remove_itip_messages(struct caldav_db *db,
+                                 struct mailbox *inbox,
+                                 const char *uid,
+                                 const char *recurid)
+{
+    if (inbox) {
+        struct itip_rock irock = { inbox, uid, recurid };
+
+        caldav_foreach(db, inbox->mbentry, &remove_itip_cb, &irock);
+    }
+}
+
 static void setcalendarevents_update(jmap_req_t *req,
                                      struct mailbox *notifmbox,
+                                     struct mailbox *schedinbox,
                                      json_t *event_patch,
                                      struct jmap_caleventid *eid,
                                      struct caldav_db *db,
@@ -5599,6 +5663,10 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
     r = 0;
 
+    /* Remove related iTIP messages from CalDAV Scheduling Inbox */
+    remove_itip_messages(db, schedinbox, eid->ical_uid,
+                         update.is_standalone ? eid->ical_recurid : NULL);
+
     /* Handle scheduling. */
     if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
         r = setcalendarevents_schedule(sched_userid, &schedule_addresses,
@@ -5705,6 +5773,7 @@ static icalcomponent *prune_vevent_instances(icalcomponent *ical,
 
 static int setcalendarevents_destroy(jmap_req_t *req,
                                      struct mailbox *notifmbox,
+                                     struct mailbox *schedinbox,
                                      struct jmap_caleventid *eid,
                                      struct caldav_db *db,
                                      int send_scheduling_messages)
@@ -5754,7 +5823,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         json_t *event_patch = json_pack("{s:b}", "excluded", 1);
         json_t *update = NULL;
         json_t *err = NULL;
-        setcalendarevents_update(req, notifmbox, event_patch, eid, db,
+        setcalendarevents_update(req, notifmbox, schedinbox, event_patch, eid, db,
                 send_scheduling_messages, update, &err);
         json_decref(event_patch);
         json_decref(update);
@@ -5924,6 +5993,10 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
+    /* Remove related iTIP messages from CalDAV Scheduling Inbox */
+    remove_itip_messages(db, schedinbox, eid->ical_uid,
+                         is_standalone_instance ? eid->ical_recurid : NULL);
+
 done:
     if (mbox) jmap_closembox(req, &mbox);
     if (oldical) icalcomponent_free(oldical);
@@ -5962,42 +6035,6 @@ static int setcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
     }
 
     return 0;
-}
-
-struct itip_rock {
-    struct mailbox *inbox;
-    struct jmap_caleventid *eid;
-};
-
-static int remove_itip_cb(void *rock, struct caldav_data *cdata)
-{
-    struct itip_rock *irock = (struct itip_rock *) rock;
-    struct index_record record = { 0 };
-
-    if (!strcmp(cdata->ical_uid, irock->eid->ical_uid) &&
-        !mailbox_find_index_record(irock->inbox, cdata->dav.imap_uid, &record)) {
-        /* Expunge the resource from mailbox. */
-        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-        int r = mailbox_rewrite_index_record(irock->inbox, &record);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_rewrite_index_record (%s:%u) failed: %s",
-                   mailbox_name(irock->inbox), cdata->dav.imap_uid,
-                   error_message(r));
-        }
-    }
-
-    return 0;
-}
-
-static void remove_itip_messages(struct caldav_db *db,
-                                 struct mailbox *inbox,
-                                 struct jmap_caleventid *eid)
-{
-    if (inbox) {
-        struct itip_rock irock = { inbox, eid };
-
-        caldav_foreach(db, inbox->mbentry, &remove_itip_cb, &irock);
-    }
 }
 
 static int jmap_calendarevent_set(struct jmap_req *req)
@@ -6094,7 +6131,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         }
 
         /* Destroy the calendar event. */
-        r = setcalendarevents_destroy(req, notifmbox, eid, db, send_itip);
+        r = setcalendarevents_destroy(req, notifmbox, schedinbox, eid, db, send_itip);
         if (r == IMAP_NOTFOUND) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(set.not_destroyed, eid->raw, err);
@@ -6111,9 +6148,6 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         /* Report calendar event as destroyed. */
         json_array_append_new(set.destroyed, json_string(eid->raw));
-
-        /* Remove related iTIP messages from CalDAV Scheduling Inbox */
-        remove_itip_messages(db, schedinbox, eid);
     }
     jmap_caleventid_free(&eid);
 
@@ -6171,7 +6205,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         /* Update the calendar event. */
         json_t *update = json_object();
         json_t *err = NULL;
-        setcalendarevents_update(req, notifmbox, arg, eid, db,
+        setcalendarevents_update(req, notifmbox, schedinbox, arg, eid, db,
                 send_itip, update, &err);
         if (err) {
             json_object_set_new(set.not_updated, eid->raw, err);
@@ -6187,9 +6221,6 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         /* Report calendar event as updated. */
         json_object_set_new(set.updated, eid->raw, update);
-
-        /* Remove related iTIP messages from CalDAV Scheduling Inbox */
-        remove_itip_messages(db, schedinbox, eid);
     }
     jmap_caleventid_free(&eid);
 

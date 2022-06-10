@@ -4383,7 +4383,6 @@ EOF
     xlog $self, "Deliver iMIP cancel";
     $msg = Cassandane::Message->new(raw => $imip);
     $self->{instance}->deliver($msg);
-    sleep 1;
 
     xlog $self, "Delete canceled event";
     $res = $jmap->CallMethods([['CalendarEvent/set', {destroy => [$id]}, "R2"]]);
