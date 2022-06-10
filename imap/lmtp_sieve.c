@@ -1489,6 +1489,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
         goto done;
     }
     organizer = icalproperty_get_organizer(prop);
+    if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 
     if (strchr(ctx->userid, '@')) {
         strarray_add(&sched_addresses, ctx->userid);
@@ -1584,6 +1585,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
                 goto done;
             }
             originator = icalproperty_get_invitee(prop);
+            if (!strncasecmp(originator, "mailto:", 7)) originator += 7;
 
             sched_flags |= SCHEDFLAG_IS_REPLY;
             break;
