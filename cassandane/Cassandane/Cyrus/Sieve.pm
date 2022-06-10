@@ -4243,6 +4243,156 @@ EOF
     $self->assert_str_equals('2021-09-24T14:00:00', $events->[0]{start});
 }
 
+sub test_remove_itip_on_jmap_update
+    :needs_component_sieve :needs_component_httpd :min_version_3_5
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Create calendar user";
+    my $CalDAV = $self->{caldav};
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "updated" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-0\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid-0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=America/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=cassandane:
+ MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP invite";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $self->{instance}->deliver($msg);
+
+
+    $imip = <<EOF;
+Date: Thu, 24 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-1\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid-1
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210924T170000
+TRANSP:OPAQUE
+SUMMARY:An Updated Event
+DTSTART;TZID=America/New_York:20210924T140000
+DTSTAMP:20210923T034327Z
+SEQUENCE:1
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=cassandane:
+ MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP update";
+    $msg = Cassandane::Message->new(raw => $imip);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that 2 iTIP messages made it to Scheduling Inbox";
+    my $events = $CalDAV->GetEvents('Inbox');
+    $self->assert_equals(2, scalar @$events);
+
+    my $res = $jmap->CallMethods([['CalendarEvent/get', {}, "R1"]]);
+    my $event = $res->[0][1]{list}[0];
+    my $id = $event->{id};
+
+    xlog $self, "Update participationStatus";
+    $res = $jmap->CallMethods([['CalendarEvent/set',
+                                {update =>
+                                 {$id =>
+                                  { "participants/cassandane/participationStatus" => "accepted"}}},
+                                "R1"]]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog $self, "Check that iTIP messages were removed from Scheduling Inbox";
+    $events = $CalDAV->GetEvents('Inbox');
+    $self->assert_equals(0, scalar @$events);
+
+
+    $imip = <<EOF;
+Date: Thu, 24 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-1\@example.net>
+Content-Type: text/calendar; method=CANCEL; component=VEVENT
+X-Cassandane-Unique: $uuid-1
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:CANCEL
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTSTAMP:20210923T034327Z
+SEQUENCE:2
+STATUS:CANCELLED
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=cassandane:
+ MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP cancel";
+    $msg = Cassandane::Message->new(raw => $imip);
+    $self->{instance}->deliver($msg);
+    sleep 1;
+
+    xlog $self, "Delete canceled event";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {destroy => [$id]}, "R2"]]);
+
+    xlog $self, "Check that iTIP messages were removed from Scheduling Inbox";
+    $events = $CalDAV->GetEvents('Inbox');
+    $self->assert_equals(0, scalar @$events);
+}
+
 sub test_imip_add
     :needs_component_sieve :needs_component_httpd :min_version_3_7
 {

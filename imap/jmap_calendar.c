@@ -5964,6 +5964,42 @@ static int setcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
     return 0;
 }
 
+struct itip_rock {
+    struct mailbox *inbox;
+    struct jmap_caleventid *eid;
+};
+
+static int remove_itip_cb(void *rock, struct caldav_data *cdata)
+{
+    struct itip_rock *irock = (struct itip_rock *) rock;
+    struct index_record record = { 0 };
+
+    if (!strcmp(cdata->ical_uid, irock->eid->ical_uid) &&
+        !mailbox_find_index_record(irock->inbox, cdata->dav.imap_uid, &record)) {
+        /* Expunge the resource from mailbox. */
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        int r = mailbox_rewrite_index_record(irock->inbox, &record);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_rewrite_index_record (%s:%u) failed: %s",
+                   mailbox_name(irock->inbox), cdata->dav.imap_uid,
+                   error_message(r));
+        }
+    }
+
+    return 0;
+}
+
+static void remove_itip_messages(struct caldav_db *db,
+                                 struct mailbox *inbox,
+                                 struct jmap_caleventid *eid)
+{
+    if (inbox) {
+        struct itip_rock irock = { inbox, eid };
+
+        caldav_foreach(db, inbox->mbentry, &remove_itip_cb, &irock);
+    }
+}
+
 static int jmap_calendarevent_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -5974,6 +6010,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     const char *id;
     int r = 0;
     int send_itip = 1;
+    struct mailbox *schedinbox = NULL;
     struct mailbox *notifmbox = NULL;
     mbentry_t *notifmb = NULL;
 
@@ -6017,6 +6054,16 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         r = IMAP_INTERNAL;
         goto done;
     }
+
+    /* Open CalDAV Scheduling Inbox, but continue even on error. */
+    char *inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
+    r = jmap_openmbox(req, inboxname, &schedinbox, 1);
+    if (r) {
+        xsyslog(LOG_WARNING, "can not open CalDAV Scheduling Inbox",
+                "accountid=%s error=%s", req->accountid, error_message(r));
+        r = 0;
+    }
+    free(inboxname);
 
     /* Open notifications mailbox, but continue even on error. */
     r = jmap_create_notify_collection(req->accountid, &notifmb);
@@ -6064,6 +6111,9 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         /* Report calendar event as destroyed. */
         json_array_append_new(set.destroyed, json_string(eid->raw));
+
+        /* Remove related iTIP messages from CalDAV Scheduling Inbox */
+        remove_itip_messages(db, schedinbox, eid);
     }
     jmap_caleventid_free(&eid);
 
@@ -6137,6 +6187,9 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         /* Report calendar event as updated. */
         json_object_set_new(set.updated, eid->raw, update);
+
+        /* Remove related iTIP messages from CalDAV Scheduling Inbox */
+        remove_itip_messages(db, schedinbox, eid);
     }
     jmap_caleventid_free(&eid);
 
@@ -6150,6 +6203,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     jmap_ok(req, jmap_set_reply(&set));
 
 done:
+    jmap_closembox(req, &schedinbox);
     jmap_closembox(req, &notifmbox);
     mboxlist_entry_free(&notifmb);
     jmap_parser_fini(&parser);
