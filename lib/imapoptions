@@ -2077,7 +2077,7 @@ If all partitions are over that limit, this feature is not used anymore.
    In a standard murder this option should ONLY be set on backends.
    DO NOT SET on frontends or things won't work properly. */
 
-{ "pts_module", "afskrb", STRINGLIST("afskrb", "ldap", "http"), "2.3.17" }
+{ "pts_module", "afskrb", STRINGLIST("afskrb", "ldap", "http"), "UNRELEASED" }
 /* The PTS module to use. */
 
 { "ptloader_sock", NULL, STRING, "2.3.17" }
