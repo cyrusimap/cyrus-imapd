@@ -1337,7 +1337,7 @@ done:
 static void clean_component(icalcomponent *comp)
 {
     icalcomponent *alarm, *next;
-    icalproperty *prop;
+    icalproperty *prop, *nextprop;
 
     /* Replace DTSTAMP on component */
     prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);
@@ -1353,6 +1353,27 @@ static void clean_component(icalcomponent *comp)
         next = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
         icalcomponent_remove_component(comp, alarm);
         icalcomponent_free(alarm);
+    }
+
+    /* Remove TRANSP, COLOR, and CATEGORIES (if color) */
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
+         prop; prop = nextprop) {
+        nextprop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY);
+        switch (icalproperty_isa(prop)) {
+        case ICAL_CATEGORIES_PROPERTY:
+            if (!ical_categories_is_color(prop)) break;
+
+            GCC_FALLTHROUGH
+
+        case ICAL_COLOR_PROPERTY:
+        case ICAL_TRANSP_PROPERTY:
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+            break;
+
+        default:
+            break;
+        }
     }
 
     /* Grab the organizer */

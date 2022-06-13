@@ -187,6 +187,8 @@ extern void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
                                                      icaltimetype *last_dtstart,
                                                      int ms_compatible);
 
+extern int ical_categories_is_color(icalproperty *cprop);
+
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory
 

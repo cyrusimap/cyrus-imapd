@@ -1082,9 +1082,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     comp = icalcomponent_get_first_real_component(itip);
     kind = icalcomponent_isa(comp);
 
-    /* Strip VALARMs and TRANSP */
+    /* Strip VALARMs, TRANSP, COLOR, and CATEGORIES (if color) */
     for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
         icalcomponent *alarm, *nextalarm;
+        icalproperty *nextprop;
         for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
                 alarm; alarm = nextalarm) {
             nextalarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
@@ -1092,10 +1093,24 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             icalcomponent_free(alarm);
         }
 
-        prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
-        if (prop) {
-            icalcomponent_remove_property(comp, prop);
-            icalproperty_free(prop);
+        for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
+             prop; prop = nextprop) {
+            nextprop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY);
+            switch (icalproperty_isa(prop)) {
+            case ICAL_CATEGORIES_PROPERTY:
+                if (!ical_categories_is_color(prop)) break;
+
+                GCC_FALLTHROUGH
+
+            case ICAL_COLOR_PROPERTY:
+            case ICAL_TRANSP_PROPERTY:
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+                break;
+
+            default:
+                break;
+            }
         }
     }
 

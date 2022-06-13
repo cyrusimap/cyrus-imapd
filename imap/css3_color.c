@@ -46,6 +46,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "util.h"
+
 struct css3_color_t {
     const char *name;
     unsigned char r;
@@ -254,4 +256,13 @@ const char *css3_color_hex_to_name(const char *hexstr)
     }
 
     return name;
+}
+
+int is_css3_color(const char *s)
+{
+    const struct css3_color_t *c;
+
+    for (c = css3_colors; strcasecmpsafe(s, c->name); c++);
+
+    return (c->name != NULL);
 }
