@@ -65,6 +65,7 @@ extern struct pts_module pts_afskrb;
 struct auth_state *ptsmodule_make_authstate(const char *identifier,
                                             size_t size,
                                             const char **reply, int *dsize);
+char *ptsmodule_unix_canonifyid(const char *identifier, size_t len);
 void ptsmodule_init(void);
 
 #endif /* INCLUDED_PTLOADER_H */
