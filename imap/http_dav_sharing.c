@@ -1077,7 +1077,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
     r = mailbox_open_iwl(mboxname, &shared);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: failed to open mailbox for share reply",
-                         "mailbox=<%s>", mboxname);
+                "mailbox=<%s> err=<%s>", mboxname, error_message(r));
     }
     else {
         annotate_state_t *astate = NULL;
