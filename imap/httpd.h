@@ -45,6 +45,10 @@
 #define HTTPD_H
 
 #include <sasl/sasl.h>
+
+typedef struct transaction_t txn_t;
+
+#if defined(HAVE_XML2) && defined(HAVE_ICAL)
 #include <libxml/tree.h>
 #include <libxml/uri.h>
 #include <libical/ical.h>
@@ -173,8 +177,6 @@ enum {
 #define ALLOW_READ_MASK ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE|ALLOW_PATCH\
                           |ALLOW_PROPPATCH|ALLOW_MKCOL|ALLOW_ACL)
 
-
-typedef struct transaction_t txn_t;
 
 struct auth_scheme_t {
     unsigned id;                /* Identifier of the scheme */
@@ -653,5 +655,7 @@ extern int http1_end_resp_headers(struct transaction_t *txn, long code);
 extern int http1_resp_body_chunk(struct transaction_t *txn,
                                  const char *data, unsigned datalen,
                                  int last_chunk, MD5_CTX *md5ctx);
+
+#endif /* HAVE_XML2 && HAVE_ICAL */
 
 #endif /* HTTPD_H */
