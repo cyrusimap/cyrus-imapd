@@ -4338,8 +4338,7 @@ EOF
     $self->assert_equals(2, scalar @$events);
 
     my $res = $jmap->CallMethods([['CalendarEvent/get', {}, "R1"]]);
-    my $event = $res->[0][1]{list}[0];
-    my $id = $event->{id};
+    my $id = $res->[0][1]{list}[0]{id};
 
     xlog $self, "Update participationStatus";
     $res = $jmap->CallMethods([['CalendarEvent/set',
@@ -4388,6 +4387,106 @@ EOF
     $res = $jmap->CallMethods([['CalendarEvent/set', {destroy => [$id]}, "R2"]]);
 
     xlog $self, "Check that iTIP messages were removed from Scheduling Inbox";
+    $events = $CalDAV->GetEvents('Inbox');
+    $self->assert_equals(0, scalar @$events);
+
+    $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-0\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid-0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210923T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=America/New_York:20210923T153000
+RECURRENCE-ID;TZID=America/New_York:20210923T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=cassandane:
+ MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP invite for one instance";
+    $msg = Cassandane::Message->new(raw => $imip);
+    $self->{instance}->deliver($msg);
+
+    $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-0\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid-1
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTEND;TZID=America/New_York:20210930T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=America/New_York:20210930T153000
+RECURRENCE-ID;TZID=America/New_York:20210930T153000
+DTSTAMP:20210923T034327Z
+SEQUENCE:1
+ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=cassandane:
+ MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP invite for another instance";
+    $msg = Cassandane::Message->new(raw => $imip);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that 2 iTIP messages made it to Scheduling Inbox";
+    $events = $CalDAV->GetEvents('Inbox');
+    $self->assert_equals(2, scalar @$events);
+
+    $res = $jmap->CallMethods([['CalendarEvent/get', {}, "R1"]]);
+    $id = $res->[0][1]{list}[0]{id};
+    my $id2 = $res->[0][1]{list}[1]{id};
+
+    xlog $self, "Update participationStatus on one instance";
+    $res = $jmap->CallMethods([['CalendarEvent/set',
+                                {update =>
+                                 {$id =>
+                                  { "participants/cassandane/participationStatus" => "accepted"}}},
+                                "R1"]]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog $self, "Check that one iTIP message was removed from Scheduling Inbox";
+    $events = $CalDAV->GetEvents('Inbox');
+    $self->assert_equals(1, scalar @$events);
+
+    xlog $self, "Update participationStatus on the other instance";
+    $res = $jmap->CallMethods([['CalendarEvent/set',
+                                {update =>
+                                 {$id2 =>
+                                  { "participants/cassandane/participationStatus" => "accepted"}}},
+                                "R1"]]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog $self, "Check that one iTIP message was removed from Scheduling Inbox";
     $events = $CalDAV->GetEvents('Inbox');
     $self->assert_equals(0, scalar @$events);
 }
