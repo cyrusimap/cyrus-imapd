@@ -1859,4 +1859,33 @@ sub test_dedup_part_compact
     $self->assert_num_equals(3, scalar @$gdocs);
 }
 
+sub test_reindex_mb_uniqueid
+    :min_version_3_7 :needs_search_xapian
+{
+    my ($self) = @_;
+
+    my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
+    my $basedir = $self->{instance}->{basedir};
+
+    $self->make_message('msgA', body => 'part1') || die;
+    $self->make_message('msgB', body => 'part1') || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-D');
+
+    xlog "compact and reindex tier";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-z', 't2', '-t', 't1', '-T', 't1:0');
+
+    xlog "dump t2:cyrus.indexed.db";
+    # assumes twoskip backend and version 2 format keys
+    my $srcfile = $xapdirs->{t2} . '/xapian/cyrus.indexed.db';
+    my $dstfile = $basedir . '/tmp/cyrus.indexed.db.flat';
+    $self->{instance}->run_command({cyrus => 1}, 'cvt_cyrusdb', $srcfile, 'twoskip', $dstfile, 'flat');
+
+    xlog "assert reindexed tier contains a mailbox key";
+    open(FH, "<$dstfile") || die;
+    my @mboxrows = grep { /^\*M\*[0-9a-zA-z\-_]+\*/ } <FH>;
+    close FH;
+    $self->assert_num_equals(1, scalar @mboxrows);
+}
+
+
 1;

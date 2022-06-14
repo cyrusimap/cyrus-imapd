@@ -3441,7 +3441,7 @@ static int reindex_mb(void *rock,
                       const char *data, size_t datalen)
 {
     struct mbfilter *filter = (struct mbfilter *)rock;
-    char *mboxname = xstrndup(key, keylen);
+    char *mbkey = xstrndup(key, keylen);
     seqset_t *seq = parse_indexed(data, datalen);
     xapian_update_receiver_t *tr = NULL;
     struct mailbox *mailbox = NULL;
@@ -3449,25 +3449,53 @@ static int reindex_mb(void *rock,
     ptrarray_t batch = PTRARRAY_INITIALIZER;
     int verbose = SEARCH_VERBOSE(filter->flags);
     strarray_t alldirs = STRARRAY_INITIALIZER;
+    mbentry_t *mbentry = NULL;
     int r = 0;
     int i;
-    char *dot;
-    uint32_t uidvalidity;
 
-    dot = strrchr(mboxname, '.');
-    *dot++ = '\0';
-    uidvalidity = atol(dot);
+    /* Lookup mailbox */
+
+    if (mbkey[0] == '*' && mbkey[1] == 'M' && mbkey[2] == '*') {
+        // read *M*<uniqueid>*
+        char *end = strrchr(mbkey, '*');
+        if (end) {
+            *end = '\0';
+            r = mboxlist_lookup_by_uniqueid(mbkey + 3, &mbentry, NULL);
+        }
+    }
+    else if (mbkey[0] != '#') {
+        // read <mboxname>:<uidvalidity>
+        char *dot = strrchr(mbkey, '.');
+        if (dot) {
+            *dot++ = '\0';
+            uint32_t uidvalidity = atol(dot);
+            r = mboxlist_lookup(mbkey, &mbentry, NULL);
+            if (!r && uidvalidity != mbentry->uidvalidity) {
+                /* returns 0, nothing to index */
+                goto done;
+            }
+        }
+    }
+    else goto done;
+
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = 0;  /* it's not an error to have a no-longer-exiting mailbox to index */
+        goto done;
+    }
+    else if (r) {
+        xsyslog(LOG_ERR, "can not lookup mailbox", "key=<%s> err=<%s>",
+                mbkey, error_message(r));
+        goto done;
+    }
 
     if (!seq) goto done;
 
-    r = mailbox_open_irl(mboxname, &mailbox);
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = 0;  /* it's not an error to have a no-longer-exiting mailbox to index */
         goto done;
     }
     if (r) goto done;
-
-    if (mailbox->i.uidvalidity != uidvalidity) goto done; /* returns 0, nothing to index */
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
 
@@ -3612,7 +3640,8 @@ done:
         message_unref(&msg);
     }
     ptrarray_fini(&batch);
-    free(mboxname);
+    mboxlist_entry_free(&mbentry);
+    free(mbkey);
     seqset_free(&seq);
     strarray_fini(&alldirs);
     buf_free(&buf);
