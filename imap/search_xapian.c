@@ -3631,7 +3631,7 @@ done:
         strarray_free(tr->activetiers);
         seqset_free(&tr->indexed);
         if (tr->dbw) xapian_dbw_close(tr->dbw);
-        free_receiver(&tr->super);
+        end_update((search_text_receiver_t *)tr);
     }
     mailbox_close(&mailbox);
     for (i = 0; i < batch.count; i++) {
