@@ -5313,50 +5313,18 @@ int updateevent_check_exists_cb(void *vrock __attribute__((unused)),
     return CYRUSDB_DONE;
 }
 
-struct itip_rock {
-    struct mailbox *inbox;
-    const char *uid;
-    const char *recurid;
-};
-
-static int remove_itip_cb(void *rock, struct caldav_data *cdata)
+static int remove_itip_cb(void *rock, struct caldav_jscal *jscal)
 {
-    struct itip_rock *irock = (struct itip_rock *) rock;
+    struct mailbox *inbox = (struct mailbox *) rock;
     struct index_record record = { 0 };
-    icalcomponent *itip = NULL;
-    int match = 0;
 
-    if (!strcmp(cdata->ical_uid, irock->uid) &&
-        !mailbox_find_index_record(irock->inbox, cdata->dav.imap_uid, &record)) {
-        if (!irock->recurid) {
-            match = 1;
-        }
-        else if ((itip = record_to_ical(irock->inbox, &record, NULL))) {
-            /* See if the iTIP contains this RECURRENCE-ID */
-            icalcomponent *comp = icalcomponent_get_first_real_component(itip);
-            icalcomponent_kind kind = icalcomponent_isa(comp);
-
-            for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
-                icalproperty *recurid =
-                    icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
-                if (recurid &&
-                    !strcmp(irock->recurid,
-                            icalproperty_get_value_as_string(recurid))) {
-                    match = 1;
-                    break;
-                }
-            }
-            icalcomponent_free(itip);
-        }
-    }
-
-    if (match) {
-        /* Expunge the resource from mailbox. */
+    /* Expunge the resource from mailbox. */
+    if (!mailbox_find_index_record(inbox, jscal->cdata.dav.imap_uid, &record)) {
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-        int r = mailbox_rewrite_index_record(irock->inbox, &record);
+        int r = mailbox_rewrite_index_record(inbox, &record);
         if (r) {
             syslog(LOG_ERR, "mailbox_rewrite_index_record (%s:%u) failed: %s",
-                   mailbox_name(irock->inbox), cdata->dav.imap_uid,
+                   mailbox_name(inbox), jscal->cdata.dav.imap_uid,
                    error_message(r));
         }
     }
@@ -5370,9 +5338,13 @@ static void remove_itip_messages(struct caldav_db *db,
                                  const char *recurid)
 {
     if (inbox) {
-        struct itip_rock irock = { inbox, uid, recurid };
+        struct caldav_jscal_filter filter = {
+            .mbentry = inbox->mbentry,
+            .ical_uid = uid,
+            .ical_recurid = recurid
+        };
 
-        caldav_foreach(db, inbox->mbentry, &remove_itip_cb, &irock);
+        caldav_foreach_jscal(db, NULL, &filter, NULL, 0, &remove_itip_cb, inbox);
     }
 }
 
