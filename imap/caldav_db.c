@@ -835,13 +835,17 @@ EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
     buf_setcstr(&stmt, cache_userid ?
             CMD_READFIELDS_JSCALOBJS : CMD_READFIELDS_JSCALOBJS_NOCACHE);
 
-    buf_appendcstr(&stmt, " WHERE mailbox != :inbox");
-
-    if (filter) {
+    if (!filter) {
+        buf_appendcstr(&stmt, " WHERE mailbox != :inbox");
+    }
+    else {
         if (filter->mbentry) {
-            buf_appendcstr(&stmt, " AND mailbox = :mailbox");
+            buf_appendcstr(&stmt, " WHERE mailbox = :mailbox");
             bval[0].val.s = caldavdb->db->version >= DB_MBOXID_VERSION ?
                 filter->mbentry->uniqueid : filter->mbentry->name;
+        }
+        else {
+            buf_appendcstr(&stmt, " WHERE mailbox != :inbox");
         }
         if (filter->ical_uid) {
             buf_appendcstr(&stmt, " AND ical_uid = :ical_uid");
