@@ -254,10 +254,6 @@ extern void sieverestart(FILE *f);
 %type <cl> flagtags
 %type <nval> flagaction
 
-/* imapflags - draft-melnikov-sieve-imapflags-04 */
-%token <nval> MARK UNMARK
-%type <nval> flagmark
-
 /* subaddress - RFC 5233 */
 %token <nval> USER DETAIL
 %type <nval> subaddress
@@ -511,12 +507,6 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         /* SET/ADD/REMOVEFLAG */ 
         | flagaction flagtags stringlist
                                  { $$ = build_flag(sscript, $2, $3); }
-
-        /* MARK/UNMARK - translate into ADD/REMOVEFLAG "\\Flagged" */ 
-        | flagmark               { $$ = build_flag(sscript,
-                                                   new_command($1, sscript),
-                                                   strarray_split("\\Flagged",
-                                                                  NULL, 0)); }
 
         | ADDHEADER ahtags string string
                                  { $$ = build_addheader(sscript,
@@ -1023,12 +1013,6 @@ flagtags: /* empty */            { $$ = new_command($<nval>0, sscript); }
 
                                      $$->u.fl.variable = $2;
                                  }
-        ;
-
-
-/* MARK/UNMARK */
-flagmark: MARK                   { $$ = B_ADDFLAG;   }
-        | UNMARK                 { $$ = B_REMOVEFLAG; }
         ;
 
 

@@ -271,10 +271,6 @@ ws              [ \t]+
 <INITIAL>hasflag              return yylval->nval = HASFLAG;
 <INITIAL>:flags               return FLAGS;
 
-    /* imapflags - draft-melnikov-sieve-imapflags-04 */
-<INITIAL>mark                 return yylval->nval = MARK;
-<INITIAL>unmark               return yylval->nval = UNMARK;
-
     /* date - RFC 5260 */
 <INITIAL>date                 return DATE;
 <INITIAL>:originalzone        return ORIGINALZONE;

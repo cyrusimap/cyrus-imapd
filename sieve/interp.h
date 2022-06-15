@@ -234,7 +234,6 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_VACATION     \
                         | SIEVE_CAPA_RELATIONAL   \
                         | SIEVE_CAPA_IMAP4FLAGS   \
-                        | SIEVE_CAPA_IMAPFLAGS    \
                         | SIEVE_CAPA_SUBADDRESS   \
                         | SIEVE_CAPA_SPAM         \
                         | SIEVE_CAPA_SPAMPLUS     \

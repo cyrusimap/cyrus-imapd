@@ -1,0 +1,24 @@
+Description:
+
+Sieve: Remove support for creating scripts with the deprecated
+'imapflags' capability and 'mark' / 'unmark' actions.
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Existing Sieve bytecode compiled with 'mark' and 'unmark' will continue
+to execute (they will be translated to 'addflag' / 'removeflag' "\\Flagged"').
+
+Any software which generates Sieve scripts will no longer be able to
+'require "imapflags" or use 'mark' or 'unmark', and should instead
+'require "imap4flags"' and use 'addflag' / 'removeflag' "\\Flagged"'.
+
+
+GitHub issue:
+
+None.
