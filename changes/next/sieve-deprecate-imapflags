@@ -16,7 +16,7 @@ to execute (they will be translated to 'addflag' / 'removeflag' "\\Flagged"').
 
 Any software which generates Sieve scripts will no longer be able to
 'require "imapflags" or use 'mark' or 'unmark', and should instead
-'require "ima4flags"' and use 'addflag' / 'removeflag' "\\Flagged"'.
+'require "imap4flags"' and use 'addflag' / 'removeflag' "\\Flagged"'.
 
 
 GitHub issue:
