@@ -911,7 +911,7 @@ int service_init(int argc, char **argv, char **envp)
 
     prometheus_increment(CYRUS_IMAP_READY_LISTENERS);
 
-    maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE) * 1024;
+    maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
     if (!maxsize) maxsize = UINT32_MAX;
 
     return 0;
