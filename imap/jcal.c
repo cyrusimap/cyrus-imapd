@@ -184,8 +184,13 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
         struct icalgeotype geo = icalvalue_get_geo(value);
 
         obj = json_array();
+#ifdef ICAL_GEO_LEN
+        json_array_append_new(obj, json_real(atof(geo.lat)));
+        json_array_append_new(obj, json_real(atof(geo.lon)));
+#else
         json_array_append_new(obj, json_real(geo.lat));
         json_array_append_new(obj, json_real(geo.lon));
+#endif
         return obj;
     }
 
@@ -523,11 +528,16 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
                  i++);
             if (i == len) {
                 struct icalgeotype geo;
+                double lat = json_real_value(json_array_get(jvalue, 0));
+                double lon = json_real_value(json_array_get(jvalue, 1));
 
-                geo.lat =
-                    json_real_value(json_array_get(jvalue, 0));
-                geo.lon =
-                    json_real_value(json_array_get(jvalue, 1));
+#ifdef ICAL_GEO_LEN
+                snprintf(geo.lat, ICAL_GEO_LEN-1, "%lf", lat);
+                snprintf(geo.lon, ICAL_GEO_LEN-1, "%lf", lon);
+#else
+                geo.lat = lat;
+                geo.lon = lon;
+#endif
 
                 value = icalvalue_new_geo(geo);
             }
