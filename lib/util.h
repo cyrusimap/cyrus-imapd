@@ -174,6 +174,7 @@ int strcmpsafe(const char *a, const char *b);
 int strcasecmpsafe(const char *a, const char *b);
 /* ditto strncmp */
 int strncmpsafe(const char *a, const char *b, size_t n);
+int strncasecmpsafe(const char *a, const char *b, size_t n);
 
 /* NULL isn't "" */
 int strcmpnull(const char *a, const char *b);

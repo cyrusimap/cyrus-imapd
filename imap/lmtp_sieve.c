@@ -1483,13 +1483,15 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     }
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (!prop) {
+    if (prop) {
+        organizer = icalproperty_get_organizer(prop);
+        if (!strncasecmpsafe(organizer, "mailto:", 7)) organizer += 7;
+    }
+    else if (meth != ICAL_METHOD_PUBLISH) {
         buf_setcstr(&imip->outcome, "error");
         buf_setcstr(&imip->errstr, "missing ORGANIZER property");
         goto done;
     }
-    organizer = icalproperty_get_organizer(prop);
-    if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 
     if (strchr(ctx->userid, '@')) {
         strarray_add(&sched_addresses, ctx->userid);
@@ -1535,6 +1537,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
 
             GCC_FALLTHROUGH
 
+        case ICAL_METHOD_PUBLISH:
         case ICAL_METHOD_REQUEST:
             originator = organizer;
 

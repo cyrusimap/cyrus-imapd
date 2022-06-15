@@ -350,6 +350,13 @@ EXPORTED int strcasecmpsafe(const char *a, const char *b)
                       (b == NULL ? "" : b));
 }
 
+EXPORTED int strncasecmpsafe(const char *a, const char *b, size_t n)
+{
+    return strncasecmp((a == NULL ? "" : a),
+                       (b == NULL ? "" : b),
+                       n);
+}
+
 /* in which NULL is NOT equal to "" */
 EXPORTED int strcmpnull(const char *a, const char *b)
 {
