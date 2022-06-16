@@ -44,8 +44,8 @@
 #ifndef CSS3_COLOR_H
 #define CSS3_COLOR_H
 
-extern const char *css3_color_hex_to_name(const char *hexstr);
+const char *css3_color_hex_to_name(const char *hexstr);
 
-extern int is_css3_color(const char *s);
+int is_css3_color(const char *s);
 
 #endif /* CSS3_COLOR_H */

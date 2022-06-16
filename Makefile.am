@@ -1269,8 +1269,6 @@ nodist_imap_httpd_SOURCES = \
 imap_httpd_SOURCES = \
 	imap/caldav_util.c \
 	imap/caldav_util.h \
-	imap/css3_color.c \
-	imap/css3_color.h \
 	imap/http_admin.c \
 	imap/http_applepush.c \
 	imap/http_caldav.c \
