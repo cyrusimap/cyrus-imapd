@@ -1718,6 +1718,8 @@ static struct jmap_state_t
       offsetof(struct mboxname_counters, quotamodseq) },
     { "Racl",
       offsetof(struct mboxname_counters, raclmodseq) },
+    { "PushSubscription",
+      offsetof(struct mboxname_counters, jmappushsubmodseq) },
     { NULL, 0 }
 };
 
