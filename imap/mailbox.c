@@ -4452,7 +4452,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     assert(mailbox_index_islocked(mailbox, 1));
 
     /* Append MUST be a higher UID than any we've yet seen */
-    assert(record->uid > mailbox->i.last_uid)
+    assert(record->uid > mailbox->i.last_uid);
 
     /* Append MUST have a message with data */
     assert(record->size);
