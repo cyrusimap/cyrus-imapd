@@ -4283,7 +4283,7 @@ EXPORTED int message_get_mailinglist(message_t *m, struct buf *buf)
 
 EXPORTED const struct index_record *msg_record(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return &m->record;
 }
 
@@ -4297,7 +4297,7 @@ EXPORTED int message_get_size(message_t *m, uint32_t *sizep)
 
 EXPORTED uint32_t msg_size(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return m->record.size;
 }
 
@@ -4311,7 +4311,7 @@ EXPORTED int message_get_uid(message_t *m, uint32_t *uidp)
 
 EXPORTED uint32_t msg_uid(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return m->record.uid;
 }
 
@@ -4325,7 +4325,7 @@ EXPORTED int message_get_cid(message_t *m, conversation_id_t *cidp)
 
 EXPORTED conversation_id_t msg_cid(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return m->record.cid;
 }
 
@@ -4339,7 +4339,7 @@ EXPORTED int message_get_modseq(message_t *m, modseq_t *modseqp)
 
 EXPORTED modseq_t msg_modseq(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return m->record.modseq;
 }
 
@@ -4353,7 +4353,7 @@ EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
 
 EXPORTED int msg_msgno(const message_t *m)
 {
-    assert(!message_need(m, M_INDEX))
+    assert(!message_need(m, M_INDEX));
     return m->msgno;
 }
 
@@ -4367,7 +4367,7 @@ EXPORTED int message_get_guid(message_t *m, const struct message_guid **guidp)
 
 EXPORTED const struct message_guid *msg_guid(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return &m->record.guid;
 }
 
