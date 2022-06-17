@@ -995,7 +995,8 @@ static int mailbox_open_advanced(const char *name,
         goto done;
     }
 
-    if (!mbentry->uniqueid) {
+    /* XXX can we even get here for remote mbentries? */
+    if (!mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
         syslog(LOG_NOTICE, "mbentry %s has no uniqueid, needs reconstruct",
                             mailbox->name);
     }
