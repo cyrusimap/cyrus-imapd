@@ -1065,7 +1065,8 @@ static int mailbox_open_advanced(const char *name,
         return r;
     }
 
-    if (!mbentry->uniqueid) {
+    /* XXX can we even get here for remote mbentries? */
+    if (!mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
         /* Theoretically it shouldn't be possible for an mbentry to not
          * have a uniqueid... so if it happens, complain loudly.
          */
