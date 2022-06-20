@@ -956,16 +956,20 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     SSL_CTX_set_tmp_dh(s_ctx, dh_params);
 #endif
 
-#if (OPENSSL_VERSION_NUMBER >= 0x1000103fL) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+#if (OPENSSL_VERSION_NUMBER >= 0x1000103fL)
     const char *ec = config_getstring(IMAPOPT_TLS_ECCURVE);
     int openssl_nid = OBJ_sn2nid(ec);
     if (openssl_nid != 0) {
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+        SSL_CTX_set1_curves(s_ctx, &openssl_nid, 1);
+#else
         EC_KEY *ecdh;
         ecdh = EC_KEY_new_by_curve_name(openssl_nid);
         if (ecdh != NULL) {
             SSL_CTX_set_tmp_ecdh(s_ctx, ecdh);
             EC_KEY_free(ecdh);
         }
+#endif
     }
 #endif
 
