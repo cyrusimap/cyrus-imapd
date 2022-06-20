@@ -49,6 +49,7 @@
 
 #include "assert.h"
 #include "caldav_db.h"
+#include "css3_color.h"
 #include "global.h"
 #include "ical_support.h"
 #include "icu_wrap.h"
@@ -2955,6 +2956,21 @@ EXPORTED void icalcomponent_add_required_timezones(icalcomponent *ical)
     }
 
     ptrarray_fini(&tzs);
+}
+
+EXPORTED int ical_categories_is_color(icalproperty *cprop)
+{
+    const char *categories = icalproperty_get_categories(cprop);
+    int i;
+
+    if (categories[0] == '#') {
+        /* Is this #RRGGBB */
+        for (i = 1; i <= 6 && isxdigit(categories[i]); i++);
+
+        return (i == 7 && categories[7] == '\0');
+    }
+
+    return is_css3_color(categories);
 }
 
 #endif /* HAVE_ICAL */

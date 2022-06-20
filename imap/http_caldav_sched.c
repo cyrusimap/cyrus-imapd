@@ -1336,8 +1336,10 @@ done:
  */
 static void clean_component(icalcomponent *comp)
 {
-    icalcomponent *alarm, *next;
     icalproperty *prop;
+
+    /* Strip VALARMs, TRANSP, COLOR, and CATEGORIES (if color) */
+    itip_strip_personal_data(comp);
 
     /* Replace DTSTAMP on component */
     prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);
@@ -1346,14 +1348,6 @@ static void clean_component(icalcomponent *comp)
         icalcomponent_add_property(comp, prop);
     }
     icalproperty_set_dtstamp(prop, icaltime_current_time_with_zone(utc_zone));
-
-    /* Remove any VALARM components */
-    for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
-         alarm; alarm = next) {
-        next = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
-        icalcomponent_remove_component(comp, alarm);
-        icalcomponent_free(alarm);
-    }
 
     /* Grab the organizer */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);

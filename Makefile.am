@@ -1009,6 +1009,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/conversations.h \
 	imap/convert_code.c \
 	imap/convert_code.h \
+	imap/css3_color.c \
+	imap/css3_color.h \
 	imap/dav_db.c \
 	imap/dav_db.h \
 	imap/dlist.c \
@@ -1267,8 +1269,6 @@ nodist_imap_httpd_SOURCES = \
 imap_httpd_SOURCES = \
 	imap/caldav_util.c \
 	imap/caldav_util.h \
-	imap/css3_color.c \
-	imap/css3_color.h \
 	imap/http_admin.c \
 	imap/http_applepush.c \
 	imap/http_caldav.c \
