@@ -2968,7 +2968,7 @@ EXPORTED int ical_categories_is_color(icalproperty *cprop)
         /* Is this #RRGGBB */
         for (i = 1; i <= 6 && isxdigit(categories[i]); i++);
 
-        return (categories[i] == '\0');
+        return (i == 7 && categories[7] == '\0');
     }
 
     return is_css3_color(categories);
