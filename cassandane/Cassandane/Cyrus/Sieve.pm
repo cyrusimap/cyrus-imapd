@@ -5207,6 +5207,9 @@ RRULE:FREQ=WEEKLY
 ORGANIZER;CN=Test User:MAILTO:foo\@example.net
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+CATEGORIES:#0000FF
+CATEGORIES:blue
+CATEGORIES:foo
 BEGIN:VALARM
 UID:myalarm
 TRIGGER;RELATED=START:PT0S
@@ -5228,6 +5231,9 @@ EOF
     $self->assert_does_not_match(qr/\r\nBEGIN:VALARM/, $ical);
     $self->assert_does_not_match(qr/\r\nCOLOR:/, $ical);
     $self->assert_does_not_match(qr/\r\nTRANSP:/, $ical);
+    $self->assert_does_not_match(qr/\r\nCATEGORIES:#0000FF/, $ical);
+    $self->assert_does_not_match(qr/\r\nCATEGORIES:blue/, $ical);
+    $self->assert_matches(qr/\r\nCATEGORIES:foo/, $ical);
 }
 
 sub test_imip_preserve_alerts
