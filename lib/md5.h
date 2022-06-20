@@ -3,6 +3,8 @@
 #ifndef _CYRUS_MD5_H_
 #define _CYRUS_MD5_H_ 1
 
+#include <assert.h>
+
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -42,7 +44,8 @@
 
 #define MD5_CTX           EVP_MD_CTX*
 
-#define MD5Init(c)        EVP_DigestInit((*c = EVP_MD_CTX_new()), EVP_md5())
+#define MD5Init(c)        assert((*c = EVP_MD_CTX_new())           \
+                                 && EVP_DigestInit(*c, EVP_md5()))
 #define MD5Update(c,d,l)  EVP_DigestUpdate(*c, d, l)
 #define MD5Final(h,c)                  \
     do {                               \

@@ -43,6 +43,7 @@
 #ifndef LIB_XSHA1_H
 #define LIB_XSHA1_H
 
+#include <assert.h>
 #include <config.h>
 
 #ifdef HAVE_SSL
@@ -54,11 +55,12 @@
 #define SHA1_DIGEST_LENGTH (SHA_DIGEST_LENGTH)
 #endif
 
-#define xsha1(d,l,h)       EVP_Digest(d, l, h, NULL, EVP_sha1(), NULL)
+#define xsha1(d,l,h)       assert(EVP_Digest(d, l, h, NULL, EVP_sha1(), NULL))
 
 #define SHA1_CTX           EVP_MD_CTX*
 
-#define SHA1Init(c)        EVP_DigestInit((*c = EVP_MD_CTX_new()), EVP_sha1())
+#define SHA1Init(c)        assert((*c = EVP_MD_CTX_new())            \
+                                  && EVP_DigestInit(*c, EVP_sha1()))
 #define SHA1Update(c,d,l)  EVP_DigestUpdate(*c, d, l)
 #define SHA1Final(h,c)                 \
     do {                               \
