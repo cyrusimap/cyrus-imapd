@@ -2962,7 +2962,6 @@ EXPORTED int ical_categories_is_color(icalproperty *cprop)
 {
     const char *categories = icalproperty_get_categories(cprop);
     int i;
-    
 
     if (categories[0] == '#') {
         /* Is this #RRGGBB */
