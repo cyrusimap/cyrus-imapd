@@ -262,7 +262,7 @@ EXPORTED int is_css3_color(const char *s)
 {
     const struct css3_color_t *c;
 
-    for (c = css3_colors; strcasecmpsafe(s, c->name); c++);
+    for (c = css3_colors; c->name && strcasecmp(s, c->name); c++);
 
     return (c->name != NULL);
 }
