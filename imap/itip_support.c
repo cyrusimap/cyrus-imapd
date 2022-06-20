@@ -1052,12 +1052,12 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     strarray_append(&recipient_addresses, recipient);
 
     syslog(LOG_DEBUG, "sched_deliver_local(%s, %s, %X)",
-           sender, recipient, sparam->flags);
+           sender ? sender : "", recipient, sparam->flags);
 
     if (icalp) *icalp = NULL;
     if (attendeep) *attendeep = NULL;
 
-    if (!strcmp(sender, recipient)) {
+    if (!strcmpsafe(sender, recipient)) {
         /* Ignore iTIP sent from and to the same address */
         result = SCHED_DELIVER_NOACTION;
         goto done;
@@ -1342,6 +1342,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         if (attendeep) *attendeep = attendee;
         break;
 
+    case ICAL_METHOD_PUBLISH:
     case ICAL_METHOD_REQUEST:
         deliver_inbox = deliver_merge_request(recipient, ical, itip);
         break;
