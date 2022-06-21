@@ -4063,6 +4063,9 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
         }
 
         if (r) {
+                xsyslog(LOG_ERR, "sievedir I/O failure on existing script",
+                        "mailbox=<%s> script=<%s>",
+                        mailbox_name(mailbox), name);
             r = IMAP_IOERROR;
             goto done;
         }
@@ -4081,14 +4084,31 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
         char *errors = NULL;
 
         r = sievedir_put_script(mailbox->sievedir, name, content, &errors);
-
-        if (!r && isactive) {
-            r = sievedir_activate_script(mailbox->sievedir, name);
-        }
-
         if (r) {
-            r = IMAP_IOERROR;
+            if (r == SIEVEDIR_INVALID) {
+                xsyslog(LOG_ERR, "sieve parse failure",
+                        "mailbox=<%s> script=<%s> err=<%s>",
+                        mailbox_name(mailbox), name, errors ? errors : "");
+            }
+            else {
+                xsyslog(LOG_ERR, "sieve bytecode failure",
+                        "mailbox=<%s> script=<%s>",
+                        mailbox_name(mailbox), name);
+            }
+
+            r = IMAP_SYNC_BADSIEVE;
             goto done;
+        }
+        else if (isactive) {
+            r = sievedir_activate_script(mailbox->sievedir, name);
+
+            if (r) {
+                xsyslog(LOG_ERR, "sievedir I/O failure on new/updated script",
+                        "mailbox=<%s> script=<%s>",
+                        mailbox_name(mailbox), name);
+                r = IMAP_IOERROR;
+                goto done;
+            }
         }
 
         sdata->lastupdated = new->internaldate;

@@ -3004,6 +3004,9 @@ int sync_apply_mailbox(struct dlist *kin,
 
     r = sync_mailbox_compare_update(mailbox, kr, 1, part_list);
     if (r) {
+        /* SHOULD never happen */
+        syslog(LOG_ERR, "syncerror: mailbox compare update failed for %s: %s",
+               mailbox_name(mailbox), error_message(r));
         abort();
         return r;
     }
