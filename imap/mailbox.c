@@ -4063,7 +4063,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
         }
 
         if (r) {
-                xsyslog(LOG_ERR, "sievedir I/O failure",
+                xsyslog(LOG_ERR, "sievedir I/O failure on existing script",
                         "mailbox=<%s> script=<%s>",
                         mailbox_name(mailbox), name);
             r = IMAP_IOERROR;
@@ -4103,7 +4103,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
             r = sievedir_activate_script(mailbox->sievedir, name);
 
             if (r) {
-                xsyslog(LOG_ERR, "sievedir I/O failure",
+                xsyslog(LOG_ERR, "sievedir I/O failure on new/updated script",
                         "mailbox=<%s> script=<%s>",
                         mailbox_name(mailbox), name);
                 r = IMAP_IOERROR;
