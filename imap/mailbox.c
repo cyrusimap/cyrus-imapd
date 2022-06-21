@@ -4085,10 +4085,10 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
 
         r = sievedir_put_script(mailbox->sievedir, name, content, &errors);
         if (r) {
-            if (errors) {
-                xsyslog(LOG_ERR, "sieve parse parse failure",
+            if (SIEVEDIR_INVALID) {
+                xsyslog(LOG_ERR, "sieve parse failure",
                         "mailbox=<%s> script=<%s> err=<%s>",
-                        mailbox_name(mailbox), name, errors);
+                        mailbox_name(mailbox), name, errors ? errors : "");
             }
             else {
                 xsyslog(LOG_ERR, "sieve bytecode failure",
