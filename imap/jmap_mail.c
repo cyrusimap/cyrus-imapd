@@ -2260,6 +2260,8 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         } else if (!strcmp("NOT", s)) {
             op = SEOP_NOT;
             this = search_expr_new(parent, SEOP_AND);
+        } else {
+            this = search_expr_new(parent, SEOP_UNKNOWN);
         }
 
 
