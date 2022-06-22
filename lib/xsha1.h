@@ -43,8 +43,9 @@
 #ifndef LIB_XSHA1_H
 #define LIB_XSHA1_H
 
-#include <assert.h>
 #include <config.h>
+
+#include "lib/assert.h"
 
 #ifdef HAVE_SSL
 

@@ -3,11 +3,11 @@
 #ifndef _CYRUS_MD5_H_
 #define _CYRUS_MD5_H_ 1
 
-#include <assert.h>
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
+
+#include "lib/assert.h"
 
 /*
  * This is gnarly, sorry :(  We might have been configured to build
