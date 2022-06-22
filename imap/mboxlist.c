@@ -346,6 +346,26 @@ EXPORTED char *mbentry_archivepath(const struct mboxlist_entry *mbentry, uint32_
                                 uid);
 }
 
+EXPORTED int mbentry_is_local_mailbox(const struct mboxlist_entry *mbentry)
+{
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        /* dedicated frontends never have local mailboxes */
+        return 0;
+    }
+    else if ((mbentry->mbtype & MBTYPE_REMOTE)) {
+        /* mbentry has the remote flag set */
+        return 0;
+    }
+    else if (mbentry->server
+             && 0 != strcmpsafe(mbentry->server, config_servername))
+    {
+        /* it's on some server that is not this one */
+        return 0;
+    }
+
+    return 1;
+}
+
 static void mboxlist_dbname_to_key(const char *dbname, size_t len,
                                    const char *userid, struct buf *key)
 {
