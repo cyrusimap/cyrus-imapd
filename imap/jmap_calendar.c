@@ -3257,6 +3257,13 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         }
         mbname_free(&rock->mbname);
         rock->mbname = mbname_from_intname(rock->mbentry->name);
+        if (mbname_isdeleted(rock->mbname)) {
+            xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
+                    "mailbox is deleted, but ical_objs row exists",
+                    "mboxid=<%s> imap_uid=<%d>",
+                    rock->mbentry->uniqueid, cdata->dav.imap_uid);
+            return 0;
+        }
 
         const char *sched_userid = req->accountid;
         strarray_truncate(&rock->schedule_addresses, 0);
@@ -5423,6 +5430,15 @@ static void setcalendarevents_update(jmap_req_t *req,
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
     resource = xstrdup(cdata->dav.resource);
 
+    if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+        xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
+                "mailbox is deleted, but ical_objs row exists",
+                "mboxid=<%s> imap_uid=<%d>",
+                mbentry->uniqueid, cdata->dav.imap_uid);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+
     /* Check read permission. */
     if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         r = IMAP_NOTFOUND;
@@ -5818,6 +5834,15 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
     mboxname = xstrdup(mbentry->name);
     resource = xstrdup(cdata->dav.resource);
+
+    if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+        xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
+                "mailbox is deleted, but ical_objs row exists",
+                "mboxid=<%s> imap_uid=<%d>",
+                mbentry->uniqueid, cdata->dav.imap_uid);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
 
     const char *sched_userid = req->accountid;
     get_schedule_addresses(NULL, mboxname, sched_userid, &schedule_addresses);
@@ -6882,37 +6907,43 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_jscal *jscal)
     struct eventquery_fastpath_rock *rock = vrock;
     jmap_req_t *req = rock->req;
     struct jmap_query *query = rock->query;
+    mbentry_t *mbentry = NULL;
     struct buf *buf = &rock->buf;
 
     assert(query->position >= 0);
 
     /* Check type and permissions */
-    if (!jscal->alive || jscal->cdata.comp_type != CAL_COMP_VEVENT) {
-        return 0;
-    }
+    if (!jscal->alive || jscal->cdata.comp_type != CAL_COMP_VEVENT)
+        goto done;
 
-    mbentry_t *mbentry = jmap_mbentry_from_dav(req, &jscal->cdata.dav);
-    if (!mbentry) return 0;
+    mbentry = jmap_mbentry_from_dav(req, &jscal->cdata.dav);
+    if (!mbentry) goto done;
+
+    if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+        xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
+                "mailbox is deleted, but ical_objs row exists",
+                "mboxid=<%s> imap_uid=<%d>",
+                mbentry->uniqueid, jscal->cdata.dav.imap_uid);
+        goto done;
+    }
 
     /* Check permissions */
     int rights = jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
-    mboxlist_entry_free(&mbentry);
-    if (!rights) return 0;
+    if (!rights) goto done;
 
     // Check privacy
     if (rock->is_sharee &&
             jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET)
-        return 0;
+        goto done;
 
     query->total++;
 
     /* Check search window */
-    if (query->have_limit && json_array_size(query->ids) >= query->limit) {
-        return 0;
-    }
-    if (query->position && (size_t) query->position <= query->total - 1) {
-        return 0;
-    }
+    if (query->have_limit && json_array_size(query->ids) >= query->limit)
+        goto done;
+
+    if (query->position && (size_t) query->position <= query->total - 1)
+        goto done;
 
     struct jmap_caleventid eid = {
         .ical_uid =jscal->cdata.ical_uid,
@@ -6921,6 +6952,8 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_jscal *jscal)
     const char *id = jmap_caleventid_encode(&eid, buf);
     json_array_append_new(query->ids, json_string(id));
 
+done:
+    mboxlist_entry_free(&mbentry);
     return 0;
 }
 
@@ -7400,6 +7433,15 @@ static void _calendarevent_copy(jmap_req_t *req,
 
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         *set_err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+
+    if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+        xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
+                "mailbox is deleted, but ical_objs row exists",
+                "mboxid=<%s> imap_uid=<%d>",
+                mbentry->uniqueid, cdata->dav.imap_uid);
+        r = CYRUSDB_NOTFOUND;
         goto done;
     }
 
