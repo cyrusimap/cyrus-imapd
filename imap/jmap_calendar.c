@@ -7885,19 +7885,19 @@ struct principal_get_rock {
     struct jmap_get *get;
     json_t *jaccounts;
     hash_table *wantids;
-    SHA_CTX *sha1;
+    SHA1_CTX *sha1;
 };
 
-static int principal_state_init(jmap_req_t *req, SHA_CTX *sha1)
+static int principal_state_init(jmap_req_t *req, SHA1_CTX *sha1)
 {
-    SHA1_Init(sha1);
+    SHA1Init(sha1);
     char *calhomename = caldav_mboxname(req->userid, NULL);
     struct mailbox *mbox = NULL;
     int r = jmap_openmbox(req, calhomename, &mbox, 0);
     if (!r) {
         struct buf buf = BUF_INITIALIZER;
         buf_printf(&buf, "%s" MODSEQ_FMT, req->userid, mailbox_foldermodseq(mbox));
-        SHA1_Update(sha1, buf_base(&buf), buf_len(&buf));
+        SHA1Update(sha1, buf_base(&buf), buf_len(&buf));
         buf_free(&buf);
     }
     jmap_closembox(req, &mbox);
@@ -7906,16 +7906,16 @@ static int principal_state_init(jmap_req_t *req, SHA_CTX *sha1)
 }
 
 static void principal_state_update(jmap_req_t *req __attribute__((unused)),
-                                   SHA_CTX *sha1,
+                                   SHA1_CTX *sha1,
                                    const char *accountid)
 {
-    SHA1_Update(sha1, accountid, strlen(accountid));
+    SHA1Update(sha1, accountid, strlen(accountid));
 }
 
-static char *principal_state_string(SHA_CTX *sha1)
+static char *principal_state_string(SHA1_CTX *sha1)
 {
     uint8_t digest[SHA1_DIGEST_LENGTH];
-    SHA1_Final(digest, sha1);
+    SHA1Final(digest, sha1);
     char hexdigest[SHA1_DIGEST_LENGTH*2 + 1];
     bin_to_lchex(digest, SHA1_DIGEST_LENGTH, hexdigest);
     hexdigest[SHA1_DIGEST_LENGTH*2] = '\0';
@@ -7927,7 +7927,7 @@ static int principal_state_current_cb(jmap_req_t *req,
                                       int rights __attribute__((unused)),
                                       void *rock)
 {
-    SHA_CTX *sha1 = rock;
+    SHA1_CTX *sha1 = rock;
     if (strcmp(req->userid, accountid)) {
         principal_state_update(req, sha1, accountid);
     }
@@ -7939,7 +7939,7 @@ static int principal_currentstate(jmap_req_t *req, char **state)
     /* Principal state is the hash of the authenticated userid, its
      * calendar home folder modseq and the account ids of all accounts
      * it where at least one calendar or the calendar home is visible */
-    SHA_CTX sha1;
+    SHA1_CTX sha1;
     principal_state_init(req, &sha1);
     int r = principal_foreach(req, principal_state_current_cb, &sha1);
     if (!r) {
@@ -7954,7 +7954,7 @@ static int principal_get_cb(jmap_req_t *req, const char *accountid,
     struct principal_get_rock *getrock = rock;
 
     /* Update state */
-    SHA1_Update(getrock->sha1, accountid, strlen(accountid));
+    SHA1Update(getrock->sha1, accountid, strlen(accountid));
 
     /* Convert princpial */
     if (hash_del(accountid, getrock->wantids)) {
@@ -8004,7 +8004,7 @@ static int jmap_principal_get(struct jmap_req *req)
     }
 
     /* Traverse principals */
-    SHA_CTX sha1;
+    SHA1_CTX sha1;
     principal_state_init(req, &sha1);
     struct principal_get_rock rock = { &get, jaccounts, &wantids, &sha1 };
     int r = principal_foreach(req, principal_get_cb, &rock);
@@ -8396,15 +8396,15 @@ static int principal_query(jmap_req_t *req, struct jmap_query *query, json_t **e
     }
 
     /* Make query state */
-    SHA_CTX sha1;
-    SHA1_Init(&sha1);
+    SHA1_CTX sha1;
+    SHA1Init(&sha1);
     size_t i;
     for (i = 0; i < (size_t) strarray_size(&matches); i++) {
         const char *id = strarray_nth(&matches, i);
-        SHA1_Update(&sha1, id, strlen(id));
+        SHA1Update(&sha1, id, strlen(id));
     }
     uint8_t digest[SHA1_DIGEST_LENGTH];
-    SHA1_Final(digest, &sha1);
+    SHA1Final(digest, &sha1);
     char hexdigest[SHA1_DIGEST_LENGTH*2 + 1];
     bin_to_lchex(digest, SHA1_DIGEST_LENGTH, hexdigest);
     hexdigest[SHA1_DIGEST_LENGTH*2] = '\0';

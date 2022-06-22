@@ -7,6 +7,8 @@
 #include <config.h>
 #endif
 
+#include "lib/assert.h"
+
 /*
  * This is gnarly, sorry :(  We might have been configured to build
  * with OpenSSL, or we might not.  Some older versions of OpenSSL
@@ -38,10 +40,18 @@
 
 #ifdef HAVE_SSL
 #include <openssl/md5.h>
+#include <openssl/evp.h>
 
-#define MD5Init                     MD5_Init
-#define MD5Update                   MD5_Update
-#define MD5Final                    MD5_Final
+#define MD5_CTX           EVP_MD_CTX*
+
+#define MD5Init(c)        assert((*c = EVP_MD_CTX_new())           \
+                                 && EVP_DigestInit(*c, EVP_md5()))
+#define MD5Update(c,d,l)  EVP_DigestUpdate(*c, d, l)
+#define MD5Final(h,c)                  \
+    do {                               \
+        EVP_DigestFinal(*c, h, NULL);  \
+        EVP_MD_CTX_free(*c);           \
+    } while(0);
 
 #else
 

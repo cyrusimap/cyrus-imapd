@@ -73,13 +73,6 @@
 /* to limit changes to the code below, set up the right types here */
 #include "lib/xsha1.h" /* for the typedefs and such */
 
-/* The SHA1 structure: */
-struct _SHA_CTX {
-    sha1_quadbyte   state[5];
-    sha1_quadbyte   count[2];
-    sha1_byte   buffer[SHA1_BLOCK_LENGTH];
-};
-
 /* Downloaded from http://www.aarongifford.com/computers/hmac_sha1.tar.gz
  * by Bron Gondwana <brong@fastmail.fm> on 2011-09-20
  */
@@ -160,7 +153,7 @@ static void SHA1_Transform(sha1_quadbyte state[5], const sha1_byte buffer[64]) {
 
 
 /* SHA1_Init - Initialize new context */
-EXPORTED int SHA1_Init(SHA_CTX* context) {
+EXPORTED int SHA1Init(SHA1_CTX* context) {
     /* SHA1 initialization constants */
     context->state[0] = 0x67452301;
     context->state[1] = 0xEFCDAB89;
@@ -173,7 +166,8 @@ EXPORTED int SHA1_Init(SHA_CTX* context) {
 }
 
 /* Run your data through this. */
-EXPORTED int SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int len) {
+EXPORTED int SHA1Update(SHA1_CTX *context, const void *vdata, unsigned int len) {
+    const sha1_byte *data = vdata;
     unsigned int    i, j;
 
     j = (context->count[0] >> 3) & 63;
@@ -195,7 +189,7 @@ EXPORTED int SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int l
 
 
 /* Add padding and return the message digest. */
-EXPORTED int SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context) {
+EXPORTED int SHA1Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA1_CTX *context) {
     sha1_quadbyte   i, j;
     sha1_byte   finalcount[8];
 
@@ -203,12 +197,12 @@ EXPORTED int SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context) 
         finalcount[i] = (sha1_byte)((context->count[(i >= 4 ? 0 : 1)]
          >> ((3-(i & 3)) * 8) ) & 255);  /* Endian independent */
     }
-    SHA1_Update(context, (sha1_byte *)"\200", 1);
+    SHA1Update(context, (sha1_byte *)"\200", 1);
     while ((context->count[0] & 504) != 448) {
-        SHA1_Update(context, (sha1_byte *)"\0", 1);
+        SHA1Update(context, (sha1_byte *)"\0", 1);
     }
     /* Should cause a SHA1_Transform() */
-    SHA1_Update(context, finalcount, 8);
+    SHA1Update(context, finalcount, 8);
     for (i = 0; i < SHA1_DIGEST_LENGTH; i++) {
         digest[i] = (sha1_byte)
          ((context->state[i>>2] >> ((3-(i & 3)) * 8) ) & 255);
@@ -230,13 +224,13 @@ EXPORTED int SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context) 
 EXPORTED unsigned char *xsha1(const unsigned char *buf, unsigned long len,
                               sha1_byte dest[SHA1_DIGEST_LENGTH])
 {
-    SHA_CTX ctx;
+    SHA1_CTX ctx;
 
-    memset(&ctx, 0, sizeof(SHA_CTX));
+    memset(&ctx, 0, sizeof(SHA1_CTX));
 
-    SHA1_Init(&ctx);
-    SHA1_Update(&ctx, buf, len);
-    SHA1_Final(dest, &ctx);
+    SHA1Init(&ctx);
+    SHA1Update(&ctx, buf, len);
+    SHA1Final(dest, &ctx);
 
     return dest;
 }

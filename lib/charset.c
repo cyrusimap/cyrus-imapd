@@ -127,7 +127,7 @@ struct search_state {
 };
 
 struct sha1_state {
-    SHA_CTX ctx;
+    SHA1_CTX ctx;
     uint8_t buf[4096];
     size_t len;
     size_t *outlen;
@@ -776,7 +776,7 @@ static void byte2sha1(struct convert_rock *rock, uint32_t c)
      * at a time (the internal block size) had overhead due to
      * to the upfront checks, so this is a good compromise size */
     if (state->len == 4096) {
-        SHA1_Update(&state->ctx, state->buf, state->len);
+        SHA1Update(&state->ctx, state->buf, state->len);
         if (state->outlen) *state->outlen += state->len;
         state->len = 0;
     }
@@ -1691,11 +1691,11 @@ static void sha1_cleanup(struct convert_rock *rock, int do_free)
     struct sha1_state *state = (struct sha1_state *)rock->state;
 
     if (state->len) {
-        SHA1_Update(&state->ctx, state->buf, state->len);
+        SHA1Update(&state->ctx, state->buf, state->len);
         if (state->outlen) *state->outlen += state->len;
     }
 
-    SHA1_Final(state->dest, &state->ctx);
+    SHA1Final(state->dest, &state->ctx);
 
     if (do_free) basic_free(rock);
 }
@@ -1955,7 +1955,7 @@ static struct convert_rock *sha1_init(uint8_t *dest, size_t *outlen)
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct sha1_state *state = xzmalloc(sizeof(struct sha1_state));
 
-    SHA1_Init(&state->ctx);
+    SHA1Init(&state->ctx);
     state->dest = dest;
     state->outlen = outlen;
 

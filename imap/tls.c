@@ -149,7 +149,7 @@ static int tls_serverengine = 0; /* server engine initialized? */
 static int tls_clientengine = 0; /* client engine initialized? */
 static int do_dump = 0;         /* actively dumping protocol? */
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
 static DH *dh_params = NULL;
 #endif
 
@@ -240,7 +240,7 @@ static int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g)
 }
 #endif
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
 /* Logic copied from OpenSSL apps/s_server.c: give the TLS context
  * DH params to work with DHE-* cipher suites. Hardcoded fallback
  * in case no DH params in server_key or server_cert.
@@ -739,7 +739,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     const char   *client_ca_file;
     const char   *server_ca_file;
     const char   *server_cert_file;
-    const char   *server_dhparam_file;
     const char   *server_key_file;
     const char   *crl_file_path;
     enum enum_value tls_client_certs;
@@ -883,7 +882,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
     server_cert_file = config_getstring(IMAPOPT_TLS_SERVER_CERT);
-    server_dhparam_file = config_getstring(IMAPOPT_TLS_SERVER_DHPARAM);
     server_key_file = config_getstring(IMAPOPT_TLS_SERVER_KEY);
 
     if (config_debug) {
@@ -949,8 +947,11 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     SSL_CTX_set_tmp_rsa_callback(s_ctx, tmp_rsa_cb);
 #endif
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+    SSL_CTX_set_dh_auto(s_ctx, 1);
+#elif (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     /* Load DH params for DHE-* key exchanges */
+    const char *server_dhparam_file = config_getstring(IMAPOPT_TLS_SERVER_DHPARAM);
     dh_params = load_dh_param(server_dhparam_file, server_key_file, server_cert_file);
     SSL_CTX_set_tmp_dh(s_ctx, dh_params);
 #endif
@@ -959,12 +960,16 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     const char *ec = config_getstring(IMAPOPT_TLS_ECCURVE);
     int openssl_nid = OBJ_sn2nid(ec);
     if (openssl_nid != 0) {
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+        SSL_CTX_set1_curves(s_ctx, &openssl_nid, 1);
+#else
         EC_KEY *ecdh;
         ecdh = EC_KEY_new_by_curve_name(openssl_nid);
         if (ecdh != NULL) {
             SSL_CTX_set_tmp_ecdh(s_ctx, ecdh);
             EC_KEY_free(ecdh);
         }
+#endif
     }
 #endif
 
@@ -1086,20 +1091,22 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
 /* taken from OpenSSL apps/s_cb.c */
 
-static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
-                        long argl __attribute__((unused)), long ret)
+static long bio_dump_cb(BIO * bio, int cmd, const char *argp,
+                        size_t len __attribute__((unused)), int argi,
+                        long argl __attribute__((unused)), int ret,
+                        size_t *processed __attribute__((unused)))
 {
     if (!do_dump)
         return (ret);
 
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
-        printf("read from %08lX [%08lX] (%d bytes => %ld (0x%lX))",
+        printf("read from %08lX [%08lX] (%d bytes => %d (0x%X))",
                (unsigned long)bio, (unsigned long)argp,
                argi, ret, ret);
         tls_dump(argp, (int) ret);
         return (ret);
     } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
-        printf("write to %08lX [%08lX] (%d bytes => %ld (0x%lX))",
+        printf("write to %08lX [%08lX] (%d bytes => %d (0x%X))",
                (unsigned long) bio, (unsigned long)argp,
                argi, ret, ret);
         tls_dump(argp, (int) ret);
@@ -1171,7 +1178,7 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
      * created for us, so we can use it for debugging purposes.
      */
     if (var_imapd_tls_loglevel >= 3)
-        BIO_set_callback(SSL_get_rbio(tls_conn), bio_dump_cb);
+        BIO_set_callback_ex(SSL_get_rbio(tls_conn), bio_dump_cb);
 
     /* Dump the negotiation for loglevels 3 and 4*/
     if (var_imapd_tls_loglevel >= 3)
@@ -1402,7 +1409,7 @@ EXPORTED int tls_shutdown_serverengine(void)
             sess_dbopen = 0;
         }
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
         if (dh_params) DH_free(dh_params);
 #endif
     }
@@ -1658,7 +1665,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
      * created for us, so we can use it for debugging purposes.
      */
     if (var_proxy_tls_loglevel >= 3)
-        BIO_set_callback(SSL_get_rbio(tls_conn), bio_dump_cb);
+        BIO_set_callback_ex(SSL_get_rbio(tls_conn), bio_dump_cb);
 
     /* Dump the negotiation for loglevels 3 and 4*/
     if (var_proxy_tls_loglevel >= 3)

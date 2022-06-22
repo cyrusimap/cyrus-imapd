@@ -45,15 +45,29 @@
 
 #include <config.h>
 
+#include "lib/assert.h"
+
 #ifdef HAVE_SSL
 
 #include <openssl/sha.h>
+#include <openssl/evp.h>
 
 #ifndef SHA1_DIGEST_LENGTH
 #define SHA1_DIGEST_LENGTH (SHA_DIGEST_LENGTH)
 #endif
 
-#define xsha1 SHA1
+#define xsha1(d,l,h)       assert(EVP_Digest(d, l, h, NULL, EVP_sha1(), NULL))
+
+#define SHA1_CTX           EVP_MD_CTX*
+
+#define SHA1Init(c)        assert((*c = EVP_MD_CTX_new())            \
+                                  && EVP_DigestInit(*c, EVP_sha1()))
+#define SHA1Update(c,d,l)  EVP_DigestUpdate(*c, d, l)
+#define SHA1Final(h,c)                 \
+    do {                               \
+        EVP_DigestFinal(*c, h, NULL);  \
+        EVP_MD_CTX_free(*c);           \
+    } while(0);
 
 #else /* HAVE_SSL */
 
@@ -66,12 +80,16 @@ typedef uint8_t sha1_byte;    /* single byte type */
 #define SHA1_DIGEST_LENGTH  20
 #define SHA_DIGEST_LENGTH (SHA1_DIGEST_LENGTH)
 
-/* opaque type for the SHA1 structure: */
-typedef struct _SHA_CTX SHA_CTX;
+/* The SHA1 structure: */
+typedef struct _SHA1_CTX {
+    sha1_quadbyte   state[5];
+    sha1_quadbyte   count[2];
+    sha1_byte   buffer[SHA1_BLOCK_LENGTH];
+} SHA1_CTX;
 
-int SHA1_Init(SHA_CTX* context);
-int SHA1_Update(SHA_CTX *context, const sha1_byte *data, unsigned int len);
-int SHA1_Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA_CTX *context);
+int SHA1Init(SHA1_CTX* context);
+int SHA1Update(SHA1_CTX *context, const void *data, unsigned int len);
+int SHA1Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA1_CTX *context);
 
 unsigned char *xsha1(const unsigned char *buf, unsigned long len,
               sha1_byte dest[SHA1_DIGEST_LENGTH]);

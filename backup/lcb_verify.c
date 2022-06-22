@@ -143,13 +143,13 @@ static int verify_chunk_checksums(struct backup *backup, struct backup_chunk *ch
         fprintf(out, "  checking data length\n");
     char buf[8192]; /* FIXME whatever */
     size_t len = 0;
-    SHA_CTX sha_ctx;
-    SHA1_Init(&sha_ctx);
+    SHA1_CTX sha_ctx;
+    SHA1Init(&sha_ctx);
     gzuc_member_start_from(gzuc, chunk->offset);
     while (!gzuc_member_eof(gzuc)) {
         ssize_t n = gzuc_read(gzuc, buf, sizeof(buf));
         if (n >= 0) {
-            SHA1_Update(&sha_ctx, buf, n);
+            SHA1Update(&sha_ctx, buf, n);
             len += n;
         }
     }
@@ -172,7 +172,7 @@ static int verify_chunk_checksums(struct backup *backup, struct backup_chunk *ch
         fprintf(out, "  checking data checksum...\n");
     unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
     char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
-    SHA1_Final(sha1_raw, &sha_ctx);
+    SHA1Final(sha1_raw, &sha_ctx);
     r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, data_sha1, BH_LOWER);
     assert(r == 2 * SHA1_DIGEST_LENGTH);
     r = strncmp(chunk->data_sha1, data_sha1, sizeof(data_sha1));
