@@ -1033,6 +1033,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     static struct buf resource = BUF_INITIALIZER;
     char *mailboxname = NULL;
     mbentry_t *mbentry = NULL;
+    mbname_t *mbname = NULL;
     struct mailbox *mailbox = NULL, *inbox = NULL;
     struct caldav_db *caldavdb = NULL;
     struct caldav_data *cdata;
@@ -1133,6 +1134,28 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     caldav_lookup_uid(caldavdb, icalcomponent_get_uid(itip), &cdata);
 
     if (cdata->dav.mailbox) {
+        if (cdata->dav.mailbox_byname)
+            mbname = mbname_from_intname(cdata->dav.mailbox);
+        else {
+            mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
+            if (!mbentry) {
+                SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
+                goto done;
+            }
+            mbname = mbname_from_intname(mbentry->name);
+        }
+
+        if (mbname_isdeleted(mbname)) {
+            xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
+                    "mailbox is deleted, but ical_objs row exists",
+                    "mboxid=<%s> imap_uid=<%d>",
+                    mbentry->uniqueid, cdata->dav.imap_uid);
+        }
+
+        mboxlist_entry_free(&mbentry);
+    }
+
+    if (mbname && !mbname_isdeleted(mbname)) {
         if (SCHED_INVITES_ONLY(sched_data)) {
             /* Configured to NOT process updates - ignore request */
             SCHED_STATUS(sched_data, REQSTAT_NOPRIVS, SCHEDSTAT_NOPRIVS);
@@ -1140,17 +1163,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             goto done;
         }
 
-        if (cdata->dav.mailbox_byname)
-            mailboxname = xstrdup(cdata->dav.mailbox);
-        else {
-            mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
-            if (!mbentry) {
-                SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
-                goto done;
-            }
-            mailboxname = xstrdup(mbentry->name);
-            mboxlist_entry_free(&mbentry);
-        }
+        mailboxname = xstrdup(mbname_intname(mbname));
         buf_setcstr(&resource, cdata->dav.resource);
     }
     else if (SCHED_IS_REPLY(sched_data)) {
@@ -1483,5 +1496,6 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.buf);
     free(mailboxname);
+    mbname_free(&mbname);
     return result;
 }
