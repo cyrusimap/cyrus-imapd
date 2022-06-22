@@ -1,0 +1,180 @@
+#!perl
+use DBI;
+use Cassandane::Tiny;
+
+sub test_calendarevent_ignore_orphaned_ical_rows
+    :min_version_3_7 :needs_component_jmap :DelayedDelete
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :deletecanceled :outcome "outcome";
+}
+EOF
+    );
+
+    xlog "Create calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                1 => {
+                    name => 'test',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $calendarId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($calendarId);
+
+    xlog "Create event via CalDAV";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:7e017102-0caf-490a-bbdf-422141d34e75
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=American/New_York:20210923T153000
+DURATION:PT1H
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER:mailto:cassandaneA@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:attendee@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $res = $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/' . $calendarId . '/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{ids}[0];
+    $self->assert_not_null($eventId);
+
+    xlog "Fetch dav.db rows";
+    my $dbfile = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{user}{dav};
+    $self->assert_not_null($dbfile);
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "", {
+        PrintError => 1, RaiseError => 1, AutoCommit => 1
+    });
+    my $ical_rows = $dbh->selectall_hashref('SELECT * FROM ical_objs;', 'rowid');
+    my $jscal_rows = $dbh->selectall_hashref('SELECT * FROM jscal_objs;', 'rowid');
+    $dbh->disconnect;
+
+    xlog "Destroy calendar and events";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            destroy => [$calendarId],
+            onDestroyRemoveEvents => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([$calendarId], $res->[0][1]{destroyed});
+
+    xlog "Write back rows into dav.db";
+    $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "", {
+        PrintError => 1, RaiseError => 1, AutoCommit => 1
+    });
+
+    while (my ($rowid, $row) = each %{$ical_rows}) {
+        my @cols = (), @vals = ();
+        while (my($k, $v) = each %{$row}) {
+            # make sure we insert in same order
+            push(@cols, $k);
+            push(@vals, $v);
+        }
+        my $stmt = 'INSERT INTO ical_objs (' . join(',', @cols) . ') VALUES (' . join(',', ('?') x scalar @vals) . ');';
+        my $sth = $dbh->prepare($stmt);
+        $sth->execute(@vals) or die $sth->errorstr;
+    }
+
+    while (my ($rowid, $row) = each %{$jscal_rows}) {
+        my @cols = (), @vals = ();
+        while (my($k, $v) = each %{$row}) {
+            # make sure we insert in same order
+            push(@cols, $k);
+            push(@vals, $v);
+        }
+        my $stmt = 'INSERT INTO jscal_objs (' . join(',', @cols) . ') VALUES (' . join(',', ('?') x scalar @vals) . ');';
+        my $sth = $dbh->prepare($stmt);
+        $sth->execute(@vals) or die $sth->errorstr;
+    }
+
+    $dbh->disconnect;
+
+    xlog "Assert that event is not returned in JMAP";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['id'],
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['id'],
+        }, 'R2'],
+        ['CalendarEvent/query', {
+        }, 'R3'],
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => 'updated',
+                },
+            },
+        }, 'R4'],
+        ['CalendarEvent/set', {
+            destroy => [$eventId],
+        }, 'R5'],
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{list}});
+    $self->assert_deep_equals([], $res->[2][1]{ids});
+    $self->assert(exists $res->[3][1]{notUpdated}{$eventId});
+    $self->assert(exists $res->[4][1]{notDestroyed}{$eventId});
+
+    xlog "Assert that event is not updated via iMIP";
+    my $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sally Sender <sender@example.net>
+To: Cassandane <cassandane@example.com>
+Message-ID: <7e017102-0caf-490a-bbdf-422141d34e75@example.net>
+Content-Type: text/calendar; method=REPLY; component=VEVENT
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REPLY
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:7e017102-0caf-490a-bbdf-422141d34e75
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=American/New_York:20210923T153000
+DURATION:PT1H
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER:mailto:cassandaneA@example.com
+ATTENDEE;PARTSTAT=ACCEPTED;RSVP=TRUE:mailto:attendee@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $self->{instance}->getsyslog();
+
+    xlog $self, "Deliver iMIP invite";
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert(not grep { /mailbox=<DELETED\.user\.cassandane\.#calendars/ } @lines);
+    }
+
+}
