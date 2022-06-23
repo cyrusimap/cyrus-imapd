@@ -137,6 +137,8 @@ struct mailbox_iter {
     unsigned skipflags;
     seqset_t *uidset;
     int32_t step_inc;
+    struct timespec until;
+    unsigned nchecktime;
 };
 
 
@@ -5266,7 +5268,7 @@ done:
             mboxname_setmodseq(mailbox_name(mailbox), deletedmodseq, mailbox_mbtype(mailbox),
                                MBOXMODSEQ_ISDELETE);
         }
-    }       
+    }
 
     return r;
 }
@@ -8001,11 +8003,33 @@ EXPORTED void mailbox_iter_uidset(struct mailbox_iter *iter, seqset_t *seq)
     mailbox_iter_startuid(iter, seqset_first(seq));
 }
 
+EXPORTED void mailbox_iter_timer(struct mailbox_iter *iter,
+                                 struct timespec until,
+                                 unsigned nchecktime)
+{
+    iter->until = until;
+    iter->nchecktime = nchecktime;
+}
+
 EXPORTED const message_t *mailbox_iter_step(struct mailbox_iter *iter)
 {
     if (mailbox_wait_cb) mailbox_wait_cb(mailbox_wait_cb_rock);
 
     while (iter->recno > 0 && iter->recno <= iter->num_records) {
+        // Check timer, if any
+        if ((iter->until.tv_sec || iter->until.tv_nsec) &&
+            ((!iter->nchecktime || (iter->recno % iter->nchecktime) == 0))) {
+            struct timespec now;
+            if (clock_gettime(CLOCK_MONOTONIC, &now) >= 0 &&
+                (now.tv_sec > iter->until.tv_sec ||
+                 (now.tv_sec == iter->until.tv_sec &&
+                  now.tv_nsec > iter->until.tv_nsec))) {
+                // timer expired
+                iter->nchecktime = 0;
+                break;
+            }
+        }
+
         message_set_from_mailbox(iter->mailbox, iter->recno, iter->msg);
         iter->recno += iter->step_inc;
 
