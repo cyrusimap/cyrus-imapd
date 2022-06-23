@@ -842,16 +842,25 @@ static int _email_matchmime_evaluate(json_t *filter,
         int matches;
 
         if (!strcasecmpsafe(strop, "AND")) {
+            if (!json_array_size(conditions))
+                return 0;
+
             op = SEOP_AND;
             matches = 1;
         }
         else if (!strcasecmpsafe(strop, "OR")) {
+            if (!json_array_size(conditions))
+                return 0;
+
             op = SEOP_OR;
-            matches = json_array_size(conditions) == 0;
+            matches = 0;
         }
         else if (!strcasecmpsafe(strop, "NOT")) {
+            if (!json_array_size(conditions))
+                return 1;
+
             op = SEOP_NOT;
-            matches = json_array_size(conditions) != 0;
+            matches = 1;
         }
         else return 0;
 
