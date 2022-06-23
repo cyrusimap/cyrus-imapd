@@ -233,9 +233,6 @@ HIDDEN void jmap_email_filter_parse(json_t *filter,
             ctx->invalid_field("operator", ctx->rock);
         }
         json_t *jconds = json_object_get(filter, "conditions");
-        if (!json_array_size(jconds)) {
-            ctx->invalid_field("conditions", ctx->rock);
-        }
         size_t i;
         json_t *jcond;
         json_array_foreach(jconds, i, jcond) {
