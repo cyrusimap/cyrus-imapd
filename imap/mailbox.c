@@ -5342,7 +5342,8 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
  * should be in the spool - if 1, the message should be in the archive.
  */
 EXPORTED void mailbox_archive(struct mailbox *mailbox,
-                              mailbox_decideproc_t *decideproc, void *deciderock, unsigned flags)
+                              struct mailbox_iter *iter,
+                              mailbox_decideproc_t *decideproc, void *deciderock)
 
 {
     int r;
@@ -5364,7 +5365,9 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     assert(mailbox_index_islocked(mailbox, 1));
     if (!decideproc) decideproc = &mailbox_should_archive;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, flags);
+    struct mailbox_iter *myiter = NULL;
+    if (!iter)
+        iter = myiter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
 
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
@@ -5484,7 +5487,8 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                    conversation_id_encode(copyrecord.cid), flagstr);
         }
     }
-    mailbox_iter_done(&iter);
+
+    if (myiter) mailbox_iter_done(&myiter);
 
     /* if we have stale cache records, we'll need a repack */
     if (dirtycache) {
@@ -5527,6 +5531,7 @@ EXPORTED void mailbox_remove_files_from_object_storage(struct mailbox *mailbox,
  *                   don't send notification)
  */
 EXPORTED int mailbox_expunge(struct mailbox *mailbox,
+                             struct mailbox_iter *iter,
                     mailbox_decideproc_t *decideproc, void *deciderock,
                     unsigned *nexpunged, int event_type)
 {
@@ -5548,7 +5553,10 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 
     if (!decideproc) decideproc = expungedeleted;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    struct mailbox_iter *myiter = NULL;
+    if (!iter)
+        iter = myiter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         if (decideproc(mailbox, record, deciderock)) {
@@ -5568,7 +5576,8 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
             mboxevent_extract_record(mboxevent, mailbox, &copyrecord);
         }
     }
-    mailbox_iter_done(&iter);
+
+    if (myiter) mailbox_iter_done(&myiter);
 
     if (numexpunged > 0) {
         syslog(LOG_NOTICE, "Expunged %d messages from %s",
@@ -5587,8 +5596,10 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
     return 0;
 }
 
-EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
-                            unsigned *ndeleted)
+EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox,
+                                     struct mailbox_iter *iter,
+                                     time_t expunge_mark,
+                                     unsigned *ndeleted)
 {
     int dirty = 0;
     unsigned numdeleted = 0;
@@ -5597,7 +5608,10 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mar
     int r = 0;
 
     /* run the actual expunge phase */
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+    struct mailbox_iter *myiter = NULL;
+    if (!iter)
+        iter = myiter = mailbox_iter_init(mailbox, 0, 0);
+
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* already unlinked, skip it (but dirty so we mark a repack is needed) */
@@ -5633,7 +5647,8 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mar
             break;
         }
     }
-    mailbox_iter_done(&iter);
+
+    if (myiter) mailbox_iter_done(&myiter);
 
     if (dirty) {
         mailbox_index_dirty(mailbox);

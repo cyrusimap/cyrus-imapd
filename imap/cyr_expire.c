@@ -389,7 +389,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
      * in imap/mailbox.c. This one takes the arock->archive_mark as the
      * callback data.
      */
-    mailbox_archive(mailbox, NULL, &arock->archive_mark, ITER_SKIP_EXPUNGED);
+    mailbox_archive(mailbox, NULL, NULL, &arock->archive_mark);
 
 done:
     mailbox_close(&mailbox);
@@ -482,7 +482,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
                      mbentry->name,
                      ((double)expire_seconds/SECS_IN_A_DAY));
 
-            r = mailbox_expunge(mailbox, expire_cb, erock, NULL,
+            r = mailbox_expunge(mailbox, NULL, expire_cb, erock, NULL,
                                 EVENT_MESSAGE_EXPIRE);
             if (r)
                 syslog(LOG_ERR, "failed to expire old messages: %s", mbentry->name);
@@ -491,7 +491,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
     }
 
     if (!did_expunge && erock->do_userflags) {
-        r = mailbox_expunge(mailbox, userflag_cb, erock, NULL,
+        r = mailbox_expunge(mailbox, NULL, userflag_cb, erock, NULL,
                             EVENT_MESSAGE_EXPIRE);
         if (r)
             syslog(LOG_ERR, "failed to scan user flags for %s: %s",
@@ -505,7 +505,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
 
     verbosep("cleaning up expunged messages in %s", mbentry->name);
 
-    r = mailbox_expunge_cleanup(mailbox, erock->expunge_mark, &numexpunged);
+    r = mailbox_expunge_cleanup(mailbox, NULL, erock->expunge_mark, &numexpunged);
 
     erock->messages_expunged += numexpunged;
     erock->mailboxes_seen++;

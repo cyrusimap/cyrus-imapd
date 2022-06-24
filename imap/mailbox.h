@@ -632,13 +632,13 @@ extern unsigned mailbox_count_unseen(struct mailbox *mailbox);
 extern int mailbox_lock_index(struct mailbox *mailbox, int locktype);
 extern int mailbox_index_islocked(struct mailbox *mailbox, int write);
 
-extern int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
-                                   unsigned *ndeleted);
-extern int mailbox_expunge(struct mailbox *mailbox,
+extern int mailbox_expunge_cleanup(struct mailbox *mailbox, struct mailbox_iter *iter,
+                                   time_t expunge_mark, unsigned *ndeleted);
+extern int mailbox_expunge(struct mailbox *mailbox, struct mailbox_iter *iter,
                            mailbox_decideproc_t *decideproc, void *deciderock,
                            unsigned *nexpunged, int event_type);
-extern void mailbox_archive(struct mailbox *mailbox,
-                            mailbox_decideproc_t *decideproc, void *deciderock, unsigned flags);
+extern void mailbox_archive(struct mailbox *mailbox, struct mailbox_iter *iter,
+                            mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_remove_files_from_object_storage(struct mailbox *mailbox, unsigned flags);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
 

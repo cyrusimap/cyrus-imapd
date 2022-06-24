@@ -265,7 +265,7 @@ static int purge_one(const mbname_t *mbname)
         return r;
     }
 
-    mailbox_expunge(mailbox, purge_check, &stats, NULL, EVENT_MESSAGE_EXPUNGE);
+    mailbox_expunge(mailbox, NULL, purge_check, &stats, NULL, EVENT_MESSAGE_EXPUNGE);
 
     mailbox_close(&mailbox);
 
