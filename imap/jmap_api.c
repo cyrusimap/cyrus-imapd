@@ -1018,8 +1018,15 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
 {
     /* Find shared accounts */
     strarray_t patterns = STRARRAY_INITIALIZER;
-    char *userpat = xstrdup("user.*");
-    userpat[4] = jmap_namespace.hier_sep;
+    char *userpat = NULL;
+    if (jmap_namespace.isalt) {
+        userpat = xstrdup("Other Users.*");
+        userpat[11] = jmap_namespace.hier_sep;
+    }
+    else {
+        userpat = xstrdup("user.*");
+        userpat[4] = jmap_namespace.hier_sep;
+    }
     strarray_append(&patterns, userpat);
     struct findaccounts_rock rock = {
         BUF_INITIALIZER, 0, accounts, httpd_userid
@@ -1828,7 +1835,7 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
         }
     }
 
-    /* Number of ids checked in validate_request() */ 
+    /* Number of ids checked in validate_request() */
 }
 
 HIDDEN void jmap_get_fini(struct jmap_get *get)
