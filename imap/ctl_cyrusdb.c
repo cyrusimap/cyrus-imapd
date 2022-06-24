@@ -173,8 +173,8 @@ static int fixmbox(const mbentry_t *mbentry,
                mbentry->name, cyrusdb_strerror(r));
     }
 
-    /* make sure every mbentry has a uniqueid!  */
-    if (!mbentry->uniqueid) {
+    /* make sure every local mbentry has a uniqueid!  */
+    if (!mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
         struct mailbox *mailbox = NULL;
         struct mboxlock *namespacelock = NULL;
         mbentry_t *copy = NULL;
