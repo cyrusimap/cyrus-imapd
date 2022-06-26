@@ -1345,6 +1345,7 @@ imap_httpd_SOURCES += \
     imap/jmap_notif.h \
     imap/jmap_push.c \
     imap/jmap_push.h \
+    imap/jmap_push_subscription.c \
     imap/jmap_quota.c \
     imap/jmap_util.c \
     imap/jmap_util.h
