@@ -116,6 +116,7 @@
 #include "statuscache.h"
 #include "strarray.h"
 #include "sync_log.h"
+#include "times.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -206,6 +207,11 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
 EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *);
 static int mailbox_commit_dav(struct mailbox *mailbox);
 static int mailbox_abort_dav(struct mailbox *mailbox);
+#endif
+
+#ifdef WITH_JMAP
+static int mailbox_commit_pushsub(struct mailbox *mailbox);
+static int mailbox_abort_pushsub(struct mailbox *mailbox);
 #endif
 
 #ifdef USE_SIEVE
@@ -2833,6 +2839,11 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
     if (r) return r;
 #endif
 
+#ifdef WITH_JMAP
+    r = mailbox_abort_pushsub(mailbox);
+    if (r) return r;
+#endif
+
 #ifdef USE_SIEVE
     r = mailbox_abort_sieve(mailbox);
     if (r) return r;
@@ -2889,6 +2900,11 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
     /* try to commit sub parts first */
 #ifdef WITH_DAV
     r = mailbox_commit_dav(mailbox);
+    if (r) return r;
+#endif
+
+#ifdef WITH_JMAP
+    r = mailbox_commit_pushsub(mailbox);
     if (r) return r;
 #endif
 
@@ -3850,6 +3866,7 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 
 #ifdef WITH_JMAP
 #include "jmap_util.h"
+#include "pushsub_db.h"
 
 static int mailbox_update_email_alarms(struct mailbox *mailbox,
                                        const struct index_record *old,
@@ -3918,6 +3935,174 @@ EXPORTED int mailbox_add_email_alarms(struct mailbox *mailbox)
         const struct index_record *record = msg_record(msg);
         r = mailbox_update_email_alarms(mailbox, NULL, record);
         if (r) break;
+    }
+    mailbox_iter_done(&iter);
+
+    return r;
+}
+
+HIDDEN struct pushsub_db *mailbox_open_pushsub(struct mailbox *mailbox)
+{
+    if (!mailbox->local_pushsub) {
+        mailbox->local_pushsub = pushsubdb_open_mailbox(mailbox);
+        int r = pushsubdb_begin(mailbox->local_pushsub);
+        if (r) {
+            pushsubdb_abort(mailbox->local_pushsub);
+            pushsubdb_close(mailbox->local_pushsub);
+            mailbox->local_pushsub = NULL;
+        }
+    }
+    return mailbox->local_pushsub;
+}
+
+static int mailbox_update_pushsub(struct mailbox *mailbox,
+                                  const struct index_record *old,
+                                  const struct index_record *new)
+{
+    struct pushsub_db *pushsubdb = NULL;
+    struct body *body = NULL;
+    struct pushsub_data *psdata = NULL;
+    const char *id = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
+    int isexpunged = (new->internal_flags & FLAG_INTERNAL_EXPUNGED ? 1 : 0);
+    int isverified = (new->system_flags & FLAG_FLAGGED ? 1 : 0);
+    int r = 0;
+
+    if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_JMAPPUSHSUB) return 0;
+
+    /* never have Sieve on deleted mailboxes */
+    if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL)) return 0;
+
+    /* conditions in which there's nothing to do */
+    if (!new) return 0;
+
+    /* phantom record - never really existed here */
+    if (!old && isexpunged) return 0;
+
+    r = mailbox_cacherecord(mailbox, new);
+    if (r) goto done;
+
+    /* Get subscription id from Subject */
+    message_read_bodystructure(new, &body);
+    id = body->subject;
+
+    assert(id);
+
+    pushsubdb = mailbox_open_pushsub(mailbox);
+
+    /* Find existing record for this id */
+    pushsubdb_lookup_id(pushsubdb, id, &psdata, /*tombstones*/1);
+
+    /* does it still come from this UID? */
+    if (psdata->imap_uid > new->uid) goto done;
+
+    if (new->internal_flags & FLAG_INTERNAL_UNLINKED) {
+        /* is there an existing record? */
+        if (!psdata->imap_uid) goto done;
+
+        /* delete entry */
+        r = pushsubdb_delete(pushsubdb, psdata->rowid);
+    }
+    else {
+        /* Load message containing the script */
+        r = mailbox_map_record(mailbox, new, &msg_buf);
+        if (r) goto done;
+
+        /* Parse existing subscription */
+        json_error_t err;
+        json_t *jpushsub =
+            json_loads(buf_cstring(&msg_buf) + new->header_size, 0, &err);
+
+        /* Add expires and types */
+        char datestr[RFC3339_DATETIME_MAX];
+        time_to_rfc3339(new->internaldate, datestr, RFC3339_DATETIME_MAX);
+        json_object_set_new(jpushsub, "expires", json_string(datestr));
+
+        json_t *types = json_array();
+        int i;
+        for (i = 0; i < MAX_USER_FLAGS; i++) {
+            if (mailbox->h.flagname[i] && (new->user_flags[i/32] & 1<<(i&31))) {
+                json_array_append_new(types,
+                                      json_string(mailbox->h.flagname[i]));
+            }
+        }
+        if (!json_array_size(types)) {
+            json_decref(types);
+            types = json_null();
+        }
+        json_object_set_new(jpushsub, "types", types);
+
+        char *subscription = json_dumps(jpushsub, JSON_COMPACT);
+
+        psdata->mailbox = mailbox_uniqueid(mailbox);
+        psdata->imap_uid = new->uid;
+        psdata->id = id;
+        psdata->subscription = subscription;
+        psdata->expires = new->internaldate;
+        psdata->isverified = isverified;
+        psdata->alive = !isexpunged;
+
+        r = pushsubdb_write(pushsubdb, psdata);
+
+        free(subscription);
+        json_decref(jpushsub);
+    }
+
+done:
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    buf_free(&msg_buf);
+
+    return r;
+}
+
+static int mailbox_commit_pushsub(struct mailbox *mailbox)
+{
+    int r;
+
+    if (mailbox->local_pushsub) {
+        r = pushsubdb_commit(mailbox->local_pushsub);
+        pushsubdb_close(mailbox->local_pushsub);
+        mailbox->local_pushsub = NULL;
+        if (r) return r;
+    }
+
+    return 0;
+}
+
+static int mailbox_abort_pushsub(struct mailbox *mailbox)
+{
+    int r;
+
+    if (mailbox->local_pushsub) {
+        r = pushsubdb_abort(mailbox->local_pushsub);
+        pushsubdb_close(mailbox->local_pushsub);
+        mailbox->local_pushsub = NULL;
+        if (r) return r;
+    }
+
+    return 0;
+}
+
+EXPORTED int mailbox_add_pushsub(struct mailbox *mailbox)
+{
+    const message_t *msg;
+    int r = 0;
+
+    if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_JMAPPUSHSUB)
+        return 0;
+
+    if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL))
+        return 0;
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        r = mailbox_update_pushsub(mailbox, NULL, record);
+        if (r) break;
+        /* in THEORY there maybe changes here that we should be saving... */
     }
     mailbox_iter_done(&iter);
 
@@ -4295,6 +4480,7 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
 
 #ifdef WITH_JMAP
     r = mailbox_update_email_alarms(mailbox, old, new);
+    if (!r) r = mailbox_update_pushsub(mailbox, old, new);
     if (r) return r;
 #endif
 
