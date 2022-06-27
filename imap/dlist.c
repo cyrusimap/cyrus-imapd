@@ -122,7 +122,7 @@ static void printfile(struct protstream *out, const struct dlist *dl)
 
     if (!message_guid_equal(&guid2, dl->gval)) {
         xsyslog(LOG_ERR, "IOERROR: GUID mismatch",
-                         "guid=<%s>", dl->gval);
+                         "guid=<%s>", message_guid_encode(dl->gval));
         prot_printf(out, "NIL");
         fclose(f);
         map_free(&msg_base, &msg_len);
