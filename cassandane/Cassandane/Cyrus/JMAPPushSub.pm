@@ -164,4 +164,86 @@ sub test_pushsub_set
     $self->assert_num_equals(0, scalar @{$res->[1][1]{list}});
 }
 
+sub test_pushsub_set_replication
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create subscription";
+    my $res = $jmap->CallMethods([
+        ['PushSubscription/set', {
+            create => {
+                "1" => {
+                    deviceClientId => "a889-ffea-910",
+                    url => "https://example.com/push/?device=X8980fc&client=12c6d086",
+                    types => [ "Mailbox", "Email" ]
+                },
+            },
+         }, "R1"],
+        ['PushSubscription/get', {
+            'ids' => [ '#1' ]
+         }, "R2"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
+    $self->assert_not_null($res->[0][1]{created}{"1"}{expires});
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_str_equals($id, $res->[1][1]{list}[0]{id});
+    $self->assert_null($res->[1][1]{list}[0]{url});
+    $self->assert_null($res->[1][1]{list}[0]{keys});
+    $self->assert_null($res->[1][1]{list}[0]{verificationCode});
+
+    my $data = $self->{instance}->getnotify();
+    my $code;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "PushSubscriptionCreated") {
+                $code = $e->{content}->{verificationCode};
+            }
+        }
+    }
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "update subscription";
+    $res = $jmap->CallMethods([
+        ['PushSubscription/set', {
+            update => {
+                $id => {
+                    verificationCode => $code,
+                    expires => "2038-01-19T03:14:07Z",
+                    types => [ "Email", "EmailSubmission" ]
+                },
+            },
+         }, "R1"],
+        ['PushSubscription/get', { }, "R2"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{updated}{$id}{expires});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "destroy subscription";
+    $res = $jmap->CallMethods([
+        ['PushSubscription/set', {
+            destroy => [ $id ]
+         }, "R1"],
+        ['PushSubscription/get', { }, "R2"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{list}});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+}
+
 1;
