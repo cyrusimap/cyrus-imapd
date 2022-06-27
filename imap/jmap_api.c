@@ -1020,12 +1020,10 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     strarray_t patterns = STRARRAY_INITIALIZER;
     char *userpat = NULL;
     if (jmap_namespace.isalt) {
-        const char *up = config_getstring(IMAPOPT_USERPREFIX);
-        int up_len = strlen(up);
-        /* reserve `.*` at suffix */
-        userpat = xstrndup(up, up_len+2);
-        userpat[up_len] = jmap_namespace.hier_sep;
-        userpat[up_len+1] = '*';
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "%s%c*", config_getstring(IMAPOPT_USERPREFIX),
+                   jmap_namespace.hier_sep);
+        userpat = buf_release(&buf);
     }
     else {
         userpat = xstrdup("user.*");
