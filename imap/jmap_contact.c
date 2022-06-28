@@ -1226,7 +1226,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                    req->accountid, resource);
             r = carddav_store(this_mailbox, card, resource,
                               record.createdmodseq, flags, &annots, req->userid,
-                              req->authstate, ignorequota);
+                              req->authstate, ignorequota,
+                              (record.size - record.header_size));
             if (!r) {
                 struct index_record record;
 
@@ -4276,7 +4277,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
 
     syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name);
     r = carddav_store(*mailbox, card, resourcename, 0, flags, &annots,
-                      req->userid, req->authstate, ignorequota);
+                      req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "carddav_store failed for user %s: %s",
                req->userid, error_message(r));
