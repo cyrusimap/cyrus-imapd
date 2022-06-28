@@ -618,7 +618,7 @@ static int carddav_store_resource(struct transaction_t *txn,
     /* Check size of vCard (allow existing oversized cards to be updated) */
     struct buf *buf = vcard_as_buf(vcard);
     if ((buf_len(buf) > (size_t) vcard_max_size) &&
-        !(oldrecord && (oldrecord->size - oldrecord->header_size) > (size_t) vcard_max_size)) {
+        (!oldrecord || (oldrecord->size - oldrecord->header_size) <= (size_t) vcard_max_size)) {
         buf_destroy(buf);
         txn->error.precond = CARDDAV_MAX_SIZE;
         return HTTP_FORBIDDEN;
