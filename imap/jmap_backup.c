@@ -809,7 +809,7 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
         /* Store the group vCard of recreated contacts */
         r = carddav_store(*mailboxp, crock->group_vcard, NULL, 0, NULL, NULL, 
                           rrock->req->accountid, rrock->req->authstate,
-                          /*ignorequota*/ 0, /*oldsize*/ INT_MAX);
+                          /*ignorequota*/ 0, /*oldsize*/ UINT32_MAX);
     }
     vparse_free_card(crock->group_vcard);
     crock->group_vcard = NULL;
