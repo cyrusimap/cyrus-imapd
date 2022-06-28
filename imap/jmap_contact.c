@@ -2037,12 +2037,6 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
         return 0;
     }
 
-    if (cdata->jmapversion == JMAPCACHE_CONTACTVERSION) {
-        json_error_t jerr;
-        obj = json_loads(cdata->jmapdata, 0, &jerr);
-        goto gotvalue;
-    }
-
     if (!crock->mailbox || strcmp(mailbox_name(crock->mailbox), mbentry->name)) {
         mailbox_close(&crock->mailbox);
         r = mailbox_open_irl(mbentry->name, &crock->mailbox);
@@ -2067,7 +2061,6 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
                                   crock->mailbox, &record);
     vparse_free_card(vcard);
 
-gotvalue:
     jmap_filterprops(obj, crock->get->props);
 
     if (jmap_wantprop(crock->get->props, "x-href")) {
