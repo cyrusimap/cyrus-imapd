@@ -1207,8 +1207,11 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     /* Check size of vCard (allow existing oversized cards to be updated) */
     struct buf buf = BUF_INITIALIZER;
     vparse_tobuf(vcard, &buf);
-    if ((buf_len(&buf) > (size_t) vcard_max_size) &&
-        (oldsize <= (size_t) vcard_max_size)) {
+    size_t max_size = vcard_max_size;
+    if (oldsize > max_size) {
+        max_size += CARDDAV_UPDATE_OVERAGE;
+    }
+    if (buf_len(&buf) > max_size) {
         buf_free(&buf);
         r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
