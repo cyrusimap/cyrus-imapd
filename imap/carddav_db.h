@@ -55,7 +55,7 @@
 
 struct carddav_db;
 
-#define CARDDAV_UPDATE_OVERAGE 2028
+#define CARDDAV_UPDATE_OVERAGE 2048
 
 #define CARDDAV_KIND_CONTACT 0
 #define CARDDAV_KIND_GROUP 1
