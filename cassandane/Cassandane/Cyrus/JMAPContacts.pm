@@ -3774,11 +3774,29 @@ sub test_contact_set_toolarge
                     lastName => 'name',
                     notes => ('x' x 100000),
                 },
+                2 => {
+                    lastName => 'othername',
+                    notes => ('x' x 10000),
+                },
             },
         }, 'R1'],
     ]);
     $self->assert_str_equals('tooLarge', $res->[0][1]{notCreated}{1}{type});
+    $self->assert_not_null($res->[0][1]{created}{2});
+    my $id = $res->[0][1]{created}{2}{id};
 
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            update => {
+                $id => {
+                    notes => ('x' x 100000),
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('tooLarge', $res->[0][1]{notUpdated}{$id}{type});
+
+#  Is there a way to shutdown httpd, change vcard_ax_size and restart httpd?
 }
 
 sub test_contact_get_apple_countrycode
