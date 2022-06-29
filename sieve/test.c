@@ -648,6 +648,7 @@ int main(int argc, char *argv[])
     sieve_execute_t *exe = NULL;
     message_data_t *m = NULL;
     char *tmpscript = NULL, *script = NULL, *message = NULL;
+    char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
     int c, force_fail = 0;
     int fd, res;
     struct stat sbuf;
@@ -727,7 +728,6 @@ int main(int argc, char *argv[])
     }
     else {
         char magic[BYTECODE_MAGIC_LEN];
-        char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
         sieve_script_t *s = NULL;
         bytecode_info_t *bc = NULL;
         char *err = NULL;
