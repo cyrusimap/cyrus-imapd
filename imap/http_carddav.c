@@ -594,13 +594,6 @@ static int carddav_store_resource(struct transaction_t *txn,
             fullname = propval;
     }
 
-    struct buf *buf = vcard_as_buf(vcard);
-    if (buf_len(buf) > (size_t) vcard_max_size) {
-        buf_destroy(buf);
-        txn->error.precond = CARDDAV_MAX_SIZE;
-        return HTTP_FORBIDDEN;
-    }
-
     /* Check for an existing resource */
     /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
        XXX  because we may have been called as part of a COPY/MOVE */
@@ -620,6 +613,18 @@ static int carddav_store_resource(struct transaction_t *txn,
                     "mailbox=<%s> record=<%u> error=<%s>",
                     mailbox_name(mailbox), cdata->dav.imap_uid, error_message(r));
         }
+    }
+
+    /* Check size of vCard (allow existing oversized cards to be updated) */
+    struct buf *buf = vcard_as_buf(vcard);
+    size_t max_size = vcard_max_size;
+    if (oldrecord && (oldrecord->size - oldrecord->header_size) > max_size) {
+        max_size += CARDDAV_UPDATE_OVERAGE;
+    }
+    if (buf_len(buf) > max_size) {
+        buf_destroy(buf);
+        txn->error.precond = CARDDAV_MAX_SIZE;
+        return HTTP_FORBIDDEN;
     }
 
     /* Create and cache RFC 5322 header fields for resource */

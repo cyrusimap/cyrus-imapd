@@ -55,6 +55,8 @@
 
 struct carddav_db;
 
+#define CARDDAV_UPDATE_OVERAGE 2048
+
 #define CARDDAV_KIND_CONTACT 0
 #define CARDDAV_KIND_GROUP 1
 struct carddav_data {
@@ -194,7 +196,7 @@ int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
                   const char *resource, modseq_t createdmodseq,
                   strarray_t *flags, struct entryattlist **annots,
                   const char *userid, struct auth_state *authstate,
-                  int ignorequota);
+                  int ignorequota, uint32_t oldsize);
 
 /* delete a carddav entry */
 int carddav_remove(struct mailbox *mailbox,

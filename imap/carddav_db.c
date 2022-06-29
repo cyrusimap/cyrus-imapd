@@ -1173,7 +1173,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
                            const char *resource, modseq_t createdmodseq,
                            strarray_t *flags, struct entryattlist **annots,
                            const char *userid, struct auth_state *authstate,
-                           int ignorequota)
+                           int ignorequota, uint32_t oldsize)
 {
     int r = 0;
     FILE *f = NULL;
@@ -1204,10 +1204,14 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     time_to_iso8601(now, datestr, sizeof(datestr), 0);
     vparse_replace_entry(vcard, NULL, "REV", datestr);
 
-    /* Check size of vCard */
+    /* Check size of vCard (allow existing oversized cards to be updated) */
     struct buf buf = BUF_INITIALIZER;
     vparse_tobuf(vcard, &buf);
-    if (buf_len(&buf) > (size_t) vcard_max_size) {
+    size_t max_size = vcard_max_size;
+    if (oldsize > max_size) {
+        max_size += CARDDAV_UPDATE_OVERAGE;
+    }
+    if (buf_len(&buf) > max_size) {
         buf_free(&buf);
         r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
