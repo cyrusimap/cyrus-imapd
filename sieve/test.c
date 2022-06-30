@@ -583,18 +583,19 @@ static int jmapquery(void *sc, void *mc, const char *json)
 
     int r = 0;
 
-    if (!md->content.body) {
-        /* parse the message body if we haven't already */
-        r = message_parse_file_buf(md->data, &md->content.map,
-                                   &md->content.body, NULL);
-        if (r) {
-            json_decref(jfilter);
-            return 0;
+    if (!md->content.matchmime) {
+        if (!md->content.body) {
+            /* parse the message body if we haven't already */
+            r = message_parse_file_buf(md->data, &md->content.map,
+                                       &md->content.body, NULL);
+            if (r) {
+                json_decref(jfilter);
+                return 0;
+            }
         }
-    }
-
-    if (!md->content.matchmime)
+        /* build the query filter */
         md->content.matchmime = jmap_email_matchmime_init(&md->content.map, &err);
+    }
 
     /* Run query */
     if (md->content.matchmime)
