@@ -66,6 +66,7 @@
 #include "comparator.h"
 #include "tree.h"
 #include "sieve/sieve.h"
+#include "imap/global.h"
 #include "imap/mailbox.h"
 #include "imap/message.h"
 #include "imap/spool.h"
@@ -668,7 +669,7 @@ int main(int argc, char *argv[])
     }
 
     /* Load configuration file. */
-    config_read(alt_config, 0);
+    cyrus_init(alt_config, "test", 0, 0);
 
     if (!sd.host) sd.host = config_servername;
 
