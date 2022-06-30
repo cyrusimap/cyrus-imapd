@@ -66,6 +66,7 @@
 #include "comparator.h"
 #include "tree.h"
 #include "sieve/sieve.h"
+#include "imap/global.h"
 #include "imap/mailbox.h"
 #include "imap/mboxname.h"
 #include "imap/message.h"
@@ -587,18 +588,19 @@ static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const
 
     int r = 0;
 
-    if (!md->content.body) {
-        /* parse the message body if we haven't already */
-        r = message_parse_file_buf(md->data, &md->content.map,
-                                   &md->content.body, NULL);
-        if (r) {
-            json_decref(jfilter);
-            return 0;
+    if (!md->content.matchmime) {
+        if (!md->content.body) {
+            /* parse the message body if we haven't already */
+            r = message_parse_file_buf(md->data, &md->content.map,
+                                       &md->content.body, NULL);
+            if (r) {
+                json_decref(jfilter);
+                return 0;
+            }
         }
-    }
-
-    if (!md->content.matchmime)
+        /* build the query filter */
         md->content.matchmime = jmap_email_matchmime_new(&md->content.map, &err);
+    }
 
     /* Run query */
     if (md->content.matchmime)
@@ -711,7 +713,7 @@ int main(int argc, char *argv[])
     }
 
     /* Load configuration file. */
-    config_read(alt_config, 0);
+    cyrus_init(alt_config, "test", 0, 0);
 
     mboxname_init_namespace(&test_namespace, /*isadmin*/0);
     sd.ns = &test_namespace;
