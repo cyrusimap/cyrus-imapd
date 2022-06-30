@@ -524,15 +524,20 @@ static int _matchmime_tr_append_text(search_text_receiver_t *rx,
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
 
-    if (buf_len(&tr->buf) >= config_search_maxsize) {
-        return IMAP_MESSAGE_TOO_LARGE;
-    }
+    if (config_search_maxsize) {
+        if (buf_len(&tr->buf) >= config_search_maxsize) {
+            return IMAP_MESSAGE_TOO_LARGE;
+        }
 
-    size_t n = config_search_maxsize - buf_len(&tr->buf);
-    if (n > buf_len(text)) {
-        n = buf_len(text);
+        size_t n = config_search_maxsize - buf_len(&tr->buf);
+        if (n > buf_len(text)) {
+            n = buf_len(text);
+        }
+        buf_appendmap(&tr->buf, buf_base(text), n);
     }
-    buf_appendmap(&tr->buf, buf_base(text), n);
+    else {
+        buf_append(&tr->buf, text);
+    }
 
     return 0;
 }
