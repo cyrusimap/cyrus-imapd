@@ -147,6 +147,9 @@ my %runners =
     },
 );
 
+#run test_wsl() before sudo to cyrus
+test_wsl();
+
 become_cyrus();
 
 eval
@@ -351,4 +354,30 @@ sub _listitem {
     my $item = shift;
     $item =~ s/\..*// if ($do_list == 1);
     return $item;
+}
+
+sub _trim {
+    my $s = shift;
+    if (!$s) {
+        return "";
+    } else {
+        $s =~ s/^\s+|\s+$//g;
+        return $s;
+    }
+}
+
+sub test_wsl {
+    # In WSL system, it will generate `fakenetstat` script
+    my $wsl = _trim(`systemd-detect-virt`);
+    if ($wsl eq "wsl") {
+        my $netstat_exe = _trim(`which netstat.exe`);
+        if ($netstat_exe) {
+            open my $fh, '>', './utils/fakenetstat'
+                or die "Cannot generate fakenetstat for WSL";
+            print $fh $netstat_exe.
+                " -an | sed -e 's/LISTENING/LISTEN/' -e 's/  TCP/tcp 0 0/'\n";
+            close $fh;
+            chmod(0755, './utils/fakenetstat');
+        }
+    }
 }
