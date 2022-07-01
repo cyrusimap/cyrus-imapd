@@ -1,0 +1,1 @@
+/mnt/c/Windows/system32/netstat.exe -an | sed -e 's/LISTENING/LISTEN/' -e 's/  TCP/tcp 0 0/'

@@ -325,7 +325,7 @@ sub _is_listening_af
     my ($self, $af) = @_;
 
     my @cmd = (
-        'netstat',
+        (-e "/mnt/c/Windows/system32/netstat.exe") ? './utils/fakenetstat' : 'netstat',
         '-l',           # listening ports only
         '-n',           # numeric output
         );
