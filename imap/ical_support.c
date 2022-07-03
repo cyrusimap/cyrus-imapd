@@ -106,6 +106,8 @@ EXPORTED int cyrus_icalrestriction_check(icalcomponent *ical)
     icalcomponent *comp;
     icalproperty *prop;
 
+    icalcomponent_strip_errors(ical);
+
     for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
          comp;
          comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
