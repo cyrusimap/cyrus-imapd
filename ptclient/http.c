@@ -192,9 +192,8 @@ static void myinit(void)
     return;
 }
 
-static struct auth_state *myauthstate(const char *identifier,
-                                            size_t size,
-                                            const char **reply, int *dsize)
+static struct auth_state *myauthstate(const char *identifier, size_t size,
+                                      const char **reply, int *dsize)
 {
     const char *canon_id = ptsmodule_unix_canonifyid(identifier, size);
     struct backend *be = state.conn;
@@ -227,9 +226,17 @@ static struct auth_state *myauthstate(const char *identifier,
         if (!be) return NULL;
     }
 
-    /* TODO: URL-encode the canon_id */
     buf_reset(&state.buf);
-    buf_printf(&state.buf, "/%s%s%s", state.uri.prefix, canon_id, state.uri.suffix);
+    buf_printf(&state.buf, "/%s", state.uri.prefix);
+    /* URL-encode the canon_id */
+    const char *c;
+    for (c = canon_id; *c; c++) {
+        if (isalnum(*c) || strchr("-_.~", *c))
+            buf_putc(&state.buf, *c);
+        else
+            buf_printf(&state.buf, "%%%02X", *c);
+    }
+    buf_appendcstr(&state.buf, state.uri.suffix);
 
     prot_printf(be->out, "GET %s HTTP/1.1\r\n", buf_cstring(&state.buf));
     prot_printf(be->out, "Host: %s\r\n", state.hosthdr);
@@ -247,6 +254,8 @@ static struct auth_state *myauthstate(const char *identifier,
             break;
         }
     } while (code < 200);
+
+    if (resp_body.flags & BODY_CLOSE) backend_disconnect(be);
 
     if (code == 200) {
         json_error_t err;
