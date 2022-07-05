@@ -425,13 +425,15 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
 {
     static char statbuf[2048];
     const char **conn;
+    unsigned version;
     int r;
 
     *errstr = NULL;
     *code = HTTP_BAD_GATEWAY;
 
     if (!prot_fgets(statbuf, sizeof(statbuf), be->in) ||
-        (sscanf(statbuf, HTTP_VERSION " %u ", code) != 1)) {
+        (sscanf(statbuf, "HTTP/1.%1u %3u ", &version, code) != 2) ||
+        (version > 1)) {
         *errstr = "Unable to read status-line from backend";
         return HTTP_BAD_GATEWAY;
     }
@@ -446,7 +448,7 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
     if (!(body->flags & BODY_DISCARD)) buf_reset(&body->payload);
 
     /* Check connection persistence */
-    if (!strncmp(statbuf, "HTTP/1.0 ", 9)) body->flags |= BODY_CLOSE;
+    if (version == 0) body->flags |= BODY_CLOSE;
     for (conn = spool_getheader(*hdrs, "Connection"); conn && *conn; conn++) {
         tok_t tok =
             TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
