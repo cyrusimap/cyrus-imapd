@@ -51,12 +51,6 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
-Cassandane::Cyrus::TestCase::magic(AltPTSDBPath => sub {
-    shift->config_set(
-        'ptscache_db_path' => '@basedir@/conf/non-default-ptscache.db'
-    );
-});
-
 sub new
 {
     my ($class, @args) = @_;
