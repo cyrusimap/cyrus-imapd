@@ -1115,8 +1115,6 @@ AC_SUBST(LDAP_LDFLAGS)
 AC_SUBST(LDAP_LIBS)
 AM_CONDITIONAL([HAVE_LDAP], [test "$have_ldap" = "yes"])
 
-AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "$have_ldap" = "yes"])
-
 AC_ARG_WITH([clamav],
 	AS_HELP_STRING([--without-clamav], [ignore presence of ClamAV and disable it]))
 AS_IF([test "x$with_clamav" != "xno"],

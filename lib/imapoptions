@@ -1063,6 +1063,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that enabling this option will increase the amount of data
    sent across the wire. */
 
+{ "httppts_uri", NULL, STRING, "UNRELEASED" }
+/* The URL endpoint to use when for querying group membership, in URI Template
+   (level 1) format [RFC6570].  The URL MUST contain a variable called "groupId" */
+
 { "httptimeout", "5m", DURATION, "3.1.8" }
 /* Set the length of the HTTP server's inactivity autologout timer.
    The default is 5 minutes.  The minimum value is 0, which will
@@ -2073,7 +2077,7 @@ If all partitions are over that limit, this feature is not used anymore.
    In a standard murder this option should ONLY be set on backends.
    DO NOT SET on frontends or things won't work properly. */
 
-{ "pts_module", "afskrb", STRINGLIST("afskrb", "ldap"), "2.3.17" }
+{ "pts_module", "afskrb", STRINGLIST("afskrb", "ldap", "http"), "UNRELEASED" }
 /* The PTS module to use. */
 
 { "ptloader_sock", NULL, STRING, "2.3.17" }

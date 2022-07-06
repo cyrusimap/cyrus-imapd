@@ -1,0 +1,14 @@
+Description:
+
+Adds a module to ptloader which speaks HTTP.
+
+
+Config changes:
+
+Adds "http" as a possible value for "pts_module".
+Adds "httppts_uri" option for specifying the HTTP endpoint.
+
+
+Upgrade instructions:
+
+None.

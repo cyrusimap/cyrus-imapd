@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-#  Copyright (c) 2011-2018 FastMail Pty Ltd. All rights reserved.
+#  Copyright (c) 2011-2022 Fastmail Pty Ltd. All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions
@@ -37,18 +37,16 @@
 #  OF THIS SOFTWARE.
 #
 
-# XXX Most of these tests are tagged with :min_version_3_0_8, as
-# XXX the architecture used for testing LDAP depends on the fix
-# XXX for https://github.com/cyrusimap/cyrus-imapd/issues/2282
-
-package Cassandane::Cyrus::LDAP;
+package Cassandane::Cyrus::HTTPPTS;
 use strict;
 use warnings;
 use Cwd qw(realpath);
+use JSON;
 use Data::Dumper;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Log;
 
 sub new
@@ -57,14 +55,8 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(
-        ldap_base => "o=cyrus",
-        ldap_group_base => "ou=groups,o=cyrus",
-        ldap_domain_base_dn => "ou=domains,o=cyrus",
-        ldap_user_attribute => "uid",
-        ldap_member_attribute => "memberof",
-        ldap_sasl => "no",
         auth_mech => 'pts',
-        pts_module => 'ldap',
+        pts_module => 'http',
         ptloader_sock => '@basedir@/conf/ptsock',
     );
 
@@ -84,22 +76,43 @@ sub set_up
 
     $self->SUPER::set_up();
 
-    $self->{ldapport} = Cassandane::PortManager::alloc();
+    $self->{server} = $self->new_test_url(sub {
+        my $env = shift;
+        my $req = Plack::Request->new($env);
+
+        my $res;
+
+        if ($req->method eq 'GET') {
+            if ($req->query_parameters->{id} eq 'cassandane') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ cassandane => [ "group:group co",
+                                                         "group:group c" ] }));
+            } elsif ($req->query_parameters->{id} eq 'otheruser') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ otheruser => [ "group:group co",
+                                                        "group:group c" ] }));
+            } else {
+                $res = Plack::Response->new(404);
+            }
+        }
+        elsif ($req->method eq 'OPTIONS') {
+            $res = Plack::Response->new(200);
+        }
+        else {
+            $res = Plack::Response->new(501);
+        }
+
+        return $res->finalize;
+    });
+
+    my $uri = $self->{server}->url . "?id={groupId}";
 
     $self->{instance}->{config}->set(
-        ldap_uri => "ldap://localhost:$self->{ldapport}/",
+        httppts_uri => $uri
     );
 
-    # arrange for the fakeldapd to be started
-    # XXX make this run as a DAEMON rather than a START
-    $self->{instance}->add_start(
-        name => 'fakeldapd',
-        argv => [
-            realpath('utils/fakeldapd'),
-            '-p', $self->{ldapport},
-            '-l', realpath('data/directory.ldif'),
-        ],
-    );
     $self->_start_instances();
 
     $self->{instance}->create_user("otheruser");
@@ -113,7 +126,7 @@ sub tear_down
 }
 
 sub test_alternate_ptscache_db_path
-    :needs_dependency_ldap :min_version_3_0_8 :AltPTSDBPath
+    :min_version_3_7 :AltPTSDBPath
 {
     my ($self) = @_;
 
@@ -130,7 +143,7 @@ sub test_alternate_ptscache_db_path
 }
 
 sub test_setacl_groupid
-    :needs_dependency_ldap :min_version_3_0_8
+    :min_version_3_7
 {
     my ($self) = @_;
 
@@ -148,7 +161,7 @@ sub test_setacl_groupid
 }
 
 sub test_setacl_groupid_spaces
-    :needs_dependency_ldap :min_version_3_0_8
+    :min_version_3_7
 {
     my ($self) = @_;
 
@@ -179,7 +192,7 @@ sub test_setacl_groupid_spaces
 }
 
 sub test_list_groupaccess_noracl
-    :needs_dependency_ldap :min_version_3_0_8 :NoAltNamespace
+    :min_version_3_7 :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -203,7 +216,7 @@ sub test_list_groupaccess_noracl
 }
 
 sub test_list_groupaccess_racl
-    :needs_dependency_ldap :ReverseACLs :min_version_3_1 :NoAltNamespace
+    :ReverseACLs :min_version_3_7 :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -237,6 +250,7 @@ sub test_list_groupaccess_racl
 }
 
 sub do_test_list_order
+    :min_version_3_7
 {
     my ($self) = @_;
 
@@ -319,14 +333,14 @@ sub do_test_list_order
 }
 
 sub test_list_order_noracl
-    :needs_dependency_ldap :min_version_3_0_8 :NoAltNamespace
+    :min_version_3_7 :NoAltNamespace
 {
     my $self = shift;
     return $self->do_test_list_order(@_);
 }
 
 sub test_list_order_racl
-    :needs_dependency_ldap :ReverseACLs :min_version_3_1 :NoAltNamespace
+    :ReverseACLs :min_version_3_7 :NoAltNamespace
 {
     my $self = shift;
     return $self->do_test_list_order(@_);

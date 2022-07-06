@@ -386,6 +386,11 @@ magic(CalDAVNoDefaultCalendar => sub {
         caldav_create_default => 'no',
     );
 });
+magic(AltPTSDBPath => sub {
+    shift->config_set(
+        'ptscache_db_path' => '@basedir@/conf/non-default-ptscache.db'
+    );
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
