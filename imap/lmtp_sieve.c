@@ -87,7 +87,6 @@
 #include "imap/lmtp_err.h"
 
 static int sieve_usehomedir = 0;
-static const char *sieve_dir = NULL;
 
 /* data per script */
 typedef struct script_data {
@@ -2200,9 +2199,10 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 
     sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     if (!sieve_usehomedir) {
-        sieve_dir = config_getstring(IMAPOPT_SIEVEDIR);
-    } else {
-        sieve_dir = NULL;
+        if (!sievedir_valid_path(config_getstring(IMAPOPT_SIEVEDIR))) {
+            xsyslog(LOG_ERR, "%s", "sievedir option is not defined/valid");
+            fatal("sievedir option is not defined/valid", EX_SOFTWARE);
+        }
     }
 
     interp = sieve_interp_alloc(ctx);

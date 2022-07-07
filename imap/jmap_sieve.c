@@ -127,6 +127,16 @@ static jmap_method_t jmap_sieve_methods_nonstandard[] = {
 
 HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
 {
+    if (config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
+        xsyslog(LOG_NOTICE, "%s", "can't use home directories");
+        return;
+    }
+
+    if (!sievedir_valid_path(config_getstring(IMAPOPT_SIEVEDIR))) {
+        xsyslog(LOG_NOTICE, "%s", "sievedir option is not defined/valid");
+        return;
+    }
+
     jmap_method_t *mp;
     for (mp = jmap_sieve_methods_standard; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);

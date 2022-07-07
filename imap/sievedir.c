@@ -78,6 +78,8 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
     int dir_len;
     int r = SIEVEDIR_OK;
 
+    assert(sievedir);
+
     if ((dp = opendir(sievedir)) == NULL) {
         if (errno == ENOENT) return SIEVEDIR_OK;
 
@@ -145,6 +147,8 @@ EXPORTED struct buf *sievedir_get_script(const char *sievedir,
 {
     struct buf buf = BUF_INITIALIZER;
 
+    assert(sievedir);
+
     buf_printf(&buf, "%s/%s", sievedir, script);
 
     int fd = open(buf_cstring(&buf), 0);
@@ -186,6 +190,8 @@ EXPORTED const char *sievedir_get_active(const char *sievedir)
     char link[PATH_MAX];
     ssize_t tgt_len;
 
+    assert(sievedir);
+
     snprintf(link, sizeof(link), "%s/%s", sievedir, DEFAULTBC_NAME);
 
     tgt_len = readlink(link, target, sizeof(target) - 1);
@@ -214,6 +220,8 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
     char target[PATH_MAX];
     char active[PATH_MAX];
     char tmp[PATH_MAX+4];  /* +4 for ".NEW" */
+
+    assert(sievedir);
 
     if (sievedir_script_isactive(sievedir, name)) {
         /* already active - nothing to do here */
@@ -247,6 +255,8 @@ EXPORTED int sievedir_deactivate_script(const char *sievedir)
 {
     char active[PATH_MAX];
 
+    assert(sievedir);
+
     snprintf(active, sizeof(active), "%s/defaultbc", sievedir);
     if (unlink(active) != 0 && errno != ENOENT) {
         xsyslog(LOG_ERR, "IOERROR: failed to delete active script link",
@@ -260,6 +270,8 @@ EXPORTED int sievedir_deactivate_script(const char *sievedir)
 EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
 {
     char path[PATH_MAX];
+
+    assert(sievedir);
 
     /* delete bytecode */
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
@@ -278,6 +290,8 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
     /* rename script and bytecode; move active link */
     char oldpath[PATH_MAX], newpath[PATH_MAX];
     int r;
+
+    assert(sievedir);
 
     snprintf(oldpath, sizeof(oldpath),
              "%s/%s%s", sievedir, oldname, BYTECODE_SUFFIX);
@@ -299,6 +313,8 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
 {
     char new_bcpath[PATH_MAX];
     int fd = -1;
+
+    assert(sievedir);
 
     /* parse the script */
     sieve_script_t *s = NULL;
@@ -373,3 +389,17 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     return (r ? r : SIEVEDIR_OK);
 }
 #endif /* USE_SIEVE */
+
+EXPORTED int sievedir_valid_path(const char *sievedir)
+{
+    if (!sievedir || *sievedir != '/') return 0;
+
+    char *resolved = realpath(sievedir, NULL);
+
+    if (!resolved && errno != ENOENT) return 0;
+
+    free(resolved);
+
+    return 1;
+}
+
