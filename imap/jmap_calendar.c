@@ -6942,7 +6942,7 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_jscal *jscal)
     if (query->have_limit && json_array_size(query->ids) >= query->limit)
         goto done;
 
-    if (query->position && (size_t) query->position <= query->total - 1)
+    if ((size_t)query->position > query->total - 1)
         goto done;
 
     struct jmap_caleventid eid = {
@@ -7027,6 +7027,7 @@ static int _calendarevent_queryargs_parse(jmap_req_t *req __attribute__((unused)
 static int eventquery_run(jmap_req_t *req,
                           struct jmap_query *query,
                           struct eventquery_args args,
+                          json_t **debug,
                           json_t **err)
 {
     time_t before = caldav_eternity;
@@ -7036,6 +7037,7 @@ static int eventquery_run(jmap_req_t *req,
     struct buf buf = BUF_INITIALIZER;
     size_t nsort = 0;
     int is_sharee = strcmp(req->accountid, req->userid);
+    int is_fastpath = 0;
 
     /* Sanity check arguments */
     eventquery_read_timerange(query->filter, args, &before, &after);
@@ -7095,6 +7097,7 @@ static int eventquery_run(jmap_req_t *req,
         r = caldav_foreach_jscal(db, req->userid, &jscal_filter,
                 sort, nsort, eventquery_fastpath_cb, &rock);
         buf_free(&rock.buf);
+        is_fastpath = 1;
         goto done;
     }
 
@@ -7220,6 +7223,9 @@ static int eventquery_run(jmap_req_t *req,
     }
 
 done:
+    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+        *debug = json_pack("{s:b}", "isFastPath", is_fastpath);
+    }
     if (db) caldav_close(db);
     if (ptrarray_size(&matches)) {
         int j;
@@ -7330,7 +7336,8 @@ static int jmap_calendarevent_query(struct jmap_req *req)
         goto done;
     }
 
-    int r = eventquery_run(req, &query, args, &err);
+    json_t *debug = NULL;
+    int r = eventquery_run(req, &query, args, &debug, &err);
     if (r || err) {
         if (!err) err = jmap_server_error(r);
         jmap_error(req, err);
@@ -7343,6 +7350,9 @@ static int jmap_calendarevent_query(struct jmap_req *req)
     json_decref(jstate);
 
     json_t *res = jmap_query_reply(&query);
+    if (debug) {
+        json_object_set_new(res, "debug", debug);
+    }
     jmap_ok(req, res);
 
 done:
