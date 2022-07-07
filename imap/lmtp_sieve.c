@@ -1414,6 +1414,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     strarray_t sched_addresses = STRARRAY_INITIALIZER;
     unsigned sched_flags = 0;
     struct bodypart **parts = NULL;
+    const char *errstr;
     int ret = 0;
 
     prometheus_increment(CYRUS_LMTP_SIEVE_IMIP_TOTAL);
@@ -1460,9 +1461,10 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     }
 
     icalrestriction_check(itip);
-    if (get_icalcomponent_errstr(itip)) {
+    if ((errstr = get_icalcomponent_errstr(itip))) {
         buf_setcstr(&imip->outcome, "error");
-        buf_setcstr(&imip->errstr, "invalid iCalendar data");
+        buf_reset(&imip->errstr);
+        buf_printf(&imip->errstr, "invalid iCalendar data: %s", errstr);
         goto done;
     }
 
@@ -1639,18 +1641,16 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
         break;
     }
 
-    syslog(LOG_INFO, "sieve iMIP processed: %s: %s",
-           m->id ? m->id : "<nomsgid>", buf_cstring(&imip->errstr));
-    if (config_auditlog)
-        syslog(LOG_NOTICE,
-               "auditlog: processed iMIP sessionid=<%s> message-id=%s: %s",
-               session_id(), m->id ? m->id : "<nomsgid>",
-               buf_cstring(&imip->errstr));
-
   done:
-    syslog(LOG_DEBUG, "sieve iMIP: %s: %s (%s)",
+    syslog(LOG_INFO, "sieve iMIP: %s: %s (%s)",
            m->id ? m->id : "<nomsgid>",
            buf_cstring(&imip->outcome), buf_cstring(&imip->errstr));
+    if (config_auditlog)
+        syslog(LOG_NOTICE,
+               "auditlog: processed iMIP sessionid=<%s> message-id=%s"
+               " outcome=%s errstr='%s'",
+               session_id(), m->id ? m->id : "<nomsgid>",
+               buf_cstring(&imip->outcome), buf_cstring(&imip->errstr));
 
     strarray_fini(&sched_addresses);
     if (parts) {
