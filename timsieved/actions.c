@@ -92,11 +92,11 @@ int actions_init(void)
     if (!sieve_usehomedir) {
         sieve_dir_config = (char *) config_getstring(IMAPOPT_SIEVEDIR);
         if (!sievedir_valid_path(sieve_dir_config)) {
-            xsyslog(LOG_ERR, "%s", "sievedir option is not defined/valid");
+            xsyslog(LOG_ERR, "sievedir option is not defined/valid", NULL);
         }
     } else {
         /* can't use home directories with timsieved */
-        xsyslog(LOG_ERR, "%s", "can't use home directories");
+        xsyslog(LOG_ERR, "can't use home directories", NULL);
 
         return TIMSIEVE_FAIL;
     }
