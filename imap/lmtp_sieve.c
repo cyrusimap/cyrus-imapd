@@ -2200,8 +2200,8 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     if (!sieve_usehomedir) {
         if (!sievedir_valid_path(config_getstring(IMAPOPT_SIEVEDIR))) {
-            xsyslog(LOG_ERR, "sievedir option is not defined/valid", NULL);
-            fatal("sievedir option is not defined/valid", EX_SOFTWARE);
+            xsyslog(LOG_ERR, "sievedir option is not defined or invalid", NULL);
+            fatal("sievedir option is not defined or invalid", EX_SOFTWARE);
         }
     }
 
