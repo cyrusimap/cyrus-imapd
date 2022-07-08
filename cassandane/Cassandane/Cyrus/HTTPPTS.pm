@@ -122,6 +122,10 @@ sub tear_down
 {
     my ($self) = @_;
 
+    # clean this up as soon as we're done with it, cause it's holding a
+    # port open!
+    delete $self->{server};
+
     $self->SUPER::tear_down();
 }
 
