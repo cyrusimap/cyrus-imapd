@@ -5157,6 +5157,8 @@ static void participants_to_ical(icalcomponent *comp,
     hash_table caladdress_by_participant_id = HASH_TABLE_INITIALIZER;
     hash_table oldattendees_by_jmapid = HASH_TABLE_INITIALIZER;
 
+    size_t invalid_count = json_array_size(parser->invalid);
+
     /* Validate replyTo */
     json_t *replyTo = json_object_get(event, "replyTo");
     if (JNOTNULL(replyTo)) {
@@ -5182,6 +5184,10 @@ static void participants_to_ical(icalcomponent *comp,
         // Detailed validation of participants comes later
         jmap_parser_invalid(parser, "participants");
     }
+
+    // Fail early if replyTo and participants are invalid
+    if (invalid_count < json_array_size(parser->invalid))
+        goto done;
 
     if (!(JNOTNULL(replyTo) || JNOTNULL(participants))) {
         goto done;
