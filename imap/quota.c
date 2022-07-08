@@ -132,7 +132,7 @@ int main(int argc,char **argv)
     int do_report = 1;
     char *alt_config = NULL, *domain = NULL;
 
-    while ((opt = getopt(argc, argv, "C:d:fqJZu")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:d:fqJnZu")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
