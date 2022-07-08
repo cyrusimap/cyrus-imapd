@@ -558,8 +558,12 @@ static void _emailsubmission_create(jmap_req_t *req,
             jmap_parser_invalid(&parser, "rcptTo");
         }
 
-        /* Don't allow 'identity' SMTP param to be different than identityId */
-        json_t *jmapid = json_object_get(envelope, "identity");
+        /* Don't allow mailFrom IDENTITY param to be different than identityId */
+        json_t *jmapid =
+            json_object_get(json_object_get(json_object_get(envelope,
+                                                            "mailFrom"),
+                                            "parameters"),
+                            "IDENTITY");
         if (jmapid && strcmpnull(identityid, json_string_value(jmapid))) {
             jmap_parser_invalid(&parser, "identity");
         }
