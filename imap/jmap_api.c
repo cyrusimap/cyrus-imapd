@@ -252,10 +252,11 @@ static int process_resultrefs(json_t *args, json_t *resp, json_t **err)
 static int validate_request(struct transaction_t *txn, const json_t *req,
                             jmap_settings_t *settings)
 {
-    json_t *using = json_object_get(req, "using");
-    json_t *calls = json_object_get(req, "methodCalls");
+    json_t *using, *calls;
 
-    if (!json_is_array(using) || !json_is_array(calls)) {
+    if (json_unpack((json_t *) req, "{s:o, s:o}",
+                    "using", &using, "methodCalls", &calls) != 0 ||
+        !json_is_array(using) || !json_is_array(calls)) {
         return JMAP_NOT_REQUEST;
     }
 
@@ -270,35 +271,37 @@ static int validate_request(struct transaction_t *txn, const json_t *req,
         return JMAP_LIMIT_SIZE;
     }
 
+    if (json_array_size(calls) > (size_t) settings->limits[MAX_CALLS_IN_REQUEST]) {
+        return JMAP_LIMIT_CALLS;
+    }
+
     size_t i;
     json_t *val;
     json_array_foreach(calls, i, val) {
-        if (json_array_size(val) != 3 ||
-                !json_is_string(json_array_get(val, 0)) ||
-                !json_is_object(json_array_get(val, 1)) ||
-                !json_is_string(json_array_get(val, 2))) {
+        const char *mname, *id;
+        json_t *args;
+
+        if (json_unpack(val, "[s,o,s!]", &mname, &args, &id) != 0) {
             return JMAP_NOT_REQUEST;
         }
-        if (i >= (size_t) settings->limits[MAX_CALLS_IN_REQUEST]) {
-            return JMAP_LIMIT_CALLS;
-        }
-        const char *mname = json_string_value(json_array_get(val, 0));
+
         mname = strchr(mname, '/');
         if (!mname) continue;
 
         mname++;
         if (!strcmp(mname, "get")) {
-            json_t *ids = json_object_get(json_array_get(val, 1), "ids");
+            json_t *ids = json_object_get(args, "ids");
             if (json_array_size(ids) >
                 (size_t) settings->limits[MAX_OBJECTS_IN_GET]) {
                 return JMAP_LIMIT_OBJS_GET;
             }
         }
         else if (!strcmp(mname, "set")) {
-            json_t *args = json_array_get(val, 1);
-            size_t size = json_object_size(json_object_get(args, "create"));
-            size += json_object_size(json_object_get(args, "update"));
-            size += json_array_size(json_object_get(args, "destroy"));
+            json_t *create = NULL, *update = NULL, *destroy = NULL;
+            json_unpack(args, "{s?:o, s?:o, s?:o}",
+                        "create", &create, "update", &update, "destroy", &destroy);
+            size_t size = json_object_size(create) +
+                json_object_size(update) + json_array_size(destroy);
             if (size > (size_t) settings->limits[MAX_OBJECTS_IN_SET]) {
                 return JMAP_LIMIT_OBJS_SET;
             }
