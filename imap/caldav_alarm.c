@@ -1599,7 +1599,21 @@ static int process_futurerelease(struct caldav_alarm_data *data,
 
         /* Set IDENTITY ID */
         if (JNOTNULL(identity)) {
-            smtpclient_set_jmapid(sm, json_string_value(identity));
+            const char *jmapid = json_string_value(identity);
+
+            /* Prefer mailFrom IDENTITY parameter if it is numeric,
+               and the toplevel identityId is not */
+            if (strchr(jmapid, '@') && envelope) {
+                json_t *from_params =
+                    json_object_get(json_object_get(envelope, "mailFrom"),
+                                    "parameters");
+                if (from_params &&
+                    (identity = json_object_get(from_params, "IDENTITY")) &&
+                    !strchr(json_string_value(identity), '@')) {
+                    jmapid = json_string_value(identity);
+                }
+            }
+            smtpclient_set_jmapid(sm, jmapid);
         }
 
         /* Prepare envelope */
