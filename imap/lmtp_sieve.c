@@ -1460,8 +1460,12 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
         goto done;
     }
 
-    icalrestriction_check(itip);
-    if ((errstr = get_icalcomponent_errstr(itip))) {
+    cyrus_icalrestriction_check(itip);
+    if ((errstr = get_icalcomponent_errstr(itip)) &&
+        (meth != ICAL_METHOD_REPLY ||
+         !strstr(errstr, "Failed iTIP restrictions for ORGANIZER property"))) {
+        /* XXX  Outlook sends METHOD:REPLY with no ORGANIZER,
+           but libical doesn't allow them in its restrictions checks */
         buf_setcstr(&imip->outcome, "error");
         buf_reset(&imip->errstr);
         buf_printf(&imip->errstr, "invalid iCalendar data: %s", errstr);
@@ -1487,11 +1491,6 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     if (prop) {
         organizer = icalproperty_get_organizer(prop);
         if (!strncasecmpsafe(organizer, "mailto:", 7)) organizer += 7;
-    }
-    else if (meth != ICAL_METHOD_PUBLISH) {
-        buf_setcstr(&imip->outcome, "error");
-        buf_setcstr(&imip->errstr, "missing ORGANIZER property");
-        goto done;
     }
 
     if (strchr(ctx->userid, '@')) {
@@ -1538,8 +1537,16 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
 
             GCC_FALLTHROUGH
 
-        case ICAL_METHOD_PUBLISH:
         case ICAL_METHOD_REQUEST:
+            if (!organizer) {
+                buf_setcstr(&imip->outcome, "error");
+                buf_setcstr(&imip->errstr, "missing ORGANIZER property");
+                goto done;
+            }
+
+            GCC_FALLTHROUGH
+
+        case ICAL_METHOD_PUBLISH:
             originator = organizer;
 
 #if 0
