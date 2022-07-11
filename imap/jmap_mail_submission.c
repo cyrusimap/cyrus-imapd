@@ -187,10 +187,12 @@ HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
 
 static int _emailsubmission_address_parse(json_t *addr,
                                           struct jmap_parser *parser,
+                                          const char **identity,
                                           time_t *holduntil)
 {
     int is_valid = 0;
 
+    if (identity)  *identity = NULL;
     if (holduntil) *holduntil = 0;
 
     json_t *email = json_object_get(addr, "email");
@@ -218,23 +220,28 @@ static int _emailsubmission_address_parse(json_t *addr,
             /* We'll xtext-encode any non-esmtp values later */
             jmap_parser_invalid(parser, key);
         }
-        else if (holduntil) {
+        else {
             const char *val = json_string_value(jval);
 
-            if (!strcasecmp(key, "HOLDFOR")) {
-                char *endptr = (char *) val;
-                ulong interval = val ? strtoul(val, &endptr, 10) : ULONG_MAX;
-                time_t now = time(0);
-
-                if (endptr == val || *endptr != '\0' ||
-                    interval > 99999999 /* per RFC 4865 */) {
-                    jmap_parser_invalid(parser, key);
-                }
-                else *holduntil = now + interval;
+            if (identity && !strcasecmp(key, "IDENTITY")) {
+                *identity = val;
             }
-            else if (!strcasecmp(key, "HOLDUNTIL")) {
-                if (!val || time_from_iso8601(val, holduntil) < 0) {
-                    jmap_parser_invalid(parser, key);
+            if (holduntil) {
+                if (!strcasecmp(key, "HOLDFOR")) {
+                    char *endptr = (char *) val;
+                    ulong interval = val ? strtoul(val, &endptr, 10) : ULONG_MAX;
+                    time_t now = time(0);
+
+                    if (endptr == val || *endptr != '\0' ||
+                        interval > 99999999 /* per RFC 4865 */) {
+                        jmap_parser_invalid(parser, key);
+                    }
+                    else *holduntil = now + interval;
+                }
+                else if (!strcasecmp(key, "HOLDUNTIL")) {
+                    if (!val || time_from_iso8601(val, holduntil) < 0) {
+                        jmap_parser_invalid(parser, key);
+                    }
                 }
             }
         }
@@ -521,25 +528,25 @@ static void _emailsubmission_create(jmap_req_t *req,
     /* identityId */
     const char *identityid = NULL;
     json_t *jidentityId = json_object_get(emailsubmission, "identityId");
-    if (json_is_string(jidentityId)) {
-        identityid = json_string_value(jidentityId);
-        if (strcmp(identityid, req->userid)) {
+    if (JNOTNULL(jidentityId)) {
+        if (json_is_string(jidentityId)) {
+            identityid = json_string_value(jidentityId);
+        }
+        else {
             jmap_parser_invalid(&parser, "identityId");
         }
-    }
-    else {
-        jmap_parser_invalid(&parser, "identityId");
     }
 
     /* envelope */
     time_t holduntil = 0;
     json_t *envelope = json_object_get(emailsubmission, "envelope");
     if (JNOTNULL(envelope)) {
+        const char *id_param = NULL;
         jmap_parser_push(&parser, "envelope");
         json_t *from = json_object_get(envelope, "mailFrom");
         if (json_object_size(from)) {
             jmap_parser_push(&parser, "mailFrom");
-            _emailsubmission_address_parse(from, &parser, &holduntil);
+            _emailsubmission_address_parse(from, &parser, &id_param, &holduntil);
             jmap_parser_pop(&parser);
         }
         else {
@@ -551,12 +558,17 @@ static void _emailsubmission_create(jmap_req_t *req,
             json_t *addr;
             json_array_foreach(rcpt, i, addr) {
                 jmap_parser_push_index(&parser, "rcptTo", i, NULL);
-                _emailsubmission_address_parse(addr, &parser, NULL);
+                _emailsubmission_address_parse(addr, &parser, NULL, NULL);
                 jmap_parser_pop(&parser);
             }
         }
         else {
             jmap_parser_invalid(&parser, "rcptTo");
+        }
+
+        /* Don't allow mailFrom IDENTITY param to be different than identityId */
+        if (id_param && strcmpnull(identityid, id_param)) {
+            jmap_parser_invalid(&parser, "identity");
         }
         jmap_parser_pop(&parser);
     } else {
@@ -789,6 +801,8 @@ static void _emailsubmission_create(jmap_req_t *req,
         if (r) goto done;
     }
     smtpclient_set_auth(*sm, req->userid);
+
+    if (identityid) smtpclient_set_jmapid(*sm, identityid);
 
     /* Prepare envelope */
     smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
