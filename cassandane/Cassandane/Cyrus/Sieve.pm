@@ -5816,11 +5816,14 @@ sub test_imip_reply
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip", "vnd.cyrus.log"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :outcome "outcome";
+    processimip :outcome "outcome" :errstr "errstr";
     if string "\${outcome}" "updated" {
         setflag "\\\\Flagged";
+    }
+    else {
+        log "\${errstr}";
     }
 }
 EOF
@@ -5875,7 +5878,6 @@ BEGIN:VEVENT
 UID:$uuid
 DTSTAMP:20210923T034327Z
 SEQUENCE:0
-ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
 END:VEVENT
 END:VCALENDAR
