@@ -537,6 +537,10 @@ void free_tree(commandlist_t *cl)
             strarray_free(cl->u.dh.values);
             break;
 
+        case B_LOG:
+            free(cl->u.l.text);
+            break;
+
         case B_SNOOZE:
             free_fileinto(&cl->u.sn.f);
             strarray_free(cl->u.sn.addflags);
