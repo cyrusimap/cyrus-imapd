@@ -6108,9 +6108,7 @@ static int jmap_thread_get(jmap_req_t *req)
         goto done;
     }
 
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-    get.state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    get.state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -8284,9 +8282,7 @@ static int jmap_email_get(jmap_req_t *req)
     else
         jmap_email_get_full(req, &get, &args);
 
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-    get.state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    get.state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
 
     jmap_ok(req, jmap_get_reply(&get));
 
@@ -13078,9 +13074,7 @@ static int jmap_email_set(jmap_req_t *req)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-        set.old_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
+        set.old_state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     }
 
     json_t *email;
@@ -13108,11 +13102,7 @@ static int jmap_email_set(jmap_req_t *req)
 
     _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed);
 
-    // TODO refactor jmap_getstate to return a string, once
-    // all code has been migrated to the new JMAP parser.
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
-    set.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    set.new_state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
 
     json_t *reply = jmap_set_reply(&set);
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {

@@ -317,7 +317,7 @@ extern int jmap_findblob_exact(jmap_req_t *req, const char *accountid,
                                struct buf *blob);
 
 /* JMAP states */
-extern json_t* jmap_getstate(jmap_req_t *req, int mbtype, int refresh);
+extern char *jmap_getstate(jmap_req_t *req, int mbtype, int refresh);
 extern json_t *jmap_fmtstate(modseq_t modseq);
 extern int jmap_cmpstate(jmap_req_t *req, json_t *state, int mbtype);
 extern modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype);

@@ -1017,9 +1017,7 @@ static int jmap_calendar_get(struct jmap_req *req)
     }
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
-    get.state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    get.state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -2211,9 +2209,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
-        set.old_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
+        set.old_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
     }
 
     r = caldav_create_defaultcalendars(req->accountid,
@@ -2305,11 +2301,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         else json_object_set_new(set.not_destroyed, id, err);
     }
 
-    // TODO refactor jmap_getstate to return a string, once
-    // all code has been migrated to the new JMAP parser.
-    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1);
-    set.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    set.new_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1);
 
     jmap_ok(req, jmap_set_reply(&set));
 
@@ -4039,9 +4031,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     }
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
-    get.state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    get.state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -6067,9 +6057,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
-        set.old_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
+        set.old_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
     }
 
     r = caldav_create_defaultcalendars(req->accountid,
@@ -6222,11 +6210,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     jmap_caleventid_free(&eid);
 
 
-    // TODO refactor jmap_getstate to return a string, once
-    // all code has been migrated to the new JMAP parser.
-    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1);
-    set.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    set.new_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1);
 
     jmap_ok(req, jmap_set_reply(&set));
 
@@ -7345,9 +7329,7 @@ static int jmap_calendarevent_query(struct jmap_req *req)
     }
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
-    query.query_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    query.query_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
 
     json_t *res = jmap_query_reply(&query);
     if (debug) {
@@ -11088,9 +11070,7 @@ static int jmap_participantidentity_get(struct jmap_req *req)
     strarray_fini(&addrs);
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, 0);
-    get.state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    get.state = jmap_getstate(req, MBTYPE_CALENDAR, 0);
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -11132,9 +11112,7 @@ static int jmap_participantidentity_set(struct jmap_req *req)
                 json_pack("{s:s}", "type", "forbidden"));
     }
 
-    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, 1);
-    set.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    set.new_state = jmap_getstate(req, MBTYPE_CALENDAR, 1);
 
     jmap_ok(req, jmap_set_reply(&set));
 

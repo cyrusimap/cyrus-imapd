@@ -957,9 +957,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     }
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-    get.state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    get.state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     jmap_ok(req, jmap_get_reply(&get));
 
     _shared_mboxes_free(shared_mboxes);
@@ -3881,9 +3879,7 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
     }
 
     /* Fetch mailbox state */
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
-    set->super.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    set->super.new_state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
 
     /* Prune intermediary mailbox trees without any children. Do this
      * after we fetched the mailbox state, so clients are forced to
@@ -4089,9 +4085,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
         set.super.old_state = xstrdup(set.super.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-        set.super.old_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
+        set.super.old_state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     }
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     _mboxset(req, &set);
