@@ -1928,6 +1928,46 @@ static void annotation_get_usercounters(annotate_state_t *state,
     buf_free(&value);
 }
 
+static void annotation_get_userrawquota(annotate_state_t *state,
+                                        struct annotate_entry_list *entry)
+{
+    struct buf value = BUF_INITIALIZER;
+    char *quotaroot = NULL;
+    const char *sep = "";
+    int r = 0;
+    struct quota q;
+    int res;
+
+    assert(state);
+    assert(state->userid);
+
+    quotaroot = mboxname_user_mbox(state->userid, NULL);
+    quota_init(&q, quotaroot);
+    // read without conversations here, to get the raw quota
+    r = quota_read(&q, NULL, 0);
+
+    // logic duplicated from imapd.c:print_quota_used
+    if (!r) {
+        buf_putc(&value, '(');
+        for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+            if (q.limits[res] >= 0) {
+                buf_printf(&value, "%s%s " QUOTA_T_FMT " " QUOTA_T_FMT,
+                           sep, quota_names[res],
+                           q.useds[res]/quota_units[res],
+                           q.limits[res]);
+                sep = " ";
+            }
+        }
+        buf_putc(&value, ')');
+    }
+
+    output_entryatt(state, entry->name, state->userid, &value);
+
+    quota_free(&q);
+    free(quotaroot);
+    buf_free(&value);
+}
+
 static void annotation_get_uniqueid(annotate_state_t *state,
                                     struct annotate_entry_list *entry)
 {
@@ -2490,6 +2530,18 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         ATTRIB_VALUE_PRIV,
         0,
         annotation_get_usercounters,
+        /*set*/NULL,
+        NULL,
+        NULL
+    },{
+        /* The "userrawquota" was added when conversations quota was added,
+         * to allow fetching a user's raw quota values */
+        IMAP_ANNOT_NS "userrawquota",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_PRIV,
+        0,
+        annotation_get_userrawquota,
         /*set*/NULL,
         NULL,
         NULL

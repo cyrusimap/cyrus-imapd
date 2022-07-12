@@ -3035,32 +3035,47 @@ sub test_storage_convquota
     $self->_check_usages(storage => 0);
     my $talk = $self->{store}->get_client();
 
+    my $KEY = "/private/vendor/cmu/cyrus-imapd/userrawquota";
+
     $talk->create("INBOX.sub") || die "Failed to create subfolder";
 
     # append some messages
-    my $expected = 0;
     $self->{store}->set_folder("INBOX");
     my $msg = $self->make_message("Message 1",
                                   extra_lines => 10 + rand(5000));
+    my $size1 = length($msg->as_string());
+
     $self->{store}->set_folder("INBOX.sub");
-    $expected += length($msg->as_string());
-    my $firstexpected = $expected;
     my $msg2 = $self->make_message("Message 2",
                                   extra_lines => 10 + rand(5000));
-    $expected += length($msg2->as_string());
+    my $size2 = length($msg2->as_string());
 
-    $self->_check_usages(storage => int($expected/1024));
+    my $data1 = $talk->getmetadata("", $KEY);
+    my ($rawusage1) = $data1->{''}{$KEY} =~ m/STORAGE (\d+)/;
+
+    $self->_check_usages(storage => int(($size1+$size2)/1024));
+    $self->assert_num_equals(int(($size1+$size2)/1024), $rawusage1);
 
     $talk->select("INBOX");
     $talk->copy("1", "INBOX.sub");
 
+    my $data2 = $talk->getmetadata("", $KEY);
+    my ($rawusage2) = $data2->{''}{$KEY} =~ m/STORAGE (\d+)/;
+
     # quota usage hasn't changed, because we don't get double-charged
-    $self->_check_usages(storage => int($expected/1024));
+    $self->_check_usages(storage => int(($size1+$size2)/1024));
+    # but raw usage has gone up by another copy of message 1
+    $self->assert_num_equals(int(($size1+$size2+$size1)/1024), $rawusage2);
 
     $talk->delete("INBOX.sub");
 
-    # we just lost one message
-    $self->_check_usages(storage => int($firstexpected/1024));
+    my $data3 = $talk->getmetadata("", $KEY);
+    my ($rawusage3) = $data3->{''}{$KEY} =~ m/STORAGE (\d+)/;
+
+    # we just lost all copies of message2
+    $self->_check_usages(storage => int($size1/1024));
+    # and also the second copy of message1, so just size1 left
+    $self->assert_num_equals(int($size1/1024), $rawusage3);
 }
 
 1;
