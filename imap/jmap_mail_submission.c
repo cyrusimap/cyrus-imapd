@@ -1373,9 +1373,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     if (mbox) jmap_closembox(req, &mbox);
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
-    get.state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    get.state = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -1525,9 +1523,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/0);
-        set.old_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
+        set.old_state = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/0);
     }
 
     /* create */
@@ -1589,11 +1585,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     /* force modseq to stable */
     if (submbox) mailbox_unlock_index(submbox, NULL);
 
-    // TODO refactor jmap_getstate to return a string, once
-    // all code has been migrated to the new JMAP parser.
-    json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/1);
-    set.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    set.new_state = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/1);
 
     jmap_ok(req, jmap_set_reply(&set));
 
@@ -2139,9 +2131,8 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         mboxlist_entry_free(&mbentry);
         r = 0;
         /* Build response */
-        json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
-        query.query_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
+        query.query_state =
+            jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
         query.result_position = 0;
         query.can_calculate_changes = 0;
         jmap_ok(req, jmap_query_reply(&query));
@@ -2253,9 +2244,8 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     free(sortcrit);
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
-    query.query_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    query.query_state =
+        jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
     query.result_position = query.position;
     query.can_calculate_changes = 0;
     jmap_ok(req, jmap_query_reply(&query));

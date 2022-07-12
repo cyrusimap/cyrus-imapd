@@ -1433,21 +1433,20 @@ HIDDEN modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
     return modseq;
 }
 
-HIDDEN json_t* jmap_getstate(jmap_req_t *req, int mbtype, int refresh)
+HIDDEN char *jmap_getstate(jmap_req_t *req, int mbtype, int refresh)
 {
-    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-    if (refresh)
+    if (refresh) {
+        char *inboxname = mboxname_user_mbox(req->accountid, NULL);
         assert (!mboxname_read_counters(inboxname, &req->counters));
+        free(inboxname);
+    }
+
     struct buf buf = BUF_INITIALIZER;
-    json_t *state = NULL;
     modseq_t modseq = jmap_highestmodseq(req, mbtype);
 
     buf_printf(&buf, MODSEQ_FMT, modseq);
-    state = json_string(buf_cstring(&buf));
-    buf_free(&buf);
 
-    free(inboxname);
-    return state;
+    return buf_release(&buf);
 }
 
 

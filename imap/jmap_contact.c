@@ -681,9 +681,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     }
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
-    get.state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    get.state = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
     jmap_ok(req, jmap_get_reply(&get));
 
   done:
@@ -957,9 +955,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
-        set.old_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
+        set.old_state = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
     }
 
     r = carddav_create_defaultaddressbook(req->accountid);
@@ -1373,11 +1369,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
     /* force modseq to stable */
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
-    // TODO refactor jmap_getstate to return a string, once
-    // all code has been migrated to the new JMAP parser.
-    json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/1);
-    set.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    set.new_state = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/1);
 
     jmap_ok(req, jmap_set_reply(&set));
     r = 0;
@@ -3251,9 +3243,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind)
     }
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
-    query.query_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    query.query_state = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
 
     json_t *res = jmap_query_reply(&query);
     jmap_ok(req, res);
