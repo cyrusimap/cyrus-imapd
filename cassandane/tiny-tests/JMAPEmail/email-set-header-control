@@ -1,0 +1,59 @@
+#!perl
+
+use Cassandane::Tiny;
+
+sub test_email_set_header_control
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my @testCases = ({
+        name => 'header:x-header-crlf',
+        val => " a\r\nb",
+        valid => 0,
+    }, {
+        name => 'header:x-header-tab',
+        val => " a\tb",
+        valid => 0,
+    }, {
+        name => 'header:x-header-fold',
+        val => " a\r\n b",
+        valid => 1,
+    });
+
+    while (my ($i, $tc) = each @testCases) {
+        my $creationId = "email$i";
+        my $res = $jmap->CallMethods([
+            ['Email/set', {
+                create => {
+                    $creationId => {
+                        $tc->{name} => $tc->{val},
+                        mailboxIds => {
+                            '$inbox' => JSON::true,
+                        },
+                        subject => 'email',
+                        bodyStructure => {
+                            type => 'text/plain',
+                            partId => 'part1',
+                        },
+                        bodyValues => {
+                            part1 => {
+                                value => 'email',
+                            }
+                        },
+                    },
+                },
+            }, 'R1'],
+        ]);
+
+        if ($tc->{valid}) {
+            $self->assert_not_null($res->[0][1]{created}{$creationId});
+        } else {
+            $self->assert_deep_equals([$tc->{name}],
+                $res->[0][1]{notCreated}{$creationId}{properties});
+        }
+
+    }
+
+}
