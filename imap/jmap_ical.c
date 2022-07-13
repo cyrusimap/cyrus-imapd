@@ -7311,6 +7311,22 @@ static void calendarevent_to_ical(icalcomponent *comp,
         if (strlen(val)) {
             icalproperty *prop = icalproperty_new_color(val);
             icalcomponent_add_property(comp, prop);
+
+            /* Also set the color in CATEGORIES if previously set */
+            icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
+            if (old_comp) {
+                for (prop = icalcomponent_get_first_property(old_comp,
+                                                             ICAL_CATEGORIES_PROPERTY);
+                     prop;
+                     prop = icalcomponent_get_next_property(old_comp,
+                                                            ICAL_CATEGORIES_PROPERTY)) {
+                    if (ical_categories_is_color(prop)) {
+                        icalcomponent_add_property(comp,
+                                                   icalproperty_new_categories(val));
+                        break;
+                    }
+                }
+            }
         }
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "color");
