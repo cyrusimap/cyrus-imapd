@@ -2761,7 +2761,9 @@ keywords_from_ical(icalcomponent *comp)
     for (prop = icalcomponent_get_first_property(comp, ICAL_CATEGORIES_PROPERTY);
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_CATEGORIES_PROPERTY)) {
-        json_object_set_new(ret, icalproperty_get_categories(prop), json_true());
+        if (!ical_categories_is_color(prop)) {
+            json_object_set_new(ret, icalproperty_get_categories(prop), json_true());
+        }
     }
     if (!json_object_size(ret)) {
         json_decref(ret);
@@ -3578,6 +3580,19 @@ calendarevent_from_ical(icalcomponent *comp,
         if (prop) {
             json_object_set_new(event, "color",
                     json_string(icalproperty_get_color(prop)));
+        }
+        else {
+            for (prop = icalcomponent_get_first_property(comp,
+                                                         ICAL_CATEGORIES_PROPERTY);
+                 prop;
+                 prop = icalcomponent_get_next_property(comp,
+                                                        ICAL_CATEGORIES_PROPERTY)) {
+                if (ical_categories_is_color(prop)) {
+                    json_object_set_new(event, "color",
+                                        json_string(icalproperty_get_categories(prop)));
+                    break;
+                }
+            }
         }
     }
 

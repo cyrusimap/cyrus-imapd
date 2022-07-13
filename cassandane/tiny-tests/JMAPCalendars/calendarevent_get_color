@@ -1,0 +1,14 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_color
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('color');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_not_null($event);
+    $self->assert_str_equals("red", $event->{color});
+}
