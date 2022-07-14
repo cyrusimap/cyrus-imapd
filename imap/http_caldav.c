@@ -646,6 +646,7 @@ struct namespace_t namespace_calendar = {
         { &meth_proppatch,      &caldav_params },       /* PROPPATCH    */
         { &meth_put,            &caldav_params },       /* PUT          */
         { &meth_report,         &caldav_params },       /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          &caldav_parse_path },   /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { &meth_unlock,         &caldav_params }        /* UNLOCK       */
