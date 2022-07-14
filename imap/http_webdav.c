@@ -284,6 +284,7 @@ struct namespace_t namespace_drive = {
         { &meth_proppatch,      &webdav_params },      /* PROPPATCH    */
         { &meth_put,            &webdav_params },      /* PUT          */
         { &meth_report,         &webdav_params },      /* REPORT       */
+        { NULL,                 NULL },                /* SEARCH       */
         { &meth_trace,          &webdav_parse_path },  /* TRACE        */
         { NULL,                 NULL },                /* UNBIND       */
         { &meth_unlock,         &webdav_params }       /* UNLOCK       */

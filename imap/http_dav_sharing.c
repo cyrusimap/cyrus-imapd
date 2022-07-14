@@ -294,6 +294,7 @@ struct namespace_t namespace_notify = {
         { NULL,                 NULL },                /* PROPPATCH    */
         { NULL,                 NULL },                /* PUT          */
         { &meth_report,         &notify_params },      /* REPORT       */
+        { NULL,                 NULL },                /* SEARCH       */
         { &meth_trace,          &notify_parse_path },  /* TRACE        */
         { NULL,                 NULL },                /* UNBIND       */
         { NULL,                 NULL },                /* UNLOCK       */

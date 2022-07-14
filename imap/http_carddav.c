@@ -389,6 +389,7 @@ struct namespace_t namespace_addressbook = {
         { &meth_proppatch,      &carddav_params },      /* PROPPATCH    */
         { &meth_put,            &carddav_params },      /* PUT          */
         { &meth_report,         &carddav_params },      /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          &carddav_parse_path },  /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { &meth_unlock,         &carddav_params }       /* UNLOCK       */

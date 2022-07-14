@@ -322,6 +322,7 @@ struct namespace_t namespace_principal = {
         { &meth_proppatch,      &princ_params },        /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { &meth_report,         &princ_params },        /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
