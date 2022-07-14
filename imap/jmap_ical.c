@@ -2761,7 +2761,9 @@ keywords_from_ical(icalcomponent *comp)
     for (prop = icalcomponent_get_first_property(comp, ICAL_CATEGORIES_PROPERTY);
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_CATEGORIES_PROPERTY)) {
-        json_object_set_new(ret, icalproperty_get_categories(prop), json_true());
+        if (!ical_categories_is_color(prop)) {
+            json_object_set_new(ret, icalproperty_get_categories(prop), json_true());
+        }
     }
     if (!json_object_size(ret)) {
         json_decref(ret);
@@ -3578,6 +3580,19 @@ calendarevent_from_ical(icalcomponent *comp,
         if (prop) {
             json_object_set_new(event, "color",
                     json_string(icalproperty_get_color(prop)));
+        }
+        else {
+            for (prop = icalcomponent_get_first_property(comp,
+                                                         ICAL_CATEGORIES_PROPERTY);
+                 prop;
+                 prop = icalcomponent_get_next_property(comp,
+                                                        ICAL_CATEGORIES_PROPERTY)) {
+                if (ical_categories_is_color(prop)) {
+                    json_object_set_new(event, "color",
+                                        json_string(icalproperty_get_categories(prop)));
+                    break;
+                }
+            }
         }
     }
 
@@ -7296,6 +7311,22 @@ static void calendarevent_to_ical(icalcomponent *comp,
         if (strlen(val)) {
             icalproperty *prop = icalproperty_new_color(val);
             icalcomponent_add_property(comp, prop);
+
+            /* Also set the color in CATEGORIES if previously set */
+            icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
+            if (old_comp) {
+                for (prop = icalcomponent_get_first_property(old_comp,
+                                                             ICAL_CATEGORIES_PROPERTY);
+                     prop;
+                     prop = icalcomponent_get_next_property(old_comp,
+                                                            ICAL_CATEGORIES_PROPERTY)) {
+                    if (ical_categories_is_color(prop)) {
+                        icalcomponent_add_property(comp,
+                                                   icalproperty_new_categories(val));
+                        break;
+                    }
+                }
+            }
         }
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "color");
