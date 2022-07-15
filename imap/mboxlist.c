@@ -5405,6 +5405,19 @@ static int _check_rec_cb(void *rock,
         }
         break;
     }
+
+    case KEY_TYPE_NAME: {
+        /* Verify that we have a valid N record */
+        mbentry_t *mbentry = NULL;
+
+        r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
+        if (!r) {
+            *do_upgrade = 0;
+            mboxlist_entry_free(&mbentry);
+            r = CYRUSDB_DONE;
+        }
+        break;
+    }
     }
 
     return r;
