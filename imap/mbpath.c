@@ -53,6 +53,7 @@
 #include <sys/stat.h>
 #include <sys/param.h>
 #include <jansson.h>
+#include <syslog.h>
 
 #include "util.h"
 #include "global.h"
@@ -61,6 +62,7 @@
 #include "mboxlist.h"
 #include "strarray.h"
 #include "user.h"
+#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -251,6 +253,24 @@ static int do_paths(struct findall_data *data, void *rock)
                 printf("%s!%s\n", data->mbentry->server, data->mbentry->partition);
         }
     }
+    else if (!data->mbentry->uniqueid
+             && !(data->mbentry->mbtype & MBTYPE_LEGACY_DIRS))
+    {
+        /* non-legacy mailbox -- can't do anything without uniqueid! */
+        xsyslog(LOG_ERR, "mbentry has no uniqueid, needs reconstruct",
+                         "mboxname=<%s>", data->mbentry->name);
+        if (!opts->quiet) {
+            const char *extname = data->extname;
+            if (!extname) {
+                extname = mbname_extname(data->mbname,
+                                         &mbpath_namespace,
+                                         "cyrus");
+            }
+            fprintf(stderr, "Mailbox has no uniqueid, needs reconstruct: %s\n",
+                            extname);
+        }
+        return IMAP_MAILBOX_BADFORMAT;
+    }
     else if (opts->do_json) {
         print_json(data->mbname, data->mbentry);
     }
@@ -292,6 +312,7 @@ static int imap_err_to_exit_code(int r)
     switch (r) {
     case 0: return 0;
 
+    case IMAP_MAILBOX_BADFORMAT:
     case IMAP_MAILBOX_NONEXISTENT:
     case IMAP_MAILBOX_RESERVED:
         return EX_DATAERR;
@@ -427,9 +448,9 @@ int main(int argc, char **argv)
         if (!r) {
             struct findall_data data = { NULL, 0, mbentry, mbname, 1 /* exact */};
 
-            do_paths(&data, &opts);
+            r = do_paths(&data, &opts);
         }
-        else {
+        if (r) {
             if (!opts.quiet && (r == IMAP_MAILBOX_NONEXISTENT)) {
                 const char *extname =
                     mbname_extname(mbname, &mbpath_namespace, "cyrus");
