@@ -1897,15 +1897,20 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
 
     newmbentry = mboxlist_entry_create();
     newmbentry->acl = xstrdupnull(acl);
-    newmbentry->mbtype = mbtype | MBTYPE_RESERVE;
+    newmbentry->mbtype = mbtype;
     newmbentry->partition = xstrdupnull(newpartition);
     newmbentry->uniqueid = xstrdup(uniqueid ? uniqueid : makeuuid());
 
     if (!(flags & MBOXLIST_CREATE_DBONLY) && !isremote) {
-        /* Reserve the mailbox - we need this so that mboxname_conf_getpath()
-           during mailbox_create() will find an mbentry with uniqueid */
-        r = mboxlist_update_entry(mboxname, newmbentry, NULL);
-        if (r) goto done;
+        if (mboxname_isusermailbox(mboxname, 1)) {
+            /* Create initial mbentry for new users --
+               the uniqueid in the record is required to open
+               user metadata files (conversations, counters) */
+            newmbentry->mbtype |= MBTYPE_INTERMEDIATE;
+            r = mboxlist_update_entry(mboxname, newmbentry, NULL);
+            newmbentry->mbtype &= ~MBTYPE_INTERMEDIATE;
+            if (r) goto done;
+        }
 
         /* Filesystem Operations */
         r = mailbox_create(mboxname, mbtype, newpartition, acl, newmbentry->uniqueid,
@@ -1919,7 +1924,6 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     }
 
     /* all is well - activate the mailbox */
-    newmbentry->mbtype = mbtype;
     if (newmailbox) {
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
