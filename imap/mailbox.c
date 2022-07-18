@@ -7801,6 +7801,15 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
         }
     }
 
+    /* make sure appends will be allowed, fixing last_uid to be at least
+     * the highest discovered uid that we'll keep */
+    if (mailbox->i.last_uid < last_seen_uid) {
+        syslog(LOG_ERR, "%s last_uid too small %u with highest uid %u, updating",
+               mailbox_name(mailbox), mailbox->i.last_uid, last_seen_uid);
+        mailbox_index_dirty(mailbox);
+        mailbox->i.last_uid = last_seen_uid;
+    }
+
     /* add discovered messages before last_uid to the list in order */
     while (files.pos < files.nused && files.found[files.pos].uid <= mailbox->i.last_uid) {
         add_found(&discovered, files.found[files.pos].uid, files.found[files.pos].isarchive);
