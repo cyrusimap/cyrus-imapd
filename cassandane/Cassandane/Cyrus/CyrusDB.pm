@@ -186,11 +186,11 @@ sub test_recover_uniqueid_from_header_legacymb
                           $syslog);
 
     # header should have the same uniqueid as before
-    $imaptalk = $self->{store}->get_client();
-    $res = $imaptalk->getmetadata("INBOX", $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $self->assert_str_equals($uniqueid, $res->{INBOX}{$entry});
+    my $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
+                       . '/cyrus.header';
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+    my $hf = Cyrus::HeaderFile->new_file($cyrus_header);
+    $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
 
     # mbentry should have the same uniqueid as before
     (undef, $mbentry) = $self->{instance}->run_dbcommand(
@@ -290,6 +290,13 @@ sub test_recover_create_missing_uniqueid_legacymb
     $self->assert_not_null($res->{INBOX}{$entry});
     my $newuniqueid = $res->{INBOX}{$entry};
     $self->assert_str_not_equals($uniqueid, $newuniqueid);
+
+    # header file should have the new uniqueid
+    $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
+                    . '/cyrus.header';
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+    $hf = Cyrus::HeaderFile->new_file($cyrus_header);
+    $self->assert_str_equals($newuniqueid, $hf->{header}->{UniqueId});
 
     # mbentry should have the new uniqueid
     (undef, $mbentry) = $self->{instance}->run_dbcommand(
