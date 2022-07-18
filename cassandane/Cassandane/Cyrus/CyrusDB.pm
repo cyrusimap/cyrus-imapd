@@ -185,12 +185,29 @@ sub test_recover_uniqueid_from_header_legacymb
     $self->assert_matches(qr{mbentry had no uniqueid, setting from header},
                           $syslog);
 
-    # should be the same uniqueid as before
+    # header should have the same uniqueid as before
     $imaptalk = $self->{store}->get_client();
     $res = $imaptalk->getmetadata("INBOX", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_str_equals($uniqueid, $res->{INBOX}{$entry});
+
+    # mbentry should have the same uniqueid as before
+    (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $N]);
+    $dlist = Cyrus::DList->parse_string($mbentry);
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals($uniqueid, $hash->{I});
+
+    # $I entry should be back
+    my ($key, $value) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $I]);
+    $self->assert_str_equals($I, $key);
+    $dlist = Cyrus::DList->parse_string($value);
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals("user\x1fcassandane", $hash->{N});
 }
 
 sub test_recover_create_missing_uniqueid_legacymb
@@ -270,8 +287,27 @@ sub test_recover_create_missing_uniqueid_legacymb
     $res = $imaptalk->getmetadata("INBOX", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_not_null($uniqueid, $res->{INBOX}{$entry});
-    $self->assert_str_not_equals($uniqueid, $res->{INBOX}{$entry});
+    $self->assert_not_null($res->{INBOX}{$entry});
+    my $newuniqueid = $res->{INBOX}{$entry};
+    $self->assert_str_not_equals($uniqueid, $newuniqueid);
+
+    # mbentry should have the new uniqueid
+    (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $N]);
+    $dlist = Cyrus::DList->parse_string($mbentry);
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals($newuniqueid, $hash->{I});
+
+    # new runq entry should exist
+    my $newI = "I$newuniqueid";
+    my ($key, $value) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $newI]);
+    $self->assert_str_equals($newI, $key);
+    $dlist = Cyrus::DList->parse_string($value);
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals("user\x1fcassandane", $hash->{N});
 }
 
 1;
