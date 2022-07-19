@@ -691,7 +691,8 @@ struct jmap_mailbox_get_cb_rock {
     strarray_t *sublist;
 };
 
-static int is_jmap_mailbox(const mbentry_t *mbentry, int tombstones)
+static int is_jmap_mailbox(jmap_req_t *req,
+                           const mbentry_t *mbentry, int tombstones)
 {
     /* Don't list special-purpose mailboxes. */
     if (mbtypes_unavailable(mbentry->mbtype) ||
@@ -703,17 +704,16 @@ static int is_jmap_mailbox(const mbentry_t *mbentry, int tombstones)
 
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     const char *topbox = strarray_nth(mbname_boxes(mbname), 0);
+    char *role = NULL;
     int ret = 0;
 
     /* skip INBOX.INBOX magic intermediate */
     if (strarray_size(mbname_boxes(mbname)) == 1 && !strcmp(topbox, "INBOX"))
         goto done;
 
-    /* skip any of our magic mailboxes */
-    if (!strcmpsafe(topbox, config_getstring(IMAPOPT_CALENDARPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_JMAPUPLOADFOLDER)))
+    /* skip any non-JMAP mailboxes */
+    role = _mbox_get_role(req, mbname);
+    if (!strcmpsafe(role, "xnotes"))
         goto done;
 
     // Use this mailbox
@@ -721,6 +721,7 @@ static int is_jmap_mailbox(const mbentry_t *mbentry, int tombstones)
 
 done:
     mbname_free(&mbname);
+    free(role);
     return ret;
 }
 
@@ -730,7 +731,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     jmap_req_t *req = rock->req;
     json_t *list = (json_t *) rock->get->list, *obj;
 
-    if (!is_jmap_mailbox(mbentry, 0)) return 0;
+    if (!is_jmap_mailbox(rock->req, mbentry, 0)) return 0;
 
     /* Do we need to process this mailbox? */
     if (rock->want && !hash_lookup(mbentry->uniqueid, rock->want))
@@ -1238,7 +1239,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 {
     mboxquery_t *q = rock;
 
-    if (!is_jmap_mailbox(mbentry, q->include_tombstones))
+    if (!is_jmap_mailbox(q->req, mbentry, q->include_tombstones))
         return 0;
 
     enum shared_mbox_type shared_mbtype = _shared_mbox_type(q->shared_mboxes, mbentry->name);
