@@ -347,6 +347,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
     dirp = opendir(dir);
     if (!dirp) {
         fprintf(stderr, "can't open zoneinfo directory %s\n", dir);
+        return;
     }
 
     while ((dirent = readdir(dirp))) {
