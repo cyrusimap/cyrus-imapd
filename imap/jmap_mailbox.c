@@ -711,13 +711,6 @@ static int is_jmap_mailbox(jmap_req_t *req,
     if (strarray_size(mbname_boxes(mbname)) == 1 && !strcmp(topbox, "INBOX"))
         goto done;
 
-    /* skip any of our magic mailboxes */
-    if (!strcmpsafe(topbox, config_getstring(IMAPOPT_CALENDARPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_JMAPUPLOADFOLDER)))
-        goto done;
-
     /* skip any non-JMAP mailboxes */
     role = _mbox_get_role(req, mbname);
     if (!strcmpsafe(role, "xnotes"))
