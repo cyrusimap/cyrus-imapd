@@ -54,6 +54,15 @@ sub test_calendarevent_set_alerts
 
     };
 
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        my $uuid = new Data::UUID;
+        # Set uid so that Cyrus doesn't pick any random
+        for my $alert (values %{$alerts}) {
+            $alert->{uid} = $uuid->to_string($uuid->create());
+        }
+    }
+
     my $event =  {
         calendarIds => {
             $calid => JSON::true,

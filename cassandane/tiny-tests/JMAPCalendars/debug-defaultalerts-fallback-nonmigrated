@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_debug_defaultalerts_fallback_nonmigrated
+    :min_version_3_7 :needs_component_jmap :MagicPlus
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $plusstore = $self->{instance}->get_service(
+        'imap')->create_store(username => 'cassandane+dav');
+    my $imap = $plusstore->get_client();
+
+    xlog $self, "PROPPATCH CalDAV alarms";
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-datetime>
+BEGIN:VALARM
+UID:c5f1c439-d18d-4c98-89e1-211ccf752dec
+TRIGGER:-PT5M
+ACTION:DISPLAY
+DESCRIPTION:alarmTime1
+END:VALARM
+</C:default-alarm-vevent-datetime>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/calendars/user/cassandane/Default",
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    xlog $self, "Assert no JMAP default alarms are returned";
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            properties => ['defaultAlertsWithTime'],
+        }, 'R1'],
+    ]);
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithTime});
+
+    xlog $self, "Remove JMAP default alert annotation from calendar";
+    $imap->setmetadata('#calendars.Default',
+        '/private/vendor/cmu/cyrus-httpd/<urn:ietf:params:jmap:calendars>defaultalerts', '');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    xlog $self, "Assert JMAP default alarms are read from CalDAV alarms";
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            properties => ['defaultAlertsWithTime'],
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{list}[0]{defaultAlertsWithTime});
+}

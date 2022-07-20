@@ -68,6 +68,7 @@
 #include "caldav_util.h"
 #include "charset.h"
 #include "css3_color.h"
+#include "defaultalarms.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
@@ -269,18 +270,18 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop, xmlNodePtr resp,
                                  struct propstat propstat[], void *rock);
-static int propfind_defaultalarm(const xmlChar *name, xmlNsPtr ns,
+static int propfind_caldav_alarms(const xmlChar *name, xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop, xmlNodePtr resp,
                                  struct propstat propstat[], void *rock);
-static int proppatch_defaultalarm(xmlNodePtr prop, unsigned set,
-                                  struct proppatch_ctx *pctx,
-                                  struct propstat propstat[], void *rock);
 static int propfind_shareesactas(const xmlChar *name, xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop, xmlNodePtr resp,
                                  struct propstat propstat[], void *rock);
 static int proppatch_shareesactas(xmlNodePtr prop, unsigned set,
+                                  struct proppatch_ctx *pctx,
+                                  struct propstat propstat[], void *rock);
+static int proppatch_forbidden(xmlNodePtr prop, unsigned set,
                                   struct proppatch_ctx *pctx,
                                   struct propstat propstat[], void *rock);
 
@@ -566,18 +567,28 @@ static const struct prop_entry caldav_props[] = {
     { "pushkey", NS_CS,
       PROP_COLLECTION,
       propfind_pushkey, NULL, NULL },
+
     /* Apple Default Alarm properties */
     { "default-alarm-vevent-datetime", NS_CALDAV,
       PROP_COLLECTION | PROP_PERUSER,
-      propfind_defaultalarm, proppatch_defaultalarm, NULL },
+      propfind_caldav_alarms, proppatch_todb_nomask, NULL },
     { "default-alarm-vevent-date", NS_CALDAV,
       PROP_COLLECTION | PROP_PERUSER,
-      propfind_defaultalarm, proppatch_defaultalarm, NULL },
+      propfind_caldav_alarms, proppatch_todb_nomask, NULL },
+
 
     /* JMAP calendar properties */
     { "sharees-act-as", NS_JMAPCAL,
         PROP_COLLECTION,
         propfind_shareesactas, proppatch_shareesactas, NULL },
+
+    // Make sure no one can set (or read) JMAP default alarms over DAV.
+    { "defaultalerts-with-time", NS_JMAPCAL,
+        PROP_COLLECTION | PROP_PERUSER,
+        NULL, proppatch_forbidden, NULL },
+    { "defaultalerts-without-time", NS_JMAPCAL,
+        PROP_COLLECTION | PROP_PERUSER,
+        NULL, proppatch_forbidden, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
@@ -2419,6 +2430,57 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
     return icaltime_null_time();
 }
 
+static void personalize_and_add_defaultalarms(struct mailbox *mailbox,
+                                              const struct caldav_data *cdata,
+                                              const struct index_record *record,
+                                              icalcomponent *ical,
+                                              struct defaultalarms **defalarmsp)
+{
+    int usedefaultalerts = 0;
+    struct dlist *dl = NULL;
+    struct buf userdata = BUF_INITIALIZER;
+
+    if (namespace_calendar.allow & ALLOW_USERDATA) {
+        if (caldav_is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
+            dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+            icalcomponent_add_personal_data_from_dl(ical, dl);
+            usedefaultalerts = caldav_get_usedefaultalerts(dl, mailbox, record, &ical);
+        }
+    }
+
+    if (!usedefaultalerts) {
+        usedefaultalerts = cdata->comp_flags.defaultalerts;
+    }
+
+    /* Inject default alarms, if necessary */
+    if (usedefaultalerts) {
+        /* Reuse default alarms if caller already read them */
+        struct defaultalarms *defalarms = defalarmsp ? *defalarmsp : NULL;
+
+        if (!defalarms) {
+            defalarms = xmalloc(sizeof(struct defaultalarms));
+            struct defaultalarms init = DEFAULTALARMS_INITIALIZER;
+            memcpy(defalarms, &init, sizeof(struct defaultalarms));
+            defaultalarms_load(mailbox_name(mailbox), httpd_userid, defalarms);
+        }
+
+        defaultalarms_insert(defalarms, ical, 0);
+
+        /* Pass default alarms to caller or free them */
+        if (defalarms) {
+            if (!defalarmsp) {
+                defaultalarms_fini(defalarms);
+                free(defalarms);
+            }
+            else if (defalarmsp && *defalarmsp == NULL) {
+                *defalarmsp = defalarms;
+            }
+        }
+    }
+
+    dlist_free(&dl);
+    buf_free(&userdata);
+}
 
 /* Perform a GET/HEAD request on a CalDAV resource */
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
@@ -2499,42 +2561,8 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         }
 
         if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
+        personalize_and_add_defaultalarms(mailbox, cdata, record, ical, NULL);
 
-        int has_defaultalerts = 0;
-        struct dlist *dl = NULL;
-
-        /* Personalize resource, if necessary */
-        if (namespace_calendar.allow & ALLOW_USERDATA) {
-            struct buf userdata = BUF_INITIALIZER;
-
-            if (caldav_is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
-                dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
-                add_personal_data_from_dl(ical, dl);
-                buf_free(&userdata);
-                has_defaultalerts = caldav_read_usedefaultalerts(dl, mailbox, record, &ical);
-            }
-        }
-        if (!has_defaultalerts) {
-            has_defaultalerts = cdata->comp_flags.defaultalerts;
-        }
-
-        /* Inject default alarms, if necessary */
-        if (has_defaultalerts) {
-            /* Read default alarms */
-            icalcomponent *withtime =
-                caldav_read_calendar_icalalarms(mailbox_name(mailbox), httpd_userid,
-                        CALDAV_DEFAULTALARMS_ANNOT_WITHTIME);
-            icalcomponent *withdate =
-                caldav_read_calendar_icalalarms(mailbox_name(mailbox), httpd_userid,
-                        CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
-
-            /* Add default alarms */
-            icalcomponent_add_defaultalerts(ical, withtime, withdate, 0);
-
-            if (withdate) icalcomponent_free(withdate);
-            if (withtime) icalcomponent_free(withtime);
-        }
-        dlist_free(&dl);
 
         /* iCalendar data in response should not be transformed */
         txn->flags.cc |= CC_NOTRANSFORM;
@@ -2571,7 +2599,6 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
     return HTTP_NO_CONTENT;
 }
 
-
 /* Perform post-create MKCOL/MKCALENDAR processing */
 static int caldav_mkcol(struct mailbox *mailbox)
 {
@@ -2604,6 +2631,19 @@ static int caldav_mkcol(struct mailbox *mailbox)
                                          httpd_userid, &attrib);
         }
     }
+
+#ifdef WITH_JMAP
+    if (types & CAL_COMP_VEVENT) {
+        r = caldav_init_jmapcalendar(httpd_userid, mailbox);
+        if (r) {
+            xsyslog(LOG_WARNING,
+                    "failed to initialize new calendar for JMAP",
+                    "mboxname=<%s> err=<%s>",
+                    mailbox_name(mailbox), error_message(r));
+            r = 0;
+        }
+    }
+#endif
 
     buf_free(&attrib);
 
@@ -5295,7 +5335,12 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     const char *data = NULL;
     size_t datalen = 0;
 
-    if (!fctx) {
+    struct caldata_rock {
+        char *mboxname;
+        struct defaultalarms *defalarms;
+    };
+
+    if (!prop) {
         /* Cleanup "property" request - free partial component structure */
         struct partial_comp_t *pcomp, *child, *sibling;
 
@@ -5311,10 +5356,27 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
         partial->comp = NULL;
 
+        /* Free property callback data */
+        struct caldata_rock *caldata_rock =
+            hash_del((const char*)name, &fctx->per_prop_data);
+        if (caldata_rock) {
+            if (caldata_rock->defalarms) {
+                defaultalarms_fini(caldata_rock->defalarms);
+                free(caldata_rock->defalarms);
+            }
+            free(caldata_rock->mboxname);
+            free(caldata_rock);
+        }
+
         return 0;
     }
 
     if (!propstat) {
+        /* Add property callback data */
+        struct caldata_rock *caldata_rock =
+            xzmalloc(sizeof(struct caldata_rock));
+        hash_insert((const char*)name, caldata_rock, &fctx->per_prop_data);
+
         /* Prescreen "property" request - read partial/expand children */
         xmlNodePtr node;
 
@@ -5369,6 +5431,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     else {
         struct caldav_data *cdata = (struct caldav_data *) fctx->data;
         icalcomponent *ical = fctx->obj;
+        struct caldata_rock *caldata_rock =
+            hash_lookup((const char*)name, &fctx->per_prop_data);
 
         if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
 
@@ -5405,20 +5469,24 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         }
 
         /* Personalize resource, if necessary */
-        if (namespace_calendar.allow & ALLOW_USERDATA) {
-            struct buf userdata = BUF_INITIALIZER;
-
-            if (caldav_is_personalized(fctx->mailbox, fctx->data,
-                                       httpd_userid, &userdata)) {
-                if (!fctx->obj) {
-                    ical = fctx->obj = icalparser_parse_string(data);
-                    if (!ical) return HTTP_SERVER_ERROR;
-                }
-
-                add_personal_data(ical, &userdata);
-                buf_free(&userdata);
-            }
+        if (!fctx->obj) {
+            ical = fctx->obj = icalparser_parse_string(data);
+            if (!ical) return HTTP_SERVER_ERROR;
         }
+        if (strcmpsafe(caldata_rock->mboxname, mailbox_name(fctx->mailbox))) {
+            /* Reset default alerts per mailbox */
+            if (caldata_rock->defalarms) {
+                defaultalarms_fini(caldata_rock->defalarms);
+                free(caldata_rock->defalarms);
+                caldata_rock->defalarms = NULL;
+            }
+
+            free(caldata_rock->mboxname);
+            caldata_rock->mboxname = xstrdup(mailbox_name(fctx->mailbox));
+        }
+        personalize_and_add_defaultalarms(fctx->mailbox,
+                fctx->data, fctx->record, ical,
+                &caldata_rock->defalarms);
 
         if (!icaltime_is_null_time(partial->range.start)) {
             /* Expand/limit recurrence set */
@@ -6642,13 +6710,13 @@ static int propfind_sharingmodes(const xmlChar *name, xmlNsPtr ns,
     return HTTP_NOT_FOUND;
 }
 
-/* Callback to fetch CALDAV:default-alarm-vevent-date[time] property */
-static int propfind_defaultalarm(const xmlChar *name, xmlNsPtr ns,
-                                 struct propfind_ctx *fctx,
-                                 xmlNodePtr prop __attribute__((unused)),
-                                 xmlNodePtr resp __attribute__((unused)),
-                                 struct propstat propstat[],
-                                 void *rock __attribute__((unused)))
+/* Callback to fetch {CALDAV}default-alarm-vevent-date[time] */
+static int propfind_caldav_alarms(const xmlChar *name, xmlNsPtr ns,
+                                  struct propfind_ctx *fctx,
+                                  xmlNodePtr prop __attribute__((unused)),
+                                  xmlNodePtr resp __attribute__((unused)),
+                                  struct propstat propstat[],
+                                  void *rock __attribute__((unused)))
 {
     struct buf attrib = BUF_INITIALIZER;
     xmlNodePtr node;
@@ -6659,85 +6727,68 @@ static int propfind_defaultalarm(const xmlChar *name, xmlNsPtr ns,
                (const char *) ns->href, name);
 
     if (fctx->mbentry && !fctx->record) {
-        r = annotatemore_lookupmask(fctx->mbentry->name,
-                                    buf_cstring(&fctx->buf),
-                                    httpd_userid, &attrib);
+        r = annotatemore_lookup(fctx->mbentry->name,
+                buf_cstring(&fctx->buf), httpd_userid, &attrib);
+        if (!r && !buf_len(&attrib)) {
+            // We stored CalDAV alarms as a shared annotation.
+            char *ownerid = mboxname_to_userid(fctx->mbentry->name);
+            if (!strcmpsafe(httpd_userid, ownerid)) {
+                r = annotatemore_lookupmask(fctx->mbentry->name,
+                        buf_cstring(&fctx->buf), httpd_userid, &attrib);
+            }
+            free(ownerid);
+        }
     }
 
     if (r) return HTTP_SERVER_ERROR;
+    buf_trim(&attrib);
     if (!buf_len(&attrib)) return HTTP_NOT_FOUND;
 
     const char *val = buf_cstring(&attrib);
     size_t len = buf_len(&attrib);
 
-    /* Try to parse as dlist - we switched from storing the raw
-     * iCalendar payload to dlist for JMAP calendar alerts */
+    /* Try to parse as dlist - an experimental Cyrus version
+     * stored JMAP default alerts and Apple CalDAV default alarms
+     * in the same annotation, formatted as a dlist.
+     * Now, CalDAV default alarms are stored as any other dead
+     * DAV property again. */
     struct dlist *dl = NULL;
     if (dlist_parsemap(&dl, 1, 0, buf_base(&attrib), buf_len(&attrib)) == 0) {
         const char *content = NULL;
         if (dlist_getatom(dl, "CONTENT", &content)) {
-            val = content;
-            len = strlen(content);
+            icalcomponent *ical = icalparser_parse_string(content);
+            if (ical) {
+                if (icalcomponent_isa(ical) == ICAL_VALARM_COMPONENT ||
+                        icalcomponent_get_first_component(ical,
+                            ICAL_VALARM_COMPONENT)) {
+                    val = content;
+                    len = strlen(content);
+                }
+                icalcomponent_free(ical);
+            }
         }
     }
 
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                        name, ns, NULL, 0);
-    xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc, BAD_CAST val, len));
+    if (len) {
+        node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                name, ns, NULL, 0);
+        xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc, BAD_CAST val, len));
+    }
+    else r = HTTP_NOT_FOUND;
 
     buf_free(&attrib);
     dlist_free(&dl);
 
-    return 0;
+    return r;
 }
 
-static void proppatch_defaultalarm_proc(struct proppatch_ctx *ctx)
-{
-    int r = caldav_bump_defaultalarms(ctx->mailbox);
-    if (r) {
-        syslog(LOG_ERR, "%s: can't bump default alarms: %s",
-                __func__, error_message(r));
-    }
-}
-
-/* Callback to write CALDAV:default-alarm-vevent-date[time] property */
-static int proppatch_defaultalarm(xmlNodePtr prop, unsigned set,
+/* Callback to reject a PROPPATCH as forbidden */
+static int proppatch_forbidden(xmlNodePtr prop,
+                                  unsigned set __attribute__((unused)),
                                   struct proppatch_ctx *pctx,
                                   struct propstat propstat[],
                                   void *rock __attribute__((unused)))
 {
-    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
-        xmlChar *freeme = NULL;
-        const char *icalstr = "";
-        struct buf buf = BUF_INITIALIZER;
-
-        if (set) {
-            freeme = xmlNodeGetContent(prop);
-            icalstr = (const char *) freeme;
-            caldav_format_defaultalarms_annot(&buf, icalstr);
-        }
-
-        proppatch_todb(prop, set, pctx, propstat,
-                buf_len(&buf) ? (void*) buf_cstring(&buf) : NULL);
-
-        if (freeme) xmlFree(freeme);
-        buf_free(&buf);
-
-        /* Bump alerts after properties are processed - but just once */
-        int i;
-        for (i = 0; i < ptrarray_size(&pctx->postprocs); i++) {
-            pctx_postproc_t *proc = ptrarray_nth(&pctx->postprocs, i);
-            if (proc == (pctx_postproc_t*) proppatch_defaultalarm_proc) {
-                break;
-            }
-        }
-        if (i == ptrarray_size(&pctx->postprocs)) {
-            ptrarray_append(&pctx->postprocs, proppatch_defaultalarm_proc);
-        }
-
-        return 0;
-    }
-
     xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
                  &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
 

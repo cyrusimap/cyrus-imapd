@@ -1,0 +1,138 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_copy_defaultalerts_mkcalendar
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "No default alerts are set on default calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => ['Default'],
+            properties => [
+                'defaultAlertsWithTime',
+                'defaultAlertsWithoutTime',
+            ],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+
+    xlog $self, "Create calendar test1 over CalDAV";
+    $res = $caldav->Request('MKCALENDAR', "/dav/calendars/user/cassandane/test1");
+
+    xlog $self, "New calendar does not have default alerts";
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => ['test1'],
+            properties => [
+                'defaultAlertsWithTime',
+                'defaultAlertsWithoutTime',
+            ],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+
+    xlog $self, "Set default alarms on test1";
+    my $defaultAlertsWithTime1 = {
+        alert1 => {
+            '@type' => 'Alert',
+            uid => 'e905cd3a-fdb7-413a-b7fa-1cd9daad501d',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => '-PT15M',
+            },
+            action => 'display',
+        }
+    };
+    my $defaultAlertsWithoutTime1 = {
+        alert1 => {
+            '@type' => 'Alert',
+            uid => '04c2bcfa-c35c-410c-83f5-27fba35257b3',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        }
+    };
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                test1 => {
+                    defaultAlertsWithTime => $defaultAlertsWithTime1,
+                    defaultAlertsWithoutTime => $defaultAlertsWithoutTime1,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{test1});
+
+    xlog $self, "Create calendar test2 over CalDAV";
+    $res = $caldav->Request('MKCALENDAR', "/dav/calendars/user/cassandane/test2");
+
+    xlog $self, "New calendar inherits default alerts from test1";
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => ['test2'],
+            properties => [
+                'defaultAlertsWithTime',
+                'defaultAlertsWithoutTime',
+            ],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals($defaultAlertsWithTime1,
+        $res->[0][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_deep_equals($defaultAlertsWithoutTime1,
+        $res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+
+    xlog $self, "Set default alarms with time on Default alert";
+    my $defaultAlertsWithTime2 = {
+        alert2 => {
+            '@type' => 'Alert',
+            uid => 'e905cd3a-fdb7-413a-b7fa-1cd9daad501d',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => '-PT30M',
+            },
+            action => 'display',
+        }
+    };
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => $defaultAlertsWithTime2,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog $self, "Create calendar test3 over CalDAV";
+    $res = $caldav->Request('MKCALENDAR', "/dav/calendars/user/cassandane/test3");
+
+    xlog $self, "New calendar inherits default alerts from Default";
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => ['test3'],
+            properties => [
+                'defaultAlertsWithTime',
+                'defaultAlertsWithoutTime',
+            ],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals($defaultAlertsWithTime2,
+        $res->[0][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+}

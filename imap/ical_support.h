@@ -87,18 +87,36 @@ extern void icalproperty_set_xparam(icalproperty *prop,
 extern const char *icalproperty_get_xparam_value(icalproperty *prop,
                                                  const char *name);
 
-/* Returns if default alerts are explicitly enabled (1) or disabled (0).
-   Returns -1 otherwise. */
-extern int icalcomponent_read_usedefaultalerts(icalcomponent *comp);
 
+/* Strip per-user data to personalize iCalendar resource.
+ *
+ * COLOR and CATEGORIES properties are not stripped.
+ * Instead, they are added to the per-user VPATCH when the
+ * user overwrites them in their copy of the resource.
+ */
+#define ICAL_PERSONAL_DATA_INITIALIZER         \
+    "CALDATA %(VPATCH {324+}\r\n"         \
+    "BEGIN:VPATCH\r\n"                    \
+    "VERSION:1\r\n"                       \
+    "DTSTAMP:19760401T005545Z\r\n"        \
+    "UID:strip-owner-cal-data\r\n"        \
+    "BEGIN:PATCH\r\n"                     \
+    "PATCH-TARGET:/VCALENDAR/ANY\r\n"     \
+    "PATCH-DELETE:/VALARM\r\n"            \
+    "PATCH-DELETE:#TRANSP\r\n"            \
+    "PATCH-DELETE:#X-MOZ-LASTACK\r\n"     \
+    "PATCH-DELETE:#X-MOZ-SNOOZE-TIME\r\n" \
+    "PATCH-DELETE:#X-APPLE-DEFAULT-ALARM\r\n" \
+    "PATCH-DELETE:#X-JMAP-USEDEFAULTALERTS\r\n" \
+    "END:PATCH\r\n"                       \
+    "END:VPATCH\r\n)"
+
+extern void icalcomponent_add_personal_data(icalcomponent *ical, struct buf *userdata);
+extern void icalcomponent_add_personal_data_from_dl(icalcomponent *ical, struct dlist *dl);
+
+extern int icalcomponent_get_usedefaultalerts(icalcomponent *comp);
 extern void icalcomponent_set_usedefaultalerts(icalcomponent *comp);
 
-/* Adds default alerts to ical, if either the X-USE-DEFAULTALERTS property
- * is set to TRUE, or force is non-zero. */
-extern void icalcomponent_add_defaultalerts(icalcomponent *ical,
-                                            icalcomponent *alarms_withtime,
-                                            icalcomponent *alarms_withdate,
-                                            int force);
 
 /* If range is a NULL period, callback() is executed for ALL occurrences,
    otherwise callback() is only executed for occurrences that overlap the range.

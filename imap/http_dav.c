@@ -3335,10 +3335,10 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
 }
 
 /* Callback to write a property to annotation DB */
-int proppatch_todb(xmlNodePtr prop, unsigned set,
-                   struct proppatch_ctx *pctx,
-                   struct propstat propstat[],
-                   void *rock)
+static int proppatch_todb_internal(xmlNodePtr prop, unsigned set,
+                                   struct proppatch_ctx *pctx,
+                                   struct propstat propstat[],
+                                   void *rock, int mask)
 {
     xmlChar *freeme = NULL;
     annotate_state_t *astate = NULL;
@@ -3363,8 +3363,11 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
     }
 
     r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
-    if (!r) r = annotate_state_writemask(astate, buf_cstring(&pctx->buf),
-                                         httpd_userid, &value);
+    if (!r) r = mask ?
+        annotate_state_writemask(astate, buf_cstring(&pctx->buf),
+                httpd_userid, &value) :
+        annotate_state_write(astate, buf_cstring(&pctx->buf),
+                httpd_userid, &value);
 
     if (!r) {
         xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
@@ -3379,6 +3382,22 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
     if (freeme) xmlFree(freeme);
 
     return 0;
+}
+
+int proppatch_todb(xmlNodePtr prop, unsigned set,
+                   struct proppatch_ctx *pctx,
+                   struct propstat propstat[],
+                   void *rock)
+{
+    return proppatch_todb_internal(prop, set, pctx, propstat, rock, 1);
+}
+
+int proppatch_todb_nomask(xmlNodePtr prop, unsigned set,
+                          struct proppatch_ctx *pctx,
+                          struct propstat propstat[],
+                          void *rock)
+{
+    return proppatch_todb_internal(prop, set, pctx, propstat, rock, 0);
 }
 
 /* annotatemore_findall callback for adding dead properties (allprop/propname) */
@@ -6126,14 +6145,16 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 }
 
 /* Free an entry list */
-HIDDEN void free_entry_list(struct propfind_entry_list *elist)
+HIDDEN void free_entry_list(struct propfind_ctx *fctx)
 {
+    struct propfind_entry_list *elist = fctx->elist;
+
     while (elist) {
         struct propfind_entry_list *freeme = elist;
 
         elist = elist->next;
         if (freeme->flags & PROP_CLEANUP) {
-            freeme->get(freeme->name, NULL, NULL,
+            freeme->get(freeme->name, NULL, fctx,
                         NULL, NULL, NULL, freeme->rock);
         }
 
@@ -6321,6 +6342,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.ns = ns;
     fctx.ns_table = &ns_table;
     fctx.ret = &ret;
+    construct_hash_table(&fctx.per_prop_data, 1024, 0);
 
     /* Parse the list of properties and build a list of callbacks */
     ret = preload_proplist(props, &fctx);
@@ -6471,9 +6493,11 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
   done:
     /* Free the entry list */
-    free_entry_list(fctx.elist);
+    free_entry_list(&fctx);
 
     buf_free(&fctx.buf);
+
+    free_hash_table(&fctx.per_prop_data, NULL);
 
     free_hash_table(&ns_table, NULL);
 
@@ -7822,7 +7846,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
   done:
     /* Free the entry list */
-    free_entry_list(fctx->elist);
+    free_entry_list(fctx);
 
     free(req_tgt.userid);
 
@@ -8322,6 +8346,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.ns = ns;
     fctx.ns_table = &ns_table;
     fctx.ret = &ret;
+    construct_hash_table(&fctx.per_prop_data, 1024, 0);
 
     /* Parse the list of properties and build a list of callbacks */
     if (fctx.mode) {
@@ -8357,11 +8382,13 @@ int meth_report(struct transaction_t *txn, void *params)
 
   done:
     /* Free the entry list */
-    free_entry_list(fctx.elist);
+    free_entry_list(&fctx);
 
     buf_free(&fctx.buf);
 
     free_hash_table(&ns_table, NULL);
+
+    free_hash_table(&fctx.per_prop_data, NULL);
 
     if (inroot) xmlFreeDoc(inroot->doc);
     if (outroot) xmlFreeDoc(outroot->doc);

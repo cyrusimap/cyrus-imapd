@@ -2875,6 +2875,11 @@ HIDDEN json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *idbuf
     struct buf buf = BUF_INITIALIZER;
     icalproperty *prop;
 
+    const char *uid = icalcomponent_get_uid(valarm);
+    if (uid) {
+        json_object_set_new(alert, "uid", json_string(uid));
+    }
+
     /* trigger */
     json_t *jtrigger = json_object();
     if (!icaldurationtype_is_null_duration(trigger.duration) ||
@@ -3968,12 +3973,12 @@ calendarevent_from_ical(icalcomponent *comp,
 
     /* useDefaultAlerts */
     if (jmap_wantprop(props, "useDefaultAlerts")) {
-        const char *v = get_icalxprop_value(comp, "X-APPLE-DEFAULT-ALARM");
+        const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_USEDEFAULTALERTS);
         if (!v) {
-            /* Our previous jscalendar draft implementation used a custom
-             * extension property to denote useDefaultAlerts. We won't
-             * write this property anymore but fall back reading it. */
-            v = get_icalxprop_value(comp, "X-JMAP-USEDEFAULTALERTS");
+            /* Our previous jscalendar draft implementation erroneously
+             * used the X-APPLE-DEFAULT-ALARM annotation in the VEVENT,
+             * not the VALARM. Read it for backwards compatibility. */
+            v = get_icalxprop_value(comp, "X-APPLE-DEFAULT-ALARM");
         }
         json_object_set_new(event, "useDefaultAlerts",
                 json_boolean(!strcasecmpsafe(v, "true")));
@@ -5707,7 +5712,7 @@ description_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *jse
 
 HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
                                              struct jmap_parser *parser,
-                                             const char *alert_uid,
+                                             const char *alert_jmapid,
                                              const char *summary,
                                              const char *description,
                                              const char *email_recipient)
@@ -5719,7 +5724,24 @@ HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
     size_t invalid_prop_count = json_array_size(parser->invalid);
 
     validate_type(parser, alert, "Alert");
-    if (alert_uid) icalcomponent_set_uid(alarm, alert_uid);
+
+    if (alert_jmapid) {
+        icalproperty *prop = icalproperty_new_x(alert_jmapid);
+        icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
+        icalcomponent_add_property(alarm, prop);
+    }
+
+    /* uid */
+    json_t *juid = json_object_get(alert, "uid");
+    if (json_is_string(juid)) {
+        icalcomponent_set_uid(alarm, json_string_value(juid));
+    }
+    else if (!juid) {
+        icalcomponent_set_uid(alarm, makeuuid());
+    }
+    else {
+        jmap_parser_invalid(parser, "uid");
+    }
 
     /* trigger */
     struct icaltriggertype trigger = {
@@ -7712,10 +7734,10 @@ static void calendarevent_to_ical(icalcomponent *comp,
     /* useDefaultAlerts */
     jprop = json_object_get(event, "useDefaultAlerts");
     if (json_is_boolean(jprop)) {
-        remove_icalxprop(comp, "X-APPLE-DEFAULT-ALARM");
+        remove_icalxprop(comp, "X-APPLE-DEFAULT-ALARM"); // remove legacy property
         if (json_boolean_value(jprop)) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, "X-APPLE-DEFAULT-ALARM");
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_USEDEFAULTALERTS);
             icalproperty_set_value(prop, icalvalue_new_boolean(1));
             icalcomponent_add_property(comp, prop);
         }

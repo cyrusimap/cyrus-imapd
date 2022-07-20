@@ -1,0 +1,188 @@
+#!perl
+use Cassandane::Tiny;
+
+sub _can_match {
+    my $event = shift;
+    my $want = shift;
+
+    # I wrote a really good one of these for Caldav, but this will do for now
+    foreach my $key (keys %$want) {
+        return 0 if not exists $event->{$key};
+        return 0 if $event->{$key} ne $want->{$key};
+    }
+
+    return 1;
+}
+
+
+sub assert_alarms {
+    my $self = shift;
+    my @want = @_;
+    # pick first calendar alarm from notifications
+    my $data = $self->{instance}->getnotify();
+    if ($self->{replica}) {
+        my $more = $self->{replica}->getnotify();
+        push @$data, @$more;
+    }
+    my @events;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                push @events, $e;
+            }
+        }
+    }
+
+    my @left;
+    while (my $event = shift @events) {
+        my $found = 0;
+        my @newwant;
+        foreach my $data (@want) {
+            if (not $found and _can_match($event, $data)) {
+                $found = 1;
+            }
+            else {
+                push @newwant, $data;
+            }
+        }
+        if (not $found) {
+            push @left, $event;
+        }
+        @want = @newwant;
+    }
+
+    if (@want or @left) {
+        my $dump = Data::Dumper->Dump([\@want, \@left], [qw(want left)]);
+        $self->assert_equals(0, scalar @want,
+                             "expected events were not received:\n$dump");
+        $self->assert_equals(0, scalar @left,
+                             "unexpected extra events were received:\n$dump");
+    }
+}
+
+sub test_caldavalarm_update_defaultalerts
+    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $calendarId = $caldav->NewCalendar({name => 'foo'});
+    $self->assert_not_null($calendarId);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                1 => {
+                    name => 'test',
+                    defaultAlertsWithTime => {
+                        alert1 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => 'PT0S',
+                            },
+                            action => 'display',
+                        },
+                    }
+                },
+            }
+        }, 'R1'],
+    ]);
+    my $calendarId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($calendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$calendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND;TZID=Australia/Sydney:$end
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART;TZID=Australia/Sydney:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+X-JMAP-USEDEFAULTALERTS;VALUE=BOOLEAN:TRUE
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "No alarm triggered before the event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() - 60 );
+    $self->assert_alarms();
+
+    xlog "Alarm triggered in the first minute after the event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+    $self->assert_alarms({summary => 'Simple', start => $start});
+
+    xlog "No further alarm triggered for the event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 120 );
+    $self->assert_alarms();
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarId => {
+                    defaultAlertsWithTime => {
+                        alert2 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => 'PT1M',
+                            },
+                            action => 'display',
+                        },
+                    }
+                },
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarId});
+
+    xlog "Assert alarm gets triggered two minutes after the event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 120 );
+    $self->assert_alarms({summary => 'Simple', start => $start});
+}
+

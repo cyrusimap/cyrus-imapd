@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+use Data::UUID;
+
+sub test_calendar_set_inherit_defaultalerts
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $defaultAlertsWithTime = {
+        alert1 => {
+            '@type' => 'Alert',
+            uid => '4c08cb1d-60e0-46e0-9cc1-9622b7a820ed',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => '-PT1H',
+            },
+            action => 'email',
+        },
+    };
+
+    my $defaultAlertsWithoutTime = {
+        alert2 => {
+            '@type' => 'Alert',
+            uid => '3f8c29c3-d305-4c19-adb6-57cc3308918c',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        },
+    };
+
+    xlog $self, "Create calendar1 with default alerts with time";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                calendar1 => {
+                    name => 'calendar1',
+                    defaultAlertsWithTime => $defaultAlertsWithTime,
+                }
+            }
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => ['#calendar1'],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R2']
+    ]);
+
+    $self->assert_deep_equals($defaultAlertsWithTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithTime});
+
+    xlog $self, "Assert no default alerts without time were inherited";
+    $self->assert_null($res->[1][1]{list}[0]{defaultAlertsWithoutTime});
+
+    xlog $self, "Create calendar2 with default alerts without time";
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                calendar2 => {
+                    name => 'calendar2',
+                    defaultAlertsWithoutTime => $defaultAlertsWithoutTime,
+                }
+            }
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => ['#calendar2'],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R2']
+    ]);
+
+    $self->assert_deep_equals($defaultAlertsWithoutTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
+
+    xlog $self, "Assert no default alerts with time were inherited";
+    $self->assert_null($res->[1][1]{list}[0]{defaultAlertsWithTime});
+}

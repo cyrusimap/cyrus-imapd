@@ -1,5 +1,6 @@
 #!perl
 use Cassandane::Tiny;
+use Data::UUID;
 
 sub test_calendar_set_defaultalerts
     :min_version_3_1 :needs_component_jmap
@@ -42,6 +43,18 @@ sub test_calendar_set_defaultalerts
         },
     };
 
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        my $uuid = new Data::UUID;
+        # Set uid so that Cyrus doesn't pick any random
+        for my $alert (values %{$defaultAlertsWithTime}) {
+            $alert->{uid} = $uuid->to_string($uuid->create());
+        }
+        for my $alert (values %{$defaultAlertsWithoutTime}) {
+            $alert->{uid} = $uuid->to_string($uuid->create());
+        }
+    }
+
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
             create => {
@@ -74,6 +87,10 @@ sub test_calendar_set_defaultalerts
         },
         action => 'display',
     };
+
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $alert4->{uid} = '118e48d3-ee09-4b45-a16c-40262bfe62df';
+    }
 
     $res = $jmap->CallMethods([
         ['Calendar/set', {

@@ -133,7 +133,6 @@ enum sched_deliver_outcome {
 
 extern unsigned config_allowsched;
 extern struct strlist *cua_domains;
-extern icaltimezone *utc_zone;
 
 struct proplist {
     icalproperty *prop;

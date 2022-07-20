@@ -1,0 +1,192 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_defaultalerts_keep_alarms
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Prepare non-recurring event";
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DTEND;TZID=Europe/Vienna:20160928T170000
+UID:72a66940-3694-48a8-b332-0de9fb73016d
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:test
+LAST-MODIFIED:20150928T132434Z
+X-JMAP-USEDEFAULTALERTS:TRUE
+EOF
+
+    my %uids = ();
+
+    $uids{userAlarm} = '4234a058-0d7f-4ddf-ac77-ab5ee8cd413d';
+    $ical .= <<EOF;
+BEGIN:VALARM
+DESCRIPTION:userAlarm
+UID:$uids{userAlarm}
+TRIGGER:-PT1S
+ACTION:DISPLAY
+END:VALARM
+EOF
+
+    $uids{acknowledgedUserAlarm} = '08b80b89-61e3-4f40-9bac-b52393920701';
+    $ical .= <<EOF;
+BEGIN:VALARM
+DESCRIPTION:acknowledgedUserAlarm
+UID:$uids{acknowledgedUserAlarm}
+TRIGGER:-PT2M
+ACTION:DISPLAY
+ACKNOWLEDGED:20160928T145800Z
+END:VALARM
+EOF
+
+    $uids{snoozedUserAlarm} = '08b80b89-61e3-4f40-9bac-b52393920701';
+    $uids{snoozeUserAlarm} = '3063f21d-5a52-4ce7-b332-7f568f9e6548';
+    $ical .= <<EOF;
+BEGIN:VALARM
+DESCRIPTION:snoozedUserAlarm
+UID:$uids{snoozedUserAlarm}
+TRIGGER:-PT3M
+ACTION:DISPLAY
+ACKNOWLEDGED:20160928T145700Z
+END:VALARM
+BEGIN:VALARM
+DESCRIPTION:snoozeUserAlarm
+UID:$uids{snoozeUserAlarm}
+TRIGGER;VALUE=DATE-TIME:20160928T150700Z
+ACTION:DISPLAY
+RELATED-TO:$uids{snoozedUserAlarm}
+END:VALARM
+EOF
+
+    $uids{oldDefaultAlarm} = 'e868c7d3-ebe7-4c59-9560-8da972a59add';
+    $ical .= <<EOF;
+BEGIN:VALARM
+DESCRIPTION:A default alarm
+X-JMAP-DEFAULT-ALARM;VALUE=BOOLEAN:TRUE
+UID:$uids{oldDefaultAlarm}
+TRIGGER:-PT4M
+ACTION:DISPLAY
+END:VALARM
+EOF
+
+    $uids{snoozedDefaultAlarm} = '6eb5fa3b-a9b2-4496-ad30-64746d7d042e';
+    $uids{snoozeDefaultAlarm} = '02a98816-8df9-4538-bd61-d6f5254f74ea';
+    $ical .= <<EOF;
+BEGIN:VALARM
+DESCRIPTION:A snoozed default alarm
+X-JMAP-DEFAULT-ALARM;VALUE=BOOLEAN:TRUE
+UID:$uids{snoozedDefaultAlarm}
+TRIGGER:-PT5M
+ACTION:DISPLAY
+ACKNOWLEDGED:20160928T145500Z
+END:VALARM
+BEGIN:VALARM
+DESCRIPTION:A snooze for a default alarm
+UID:$uids{snoozeDefaultAlarm}
+TRIGGER;VALUE=DATE-TIME:20160928T150500Z
+ACTION:DISPLAY
+RELATED-TO:$uids{snoozedDefaultAlarm}
+END:VALARM
+EOF
+
+    $uids{acknowledgedDefaultAlarm} = '5a8283a7-cd3b-4c5d-b32a-17c0e7c3954b';
+    $ical .= <<EOF;
+BEGIN:VALARM
+DESCRIPTION:An acknowledged default alarm
+X-JMAP-DEFAULT-ALARM;VALUE=BOOLEAN:TRUE
+UID:$uids{acknowledgedDefaultAlarm}
+TRIGGER:-PT6M
+ACTION:DISPLAY
+ACKNOWLEDGED:20160928T145400Z
+END:VALARM
+EOF
+
+    $uids{snoozedUnacknowledgedDefaultAlarm} = '02fa40e1-8827-45e8-9833-8958f2bb417e';
+    $uids{snoozeUnacknowledgedDefaultAlarm} = '841863e0-347f-4713-b27d-8c0991233293';
+    $ical .= <<EOF;
+BEGIN:VALARM
+DESCRIPTION:A snoozed unacknowledged default alarm
+X-JMAP-DEFAULT-ALARM;VALUE=BOOLEAN:TRUE
+UID:02fa40e1-8827-45e8-9833-8958f2bb417e
+TRIGGER:-PT7M
+ACTION:DISPLAY
+END:VALARM
+BEGIN:VALARM
+DESCRIPTION:A snooze for an unacknowledged default alarm
+UID:841863e0-347f-4713-b27d-8c0991233293
+TRIGGER;VALUE=DATE-TIME:20160928T150300Z
+ACTION:DISPLAY
+RELATED-TO:$uids{snoozedUnacknowledgedDefaultAlarm}
+END:VALARM
+EOF
+
+    $ical .= <<EOF;
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "PUT event";
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    $uids{currentDefaultAlarm} = 'ea71745b-dbef-40bd-b48d-9edbfad8cd2f';
+    xlog $self, "Set default alerts on calendar";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => {
+                        jmapDefaultAlert => {
+                            '@type' => 'Alert',
+                            uid => $uids{currentDefaultAlarm},
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => 'PT1M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog $self, "GET event";
+    $res = $caldav->Request('GET', 'Default/test.ics');
+
+    my $vcal = Data::ICal->new(data => $res->{content});
+    my @vevents = grep { $_->ical_entry_type() eq 'VEVENT' } @{$vcal->entries()};
+    $self->assert_num_equals(1, scalar @vevents);
+    my @valarms = grep { $_->ical_entry_type() eq 'VALARM' } @{$vevents[0]->entries()};
+
+    my %valarmsByUid = map { ($_->property('UID'))->[0]->value() => $_ } @valarms;
+
+    $self->assert_not_null($valarmsByUid{$uids{userAlarm}});
+    $self->assert_not_null($valarmsByUid{$uids{acknowledgedUserAlarm}});
+    $self->assert_not_null($valarmsByUid{$uids{snoozedUserAlarm}});
+    $self->assert_not_null($valarmsByUid{$uids{snoozeUserAlarm}});
+
+    $self->assert_not_null($valarmsByUid{$uids{acknowledgedDefaultAlarm}});
+    $self->assert_not_null($valarmsByUid{$uids{snoozedDefaultAlarm}});
+    $self->assert_not_null($valarmsByUid{$uids{snoozeDefaultAlarm}});
+    $self->assert_not_null($valarmsByUid{$uids{snoozedUnacknowledgedDefaultAlarm}});
+    $self->assert_num_equals(1, scalar @{
+        ($valarmsByUid{$uids{
+            snoozedUnacknowledgedDefaultAlarm}}->property('ACKNOWLEDGED'))
+    });
+    $self->assert_not_null($valarmsByUid{$uids{snoozeUnacknowledgedDefaultAlarm}});
+    $self->assert_null($valarmsByUid{$uids{oldDefaultAlarm}});
+}

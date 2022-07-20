@@ -6,6 +6,8 @@ sub test_calendarevent_defaultalerts_imip
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    my $uuid = new Data::UUID;
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
@@ -37,6 +39,11 @@ EOF
         },
         action => 'display',
     };
+
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $alertWithTime->{uid} = $uuid->to_string($uuid->create());
+        $alertWithoutTime->{uid} = $uuid->to_string($uuid->create());
+    }
 
     xlog 'Set default alerts on calendar';
     my $res = $jmap->CallMethods([
@@ -79,7 +86,7 @@ SEQUENCE:0
 ORGANIZER;CN=Test User:MAILTO:foo@example.net
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo@example.net
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane@example.com
-X-APPLE-DEFAULT-ALARM;VALUE=BOOLEAN:FALSE
+X-JMAP-USEDEFAULTALERTS;VALUE=BOOLEAN:TRUE
 BEGIN:VALARM
 UID:0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1
 TRIGGER:PT25M
@@ -115,6 +122,9 @@ EOF
         },
         action => 'display',
     };
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $customAlert->{uid} = $uuid->to_string($uuid->create());
+    }
 
     xlog "Set custom alert on event";
     $res = $jmap->CallMethods([

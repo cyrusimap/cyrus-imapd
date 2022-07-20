@@ -1,0 +1,373 @@
+#!perl
+use Cassandane::Tiny;
+use Data::UUID;
+
+sub _can_match {
+    my $event = shift;
+    my $want = shift;
+
+    # I wrote a really good one of these for Caldav, but this will do for now
+    foreach my $key (keys %$want) {
+        return 0 if not exists $event->{$key};
+        return 0 if $event->{$key} ne $want->{$key};
+    }
+
+    return 1;
+}
+
+sub assert_alarm_notifs {
+    my $self = shift;
+    my @want = @_;
+    # pick first calendar alarm from notifications
+    my $data = $self->{instance}->getnotify();
+    if ($self->{replica}) {
+        my $more = $self->{replica}->getnotify();
+        push @$data, @$more;
+    }
+    my @events;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                push @events, $e;
+            }
+        }
+    }
+
+    my @left;
+    while (my $event = shift @events) {
+        my $found = 0;
+        my @newwant;
+        foreach my $data (@want) {
+            if (not $found and _can_match($event, $data)) {
+                $found = 1;
+            }
+            else {
+                push @newwant, $data;
+            }
+        }
+        if (not $found) {
+            push @left, $event;
+        }
+        @want = @newwant;
+    }
+
+    if (@want or @left) {
+        my $dump = Data::Dumper->Dump([\@want, \@left], [qw(want left)]);
+        $self->assert_equals(0, scalar @want,
+                             "expected events were not received:\n$dump");
+        $self->assert_equals(0, scalar @left,
+                             "unexpected extra events were received:\n$dump");
+    }
+}
+
+sub assert_shared_defaultalerts
+{
+    my ($self, $t) = @_;
+
+    for my $who (qw/owner sharee/) {
+        my $jmap = $t->{$who}->{jmap};
+
+        xlog $self, "Assert alarms for $who";
+        my $res = $jmap->CallMethods([
+            ['Calendar/get', {
+                accountId => 'owner',
+                properties => [
+                    'defaultAlertsWithTime',
+                    'defaultAlertsWithoutTime',
+                ],
+            }, 'R1'],
+        ]);
+        $self->assert_not_null($res->[0][1]{list}[0]);
+
+        my $defaultAlertsWithTime =
+            $t->{$who}->{defaultAlertsWithTime};
+        if ($defaultAlertsWithTime) {
+            $self->assert_deep_equals($defaultAlertsWithTime,
+                $res->[0][1]{list}[0]{defaultAlertsWithTime});
+        } else {
+            $self->assert_null(
+                $res->[0][1]{list}[0]{defaultAlertsWithTime});
+        }
+
+        my $defaultAlertsWithoutTime =
+            $t->{$who}->{defaultAlertsWithoutTime};
+        if ($defaultAlertsWithoutTime) {
+            $self->assert_deep_equals($defaultAlertsWithoutTime,
+                $res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+        } else {
+            $self->assert_null(
+                $res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+        }
+
+        xlog 'Assert default alarms in CalDAV GET';
+        my $caldav = $t->{$who}->{caldav};
+        my $xhref = $t->{$who}->{xhref};
+
+        $res = $caldav->Request('GET', $xhref);
+        if ($defaultAlertsWithTime) {
+            $self->assert_matches(qr/BEGIN:VALARM/, $res->{content});
+            my $uid = (values %{$defaultAlertsWithTime})->{uid};
+            $self->assert_matches(qr/UID:$uid/, $res->{content});
+        } else {
+            $self->assert(not $res->{content} =~ qr/BEGIN:VALARM/);
+        }
+    }
+
+    xlog 'Assert calalarmd alarms';
+    my @alarms;
+    for my $who (qw/owner sharee/) {
+        my $defaultAlertsWithTime =
+            $t->{$who}->{defaultAlertsWithTime};
+
+        if ($defaultAlertsWithTime) {
+            my $alertid = (keys %{$defaultAlertsWithTime})[0];
+            my $event_start = $t->{start}->strftime('%Y%m%dT%H%M%S');
+            push (@alarms, {
+                start => $event_start, alertId => $alertid, userId => $who
+            });
+        }
+    }
+    $self->{instance}->getnotify();
+    $self->{instance}->run_command({ cyrus => 1 },
+        'calalarmd', '-t' => $t->{now}->epoch() );
+    $self->assert_alarm_notifs(@alarms);
+
+    xlog 'Move clock on week forward';
+    $t->{now}->add(DateTime::Duration->new(days =>7));
+    $t->{start}->add(DateTime::Duration->new(days =>7));
+}
+
+sub create_test
+{
+    my ($self) = @_;
+
+    my ($ownerJmap, $ownerCaldav) = $self->create_user('owner');
+    my ($shareeJmap, $shareeCaldav) = $self->create_user('sharee');
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Etc/UTC');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
+
+    # define the event to start in a few seconds
+    my $start = $now->clone();
+    $start->add(DateTime::Duration->new(seconds => 2));
+
+    xlog $self, 'Create event and share calendar with sharee';
+    my $res = $ownerJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'owner',
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'ed326178-43dc-474d-a496-6cba057c9afe',
+                    title => 'test',
+                    start => $start->strftime('%Y-%m-%dT%H:%M:%S'),
+                    timeZone => 'Europe/Vienna',
+                    duration => 'PT15M',
+                    recurrenceRules => [{
+                        '@type' => 'RecurrenceRule',
+                        frequency => 'weekly',
+                    }],
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+        ['Calendar/set', {
+            accountId => 'owner',
+            update => {
+                Default => {
+                    shareWith => {
+                        'sharee' => {
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayRSVP => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R2'],
+    ]);
+
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
+    my $ownerHref = $res->[0][1]{created}{event1}{'x-href'};
+    $self->assert_not_null($ownerHref);
+    $self->assert(exists $res->[1][1]{updated}{Default});
+
+    xlog $self, 'Sharee sets useDefaultAlerts=true';
+    my $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'owner',
+            update => {
+                $eventId => {
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => 'owner',
+            ids => [$eventId],
+            properties => ['x-href'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    my $shareeHref = $res->[1][1]{list}[0]{'x-href'};
+    $self->assert_not_null($shareeHref);
+
+    return {
+        now => $now,
+        start => $start,
+        owner => {
+            jmap => $ownerJmap,
+            caldav => $ownerCaldav,
+            defaultAlertsWithTime => undef,
+            defaultAlertsWithoutTime => undef,
+            xhref => $ownerHref,
+        },
+        sharee => {
+            jmap => $shareeJmap,
+            caldav => $shareeCaldav,
+            defaultAlertsWithTime => undef,
+            defaultAlertsWithoutTime => undef,
+            xhref => $shareeHref,
+        },
+    };
+}
+
+sub test_calendar_set_defaultalerts_shared
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $t = $self->create_test;
+
+    my $ownerJmap = $t->{owner}{jmap};
+    my $shareeJmap = $t->{sharee}{jmap};
+
+    $self->assert_shared_defaultalerts($t);
+
+    xlog $self, "Owner sets default alarms";
+    $t->{owner}->{defaultAlertsWithTime} = {
+        alertWithTimeOwner => {
+            '@type' => 'Alert',
+            uid => '4c08cb1d-60e0-46e0-9cc1-9622b7a820ed',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'email',
+        },
+    };
+    $t->{owner}->{defaultAlertsWithoutTime} = {
+        alertWithoutTimeOwner => {
+            '@type' => 'Alert',
+            uid => '3f8c29c3-d305-4c19-adb6-57cc3308918c',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        },
+    };
+    $ownerJmap->CallMethods([
+        ['Calendar/set', {
+            accountId => 'owner',
+            update => {
+                Default => {
+                    defaultAlertsWithTime =>
+                        $t->{owner}->{defaultAlertsWithTime},
+                    defaultAlertsWithoutTime =>
+                        $t->{owner}->{defaultAlertsWithoutTime},
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_shared_defaultalerts($t);
+
+    xlog $self, 'Sharee sets default alarms';
+    $t->{sharee}->{defaultAlertsWithTime} = {
+        alertWithTimeSharee => {
+            '@type' => 'Alert',
+            uid => 'b61e5b53-8ea2-46f4-949d-7b49734ba4d3',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'email',
+        },
+    };
+    $t->{sharee}->{defaultAlertsWithoutTime} = {
+        alertWithoutTimeSharee => {
+            '@type' => 'Alert',
+            uid => '97d7c889-272f-4ce3-8d21-4a32b17ecece',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        },
+    };
+    $shareeJmap->CallMethods([
+        ['Calendar/set', {
+            accountId => 'owner',
+            update => {
+                Default => {
+                    defaultAlertsWithTime =>
+                        $t->{sharee}->{defaultAlertsWithTime},
+                    defaultAlertsWithoutTime =>
+                        $t->{sharee}->{defaultAlertsWithoutTime},
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_shared_defaultalerts($t);
+
+    xlog $self, 'Owner removes default alarms';
+    $t->{owner}->{defaultAlertsWithTime} = undef;
+    $t->{owner}->{defaultAlertsWithoutTime} = undef;
+    $ownerJmap->CallMethods([
+        ['Calendar/set', {
+            accountId => 'owner',
+            update => {
+                Default => {
+                    defaultAlertsWithTime =>
+                        $t->{owner}->{defaultAlertsWithTime},
+                    defaultAlertsWithoutTime =>
+                        $t->{owner}->{defaultAlertsWithoutTime},
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_shared_defaultalerts($t);
+
+    xlog $self, 'Sharee removes default alarms';
+    $t->{sharee}->{defaultAlertsWithTime} = undef;
+    $t->{sharee}->{defaultAlertsWithoutTime} = undef;
+    $shareeJmap->CallMethods([
+        ['Calendar/set', {
+            accountId => 'owner',
+            update => {
+                Default => {
+                    defaultAlertsWithTime =>
+                        $t->{sharee}->{defaultAlertsWithTime},
+                    defaultAlertsWithoutTime =>
+                        $t->{sharee}->{defaultAlertsWithoutTime},
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_shared_defaultalerts($t);
+}

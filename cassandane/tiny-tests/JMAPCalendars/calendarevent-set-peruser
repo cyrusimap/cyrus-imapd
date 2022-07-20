@@ -7,6 +7,7 @@ sub test_calendarevent_set_peruser
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
+    my ($maj, $min) = Cassandane::Instance->get_version();
 
     # These properties are set per-user.
     my $proplist = [
@@ -94,6 +95,11 @@ sub test_calendarevent_set_peruser
             },
         },
     };
+
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $ownerPerUserProps->{alerts}{alert1}{uid} = '639d8761-81ee-404c-84cd-3e419ab6f883';
+    }
+
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -152,6 +158,9 @@ sub test_calendarevent_set_peruser
             },
         },
     };
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $otherPerUserProps->{alerts}{alert2}{uid} = '314fe5cb-6b9a-46a5-923c-1ec298d828dc';
+    }
     $res = $otherJMAPTalk->CallMethods([
         ['CalendarEvent/set', {
             accountId => 'cassandane',
@@ -198,6 +207,9 @@ sub test_calendarevent_set_peruser
             },
         },
     };
+    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
+        $otherPerUserProps->{alerts}{alert2}{uid} = '314fe5cb-6b9a-46a5-923c-1ec298d828dc';
+    }
     $res = $otherJMAPTalk->CallMethods([
         ['CalendarEvent/set', {
             accountId => 'cassandane',

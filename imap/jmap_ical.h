@@ -70,6 +70,7 @@ extern "C" {
 #define JMAPICAL_XPROP_HIDEATTENDEES   "X-JMAP-HIDE-ATTENDEES"
 #define JMAPICAL_XPROP_SENTBY          "X-JMAP-SENT-BY"
 #define JMAPICAL_XPROP_PRIVACY         "X-JMAP-PRIVACY"
+#define JMAPICAL_XPROP_USEDEFAULTALERTS "X-JMAP-USEDEFAULTALERTS"
 
 /* Custom iCalendar parameters */
 #define JMAPICAL_XPARAM_CID           "X-JMAP-CID"
@@ -176,7 +177,7 @@ json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *id);
 
 /* Convert alert to iCalendar VALARM. Returns NULL on error */
 extern icalcomponent *jmapical_alert_to_ical(json_t *alert, struct jmap_parser *parser,
-                                             const char *alert_uid,
+                                             const char *alert_jmapid,
                                              const char *description,
                                              const char *email_summary,
                                              const char *email_recipient);
