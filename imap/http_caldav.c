@@ -5295,7 +5295,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     const char *data = NULL;
     size_t datalen = 0;
 
-    if (!fctx) {
+    if (!prop) {
         /* Cleanup "property" request - free partial component structure */
         struct partial_comp_t *pcomp, *child, *sibling;
 

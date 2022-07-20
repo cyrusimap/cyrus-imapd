@@ -6125,14 +6125,16 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 }
 
 /* Free an entry list */
-HIDDEN void free_entry_list(struct propfind_entry_list *elist)
+HIDDEN void free_entry_list(struct propfind_ctx *fctx)
 {
+    struct propfind_entry_list *elist = fctx->elist;
+
     while (elist) {
         struct propfind_entry_list *freeme = elist;
 
         elist = elist->next;
         if (freeme->flags & PROP_CLEANUP) {
-            freeme->get(freeme->name, NULL, NULL,
+            freeme->get(freeme->name, NULL, fctx,
                         NULL, NULL, NULL, freeme->rock);
         }
 
@@ -6320,6 +6322,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.ns = ns;
     fctx.ns_table = &ns_table;
     fctx.ret = &ret;
+    construct_hash_table(&fctx.per_prop_data, 1024, 0);
 
     /* Parse the list of properties and build a list of callbacks */
     ret = preload_proplist(props, &fctx);
@@ -6470,9 +6473,11 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
   done:
     /* Free the entry list */
-    free_entry_list(fctx.elist);
+    free_entry_list(&fctx);
 
     buf_free(&fctx.buf);
+
+    free_hash_table(&fctx.per_prop_data, NULL);
 
     free_hash_table(&ns_table, NULL);
 
@@ -7821,7 +7826,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
   done:
     /* Free the entry list */
-    free_entry_list(fctx->elist);
+    free_entry_list(fctx);
 
     free(req_tgt.userid);
 
@@ -8321,6 +8326,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.ns = ns;
     fctx.ns_table = &ns_table;
     fctx.ret = &ret;
+    construct_hash_table(&fctx.per_prop_data, 1024, 0);
 
     /* Parse the list of properties and build a list of callbacks */
     if (fctx.mode) {
@@ -8356,11 +8362,13 @@ int meth_report(struct transaction_t *txn, void *params)
 
   done:
     /* Free the entry list */
-    free_entry_list(fctx.elist);
+    free_entry_list(&fctx);
 
     buf_free(&fctx.buf);
 
     free_hash_table(&ns_table, NULL);
+
+    free_hash_table(&fctx.per_prop_data, NULL);
 
     if (inroot) xmlFreeDoc(inroot->doc);
     if (outroot) xmlFreeDoc(outroot->doc);
