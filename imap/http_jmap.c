@@ -846,6 +846,8 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentryp)
     return r;
 }
 
+static int jmap_upload_rights = ACL_INSERT|ACL_EXPUNGE|ACL_DELETEMSG;
+
 /* this takes a namespace lock and tries to either create or
  * grant access to the target upload collection.  You can only
  * write to somebody's upload collection if you have write access
@@ -861,7 +863,7 @@ static int _create_upload_collection(const char *accountid,
 
     if (!r) {
         int rights = httpd_myrights(httpd_authstate, mbentry);
-        if (!(rights & ACL_INSERT)) {
+        if ((rights & jmap_upload_rights) != jmap_upload_rights) {
             if (!has_shared_rw_rights(accountid)) {
                 r = IMAP_PERMISSION_DENIED;
                 goto done;
@@ -914,6 +916,9 @@ static int _create_upload_collection(const char *accountid,
         cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
                       JACL_READITEMS | JACL_WRITE, NULL, NULL);
 
+        xsyslog(LOG_NOTICE, "reset ACL", "userid=<%s> newacl=<%s>",
+                httpd_userid, newacl);
+
         /* ok, change the mailboxes database */
         r = mboxlist_sync_setacls(mbentry->name, newacl,
                                   mailbox_modseq_dirty(*mailboxp));
@@ -951,7 +956,7 @@ HIDDEN int jmap_open_upload_collection(const char *accountid,
     }
 
     int rights = httpd_myrights(httpd_authstate, mbentry);
-    if (!(rights & ACL_INSERT)) {
+    if ((rights & jmap_upload_rights) != jmap_upload_rights) {
         mboxlist_entry_free(&mbentry);
         return _create_upload_collection(accountid, mailboxp);
     }
