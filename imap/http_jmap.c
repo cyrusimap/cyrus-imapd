@@ -1054,12 +1054,22 @@ static int jmap_upload(struct transaction_t *txn)
         goto done;
     }
 
-    const char *type = "application/octet-stream";
     if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
-        type = hdr[0];
+        // Strip any parameters from Content-Type header
+        char *maintype = NULL, *subtype = NULL;
+        struct param *param = NULL;
+        message_parse_type(hdr[0], &maintype, &subtype, &param);
+        if (maintype && subtype) {
+            lcase(maintype);
+            lcase(subtype);
+            normalisedtype = strconcat(maintype, "/", subtype, NULL);
+        }
+        free(maintype);
+        free(subtype);
+        param_free(&param);
     }
-    /* Remove CFWS and encodings from type */
-    normalisedtype = charset_decode_mimeheader(type, CHARSET_KEEPCASE);
+    if (!normalisedtype)
+        normalisedtype = xstrdup("application/octet-stream");
 
     if (!strcasecmp(normalisedtype, "message/rfc822")) {
         struct protstream *stream = prot_readmap(data, datalen);
@@ -1119,7 +1129,7 @@ static int jmap_upload(struct transaction_t *txn)
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
-    fprintf(f, "Content-Type: %s\r\n", type);
+    fprintf(f, "Content-Type: %s\r\n", normalisedtype);
 
     int domain = data_domain(data, datalen);
     switch (domain) {

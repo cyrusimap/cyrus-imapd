@@ -896,4 +896,34 @@ sub test_blob_upload_repair_acl
     my %acl = @{$admin->getacl("user.cassandane.#jmap")};
     $self->assert_str_equals("lrswitedn", $acl{cassandane});
 }
+
+sub test_blob_upload_type
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+{
+    my $self = shift;
+    my $jmap = $self->{jmap};
+
+    xlog "Assert client-supplied type is returned";
+    my $res = $jmap->Upload("blob1", "text/plain");
+    $self->assert_str_equals("text/plain", $res->{type});
+
+    xlog "Assert client-supplied type is normalized";
+    $res = $jmap->Upload("blob1", "text/plain;charset=latin1");
+    $self->assert_str_equals("text/plain", $res->{type});
+
+    xlog "Assert default server type";
+    my $httpReq = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => 'blob2',
+    };
+    my $httpRes = $jmap->ua->post($jmap->uploaduri('cassandane'), $httpReq);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($httpReq, $httpRes);
+    }
+    $res = eval { decode_json($httpRes->{content}) };
+    $self->assert_str_equals("application/octet-stream", $res->{type});
+}
+
 1;
