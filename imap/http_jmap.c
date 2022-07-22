@@ -1143,14 +1143,6 @@ static int jmap_upload(struct transaction_t *txn)
             break; // no CTE == 7bit
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Content-Disposition"))) {
-        fprintf(f, "Content-Disposition: %s\r\n", hdr[0]);
-    }
-
-    if ((hdr = spool_getheader(hdrcache, "Content-Description"))) {
-        fprintf(f, "Content-Description: %s\r\n", hdr[0]);
-    }
-
     fprintf(f, "Content-Length: %u\r\n", (unsigned) datalen);
 
     fputs("MIME-Version: 1.0\r\n\r\n", f);
