@@ -284,6 +284,7 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
         }
     } elsif (($words[0] eq "quit") || ($words[0] eq "q")) {
         sieve_logout($obj);
+        last;
     } elsif (($words[0] eq "help") || ($words[0] eq "?")) {
         show_help();
     } else {
