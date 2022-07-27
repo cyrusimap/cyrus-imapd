@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -88,9 +89,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-extern int optind;
-extern char *optarg;
-
 /* current namespace */
 static struct namespace quota_namespace;
 
@@ -132,7 +130,25 @@ int main(int argc,char **argv)
     int do_report = 1;
     char *alt_config = NULL, *domain = NULL;
 
-    while ((opt = getopt(argc, argv, "C:d:fqJnZu")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:JZd:fnqu";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "json", no_argument, NULL, 'J' },
+        { "test-sync-mode", no_argument, NULL, 'Z' },
+        { "domain", required_argument, NULL, 'd' },
+        { "fix", no_argument, NULL, 'f' },
+        { "report-only", no_argument, NULL, 'n' },
+        { "quiet", no_argument, NULL, 'q' },
+        { "userids", no_argument, NULL, 'u' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
