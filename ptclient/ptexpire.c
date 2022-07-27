@@ -54,6 +54,7 @@
 #define MAXPATHLEN MAXPATHNAMELEN
 #endif
 
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -102,7 +103,6 @@ static int expire_cb(void *rockp,
 int main(int argc, char *argv[])
 {
     struct db *ptdb;
-    extern char *optarg;
     int opt;
     int r;
     const char *fname;
@@ -110,7 +110,19 @@ int main(int argc, char *argv[])
 
     openlog("ptexpire", LOG_PID, SYSLOG_FACILITY);
 
-    while ((opt = getopt(argc, argv, "C:E:")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:E:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "expire-duration", required_argument, NULL, 'E' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
