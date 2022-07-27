@@ -22,6 +22,29 @@ Upgrading to 3.6
 
 Things to consider **before** you begin:
 
+Versions to upgrade from
+########################
+
+Before upgrading to 3.6, your deployment should be running either:
+
+* 3.2.10 (or later), or
+* 3.4.4 (or later)
+
+If your existing deployment predates these releases, you should first upgrade
+to one of these versions, let it run for a while, resolve any issues that
+come up, and only then upgrade to 3.6.
+
+3.2.x prior to 3.2.10, 3.4.x prior to 3.4.4, and all 3.0.x and 2.x releases
+have inconsistencies in their storage of an optional metadata field (mailbox
+uniqueids).  This was not previously a problem due to the field being optional.
+
+Architectural changes in 3.6 make mailbox uniqueids required for almost all
+operations.  If these are inconsistent or missing, the upgrade may not succeed,
+and the failure may be difficult to recover from.
+
+3.2.10 and 3.4.4 contain changes that detect, report, and fix up missing or
+inconsistent mailbox uniqueids, allowing for a safer upgrade to 3.6.
+
 Installation from tarball
 #########################
 
