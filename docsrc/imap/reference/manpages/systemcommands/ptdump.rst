@@ -8,7 +8,7 @@
 **ptdump**
 ==========
 
-Program to to dump the current PTS (protection database authorization)
+Program to dump the current PTS (protection database authorization)
 cache.
 
 Synopsis

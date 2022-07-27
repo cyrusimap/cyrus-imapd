@@ -40,6 +40,7 @@
  */
 
 #include <config.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -71,13 +72,23 @@ static int dump_cb(void *rockp __attribute__((unused)),
 int main(int argc, char *argv[])
 {
     struct db *ptdb;
-    extern char *optarg;
     int opt;
     int r;
     const char *fname;
     char *alt_config = NULL, *tofree = NULL;
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -110,7 +121,7 @@ int main(int argc, char *argv[])
 
     if (tofree) free(tofree);
 
-    /* iterate through db, wiping expired entries */
+    /* iterate through db, printing entries */
     cyrusdb_foreach(ptdb, "", 0, NULL, dump_cb, ptdb, NULL);
 
     cyrusdb_close(ptdb);
