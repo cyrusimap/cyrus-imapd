@@ -41,16 +41,17 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -t
+.. option:: -t, --normalize-internaldate
 
     Normalize ``internaldate`` on all index records of all listed
     *mailbox*\ es to match the *Date:* header if they're off by more
     than a day, which can be used to fix up a mailbox which has been
     restored from backup and lost its internaldate information.
 
-.. option:: -r
+.. option:: -r, --new-uniqueid
 
-    Create a new unique ID for all listed *mailbox*\ es.
+    Create a new unique ID for all listed *mailbox*\ es.  Only works
+    for legacy mailboxes.
 
 Examples
 ========

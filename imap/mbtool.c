@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -88,9 +89,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-extern int optind;
-extern char *optarg;
-
 /* current namespace */
 static struct namespace mbtool_namespace;
 
@@ -111,7 +109,20 @@ int main(int argc, char **argv)
     int cmd = 0;
     char *alt_config = NULL;
 
-    while ((opt = getopt(argc, argv, "C:rt")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:rt";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "new-uniqueid", no_argument, NULL, 'r' },
+        { "normalize-internaldate", no_argument, NULL, 't' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
