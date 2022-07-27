@@ -69,7 +69,7 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS };
+enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, SHOWMISMATCHES, FIXMISMATCHES };
 
 static int verbose = 0;
 
@@ -257,6 +257,81 @@ static int do_build(const char *userid)
     if (r) return r;
 
     r = mboxlist_usermboxtree(userid, NULL, build_cid_cb, NULL, 0);
+
+    conversations_commit(&state);
+    return r;
+}
+
+struct fixthread_rock {
+    const char *userid;
+    struct conversations_state *state;
+    int foldernum;
+    uint32_t uid;
+    char *guid;
+    conversation_id_t cid;
+    int really;
+};
+
+static int fixthread_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct fixthread_rock *frock = (struct fixthread_rock *)rock;
+
+    if (rec->part) return 0;
+
+    // yeah, 24 - that's the length of EmailId in JMAPLand
+    if (!frock->guid || strncmp(rec->guidrep, frock->guid, 24)) {
+        frock->foldernum = rec->foldernum;
+        frock->uid = rec->uid;
+        free(frock->guid);
+        frock->guid = xstrndup(rec->guidrep, 40);
+        frock->cid = rec->cid;
+        return 0;
+    }
+
+    // OK, so same EmailId, is the CID the same?
+    if (!rec->cid) return 0;
+    if (!frock->cid) return 0;
+    if (rec->cid == frock->cid) return 0;
+
+    if (strncmp(rec->guidrep, frock->guid, 40)) {
+        printf("%s EMAILID DISASTER! %s / %.*s\n", frock->userid, frock->guid, 40, rec->guidrep);
+    }
+
+    // same GUID, different CID!
+    printf("%s CID change! M%.*s %08llx/%08llx (%d:%u/%d:%u)\n",
+           frock->userid, 24, rec->guidrep, frock->cid, rec->cid,
+           frock->foldernum, frock->uid, rec->foldernum, rec->uid);
+
+    if (!frock->really) return 0;
+
+    struct mailbox *mailbox = NULL;
+    struct index_record record;
+    int r = mailbox_open_iwl(rec->mboxname, &mailbox);
+    if (!r) r = mailbox_find_index_record(mailbox, rec->uid, &record);
+    if (!r) {
+        // match later records to match the first CID!
+        record.cid = frock->cid;
+        r = mailbox_rewrite_index_record(mailbox, &record);
+    }
+    if (r) {
+        printf("Failed to rewrite! %s - this may need a full rebuild\n", error_message(r));
+    }
+    mailbox_close(&mailbox);
+
+    return 0;  // keep going
+}
+
+static int do_fixthread(const char *userid, int really)
+{
+    struct conversations_state *state = NULL;
+    int r;
+
+    r = conversations_open_user(userid, 0/*shared*/, &state);
+    if (r) return r;
+
+    struct fixthread_rock rock = { userid, state, 0, 0, NULL, 0, really };
+    r = conversations_guid_foreach(state, "", fixthread_cb, &rock);
+    free(rock.guid);
 
     conversations_commit(&state);
     return r;
@@ -805,6 +880,16 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
             r = EX_NOINPUT;
         break;
 
+    case SHOWMISMATCHES:
+        if (do_fixthread(userid, 0))
+            r = EX_NOINPUT;
+        break;
+
+    case FIXMISMATCHES:
+        if (do_fixthread(userid, 1))
+            r = EX_NOINPUT;
+        break;
+
     case CHECKFOLDERS:
         if (do_checkfolders(userid))
             r = EX_NOINPUT;
@@ -838,7 +923,7 @@ int main(int argc, char **argv)
     const char *userid = NULL;
     int recursive = 0;
 
-    while ((c = getopt(argc, argv, "durzSAbvRFC:T:")) != EOF) {
+    while ((c = getopt(argc, argv, "durzSAbvmMRFC:T:")) != EOF) {
         switch (c) {
         case 'd':
             if (mode != UNKNOWN)
@@ -884,6 +969,18 @@ int main(int argc, char **argv)
             if (mode != UNKNOWN)
                 usage(argv[0]);
             mode = CHECKFOLDERS;
+            break;
+
+        case 'm':
+            if (mode != UNKNOWN)
+                usage(argv[0]);
+            mode = SHOWMISMATCHES;
+            break;
+
+        case 'M':
+            if (mode != UNKNOWN)
+                usage(argv[0]);
+            mode = FIXMISMATCHES;
             break;
 
         case 'v':
@@ -947,6 +1044,8 @@ static int usage(const char *name)
     fprintf(stderr, "    -R             recalculate all counts\n");
     fprintf(stderr, "    -A             audit conversations DB counts\n");
     fprintf(stderr, "    -F             check folder names\n");
+    fprintf(stderr, "    -m             show thread mismatches\n");
+    fprintf(stderr, "    -M             fix thread mismatches\n");
     fprintf(stderr, "    -T dir         store temporary data for audit in dir\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "    -r             recursive mode: username is a prefix\n");
