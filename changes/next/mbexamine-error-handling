@@ -1,0 +1,18 @@
+Description:
+
+Improves error handling and reporting from mbexamine
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+If you have custom tooling that calls mbexamine, it may need updating.
+
+
+GitHub issue:
+
+None
