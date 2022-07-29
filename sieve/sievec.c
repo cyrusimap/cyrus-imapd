@@ -54,6 +54,7 @@
 #include "script.h"
 #include "util.h"
 #include "assert.h"
+#include <getopt.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/file.h>
@@ -72,11 +73,21 @@ int main(int argc, char **argv)
     char *err = NULL;
     sieve_script_t *s = NULL;
     bytecode_info_t *bc = NULL;
-    int c, fd, usage_error = 0;
+    int opt, fd, usage_error = 0;
     char *alt_config = NULL;
 
-    while ((c = getopt(argc, argv, "C:")) != EOF)
-        switch (c) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
@@ -84,6 +95,7 @@ int main(int argc, char **argv)
             usage_error = 1;
             break;
         }
+    }
 
     if (usage_error || (argc - optind) < 2) {
         fprintf(stderr, "Syntax: %s [-C <altconfig>] <filename> <outputfile>\n",
