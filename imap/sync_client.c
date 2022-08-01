@@ -48,6 +48,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -91,9 +92,6 @@
 /* ====================================================================== */
 
 /* Static global variables and support routines for sync_client */
-
-extern char *optarg;
-extern int optind;
 
 static const char *servername = NULL;
 static struct sync_client_state sync_cs = SYNC_CLIENT_STATE_INITIALIZER;
@@ -470,7 +468,41 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vlLS:F:f:w:t:d:n:rRNumsozOAp:1a")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "1AC:F:LNORS:ad:f:lmn:op:rst:uvw:z";
+
+    static const struct option long_options[] = {
+        { "rolling-once", no_argument, NULL, '1' },
+        { "all-users", no_argument, NULL, 'A' },
+        /* n.b. no long option for -C */
+        { "shutdown-file", required_argument, NULL, 'F' },
+        { "local-only", no_argument, NULL, 'L' },
+        { "skip-locked", no_argument, NULL, 'N' },
+        { "no-copyback", no_argument, NULL, 'O' },
+        { "foreground-rolling", no_argument, NULL, 'R' }, /* XXX better name? */
+        { "server", required_argument, NULL, 'S' },
+        { "stage-to-archive", no_argument, NULL, 'a' },
+        { "delay", required_argument, NULL, 'd' },
+        { "input-file", required_argument, NULL, 'f' },
+        { "verbose-logging", no_argument, NULL, 'l' },
+        { "mailboxes", no_argument, NULL, 'm' },
+        { "channel", required_argument, NULL, 'n' },
+        { "connect-once", no_argument, NULL, 'o' },
+        { "dest-partition", required_argument, NULL, 'p' },
+        { "rolling", no_argument, NULL, 'r' },
+        { "sieve-mode", no_argument, NULL, 's' },
+        { "timeout", required_argument, NULL, 't' },
+        { "userids", no_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "delayed-startup", required_argument, NULL, 'w' },
+        { "require-compression", no_argument, NULL, 'z' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
