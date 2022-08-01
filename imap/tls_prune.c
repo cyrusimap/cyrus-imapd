@@ -42,6 +42,7 @@
 
 #include <config.h>
 
+#include <getopt.h>
 #include <stdio.h>
 #include <sysexits.h>
 #include <unistd.h>
@@ -63,7 +64,18 @@ int main(int argc, char *argv[])
     int opt,r;
     char *alt_config = NULL;
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
