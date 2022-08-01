@@ -42,40 +42,40 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -l
+.. option:: -l, --list
 
     List the expunged messages in the specified mailbox which are
     available for restoration.
     Optionally, only list the messages in the mailbox matching the
     UIDs in the space\-separated list at the end of the command invocation.
 
-.. option:: -t time-interval
+.. option:: -t time-interval, --within-time-interval=time-interval
 
-    Unexpunge messages which where expunged within the last
+    Unexpunge messages which were expunged within the last
     ``time-interval`` seconds.
     Use one of the trailing modifiers -- ``m`` (minutes), ``h`` (hours),
     ``d`` (days) or ``w`` (weeks) -- to specify a different time unit.
 
-.. option:: -a
+.. option:: -a, --all
 
     Restore **all** of the expunged messages in the specified mailbox.
 
-.. option:: -u
+.. option:: -u, --uids
 
     Restore only messages matching the UIDs, in a space-separated list
     at the end of the command invocation, in the specified mailbox.
 
-.. option:: -d
+.. option:: -d, --unset-deleted
 
     Unset the *\\Deleted* flag on any restored messages.
 
-.. option:: -f flagname
+.. option:: -f flagname, --set-flag=flagname
 
     Set the user flag *\\flagname* on the messages restored, making it
     easier for the user(s) to find the restored messages and operate on
     them (in a batch).
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Enable verbose output/logging.
 
