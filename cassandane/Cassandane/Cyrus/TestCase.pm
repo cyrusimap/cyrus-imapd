@@ -190,6 +190,7 @@ sub config_set
     }
 }
 
+# XXX put these in alphabetical order someday
 magic(ReverseACLs => sub {
     shift->config_set(reverseacls => 1);
 });
@@ -390,6 +391,18 @@ magic(AltPTSDBPath => sub {
     shift->config_set(
         'ptscache_db_path' => '@basedir@/conf/non-default-ptscache.db'
     );
+});
+magic(ArchivePartition => sub {
+    my $conf = shift;
+    $conf->config_set('archivepartition-default' => '@basedir@/archive');
+    $conf->config_set('archive_enabled' => 'yes');
+    $conf->config_set('archive_after' => '7d');
+});
+magic(ArchiveNow => sub {
+    my $conf = shift;
+    $conf->config_set('archivepartition-default' => '@basedir@/archive');
+    $conf->config_set('archive_enabled' => 'yes');
+    $conf->config_set('archive_after' => '0d');
 });
 
 # Run any magic handlers indicated by the test name or attributes

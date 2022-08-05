@@ -66,20 +66,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-Cassandane::Cyrus::TestCase::magic(ArchivePartition => sub {
-    my $conf = shift;
-    $conf->config_set('archivepartition-default' => '@basedir@/archive');
-    $conf->config_set('archive_enabled' => 'yes');
-    $conf->config_set('archive_days' => '7');
-});
-
-Cassandane::Cyrus::TestCase::magic(ArchiveNow => sub {
-    my $conf = shift;
-    $conf->config_set('archivepartition-default' => '@basedir@/archive');
-    $conf->config_set('archive_enabled' => 'yes');
-    $conf->config_set('archive_days' => '0');
-});
-
 #
 # Test that
 #  - cyr_expire archives messages
