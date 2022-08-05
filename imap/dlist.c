@@ -170,6 +170,13 @@ EXPORTED const char *dlist_reserve_path(const char *part, int isarchive, int isb
                          "directory=<%s/sync./%lu/> file=<%s>",
                          base, (unsigned long) getpid(), buf);
     }
+
+    if (config_getswitch(IMAPOPT_DEBUG_LOG_SYNC_PARTITION_CHOICE)) {
+        xsyslog(LOG_DEBUG, "debug_log_sync_partition_choice: chose reserve path",
+                           "base=<%s> reserve_path=<%s>",
+                           base, buf);
+    }
+
     return buf;
 }
 
