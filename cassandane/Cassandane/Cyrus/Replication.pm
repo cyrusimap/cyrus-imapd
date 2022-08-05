@@ -2281,4 +2281,202 @@ sub test_delete_longname
     $self->check_replication('cassandane');
 }
 
+sub test_toarchive
+    :NoStartInstances :ArchivePartition :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $repcfg = $self->{replica}->{config};
+    $repcfg->set('debug_log_sync_partition_choice' => 'yes');
+    $self->_start_instances();
+
+    my $mtalk = $self->{master_store}->get_client();
+    $self->{master_store}->_select();
+    $self->assert_num_equals(1, $mtalk->uid());
+    $self->{master_store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Append 3 old messages";
+    my %msg;
+    foreach my $id (1..3) {
+        my $olddate = DateTime->now();
+        $olddate->add(DateTime::Duration->new(months => -4 + $id));
+
+        $msg{$id} = $self->make_message("Message $id",
+                                        date => $olddate,
+                                        store => $self->{master_store});
+        $msg{$id}->set_attributes(id => $id,
+                                  uid => $id,
+                                  flags => []);
+    }
+
+    xlog $self, "Append 3 current messages";
+    foreach my $id (4..6) {
+        $msg{$id} = $self->make_message("Message $id",
+                                        store => $self->{master_store});
+        $msg{$id}->set_attributes(id => $id,
+                                  uid => $id,
+                                  flags => []);
+    }
+
+    xlog $self, "Run cyr_expire to archive old messages";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
+
+    $self->check_messages(\%msg);
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    my $mdatadir = $mbpath->{data};
+    my $marchivedir = $mbpath->{archive};
+
+    foreach my $id (1..6) {
+        if ($id > 3) {
+            $self->assert(-f "$mdatadir/$id.");
+            $self->assert(! -f "$marchivedir/$id.");
+        }
+        else {
+            $self->assert(! -f "$mdatadir/$id.");
+            $self->assert(-f "$marchivedir/$id.");
+        }
+    }
+
+    $self->{replica}->getsyslog(); # discard setup noise
+
+    xlog $self, "Run replication, staging on archive partition";
+    $self->run_replication('stagetoarchive' => 1);
+    $self->check_replication('cassandane');
+
+    # ensure we made the correct choices about how to stage
+    if ($self->{replica}->{have_syslog_replacement}) {
+        my $part = $repcfg->substitute(
+            $repcfg->get('archivepartition-default')
+        );
+
+        my @choices = grep {
+            m{debug_log_sync_partition_choice: chose reserve path}
+        } $self->{replica}->getsyslog();
+
+        $self->assert_num_equals(scalar(keys %msg), scalar @choices);
+
+        foreach my $choice (@choices) {
+            $self->assert_matches(qr{\bbase=<$part>},
+                                  $choice);
+            $self->assert_matches(qr{\breserve_path=<$part/sync\./},
+                                  $choice);
+        }
+    }
+
+    # ensure that data ends up in the correct places
+    $mbpath = $self->{replica}->run_mbpath('-u', 'cassandane');
+    my $rdatadir = $mbpath->{data};
+    my $rarchivedir = $mbpath->{archive};
+
+    foreach my $id (1..6) {
+        if ($id > 3) {
+            $self->assert(-f "$rdatadir/$id.");
+            $self->assert(! -f "$rarchivedir/$id.");
+        }
+        else {
+            $self->assert(! -f "$rdatadir/$id.");
+            $self->assert(-f "$rarchivedir/$id.");
+        }
+    }
+}
+
+sub test_toarchive_noarchive
+    :NoStartInstances :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $repcfg = $self->{replica}->{config};
+    $repcfg->set('debug_log_sync_partition_choice' => 'yes');
+    $self->_start_instances();
+
+    my $mtalk = $self->{master_store}->get_client();
+    $self->{master_store}->_select();
+    $self->assert_num_equals(1, $mtalk->uid());
+    $self->{master_store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Append 3 old messages";
+    my %msg;
+    foreach my $id (1..3) {
+        my $olddate = DateTime->now();
+        $olddate->add(DateTime::Duration->new(months => -4 + $id));
+
+        $msg{$id} = $self->make_message("Message $id",
+                                        date => $olddate,
+                                        store => $self->{master_store});
+        $msg{$id}->set_attributes(id => $id,
+                                  uid => $id,
+                                  flags => []);
+    }
+
+    xlog $self, "Append 3 current messages";
+    foreach my $id (4..6) {
+        $msg{$id} = $self->make_message("Message $id",
+                                        store => $self->{master_store});
+        $msg{$id}->set_attributes(id => $id,
+                                  uid => $id,
+                                  flags => []);
+    }
+
+    xlog $self, "Run cyr_expire to archive old messages";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
+
+    $self->check_messages(\%msg);
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    my $mdatadir = $mbpath->{data};
+    my $marchivedir = $mbpath->{archive};
+
+    # expect data and archive should be the same
+    $self->assert_str_equals($mdatadir, $marchivedir);
+
+    # all messages in same place
+    foreach my $id (1..6) {
+        $self->assert(-f "$mdatadir/$id.");
+    }
+
+    $self->{replica}->getsyslog(); # discard setup noise
+
+    xlog $self, "Run replication, staging on archive partition";
+    $self->run_replication('stagetoarchive' => 1);
+    $self->check_replication('cassandane');
+
+    # ensure we made the correct choices about how to stage
+    if ($self->{replica}->{have_syslog_replacement}) {
+        my $part = $repcfg->substitute(
+            $repcfg->get('partition-default')
+        );
+
+        my @choices = grep {
+            m{debug_log_sync_partition_choice: chose reserve path}
+        } $self->{replica}->getsyslog();
+
+        $self->assert_num_equals(scalar(keys %msg), scalar @choices);
+
+        foreach my $choice (@choices) {
+            $self->assert_matches(qr{\bbase=<$part>},
+                                  $choice);
+            $self->assert_matches(qr{\breserve_path=<$part/sync\./},
+                                  $choice);
+        }
+    }
+
+    # ensure that data ends up in the correct places
+    $mbpath = $self->{replica}->run_mbpath('-u', 'cassandane');
+    my $rdatadir = $mbpath->{data};
+    my $rarchivedir = $mbpath->{archive};
+
+    # expect data and archive should be the same
+    $self->assert_str_equals($rdatadir, $rarchivedir);
+
+    # all messages in same place
+    foreach my $id (1..6) {
+        $self->assert(-f "$rdatadir/$id.");
+    }
+
+    foreach my $id (1..6) {
+        $self->assert(-f "$rdatadir/$id.");
+    }
+}
+
 1;
