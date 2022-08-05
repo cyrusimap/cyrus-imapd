@@ -1192,6 +1192,7 @@ sub run_replication
     my $meta = delete $opts{meta};
     my $nosyncback = delete $opts{nosyncback};
     my $allusers = delete $opts{allusers};
+    my $stagetoarchive = delete $opts{stagetoarchive};
     $nmodes++ if $user;
     $nmodes++ if $rolling;
     $nmodes++ if $mailbox;
@@ -1226,6 +1227,7 @@ sub run_replication
     push(@cmd, '-u', $user) if defined $user;
     push(@cmd, '-m', $mailbox) if defined $mailbox;
     push(@cmd, '-A') if $allusers;  # n.b. boolean
+    push(@cmd, '-a') if $stagetoarchive; # n.b. boolean
 
     my %run_options;
     $run_options{cyrus} = 1;
