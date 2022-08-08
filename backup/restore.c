@@ -44,6 +44,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -197,7 +198,36 @@ int main(int argc, char **argv)
     struct dlist *upload = NULL;
     int opt, r = 0;
 
-    while ((opt = getopt(argc, argv, ":A:C:DF:LM:P:UXaf:m:nru:vw:xz")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = ":A:C:DF:LM:P:UXaf:m:nru:vw:xz";
+
+    static const struct option long_options[] = {
+        { "override-acl", optional_argument, NULL, 'A' },
+        /* n.b. no long option for -C */
+        { "keep-deletedprefix", no_argument, NULL, 'D' },
+        { "input-file", required_argument, NULL, 'F' },
+        { "local-only", no_argument, NULL, 'L' },
+        { "dest-mailbox", required_argument, NULL, 'M' },
+        { "dest-partition", required_argument, NULL, 'P' },
+        { "keep-uidvalidity", no_argument, NULL, 'U' },
+        { "skip-expunged", no_argument, NULL, 'X' },
+        { "all-mailboxes", no_argument, NULL, 'a' },
+        { "file", required_argument, NULL, 'f' },
+        { "mailbox", required_argument, NULL, 'm' },
+        { "dry-run", no_argument, NULL, 'n' },
+        { "recursive", no_argument, NULL, 'r' },
+        { "userid", required_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "delayed-startup", required_argument, NULL, 'w' },
+        { "only-expunged", no_argument, NULL, 'x' },
+        { "require-compression", no_argument, NULL, 'z' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'A':
             if (options.keep_uidvalidity) usage();

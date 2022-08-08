@@ -67,7 +67,7 @@ restoring into mailboxes that already exists) will not have their ACLs altered.
 Options
 =======
 
-.. option:: -A [acl]
+.. option:: -A [acl], --override-acl[=acl]
 
     Apply specified *acl* to restored mailboxes, rather than their ACLs as
     stored in the backup.
@@ -81,7 +81,7 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -D
+.. option:: -D, --keep-deletedprefix
 
     Don't trim **deletedprefix** from mailbox names prior to restoring.  This
     is mainly useful for rebuilding failed servers, where deleted mailboxes
@@ -96,7 +96,7 @@ Options
     See :cyrusman:`imapd.conf(5)` for information about the **deletedprefix**
     and **delete_mode** configuration options.
 
-.. option:: -F input-file
+.. option:: -F input-file, --input-file=input-file
 
     Get the list of mailboxes or messages from *input-file* instead of from
     the command line arguments.
@@ -105,7 +105,7 @@ Options
     a *uniqueid*, or a *guid*) per line.  Empty lines, and lines beginning with
     a '#' character, are ignored.
 
-.. option:: -L
+.. option:: -L, --local-only
 
     Local operations only.  Actions required to restore the requested mailboxes
     and messages will be performed on the destination server only.
@@ -116,7 +116,7 @@ Options
 
     This option has no effect if the destination server is not part of a murder.
 
-.. option:: -M mboxname
+.. option:: -M mboxname, --dest-mailbox=mboxname
 
     Messages are restored to the mailbox with the specified *mboxname*.  If no
     mailbox of this name exists, one will be created.
@@ -132,11 +132,11 @@ Options
     The default when restoring individual messages is to restore them into
     their original mailboxes.
 
-.. option:: -P partition
+.. option:: -P partition, --dest-partition=partition
 
     Restore mailboxes to the specified *partition*
 
-.. option:: -U
+.. option:: -U, --keep-uidvalidity
 
     Try to preserve uidvalidity and other related fields, such that the
     restored mailboxes and messages appear like they never left, and IMAP
@@ -150,17 +150,17 @@ Options
     appended as if newly delivered, regardless of whether the **-U** option
     was specified.
 
-.. option:: -X
+.. option:: -X, --skip-expunged
 
     Do not restore messages that are marked as expunged in the *backup*.
 
     See also **-x**.
 
-.. option:: -a
+.. option:: -a, --all-mailboxes
 
     Try to restore all mailboxes in the specified *backup*.
 
-.. option:: -n
+.. option:: -n, --dry-run
 
     Do nothing.  The work required to perform the restoration will be
     calculated (and reported depending on verbosity level), but no
@@ -169,23 +169,23 @@ Options
 
     Note that the *server* argument is still mandatory with this option.
 
-.. option:: -r
+.. option:: -r, --recursive
 
     Recurse into submailboxes.  When restoring mailboxes, also restore
     any mailboxes contained within them.
 
     The default is to restore only explicitly-specified mailboxes.
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Increase the verbosity level.  This option can be specified multiple times
     for additional verbosity.
 
-.. option:: -w seconds
+.. option:: -w seconds, --delayed-startup=seconds
 
     Wait *seconds* before starting.  This is useful for attaching a debugger.
 
-.. option:: -x
+.. option:: -x, --only-expunged
 
     Only restore messages that are marked as expunged in the *backup*.
 
@@ -195,7 +195,7 @@ Options
 
     See also **-X**.
 
-.. option:: -z
+.. option:: -z, --require-compression
 
     Require compression for server connection.  The restore will abort
     if compression is unavailable.
@@ -205,12 +205,12 @@ Options
 Modes
 =====
 
-.. option:: -f
+.. option:: -f backup, --file=backup
 
     *backup* is interpreted as a filename.  The named file does not need to be
     known about in the backups database.
 
-.. option:: -m
+.. option:: -m backup, --mailbox=backup
 
     *backup* is interpreted as a mailbox name.  There must be a known backup
     for the user whose mailbox this is.
@@ -218,7 +218,7 @@ Modes
     Known backups are recorded in the database specified by the **backup_db**
     and **backup_db_path** configuration options.
 
-.. option:: -u
+.. option:: -u backup, --userid=backup
 
     *backup* is interpreted as a userid.  There must be a known backup for
     the specified user.
