@@ -9023,12 +9023,46 @@ static void _email_fini(struct email *email)
     free(email->body);
 }
 
-static json_t *_header_make(const char *header_name, const char *prop_name, struct buf *val)
+static json_t *_header_make(const char *header_name,
+                            const char *prop_name,
+                            struct buf *hdr,
+                            struct jmap_parser *parser)
 {
-    char *tmp = buf_release(val);
-    json_t *jheader = json_pack("{s:s s:s}", "name", header_name, "value", tmp);
-    free(tmp);
-    if (prop_name) json_object_set_new(jheader, "prop", json_string(prop_name));
+    const char *val = buf_cstring(hdr);
+    int is_valid = 0;
+    size_t i;
+    for (i = 0; i < buf_len(hdr); i++) {
+        // Allow line folds
+        if (val[i] == '\r' && val[i+1] == '\n' &&
+                (val[i+2] == ' ' || val[i+2] == '\t')) {
+            i += 2;
+            continue;
+        }
+        // Reject any other control character
+        if (iscntrl(val[i]))
+            break;
+    }
+    is_valid = i == buf_len(hdr);
+
+    if (is_valid) {
+        // Check for valid UTF-8
+        struct char_counts counts = charset_count_validutf8(val, buf_len(hdr));
+        is_valid = !counts.invalid;
+    }
+
+    if (!is_valid) {
+        if (prop_name && parser) {
+            jmap_parser_invalid(parser, prop_name);
+        }
+        return NULL;
+    }
+
+    json_t *jheader = json_pack("{s:s s:s}",
+            "name", header_name, "value", buf_cstring(hdr));
+    if (prop_name)
+        json_object_set_new(jheader, "prop", json_string(prop_name));
+
+    buf_free(hdr);
     return jheader;
 }
 
@@ -9044,16 +9078,15 @@ static json_t *_header_from_raw(json_t *jraw,
                                 const char *header_name,
                                 enum header_form form __attribute__((unused)))
 {
-    /* Verbatim use header value in raw form */
-    if (json_is_string(jraw)) {
-        json_t *jheader = json_pack("{s:s s:O s:s}",
-                "name", header_name, "value", jraw, "prop", prop_name);
-        return jheader;
-    }
-    else {
+    if (!json_is_string(jraw)) {
         jmap_parser_invalid(parser, prop_name);
         return NULL;
     }
+
+    struct buf val = BUF_INITIALIZER;
+    buf_init_ro(&val, json_string_value(jraw),
+            json_string_length(jraw));
+    return _header_make(header_name, prop_name, &val, parser);
 }
 
 static json_t *_header_from_text(json_t *jtext,
@@ -9074,7 +9107,7 @@ static json_t *_header_from_text(json_t *jtext,
          * allows us to not start the header value with a line fold. */
         buf_setcstr(&val, tmp);
         free(tmp);
-        return _header_make(header_name, prop_name, &val);
+        return _header_make(header_name, prop_name, &val, parser);
     }
     else {
         jmap_parser_invalid(parser, prop_name);
@@ -9084,7 +9117,8 @@ static json_t *_header_from_text(json_t *jtext,
 
 static json_t *_header_from_strings(const strarray_t *vals,
                                     const char *prop_name,
-                                    const char *header_name)
+                                    const char *header_name,
+                                    struct jmap_parser *parser)
 {
     size_t line_len = strlen(header_name) + 2;
     struct buf val = BUF_INITIALIZER;
@@ -9105,7 +9139,7 @@ static json_t *_header_from_strings(const strarray_t *vals,
         line_len += s_len;
     }
 
-    return _header_make(header_name, prop_name, &val);
+    return _header_make(header_name, prop_name, &val, parser);
 }
 
 
@@ -9264,7 +9298,7 @@ static json_t *_header_from_addresses(json_t *addrs,
             strarray_append(&vals, ";");
     }
 
-    ret = _header_from_strings(&vals, prop_name, header_name);
+    ret = _header_from_strings(&vals, prop_name, header_name, parser);
 
 done:
     if (groups != addrs) json_decref(groups);
@@ -9310,7 +9344,7 @@ static json_t *_header_from_messageids(json_t *jmessageids,
         strarray_append(&vals, buf_cstring(&val));
         buf_reset(&val);
     }
-    ret = _header_from_strings(&vals, prop_name, header_name);
+    ret = _header_from_strings(&vals, prop_name, header_name, parser);
 
 done:
     strarray_fini(&vals);
@@ -9343,7 +9377,7 @@ static json_t *_header_from_date(json_t *jdate,
 
     struct buf val = BUF_INITIALIZER;
     buf_setcstr(&val, fmt);
-    return _header_make(header_name, prop_name, &val);
+    return _header_make(header_name, prop_name, &val, parser);
 }
 
 static json_t *_header_from_urls(json_t *jurls,
@@ -9379,7 +9413,7 @@ static json_t *_header_from_urls(json_t *jurls,
         strarray_append(&vals, buf_cstring(&val));
         buf_reset(&val);
     }
-    ret = _header_from_strings(&vals, prop_name, header_name);
+    ret = _header_from_strings(&vals, prop_name, header_name, parser);
 
 done:
     strarray_fini(&vals);
@@ -9585,7 +9619,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         buf_setcstr(&buf, "<");
         buf_appendcstr(&buf, cid);
         buf_appendcstr(&buf, ">");
-        _headers_add_new(&part->headers, _header_make("Content-Id", "cid", &buf));
+        _headers_add_new(&part->headers, _header_make("Content-Id", "cid", &buf, parser));
     }
     else if (JNOTNULL(jcid)) {
         jmap_parser_invalid(parser, "cid");
@@ -9613,7 +9647,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
             }
             strarray_append(&vals, buf_cstring(&buf));
         }
-        _headers_add_new(&part->headers, _header_from_strings(&vals, "language", "Content-Language"));
+        _headers_add_new(&part->headers, _header_from_strings(&vals, "language", "Content-Language", parser));
         buf_free(&buf);
         strarray_fini(&vals);
     }
@@ -9626,7 +9660,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
     seen_header = _headers_have(&part->headers, "Content-Location");
     if (json_is_string(jlocation) && !seen_header) {
         buf_setcstr(&buf, json_string_value(jlocation));
-        _headers_add_new(&part->headers, _header_make("Content-Location", "location", &buf));
+        _headers_add_new(&part->headers, _header_make("Content-Location", "location", &buf, parser));
     }
     else if (JNOTNULL(jlocation)) {
         jmap_parser_invalid(parser, "location");
@@ -9653,7 +9687,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
             _mime_write_xparam(&buf, "filename", part->filename);
         }
         _headers_add_new(&part->headers,
-                _header_make("Content-Disposition", "disposition", &buf));
+                _header_make("Content-Disposition", "disposition", &buf, parser));
     }
     else if (JNOTNULL(jdisposition)) {
         jmap_parser_invalid(parser, "disposition");
@@ -9666,7 +9700,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
             _mime_write_xparam(&buf, "filename", part->filename);
         }
         _headers_add_new(&part->headers,
-                _header_make("Content-Disposition", "name", &buf));
+                _header_make("Content-Disposition", "name", &buf, parser));
     }
     /* charset */
     json_t *jcharset = json_object_get(jpart, "charset");
@@ -9781,7 +9815,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         }
 
         _headers_add_new(&part->headers,
-                _header_make("Content-Type", "type", &buf));
+                _header_make("Content-Type", "type", &buf, parser));
     }
 
     /* Validate by type */
@@ -9852,7 +9886,7 @@ static struct emailpart *_emailpart_new_multi(const char *subtype,
     buf_printf(&val, "%s/%s;boundary=%s",
             part->type, part->subtype, part->boundary);
     _headers_add_new(&part->headers,
-            _header_make("Content-Type", NULL, &val));
+            _header_make("Content-Type", NULL, &val, NULL));
     for (i = 0; i < subparts->count; i++)
         ptrarray_append(&part->subparts, ptrarray_nth(subparts, i));
 
@@ -10037,7 +10071,7 @@ static void _email_parse_bodies(jmap_req_t *req,
                     struct buf val = BUF_INITIALIZER;
                     buf_setcstr(&val, "text/plain");
                     _headers_add_new(&text_body->headers,
-                            _header_make("Content-Type", NULL, &val));
+                            _header_make("Content-Type", NULL, &val, parser));
                 }
                 else if (strcasecmp(text_body->type, "text") ||
                          strcasecmp(text_body->subtype, "plain")) {
@@ -10063,7 +10097,7 @@ static void _email_parse_bodies(jmap_req_t *req,
                     struct buf val = BUF_INITIALIZER;
                     buf_setcstr(&val, "text/html");
                     _headers_add_new(&html_body->headers,
-                            _header_make("Content-Type", NULL, &val));
+                            _header_make("Content-Type", NULL, &val, parser));
                 }
                 else if (strcasecmp(html_body->type, "text") ||
                          strcasecmp(html_body->subtype, "html")) {
