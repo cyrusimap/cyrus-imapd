@@ -1895,22 +1895,36 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     else if (config_getswitch(IMAPOPT_MAILBOX_LEGACY_DIRS))
         mbtype |= MBTYPE_LEGACY_DIRS;
 
-    if (!(flags & MBOXLIST_CREATE_DBONLY) && !isremote) {
-        /* Filesystem Operations */
-        r = mailbox_create(mboxname, mbtype, newpartition, acl, uniqueid,
-                           options, uidvalidity, createdmodseq, highestmodseq, &newmailbox);
-        if (r) goto done; /* CREATE failed */
-        r = mailbox_add_conversations(newmailbox, /*silent*/0);
-        if (r) goto done;
-    }
-
-    /* all is well - activate the mailbox */
     newmbentry = mboxlist_entry_create();
     newmbentry->acl = xstrdupnull(acl);
     newmbentry->mbtype = mbtype;
     newmbentry->partition = xstrdupnull(newpartition);
+    newmbentry->uniqueid = xstrdup(uniqueid ? uniqueid : makeuuid());
+
+    if (!(flags & MBOXLIST_CREATE_DBONLY) && !isremote) {
+        if (mboxname_isusermailbox(mboxname, 1)) {
+            /* Create initial mbentry for new users --
+               the uniqueid in the record is required to open
+               user metadata files (conversations, counters) */
+            newmbentry->mbtype |= MBTYPE_INTERMEDIATE;
+            r = mboxlist_update_entry(mboxname, newmbentry, NULL);
+            newmbentry->mbtype &= ~MBTYPE_INTERMEDIATE;
+            if (r) goto done;
+        }
+
+        /* Filesystem Operations */
+        r = mailbox_create(mboxname, mbtype, newpartition, acl, newmbentry->uniqueid,
+                           options, uidvalidity, createdmodseq, highestmodseq, &newmailbox);
+        if (!r) r = mailbox_add_conversations(newmailbox, /*silent*/0);
+        if (r) {
+            /* CREATE failed - remove mbentry */
+            mboxlist_delete(newmbentry);
+            goto done;
+        }
+    }
+
+    /* all is well - activate the mailbox */
     if (newmailbox) {
-        newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(newmailbox));
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = foldermodseq ? foldermodseq : newmailbox->i.highestmodseq;
