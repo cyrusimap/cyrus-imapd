@@ -3729,7 +3729,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     struct param *param;
     struct body *body = NULL;
     struct webdav_data *wdata = NULL;
-    const char *resource = NULL;
+    struct buf resource = BUF_INITIALIZER;
     int r = 0;
 
     /* conditions in which there's nothing to do */
@@ -3746,10 +3746,11 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     message_read_bodystructure(new, &body);
     for (param = body->disposition_params; param; param = param->next) {
         if (!strcmp(param->attribute, "FILENAME")) {
-            resource = param->value;
+            buf_setcstr(&resource, param->value);
         }
     }
-    if (!resource) resource = message_guid_encode(&body->content_guid);
+    if (!buf_len(&resource))
+        buf_setcstr(&resource, makeuuid());
 
     webdavdb = mailbox_open_webdav(mailbox);
 
@@ -3757,7 +3758,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
                                 .uniqueid = (char *)mailbox_uniqueid(mailbox) };
 
-    webdav_lookup_resource(webdavdb, &mbentry, resource, &wdata, /*tombstones*/1);
+    webdav_lookup_resource(webdavdb, &mbentry, buf_cstring(&resource), &wdata, /*tombstones*/1);
 
     /* if updated by a newer UID, skip - this record doesn't refer to the current item */
     if (wdata->dav.imap_uid > new->uid) goto done;
@@ -3804,6 +3805,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     }
 
 done:
+    buf_free(&resource);
     if (body) {
         message_free_body(body);
         free(body);

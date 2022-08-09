@@ -846,6 +846,8 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentryp)
     return r;
 }
 
+static int jmap_upload_rights = ACL_INSERT|ACL_EXPUNGE|ACL_DELETEMSG;
+
 /* this takes a namespace lock and tries to either create or
  * grant access to the target upload collection.  You can only
  * write to somebody's upload collection if you have write access
@@ -861,7 +863,7 @@ static int _create_upload_collection(const char *accountid,
 
     if (!r) {
         int rights = httpd_myrights(httpd_authstate, mbentry);
-        if (!(rights & ACL_INSERT)) {
+        if ((rights & jmap_upload_rights) != jmap_upload_rights) {
             if (!has_shared_rw_rights(accountid)) {
                 r = IMAP_PERMISSION_DENIED;
                 goto done;
@@ -914,6 +916,9 @@ static int _create_upload_collection(const char *accountid,
         cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
                       JACL_READITEMS | JACL_WRITE, NULL, NULL);
 
+        xsyslog(LOG_NOTICE, "reset ACL", "userid=<%s> newacl=<%s>",
+                httpd_userid, newacl);
+
         /* ok, change the mailboxes database */
         r = mboxlist_sync_setacls(mbentry->name, newacl,
                                   mailbox_modseq_dirty(*mailboxp));
@@ -951,7 +956,7 @@ HIDDEN int jmap_open_upload_collection(const char *accountid,
     }
 
     int rights = httpd_myrights(httpd_authstate, mbentry);
-    if (!(rights & ACL_INSERT)) {
+    if ((rights & jmap_upload_rights) != jmap_upload_rights) {
         mboxlist_entry_free(&mbentry);
         return _create_upload_collection(accountid, mailboxp);
     }
@@ -1049,12 +1054,22 @@ static int jmap_upload(struct transaction_t *txn)
         goto done;
     }
 
-    const char *type = "application/octet-stream";
     if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
-        type = hdr[0];
+        // Strip any parameters from Content-Type header
+        char *maintype = NULL, *subtype = NULL;
+        struct param *param = NULL;
+        message_parse_type(hdr[0], &maintype, &subtype, &param);
+        if (maintype && subtype) {
+            lcase(maintype);
+            lcase(subtype);
+            normalisedtype = strconcat(maintype, "/", subtype, NULL);
+        }
+        free(maintype);
+        free(subtype);
+        param_free(&param);
     }
-    /* Remove CFWS and encodings from type */
-    normalisedtype = charset_decode_mimeheader(type, CHARSET_KEEPCASE);
+    if (!normalisedtype)
+        normalisedtype = xstrdup("application/octet-stream");
 
     if (!strcasecmp(normalisedtype, "message/rfc822")) {
         struct protstream *stream = prot_readmap(data, datalen);
@@ -1114,7 +1129,7 @@ static int jmap_upload(struct transaction_t *txn)
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
-    fprintf(f, "Content-Type: %s\r\n", type);
+    fprintf(f, "Content-Type: %s\r\n", normalisedtype);
 
     int domain = data_domain(data, datalen);
     switch (domain) {
@@ -1126,14 +1141,6 @@ static int jmap_upload(struct transaction_t *txn)
             break;
         default:
             break; // no CTE == 7bit
-    }
-
-    if ((hdr = spool_getheader(hdrcache, "Content-Disposition"))) {
-        fprintf(f, "Content-Disposition: %s\r\n", hdr[0]);
-    }
-
-    if ((hdr = spool_getheader(hdrcache, "Content-Description"))) {
-        fprintf(f, "Content-Description: %s\r\n", hdr[0]);
     }
 
     fprintf(f, "Content-Length: %u\r\n", (unsigned) datalen);

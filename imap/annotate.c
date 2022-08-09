@@ -3066,8 +3066,13 @@ static int write_entry(struct mailbox *mailbox,
     modseq_t modseq = mdata ? mdata->modseq : 0;
 
     r = _annotate_getdb(mboxid, mailbox, uid, CYRUSDB_CREATE, &d);
-    if (r)
-        return r;
+    if (r) {
+        xsyslog(LOG_ERR, "_annotate_getdb failed",
+                "mailbox=<%s> uid=<%u> error=<%s>",
+                mailbox_name(mailbox), uid, cyrusdb_strerror(r));
+        r = IMAP_IOERROR;
+        goto out;
+    }
 
     /* must be in a transaction to modify the db */
     annotate_begin(d);
@@ -3076,7 +3081,13 @@ static int write_entry(struct mailbox *mailbox,
 
     struct annotate_metadata oldmdata;
     r = read_old_value(d, key, keylen, &oldval, &oldmdata);
-    if (r) goto out;
+    if (r) {
+        xsyslog(LOG_ERR, "read_old_value failed",
+                "mailbox=<%s> uid=<%u> key=<%.*s> error=<%s>",
+                mailbox_name(mailbox), uid, keylen, key, cyrusdb_strerror(r));
+        r = IMAP_IOERROR;
+        goto out;
+    }
 
     /* if the value is identical, don't touch the mailbox */
     if (oldval.len == value->len && (!value->len || !memcmp(oldval.s, value->s, value->len)))
@@ -3116,6 +3127,13 @@ static int write_entry(struct mailbox *mailbox,
         do {
             r = cyrusdb_delete(d->db, key, keylen, tid(d), /*force*/1);
         } while (r == CYRUSDB_AGAIN);
+        if (r) {
+            xsyslog(LOG_ERR, "cyrusdb_delete failed",
+                    "mailbox=<%s> uid=<%u> key=<%.*s> error=<%s>",
+                    mailbox_name(mailbox), uid, keylen, key, cyrusdb_strerror(r));
+            r = IMAP_IOERROR;
+            goto out;
+        }
     }
     else {
         struct buf data = BUF_INITIALIZER;
@@ -3142,6 +3160,13 @@ static int write_entry(struct mailbox *mailbox,
             r = cyrusdb_store(d->db, key, keylen, data.s, data.len, tid(d));
         } while (r == CYRUSDB_AGAIN);
         buf_free(&data);
+        if (r) {
+            xsyslog(LOG_ERR, "cyrusdb_store failed",
+                    "mailbox=<%s> uid=<%u> key=<%.*s> error=<%s>",
+                    mailbox_name(mailbox), uid, keylen, key, cyrusdb_strerror(r));
+            r = IMAP_IOERROR;
+            goto out;
+        }
     }
 
     if (!mailbox)
