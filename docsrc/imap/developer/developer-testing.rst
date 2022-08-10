@@ -81,12 +81,6 @@ Install and configure Cassandane
             [imaptest]
             basedir=/path/to/imaptest/imaptest
             suppress=append-binary urlauth-binary fetch-binary-mime fetch-binary-mime-qp
-    * Ensure that the following config items are off:
-
-      .. code-block:: ini
-
-         altnamespace = no
-         unixhierarchysep = no
 
 6. Create a ``cyrus`` user and matching group and also add ``cyrus`` to group ``mail``
 
