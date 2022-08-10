@@ -382,7 +382,7 @@ void sync_send_lookup(struct dlist *kl, struct protstream *out);
 void sync_send_restart(struct protstream *out);
 void sync_send_restore(struct dlist *kl, struct protstream *out);
 
-struct dlist *sync_parseline(struct protstream *in);
+struct dlist *sync_parseline(struct protstream *in, int isarchive);
 
 /* ====================================================================== */
 
@@ -481,6 +481,7 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_BATCH (1<<5)
 #define SYNC_FLAG_SIEVE_MAILBOX (1<<6)
 #define SYNC_FLAG_NONBLOCK (1<<7)
+#define SYNC_FLAG_ARCHIVE (1<<8)
 
 int sync_do_seen(struct sync_client_state *sync_cs, const char *userid, char *uniqueid);
 int sync_do_quota(struct sync_client_state *sync_cs, const char *root);

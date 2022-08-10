@@ -782,6 +782,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    is the pid (integer) and the third is the service ID.
    Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d */
 
+{ "debug_log_sync_partition_choice", 0, SWITCH, "UNRELEASED" }
+/* If enabled, replication will log which partition it chose for staging.
+   This is mainly useful for regression testing the sync_client -a switch. */
+
 { "debug_writefail_guid", NULL, STRING, "3.6.0" }
 /* If set, any arriving message with this guid will fail as if the underlying
    disk write had failed, pretending to be a disk full condition.  This is

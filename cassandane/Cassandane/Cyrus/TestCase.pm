@@ -190,6 +190,7 @@ sub config_set
     }
 }
 
+# XXX put these in alphabetical order someday
 magic(ReverseACLs => sub {
     shift->config_set(reverseacls => 1);
 });
@@ -390,6 +391,18 @@ magic(AltPTSDBPath => sub {
     shift->config_set(
         'ptscache_db_path' => '@basedir@/conf/non-default-ptscache.db'
     );
+});
+magic(ArchivePartition => sub {
+    my $conf = shift;
+    $conf->config_set('archivepartition-default' => '@basedir@/archive');
+    $conf->config_set('archive_enabled' => 'yes');
+    $conf->config_set('archive_after' => '7d');
+});
+magic(ArchiveNow => sub {
+    my $conf = shift;
+    $conf->config_set('archivepartition-default' => '@basedir@/archive');
+    $conf->config_set('archive_enabled' => 'yes');
+    $conf->config_set('archive_after' => '0d');
 });
 
 # Run any magic handlers indicated by the test name or attributes
@@ -1179,6 +1192,7 @@ sub run_replication
     my $meta = delete $opts{meta};
     my $nosyncback = delete $opts{nosyncback};
     my $allusers = delete $opts{allusers};
+    my $stagetoarchive = delete $opts{stagetoarchive};
     $nmodes++ if $user;
     $nmodes++ if $rolling;
     $nmodes++ if $mailbox;
@@ -1213,6 +1227,7 @@ sub run_replication
     push(@cmd, '-u', $user) if defined $user;
     push(@cmd, '-m', $mailbox) if defined $mailbox;
     push(@cmd, '-A') if $allusers;  # n.b. boolean
+    push(@cmd, '-a') if $stagetoarchive; # n.b. boolean
 
     my %run_options;
     $run_options{cyrus} = 1;

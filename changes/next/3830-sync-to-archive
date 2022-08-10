@@ -1,0 +1,19 @@
+Description:
+
+Adds the ability for replication to stage message uploads to the
+archive partition rather than the spool partition.
+
+
+Config changes:
+
+* debug_log_sync_partition_choice
+
+
+Upgrade instructions:
+
+None required
+
+
+GitHub issue:
+
+https://github.com/cyrusimap/cyrus-imapd/issues/3830

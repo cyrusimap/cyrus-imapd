@@ -134,6 +134,7 @@ static int sync_logfd = -1;
 static int sync_starttls_done = 0;
 static int sync_compress_done = 0;
 static int sync_sieve_mailbox_enabled = 0;
+static int sync_archive_enabled = 0;
 
 static int opt_force = 0;
 
@@ -224,6 +225,7 @@ static void sync_reset(void)
     sync_compress_done = 0;
 
     sync_sieve_mailbox_enabled = 0;
+    sync_archive_enabled = 0;
 
     saslprops_reset(&saslprops);
 }
@@ -298,6 +300,10 @@ static void dobanner(void)
 #endif
 
         prot_printf(sync_out, "* SIEVE-MAILBOX\r\n");
+
+        if (config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) {
+            prot_printf(sync_out, "* REPLICATION-ARCHIVE\r\n");
+        }
     }
 
     prot_printf(sync_out,
@@ -557,7 +563,7 @@ static void cmdloop(void)
             }
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Apply")) {
-                kl = sync_parseline(sync_in);
+                kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
                     cmd_apply(kl, reserve_list);
                     dlist_free(&kl);
@@ -585,7 +591,7 @@ static void cmdloop(void)
         case 'G':
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
-                kl = sync_parseline(sync_in);
+                kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
                     cmd_get(kl);
                     dlist_free(&kl);
@@ -629,7 +635,7 @@ static void cmdloop(void)
             }
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Restore")) {
-                kl = sync_parseline(sync_in);
+                kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
                     cmd_restore(kl, reserve_list);
                     dlist_free(&kl);
@@ -963,6 +969,13 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
         snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
                  config_partitiondir(p->name), (unsigned long)getpid());
         rmdir(buf);
+
+        if (config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) {
+            /* and the archive partition too */
+            snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
+                    config_archivepartitiondir(p->name), (unsigned long)getpid());
+            rmdir(buf);
+        }
     }
     partition_list_free(pl);
 
@@ -988,11 +1001,17 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
     if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
+    }
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
 
     if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
         sync_sieve_mailbox_enabled = 1;
+    }
+    if (sync_state.flags & SYNC_FLAG_ARCHIVE) {
+        sync_archive_enabled = 1;
     }
 
     sync_checkpoint(sync_in);
@@ -1013,6 +1032,9 @@ static void cmd_get(struct dlist *kin)
     if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
     }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
+    }
 
     const char *resp = sync_get(kin, &sync_state);
     prot_printf(sync_out, "%s\r\n", resp);
@@ -1031,6 +1053,9 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
 
     if (sync_sieve_mailbox_enabled) {
         sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
     }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
