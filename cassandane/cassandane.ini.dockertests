@@ -56,9 +56,6 @@ suppress = Rename.rename_inbox JMAPBackup Sieve.snooze_tzid MboxEvent.tls_login_
 [gdb]
 
 [config]
-# need to revert the defaults for now because tests were built do old defaults.
-# remove this when they're fixed!
-unixhierarchysep = no
 zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
 
 [imaptest]
