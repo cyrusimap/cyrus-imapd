@@ -13,6 +13,8 @@ use IO::Handle;
 use File::Temp;
 use Data::Dumper;
 
+use Cyrus::DList;
+
 =pod
 
 =head1 NAME
@@ -122,18 +124,24 @@ sub write_header {
   $fh->print($Self->make_header($header));
 }
 
+# XXX still writes old-style header!
 sub make_header {
   my $Self = shift;
   my $ds = shift || $Self->header();
 
+  # NOTE: no tab separator if no uniqueid!
+  my $qr_uuid = $ds->{QuotaRoot};
+  $qr_uuid .= "\t$ds->{UniqueId}" if $ds->{UniqueId};
+
   # NOTE: acl and flags should have '' as the last element!
   my $flags = join(" ", @{$ds->{Flags}}, '');
   my $acl = join("\t", @{$ds->{ACL}}, '');
+
   my $buf = <<EOF;
 $HL1
 $HL2
 $HL3
-$ds->{QuotaRoot}        $ds->{UniqueId}
+$qr_uuid
 $flags
 $acl
 EOF
@@ -149,9 +157,36 @@ sub parse_header {
   die "Not a mailbox header file" unless $lines[0] eq $HL1;
   die "Not a mailbox header file" unless $lines[1] eq $HL2;
   die "Not a mailbox header file" unless $lines[2] eq $HL3;
-  my ($quotaroot, $uniqueid) = split /\t/, $lines[3];
-  my (@flags) = split / /, $lines[4];
-  my (@acl) = split /\t/, $lines[5];
+
+  my ($quotaroot, $uniqueid, @flags, @acl);
+
+  if (substr($lines[3], 0, 1) eq '%') {
+    # new dlist-style header
+    $Self->{dlistheader} = $lines[3];
+    my $dlist = Cyrus::DList->parse_string($lines[3]);
+    my $hash = $dlist->as_perl();
+
+    $quotaroot = $hash->{Q} // '';
+    $uniqueid = $hash->{I};
+    @flags = @{$hash->{U}} if ref $hash->{U};
+    if (ref $hash->{A}) {
+        my $order = delete $hash->{A}->{__kvlist_order};
+
+        if ($order && ref $order eq 'ARRAY') {
+            foreach my $k (@{$order}) {
+                my $v = delete $hash->{A}->{$k};
+                push @acl, $k, $v;
+            }
+        }
+
+        push @acl, %{$hash->{A}};
+    }
+  }
+  else {
+    ($quotaroot, $uniqueid) = split /\t/, $lines[3];
+    @flags = split / /, $lines[4];
+    @acl = split /\t/, $lines[5];
+  }
 
   return {
     QuotaRoot => $quotaroot,

@@ -151,6 +151,9 @@ char *mbentry_metapath(const struct mboxlist_entry *mbentry, int metatype, int i
 char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t);
 char *mbentry_archivepath(const struct mboxlist_entry *mbentry, uint32_t);
 
+int mbentry_is_local_mailbox(const struct mboxlist_entry *mbentry);
+#define mbentry_is_remote_mailbox(mbentry) (!mbentry_is_local_mailbox(mbentry))
+
 mbentry_t *mboxlist_entry_copy(const mbentry_t *src);
 
 void mboxlist_entry_free(mbentry_t **mbentryptr);

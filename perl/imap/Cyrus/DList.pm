@@ -93,6 +93,15 @@ sub add_perl {
 
   elsif (ref($val) eq 'HASH') {
     my $child = $Self->add_kvlist($key);
+    my $order = delete $val->{__kvlist_order};
+
+    if ($order) {
+      die "Unknown order " . ref($order) if ref($order) ne 'ARRAY';
+      foreach my $k (grep { exists $val->{$_} } @{$order}) {
+        $child->add_perl($k, delete $val->{$k});
+      }
+    }
+
     $child->add_perl($_, $val->{$_}) for sort keys %$val;
   }
 
@@ -307,7 +316,16 @@ sub as_perl {
   my $Self = shift;
 
   if ($Self->{type} eq 'kvlist') {
-    return { map { $_->{key} => $_->as_perl() } @{$Self->{data}} };
+    my $kvlist = {};
+    my @order;
+
+    foreach my $datum (@{$Self->{data}}) {
+      push @order, $datum->{key};
+      $kvlist->{$datum->{key}} = $datum->as_perl();
+    }
+
+    $kvlist->{__kvlist_order} = [ @order ];
+    return $kvlist;
   }
   elsif ($Self->{type} eq 'list') {
     return [ map { $_->as_perl() } @{$Self->{data}} ];

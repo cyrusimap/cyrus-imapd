@@ -1065,6 +1065,15 @@ static int mailbox_open_advanced(const char *name,
         return r;
     }
 
+    /* XXX can we even get here for remote mbentries? */
+    if (!mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
+        /* Theoretically it shouldn't be possible for an mbentry to not
+         * have a uniqueid... so if it happens, complain loudly.
+         */
+        xsyslog(LOG_ERR, "mbentry has no uniqueid, needs reconstruct",
+                         "mboxname=<%s>", name);
+    }
+
     uint32_t legacy_dirs = (mbentry->mbtype & MBTYPE_LEGACY_DIRS);
     r = mboxname_lock(legacy_dirs ? name : mbentry->uniqueid, &listitem->l, locktype);
     if (r) {
@@ -1553,7 +1562,12 @@ static int mailbox_read_header(struct mailbox *mailbox)
         if (!tab || tab > eol) tab = eol;
         mailbox->h.uniqueid = xstrndup(p, tab - p);
     }
-    /* else, uniqueid needs to be generated when we know the uidvalidity */
+    else {
+        /* ancient cyrus.header file without a uniqueid field! */
+        xsyslog(LOG_ERR, "mailbox header has no uniqueid, needs reconstruct",
+                         "mboxname=<%s>",
+                         mailbox_name(mailbox));
+    }
 
     /* Read names of user flags */
     p = eol + 1;
