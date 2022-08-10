@@ -209,8 +209,26 @@ sub get_section
     my ($self, $section) = @_;
     my $inifile = $self->{inifile};
     my %params;
+    my $filename = $self->{filename} || 'inifile';
     if ($inifile->SectionExists($section)) {
-        map { $params{$_} = $inifile->val($section, $_) } $inifile->Parameters($section);
+        foreach my $key ($inifile->Parameters($section)) {
+            # n.b. if there are multiple values for this section.key,
+            # val() in scalar context returns them joined by $/, which is
+            # nasty.  So call it in list context instead, even though we
+            # don't support multiple values, and use the last one...
+            my @values = $inifile->val($section, $key);
+
+            if (scalar @values > 1) {
+                # ... and whinge if there were multiple!
+                xlog "$filename: multiple values for $section.$key,"
+                     . " using last ($values[-1])";
+                if (get_verbose()) {
+                    xlog "$filename: $section.$key=<$_>" for @values;
+                }
+            }
+
+            $params{$key} = $values[-1];
+        }
     }
     return \%params;
 }
