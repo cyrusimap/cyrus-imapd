@@ -1108,6 +1108,9 @@ static char next_nonspace(struct protstream *in, char c)
     return c;
 }
 
+/* XXX accumulating a lot of flag arguments here, perhaps we should
+ * XXX consolidate them into a single flags argument with defined bits
+ */
 EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive, int isbackup,
                           struct protstream *in)
 {
