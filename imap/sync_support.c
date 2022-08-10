@@ -8081,7 +8081,9 @@ connected:
     if (capabilities) {
         sync_do_enable(sync_cs, capabilities);
 
-        if (capabilities & CAPA_REPLICATION_ARCHIVE && !(sync_cs->flags & SYNC_FLAG_ARCHIVE)) {
+        if ((capabilities & CAPA_REPLICATION_ARCHIVE)
+            && !(sync_cs->flags & SYNC_FLAG_ARCHIVE))
+        {
             syslog(LOG_NOTICE, "Replication to archive requested but destination didn't enable it");
             return IMAP_REMOTE_DENIED;
         }
