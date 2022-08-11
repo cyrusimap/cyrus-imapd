@@ -2851,7 +2851,7 @@ static int _jmap_checkfolder(const char *mboxname, void *rock)
     jmap_req_t *req = (jmap_req_t *)rock;
 
     // ignore Notes mailbox
-    if (mboxname_isnotesmailbox(mboxname, 0))
+    if (mboxname_isnondeliverymailbox(mboxname, 0))
         return 0;
 
     // we only want to look in folders that the user is allowed to read
