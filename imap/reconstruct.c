@@ -152,15 +152,20 @@ int main(int argc, char **argv)
     struct buf buf = BUF_INITIALIZER;
     char *alt_config = NULL;
     char *start_part = NULL;
+    char *path = NULL;
     struct reconstruct_rock rrock = { NULL, HASH_TABLE_INITIALIZER };
 
     progname = basename(argv[0]);
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxdgGqRUMIoOnV:u")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxdgGqRUMIoOnV:uP:")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
+
+        case 'P':
+          path = optarg;
+          break;
 
         case 'p':
             start_part = optarg;
@@ -264,6 +269,17 @@ int main(int argc, char **argv)
             usage();
         }
         do_mboxlist();
+    }
+
+    if (path) {
+        char real[PATH_MAX+1];
+        mbentry_t *mbentry = mailbox_mbentry_from_path(realpath(path, real));
+
+        if (mbentry) {
+            r = mboxlist_updatelock(mbentry, 1);
+            mboxlist_entry_free(&mbentry);
+        }
+        goto done;
     }
 
     mbentry_t mbentry = MBENTRY_INITIALIZER;
@@ -397,6 +413,7 @@ int main(int argc, char **argv)
         free(name);
     }
 
+  done:
     if (rrock.discovered) strarray_free(rrock.discovered);
     free_hash_table(&rrock.visited, NULL);
 

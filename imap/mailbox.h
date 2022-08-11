@@ -747,4 +747,6 @@ extern int mailbox_changequotaroot(struct mailbox *mailbox,
 
 extern int mailbox_parse_datafilename(const char *name, uint32_t *uidp);
 
+extern struct mboxlist_entry *mailbox_mbentry_from_path(const char *path);
+
 #endif /* INCLUDED_MAILBOX_H */

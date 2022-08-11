@@ -1480,12 +1480,11 @@ static int _parse_header_data(struct mailbox *mailbox,
  * userflag1 SPACE userflag2 SPACE userflag3 [...] (with no trailing space)
  * user1 TAB user1acl TAB user2 TAB user2acl TAB (with trailing tab!)
  */
-static int mailbox_read_header(struct mailbox *mailbox)
+static int mailbox_read_header(struct mailbox *mailbox, const char *fname)
 {
     int r = 0;
     int flag;
     const char *name, *p, *tab, *eol;
-    const char *fname;
     struct stat sbuf;
     const char *base = NULL;
     size_t len = 0;
@@ -1497,7 +1496,7 @@ static int mailbox_read_header(struct mailbox *mailbox)
 
     xclose(mailbox->header_fd);
 
-    fname = mailbox_meta_fname(mailbox, META_HEADER);
+    if (!fname) fname = mailbox_meta_fname(mailbox, META_HEADER);
     mailbox->header_fd = open(fname, O_RDONLY, 0);
 
     if (mailbox->header_fd == -1) {
@@ -2568,7 +2567,7 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
 
     /* has the header file changed? */
     if (sbuf.st_ino != mailbox->header_file_ino) {
-        r = mailbox_read_header(mailbox);
+        r = mailbox_read_header(mailbox, NULL);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: read header failed",
                              "mailbox=<%s> error=<%s>",
@@ -2794,7 +2793,7 @@ static int mailbox_commit_header(struct mailbox *mailbox)
     mailbox->header_dirty = 0; /* we wrote it out, so not dirty any more */
 
     /* re-read the header */
-    r = mailbox_read_header(mailbox);
+    r = mailbox_read_header(mailbox, NULL);
     if (r) return r;
 
     /* copy the new CRC into the index header */
@@ -2973,7 +2972,7 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
 
     /* we re-read the header and index header to wipe
      * away all the changed values */
-    r = mailbox_read_header(mailbox);
+    r = mailbox_read_header(mailbox, NULL);
     if (r) return r;
 
     r = mailbox_read_index_header(mailbox);
@@ -6896,7 +6895,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     mboxlist_entry_free(&mbentry);
 
     /* read header, if it is not there, we need to create it */
-    r = mailbox_read_header(mailbox);
+    r = mailbox_read_header(mailbox, NULL);
     if (r) {
         /* Header failed to read - recreate it */
         printf("%s: failed to read header file\n", mailbox_name(mailbox));
@@ -6928,7 +6927,7 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
     int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
     int r;
 
-    r = mailbox_read_header(mailbox);
+    r = mailbox_read_header(mailbox, NULL);
     if (r) return r;
 
     if (strcmp(mailbox_acl(mailbox), mailbox->h.acl)) {
@@ -8226,4 +8225,95 @@ HIDDEN int mailbox_changequotaroot(struct mailbox *mailbox,
 
   done:
     return r;
+}
+
+struct part_rock {
+    const char *path;
+    unsigned long is_meta;
+    char *partition;
+};
+
+static void get_partition(const char *key, const char *val, void *rock)
+{
+    struct part_rock *prock = (struct part_rock *) rock;
+
+    if (prock->partition) return;
+
+    if (prock->is_meta) {
+        if (strncmp("meta", key, 4)) return;
+        key += 4;
+    }
+    if (strncmp("partition-", key, 10)) return;
+
+    if (!strncmp(prock->path, val, strlen(val))) {
+        prock->partition = xstrdup(key+10);
+    }
+}
+
+EXPORTED struct mboxlist_entry *mailbox_mbentry_from_path(const char *path)
+{
+    struct buf buf = BUF_INITIALIZER;
+    size_t pathlen = strlen(path);
+    size_t fnamelen = strlen(FNAME_HEADER);
+    struct mboxlist_entry *mbentry = mboxlist_entry_create();
+    struct mailbox mailbox;
+    int r;
+
+    if (pathlen < fnamelen || strcmp(path + pathlen - fnamelen, FNAME_HEADER)) {
+        buf_setcstr(&buf, path);
+        buf_appendcstr(&buf, FNAME_HEADER);
+        path = buf_cstring(&buf);
+    }
+
+    zeromailbox(mailbox);
+    mailbox.mbentry = mbentry;
+
+    r = mailbox_read_header(&mailbox, path);
+    if (!r) {
+        mbentry->mbtype = mailbox.h.mbtype;
+
+        /* Steal strings from mailbox_header */
+        mbentry->name = mailbox.h.name;
+        mbentry->uniqueid = mailbox.h.uniqueid;
+        mbentry->acl = mailbox.h.acl;
+
+        /* Cleanup remaining mailbox_header */
+        for (int flag = 0; flag < MAX_USER_FLAGS; flag++) {
+            xzfree(mailbox.h.flagname[flag]);
+        }
+        xzfree(mailbox.h.quotaroot);
+        xclose(mailbox.header_fd);
+
+        /* Get partition name */
+        unsigned long metapartition_files =
+            config_getbitfield(IMAPOPT_METAPARTITION_FILES);
+        struct part_rock prock = {
+            path, metapartition_files & IMAP_ENUM_METAPARTITION_FILES_HEADER, NULL
+        };
+
+        config_foreachoverflowstring(&get_partition, &prock);
+        if (prock.partition) {
+            struct mailbox *mailboxp = NULL;
+
+            mbentry->partition = prock.partition;
+
+            r = mailbox_open_from_mbe(mbentry, &mailboxp);
+            if (!r) {
+                r = mailbox_read_index_header(mailboxp);
+
+                if (!r) {
+                    mbentry->uidvalidity = mailboxp->i.uidvalidity;
+                    mbentry->foldermodseq = mailboxp->i.highestmodseq;
+                    mbentry->createdmodseq = mailboxp->i.createdmodseq;
+                }
+
+                mailbox_close(&mailboxp);
+            }
+        }
+    }
+
+    if (r) mboxlist_entry_free(&mbentry);
+    buf_free(&buf);
+
+    return mbentry;
 }
