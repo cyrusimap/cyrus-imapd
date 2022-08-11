@@ -870,8 +870,14 @@ static int subquery_run_one_folder(search_query_t *query,
         if (!folder) {
             folder = query_get_valid_folder(query, mboxname, state->uidvalidity);
             if (!folder) {
-                r = IMAP_INTERNAL;
-                goto out;   /* can't happen */
+                if (query->checkfolder) {
+                    /* filtered out */
+                    continue;
+                }
+                else {
+                    r = IMAP_INTERNAL;
+                    goto out;   /* can't happen */
+                }
             }
         }
 
