@@ -641,9 +641,13 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
     const char *ical_str = icalcomponent_as_ical_string(sched_data->itip);
     if (!ical_str) goto done;
 
-    json_t *val = json_pack("{s:s s:s s:s s:o s:o s:b}",
+    const char *imip_method = icalproperty_method_to_string(
+                                  icalcomponent_get_method(sched_data->itip));
+
+    json_t *val = json_pack("{s:s s:s s:s s:s s:o s:o s:b}",
                             "recipient", buf_cstring(&recipient),
                             "sender", sender,
+                            "method", imip_method,
                             "ical", ical_str,
                             "jsevent", jsevent,
                             "patch", patch,
