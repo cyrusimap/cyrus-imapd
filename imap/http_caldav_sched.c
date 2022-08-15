@@ -609,7 +609,7 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
         goto done;
     }
 
-    json_t *jsevent, *patch;
+    json_t *jsevent, *patch, *id;
 
 #ifdef WITH_JMAP
     if (sched_data->oldical) {
@@ -632,9 +632,30 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
         jsevent = json_null();
         patch = jmapical_tojmap(sched_data->newical, NULL, NULL);
     }
+
+    struct jmap_caleventid eid = { 0 };
+    icalproperty *prop = NULL;
+    struct buf buf = BUF_INITIALIZER;
+
+    /* if there's going to be a recurrence-id, it will be a layer down */
+    icalcomponent *comp = icalcomponent_get_first_real_component(sched_data->itip);
+    if (comp) {
+        prop = icalcomponent_get_first_property(comp,
+                                                ICAL_RECURRENCEID_PROPERTY);
+    }
+    if (prop) {
+        eid.ical_recurid = icalproperty_get_value_as_string(prop);
+    }
+
+    /* ditto uid, but icalcomponent_get_uid already does the right thing */
+    eid.ical_uid = icalcomponent_get_uid(sched_data->itip);
+
+    id = json_string(jmap_caleventid_encode(&eid, &buf));
+    buf_free(&buf);
 #else
     jsevent = json_null();
     patch = json_null();
+    id = json_null();
 #endif
 
     /* Don't send a bogus message - check late to not allocate our own copy */
@@ -644,10 +665,11 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
     const char *imip_method = icalproperty_method_to_string(
                                   icalcomponent_get_method(sched_data->itip));
 
-    json_t *val = json_pack("{s:s s:s s:s s:s s:o s:o s:b}",
+    json_t *val = json_pack("{s:s s:s s:s s:o s:s s:o s:o s:b}",
                             "recipient", buf_cstring(&recipient),
                             "sender", sender,
                             "method", imip_method,
+                            "id", id,
                             "ical", ical_str,
                             "jsevent", jsevent,
                             "patch", patch,
