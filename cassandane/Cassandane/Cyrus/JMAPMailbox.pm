@@ -66,6 +66,7 @@ sub new
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                  httpmodules => 'carddav caldav jmap',
                  specialuse_extra => '\\XSpecialUse',
+                 notesmailbox => 'Notes',
                  httpallowcompress => 'no');
 
     return $class->SUPER::new({
@@ -5087,6 +5088,53 @@ sub test_mailbox_set_sharewith_acl
         my %acl = @{$admin->getacl("user.cassandane.A")};
         $self->assert_str_equals($_->{acl}, $acl{sharee});
     }
+}
+
+sub test_mailbox_changes_notes
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $state;
+    my $res;
+    my %m;
+    my $inbox;
+
+    xlog $self, "get mailbox list";
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+    %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $inbox = $m{"Inbox"}->{id};
+    $self->assert_not_null($inbox);
+
+    # we need 'https://cyrusimap.org/ns/jmap/notes' capability
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/notes';
+    $jmap->DefaultUsing(\@using);
+
+    # force creation of notes mailbox prior to creating notes
+    $res = $jmap->CallMethods([
+        ['Note/set', {
+         }, "R0"]
+    ]);
+
+    xlog "create note";
+    $res = $jmap->CallMethods([['Note/set',
+                                { create => { "1" => {title => "foo"}, } },
+                                "R1"]]);
+    $self->assert_not_null($res);
+
+    xlog $self, "get mailbox updates (expect no changes)";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{updatedProperties});
 }
 
 
