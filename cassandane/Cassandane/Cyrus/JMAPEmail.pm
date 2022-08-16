@@ -73,6 +73,7 @@ sub new
                  icalendar_max_size => 100000,
                  jmap_nonstandard_extensions => 'yes',
                  jmapsubmission_deleteonsend => 'no',
+                 notesmailbox => 'Notes',
                  sync_log => 'yes');
 
     # setup sieve

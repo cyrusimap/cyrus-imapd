@@ -734,7 +734,7 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
 
     // we only want regular mailboxes!
     static int needrights = JACL_READITEMS;
-    if (!mbentry || (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) ||
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
         !jmap_hasrights_mbentry(req, mbentry, needrights)) {
         mboxlist_entry_free(&mbentry);
         return 0;
@@ -1106,7 +1106,7 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
     conv_guidrec_mbentry(rec, &mbentry);
 
     /* Make sure we are allowed to read this mailbox */
-    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
         !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         mboxlist_entry_free(&mbentry);
         return 0;
@@ -1217,7 +1217,7 @@ static int _email_get_cid_cb(const conv_guidrec_t *rec, void *rock)
 
     conv_guidrec_mbentry(rec, &mbentry);
 
-    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
         (d->checkacl && !jmap_hasrights_mbentry(d->req, mbentry, JACL_READITEMS))) {
         mboxlist_entry_free(&mbentry);
         return 0;
@@ -1270,7 +1270,7 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
     if (r) return r;
 
-    if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_EMAIL) {
+    if (!mboxname_isnondeliverymailbox(mailbox_name(mbox), mailbox_mbtype(mbox))) {
         r = msgrecord_find(mbox, rec->uid, &mr);
         if (!r) {
             uint32_t internal_flags;
@@ -1888,7 +1888,8 @@ emailsearch_folders_value_new(jmap_req_t *req,
     json_array_foreach(jmboxids, i, jmboxid) {
         const char *mboxid = json_string_value(jmboxid);
         const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
-        if (mbentry && mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL &&
+        if (mbentry &&
+                !mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) &&
                 jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
             int foldernum = conversation_folder_number(req->cstate,
                     CONV_FOLDER_KEY_MBE(req->cstate, mbentry), 0);
@@ -2848,6 +2849,10 @@ static void _email_querychanges_destroyed(struct jmap_querychanges *query,
 static int _jmap_checkfolder(const char *mboxname, void *rock)
 {
     jmap_req_t *req = (jmap_req_t *)rock;
+
+    // ignore Notes mailbox
+    if (mboxname_isnondeliverymailbox(mboxname, 0))
+        return 0;
 
     // we only want to look in folders that the user is allowed to read
     if (jmap_hasrights(req, mboxname, JACL_READITEMS))
@@ -6004,7 +6009,7 @@ static int _thread_get_cb(const conv_guidrec_t *rec, void *vrock)
 
     conv_guidrec_mbentry(rec, &mbentry);
 
-    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
         (!rock->is_own_account &&
          !jmap_hasrights_mbentry(rock->req, mbentry, needrights))) {
         mboxlist_entry_free(&mbentry);
@@ -6346,7 +6351,7 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *vrock)
 
     conv_guidrec_mbentry(rec, &mbentry);
 
-    if (!mbentry || (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) ||
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
         !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         mboxlist_entry_free(&mbentry);
         return 0;
@@ -6405,7 +6410,7 @@ static int _email_get_snoozed_cb(const conv_guidrec_t *rec, void *vrock)
 
     conv_guidrec_mbentry(rec, &mbentry);
 
-    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
         !jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)) {
         mboxlist_entry_free(&mbentry);
         return 0;
@@ -7975,7 +7980,7 @@ static int _warmup_mboxcache_cb(const conv_guidrec_t *rec, void* vrock)
     struct mailbox *mbox = NULL;
     int r = jmap_openmbox_by_guidrec(rock->req, rec, &mbox, /*rw*/0);
     if (!r) {
-        if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_EMAIL) {
+        if (!mboxname_isnondeliverymailbox(mailbox_name(mbox), mailbox_mbtype(mbox))) {
             ptrarray_append(&rock->mboxes, mbox);
         }
         else jmap_closembox(rock->req, &mbox);
@@ -10785,7 +10790,7 @@ static void _append_validate_mboxids(jmap_req_t *req,
             if (mbox_id) {
                 mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
             }
-            if (!mbentry || mbentry->mbtype == MBTYPE_DELETED ||
+            if (!mbentry || (mbentry->mbtype & MBTYPE_DELETED) ||
                     mboxname_isdeletedmailbox(mbentry->name, NULL) ||
                     !jmap_hasrights_mbentry(req, mbentry, need_rights)) {
                 jmap_parser_invalid(parser, NULL);
@@ -10962,7 +10967,7 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
     }
     if (mboxrec == NULL) {
         // we only want regular mailboxes!
-        if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
+        if (mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
             goto done;
         }
         if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)) {
@@ -12438,7 +12443,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
         json_object_foreach_safe(update->mailboxids, tmp, mbox_id, jval) {
             struct mailbox *mbox = NULL;
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
-            if (mbentry && mbentry->mbtype != MBTYPE_DELETED &&
+            if (mbentry && !(mbentry->mbtype & MBTYPE_DELETED) &&
                     !mboxname_isdeletedmailbox(mbentry->name, NULL)) {
                 int r = 0;
                 if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
@@ -13492,7 +13497,7 @@ static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
     struct _email_copy_checkmbox_rock *rock = _rock;
 
     /* Ignore anything but regular and intermediate mailboxes */
-    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
         mbtypes_unavailable(mbentry->mbtype) || (mbentry->mbtype & MBTYPE_DELETED)) {
         return 0;
     }
@@ -13540,7 +13545,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
 
     /* Overwrite message record */
     int r = jmap_openmbox_by_guidrec(rock->req, rec, &mbox, /*rw*/1);
-    if (r || mbtype_isa(mailbox_mbtype(mbox)) != MBTYPE_EMAIL) {
+    if (r || mboxname_isnondeliverymailbox(mailbox_name(mbox), mailbox_mbtype(mbox))) {
         goto done;
     }
     if (!r) r = msgrecord_find(mbox, rec->uid, &mr);
@@ -13666,7 +13671,7 @@ static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
 
     conv_guidrec_mbentry(rec, &mbentry);
 
-    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
         goto done;
     }
     if (rec->version < 1) {
@@ -13712,7 +13717,7 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
 
     conv_guidrec_mbentry(rec, &mbentry);
 
-    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
         !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         mboxlist_entry_free(&mbentry);
         return 0;
