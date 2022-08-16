@@ -80,8 +80,6 @@ void ptrarray_truncate(ptrarray_t *pa, int newlen);
 #define ptrarray_tail(pa)           ptrarray_nth((pa), -1)
 #define ptrarray_head(pa)           ptrarray_nth((pa), 0)
 
-void **ptrarray_takevf(ptrarray_t *pa);
-
 int ptrarray_find(const ptrarray_t *pa, void *match,
                   int starting);
 

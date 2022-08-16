@@ -306,40 +306,6 @@ static void test_remove(void)
     ptrarray_fini(&pa);
 }
 
-static void test_takevf(void)
-{
-    ptrarray_t *pa;
-    void **pp;
-
-    pa = ptrarray_new();
-    CU_ASSERT_PTR_NOT_NULL(pa);
-    ptrarray_append(pa, PTR0);
-    ptrarray_append(pa, PTR1);
-    ptrarray_append(pa, PTR2);
-    ptrarray_append(pa, PTR3);
-    ptrarray_append(pa, PTR4);
-    CU_ASSERT_EQUAL(pa->count, 5);
-    CU_ASSERT(pa->alloc >= pa->count);
-    CU_ASSERT_PTR_NOT_NULL(pa->data);
-    CU_ASSERT_PTR_EQUAL(ptrarray_nth(pa, 0), PTR0);
-    CU_ASSERT_PTR_EQUAL(ptrarray_nth(pa, 1), PTR1);
-    CU_ASSERT_PTR_EQUAL(ptrarray_nth(pa, 2), PTR2);
-    CU_ASSERT_PTR_EQUAL(ptrarray_nth(pa, 3), PTR3);
-    CU_ASSERT_PTR_EQUAL(ptrarray_nth(pa, 4), PTR4);
-
-    pp = ptrarray_takevf(pa);
-    /* note: takevf frees the ptrarray itself */
-    CU_ASSERT_PTR_NOT_NULL(pp);
-    CU_ASSERT_PTR_EQUAL(pp[0], PTR0);
-    CU_ASSERT_PTR_EQUAL(pp[1], PTR1);
-    CU_ASSERT_PTR_EQUAL(pp[2], PTR2);
-    CU_ASSERT_PTR_EQUAL(pp[3], PTR3);
-    CU_ASSERT_PTR_EQUAL(pp[4], PTR4);
-    CU_ASSERT_PTR_NULL(pp[5]);
-
-    free(pp);
-}
-
 static void test_truncate(void)
 {
     ptrarray_t pa = PTRARRAY_INITIALIZER;

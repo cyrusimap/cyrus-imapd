@@ -193,15 +193,6 @@ EXPORTED void *ptrarray_nth(const ptrarray_t *pa, int idx)
     return pa->data[idx];
 }
 
-EXPORTED void **ptrarray_takevf(ptrarray_t *pa)
-{
-    void **d = pa->data;
-    pa->data = NULL;
-    pa->count = pa->alloc = 0;
-    ptrarray_free(pa);
-    return d;
-}
-
 EXPORTED int ptrarray_find(const ptrarray_t *pa, void *match, int starting)
 {
     if (!pa) return -1;
