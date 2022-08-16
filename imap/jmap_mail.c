@@ -13159,20 +13159,14 @@ done:
     return 0;
 }
 
-struct _email_import_rock {
-    struct buf buf;
-};
-
 static int _email_import_cb(jmap_req_t *req __attribute__((unused)),
                             FILE *out,
                             void *rock,
                             json_t **err __attribute__((unused)))
 {
-    struct _email_import_rock *data = (struct _email_import_rock*) rock;
-    const char *base = data->buf.s;
-    size_t len = data->buf.len;
-    struct protstream *stream = prot_readmap(base, len);
-    int r = message_copy_strict(stream, out, len, 0);
+    struct buf *buf = rock;
+    struct protstream *stream = prot_readmap(buf_base(buf), buf_len(buf));
+    int r = message_copy_strict(stream, out, buf_len(buf), 0);
     prot_free(stream);
     return r;
 }
@@ -13205,7 +13199,7 @@ static void _email_import(jmap_req_t *req,
     const char *blob_id = jmap_id_string_value(req, json_object_get(jemail_import, "blobId"));
     json_t *jmailbox_ids = json_object_get(jemail_import, "mailboxIds");
     char *mboxname = NULL;
-    struct _email_import_rock content = { BUF_INITIALIZER };
+    struct buf content = BUF_INITIALIZER;
     int has_attachment = 0;
     const char *sourcefile = NULL;
 
@@ -13254,12 +13248,12 @@ static void _email_import(jmap_req_t *req,
 
     /* see if we can get a direct email! */
     int r = jmap_findblob_exact(req, NULL/*accountid*/, blob_id,
-                                &mbox, &mr, &content.buf);
+                                &mbox, &mr, &content);
     if (!r && mr) r = msgrecord_get_fname(mr, &sourcefile);
     if (!r) goto gotrecord;
 
     /* better clean up before we go the slow path */
-    buf_reset(&content.buf);
+    buf_reset(&content);
     sourcefile = NULL;
     msgrecord_unref(&mr);
     jmap_closembox(req, &mbox);
@@ -13290,15 +13284,15 @@ static void _email_import(jmap_req_t *req,
             char *tmp;
             size_t dec_len;
             const char *dec = charset_decode_mimebody(blob_base, blob_len, enc, &tmp, &dec_len);
-            buf_setmap(&content.buf, dec, dec_len);
+            buf_setmap(&content, dec, dec_len);
             free(tmp);
         }
         else {
-            buf_setmap(&content.buf, blob_base, blob_len);
+            buf_setmap(&content, blob_base, blob_len);
         }
     }
     else {
-        buf_setmap(&content.buf, blob_base, blob_len);
+        buf_setmap(&content, blob_base, blob_len);
     }
 
     message_free_body(body);
@@ -13315,7 +13309,7 @@ gotrecord:
         construct_hash_table(getargs.props, 1, 0);
 
         hash_insert("hasAttachment", (void*)1, getargs.props);
-        _email_from_buf(req, &getargs, &content.buf, NULL, &email);
+        _email_from_buf(req, &getargs, &content, NULL, &email);
         has_attachment = json_boolean_value(json_object_get(email, "hasAttachment"));
 
         free_hash_table(getargs.props, NULL);
@@ -13342,7 +13336,7 @@ gotrecord:
 
 done:
     strarray_fini(&keywords);
-    buf_free(&content.buf);
+    buf_free(&content);
     free(mboxname);
 }
 
