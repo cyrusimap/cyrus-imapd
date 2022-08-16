@@ -13334,23 +13334,21 @@ static int is_noinferiors(struct findall_data *data, struct list_rock *rock)
     int r = 0;
 
     if (data->mb_category == MBNAME_ALTINBOX)
-        r = 1;
+        return 1;
 
-    else if (strarray_size(rock->special_nochildren)) {
+    if (strarray_size(rock->special_nochildren)) {
         struct buf attrib = BUF_INITIALIZER;
 
         annotatemore_lookup(mbname_intname(data->mbname), "/specialuse",
                             mbname_userid(data->mbname), &attrib);
-
         if (buf_len(&attrib)) {
             strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
 
-            if (strarray_intersect(uses, rock->special_nochildren))
+            if (strarray_intersect(uses, rock->special_nochildren)) {
                 r = 1;
-
+            }
             strarray_free(uses);
         }
-
         buf_free(&attrib);
     }
 
