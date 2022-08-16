@@ -65,7 +65,7 @@ sub new
                  conversations => 'yes',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                  httpmodules => 'carddav caldav jmap',
-                 specialuse_extra => '\\XSpecialUse',
+                 specialuse_extra => '\\XSpecialUse \\XChats \\XTemplates \\XNotes',
                  notesmailbox => 'Notes',
                  httpallowcompress => 'no');
 
@@ -5136,5 +5136,44 @@ sub test_mailbox_changes_notes
     $self->assert_null($res->[0][1]{updatedProperties});
 }
 
+sub test_mailbox_ignore_notes_subfolders
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog 'Fetch inbox id';
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', { }, 'R1']
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    my $inboxId = $res->[0][1]{ids}[0];
+
+    xlog 'Create Notes mailbox';
+    $imap->create("Notes", "(USE (\\XNotes))") or die "$!";
+
+    xlog 'Assert Notes folder is invisible';
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', { }, 'R1'],
+        ['Mailbox/get', { }, 'R2']
+    ]);
+    $self->assert_deep_equals([$inboxId], $res->[0][1]{ids});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_str_equals($inboxId, $res->[1][1]{list}[0]{id});
+
+    xlog 'Create subfolder in Notes folder';
+    $imap->create("Notes.Sub") or die "$!";
+
+    xlog 'Assert Notes folders are invisible';
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', { }, 'R1'],
+        ['Mailbox/get', { }, 'R2']
+    ]);
+    $self->assert_deep_equals([$inboxId], $res->[0][1]{ids});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_str_equals($inboxId, $res->[1][1]{list}[0]{id});
+}
 
 1;

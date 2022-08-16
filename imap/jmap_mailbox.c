@@ -697,7 +697,8 @@ static int is_jmap_mailbox(jmap_req_t *req,
     /* Don't list special-purpose mailboxes. */
     if (mbtypes_unavailable(mbentry->mbtype) ||
         mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
-        ((mbentry->mbtype & MBTYPE_DELETED) && !tombstones))
+        ((mbentry->mbtype & MBTYPE_DELETED) && !tombstones) ||
+        mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype))
         return 0;
 
     // No more returns from here
@@ -2225,7 +2226,8 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 
     /* Check parent exists and has the proper ACL. */
     const mbentry_t *mbparent = jmap_mbentry_by_uniqueid(req, parent_id);
-    if (!mbparent || !jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD)) {
+    if (!mbparent || !jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD) ||
+                mboxname_isnondeliverymailbox(mbparent->name, mbparent->mbtype)) {
         jmap_parser_invalid(&parser, "parentId");
         goto done;
     }
@@ -2472,7 +2474,8 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
     /* Lookup current mailbox entry */
     mbentry = jmap_mbentry_by_uniqueid_copy(req, args->mbox_id);
-    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
+    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP) ||
+            mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
         mboxlist_entry_free(&mbentry);
         result->err = json_pack("{s:s}", "type", "notFound");
         goto done;
@@ -2919,7 +2922,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
 
     /* Lookup mailbox by id. */
     mbentry = jmap_mbentry_by_uniqueid_copy(req, mboxid);
-    if (!mbentry) {
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
         result->err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
