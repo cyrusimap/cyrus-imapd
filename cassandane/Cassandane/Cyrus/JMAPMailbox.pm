@@ -2818,8 +2818,7 @@ sub test_mailbox_changes
 
     xlog $self, "get mailbox updates (expect error)";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => 0 }, "R1"]]);
-    $self->assert_str_equals("invalidArguments", $res->[0][1]->{type});
-    $self->assert_str_equals("sinceState", $res->[0][1]->{arguments}[0]);
+    $self->assert_str_equals("cannotCalculateChanges", $res->[0][1]->{type});
 
     xlog $self, "get mailbox updates (expect no changes)";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
