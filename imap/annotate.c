@@ -1932,17 +1932,15 @@ static void annotation_get_userrawquota(annotate_state_t *state,
                                         struct annotate_entry_list *entry)
 {
     struct buf value = BUF_INITIALIZER;
-    char *quotaroot = NULL;
     const char *sep = "";
     int r = 0;
     struct quota q;
     int res;
 
     assert(state);
-    assert(state->userid);
+    assert(state->mailbox);
 
-    quotaroot = mboxname_user_mbox(state->userid, NULL);
-    quota_init(&q, quotaroot);
+    quota_init(&q, mailbox_name(state->mailbox));
     // read without conversations here, to get the raw quota
     r = quota_read(&q, NULL, 0);
 
@@ -1961,10 +1959,9 @@ static void annotation_get_userrawquota(annotate_state_t *state,
         buf_putc(&value, ')');
     }
 
-    output_entryatt(state, entry->name, state->userid, &value);
+    output_entryatt(state, entry->name, "", &value);
 
     quota_free(&q);
-    free(quotaroot);
     buf_free(&value);
 }
 
@@ -2363,6 +2360,18 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         NULL,
         NULL
     },{
+        /* The "userrawquota" was added when conversations quota was added,
+         * to allow fetching a user's raw quota values */
+        IMAP_ANNOT_NS "userrawquota",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_userrawquota,
+        /*set*/NULL,
+        NULL,
+        NULL
+    },{
         IMAP_ANNOT_NS "search-fuzzy-always",
         ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
@@ -2530,18 +2539,6 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         ATTRIB_VALUE_PRIV,
         0,
         annotation_get_usercounters,
-        /*set*/NULL,
-        NULL,
-        NULL
-    },{
-        /* The "userrawquota" was added when conversations quota was added,
-         * to allow fetching a user's raw quota values */
-        IMAP_ANNOT_NS "userrawquota",
-        ATTRIB_TYPE_STRING,
-        BACKEND_ONLY,
-        ATTRIB_VALUE_PRIV,
-        0,
-        annotation_get_userrawquota,
         /*set*/NULL,
         NULL,
         NULL
