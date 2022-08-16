@@ -2068,9 +2068,6 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
                 have_sincemodseq = 1;
                 changes->since_modseq = atomodseq_t(json_string_value(arg));
             }
-            else {
-                jmap_parser_invalid(parser, "sinceState");
-            }
         }
 
         /* maxChanges */
@@ -2093,11 +2090,11 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
     }
     else if (!have_sincemodseq) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
-                                      "description", "no sinceModseq");
+                                      "description", "invalid sinceState");
     }
     else if (changes->since_modseq < minmodseq) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
-                                      "description", "outdated sinceModseq");
+                                      "description", "outdated sinceState");
     }
 }
 
