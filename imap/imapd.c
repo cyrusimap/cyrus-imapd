@@ -268,6 +268,7 @@ struct list_rock {
     uint32_t last_attributes;
     int last_category;
     hash_table server_table;    /* for proxying */
+    strarray_t *special_nochildren;
 };
 
 /* Information about one mailbox name that LIST returns */
@@ -13328,6 +13329,32 @@ static void add_intermediates(const char *extname, struct list_rock *lrock)
     strarray_fini(&inter);
 }
 
+static int is_noinferiors(struct findall_data *data, struct list_rock *rock)
+{
+    int r = 0;
+
+    if (data->mb_category == MBNAME_ALTINBOX)
+        return 1;
+
+    if (strarray_size(rock->special_nochildren)) {
+        struct buf attrib = BUF_INITIALIZER;
+
+        annotatemore_lookup(mbname_intname(data->mbname), "/specialuse",
+                            mbname_userid(data->mbname), &attrib);
+        if (buf_len(&attrib)) {
+            strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
+
+            if (strarray_intersect(uses, rock->special_nochildren)) {
+                r = 1;
+            }
+            strarray_free(uses);
+        }
+        buf_free(&attrib);
+    }
+
+    return r;
+}
+
 /* callback for mboxlist_findall
  * used when the SUBSCRIBED selection option is NOT given */
 static int list_cb(struct findall_data *data, void *rockp)
@@ -13381,7 +13408,7 @@ static int list_cb(struct findall_data *data, void *rockp)
     if (!data->is_exactmatch)
         rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN | MBOX_ATTRIBUTE_NONEXISTENT;
 
-    else if (data->mb_category == MBNAME_ALTINBOX)
+    else if (is_noinferiors(data, rock))
         rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
 
     return 0;
@@ -13419,7 +13446,7 @@ static int subscribed_cb(struct findall_data *data, void *rockp)
         rock->last_attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
         if (mboxlist_lookup(mbname_intname(data->mbname), NULL, NULL))
             rock->last_attributes |= MBOX_ATTRIBUTE_NONEXISTENT;
-        if (data->mb_category == MBNAME_ALTINBOX)
+        if (is_noinferiors(data, rock))
             rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
     }
     else if (rock->listargs->cmd == LIST_CMD_LSUB) {
@@ -13688,6 +13715,10 @@ static void list_data(struct listargs *listargs)
         memset(&rock, 0, sizeof(struct list_rock));
         rock.listargs = listargs;
 
+        rock.special_nochildren =
+            strarray_split(config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN),
+                           NULL, STRARRAY_TRIM);
+
         if (listargs->sel & LIST_SEL_SUBSCRIBED) {
             mboxlist_findsubmulti(&imapd_namespace, &listargs->pat,
                                   imapd_userisadmin, imapd_userid,
@@ -13714,6 +13745,7 @@ static void list_data(struct listargs *listargs)
         }
 
         if (rock.last_name) free(rock.last_name);
+        strarray_free(rock.special_nochildren);
     }
 }
 

@@ -2251,4 +2251,82 @@ sub test_no_inbox_tombstone
     $self->assert_str_equals('ok', $data); # no mailboxes listed
 }
 
+sub test_list_non_extended_trash_nochildren
+    :UnixHierarchySep :AltNamespace :NoStartInstances :min_version_3_7
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('specialuse_nochildren' => '\\Trash');
+    $self->_start_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash Snoozed) ] ],
+    ]);
+
+    $imaptalk->setmetadata("SentMail", "/private/specialuse", "\\Sent");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("MyDrafts", "/private/specialuse", "\\Drafts");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("Snoozed", "/private/specialuse", "\\Snoozed");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $alldata = $imaptalk->list("", "%");
+
+    $self->assert_mailbox_structure($alldata, '/', {
+        'INBOX'                 => [qw( \\HasNoChildren )],
+        'ToDo'                  => [qw( \\HasNoChildren )],
+        'Projects'              => [qw( \\HasChildren )],
+        'SentMail'              => [qw( \\Sent \\HasNoChildren )],
+        'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+        'Trash'                 => [qw( \\Trash \\HasNoChildren \\Noinferiors )],
+        'Snoozed'               => [qw( \\Snoozed \\HasNoChildren )],
+    });
+}
+
+sub test_list_return_subscribed_trash_nochildren
+    :UnixHierarchySep :AltNamespace :NoStartInstances :min_version_3_7
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('specialuse_nochildren' => '\\Trash');
+    $self->_start_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash Snoozed) ] ],
+        [ 'subscribe' => [qw( SentMail Trash) ] ],
+    ]);
+
+    $imaptalk->setmetadata("SentMail", "/private/specialuse", "\\Sent");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("MyDrafts", "/private/specialuse", "\\Drafts");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("Snoozed", "/private/specialuse", "\\Snoozed");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $alldata = $imaptalk->list([qw( SPECIAL-USE )], "", "*",
+                                  'RETURN', [qw(SUBSCRIBED)]);
+
+    xlog $self, Dumper $alldata;
+    $self->assert_mailbox_structure($alldata, '/', {
+        'SentMail'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+        'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+        'Trash'                 => [qw( \\Trash \\Noinferiors \\Subscribed )],
+        'Snoozed'               => [qw( \\Snoozed \\HasNoChildren )],
+    });
+}
+
 1;
