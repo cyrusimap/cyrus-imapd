@@ -3035,7 +3035,7 @@ sub test_storage_convquota
     $self->_check_usages(storage => 0);
     my $talk = $self->{store}->get_client();
 
-    my $KEY = "/private/vendor/cmu/cyrus-imapd/userrawquota";
+    my $KEY = "/shared/vendor/cmu/cyrus-imapd/userrawquota";
 
     $talk->create("INBOX.sub") || die "Failed to create subfolder";
 
@@ -3050,8 +3050,8 @@ sub test_storage_convquota
                                   extra_lines => 10 + rand(5000));
     my $size2 = length($msg2->as_string());
 
-    my $data1 = $talk->getmetadata("", $KEY);
-    my ($rawusage1) = $data1->{''}{$KEY} =~ m/STORAGE (\d+)/;
+    my $data1 = $talk->getmetadata("INBOX", $KEY);
+    my ($rawusage1) = $data1->{'INBOX'}{$KEY} =~ m/STORAGE (\d+)/;
 
     $self->_check_usages(storage => int(($size1+$size2)/1024));
     $self->assert_num_equals(int(($size1+$size2)/1024), $rawusage1);
@@ -3059,8 +3059,8 @@ sub test_storage_convquota
     $talk->select("INBOX");
     $talk->copy("1", "INBOX.sub");
 
-    my $data2 = $talk->getmetadata("", $KEY);
-    my ($rawusage2) = $data2->{''}{$KEY} =~ m/STORAGE (\d+)/;
+    my $data2 = $talk->getmetadata("INBOX", $KEY);
+    my ($rawusage2) = $data2->{'INBOX'}{$KEY} =~ m/STORAGE (\d+)/;
 
     # quota usage hasn't changed, because we don't get double-charged
     $self->_check_usages(storage => int(($size1+$size2)/1024));
@@ -3069,8 +3069,8 @@ sub test_storage_convquota
 
     $talk->delete("INBOX.sub");
 
-    my $data3 = $talk->getmetadata("", $KEY);
-    my ($rawusage3) = $data3->{''}{$KEY} =~ m/STORAGE (\d+)/;
+    my $data3 = $talk->getmetadata("INBOX", $KEY);
+    my ($rawusage3) = $data3->{'INBOX'}{$KEY} =~ m/STORAGE (\d+)/;
 
     # we just lost all copies of message2
     $self->_check_usages(storage => int($size1/1024));
