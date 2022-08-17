@@ -3668,8 +3668,11 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
         if (prop) {
             struct icaldurationtype duration = icalproperty_get_duration(prop);
 
-            if (icaldurationtype_as_int(duration) < 1) {
-                error->desc = "DURATION must be postive";
+            if (icaldurationtype_as_int(duration) < 0) {
+                /* NOTE: Per RFC 5545, Section 3.8.2.5, DURATION > 0,
+                   but DURATION == 0 occurs frequently enough in the wild
+                   for us to allow it */
+                error->desc = "DURATION must be non-negative";
                 error->precond = CALDAV_VALID_DATA;
                 return HTTP_FORBIDDEN;
             }
