@@ -119,6 +119,7 @@ static const char *progname = NULL;
 static void do_mboxlist(void);
 static int do_reconstruct_p(const mbentry_t *mbentry, void *rock);
 static int do_reconstruct(struct findall_data *data, void *rock);
+static void reconstruct_mbentry(const char *path);
 static void usage(void);
 
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
@@ -145,6 +146,7 @@ int main(int argc, char **argv)
 {
     int opt, i, r;
     int dousers = 0;
+    int dopaths = 0;
     int rflag = 0;
     int mflag = 0;
     int fflag = 0;
@@ -152,20 +154,15 @@ int main(int argc, char **argv)
     struct buf buf = BUF_INITIALIZER;
     char *alt_config = NULL;
     char *start_part = NULL;
-    char *path = NULL;
     struct reconstruct_rock rrock = { NULL, HASH_TABLE_INITIALIZER };
 
     progname = basename(argv[0]);
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxdgGqRUMIoOnV:uP:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxdgGqRUMIoOnV:uP")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
-
-        case 'P':
-          path = optarg;
-          break;
 
         case 'p':
             start_part = optarg;
@@ -177,6 +174,10 @@ int main(int argc, char **argv)
 
         case 'u':
             dousers = 1;
+            break;
+
+        case 'P':
+            dopaths = 1;
             break;
 
         case 'm':
@@ -270,16 +271,9 @@ int main(int argc, char **argv)
         }
         do_mboxlist();
     }
-
-    if (path) {
-        char real[PATH_MAX+1];
-        mbentry_t *mbentry = mailbox_mbentry_from_path(realpath(path, real));
-
-        if (mbentry) {
-            r = mboxlist_updatelock(mbentry, 1);
-            mboxlist_entry_free(&mbentry);
-        }
-        goto done;
+    else if (dousers && dopaths) {
+        cyrus_done();
+        usage();
     }
 
     mbentry_t mbentry = MBENTRY_INITIALIZER;
@@ -362,6 +356,10 @@ int main(int argc, char **argv)
                                   MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
             continue;
         }
+        else if (dopaths) {
+            reconstruct_mbentry(argv[i]);
+            continue;
+        }
         char *domain = NULL;
 
         /* save domain */
@@ -413,7 +411,6 @@ int main(int argc, char **argv)
         free(name);
     }
 
-  done:
     if (rrock.discovered) strarray_free(rrock.discovered);
     free_hash_table(&rrock.visited, NULL);
 
@@ -450,6 +447,8 @@ static void usage(void)
     fprintf(stderr, "-M                 prefer mailboxes.db over cyrus.header\n");
     fprintf(stderr, "-V <version>       Change the cyrus.index minor version to the version specified\n");
     fprintf(stderr, "-u                 give usernames instead of mailbox prefixes\n");
+    fprintf(stderr, "-P                 give paths to cyrus.header files instead of mailbox prefixes\n");
+    fprintf(stderr, "                   (this option ONLY repairs/creates mailboxes.db records)\n");
 
     fprintf(stderr, "\n");
 
@@ -732,3 +731,94 @@ static void do_mboxlist(void)
     fprintf(stderr, "reconstructing mailboxes.db currently not supported\n");
     exit(EX_USAGE);
 }
+
+/*
+ * Reconstruct an mbentry from a mailbox header path.
+ */
+static void reconstruct_mbentry(const char *header_path)
+{
+    char real[PATH_MAX+1];
+    mbentry_t *mbentry = NULL, *mbentry_byname = NULL, *mbentry_byid = NULL;
+    struct mboxlock *namespacelock = NULL;
+
+    /* Create an mbentry from cyrus.header */
+    mbentry = mailbox_mbentry_from_path(realpath(header_path, real));
+    if (!mbentry) {
+        printf("Invalid/missing cyrus.header at %s\n", real);
+        return;
+    }
+    else if (!mbentry->partition) {
+        printf("header for %s is not located on a valid [meta]partition\n",
+               mbentry->name);
+        goto done;
+    }
+
+    namespacelock = mboxname_usernamespacelock(mbentry->name);
+
+    /* Look for existing N record and sanity check partition and uniqueid */
+    mboxlist_lookup_allow_all(mbentry->name, &mbentry_byname, NULL);
+    if (mbentry_byname) {
+        if (strcmpsafe(mbentry->partition, mbentry_byname->partition)) {
+            printf("partition clash with %s - %s vs %s\n",
+                   mbentry->name, mbentry->partition, mbentry_byname->partition);
+            goto done;
+        }
+
+        if (strcmpsafe(mbentry->uniqueid, mbentry_byname->uniqueid)) {
+            printf("uniqueid clash with %s - %s vs %s\n",
+                   mbentry->name,
+                   mbentry->uniqueid, mbentry_byname->uniqueid);
+            goto done;
+        }
+    }
+
+    /* Look for existing I record and sanity check partition and name */
+    mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &mbentry_byid, NULL);
+    if (mbentry_byid) {
+        if (strcmpsafe(mbentry->partition, mbentry_byid->partition)) {
+            printf("partition clash with %s - %s vs %s\n",
+                   mbentry->uniqueid,
+                   mbentry->partition, mbentry_byid->partition);
+            goto done;
+        }
+
+        if (strcmpsafe(mbentry->name, mbentry_byid->name)) {
+            printf("name clash with %s - %s vs %s\n",
+                   mbentry->uniqueid,
+                   mbentry->name, mbentry_byid->name);
+            goto done;
+        }
+        mboxlist_entry_free(&mbentry_byid);
+    }
+
+    /* Open mailbox to fetch meta-data from cyrus.index header */
+    struct mailbox *mailbox = NULL;
+    int r = mailbox_open_from_mbe(mbentry, &mailbox);
+    if (r) {
+        printf("failed to open mailbox %s (%s): %s\n",
+               mbentry->name, mbentry->uniqueid, error_message(r));
+        goto done;
+    }
+
+    mbentry->uidvalidity = mailbox->i.uidvalidity;
+    mbentry->foldermodseq = mailbox->i.highestmodseq;
+    mbentry->createdmodseq = mailbox->i.createdmodseq;
+    mailbox_close(&mailbox);
+
+    /* Update mailboxes.db records */
+    r = mboxlist_update(mbentry, 1);
+    if (r) {
+        printf("failed to create mbentry for %s (%s): %s\n",
+               mbentry->name, mbentry->uniqueid, error_message(r));
+    }
+    else {
+        printf("created mbentry for %s (%s)\n", mbentry->name, mbentry->uniqueid);
+    }
+
+  done:
+    mboxname_release(&namespacelock);
+    mboxlist_entry_free(&mbentry_byname);
+    mboxlist_entry_free(&mbentry_byid);
+    mboxlist_entry_free(&mbentry);
+}
+

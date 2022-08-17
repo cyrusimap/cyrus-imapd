@@ -8230,14 +8230,14 @@ HIDDEN int mailbox_changequotaroot(struct mailbox *mailbox,
 struct part_rock {
     const char *path;
     unsigned long is_meta;
-    char *partition;
+    char **partition;
 };
 
 static void get_partition(const char *key, const char *val, void *rock)
 {
     struct part_rock *prock = (struct part_rock *) rock;
 
-    if (prock->partition) return;
+    if (*prock->partition) return;
 
     if (prock->is_meta) {
         if (strncmp("meta", key, 4)) return;
@@ -8245,8 +8245,9 @@ static void get_partition(const char *key, const char *val, void *rock)
     }
     if (strncmp("partition-", key, 10)) return;
 
-    if (!strncmp(prock->path, val, strlen(val))) {
-        prock->partition = xstrdup(key+10);
+    size_t vlen = strlen(val);
+    if (!strncmp(prock->path, val, vlen) && prock->path[vlen] == '/') {
+        *prock->partition = xstrdup(key+10);
     }
 }
 
@@ -8288,31 +8289,17 @@ EXPORTED struct mboxlist_entry *mailbox_mbentry_from_path(const char *path)
         unsigned long metapartition_files =
             config_getbitfield(IMAPOPT_METAPARTITION_FILES);
         struct part_rock prock = {
-            path, metapartition_files & IMAP_ENUM_METAPARTITION_FILES_HEADER, NULL
+            path,
+            metapartition_files & IMAP_ENUM_METAPARTITION_FILES_HEADER,
+            &mbentry->partition
         };
 
         config_foreachoverflowstring(&get_partition, &prock);
-        if (prock.partition) {
-            struct mailbox *mailboxp = NULL;
-
-            mbentry->partition = prock.partition;
-
-            r = mailbox_open_from_mbe(mbentry, &mailboxp);
-            if (!r) {
-                r = mailbox_read_index_header(mailboxp);
-
-                if (!r) {
-                    mbentry->uidvalidity = mailboxp->i.uidvalidity;
-                    mbentry->foldermodseq = mailboxp->i.highestmodseq;
-                    mbentry->createdmodseq = mailboxp->i.createdmodseq;
-                }
-
-                mailbox_close(&mailboxp);
-            }
-        }
+    }
+    else {
+        mboxlist_entry_free(&mbentry);
     }
 
-    if (r) mboxlist_entry_free(&mbentry);
     buf_free(&buf);
 
     return mbentry;
