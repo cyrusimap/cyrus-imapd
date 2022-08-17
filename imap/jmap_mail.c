@@ -13217,13 +13217,6 @@ static void _email_import(jmap_req_t *req,
         strarray_append(&keywords, keyword);
     }
 
-    /* check for internaldate */
-    time_t internaldate = 0;
-    const char *received_at = json_string_value(json_object_get(jemail_import, "receivedAt"));
-    if (received_at) {
-        time_from_iso8601(received_at, &internaldate);
-    }
-
     /* check for snoozed */
     json_t *snoozed = json_object_get(jemail_import, "snoozed");
 
@@ -13319,9 +13312,35 @@ gotrecord:
         json_decref(email);
     }
 
+    /* set receivedAt property */
+    time_t internaldate = 0;
+    const char *received_at = json_string_value(json_object_get(jemail_import, "receivedAt"));
+    if (received_at) {
+        time_from_iso8601(received_at, &internaldate);
+    }
+    else {
+        /* check for Received and Date Header */
+        struct body *mybody = xzmalloc(sizeof(struct body));
+        r = message_parse_mapped(buf_base(&content), buf_len(&content), mybody, NULL);
+        if (!r) {
+            const char *date = mybody->received_date ?
+                mybody->received_date : mybody->date;
+            if (date) {
+                time_t t = 0;
+                if (time_from_rfc822(date, &t) > 0) {
+                    internaldate = t;
+                }
+            }
+        }
+        message_free_body(mybody);
+        free(mybody);
+    }
+    if (!internaldate)
+        internaldate = time(NULL);
+
     /* Write the message to the file system */
     _email_append(req, jmailbox_ids, &keywords, internaldate, snoozed,
-                  has_attachment, sourcefile, _email_import_cb, &content, &detail, err);
+            has_attachment, sourcefile, _email_import_cb, &content, &detail, err);
 
     msgrecord_unref(&mr);
     jmap_closembox(req, &mbox);
