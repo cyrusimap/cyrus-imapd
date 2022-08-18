@@ -9059,6 +9059,7 @@ static json_t *_header_make(const char *header_name,
         if (prop_name && parser) {
             jmap_parser_invalid(parser, prop_name);
         }
+        buf_free(hdr);
         return NULL;
     }
 
