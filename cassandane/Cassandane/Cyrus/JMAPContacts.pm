@@ -4053,5 +4053,64 @@ EOF
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{'x-hasPhoto'});
 }
 
+sub test_contactgroup_get_deduplicate_contactids
+    :min_version_3_7 :needs_component_jmap
+{
+
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+
+    # define duplicate ids
+	my @ids = qw (
+        b48259ca-1524-4df0-af54-e65f60bf27b5
+        b48259ca-1524-4df0-af54-e65f60bf27b5
+        2391c8ef-1cfc-40da-8730-cb5664005973
+        b48259ca-1524-4df0-af54-e65f60bf27b5
+        f1fc45d4-809a-4d10-8abd-2bfc84dcab8c
+        2391c8ef-1cfc-40da-8730-cb5664005973
+    );
+
+    # deduplicate ids
+    my %idhash = map { $_, 1 } @ids;
+    my @wantids = sort keys %idhash;
+
+    my @wantOtherAccountIds = qw (5b3b9ce1-0b5e-4cbd-8add-018321cad51b);
+
+    xlog $self, "create a v3 contact group with duplicate members";
+    my $id = '816ad14a-f9ef-43a8-9039-b57bf321de1f';
+    my $href = "Default/$id.vcf";
+	my $vgroup = <<EOF;
+BEGIN:VCARD
+PRODID:-//CyrusIMAP.org//Cyrus 3.7.0-alpha0-828-gb569fe344b//EN
+VERSION:3.0
+UID:$id
+N:group1
+FN:group1
+X-ADDRESSBOOKSERVER-KIND:group
+REV:20220817T161655Z
+X-FM-OTHERACCOUNT-MEMBER;USERID=foo:urn:uuid:5b3b9ce1-0b5e-4cbd-8add-018321cad51b
+X-FM-OTHERACCOUNT-MEMBER;USERID=foo:urn:uuid:5b3b9ce1-0b5e-4cbd-8add-018321cad51b
+EOF
+    $vgroup .= join("", map { "X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:". $_ . "\n"} @ids);
+    $vgroup .= "END:VCARD";
+    $vgroup =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $vgroup, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['ContactGroup/get', {
+            properties => ['contactIds', 'otherAccountContactIds' ],
+        }, 'R1']
+    ]);
+    my @gotids = sort @{$res->[0][1]{list}[0]{contactIds}};
+
+    xlog "Assert contactIds in group got deduplicated";
+    $self->assert_deep_equals(\@wantids, \@gotids);
+
+    xlog "Assert otherAccountContactIds got deduplicated";
+    $self->assert_deep_equals({ foo => \@wantOtherAccountIds },
+        $res->[0][1]{list}[0]{otherAccountContactIds});
+
+}
 
 1;

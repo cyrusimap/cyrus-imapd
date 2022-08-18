@@ -272,8 +272,9 @@ static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
     struct vparse_entry *ventry = NULL;
     json_t *obj = json_object();
 
-    json_t *contactids = json_array();
-    json_t *otherids = json_object();
+    // Deduplicate member ids
+    json_t *contactids_set = json_object();
+    json_t *otherids_sets = json_object();
 
     for (ventry = vcard->properties; ventry; ventry = ventry->next) {
         const char *name = ventry->name;
@@ -289,24 +290,46 @@ static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
         else if (!strcasecmp(name, "member") ||
                  !strcasecmp(name, "x-addressbookserver-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
-            json_array_append_new(contactids, json_string(propval+9));
+            json_object_set_new(contactids_set, propval+9, json_true());
         }
 
         else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             struct vparse_param *param = vparse_get_param(ventry, "userid");
             if (!param) continue;
-            json_t *object = json_object_get(otherids, param->value);
+            json_t *object = json_object_get(otherids_sets, param->value);
             if (!object) {
-                object = json_array();
-                json_object_set_new(otherids, param->value, object);
+                object = json_object();
+                json_object_set_new(otherids_sets, param->value, object);
             }
-            json_array_append_new(object, json_string(propval+9));
+            json_object_set_new(object, propval+9, json_true());
         }
     }
 
+    // Convert contact ids set to array
+    json_t *contactids = json_array();
+    const char *contactid;
+    json_t *jval;
+    json_object_foreach(contactids_set, contactid, jval) {
+        json_array_append_new(contactids, json_string(contactid));
+    }
     json_object_set_new(obj, "contactIds", contactids);
+
+    // Convert otherids set to array
+    json_t *otherids = json_object();
+    const char *userid;
+    json_t *jaccountids;
+    json_object_foreach(otherids_sets, userid, jaccountids) {
+        json_t *account_contactids = json_array();
+        json_object_foreach(jaccountids, contactid, jval) {
+            json_array_append_new(account_contactids, json_string(contactid));
+        }
+        json_object_set_new(otherids, userid, account_contactids);
+    }
     json_object_set_new(obj, "otherAccountContactIds", otherids);
+
+    json_decref(contactids_set);
+    json_decref(otherids_sets);
 
     return obj;
 }
