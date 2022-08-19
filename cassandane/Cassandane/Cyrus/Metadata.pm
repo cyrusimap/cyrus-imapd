@@ -321,6 +321,7 @@ sub test_shared
             '/shared/vendor/cmu/cyrus-imapd/lastpop' => undef,
             '/shared/vendor/cmu/cyrus-imapd/expire' => undef,
             '/shared/vendor/cmu/cyrus-imapd/duplicatedeliver' => 'false',
+            '/shared/vendor/cmu/cyrus-imapd/userrawquota' => undef,
             '/shared/specialuse' => undef,
             '/shared/thread' => undef,
             '/shared/sort' => undef,
