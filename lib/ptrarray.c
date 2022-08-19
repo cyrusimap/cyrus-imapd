@@ -57,9 +57,8 @@ EXPORTED void ptrarray_fini(ptrarray_t *pa)
 {
     if (!pa)
         return;
-    memset(pa->data, 0, sizeof(void *) * pa->count);
-    free(pa->data);
-    pa->data = NULL;
+
+    xzfree(pa->data);
     pa->count = 0;
     pa->alloc = 0;
 }
