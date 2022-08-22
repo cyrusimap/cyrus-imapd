@@ -298,7 +298,7 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
 
     /* ok, ok, if we got here maybe we should reply */
 out:
-    free(strarray_takevf(addresses));
+    strarray_free(addresses);
     free(myaddr);
     if (l == SIEVE_OK) {
         *from = found;
@@ -443,7 +443,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
             if (interp->getheader(m, str, &val) != SIEVE_OK) res = 0;
         }
 
-        free(strarray_takevf(test.u.sl));
+        strarray_free(test.u.sl);
         break;
     }
 
@@ -666,8 +666,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         }
 
 envelope_err:
-        free(strarray_takevf(test.u.ae.sl));
-        free(strarray_takevf(test.u.ae.pl));
+        strarray_free(test.u.ae.sl);
+        strarray_free(test.u.ae.pl);
         break;
     }
 
@@ -775,8 +775,8 @@ envelope_err:
         }
 
       header_err:
-        free(strarray_takevf(test.u.hhs.sl));
-        free(strarray_takevf(test.u.hhs.pl));
+        strarray_free(test.u.hhs.sl);
+        strarray_free(test.u.hhs.pl);
         break;
     }
 
@@ -923,8 +923,8 @@ envelope_err:
 	} // loop on each variable or string
 
       string_err:
-        free(strarray_takevf(test.u.hhs.sl));
-        free(strarray_takevf(test.u.hhs.pl));
+        strarray_free(test.u.hhs.sl);
+        strarray_free(test.u.hhs.pl);
         break;
     }
 
@@ -1024,7 +1024,7 @@ envelope_err:
         }
 
       body_err:
-        free(strarray_takevf(test.u.b.pl));
+        strarray_free(test.u.b.pl);
         break;
     }
 
@@ -1277,7 +1277,7 @@ envelope_err:
                              match_vars);
 
     date_err:
-        free(strarray_takevf(test.u.dt.kl));
+        strarray_free(test.u.dt.kl);
         break;
     }
 
@@ -1294,7 +1294,7 @@ envelope_err:
             if (!extension_isactive(interp, str)) res = 0;
         }
 
-        free(strarray_takevf(test.u.sl));
+        strarray_free(test.u.sl);
         break;
 
     case BC_MAILBOXEXISTS:
@@ -1318,7 +1318,7 @@ envelope_err:
             if (res) break;
         }
 
-        free(strarray_takevf(test.u.mm.keylist));
+        strarray_free(test.u.mm.keylist);
         break;
 
     case BC_MAILBOXIDEXISTS:
@@ -1342,7 +1342,7 @@ envelope_err:
             if (res) break;
         }
 
-        free(strarray_takevf(test.u.mm.keylist));
+        strarray_free(test.u.mm.keylist);
         break;
 
     case BC_METADATA:
@@ -1404,7 +1404,7 @@ envelope_err:
         }
 
       meta_err:
-        free(strarray_takevf(test.u.mm.keylist));
+        strarray_free(test.u.mm.keylist);
         break;
     }
 
@@ -1442,7 +1442,7 @@ envelope_err:
             if (!res) break;
         }
 
-        free(strarray_takevf(test.u.mm.keylist));
+        strarray_free(test.u.mm.keylist);
         break;
     }
 
@@ -1560,7 +1560,7 @@ envelope_err:
         strarray_fini(&uses);
 
       exists_err:
-        free(strarray_takevf(test.u.mm.keylist));
+        strarray_free(test.u.mm.keylist);
         break;
     }
 
@@ -1618,7 +1618,7 @@ void unwrap_flaglist(strarray_t *strlist, strarray_t **flaglist,
         verify_flaglist(*flaglist);
     }
 
-    free(strarray_takevf(strlist));
+    strarray_free(strlist);
 }
 
 const char *priority_to_string(int priority)
@@ -2150,7 +2150,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 				    &fromaddr, &toaddr, variables, requires);
 
             if (respond != SIEVE_OK) {
-                if (cmd.u.v.fcc.flags) free(strarray_takevf(cmd.u.v.fcc.flags));
+                strarray_free(cmd.u.v.fcc.flags);
 
                 if (respond != SIEVE_DONE) {
                     res = SIEVE_RUN_ERROR; /* something is bad */
@@ -2447,7 +2447,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                     }
                 }
             }
-            free(strarray_takevf(cmd.u.dh.values));
+            strarray_free(cmd.u.dh.values);
             break;
         }
 

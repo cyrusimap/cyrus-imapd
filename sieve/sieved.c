@@ -182,7 +182,7 @@ static void print_stringlist(const char *label, strarray_t *list)
     }
     printf("\n\t]");
 
-    free(strarray_takevf(list));
+    strarray_free(list);
 }
 
 static void print_time(uint64_t t)

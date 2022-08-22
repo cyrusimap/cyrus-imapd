@@ -546,10 +546,8 @@ void free_notify_list(notify_list_t *n)
 {
     while (n) {
         notify_list_t *b = n->next;
-        if (n->options) {
-            /* strings live in bytecode, only free the array */
-            free(strarray_safetakevf(n->options));
-        }
+        /* strings live in bytecode, only free the array */
+        strarray_free(n->options);
         free(n);
         n = b;
     }
