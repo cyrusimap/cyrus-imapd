@@ -701,8 +701,8 @@ EXPORTED void search_expr_detrivialise(search_expr_t **ep)
 }
 
 /*
- * Top-level normalisation step.  Returns 1 if it changed the subtree, 0
- * if it didn't, and -1 on error (such as exceeding a complexity limit).
+ * Top-level normalisation step.  Returns >0 if it changed the subtree, 0
+ * if it didn't, and <0 on error (such as exceeding a complexity limit).
  */
 static int normalise(search_expr_t **ep, unsigned *nnodes, unsigned *nnodes_last_collect)
 {
@@ -710,22 +710,30 @@ static int normalise(search_expr_t **ep, unsigned *nnodes, unsigned *nnodes_last
     int depth;
     int changed = -1;
     int r;
+
+    // Keep track of the nnodes count in the whole tree
     char is_root = !nnodes_last_collect;
+    unsigned root_nnodes_last_collect = *nnodes;
     if (is_root) {
-        unsigned nnodes_last_collect_value = *nnodes;
-        nnodes_last_collect = &nnodes_last_collect_value;
+        nnodes_last_collect = &root_nnodes_last_collect;
     }
 
 restart:
+    if (changed == INT_MAX)
+        return -1;
+
     changed++;
 
     if (*nnodes > 2 * *nnodes_last_collect + 1) {
         if (!is_root) return -2;
 
         r = detrivialise(ep, nnodes);
-        *nnodes_last_collect = *nnodes;
+        if (r >= 0)
+            r = complexity_check(r, nnodes);
+
         if (r < 0) return -1;
         if (r > 0) changed++;
+        *nnodes_last_collect = *nnodes;
     }
 
 #if DEBUG
