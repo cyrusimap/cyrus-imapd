@@ -6,6 +6,7 @@ sub test_itip_request_tzid_change
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+    my $uid = 'event1uid',
 
     xlog "Clear notifications";
     $self->{instance}->getnotify();
@@ -19,7 +20,7 @@ sub test_itip_request_tzid_change
                         'Default' => JSON::true,
                     },
                     '@type' => 'Event',
-                    uid => 'event1uid',
+                    uid => $uid,
                     title => 'event',
                     start => '2021-01-01T15:30:00',
                     timeZone => 'Europe/Berlin',
@@ -54,6 +55,10 @@ sub test_itip_request_tzid_change
     my $data = $self->{instance}->getnotify();
     my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
     $self->assert_not_null($notif);
+    my $notif_payload = decode_json($notif->{MESSAGE});
+    my $expect_id = encode_eventid($uid);
+    $self->assert_str_equals($expect_id, $notif_payload->{id});
+    $self->assert_str_equals('REQUEST', $notif_payload->{method});
 
     xlog "Clear notifications";
     $self->{instance}->getnotify();
@@ -74,4 +79,7 @@ sub test_itip_request_tzid_change
     $data = $self->{instance}->getnotify();
     ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
     $self->assert_not_null($notif);
+    $notif_payload = decode_json($notif->{MESSAGE});
+    $self->assert_str_equals($expect_id, $notif_payload->{id});
+    $self->assert_str_equals('REQUEST', $notif_payload->{method});
 }

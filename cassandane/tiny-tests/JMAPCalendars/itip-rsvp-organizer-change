@@ -6,6 +6,7 @@ sub test_itip_rsvp_organizer_change
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+    my $uid = '7e017102-0caf-490a-bbdf-422141d34e75';
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
@@ -72,6 +73,10 @@ EOF
     my $data = $self->{instance}->getnotify();
     my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
     $self->assert_not_null($notif);
+    my $notif_payload = decode_json($notif->{MESSAGE});
+    my $expect_id = encode_eventid($uid);
+    $self->assert_str_equals($expect_id, $notif_payload->{id});
+    $self->assert_str_equals('REPLY', $notif_payload->{method});
 
     xlog "Clear notifications";
     $self->{instance}->getnotify();
@@ -102,4 +107,7 @@ EOF
     $data = $self->{instance}->getnotify();
     ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
     $self->assert_not_null($notif);
+    $notif_payload = decode_json($notif->{MESSAGE});
+    $self->assert_str_equals($expect_id, $notif_payload->{id});
+    $self->assert_str_equals('REPLY', $notif_payload->{method});
 }
