@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -56,9 +57,6 @@
 #include "util.h"
 #include "xmalloc.h"
 
-extern int optind;
-extern char *optarg;
-
 /* forward declarations */
 static void usage(void);
 static void get_part_stats(const char *key, const char *val, void *rock);
@@ -69,7 +67,18 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
     int meta = 0;
 
-    while ((opt = getopt(argc, argv, "C:m")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:m";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "metadata", no_argument, NULL, 'm' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

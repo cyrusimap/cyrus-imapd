@@ -42,6 +42,7 @@
 
 #include <config.h>
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -274,7 +275,22 @@ int main(int argc, char *argv[])
     struct txn *tid = NULL;
     struct txn **tidp = NULL;
 
-    while ((opt = getopt(argc, argv, "C:MntTc")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:MTcnt";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "improved-mboxlist-sort", no_argument, NULL, 'M' },
+        { "use-transaction", no_argument, NULL, 'T' },
+        { "convert", no_argument, NULL, 'c' }, /* XXX undocumented */
+        { "create", no_argument, NULL, 'n' },
+        { "no-transaction", no_argument, NULL, 't' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

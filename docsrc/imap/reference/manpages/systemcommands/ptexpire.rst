@@ -15,14 +15,14 @@ Synopsis
 
 .. parsed-literal::
 
-    **ptexpire** [**-C** *filename*] [**-E** *time*]
+    **ptexpire** [**-C** *filename*] [**-E** *seconds*]
 
 Description
 ===========
 
-The **ptexpire** program sweeps the ``ptscache_db`` database, expiring
-entries older than the time specified on the command line (default 3
-hours).
+The **ptexpire** program sweeps the ``ptscache_db`` database, deleting
+entries older than the expiry duration, which defaults to 5400 seconds
+(3 hours).  The expiry duration can be changed with the **-E** option.
 
 **ptexpire** |default-conf-text|
 
@@ -35,10 +35,9 @@ Options
 
   |cli-dash-c-text|
 
-.. option::  -E time
+.. option::  -E seconds, --expire-duration=seconds
 
-  Expire entries older than this time.
-  Default: 3 hours
+  Set the expiry duration to *seconds*.
 
 Files
 =====

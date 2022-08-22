@@ -56,6 +56,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <inttypes.h>
@@ -102,12 +103,23 @@ int main(int argc, char * argv[])
 {
     bytecode_input_t *bc = NULL;
     int script_fd;
-    int c, usage_error = 0, gen_script = 0;
+    int opt, usage_error = 0, gen_script = 0;
 
     unsigned long len;
 
-    while ((c = getopt(argc, argv, "s")) != EOF)
-        switch (c) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "s";
+
+    static const struct option long_options[] = {
+        { "as-sieve", no_argument, NULL, 's' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
         case 's':
             gen_script = 1;
             break;
@@ -115,6 +127,7 @@ int main(int argc, char * argv[])
             usage_error = 1;
             break;
         }
+    }
 
     if (usage_error || (argc - optind) < 1) {
         fprintf(stderr, "Syntax: %s [-s] <bytecode-file>\n",

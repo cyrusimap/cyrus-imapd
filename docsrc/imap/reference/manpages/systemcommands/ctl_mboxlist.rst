@@ -40,37 +40,37 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -d
+.. option:: -d, --dump
 
     Dump the contents of the database to standard output in JSON format.
 
-.. option:: -x
+.. option:: -x, --remove-dumped
 
     When performing a dump, remove the mailboxes dumped from the mailbox
     list (mostly useful when specified with **-p**).
 
-.. option:: -y
+.. option:: -y, --include-intermediaries
 
     When performing a dump, also list intermediary mailboxes which would
     be hidden from IMAP.
 
-.. option:: -p partition
+.. option:: -p partition, --partition=partition
 
     When performing a dump, dump only those mailboxes that live on
     *partition*.
 
-.. option:: -f filename
+.. option:: -f filename, --filename=filename
 
     Use the database specified by *filename* instead of the default
     (*configdirectory/mailboxes.db**).
 
-.. option:: -L
+.. option:: -L, --legacy
 
     When performing an undump, use the legacy dump parser instead of the
     JSON parser.  This might be useful for importing a dump produced
     by an older version of Cyrus.
 
-.. option:: -u
+.. option:: -u, --undump
 
     Load ("undump") the contents of the database from standard input.  The
     input MUST be a valid JSON file, unless the -L option is also supplied.
@@ -83,12 +83,12 @@ Options
         dump file, but it can't do much to protect you from a valid file
         containing bad data.
 
-.. option:: -m
+.. option:: -m, --sync-mupdate
 
     For backend servers in the Cyrus Murder, synchronize the local
     mailbox list file with the MUPDATE server.
 
-.. option:: -a
+.. option:: -a, --authoritative
 
     When used with **-m**, assume the local mailboxes file is authoritative,
     that is, only change the mupdate server, do not delete any local
@@ -98,17 +98,17 @@ Options
         USE THIS OPTION WITH CARE, as it allows namespace collisions into
         the murder.
 
-.. option:: -w
+.. option:: -w, --warn-only
 
     When used with **-m**, print out what would be done but do not perform
     the operations.
 
-.. option:: -i
+.. option:: -i, --interactive
 
     When used with **-m**, asks for verification before deleting local
     mailboxes.
 
-.. option:: -v
+.. option:: -v, --verify
 
     Verify the consistency of the mailbox list database and the spool
     partition(s). Mailboxes present in the database and not located on a

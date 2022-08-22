@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -69,9 +70,6 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-
-extern int optind;
-extern char *optarg;
 
 /* current namespace */
 static struct namespace reloc_namespace;
@@ -115,7 +113,21 @@ int main(int argc, char **argv)
 
     progname = basename(argv[0]);
 
-    while ((opt = getopt(argc, argv, "C:qnu")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:nqu";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "dry-run", no_argument, NULL, 'n' },
+        { "quiet", no_argument, NULL, 'q' },
+        { "userids", no_argument, NULL, 'u' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

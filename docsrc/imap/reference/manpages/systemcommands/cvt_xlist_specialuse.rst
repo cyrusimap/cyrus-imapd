@@ -32,7 +32,7 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Produce verbose output
 

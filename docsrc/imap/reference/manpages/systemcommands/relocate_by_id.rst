@@ -36,15 +36,15 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -n
+.. option:: -n, --dry-run
 
     Do NOT make any changes.  Just list which directories will be relocated.
 
-.. option:: -q
+.. option:: -q, --quiet
 
     Run quietly.  Suppress any error output.
 
-.. option:: -u
+.. option:: -u, --userids
 
     The specified *mailbox-names* are users, not mailboxes.
     User metadata directories will also be relocated.

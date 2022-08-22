@@ -47,6 +47,7 @@
 #include <unistd.h>
 #endif
 #include <errno.h>
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -66,9 +67,6 @@
 #include "xmalloc.h"
 #include "xml_support.h"
 #include "zoneinfo_db.h"
-
-extern int optind;
-extern char *optarg;
 
 /* config.c stuff */
 const int config_need_data = 0;
@@ -91,7 +89,20 @@ int main(int argc, char **argv)
     const char *zoneinfo_dir = NULL;
     enum { REBUILD, WINZONES, NONE } op = NONE;
 
-    while ((opt = getopt(argc, argv, "C:r:vw:")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:r:vw:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "rebuild", required_argument, NULL, 'r' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "windows-zone-xml", required_argument, NULL, 'w' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

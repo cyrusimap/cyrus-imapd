@@ -48,6 +48,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -78,9 +79,6 @@
 #include "imap/imap_err.h"
 
 /* Static global variables and support routines for sync_reset */
-
-extern char *optarg;
-extern int optind;
 
 static struct namespace sync_namespace;
 static struct namespace *sync_namespacep = &sync_namespace;
@@ -192,7 +190,21 @@ main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vfL")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:Lfv";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "local-only", no_argument, NULL, 'L' },
+        { "force", no_argument, NULL, 'f' },
+        { "verbose", no_argument, NULL, 'v' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

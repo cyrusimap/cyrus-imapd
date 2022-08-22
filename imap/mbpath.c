@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,9 +67,6 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-
-extern int optind;
-extern char *optarg;
 
 /* current namespace */
 static struct namespace mbpath_namespace;
@@ -325,13 +323,37 @@ static int imap_err_to_exit_code(int r)
 int main(int argc, char **argv)
 {
     int r, i;
-    int opt;              /* getopt() returns an int */
+    int opt;
     char *alt_config = NULL;
 
     // capture options
     struct options_t opts = { 0, 0, 0, 0, 0, 0, 1 /* default to UTF8 */ };
 
-    while ((opt = getopt(argc, argv, "C:7ajlmqsupADMSU")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "7AC:DMSUajlmpqsu";
+
+    static const struct option long_options[] = {
+        { "no-utf8", no_argument, NULL, '7' }, /* XXX undocumented */
+        { "archive", no_argument, NULL, 'A' },
+        /* n.b. no long option for -C */
+        { "data", no_argument, NULL, 'D' },
+        { "metadata", no_argument, NULL, 'M' },
+        { "sieve", no_argument, NULL, 'S' },
+        { "user-files", no_argument, NULL, 'U' },
+        { "all", no_argument, NULL, 'a' },
+        { "json", no_argument, NULL, 'j' }, /* XXX undocumented */
+        { "local-only", no_argument, NULL, 'l' },
+        { "paths", no_argument, NULL, 'p' },
+        { "quiet", no_argument, NULL, 'q' },
+        { "stop", no_argument, NULL, 's' },
+        { "userids", no_argument, NULL, 'u' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

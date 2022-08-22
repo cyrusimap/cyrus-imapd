@@ -49,6 +49,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <getopt.h>
 #include <jansson.h>
 #include <stdlib.h>
 #include <string.h>
@@ -352,7 +353,35 @@ int main(int argc, char **argv)
     struct ctlbu_cmd_options options = {0};
     options.wait = BACKUP_OPEN_NONBLOCK;
 
-    while ((opt = getopt(argc, argv, ":AC:DFPSVcfjmpst:x:uvw")) != EOF) {
+    /* keep in alphabetical order */
+    static const char *const short_options = ":AC:DFPSVcfjmpst:uvwx:";
+
+    static const struct option long_options[] = {
+        { "all", no_argument, NULL, 'A' },
+        /* n.b. no long-option for -C */
+        { "domains", no_argument, NULL, 'D' },
+        { "force", no_argument, NULL, 'F' },
+        { "prefixes", no_argument, NULL, 'P' },
+        { "stop-on-error", no_argument, NULL, 'S' },
+        { "no-verify", no_argument, NULL, 'V' },
+        { "create", no_argument, NULL, 'c' },
+        { "filenames", no_argument, NULL, 'f' },
+        { "json", no_argument, NULL, 'j' },
+        { "mailboxes", no_argument, NULL, 'm' },
+        { "pause", no_argument, NULL, 'p' },
+        { "sqlite3", no_argument, NULL, 's' },
+        { "stale", optional_argument, NULL, 't' },
+        { "userids", no_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "wait-for-locks", no_argument, NULL, 'w' },
+        { "execute", required_argument, NULL, 'x' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'A':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();

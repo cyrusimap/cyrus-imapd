@@ -37,7 +37,7 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -l
+.. option:: -l, --local-only
 
     Local mailboxes only (exits with error for remote or nonexistent mailboxes)
 
@@ -46,46 +46,46 @@ Options
     Output the path to the metadata files (if different from the
     message files).  Legacy, use **-M**.
 
-.. option:: -q
+.. option:: -q, --quiet
 
     Suppress any error output.
 
-.. option:: -s
+.. option:: -s, --stop
 
     If any error occurs, stop processing the list of mailboxes and exit.
 
-.. option:: -u
+.. option:: -u, --userids
 
-    The specified *mailbox-names* are users, not mailboxes.
+    The specified *mailbox-names* are userids, not mailboxes.
 
-.. option:: -p
+.. option:: -p, --paths
 
     The specified *mailbox-names* are UNIX mailbox paths, not mailboxes.
 
 Selectors
 =========
 
-.. option:: -A
+.. option:: -A, --archive
 
     Show the mailbox archive path
 
-.. option:: -D
+.. option:: -D, --data
 
     Show the mailbox data path (*default*)
 
-.. option:: -M
+.. option:: -M, --metadata
 
     Show the mailbox metadata path (same as **-m**)
 
-.. option:: -S
+.. option:: -S, --sieve
 
     Show the user sieve scripts path
 
-.. option:: -U
+.. option:: -U, --user-files
 
     Show the user files path (seen, sub, etc)
 
-.. option:: -a
+.. option:: -a, --all
 
     Show all paths, as if all selectors were specified
 

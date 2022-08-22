@@ -65,6 +65,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <inttypes.h>
 #include <sysexits.h>
 #include <syslog.h>
@@ -88,9 +89,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 #include "imap/mupdate_err.h"
-
-extern int optind;
-extern char *optarg;
 
 enum mboxop { DUMP,
               M_POPULATE,
@@ -1222,7 +1220,30 @@ int main(int argc, char *argv[])
     int dointermediary = 0;
     int undump_legacy = 0;
 
-    while ((opt = getopt(argc, argv, "C:Lawmdurcxf:p:viy")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:Ladf:imp:uvwxy";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "legacy", no_argument, NULL, 'L' },
+        { "authoritative", no_argument, NULL, 'a' },
+        { "dump", no_argument, NULL, 'd' },
+        { "filename", required_argument, NULL, 'f' },
+        { "interactive", no_argument, NULL, 'i' },
+        { "sync-mupdate", no_argument, NULL, 'm' },
+        { "partition", required_argument, NULL, 'p' },
+        { "undump", no_argument, NULL, 'u' },
+        { "verify", no_argument, NULL, 'v' },
+        { "warn-only", no_argument, NULL, 'w' },
+        { "remove-dumped", no_argument, NULL, 'x' },
+        { "include-intermediaries", no_argument, NULL, 'y' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

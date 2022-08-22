@@ -68,20 +68,15 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -M
+.. option:: -M, --improved-mboxlist-sort
 
     Uses improved MBOX list sort
 
-.. option:: -n
+.. option:: -n, --create
 
     Create the database file if it doesn't already exist.
 
-.. option:: -o
-
-    Store all the output in memory and only print it once the transaction
-    is completed.
-
-.. option:: -T
+.. option:: -T, --use-transaction
 
     Use a transaction to do the action (most especially for 'show') - the
     default used to be transactions.

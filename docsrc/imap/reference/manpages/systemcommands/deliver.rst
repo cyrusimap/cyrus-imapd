@@ -43,15 +43,15 @@ Options
 
     Ignored for compatibility with **/bin/mail**.
 
-.. option:: -r  address
+.. option:: -r address, --return-path=address
 
     Insert a **Return-Path:** header containing *address*.
 
-.. option:: -f  address
+.. option:: -f address
 
     Insert a **Return-Path:** header containing *address*.
 
-.. option:: -m  mailbox
+.. option:: -m mailbox, --mailbox=mailbox
 
     Deliver to **mailbox**.  If any *userid*\ s are specified, attempts
     to deliver to ``user.``\ *userid*\ ``.mailbox`` for each *userid*\ .
@@ -63,15 +63,15 @@ Options
     . If the ACL on *mailbox* does not grant the sender the "p" right,
     the delivery fails.
 
-.. option:: -a  auth-id
+.. option:: -a auth-id, --auth-id=auth-id
 
     Specify the authorization id of the sender.  Defaults to "anonymous".
 
-.. option:: -q  user-id
+.. option:: -q, --ignore-quota
 
     Deliver message even when receiving mailbox is over quota.
 
-.. option:: -l
+.. option:: -l, --lmtp
 
     Accept messages using the LMTP protocol.
 

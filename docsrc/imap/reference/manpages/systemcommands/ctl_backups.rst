@@ -111,12 +111,12 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -F
+.. option:: -F, --force
 
     Force the operation to occur, even if it is determined to be unnecessary.
     This is mostly useful with the **compact** sub-command.
 
-.. option:: -S
+.. option:: -S, --stop-on-error
 
     Stop-on-error.  With this option, if a sub-command fails for any
     particular backup, **ctl_backups** will immediately exit with an error,
@@ -124,7 +124,7 @@ Options
 
     The default is to log the error, and continue with the next backup.
 
-.. option:: -V
+.. option:: -V, --no-verify
 
     Don't verify backup checksums for read-only operations.
 
@@ -135,15 +135,15 @@ Options
 
     With this option, the verification step will be skipped.
 
-.. option:: -j
+.. option:: -j, --json
 
     Produce output in JSON format.  The default is plain text.
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Increase the verbosity.  Can be specified multiple times.
 
-.. option:: -w
+.. option:: -w, --wait-for-locks
 
     Wait for locks.  With this option, if a backup named on the command line is
     locked, execution will block until the lock becomes available.
@@ -158,7 +158,7 @@ List Options
 
 Options that apply only to the **list** sub-command.
 
-.. option:: -t [hours]
+.. option:: -t [hours], --stale[=hours]
 
     List stale backups only, that is, backups that have received no updates
     in *hours*.  If *hours* is unspecified, it defaults to 24.
@@ -170,26 +170,26 @@ Lock Options
 
 Options that apply only to the **lock** sub-command.
 
-.. option:: -c
+.. option:: -c, --create
 
     Exclusively create the named backup while obtaining the lock.  Exits
     immediately with an error if the named backup already exists.
 
     When the lock is successfully obtained, continue as per the other options.
 
-.. option:: -p
+.. option:: -p, --pause
 
     Locks the named backup, and then waits for EOF on the standard input
     stream.  Unlocks the backup and exits once EOF is received.  This is the
     default mode of operation.
 
-.. option:: -s
+.. option:: -s, --sqlite3
 
     Locks the named backup, and with the lock held, opens its index file in
     the :manpage:`sqlite3(1)` program.  The lock is automatically released when
     sqlite3 exits.
 
-.. option:: -x command
+.. option:: -x command, --execute=command
 
     Locks the named backup, and with the lock held, executes *command* using
     **/bin/sh** (as per :manpage:`system(3)`).  The lock is automatically
@@ -204,35 +204,35 @@ Options that apply only to the **lock** sub-command.
 Modes
 =====
 
-.. option:: -A
+.. option:: -A, --all
 
     Run sub-command over all known backups.
 
     Known backups are recorded in the database specified by the **backup_db**
     and **backup_db_path** configuration options.
 
-.. option:: -D
+.. option:: -D, --domains
 
     Backups specified on the command line are interpreted as domains.  Run
     sub-command over known backups for users in these domains.
 
-.. option:: -P
+.. option:: -P, --prefixes
 
     Backups specified on the command line are interpreted as userid prefixes.
     Run sub-command over known backups for users matching these prefixes.
 
-.. option:: -f
+.. option:: -f, --filenames
 
     Backups specified on the command line are interpreted as filenames.  Run
     sub-command over the matching backup files.  The backup files do not need
     to be known about in the backups database.
 
-.. option:: -m
+.. option:: -m, --mailboxes
 
     Backups specified on the command line are interpreted as mailbox names.
     Run sub-command over known backups containing these mailboxes.
 
-.. option:: -u
+.. option:: -u, --userids
 
     Backups specified on the command line are interpreted as userids.  Run
     sub-command over known backups for matching users.

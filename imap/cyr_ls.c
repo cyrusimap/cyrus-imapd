@@ -62,6 +62,7 @@
 # endif
 #endif
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -83,9 +84,6 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-
-extern int optind;
-extern char *optarg;
 
 /* current namespace */
 static struct namespace cyr_ls_namespace;
@@ -350,12 +348,28 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
     int is_path = 0;
 
+    /* keep this in alphabetical order */
+    static const char *const short_options = "17C:Rilmp";
+
+    static const struct option long_options[] = {
+        { "one-per-line", no_argument, NULL, '1' },
+        { "no-utf8", no_argument, NULL, '7' }, /* XXX undocumented */
+        /* n.b. no long option for -C */
+        { "recursive", no_argument, NULL, 'R' },
+        { "long", no_argument, NULL, 'l' },
+        { "metadata", no_argument, NULL, 'm' },
+        { "path", no_argument, NULL, 'p' }, /* XXX undocumented */
+        { 0, 0, 0, 0 },
+    };
+
     // capture options
     struct list_opts opts =
         { 1 /* default to UTF8 */, 0, 0, 0, 0,
           isatty(STDOUT_FILENO), 4 /* default to 4 columns */, 0 };
 
-    while ((opt = getopt(argc, argv, "C:7milR1p")) != EOF) {
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

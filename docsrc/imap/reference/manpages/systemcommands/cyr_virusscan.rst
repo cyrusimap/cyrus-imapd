@@ -62,21 +62,21 @@ Options
     |cli-dash-c-text|
 
 
-.. option:: -n
+.. option:: -n, --notify
 
     Notify mailbox owner of deleted messages via email.  This flag is
     only operable in combination with **-r**.
 
-.. option:: -r
+.. option:: -r, --remove-infected
 
     Remove infected messages.
 
-.. option:: -s imap-search-string
+.. option:: -s imap-search-string, --search=imap-search-string
 
     Rather than scanning for viruses, messages matching the search
     criteria will be treated as infected.
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Produce more verbose output
 

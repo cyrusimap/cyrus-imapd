@@ -31,13 +31,14 @@ Options
 
     Alternative config file with cyrus settings.
 
-.. option:: -a
+.. option:: -a, --all
 
     Process all users on this store.
 
-.. option:: -A \<audit tool\>
+.. option:: -A audit-tool, --audit-tool=audit-tool
 
-   Name of a program to take two sqlite databases and compare them. This option currently does not work.
+   Name of a program to take two sqlite databases and compare them. This option
+   currently does not work.
 
 .. option:: userid_list
 

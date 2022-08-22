@@ -42,7 +42,7 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -d
+.. option:: -d, --delete
 
     Actually delete all user seen state information.
 

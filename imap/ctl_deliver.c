@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -75,7 +76,21 @@ int main(int argc, char *argv[])
     char *days = NULL;
     enum { DUMP, PRUNE, NONE } op = NONE;
 
-    while ((opt = getopt(argc, argv, "C:drE:f:")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:E:df:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        /* n.b. no long option for "deprecated" -E */
+        { "dump", no_argument, NULL, 'd' },
+        { "filename", required_argument, NULL, 'f' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

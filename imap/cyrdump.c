@@ -44,6 +44,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <libgen.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -79,15 +80,26 @@ struct incremental_record {
 
 int main(int argc, char *argv[])
 {
-    int option;
+    int opt;
     int i;
     char *alt_config = NULL;
     struct incremental_record irec;
 
     progname = basename(argv[0]);
 
-    while ((option = getopt(argc, argv, "vC:")) != EOF) {
-        switch (option) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:v";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "verbose", no_argument, NULL, 'v' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
         case 'v':
             verbose++;
             break;

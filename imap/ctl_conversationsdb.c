@@ -44,6 +44,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -838,7 +839,28 @@ int main(int argc, char **argv)
     const char *userid = NULL;
     int recursive = 0;
 
-    while ((c = getopt(argc, argv, "durzSAbvRFC:T:")) != EOF) {
+    /* keep in alphabetical order */
+    static const char *const short_options = "AC:FRST:bdruvz";
+
+    static const struct option long_options[] = {
+        { "audit", no_argument, NULL, 'A' },
+        /* n.b. no long option for -C */
+        { "check-folders", no_argument, NULL, 'F' },
+        { "update-counts", no_argument, NULL, 'R' },
+        { "split", no_argument, NULL, 'S' },
+        { "audit-temp-directory", required_argument, NULL, 'T' },
+        { "rebuild", no_argument, NULL, 'b' },
+        { "dump", no_argument, NULL, 'd' },
+        { "recursive", no_argument, NULL, 'r' },
+        { "undump", no_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "clear", no_argument, NULL, 'z' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (c = getopt_long(argc, argv,
+                                  short_options, long_options, NULL)))
+    {
         switch (c) {
         case 'd':
             if (mode != UNKNOWN)

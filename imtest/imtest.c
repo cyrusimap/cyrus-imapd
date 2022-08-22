@@ -45,6 +45,7 @@
 #include "config.h"
 
 #include <fcntl.h>
+#include <getopt.h>
 #include <limits.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -123,7 +124,6 @@ static struct hash_table confighash;
 static int mysasl_config(void*, const char*, const char*, const char**, unsigned*);
 
 extern int _sasl_debug;
-extern char *optarg;
 
 static strarray_t stashed_strings = STRARRAY_INITIALIZER;
 
@@ -2845,7 +2845,7 @@ int main(int argc, char **argv)
     sasl_ssf_t ssf;
     int maxssf = 128;
     int minssf = 0;
-    int c;
+    int opt;
     int result;
     int errflg = 0;
 
@@ -2886,9 +2886,43 @@ int main(int argc, char **argv)
 
     prog = strrchr(argv[0], '/') ? strrchr(argv[0], '/')+1 : argv[0];
 
-    /* look at all the extra args */
-    while ((c = getopt(argc, argv, "P:qscizvk:l:p:u:a:m:f:r:t:n:I:x:X:w:o:?h")) != EOF)
-        switch (c) {
+    /* keep this in alphabetical order */
+    static const char *const short_options =
+        "?I:P:X:a:cf:hik:l:m:n:o:p:qr:st:u:vw:x:z";
+
+    static const struct option long_options[] = {
+        /* n.b. -? is duplicated as -h */
+        { "pidfile", required_argument, NULL, 'I' },
+        { "protocol", required_argument, NULL, 'P' },
+        /* n.b. -X is duplicated as -x */
+        { "authname", required_argument, NULL, 'a' },
+        { "do-challenge", no_argument, NULL, 'c' },
+        { "input-filename", required_argument, NULL, 'f' },
+        { "help", no_argument, NULL, 'h' },
+        { "no-initial-response", no_argument, NULL, 'i' },
+        { "minssf", required_argument, NULL, 'k' },
+        { "maxssf", required_argument, NULL, 'l' },
+        { "mechanism", required_argument, NULL, 'm' },
+        { "reauth-attempts", required_argument, NULL, 'n' },
+        { "sasl-option", required_argument, NULL, 'o' },
+        { "port", required_argument, NULL, 'p' },
+        { "require-compression", no_argument, NULL, 'q' },
+        { "realm", required_argument, NULL, 'r' },
+        { "require-tls", no_argument, NULL, 's' },
+        { "keyfile", required_argument, NULL, 't' },
+        { "username", required_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "password", required_argument, NULL, 'w' },
+        { "output-socket", required_argument, NULL, 'x' }, /* XXX no daemonisation */
+        { "run-stress-test", no_argument, NULL, 'z' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
         case 'P':
             prot = optarg;
             break;
@@ -2972,7 +3006,7 @@ int main(int argc, char **argv)
 
             output_socket = optarg;
 
-            if(c == 'X'){
+            if(opt == 'X'){
                 /* close all already-open file descriptors that are
                  * not stdin/stdout/stderr */
                 int i, dsize = getdtablesize();
@@ -3003,6 +3037,7 @@ int main(int argc, char **argv)
             errflg = 1;
             break;
         }
+    }
 
     if (!*prot) {
         if (!strcasecmp(prog, "imtest"))

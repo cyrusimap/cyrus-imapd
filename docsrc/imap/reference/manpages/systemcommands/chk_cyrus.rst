@@ -38,11 +38,11 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -P partition
+.. option:: -P partition, --partition=partition
 
     Limit to partition *partition*.  May not be specified with **-M**.
 
-.. option:: -M mailbox
+.. option:: -M mailbox, --mailbox=mailbox
 
     Only check mailbox *mailbox*.  May not be specified with **-P**.
 
