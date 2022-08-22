@@ -554,7 +554,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     if (strcmpsafe(mailbox_uniqueid(mailbox), mbentry_byname->uniqueid)) {
         printf("Wrong uniqueid in mbentry, fixing %s (%s -> %s)\n",
                name, mbentry_byname->uniqueid, mailbox_uniqueid(mailbox));
-        xzfree(mbentry_byname->uniqueid);
+        free(mbentry_byname->uniqueid);
         mbentry_byname->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
         mbentry_dirty = 1;
     }
@@ -574,7 +574,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         printf("Wrong uniqueid! %s (should be %s)\n", mbentry_byid->name, name);
         if (updateuniqueids) {
             mailbox_make_uniqueid(mailbox);
-            xzfree(mbentry_byname->uniqueid);
+            free(mbentry_byname->uniqueid);
             mbentry_byname->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
             mbentry_dirty = 1;
             syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
@@ -641,7 +641,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         else {
             printf("Wrong acl in mbentry %s (%s %s)\n",
                    name, mbentry_byname->acl, mailbox_acl(mailbox));
-            xzfree(mbentry_byname->acl);
+            free(mbentry_byname->acl);
             mbentry_byname->acl = xstrdupnull(mailbox_acl(mailbox));
             mbentry_dirty = 1;
         }

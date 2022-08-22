@@ -1375,7 +1375,7 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
         break;
     case DLISTSAX_KVLISTEND:
         if (rock->doingacl) {
-            xzfree(rock->h->acl);
+            free(rock->h->acl);
             rock->h->acl = buf_release(&rock->aclbuf);
             rock->doingacl = 0;
         }
@@ -1404,23 +1404,23 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             buf_putc(&rock->aclbuf, '\t');
         }
         else if (rock->doingflags) {
-            xzfree(rock->h->flagname[rock->nflags]);
+            free(rock->h->flagname[rock->nflags]);
             rock->h->flagname[rock->nflags++] = xstrdupnull(d->data);
         }
         else {
             if (!strcmp(key, "I")) {
-                xzfree(rock->h->uniqueid);
+                free(rock->h->uniqueid);
                 rock->h->uniqueid = xstrdupnull(d->data);
             }
             else if (!strcmp(key, "N")) {
-                xzfree(rock->h->name);
+                free(rock->h->name);
                 rock->h->name = xstrdupnull(d->data);
             }
             else if (!strcmp(key, "T")) {
                 rock->h->mbtype = mboxlist_string_to_mbtype(d->data);
             }
             else if (!strcmp(key, "Q")) {
-                xzfree(rock->h->quotaroot);
+                free(rock->h->quotaroot);
                 rock->h->quotaroot = xstrdupnull(d->data);
             }
         }
@@ -6583,7 +6583,7 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
     if (!silent) mailbox_modseq_dirty(oldmailbox);
 
     /* update the name in the header */
-    xzfree(oldmailbox->h.name);
+    free(oldmailbox->h.name);
     oldmailbox->h.name = xstrdup(newname);
     oldmailbox->header_dirty = 1;
 

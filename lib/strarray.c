@@ -60,7 +60,7 @@ EXPORTED void strarray_fini(strarray_t *sa)
     if (!sa)
         return;
     for (i = 0 ; i < sa->count ; i++) {
-        xzfree(sa->data[i]);
+        free(sa->data[i]);
     }
     xzfree(sa->data);
     sa->count = 0;

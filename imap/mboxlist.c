@@ -1794,7 +1794,7 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
                                   &mbentry->partition);
     if (r) goto done;
     mbentry->mbtype &= ~MBTYPE_INTERMEDIATE;
-    xzfree(mbentry->acl);
+    free(mbentry->acl);
     mbentry->acl = xstrdupnull(parent->acl);
 
     r = mailbox_create(mboxname, mbentry->mbtype,
@@ -1809,7 +1809,7 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
     if (r) goto done;
 
     // make sure all the fields are up-to-date
-    xzfree(mbentry->uniqueid);
+    free(mbentry->uniqueid);
     mbentry->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
     mbentry->uidvalidity = mailbox->i.uidvalidity;
     mbentry->createdmodseq = mailbox->i.createdmodseq;

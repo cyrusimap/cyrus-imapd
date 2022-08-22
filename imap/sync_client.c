@@ -387,7 +387,7 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
         if (!strcmpsafe(userid, prev_userid))
             goto done;
 
-        xzfree(prev_userid);
+        free(prev_userid);
         prev_userid = xstrdup(userid);
 
         r = sync_do_user(&sync_cs, userid, NULL);
