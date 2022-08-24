@@ -15,6 +15,7 @@
 *.tar.bz2
 *.*-cunit.c
 *~
+.clang-format
 .cunit-*.c
 .deps
 .dirstamp
