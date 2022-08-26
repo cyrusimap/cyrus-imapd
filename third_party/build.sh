@@ -94,7 +94,7 @@ if [ ! $ITEM ] || [ $ITEM == vzic ] ; then
 (
   cd vzic
   git clean -f -x -d
-  TZID_PREFIX="" make
+  TZID_PREFIX="" CREATE_SYMLINK=0 IGNORE_TOP_LEVEL_LINK=0 make
   sudo cp vzic $PREFIX/bin
 )
 fi
