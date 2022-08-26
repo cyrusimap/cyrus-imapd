@@ -92,6 +92,15 @@ no unit is specified, an option-specific backward-compatible default unit
 is assumed (documented on an option-by-option basis).  These are simple time
 units: 1d=24h, 1h=60m, 1m=60s (daylight savings, timezones, leap adjustments,
 etc are not considered).
+.PP
+Byte size options take the form of a number followed by a unit, for example
+\fB1KiB\fR (1 kibibyte).  Units are \fBB\fR (bytes), \fBKiB\fR (kibibytes),
+\fBMiB\fR (mebibytes), and \fBGiB\fR (gibibytes), which may also be spelt
+\fBKB\fR, \fBMB\fR, and \fBGB\fR.  Units are parsed without regard to case.
+Note that regardless of spelling, these units are always powers of 2, and
+never metric.  That is, 1GiB = 1024MiB, 1MiB = 1024KiB, 1KiB = 1024B.  If no
+unit is specified, an option-specific backward-compatible default unit is
+assumed (documented on an option-by-option basis).
 .SH FIELD DESCRIPTIONS
 .PP
 The sections below detail options that can be placed in the
