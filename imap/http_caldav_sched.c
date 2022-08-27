@@ -1338,7 +1338,7 @@ static void clean_component(icalcomponent *comp)
 {
     icalproperty *prop;
 
-    /* Strip VALARMs, TRANSP, COLOR, and CATEGORIES (if color) */
+    /* Strip per-user properties */
     itip_strip_personal_data(comp);
 
     /* Replace DTSTAMP on component */

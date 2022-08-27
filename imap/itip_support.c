@@ -753,6 +753,14 @@ static int deliver_merge_request(const char *attendee,
                 icalproperty_add_parameter(prop, param);
             }
 
+            /* Copy over CLASS property from current component to iTIP component */
+            prop =
+                icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+            if (prop) {
+                icalcomponent_add_property(new_comp,
+                                           icalproperty_clone(prop));
+            }
+
             if (master == comp) {
                 /* Use updated master component since we will remove the old */
                 master = new_comp;
@@ -777,6 +785,14 @@ static int deliver_merge_request(const char *attendee,
 
                 prop = icalcomponent_get_first_property(master,
                                                         ICAL_TRANSP_PROPERTY);
+                if (prop) {
+                    icalcomponent_add_property(new_comp,
+                                               icalproperty_clone(prop));
+                }
+
+                /* Inherit CLASS property from master */
+                prop = icalcomponent_get_first_property(master,
+                                                        ICAL_CLASS_PROPERTY);
                 if (prop) {
                     icalcomponent_add_property(new_comp,
                                                icalproperty_clone(prop));
@@ -994,7 +1010,7 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp)
         icalcomponent_free(alarm);
     }
 
-    /* Remove TRANSP, COLOR, and CATEGORIES (if color) */
+    /* Remove TRANSP, COLOR, CATEGORIES (if color) and CLASS */
     for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
          prop; prop = nextprop) {
         nextprop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY);
@@ -1004,6 +1020,7 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp)
 
             GCC_FALLTHROUGH
 
+        case ICAL_CLASS_PROPERTY:
         case ICAL_COLOR_PROPERTY:
         case ICAL_TRANSP_PROPERTY:
             icalcomponent_remove_property(comp, prop);
@@ -1119,7 +1136,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     comp = icalcomponent_get_first_real_component(itip);
     kind = icalcomponent_isa(comp);
 
-    /* Strip VALARMs, TRANSP, COLOR, and CATEGORIES (if color) */
+    /* Strip per-user properties */
     for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
         itip_strip_personal_data(comp);
     }
