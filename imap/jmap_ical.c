@@ -3706,20 +3706,13 @@ calendarevent_from_ical(icalcomponent *comp,
         // JSCalendar forbids to override privacy in overrides,
         // so read the property value from the main component.
         icalcomponent *fromcomp = maincomp ? maincomp : comp;
-        const char *prv = "public";
-        if ((prop = icalcomponent_get_first_property(fromcomp, ICAL_CLASS_PROPERTY))) {
-            switch (icalproperty_get_class(prop)) {
-                case ICAL_CLASS_CONFIDENTIAL:
-                    prv = "secret";
-                    break;
-                case ICAL_CLASS_PRIVATE:
-                    prv = "private";
-                    break;
-                default:
-                    prv = "public";
-            }
+        const char *v = get_icalxprop_value(fromcomp, JMAPICAL_XPROP_PRIVACY);
+        if (v) {
+            buf_setcstr(&buf, v);
+            buf_lcase(&buf);
+            v = buf_cstring(&buf);
         }
-        json_object_set_new(event, "privacy", json_string(prv));
+        json_object_set_new(event, "privacy", json_string(v ? v : "public"));
     }
 
     /* replyTo */
@@ -7146,6 +7139,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
 {
     jstimezones_t myjstzones = JSTIMEZONES_INITIALIZER;
     jstimezones_t *jstzones = NULL;
+    icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
 
     /* Caller must set UID */
     const char *uid = icalcomponent_get_uid(comp);
@@ -7285,7 +7279,6 @@ static void calendarevent_to_ical(icalcomponent *comp,
              * - the method values are left unchanged
              */
             int reject = 1;
-            icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
             if (old_comp) {
                 icalcomponent *old_ical = icalcomponent_get_parent(old_comp);
                 if (old_ical &&
@@ -7455,26 +7448,31 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "privacy");
     if (json_is_string(jprop)) {
         const char *val = json_string_value(jprop);
-        enum icalproperty_class v = ICAL_CLASS_NONE;
-        if (!strcmp(val, "public")) {
-            v = ICAL_CLASS_PUBLIC;
-        } else if (!strcmp(val, "private")) {
-            v = ICAL_CLASS_PRIVATE;
-        } else if (!strcmp(val, "secret")) {
-            v = ICAL_CLASS_CONFIDENTIAL;
+        if (!strcmp(val, "public") ||
+            !strcmp(val, "private") ||
+            !strcmp(val, "secret")) {
+
+            struct buf buf = BUF_INITIALIZER;
+            buf_setcstr(&buf, val);
+            buf_ucase(&buf);
+            icalproperty *prop = icalproperty_new_x(buf_cstring(&buf));
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_PRIVACY);
+            icalcomponent_add_property(comp, prop);
+            buf_free(&buf);
         } else {
             jmap_parser_invalid(parser, "privacy");
         }
-        if (v != ICAL_CLASS_NONE) {
-            icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-            if (prop) {
-                icalproperty_set_class(prop, v);
-            } else {
-                icalcomponent_add_property(comp, icalproperty_new_class(v));
-            }
-        }
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "privacy");
+    }
+
+    /* Preserve CLASS property */
+    if (old_comp) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(old_comp, ICAL_CLASS_PROPERTY);
+        if (prop) {
+            icalcomponent_add_property(comp, icalproperty_clone(prop));
+        }
     }
 
     /* replyTo and participants */

@@ -753,6 +753,14 @@ static int deliver_merge_request(const char *attendee,
                 icalproperty_add_parameter(prop, param);
             }
 
+            /* Copy over JMAP privacy from current component to iTIP component */
+			prop =
+                icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
+            if (prop) {
+                icalcomponent_add_property(new_comp,
+                                           icalproperty_clone(prop));
+            }
+
             if (master == comp) {
                 /* Use updated master component since we will remove the old */
                 master = new_comp;
@@ -777,6 +785,14 @@ static int deliver_merge_request(const char *attendee,
 
                 prop = icalcomponent_get_first_property(master,
                                                         ICAL_TRANSP_PROPERTY);
+                if (prop) {
+                    icalcomponent_add_property(new_comp,
+                                               icalproperty_clone(prop));
+                }
+
+                /* Inherit JMAP privacy from master */
+                prop = icalcomponent_get_x_property_by_name(master,
+                                                            JMAPICAL_XPROP_PRIVACY);
                 if (prop) {
                     icalcomponent_add_property(new_comp,
                                                icalproperty_clone(prop));
@@ -1008,6 +1024,17 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp)
         case ICAL_TRANSP_PROPERTY:
             icalcomponent_remove_property(comp, prop);
             icalproperty_free(prop);
+            break;
+
+        case ICAL_X_PROPERTY:
+            {
+                /* Remove select JMAP-related properties */
+                if (!strcmpsafe(icalproperty_get_x_name(prop),
+                            JMAPICAL_XPROP_PRIVACY)) {
+                    icalcomponent_remove_property(comp, prop);
+                    icalproperty_free(prop);
+                }
+            }
             break;
 
         default:

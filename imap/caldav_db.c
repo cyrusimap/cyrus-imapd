@@ -1179,20 +1179,16 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
     }
     cdata->comp_flags.transp = transp;
 
-    /* Determine privacy */
-    cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
-    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+    /* Determine JSCalendar privacy */
+    cdata->comp_flags.privacy = 0;
+    prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
     if (prop) {
-        switch (icalproperty_get_class(prop)) {
-            case ICAL_CLASS_CONFIDENTIAL:
+        const char *val = icalproperty_get_value_as_string(prop);
+        if (val) {
+            if (!strcasecmp(val, "secret"))
                 cdata->comp_flags.privacy = CAL_PRIVACY_SECRET;
-                break;
-            case ICAL_CLASS_PRIVATE:
-            case ICAL_CLASS_X:
+            else if (!strcasecmp(val, "private"))
                 cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
-                break;
-            default:
-                ; // ignore
         }
     }
 
