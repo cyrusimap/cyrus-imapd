@@ -67,6 +67,29 @@ my $skip_slow = 1;
 my $log_directory;
 my @names;
 
+# Make sure our binary components have been built already
+# -- get their names from the Makefile
+open my $mf, '<', 'utils/Makefile'
+    or die "Can't read utils/Makefile: $!";
+my $pat = qr{^(?:PROGRAMS|LIBS)=};
+my $missing_binaries = 0;
+foreach my $match (grep { m/$pat/ } <$mf>) {
+    chomp $match;
+    $match =~ s/$pat//;
+    foreach my $binary (split /\s+/, $match) {
+        my $filename = "utils/$binary";
+        if (! -e $filename || ! -x $filename) {
+            print STDERR "$filename is not executable or is missing\n";
+            $missing_binaries ++;
+        }
+    }
+}
+close $mf;
+if ($missing_binaries) {
+    print STDERR "Did you run 'make' yet?\n";
+    exit 1;
+}
+
 # This disgusting hack makes Test::Unit report a useful stack trace for
 # it's assert failures instead of just a file name and line number.
 {
