@@ -8246,30 +8246,22 @@ static void get_partition(const char *key, const char *val, void *rock)
     if (strncmp("partition-", key, 10)) return;
 
     size_t vlen = strlen(val);
-    if (!strncmp(prock->path, val, vlen) && prock->path[vlen] == '/') {
+    if (!strncmp(prock->path, val, vlen) &&
+        (val[vlen-1] == '/' || prock->path[vlen] == '/')) {
         *prock->partition = xstrdup(key+10);
     }
 }
 
-EXPORTED struct mboxlist_entry *mailbox_mbentry_from_path(const char *path)
+EXPORTED struct mboxlist_entry *mailbox_mbentry_from_path(const char *header_path)
 {
-    struct buf buf = BUF_INITIALIZER;
-    size_t pathlen = strlen(path);
-    size_t fnamelen = strlen(FNAME_HEADER);
     struct mboxlist_entry *mbentry = mboxlist_entry_create();
     struct mailbox mailbox;
     int r;
 
-    if (pathlen < fnamelen || strcmp(path + pathlen - fnamelen, FNAME_HEADER)) {
-        buf_setcstr(&buf, path);
-        buf_appendcstr(&buf, FNAME_HEADER);
-        path = buf_cstring(&buf);
-    }
-
     zeromailbox(mailbox);
     mailbox.mbentry = mbentry;
 
-    r = mailbox_read_header(&mailbox, path);
+    r = mailbox_read_header(&mailbox, header_path);
     if (!r) {
         mbentry->mbtype = mailbox.h.mbtype;
 
@@ -8286,11 +8278,9 @@ EXPORTED struct mboxlist_entry *mailbox_mbentry_from_path(const char *path)
         xclose(mailbox.header_fd);
 
         /* Get partition name */
-        unsigned long metapartition_files =
-            config_getbitfield(IMAPOPT_METAPARTITION_FILES);
         struct part_rock prock = {
-            path,
-            metapartition_files & IMAP_ENUM_METAPARTITION_FILES_HEADER,
+            header_path,
+            config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_HEADER,
             &mbentry->partition
         };
 
@@ -8299,8 +8289,6 @@ EXPORTED struct mboxlist_entry *mailbox_mbentry_from_path(const char *path)
     else {
         mboxlist_entry_free(&mbentry);
     }
-
-    buf_free(&buf);
 
     return mbentry;
 }
