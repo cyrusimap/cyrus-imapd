@@ -838,8 +838,7 @@ static void reconstruct_mbentry(const char *header_path)
     }
 
     /* Sanity check the path */
-    int legacy = (mbentry->mbtype & MBTYPE_LEGACY_DIRS) ||
-        config_getswitch(IMAPOPT_MAILBOX_LEGACY_DIRS);
+    int legacy = mbentry->mbtype & MBTYPE_LEGACY_DIRS;
     const char *metapath = mboxname_metapath(mbentry->partition, mbentry->name,
                                              legacy ? NULL : mbentry->uniqueid,
                                              META_HEADER, 0 /*is_new*/);
