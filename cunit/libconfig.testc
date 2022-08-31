@@ -988,4 +988,55 @@ static void test_deprecated_duration(void)
     CU_ASSERT_EQUAL(val, 12 * 24 * 60 * 60);
 }
 
+static void test_deprecated_bytesize(void)
+{
+    /* { "autocreatequota", NULL, BYTESIZE, "UNRELEASED", "2.5.0", "autocreate_quota" } */
+    /* { "autocreate_quota", "-1", BYTESIZE, "UNRELEASED" } */
+    int64_t val;
+
+    /* set the deprecated name only */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreatequota: 8\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should not be able to read the deprecated name */
+    CU_EXPECT_CYRFATAL_BEGIN;
+    val = config_getbytesize(IMAPOPT_AUTOCREATEQUOTA, 'K');
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+        "Option 'autocreatequota' is deprecated in favor of "
+        "'autocreate_quota' since version 2.5.0.");
+
+    /* should be able to read it at the new name */
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    CU_ASSERT_EQUAL(val, 8LL * 1024);
+
+    /* set the new name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreate_quota: 12M\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+
+    /* should be able to read it at the new name */
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    CU_ASSERT_EQUAL(val, 12LL * 1024 * 1024);
+
+    /* set both names to different values */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreatequota: 7\n"
+        "autocreate_quota: 12M\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should read new value at the new name */
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    CU_ASSERT_EQUAL(val, 12LL * 1024 * 1024);
+}
+
 /* vim: set ft=c: */
