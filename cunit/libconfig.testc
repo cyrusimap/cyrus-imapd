@@ -462,6 +462,128 @@ static void test_duration_parse(void)
     }
 }
 
+static void test_bytesize_value_gibibytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 1G\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 1LL * 1024 * 1024 * 1024);
+}
+
+static void test_bytesize_value_mebibytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 3M\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 3LL * 1024 * 1024);
+}
+
+static void test_bytesize_value_kibibytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 45K\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 45LL * 1024);
+}
+
+static void test_bytesize_value_bytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 25B\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
+    CU_ASSERT_EQUAL(archive_maxsize, 25LL);
+}
+
+static void test_bytesize_value_nounits(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 13\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'M');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024 * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'G');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024 * 1024 * 1024);
+}
+
+static void test_bytesize_value_negative(void)
+{
+    int64_t archive_maxsize = 0xdeadbeef;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: -1\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'M');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024 * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'G');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024 * 1024 * 1024);
+}
+
+static void test_bytesize_default(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* archive_maxsize: 1024 K (default) */
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 1024LL * 1024);
+}
+
+static void test_bytesize_invalid(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: junk\n"
+    );
+    CU_EXPECT_CYRFATAL_END(
+        EX_CONFIG,
+        "unparsable byte size 'junk' for archive_maxsize in line 2"
+    );
+}
+
 struct bytesize_parse_data {
     const char *str;
     int expected_result;
