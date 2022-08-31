@@ -333,9 +333,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    assumed.  */
 */
 
-{ "archive_maxsize", 1024, INT, "3.0.0" }
-/* The size in kilobytes of the largest message that won't be archived
-   immediately.  Default is 1Mb */
+{ "archive_maxsize", "1024 K", BYTESIZE, "UNRELEASED" }
+/* The size of the largest message that won't be archived immediately.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed.  */
 
 { "archive_keepflagged", 0, SWITCH, "3.0.0" }
 /* If set, messages with the \\Flagged system flag won't be archived,

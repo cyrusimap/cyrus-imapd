@@ -69,12 +69,12 @@ static int tear_down(void)
 static void test_int(void)
 {
     int boundary_limit = -1;
-    int archive_maxsize = -1;
+    int conversations_max_thread = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
         "boundary_limit: 120\n"
-        /* archive_maxsize: 1024 (default) */
+        /* conversations_max_thread: 100 (default) */
     );
 
     /* test a value that has been set */
@@ -82,8 +82,8 @@ static void test_int(void)
     CU_ASSERT_EQUAL(boundary_limit, 120);
 
     /* test a value that is defaulted */
-    archive_maxsize = config_getint(IMAPOPT_ARCHIVE_MAXSIZE);
-    CU_ASSERT_EQUAL(archive_maxsize, 1024);
+    conversations_max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
+    CU_ASSERT_EQUAL(conversations_max_thread, 100);
 }
 
 static void test_string(void)
