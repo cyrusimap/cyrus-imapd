@@ -1071,7 +1071,7 @@ int autocreate_inbox(const mbname_t *mbname)
     /*
      * Check for autocreatequota and createonpost
      */
-    if (config_getint(IMAPOPT_AUTOCREATE_QUOTA) < 0)
+    if (config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K') < 0)
         return IMAP_MAILBOX_NONEXISTENT;
 
     if (!config_getswitch(IMAPOPT_AUTOCREATE_POST))

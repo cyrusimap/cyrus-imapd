@@ -365,7 +365,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "autocreateinboxfolders", NULL, STRING, "2.5.0", "2.5.0", "autocreate_inbox_folders" }
 /* Deprecated in favor of \fIautocreate_inbox_folders\fR. */
 
-{ "autocreatequota", 0, INT, "2.5.0", "2.5.0", "autocreate_quota" }
+{ "autocreatequota", NULL, BYTESIZE, "UNRELEASED", "2.5.0", "autocreate_quota" }
 /* Deprecated in favor of \fIautocreate_quota\fR. */
 
 { "autocreatequotamsg", -1, INT, "2.5.0", "2.5.0", "autocreate_quota_messages" }
@@ -433,7 +433,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    INBOX that does not exist, then the INBOX is automatically created
    by \fIlmtpd(8)\fR and delivery of the message continues. */
 
-{ "autocreate_quota", -1, INT, "2.5.0" }
+{ "autocreate_quota", "-1", BYTESIZE, "UNRELEASED" }
 /* If set to a value of zero or higher, users have their INBOX folders
    created upon a successful login event or upon \fIlmtpd(8)\fR
    message delivery if \fIautocreate_post\fR is enabled, provided their
@@ -442,7 +442,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    The user's quota is set to the value if it is greater than zero,
    otherwise the user has unlimited quota.
 .PP
-   Note that quota is specified in kilobytes. */
+   Note that quota has kibibyte granularity.  Values specified here will
+   be truncated to the nearest whole kibibyte.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed. */
 
 { "autocreate_quota_messages", -1, INT, "3.0.0" }
 /* If set to a value of zero or higher, users who have their INBOX

@@ -2554,7 +2554,7 @@ static void autocreate_inbox(void)
     if (imapd_userisadmin) return;
     if (imapd_userisproxyadmin) return;
 
-    if (config_getint(IMAPOPT_AUTOCREATE_QUOTA) >= 0) {
+    if (config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K') >= 0) {
         char *inboxname = mboxname_user_mbox(imapd_userid, NULL);
         int r = mboxlist_lookup(inboxname, NULL, NULL);
         free(inboxname);
@@ -7193,7 +7193,8 @@ localcreate:
     // Clausing autocreate for the INBOX
     if (r == IMAP_PERMISSION_DENIED) {
         if (!strarray_size(mbname_boxes(mbname)) && !strcmpsafe(imapd_userid, mbname_userid(mbname))) {
-            int autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+            int64_t autocreatequotastorage =
+                config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
 
             if (autocreatequotastorage > 0) {
                 mbentry.uniqueid = NULL;
@@ -7216,8 +7217,10 @@ localcreate:
                         newquotas[res] = QUOTA_UNLIMITED;
                     }
 
-                    newquotas[QUOTA_STORAGE] = autocreatequotastorage;
-                    newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
+                    if (autocreatequotastorage > 0)
+                        newquotas[QUOTA_STORAGE] = autocreatequotastorage / 1024;
+                    if (autocreatequotamessage > 0)
+                        newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
 
                     (void) mboxlist_setquotas(mbname_intname(mbname), newquotas, 0, 0);
                 }

@@ -780,51 +780,51 @@ static void test_magic_configdirectory_default(void)
 
 static void test_deprecated_int(void)
 {
-    /* { "autocreatequota", 0, INT, "2.5.0", "autocreate_quota" } */
+    /* { "autocreatequotamsg", -1, INT, "2.5.0", "2.5.0", "autocreate_quota_messages" } */
     int val;
 
     /* set the deprecated name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
-        "autocreatequota: 12\n"
+        "autocreatequotamsg: 12\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
     /* should not be able to read the deprecated name */
     CU_EXPECT_CYRFATAL_BEGIN
-    val = config_getint(IMAPOPT_AUTOCREATEQUOTA);
+    val = config_getint(IMAPOPT_AUTOCREATEQUOTAMSG);
     CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
-        "Option 'autocreatequota' is deprecated in favor of "
-        "'autocreate_quota' since version 2.5.0.");
+        "Option 'autocreatequotamsg' is deprecated in favor of "
+        "'autocreate_quota_messages' since version 2.5.0.");
 
     /* should be able to read the value at the new name */
-    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
     CU_ASSERT_EQUAL(val, 12);
 
     /* set the new name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
-        "autocreate_quota: 12\n"
+        "autocreate_quota_messages: 12\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 0);
 
     /* should be able to read it at the new name */
-    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
     CU_ASSERT_EQUAL(val, 12);
 
     /* set both names to different values */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
-        "autocreatequota: 12\n"
-        "autocreate_quota: 15\n"
+        "autocreatequotamsg: 12\n"
+        "autocreate_quota_messages: 15\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
     /* should read new value at the new name */
-    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
     CU_ASSERT_EQUAL(val, 15);
 }
 
