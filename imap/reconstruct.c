@@ -744,6 +744,7 @@ static void reconstruct_mbentry(const char *header_path)
     size_t fnamelen = strlen(FNAME_HEADER);
     mbentry_t *mbentry = NULL;
     struct mboxlock *namespacelock = NULL;
+    int fix_header = 0;
 
     if (!realpath(header_path, real)) {
         printf("Can not resolve path '%s'\n", header_path);
@@ -817,6 +818,11 @@ static void reconstruct_mbentry(const char *header_path)
                        mbentry->name, header_path);
                 goto done;
             }
+            else {
+                xsyslog(LOG_INFO, "mailbox header had no uniqueid, setting from path",
+                        "mboxname=<%s> newuniqueid=<%s>",
+                        mbentry->name, mbentry->uniqueid);
+            }
         }
         else {
             /* Look for an existing N record */
@@ -831,10 +837,26 @@ static void reconstruct_mbentry(const char *header_path)
             if (!mbentry->uniqueid) {
                 /* Generate a new UID */
                 mbentry->uniqueid = xstrdup(makeuuid());
+
+                xsyslog(LOG_INFO, "mailbox header had no uniqueid, creating one",
+                        "mboxname=<%s> newuniqueid=<%s>",
+                        mbentry->name, mbentry->uniqueid);
+            }
+            else {
+                xsyslog(LOG_INFO, "mailbox header had no uniqueid, setting from mbentry",
+                        "mboxname=<%s> newuniqueid=<%s>",
+                        mbentry->name, mbentry->uniqueid);
             }
 
             mbentry->mbtype |= MBTYPE_LEGACY_DIRS;
         }
+
+        fix_header = 1;
+    }
+    else {
+        xsyslog(LOG_INFO, "setting mbentry uniqueid from header",
+                "mboxname=<%s> newuniqueid=<%s>",
+                mbentry->name, mbentry->uniqueid);
     }
 
     /* Sanity check the path */
@@ -861,6 +883,11 @@ static void reconstruct_mbentry(const char *header_path)
     mbentry->uidvalidity = mailbox->i.uidvalidity;
     mbentry->foldermodseq = mailbox->i.highestmodseq;
     mbentry->createdmodseq = mailbox->i.createdmodseq;
+
+    if (fix_header) {
+        mailbox_set_mbtype(mailbox, mbentry->mbtype);
+        mailbox_set_uniqueid(mailbox, mbentry->uniqueid);
+    }
     mailbox_close(&mailbox);
 
     /* Update mailboxes.db records */
