@@ -666,7 +666,16 @@ extern int mailbox_rename_cleanup(struct mailbox **mailboxptr);
 extern int mailbox_copyfile(const char *from, const char *to, int nolink);
 
 extern int mailbox_reconstruct(const char *name, int flags, struct mailbox **mailboxp);
-extern void mailbox_make_uniqueid(struct mailbox *mailbox);
+
+/*
+ * Create the unique identifier for a mailbox named 'name' with
+ * uidvalidity 'uidvalidity'.  We use Ted Ts'o's libuuid if available,
+ * otherwise we use some random bits.
+ */
+#define mailbox_make_uniqueid(mailbox) mailbox_set_uniqueid(mailbox, makeuuid())
+
+extern void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid);
+extern void mailbox_set_mbtype(struct mailbox *mailbox, uint32_t mbtype);
 
 extern int mailbox_setversion(struct mailbox *mailbox, int version);
 

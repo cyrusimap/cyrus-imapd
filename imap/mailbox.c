@@ -857,15 +857,16 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
     return updatenotifier;
 }
 
-/*
- * Create the unique identifier for a mailbox named 'name' with
- * uidvalidity 'uidvalidity'.  We use Ted Ts'o's libuuid if available,
- * otherwise we use some random bits.
- */
-EXPORTED void mailbox_make_uniqueid(struct mailbox *mailbox)
+EXPORTED void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid)
 {
     free(mailbox->h.uniqueid);
-    mailbox->h.uniqueid = xstrdup(makeuuid());
+    mailbox->h.uniqueid = xstrdup(uniqueid);
+    mailbox->header_dirty = 1;
+}
+
+EXPORTED void mailbox_set_mbtype(struct mailbox *mailbox, uint32_t mbtype)
+{
+    mailbox->h.mbtype = mbtype;
     mailbox->header_dirty = 1;
 }
 
