@@ -926,9 +926,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    to a size. In "headerbody" mode, it includes full headers and body truncated
    to a size */
 
-{ "event_content_size", 0, INT, "2.5.0" }
+{ "event_content_size", "0", BYTESIZE, "UNRELEASED" }
 /* Truncate the message content that may be included with MessageAppend and
-   MessageNew. Set 0 to include the entire message itself */
+   MessageNew. Set 0 to include the entire message itself.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "event_exclude_flags", NULL, STRING, "2.5.0" }
 /* Don't send event notification for given IMAP flag(s) */
