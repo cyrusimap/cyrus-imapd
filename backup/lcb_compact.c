@@ -67,12 +67,12 @@ static void compact_readconfig(void)
     /* read and normalise config values */
     if (compact_minsize == 0) {
         compact_minsize = (size_t)
-            MAX(0, 1024 * config_getint(IMAPOPT_BACKUP_COMPACT_MINSIZE));
+            MAX(0, config_getbytesize(IMAPOPT_BACKUP_COMPACT_MINSIZE, 'K'));
     }
 
     if (compact_maxsize == 0) {
         compact_maxsize = (size_t)
-            MAX(0, 1024 * config_getint(IMAPOPT_BACKUP_COMPACT_MAXSIZE));
+            MAX(0, config_getbytesize(IMAPOPT_BACKUP_COMPACT_MAXSIZE, 'K'));
     }
 
     if (compact_work_threshold == 0) {

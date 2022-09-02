@@ -520,17 +520,23 @@ Blank lines and lines beginning with ``#'' are ignored.
    partition pathname MUST be specified if backups are in use.  Note that
    there is no relationship between spool partitions and backup partitions. */
 
-{ "backup_compact_minsize", 0, INT, "3.0.0" }
-/* The minimum size in kilobytes of chunks in each backup.  The compact tool
+{ "backup_compact_minsize", "0", BYTESIZE, "UNRELEASED" }
+/* The minimum size of chunks in each backup.  The compact tool
    will try to combine adjacent chunks that are smaller than this.
 .PP
-   Setting this value to zero or negative disables combining of chunks. */
+   Setting this value to zero or negative disables combining of chunks.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed. */
 
-{ "backup_compact_maxsize", 0, INT, "3.0.0" }
-/* The maximum size in kilobytes of chunks in each backup.  The compact tool
+{ "backup_compact_maxsize", "0", BYTESIZE, "UNRELEASED" }
+/* The maximum size of chunks in each backup.  The compact tool
    will try to split chunks larger than this into smaller chunks.
 .PP
-   Setting this value to zero or negative disables splitting of chunks. */
+   Setting this value to zero or negative disables splitting of chunks.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed. */
 
 { "backup_compact_work_threshold", 1, INT, "3.0.0" }
 /* The number of chunks that must obviously need compaction before the compact
