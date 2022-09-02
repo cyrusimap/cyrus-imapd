@@ -1251,9 +1251,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that the Content-ID key must be URL-unescaped and enclosed in
    angular brackets, as defined in RFC 2392. */
 
-{ "jmap_preview_length", 64, INT, "3.1.1" }
-/* The maximum byte length of dynamically generated message previews. Previews
-   stored in jmap_preview_annot take precedence. */
+{ "jmap_preview_length", "64B", BYTESIZE, "UNRELEASED" }
+/* The maximum length of dynamically generated message previews. Previews
+   stored in jmap_preview_annot take precedence.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "jmap_max_catenate_items", 100, INT, "3.6.0" }
 /* The maximum number of items that can be catenated together by

@@ -7887,7 +7887,8 @@ static int _email_get_bodies(jmap_req_t *req,
                 free(html);
             }
             if (text) {
-                size_t len = config_getint(IMAPOPT_JMAP_PREVIEW_LENGTH);
+                int64_t len = config_getbytesize(IMAPOPT_JMAP_PREVIEW_LENGTH, 'B');
+                if (len < 0) len = 0;
                 char *preview = _email_extract_preview(text, len);
                 json_object_set_new(email, "preview", json_string(preview));
                 free(preview);
