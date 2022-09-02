@@ -4520,10 +4520,10 @@ static int createevent_store(jmap_req_t *req,
     };
     int r = 0;
 
-    static int icalendar_max_size = -1;
+    static int64_t icalendar_max_size = -1;
     if (icalendar_max_size < 0) {
-        icalendar_max_size = config_getint(IMAPOPT_ICALENDAR_MAX_SIZE);
-        if (icalendar_max_size <= 0) icalendar_max_size = INT_MAX;
+        icalendar_max_size = config_getbytesize(IMAPOPT_ICALENDAR_MAX_SIZE, 'B');
+        if (icalendar_max_size <= 0) icalendar_max_size = BYTESIZE_UNLIMITED;
     }
 
     // Make event id. Main events use empty string as recurrence id.
@@ -4550,12 +4550,10 @@ static int createevent_store(jmap_req_t *req,
     if (r || json_array_size(parser->invalid)) goto done;
 
     // Sanity-check iCalendar data
-    if (icalendar_max_size != INT_MAX) {
-        size_t ical_len = strlen(icalcomponent_as_ical_string(create->ical));
-        if (ical_len > (size_t) icalendar_max_size) {
-            r = IMAP_MESSAGE_TOO_LARGE;
-            goto done;
-        }
+    size_t ical_len = strlen(icalcomponent_as_ical_string(create->ical));
+    if (ical_len > (size_t) icalendar_max_size) {
+        r = IMAP_MESSAGE_TOO_LARGE;
+        goto done;
     }
 
     // Process managed attachments
@@ -5376,10 +5374,10 @@ static void setcalendarevents_update(jmap_req_t *req,
         .serverset = serverset,
     };
 
-    static int icalendar_max_size = -1;
+    static int64_t icalendar_max_size = -1;
     if (icalendar_max_size < 0) {
-        icalendar_max_size = config_getint(IMAPOPT_ICALENDAR_MAX_SIZE);
-        if (icalendar_max_size <= 0) icalendar_max_size = INT_MAX;
+        icalendar_max_size = config_getbytesize(IMAPOPT_ICALENDAR_MAX_SIZE, 'B');
+        if (icalendar_max_size <= 0) icalendar_max_size = BYTESIZE_UNLIMITED;
     }
 
     // Determine if event is a standalone recurrence instance
@@ -5570,7 +5568,7 @@ static void setcalendarevents_update(jmap_req_t *req,
         r = 0;
         goto done;
     }
-    else if (icalendar_max_size != INT_MAX && update.newical) {
+    else if (update.newical) {
         size_t ical_size = strlen(icalcomponent_as_ical_string(update.newical));
         if (ical_size > (size_t) icalendar_max_size) {
             r = IMAP_MESSAGE_TOO_LARGE;

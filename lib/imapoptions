@@ -1142,11 +1142,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    The zero value disables validation of the "iat" JWS claim.
 */
 
-{ "icalendar_max_size", 0, INT, "3.6.0" }
-/* Maximum allowed iCalendar size.
-   If non-zero, CalDAV and JMAP will reject storage of resources whose
-   iCalendar representation is larger than \fIicalendar_max_size\fR bytes.
-   If set to 0, this will allow iCalendar resources of any size (the default). */
+{ "icalendar_max_size", "0", BYTESIZE, "UNRELEASED" }
+/* Maximum allowed iCalendar size. CalDAV and JMAP will reject storage of
+   resources whose iCalendar representation is larger than this.
+.PP
+   If set to 0 (the default), a large internally-defined limit will be applied.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "idlesocket", "{configdirectory}/socket/idle", STRING, "2.3.17" }
 /* Unix domain socket that idled listens on. */
