@@ -124,34 +124,47 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
 
 HIDDEN void jmap_core_init(jmap_settings_t *settings)
 {
-#define _read_opt(val, optkey) \
+#define _read_int_opt(val, optkey) do { \
     val = config_getint(optkey); \
     if (val <= 0) { \
         syslog(LOG_ERR, "jmap: invalid property value: %s", \
                 imapopts[optkey].optname); \
         val = 0; \
-    }
-    _read_opt(settings->limits[MAX_SIZE_UPLOAD],
-              IMAPOPT_JMAP_MAX_SIZE_UPLOAD);
+    } \
+} while (0)
+
+#define _read_bytesize_opt(val, optkey, defunit) do { \
+    val = config_getbytesize(optkey, defunit); \
+    if (val <= 0) { \
+        syslog(LOG_ERR, "jmap: invalid property value: %s", \
+               imapopts[optkey].optname); \
+        val = 0; \
+    } \
+} while (0)
+
+    _read_int_opt(settings->limits[MAX_SIZE_UPLOAD],
+                  IMAPOPT_JMAP_MAX_SIZE_UPLOAD);
     settings->limits[MAX_SIZE_UPLOAD] *= 1024;
-    _read_opt(settings->limits[MAX_CONCURRENT_UPLOAD],
-              IMAPOPT_JMAP_MAX_CONCURRENT_UPLOAD);
-    _read_opt(settings->limits[MAX_SIZE_REQUEST],
-              IMAPOPT_JMAP_MAX_SIZE_REQUEST);
+    _read_int_opt(settings->limits[MAX_CONCURRENT_UPLOAD],
+                  IMAPOPT_JMAP_MAX_CONCURRENT_UPLOAD);
+    _read_int_opt(settings->limits[MAX_SIZE_REQUEST],
+                  IMAPOPT_JMAP_MAX_SIZE_REQUEST);
     settings->limits[MAX_SIZE_REQUEST] *= 1024;
-    _read_opt(settings->limits[MAX_CONCURRENT_REQUESTS],
-              IMAPOPT_JMAP_MAX_CONCURRENT_REQUESTS);
-    _read_opt(settings->limits[MAX_CALLS_IN_REQUEST],
-              IMAPOPT_JMAP_MAX_CALLS_IN_REQUEST);
-    _read_opt(settings->limits[MAX_OBJECTS_IN_GET],
-              IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
-    _read_opt(settings->limits[MAX_OBJECTS_IN_SET],
-              IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
-    _read_opt(settings->limits[MAX_SIZE_BLOB_SET],
-              IMAPOPT_JMAP_MAX_SIZE_BLOB_SET);
-    _read_opt(settings->limits[MAX_CATENATE_ITEMS],
-              IMAPOPT_JMAP_MAX_CATENATE_ITEMS);
-#undef _read_opt
+    _read_int_opt(settings->limits[MAX_CONCURRENT_REQUESTS],
+                  IMAPOPT_JMAP_MAX_CONCURRENT_REQUESTS);
+    _read_int_opt(settings->limits[MAX_CALLS_IN_REQUEST],
+                  IMAPOPT_JMAP_MAX_CALLS_IN_REQUEST);
+    _read_int_opt(settings->limits[MAX_OBJECTS_IN_GET],
+                  IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
+    _read_int_opt(settings->limits[MAX_OBJECTS_IN_SET],
+                  IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
+    _read_int_opt(settings->limits[MAX_SIZE_BLOB_SET],
+                  IMAPOPT_JMAP_MAX_SIZE_BLOB_SET);
+    _read_int_opt(settings->limits[MAX_CATENATE_ITEMS],
+                  IMAPOPT_JMAP_MAX_CATENATE_ITEMS);
+
+#undef _read_int_opt
+#undef _read_bytesize_opt
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_CORE,
