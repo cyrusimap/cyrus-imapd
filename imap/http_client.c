@@ -97,11 +97,16 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
     static unsigned max_msgsize = 0;
     const char **hdr;
 
-    if (!max_msgsize) {
-        max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
+    if (max_msgsize == 0) {
+        int64_t val = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
 
-        /* If max_msgsize is 0, allow any size */
-        if (!max_msgsize) max_msgsize = INT_MAX;
+        /* 0 means "unlimited", which really means our internally-defined limit */
+        if (val <= 0) val = BYTESIZE_UNLIMITED;
+
+        /* XXX constrained by other variable sizes here */
+        if (val > BYTESIZE_UNLIMITED) val = BYTESIZE_UNLIMITED;
+
+        max_msgsize = val;
     }
 
     body->framing = FRAMING_LENGTH;

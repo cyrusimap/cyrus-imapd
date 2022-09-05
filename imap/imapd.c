@@ -135,7 +135,7 @@ static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
-static size_t maxsize = 0;
+static int64_t maxsize = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -914,8 +914,8 @@ int service_init(int argc, char **argv, char **envp)
 
     prometheus_increment(CYRUS_IMAP_READY_LISTENERS);
 
-    maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
-    if (!maxsize) maxsize = UINT32_MAX;
+    maxsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+    if (maxsize <= 0) maxsize = BYTESIZE_UNLIMITED;
 
     return 0;
 }
@@ -3519,7 +3519,7 @@ static void capa_response(int flags)
         prot_printf(imapd_out, " IDLE");
     }
 
-    prot_printf(imapd_out, " APPENDLIMIT=%zu", maxsize);
+    prot_printf(imapd_out, " APPENDLIMIT=%" PRIi64, maxsize);
 }
 
 /*

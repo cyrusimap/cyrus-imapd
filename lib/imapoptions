@@ -1702,10 +1702,14 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Maximum number of logged in sessions allowed per user,
    zero means no limit */
 
-{ "maxmessagesize", 0, INT, "2.3.17" }
-/* Maximum incoming LMTP message size.  If non-zero, lmtpd will reject
-   messages larger than \fImaxmessagesize\fR bytes.  If set to 0, this
-   will allow messages of any size (the default). */
+{ "maxmessagesize", "0", BYTESIZE, "UNRELEASED" }
+/* Maximum size of messages that will be accepted by Cyrus.  This affects LMTP
+   deliveries, IMAP appends, DAV uploads, etc.  Messages larger than this will
+   be rejected.
+.PP
+   If set to 0 (the default), a large internally-defined limit will be applied.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "maxquoted", 131072, INT, "2.3.17" }
 /* Maximum size of a single quoted string for the parser.  Default 128k */
