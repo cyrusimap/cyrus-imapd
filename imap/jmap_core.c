@@ -146,9 +146,8 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                        IMAPOPT_JMAP_MAX_SIZE_UPLOAD, 'K');
     _read_int_opt(settings->limits[MAX_CONCURRENT_UPLOAD],
                   IMAPOPT_JMAP_MAX_CONCURRENT_UPLOAD);
-    _read_int_opt(settings->limits[MAX_SIZE_REQUEST],
-                  IMAPOPT_JMAP_MAX_SIZE_REQUEST);
-    settings->limits[MAX_SIZE_REQUEST] *= 1024;
+    _read_bytesize_opt(settings->limits[MAX_SIZE_REQUEST],
+                       IMAPOPT_JMAP_MAX_SIZE_REQUEST, 'K');
     _read_int_opt(settings->limits[MAX_CONCURRENT_REQUESTS],
                   IMAPOPT_JMAP_MAX_CONCURRENT_REQUESTS);
     _read_int_opt(settings->limits[MAX_CALLS_IN_REQUEST],

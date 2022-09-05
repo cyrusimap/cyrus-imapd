@@ -1284,11 +1284,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    the JMAP \"urn:ietf:params:jmap:core\" capabilities object. The Cyrus JMAP
    implementation does not enforce this rate-limit. */
 
-{ "jmap_max_size_request", 10240, INT, "3.1.6" }
-/* The maximum size (in kilobytes) that the JMAP API accepts
-   for requests at the API endpoint. Returned as the
-   maxSizeRequest property value of the JMAP \"urn:ietf:params:jmap:core\"
-   capabilities object. Default is 10Mb. */
+{ "jmap_max_size_request", "10M", BYTESIZE, "UNRELEASED" }
+/* The maximum size that the JMAP API accepts for requests at the API endpoint.
+   Returned as the maxSizeRequest property value of the JMAP
+   \"urn:ietf:params:jmap:core\" capabilities object.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is assumed.
+   */
 
 { "jmap_max_concurrent_requests", 5, INT, "3.1.6" }
 /* The value to return for the maxConcurrentRequests property of
