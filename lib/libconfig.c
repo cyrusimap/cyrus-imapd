@@ -647,6 +647,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     char buf[4096];
     char *p;
     int ival;
+    int64_t i64val;
 
     config_loaded = 1;
 
@@ -790,7 +791,11 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     config_serverinfo = config_getenum(IMAPOPT_SERVERINFO);
 
     /* set some limits */
-    config_maxquoted = config_getint(IMAPOPT_MAXQUOTED);
+    i64val = config_getbytesize(IMAPOPT_MAXQUOTED, 'B');
+    if (i64val <= 0 || i64val > BYTESIZE_UNLIMITED) {
+        i64val = BYTESIZE_UNLIMITED;
+    }
+    config_maxquoted = i64val;
     config_maxword = config_getint(IMAPOPT_MAXWORD);
 
     ival = config_getenum(IMAPOPT_QOSMARKING);
