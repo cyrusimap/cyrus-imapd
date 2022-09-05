@@ -1263,11 +1263,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    value of the JMAP \"urn:ietf:params:jmap:blob\" capabilities object.
    Default value is 100. */
 
-{ "jmap_max_size_upload", 1048576, INT, "3.1.6" }
-/* The maximum size (in kilobytes) that the JMAP API accepts
-   for blob uploads. Returned as the maxSizeUpload property
-   value of the JMAP \"urn:ietf:params:jmap:core\" capabilities object.
-   Default is 1Gb. */
+{ "jmap_max_size_upload", "1G", BYTESIZE, "UNRELEASED" }
+/* The maximum size that the JMAP API accepts for blob uploads. Returned as
+   the maxSizeUpload property value of the JMAP \"urn:ietf:params:jmap:core\"
+   capabilities object.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is assumed.
+   */
 
 { "jmap_max_size_blob_set", 4096, INT, "3.3.0" }
 /* The maximum size (in kilobytes) that the JMAP API accepts
