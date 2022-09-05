@@ -1324,10 +1324,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    Returned as the maxObjectsInSet property value of the
    JMAP \"urn:ietf:params:jmap:core\" capabilities object. */
 
-{ "jmap_mail_max_size_attachments_per_email", 10240, INT, "3.1.6" }
-/* The value (in kilobytes) to return for the maxSizeAttachmentsPerEmail
-   property of the JMAP \"urn:ietf:params:jmap:mail\" capabilities object. The Cyrus
-   JMAP implementation does not enforce this size limit. Default is 10 Mb.*/
+{ "jmap_mail_max_size_attachments_per_email", "10M", BYTESIZE, "UNRELEASED" }
+/* The value to return for the maxSizeAttachmentsPerEmail property of the JMAP
+   \"urn:ietf:params:jmap:mail\" capabilities object. The Cyrus JMAP
+   implementation does not enforce this size limit.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is assumed.
+   */
 
 { "jmap_nonstandard_extensions", 0, SWITCH, "3.1.9" }
 /* If enabled, support non-standard JMAP extensions.  If not enabled,
