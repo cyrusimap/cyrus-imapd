@@ -1716,8 +1716,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    If no unit is specified, bytes is assumed. */
 
-{ "maxword", 131072, INT, "2.3.17" }
-/* Maximum size of a single word for the parser.  Default 128k */
+{ "maxword", "128K", BYTESIZE, "UNRELEASED" }
+/* Maximum size of a single word for the parser.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "mboxkey_db", "twoskip", STRINGLIST("skiplist", "twoskip", "zeroskip"), "3.1.6" }
 /* The cyrusdb backend to use for mailbox keys. */

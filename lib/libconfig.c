@@ -796,7 +796,11 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         i64val = BYTESIZE_UNLIMITED;
     }
     config_maxquoted = i64val;
-    config_maxword = config_getint(IMAPOPT_MAXWORD);
+    i64val = config_getbytesize(IMAPOPT_MAXWORD, 'B');
+    if (i64val <= 0 || i64val > BYTESIZE_UNLIMITED) {
+        i64val = BYTESIZE_UNLIMITED;
+    }
+    config_maxword = i64val;
 
     ival = config_getenum(IMAPOPT_QOSMARKING);
     config_qosmarking = qos[ival];
