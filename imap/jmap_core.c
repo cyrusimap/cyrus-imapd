@@ -157,8 +157,8 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                   IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
     _read_int_opt(settings->limits[MAX_OBJECTS_IN_SET],
                   IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
-    _read_int_opt(settings->limits[MAX_SIZE_BLOB_SET],
-                  IMAPOPT_JMAP_MAX_SIZE_BLOB_SET);
+    _read_bytesize_opt(settings->limits[MAX_SIZE_BLOB_SET],
+                       IMAPOPT_JMAP_MAX_SIZE_BLOB_SET, 'K');
     _read_int_opt(settings->limits[MAX_CATENATE_ITEMS],
                   IMAPOPT_JMAP_MAX_CATENATE_ITEMS);
 
@@ -212,7 +212,7 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                 JMAP_BLOB_EXTENSION,
                 json_pack("{s:i, s:i, s:o, s:o}",
                     "maxSizeBlobSet",
-                    settings->limits[MAX_SIZE_BLOB_SET],
+                    settings->limits[MAX_SIZE_BLOB_SET] / 1024,
                     "maxCatenateItems",
                     settings->limits[MAX_CATENATE_ITEMS],
                     "supportedTypeNames",

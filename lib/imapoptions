@@ -1271,11 +1271,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, kibibytes is assumed.
    */
 
-{ "jmap_max_size_blob_set", 4096, INT, "3.3.0" }
-/* The maximum size (in kilobytes) that the JMAP API accepts
-   for Blob/set. Returned as the maxSizeBlobSet property
-   value of the JMAP \"https://cyrusimap.org/ns/jmap/blob\" capabilities object.
-   Default is 4Mb. */
+{ "jmap_max_size_blob_set", "4M", BYTESIZE, "UNRELEASED" }
+/* The maximum size that the JMAP API accepts for Blob/set. Returned as the
+   maxSizeBlobSet property value of the JMAP
+   \"https://cyrusimap.org/ns/jmap/blob\" capabilities object.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is assumed.
+   */
 
 { "jmap_max_concurrent_upload", 5, INT, "3.1.6" }
 /* The value to return for the maxConcurrentUpload property of
