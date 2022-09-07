@@ -1184,12 +1184,12 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     time_t now = time(0);
     char *freeme = NULL;
     char datestr[80];
-    static int vcard_max_size = -1;
+    static int64_t vcard_max_size = -1;
     char *mbuserid = NULL;
 
     if (vcard_max_size < 0) {
-        vcard_max_size = config_getint(IMAPOPT_VCARD_MAX_SIZE);
-        if (vcard_max_size <= 0) vcard_max_size = INT_MAX;
+        vcard_max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE, 'B');
+        if (vcard_max_size <= 0) vcard_max_size = BYTESIZE_UNLIMITED;
     }
 
     init_internal();

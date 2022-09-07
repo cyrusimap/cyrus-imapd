@@ -3103,11 +3103,14 @@ product version in the capabilities
    character '.'. Note that with the newnews separator, no dots may
    occur in mailbox names.  The default switched in 3.0 from off to on. */
 
-{ "vcard_max_size", 0, INT, "3.6.0" }
+{ "vcard_max_size", "0", BYTESIZE, "UNRELEASED" }
 /* Maximum allowed vCard size.
    If non-zero, CardDAV and JMAP will reject storage of contacts whose
-   vCard representation is larger than \fIvcard_max_size\fR bytes.
-   If set to 0, this will allow vCards of any size (the default). */
+   vCard representation is larger than \fIvcard_max_size\fR.
+.PP
+   If set to 0 (the default), a large internally-defined limit will be applied.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "virtdomains", "off", ENUM("off", "userid", "on"), "3.1.8" }
 /* Configure virtual domain support.

@@ -90,7 +90,7 @@
 #include "imap/imap_err.h"
 
 static time_t compile_time;
-static int vcard_max_size;
+static int64_t vcard_max_size;
 
 static void my_carddav_init(struct buf *serverinfo);
 static int my_carddav_auth(const char *userid);
@@ -415,8 +415,8 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
-    vcard_max_size = config_getint(IMAPOPT_VCARD_MAX_SIZE);
-    if (vcard_max_size <= 0) vcard_max_size = INT_MAX;
+    vcard_max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE, 'B');
+    if (vcard_max_size <= 0) vcard_max_size = BYTESIZE_UNLIMITED;
 }
 
 
@@ -1746,7 +1746,7 @@ static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%d", vcard_max_size);
+    buf_printf(&fctx->buf, "%" PRIi64, vcard_max_size);
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
 
