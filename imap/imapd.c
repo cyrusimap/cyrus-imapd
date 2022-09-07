@@ -4185,12 +4185,12 @@ cleanup:
  * Warn if mailbox is close to or over any quota resource.
  *
  * Warn if the following possibilities occur:
- * - quotawarnkb not set + quotawarn hit
- * - quotawarnkb set larger than mailbox + quotawarn hit
- * - quotawarnkb set + hit + quotawarn hit
- * - quotawarnmsg not set + quotawarn hit
- * - quotawarnmsg set larger than mailbox + quotawarn hit
- * - quotawarnmsg set + hit + quotawarn hit
+ * - quotawarnsize not set + quotawarnpercent hit
+ * - quotawarnsize set larger than mailbox + quotawarnpercent hit
+ * - quotawarnsize set + hit + quotawarnpercent hit
+ * - quotawarnmsg not set + quotawarnpercent hit
+ * - quotawarnmsg set larger than mailbox + quotawarnpercent hit
+ * - quotawarnmsg set + hit + quotawarnpercent hit
  */
 static void warn_about_quota(const char *quotaroot)
 {
@@ -4220,9 +4220,9 @@ static void warn_about_quota(const char *quotaroot)
         goto out;           /* failed to read */
 
     memset(thresholds, 0, sizeof(thresholds));
-    thresholds[QUOTA_STORAGE] = config_getint(IMAPOPT_QUOTAWARNKB);
+    thresholds[QUOTA_STORAGE] = config_getbytesize(IMAPOPT_QUOTAWARNSIZE, 'K') / 1024;
     thresholds[QUOTA_MESSAGE] = config_getint(IMAPOPT_QUOTAWARNMSG);
-    thresholds[QUOTA_ANNOTSTORAGE] = config_getint(IMAPOPT_QUOTAWARNKB);
+    thresholds[QUOTA_ANNOTSTORAGE] = config_getbytesize(IMAPOPT_QUOTAWARNSIZE, 'K') / 1024;
 
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
         if (q.limits[res] < 0)

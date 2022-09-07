@@ -47,8 +47,8 @@ sites, via the use of several settings in :cyrusman:`imapd.conf(5)`:
 
 
     .. include:: /imap/reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quotawarnkb
-        :end-before: endblob quotawarnkb
+        :start-after: startblob quotawarnsize
+        :end-before: endblob quotawarnsize
 
 
     .. include:: /imap/reference/manpages/configs/imapd.conf.rst

@@ -2180,10 +2180,19 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The percent of quota utilization over which the server generates
    warnings. */
 
-{ "quotawarnkb", 0, INT, "2.3.17" }
-/* The maximum amount of free space (in kB) at which to give a quota
-   warning (if this value is 0, or if the quota is smaller than this
-   amount, then warnings are always given). */
+{ "quotawarnkb", NULL, BYTESIZE, "UNRELEASED", "UNRELEASED", "quotawarnsize" }
+/* Deprecated in favour of \fIquotawarnsize\fR. */
+
+{ "quotawarnsize", "0", BYTESIZE, "UNRELEASED" }
+/* The maximum amount of free space at which to give a quota warning
+   (if this value is 0, or if the quota is smaller than this
+   amount, then warnings are always given).
+.PP
+   Note that quota has kibibyte granularity.  Values specified here will
+   be truncated to the nearest whole kibibyte.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed.  */
 
 { "quotawarnmsg", 0, INT, "2.5.0" }
 /* The maximum amount of messages at which to give a quota warning
