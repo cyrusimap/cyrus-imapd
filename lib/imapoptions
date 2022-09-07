@@ -3162,12 +3162,14 @@ of the incoming network interface, or if no record is found, the
    the attachment will be used. For JMAP, the Link.blobId property of
    JSCalendar objects will be disabled. */
 
-{ "webdav_attachments_max_binary_attach_size", 1024, INT, "3.6.0" }
-/* The maximum byte length (in kilobytes) of an ATTACH property value
-   when managed attachment URIs get rewritten to BINARY during iTIP processing.
-   Any attachment that exceeds this byte size keeps its managed attachment
-   URI as ATTACH value. A zero size limit causes attachments of any size
-   be rewritten as BINARY. */
+{ "webdav_attachments_max_binary_attach_size", "1024K", BYTESIZE, "UNRELEASED" }
+/* The maximum byte length of an ATTACH property value when managed attachment
+   URIs get rewritten to BINARY during iTIP processing.  Any attachment that
+   exceeds this byte size keeps its managed attachment URI as ATTACH value. A
+   zero size limit causes attachments of any size be rewritten as BINARY. */
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed.  */
 
 { "xbackup_enabled", 0, SWITCH, "3.0.0" }
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin
