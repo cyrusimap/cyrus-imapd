@@ -325,7 +325,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         charset_snippet_flags |= CHARSET_ESCAPEHTML;
     }
 
-    config_search_maxsize = 1024 * config_getint(IMAPOPT_SEARCH_MAXSIZE);
+    config_search_maxsize = config_getbytesize(IMAPOPT_SEARCH_MAXSIZE, 'K');
 
     if (!cyrus_init_nodb) {
         /* lookup the database backends */
