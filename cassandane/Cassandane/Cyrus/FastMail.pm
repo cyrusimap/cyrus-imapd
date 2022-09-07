@@ -121,7 +121,7 @@ sub new
                  sieve_utf8fileinto => 'yes',
                  sieve_use_lmtp_reject => 'no',
                  sievenotifier => 'mailto',
-                 sieve_maxscriptsize => '1024',
+                 sieve_maxscriptsize => '1024K',
                  sieve_vacation_min_response => '60',
                  specialusealways => 'yes',
                  specialuse_extra => '\\XChats \\XTemplates \\XNotes',

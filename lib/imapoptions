@@ -2571,9 +2571,12 @@ product version in the capabilities
 { "sieve_folder", "#sieve", STRING, "3.6.0" }
 /* The name of the folder for storing Sieve scripts (#sieve) */
 
-{ "sieve_maxscriptsize", 32, INT, "2.3.17" }
-/* Maximum size (in kilobytes) any sieve script can be, enforced at
-   submission by timsieved(8). */
+{ "sieve_maxscriptsize", "32K", BYTESIZE, "UNRELEASED" }
+/* Maximum size any sieve script can be, enforced at submission by
+   timsieved(8) and JMAP.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed.  */
 
 { "sieve_maxscripts", 5, INT, "2.3.17" }
 /* Maximum number of sieve scripts any user may have, enforced at
