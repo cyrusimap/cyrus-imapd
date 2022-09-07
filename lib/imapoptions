@@ -2173,7 +2173,10 @@ If all partitions are over that limit, this feature is not used anymore.
    conversations quota counts, which count multiple copies of exactly the
    same message (by GUID) as only one */
 
-{ "quotawarn", 90, INT, "2.3.17" }
+{ "quotawarn", 90, INT, "UNRELEASED", "UNRELEASED", "quotawarnpercent" }
+/* Deprecated in favour of \fIquotawarnpercent\fR. */
+
+{ "quotawarnpercent", 90, INT, "UNRELEASED" }
 /* The percent of quota utilization over which the server generates
    warnings. */
 

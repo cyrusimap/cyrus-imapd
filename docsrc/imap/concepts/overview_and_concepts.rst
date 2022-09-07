@@ -321,9 +321,14 @@ the sender.
 Quota Warnings Upon Select When User Has ``d`` Rights
 =====================================================
 
-When a user selects a mailbox whose quota root has usage that is close to or over the limit and the user has ``d`` rights on the mailbox, the server will issue an alert notifying the user that usage is close to or over the limit. The threshold of usage at which the server will issue quota warnings is set by the ``quotawarn`` configuration option.
+When a user selects a mailbox whose quota root has usage that is close to or
+over the limit and the user has ``d`` rights on the mailbox, the server will
+issue an alert notifying the user that usage is close to or over the limit.
+The threshold of usage at which the server will issue quota warnings is set
+by the ``quotawarnpercent`` configuration option.
 
-The server only issues warnings when the user has ``d`` rights because only users with ``d`` rights are capable of correcting the problem.
+The server only issues warnings when the user has ``d`` rights because only
+users with ``d`` rights are capable of correcting the problem.
 
 Quotas and Partitions
 =====================

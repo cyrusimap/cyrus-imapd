@@ -113,7 +113,7 @@ sub new
                  postmaster => 'postmaster@example.com',
                  quota_db => 'quotalegacy',
                  quota_use_conversations => 'yes',
-                 quotawarn => '98',
+                 quotawarnpercent => '98',
                  reverseacls => 'yes',
                  rfc3028_strict => 'no',
                  savedate => 'yes',

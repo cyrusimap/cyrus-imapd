@@ -4199,7 +4199,7 @@ static void warn_about_quota(const char *quotaroot)
     int res;
     int r;
     int thresholds[QUOTA_NUMRESOURCES];
-    int pc_threshold = config_getint(IMAPOPT_QUOTAWARN);
+    int pc_threshold = config_getint(IMAPOPT_QUOTAWARNPERCENT);
     int pc_usage;
     struct buf msg = BUF_INITIALIZER;
     static char lastqr[MAX_MAILBOX_PATH+1] = "";
