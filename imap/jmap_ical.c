@@ -2980,7 +2980,7 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
         /* X-APPLE-STRUCTURED-LOCATION */
         if (!strcmp(name, "X-APPLE-STRUCTURED-LOCATION")) {
             const char *uri = icalvalue_as_ical_string(icalproperty_get_value(prop));
-            if (strncmp(uri, "geo:", 4)) continue;
+            if (strncmpsafe(uri, "geo:", 4)) continue;
 
             struct buf title = BUF_INITIALIZER;
             const char *s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE);
@@ -6069,7 +6069,7 @@ static int geouri_parts_parse(const char *uri, struct geouri_parts *parts)
     const char *str = uri;
 
     // geo:
-    if (strncmp("geo:", str, 4)) return -1;
+    if (strncmpsafe("geo:", str, 4)) return -1;
     str += 4;
 
     // coord-a "," coord-b [ "," coord-c ]
