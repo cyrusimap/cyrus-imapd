@@ -383,7 +383,7 @@ static int send_alarm(struct get_alarm_rock *rock,
     prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
     if (prop) eid.ical_uid = icalproperty_get_value_as_string(prop);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_UID,
-                      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+            xstrdupsafe(prop ? icalproperty_get_value_as_string(prop) : ""));
 
     if (!icaltime_is_null_time(recurid) && is_standalone) {
         // if the event is a standalone recurrence instance, encode
@@ -406,19 +406,19 @@ static int send_alarm(struct get_alarm_rock *rock,
 
     prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_SUMMARY,
-                      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+            xstrdupsafe(prop ? icalproperty_get_value_as_string(prop) : ""));
 
     prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_DESCRIPTION,
-                      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+            xstrdupsafe(prop ? icalproperty_get_value_as_string(prop) : ""));
 
     prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_LOCATION,
-                      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+            xstrdupsafe(prop ? icalproperty_get_value_as_string(prop) : ""));
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_ORGANIZER,
-                      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+            xstrdupsafe(prop ? icalproperty_get_value_as_string(prop) : ""));
 
     const char *timezone = NULL;
     if (!icaltime_is_date(start) && icaltime_is_utc(start))
