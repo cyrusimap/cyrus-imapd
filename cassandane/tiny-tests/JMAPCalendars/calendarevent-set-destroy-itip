@@ -10,9 +10,9 @@ sub test_calendarevent_set_destroy_itip
     my $caldav = $self->{caldav};
 
     my %expectNotif = (
-        'NEEDS-ACTION' => 0,
-        'TENTATIVE' => 1,
-        'ACCEPTED' => 1,
+        'NEEDS-ACTION' => undef,
+        'TENTATIVE' => 'REPLY',
+        'ACCEPTED' => 'REPLY',
     );
 
     while (my ($partstat, $wantNotif) = each %expectNotif) {
@@ -57,6 +57,11 @@ EOF
         if ($wantNotif) {
             xlog "Assert iTIP notification is sent";
             $self->assert_not_null($notif);
+
+            my $expect_id = encode_eventid($uid);
+            my $notif_payload = decode_json($notif->{MESSAGE});
+            $self->assert_str_equals($expect_id, $notif_payload->{id});
+            $self->assert_str_equals($wantNotif, $notif_payload->{method});
         } else {
             xlog "Assert no iTIP notification is sent";
             $self->assert_null($notif);
