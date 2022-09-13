@@ -1,0 +1,163 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_multiget_defaultalerts
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "share calendar";
+    my ($shareeJmap, $shareeCaldav) = $self->create_user('sharee');
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteAll => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Set default alert on calendar and personalized event";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => {
+                        alert1 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT5M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => '5f0dec98-8952-418e-91fa-159cb2ba28da',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+    my $eventId = $res->[1][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+    my $eventHref = $res->[1][1]{created}{1}{'x-href'};
+    $self->assert_not_null($eventHref);
+
+    xlog "Set per-user property to force per-user data split";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    color => 'red',
+                }
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog "Assert alerts and ETag";
+
+    my $xmlMultiget = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-multiget xmlns:D="DAV:"
+             xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <D:getetag/>
+    <C:calendar-data/>
+  </D:prop>
+  <D:href>$eventHref</D:href>
+</C:calendar-multiget>
+EOF
+
+    xlog "Run multiget";
+    $mgRes = $caldav->Request('REPORT', 'Default', $xmlMultiget,
+        'Content-Type' => 'application/xml',
+    );
+    my $icaldata = $mgRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content};
+    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT5M/, $icaldata);
+    my $mgEtag = $mgRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}getetag'}{content};
+    $self->assert_not_null($mgEtag);
+
+    my $xmlCalQuery = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-query xmlns:D="DAV:"
+                  xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <D:getetag/>
+  </D:prop>
+</C:calendar-query>
+EOF
+
+    xlog "Run calendar query";
+    $qrRes = $caldav->Request('REPORT', 'Default', $xmlCalQuery,
+        'Content-Type' => 'application/xml',
+    );
+    my $qrEtag = $qrRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}getetag'}{content};
+    $self->assert_str_equals($mgEtag, $qrEtag);
+
+    xlog "Update default alerts";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => {
+                        alert1 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT15M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Assert iCalendar data and ETags changed";
+
+    xlog "Run multiget";
+    $mgRes = $caldav->Request('REPORT', 'Default', $xmlMultiget,
+        'Content-Type' => 'application/xml',
+    );
+    my $icaldata = $mgRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content};
+    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT15M/, $icaldata);
+    my $newMgEtag = $mgRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}getetag'}{content};
+    $self->assert_str_not_equals($mgEtag, $newMgEtag);
+
+    xlog "Run calendar query";
+    $qrRes = $caldav->Request('REPORT', 'Default', $xmlCalQuery,
+        'Content-Type' => 'application/xml',
+    );
+    my $newQrEtag = $qrRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}getetag'}{content};
+    $self->assert_str_equals($newMgEtag, $newQrEtag);
+}

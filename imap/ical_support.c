@@ -2289,6 +2289,10 @@ EXPORTED void icalcomponent_add_defaultalerts(icalcomponent *ical,
 
             icalcomponent *alerts = is_date ?  withdate : withtime;
 
+            /* Ignore empty list of default alerts */
+            if (!icalcomponent_get_first_component(alerts, ICAL_VALARM_COMPONENT))
+                break;
+
             /* Remove VALARMs in component */
             icalcomponent *curr, *next = NULL;
             for (curr = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);

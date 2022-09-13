@@ -2419,6 +2419,73 @@ static struct icaltimetype icaltime_from_rfc3339_string(const char *str)
     return icaltime_null_time();
 }
 
+static void personalize_and_add_defaultalerts(struct mailbox *mailbox,
+                                              const struct caldav_data *cdata,
+                                              const struct index_record *record,
+                                              icalcomponent *ical,
+                                              icalcomponent **alerts_withtimep,
+                                              icalcomponent **alerts_withdatep)
+{
+    int has_defaultalerts = 0;
+    struct dlist *dl = NULL;
+    struct buf userdata = BUF_INITIALIZER;
+
+    if (namespace_calendar.allow & ALLOW_USERDATA) {
+        if (caldav_is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
+            dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+            add_personal_data_from_dl(ical, dl);
+            has_defaultalerts = caldav_read_usedefaultalerts(dl, mailbox, record, &ical);
+        }
+    }
+
+    if (!has_defaultalerts) {
+        has_defaultalerts = cdata->comp_flags.defaultalerts;
+    }
+
+    /* Inject default alarms, if necessary */
+    if (has_defaultalerts) {
+        icalcomponent *withtime = alerts_withtimep ? *alerts_withtimep : NULL;
+        icalcomponent *withdate = alerts_withdatep ? *alerts_withdatep : NULL;
+
+        /* Read default alarms */
+        if (!withtime) {
+            withtime =
+                caldav_read_calendar_icalalarms(mailbox_name(mailbox),
+                        httpd_userid, CALDAV_DEFAULTALARMS_ANNOT_WITHTIME);
+
+            if (!withtime)
+                withtime = icalcomponent_new(ICAL_XROOT_COMPONENT);
+
+            if (alerts_withtimep)
+                *alerts_withtimep = withtime;
+        }
+
+        if (!withdate) {
+            withdate =
+                caldav_read_calendar_icalalarms(mailbox_name(mailbox),
+                        httpd_userid, CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
+
+            if (!withdate)
+                withdate = icalcomponent_new(ICAL_XROOT_COMPONENT);
+
+            if (alerts_withdatep)
+                *alerts_withdatep = withdate;
+        }
+
+        /* Add default alarms */
+        icalcomponent_add_defaultalerts(ical, withtime, withdate, 0);
+
+        /* Free default alarms */
+        if (withtime && !alerts_withtimep)
+            icalcomponent_free(withtime);
+
+        if (withdate && !alerts_withdatep)
+            icalcomponent_free(withdate);
+    }
+
+    dlist_free(&dl);
+    buf_free(&userdata);
+}
 
 /* Perform a GET/HEAD request on a CalDAV resource */
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
@@ -2499,42 +2566,8 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         }
 
         if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
+        personalize_and_add_defaultalerts(mailbox, cdata, record, ical, NULL, NULL);
 
-        int has_defaultalerts = 0;
-        struct dlist *dl = NULL;
-
-        /* Personalize resource, if necessary */
-        if (namespace_calendar.allow & ALLOW_USERDATA) {
-            struct buf userdata = BUF_INITIALIZER;
-
-            if (caldav_is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
-                dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
-                add_personal_data_from_dl(ical, dl);
-                buf_free(&userdata);
-                has_defaultalerts = caldav_read_usedefaultalerts(dl, mailbox, record, &ical);
-            }
-        }
-        if (!has_defaultalerts) {
-            has_defaultalerts = cdata->comp_flags.defaultalerts;
-        }
-
-        /* Inject default alarms, if necessary */
-        if (has_defaultalerts) {
-            /* Read default alarms */
-            icalcomponent *withtime =
-                caldav_read_calendar_icalalarms(mailbox_name(mailbox), httpd_userid,
-                        CALDAV_DEFAULTALARMS_ANNOT_WITHTIME);
-            icalcomponent *withdate =
-                caldav_read_calendar_icalalarms(mailbox_name(mailbox), httpd_userid,
-                        CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
-
-            /* Add default alarms */
-            icalcomponent_add_defaultalerts(ical, withtime, withdate, 0);
-
-            if (withdate) icalcomponent_free(withdate);
-            if (withtime) icalcomponent_free(withtime);
-        }
-        dlist_free(&dl);
 
         /* iCalendar data in response should not be transformed */
         txn->flags.cc |= CC_NOTRANSFORM;
@@ -5295,6 +5328,12 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     const char *data = NULL;
     size_t datalen = 0;
 
+    struct caldata_rock {
+        char *mboxname;
+        icalcomponent *alerts_withtime;
+        icalcomponent *alerts_withdate;
+    };
+
     if (!prop) {
         /* Cleanup "property" request - free partial component structure */
         struct partial_comp_t *pcomp, *child, *sibling;
@@ -5311,10 +5350,29 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
         partial->comp = NULL;
 
+        /* Free property callback data */
+        struct caldata_rock *caldata_rock =
+            hash_del((const char*)name, &fctx->per_prop_data);
+        if (caldata_rock) {
+            if (caldata_rock->alerts_withtime)
+                icalcomponent_free(caldata_rock->alerts_withtime);
+
+            if (caldata_rock->alerts_withdate)
+                icalcomponent_free(caldata_rock->alerts_withdate);
+
+            free(caldata_rock->mboxname);
+            free(caldata_rock);
+        }
+
         return 0;
     }
 
     if (!propstat) {
+        /* Add property callback data */
+        struct caldata_rock *caldata_rock =
+            xzmalloc(sizeof(struct caldata_rock));
+        hash_insert((const char*)name, caldata_rock, &fctx->per_prop_data);
+
         /* Prescreen "property" request - read partial/expand children */
         xmlNodePtr node;
 
@@ -5369,6 +5427,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     else {
         struct caldav_data *cdata = (struct caldav_data *) fctx->data;
         icalcomponent *ical = fctx->obj;
+        struct caldata_rock *caldata_rock =
+            hash_lookup((const char*)name, &fctx->per_prop_data);
 
         if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
 
@@ -5405,20 +5465,29 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         }
 
         /* Personalize resource, if necessary */
-        if (namespace_calendar.allow & ALLOW_USERDATA) {
-            struct buf userdata = BUF_INITIALIZER;
-
-            if (caldav_is_personalized(fctx->mailbox, fctx->data,
-                                       httpd_userid, &userdata)) {
-                if (!fctx->obj) {
-                    ical = fctx->obj = icalparser_parse_string(data);
-                    if (!ical) return HTTP_SERVER_ERROR;
-                }
-
-                add_personal_data(ical, &userdata);
-                buf_free(&userdata);
-            }
+        if (!fctx->obj) {
+            ical = fctx->obj = icalparser_parse_string(data);
+            if (!ical) return HTTP_SERVER_ERROR;
         }
+        if (strcmpsafe(caldata_rock->mboxname, mailbox_name(fctx->mailbox))) {
+            /* Reset default alerts per mailbox */
+            if (caldata_rock->alerts_withtime) {
+                icalcomponent_free(caldata_rock->alerts_withtime);
+                caldata_rock->alerts_withtime = NULL;
+            }
+
+            if (caldata_rock->alerts_withdate) {
+                icalcomponent_free(caldata_rock->alerts_withdate);
+                caldata_rock->alerts_withdate = NULL;
+            }
+
+            free(caldata_rock->mboxname);
+            caldata_rock->mboxname = xstrdup(mailbox_name(fctx->mailbox));
+        }
+        personalize_and_add_defaultalerts(fctx->mailbox,
+                fctx->data, fctx->record, ical,
+                &caldata_rock->alerts_withtime,
+                &caldata_rock->alerts_withdate);
 
         if (!icaltime_is_null_time(partial->range.start)) {
             /* Expand/limit recurrence set */

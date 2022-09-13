@@ -1,0 +1,125 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_multiget_defaultalerts_per_calendar
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create two calendars with default alerts";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                calendarA => {
+                    name => 'calendarA',
+                    defaultAlertsWithTime => {
+                        alert1 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT1H',
+                            },
+                            action => 'display',
+                        },
+                    },
+                },
+                calendarB => {
+                    name => 'calendarB',
+                    defaultAlertsWithTime => {
+                        alert1 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT2H',
+                            },
+                            action => 'display',
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    my $calendarAId = $res->[0][1]{created}{calendarA}{id};
+    $self->assert_not_null($calendarAId);
+    my $calendarBId = $res->[0][1]{created}{calendarB}{id};
+    $self->assert_not_null($calendarBId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                eventA1 => {
+                    uid => '5f0dec98-8952-418e-91fa-159cb2ba28da',
+                    calendarIds => {
+                        $calendarAId => JSON::true,
+                    },
+                    title => "eventA1",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::true,
+                },
+                eventA2 => {
+                    uid => '68b31869-889e-49f2-ac6a-f94ce0179635',
+                    calendarIds => {
+                        $calendarAId => JSON::true,
+                    },
+                    title => "eventA2",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::true,
+                },
+                eventB1 => {
+                    uid => 'b58fcc34-aca6-4ae5-a7d0-97411d1166a4',
+                    calendarIds => {
+                        $calendarBId => JSON::true,
+                    },
+                    title => "eventB1",
+                    start => "2020-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    my $eventA1Href = $res->[0][1]{created}{eventA1}{'x-href'};
+    $self->assert_not_null($eventA1Href);
+    my $eventA2Href = $res->[0][1]{created}{eventA2}{'x-href'};
+    $self->assert_not_null($eventA2Href);
+    my $eventB1Href = $res->[0][1]{created}{eventB1}{'x-href'};
+    $self->assert_not_null($eventB1Href);
+
+    xlog "Assert alerts and ETag";
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-multiget xmlns:D="DAV:"
+             xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <D:getetag/>
+    <C:calendar-data/>
+  </D:prop>
+  <D:href>$eventA1Href</D:href>
+  <D:href>$eventA2Href</D:href>
+  <D:href>$eventB1Href</D:href>
+</C:calendar-multiget>
+EOF
+    $res = $caldav->Request('REPORT', 'Default', $xml,
+        'Content-Type' => 'application/xml',
+    );
+
+    my %icaldataPerHref = map {
+        $_->{'{DAV:}href'}{content} => $_->{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content}
+    } @{$res->{'{DAV:}response'}};
+
+
+    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT1H/, $icaldataPerHref{$eventA1Href});
+    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT1H/, $icaldataPerHref{$eventA2Href});
+    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT2H/, $icaldataPerHref{$eventB1Href});
+}
