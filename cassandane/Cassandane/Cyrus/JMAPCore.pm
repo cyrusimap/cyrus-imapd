@@ -926,4 +926,42 @@ sub test_blob_upload_type
     $self->assert_str_equals("application/octet-stream", $res->{type});
 }
 
+sub test_get_session_rename_race
+    :AllowMoves :min_version_3_7 :needs_component_jmap
+{
+    # Test fetching the JMAP session during/after a user has been renamed
+    # but before the authentication credentials have been changed.
+    # In this case, we should return 503 rather than 500.
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # GET session
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('200', $RawResponse->{status});
+    my $session = eval { decode_json($RawResponse->{content}) };
+    $self->assert_not_null($session);
+
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert(not $admintalk->get_last_error());
+
+    # Try to GET session
+    $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('503', $RawResponse->{status});
+    $self->assert_not_null($RawResponse->{headers}{'retry-after'});
+}
+
 1;

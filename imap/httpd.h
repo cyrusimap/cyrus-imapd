@@ -331,6 +331,7 @@ struct txn_flags_t {
     unsigned long vary     : 6;         /* Headers on which response can vary */
     unsigned long trailer  : 3;         /* Headers which will be in trailer */
     unsigned long redirect : 1;         /* CGI local redirect */
+    unsigned long retry    : 1;         /* Retry-After */
 };
 
 /* HTTP connection context */

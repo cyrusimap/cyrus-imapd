@@ -810,6 +810,14 @@ static int my_caldav_auth(const char *userid)
     if (r) {
         syslog(LOG_ERR, "could not autoprovision calendars for userid %s: %s",
                 userid, error_message(r));
+        if (r == IMAP_INVALID_USER) {
+            /* We successfully authenticated, but don't have a user INBOX.
+               Assume that the user has yet to be fully provisioned,
+               or the user is being renamed.
+            */
+            return HTTP_UNAVAILABLE;
+        }
+        
         return HTTP_SERVER_ERROR;
     }
 

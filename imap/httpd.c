@@ -3255,6 +3255,13 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         }
         else simple_hdr(txn, "Accept-Encoding", "identity");
         break;
+
+    case HTTP_UNAVAILABLE:
+        if (txn->flags.retry) {
+            /* Construct Retry-After header for 503 response */
+            simple_hdr(txn, "Retry-After", "%u", 30 /* arbitrary value */);
+        }
+        break;
     }
 
 
@@ -4062,7 +4069,12 @@ static int auth_success(struct transaction_t *txn, const char *userid)
     for (i = 0; http_namespaces[i]; i++) {
         if (http_namespaces[i]->enabled && http_namespaces[i]->auth) {
             int ret = http_namespaces[i]->auth(httpd_userid);
-            if (ret) return ret;
+            if (ret) {
+                if (ret == HTTP_UNAVAILABLE) {
+                    txn->flags.retry = 1;
+                }
+                return ret;
+            }
         }
     }
 
