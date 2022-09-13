@@ -43,7 +43,7 @@
 error_table http
 
 # HTTP Response Status Codes
-# (from draft-ietf-httpbis-semantics unless otherwise noted)
+# (from RFC 9110 unless otherwise noted)
 #
 # Commented-out codes are currently unused by Cyrus
 
