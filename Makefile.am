@@ -1729,7 +1729,7 @@ master_master_SOURCES = \
 	master/masterconf.c \
 	master/masterconf.h \
 	master/service.h
-master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) -lm
+master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM)
 
 
 netnews_remotepurge_SOURCES = \
