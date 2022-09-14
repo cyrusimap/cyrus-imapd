@@ -458,7 +458,7 @@ sub test_contact_set_nickname
     $self->assert_not_null($res);
 }
 
-sub test_contact_set_invalid
+sub bogus_test_contact_set_invalid
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
