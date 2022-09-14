@@ -90,6 +90,7 @@ sub dump_user {
 
   my @folders;
   for my $folder (@{$info->{MAILBOX}}) {
+    next if $folder->{MBOXTYPE}; # don't dump special folders
     my $fi = $self->{sync}->dlwrite("GET", "FULLMAILBOX", $folder->{MBOXNAME});
     my @emails;
     for my $record (@{$fi->{MAILBOX}[0]{RECORD}||[]}) {
