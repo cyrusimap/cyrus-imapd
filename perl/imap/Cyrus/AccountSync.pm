@@ -44,7 +44,7 @@ use strict;
 use warnings;
 
 use Digest::SHA qw(sha1_hex);
-use JSON::XS;
+use JSON;
 use Cyrus::Mbname;
 use Data::Dumper;
 use Tie::DataUUID qw{$uuid};
@@ -124,7 +124,7 @@ sub dump_user {
       highestModificationSequenceValue => $folder->{HIGHESTMODSEQ} + 0,
       emails => \@emails,
     );
-    $frecord{subscribed} = $JSON::true if $subs{$folder->{MBOXNAME}};
+    $frecord{subscribed} = JSON::true if $subs{$folder->{MBOXNAME}};
     $frecord{specialUse} = $use if $use;
     if ($opts{objectid}) {
       $frecord{mailboxId} = $folder->{UNIQUEID};
