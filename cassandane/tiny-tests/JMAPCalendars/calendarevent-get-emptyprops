@@ -1,0 +1,123 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_emptyprops
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create VEVENT with empty string properties";
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+PRODID:-//Foo//Bar//EN
+BEGIN:VEVENT
+UID:05f5834a-6eab-4862-9b95-4497d5d6259b
+SEQUENCE:3
+DTSTAMP:20201221T074700Z
+CREATED:20201221T074700Z
+DTSTART;TZID=Europe/Berlin:20210101T010000
+DURATION:PT1H
+COLOR:
+RELATED-TO:
+SUMMARY:
+DESCRIPTION:
+CATEGORIES:
+LOCATION:
+URL:
+CONFERENCE:
+STATUS:
+TRANSP:
+CLASS:
+ORGANIZER:
+ATTENDEE:
+ATTACH:
+BEGIN:VALARM
+UID:e01ddb42-f2f1-4e39-9d94-17fcc5aa320c
+TRIGGER;VALUE=DATE-TIME:20210101T010000Z
+ACKNOWLEDGED:20201221T074700Z
+RELATED-TO:
+ACTION:
+ATTENDEE:
+SUMMARY:
+DESCRIPTION:
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    xlog "Make sure CalendarEvent/get returns it";
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+        }, 'R2'],
+    ]);
+
+    my $event = $res->[1][1]{list}[0];
+    $self->assert_not_null($event);
+
+    xlog "Make sure CalendarEvent/set{update} handles it";
+
+    # This triggers a specific empty-string related
+    # bug that only surfaces during update.
+    $event->{links} = {
+        links1 => {
+            href => 'https://example.com/2c505abe',
+        },
+    };
+
+    delete($event->{blobId});
+    delete($event->{debugBlobId});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $event->{id} => $event,
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ $event->{id} ],
+        }, 'R2'],
+    ]);
+
+    $self->assert(exists $res->[0][1]{updated}{$event->{id}});
+    $self->assert_not_null($res->[1][1]{list}[0]{id});
+
+    xlog "Make sure CalendarEvent/set{create} handles it";
+
+    $event->{links} = undef;
+    $event->{uid} = '113a2c25-5458-48ce-9c35-29eb957a4631';
+    delete($event->{id});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event2 => $event,
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event2}{id};
+    $self->assert_not_null($eventId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [ $eventId ],
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{list}[0]{id});
+}

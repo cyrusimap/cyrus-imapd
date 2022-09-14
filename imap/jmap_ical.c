@@ -757,7 +757,7 @@ static icalproperty* findprop_byid(icalcomponent *comp, const char *id,
         char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
         if (!oldid)
             oldid = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
-        if (!strcmp(id, oldid)) break;
+        if (!strcmpsafe(id, oldid)) break;
     }
 
     return prop;
@@ -2154,11 +2154,14 @@ static json_t* linksbyprop_from_ical(icalcomponent *comp,
 
             const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
             char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
-            if (!id) id = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
-            json_t *link = link_from_ical(prop, jmapctx);
-            if (json_object_size(link)) {
-                json_object_set_new(jlinks_propid ?
-                        jlinks_propid : jlinks_propname, id, link);
+            if (!id)
+                id = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
+            if (id) {
+                json_t *link = link_from_ical(prop, jmapctx);
+                if (json_object_size(link)) {
+                    json_object_set_new(jlinks_propid ?
+                            jlinks_propid : jlinks_propname, id, link);
+                }
             }
 
             // do not leave empty link objects lingering around
@@ -3056,7 +3059,9 @@ virtuallocations_from_ical(icalcomponent *comp)
             buf_free(&buf);
         }
 
-        if (uri) json_object_set_new(locations, id, loc);
+        if (uri) json_object_set(locations, id, loc);
+
+        json_decref(loc);
         free(id);
     }
 
