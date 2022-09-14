@@ -843,12 +843,17 @@ sub test_blob_set_complex
     xlog "Base64 Blob/upload works and returns the right data";
     $res = $jmap->CallMethods([
       ['Blob/upload', { create => { b2 => { data => [{'data:asBase64' => $bdata}] } } }, 'S2'],
-      ['Blob/get', { ids => ['#b2'], properties => [ 'data:asText', 'size' ] }, 'G2'],
+      ['Blob/get', { ids => ['#b2'], properties => [ 'data:asText', 'size', 'digest:sha' ] }, 'G2'],
+      ['Blob/get', { ids => ['#b2'], offset => 4, length => 9, properties => [ 'data:asText', 'size', 'digest:sha', 'digest:sha-256' ] }, 'G2'],
+
     ]);
     $self->assert_str_equals('Blob/upload', $res->[0][0]);
     $self->assert_str_equals('Blob/get', $res->[1][0]);
     $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
     $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
+    $self->assert_str_equals("quick bro", $res->[2][1]{list}[0]{'data:asText'});
+    $self->assert_str_equals("QiRAPtfyX8K6tm1iOAtZ87Xj3Ww=", $res->[2][1]{list}[0]{'digest:sha'});
+    $self->assert_str_equals("gdg9INW7lwHK6OQ9u0dwDz2ZY/gubi0En0xlFpKt0OA=", $res->[2][1]{list}[0]{'digest:sha-256'});
 
     xlog "Complex expression works and returns the right data";
     my $target = "How quick was that?";
