@@ -750,11 +750,14 @@ static struct dlist *notify_extract_dl(xmlDocPtr doc)
             if (!xmlStrcmp(node->name, BAD_CAST "sharer-resource-uri")) {
                 struct request_target_t tgt;
                 struct meth_params *pparams;
-                const char *path, *errstr;
+                const char *errstr;
+                char *path;
                 int i;
 
                 value = xmlNodeGetContent(xmlFirstElementChild(node));
-                path = (const char *) value;
+                path = xmlURIUnescapeString((const char *) value,
+                                            xmlStrlen(value), NULL);
+                xmlFree(value);
 
                 /* Find the namespace of the requested resource */
                 for (i = 0; http_namespaces[i]; i++) {
@@ -777,12 +780,13 @@ static struct dlist *notify_extract_dl(xmlDocPtr doc)
                     (struct meth_params *) tgt.namespace->methods[METH_PUT].params;
                 tgt.flags = TGT_DAV_SHARED;  // prevent old-style sharing redirect
                 pparams->parse_path(path, &tgt, &errstr);
-                xmlFree(value);
                 free(tgt.userid);
+                free(path);
 
-                dlist_setatom(al, "M", tgt.mbentry->name);
-
-                mboxlist_entry_free(&tgt.mbentry);
+                if (tgt.mbentry) {
+                    dlist_setatom(al, "M", tgt.mbentry->name);
+                    mboxlist_entry_free(&tgt.mbentry);
+                }
                 break;
             }
         }
