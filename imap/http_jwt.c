@@ -50,7 +50,6 @@
 #include <string.h>
 #include <syslog.h>
 
-#include <openssl/err.h>
 #include <sasl/saslutil.h>
 
 #include "assert.h"
@@ -61,6 +60,10 @@
 #include "imap/http_err.h"
 
 #include "http_jwt.h"
+
+#ifdef HAVE_SSL
+
+#include <openssl/err.h>
 
 static int is_enabled = 0;
 
@@ -576,3 +579,26 @@ done:
     buf_free(&jwt.buf);
     return status;
 }
+
+#else /* !HAVE_SSL */
+
+int http_jwt_init(const char *keydir __attribute__((unused)),
+                  int max_age __attribute__((unused)))
+{
+    return 0;
+}
+
+int http_jwt_reset(void) { return 0; }
+
+int http_jwt_is_enabled(void) { return 0; }
+
+int http_jwt_auth(const char *in __attribute__((unused)),
+                  size_t inlen __attribute__((unused)),
+                  char *out __attribute__((unused)),
+                  size_t outlen __attribute__((unused)))
+{
+    xsyslog(LOG_INFO, "JSON Web Token authentication is disabled", NULL);
+    return SASL_BADAUTH;
+}
+
+#endif /* HAVE_SSL */
