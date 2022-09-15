@@ -191,9 +191,7 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
         json_array_append_new(typenames, json_string("Thread"));
         json_array_append_new(typenames, json_string("Email"));
         json_t *algorithms = json_array();
-#ifdef HAVE_SSL
         json_array_append_new(algorithms, json_string("md5"));
-#endif
         json_array_append_new(algorithms, json_string("sha"));
 #ifdef HAVE_SSL
         json_array_append_new(algorithms, json_string("sha-256"));
@@ -446,13 +444,11 @@ static const jmap_property_t blob_xprops[] = {
         NULL,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
     },
-#ifdef HAVE_SSL
     {
         "digest:md5",
         NULL,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
     },
-#endif
     {
         "digest:sha",
         NULL,
@@ -600,17 +596,15 @@ static int jmap_blob_get(jmap_req_t *req)
                 json_object_set_new(item, "size", json_integer(buf_len(&ctx.blob)));
             }
 
-#ifdef HAVE_SSL
             if (jmap_wantprop(get.props, "digest:md5")) {
                 unsigned char data[16];
                 memset(data, 0, sizeof(data));
-                MD5((unsigned char *)base, len, data);
+                md5((unsigned char *)base, len, data);
                 size_t len64 = 24;
                 char output[24];
                 charset_encode_mimebody((char *)data, 16, output, &len64, NULL, 0 /* no wrap */);
                 json_object_set_new(item, "digest:md5", json_stringn(output, 24));
             }
-#endif
 
             // this is "sha1" and we have a built-in so use that
             if (jmap_wantprop(get.props, "digest:sha")) {
@@ -626,7 +620,7 @@ static int jmap_blob_get(jmap_req_t *req)
             if (jmap_wantprop(get.props, "digest:sha-256")) {
                 unsigned char data[32];
                 memset(data, 0, sizeof(data));
-                SHA256((unsigned char *)base, len, data);
+                xsha256((unsigned char *)base, len, data);
                 size_t len64 = 44;
                 char output[44];
                 charset_encode_mimebody((char *)data, 32, output, &len64, NULL, 0 /* no wrap */);
