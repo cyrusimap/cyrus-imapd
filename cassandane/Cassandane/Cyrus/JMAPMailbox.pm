@@ -4479,6 +4479,112 @@ EOF
     );
 }
 
+sub test_mailbox_changes_on_thread_counts
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    $imap->uid(1);
+
+    xlog "Set up mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', { }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                "a" => { name => "a", parentId => undef },
+                "b" => { name => "b", parentId => undef },
+            },
+        }, 'R2'],
+    ]);
+    my %ids = map { $_ => $res->[1][1]{created}{$_}{id} }
+              keys %{$res->[1][1]{created}};
+
+    xlog "Set up messages";
+    my %raw = (
+        A => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test A\r
+EOF
+        B => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test B\r
+EOF
+        C => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test C\r
+EOF
+        D => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+    );
+
+    # threads:
+    # T1: A B C
+    # T2: D
+
+    xlog $self, "Set up all the emails in all the folders";
+    $imap->append('INBOX.a', "(\\Seen)", $raw{A}) || die $@;
+    $imap->append('INBOX.a', "()", $raw{B}) || die $@;
+    $imap->append('INBOX.b', "(\\Seen)", $raw{C}) || die $@;
+    $imap->append('INBOX.a', "()", $raw{D}) || die $@;
+
+    # expectation:
+    # A (a:1, seen)
+    # B (a:2, unseen)
+    # C (b:1, seen)
+    # D (a:3 unseen)
+
+    my $predata = $jmap->CallMethods([
+        ['Mailbox/get', { }, 'R1'],
+    ]);
+
+    xlog $self, "mark thread seen";
+    $imap->select("INBOX.a");
+    $imap->store(2, "+flags", "\\Seen");
+
+    my $postdata = $jmap->CallMethods([
+        ['Mailbox/changes', { sinceState => $predata->[0][1]{state} }, 'R1'],
+    ]);
+
+    my %changed = map { $_ => 1 } @{$postdata->[0][1]{updated}};
+    $self->assert_not_null($changed{$ids{a}});
+    $self->assert_not_null($changed{$ids{b}});
+}
+
 sub test_mailbox_trash_counts_ondelete
     :min_version_3_3 :needs_component_jmap :NoAltNameSpace
 {
