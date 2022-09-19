@@ -382,4 +382,80 @@ sub _set_quotalimits
 
 use Cassandane::Tiny::Loader 'tiny-tests/JMAPEmail';
 
+sub test_email_query_seen_ignore_jmapupload_folder
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions :MagicPlus :AllowDeleted
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog 'Upload some blob to create upload folder';
+    $jmap->Upload('test', 'application/octets') or die;
+
+    xlog 'Upload MIME message';
+    my $mime = <<'EOF';
+From: 'Some Example Sender' <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+MIME-Version: 1.0
+Content-Type: text/plain; charset='UTF-8'
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    my $blobId = $jmap->Upload($mime, 'message/rfc822')->{blobId};
+    $self->assert_not_null($blobId);
+
+    xlog "Undelete blobs in #jmap folder";
+    $self->{instance}->run_command({ cyrus => 1 },
+        'unexpunge', '-a', '-d', 'user.cassandane.#jmap');
+
+    xlog 'Import message';
+    my $res = $jmap->CallMethods([
+        ['Email/import', {
+            emails => {
+                email1 => {
+                    blobId => $blobId,
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    keywords => {
+                        '$seen' => JSON::true,
+                    },
+                }
+            },
+        }, 'R1'],
+    ]);
+    my $emailId = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($emailId);
+
+    xlog 'Query email by $seen';
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                hasKeyword => '$seen',
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                allInThreadHaveKeyword => '$seen',
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                someInThreadHaveKeyword => '$seen',
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                noneInThreadHaveKeyword => '$seen',
+            },
+        }, 'R4'],
+    ]);
+    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
+    $self->assert_deep_equals([$emailId], $res->[1][1]{ids});
+    $self->assert_deep_equals([$emailId], $res->[2][1]{ids});
+    $self->assert_deep_equals([], $res->[3][1]{ids});
+}
 1;

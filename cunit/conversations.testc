@@ -404,7 +404,8 @@ static void test_folder_rename(void)
     CU_ASSERT_PTR_NOT_NULL(conv);
 
     int f1 = conversation_folder_number(state, FOLDER1, 1);
-    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 }, BV_INITIALIZER };
+    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                    BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
 
     conversation_update(state, conv,
                         &ecounts1,
@@ -413,7 +414,8 @@ static void test_folder_rename(void)
                         /*createdmodseq*/1);
 
     int f2 = conversation_folder_number(state, FOLDER2, 1);
-    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 }, BV_INITIALIZER };
+    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                    BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
 
     conversation_update(state, conv,
                         &ecounts2,
@@ -517,7 +519,8 @@ static void test_folders(void)
     counts[1] = 0;
 
     int f1 = conversation_folder_number(state, FOLDER1, 1);
-    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 }, BV_INITIALIZER };
+    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                    BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts1,
                         /*size*/0, counts,
@@ -584,7 +587,8 @@ static void test_folders(void)
     counts[1] = 2;
     /* some more updates should succeed */
     int f2 = conversation_folder_number(state, FOLDER2, 1);
-    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 1, 1, 1, 1 }, BV_INITIALIZER };
+    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 1, 1, 1, 1 },
+                                    BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts2,
                         /*size*/0, counts,
@@ -619,7 +623,8 @@ static void test_folders(void)
 
     counts[1] = 5;
     int f3 = conversation_folder_number(state, FOLDER3, 1);
-    struct emailcounts ecounts3 = { f3, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 0, 0, 1, 0, 0 }, BV_INITIALIZER };
+    struct emailcounts ecounts3 = { f3, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 0, 0, 1, 0, 0 },
+                                    BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts3,
                         /*size*/0, counts,
@@ -738,7 +743,8 @@ static void test_folders(void)
     /* decrementing a folder down to zero */
     counts[0] = -1;
     counts[1] = 0;
-    struct emailcounts ecountsneg1 = { f1, 0, -1, { 1, 1, 0, 1, 1, 0 }, { 0, 0, 0, 0, 0, 0 }, BV_INITIALIZER };
+    struct emailcounts ecountsneg1 = { f1, 0, -1, { 1, 1, 0, 1, 1, 0 }, { 0, 0, 0, 0, 0, 0 },
+                                       BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecountsneg1,
                         /*size*/0, counts,
@@ -853,7 +859,8 @@ static void test_folder_ordering(void)
 
     conv = conversation_new();
 
-    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 }, BV_INITIALIZER };
+    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                       BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts1,
                         /*size*/0, counts,
@@ -861,7 +868,8 @@ static void test_folder_ordering(void)
                         /*createdmodseq*/0);
 
     /* add folders out of order */
-    struct emailcounts ecounts3 = { f3, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 }, BV_INITIALIZER };
+    struct emailcounts ecounts3 = { f3, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                       BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts3,
                         /*size*/0, counts,
@@ -877,7 +885,8 @@ static void test_folder_ordering(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(conv);
 
-    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 }, BV_INITIALIZER };
+    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                       BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts2,
                         /*size*/0, counts,
@@ -1199,7 +1208,8 @@ static void test_dump(void)
         CU_ASSERT_PTR_NOT_NULL(conv);
         for (j = 0 ; j < mboxnames.count ; j++) {
             int f = conversation_folder_number(state, mboxnames.data[j], 1);
-            struct emailcounts ecounts = { f, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 }, BV_INITIALIZER };
+            struct emailcounts ecounts = { f, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                            BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
             conversation_update(state, conv,
                                 &ecounts,
                                 /*size*/0, /*counts*/NULL,
