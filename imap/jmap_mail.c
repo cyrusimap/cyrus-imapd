@@ -2292,7 +2292,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
                                              ptrarray_t *search_attrs,
                                              strarray_t *perf_filters)
 {
-    search_expr_t *this, *e;
+    search_expr_t *this;
     json_t *val;
     const char *s;
     size_t i;
@@ -2303,28 +2303,56 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
     }
 
     if ((s = json_string_value(json_object_get(filter, "operator")))) {
-        enum search_op op = SEOP_UNKNOWN;
+        json_t *conditions = json_object_get(filter, "conditions");
+        int is_not = 0;
 
+        // Build operator node
         if (!strcmp("AND", s)) {
-            op = SEOP_AND;
+            if (!json_array_size(conditions)) {
+                return search_expr_new(parent, SEOP_FALSE);
+            }
+            this = search_expr_new(parent, SEOP_AND);
         } else if (!strcmp("OR", s)) {
-            op = SEOP_OR;
+            if (!json_array_size(conditions)) {
+                return search_expr_new(parent, SEOP_FALSE);
+            }
+            this = search_expr_new(parent, SEOP_OR);
         } else if (!strcmp("NOT", s)) {
-            op = SEOP_NOT;
+            if (!json_array_size(conditions)) {
+                return search_expr_new(parent, SEOP_TRUE);
+            }
+            this = search_expr_new(parent, SEOP_AND);
+            is_not = 1;
+        } else {
+            return search_expr_new(parent, SEOP_UNKNOWN);
         }
 
-        this = search_expr_new(parent, op);
-        e = op == SEOP_NOT ? search_expr_new(this, SEOP_OR) : this;
+        // Build operand nodes, skip empty conditions
+        json_array_foreach(conditions, i, val) {
+            if (json_object_size(val)) {
+                search_expr_t *e = is_not ? search_expr_new(this, SEOP_NOT) : this;
+                _email_buildsearchexpr(req, val, e, contactgroups, want_expunged,
+                        search_attrs, perf_filters);
+            }
+        }
 
-        json_array_foreach(json_object_get(filter, "conditions"), i, val) {
-            _email_buildsearchexpr(req, val, e, contactgroups, want_expunged,
-                    search_attrs, perf_filters);
+        // Reduce empty operator nodes
+        if (!this->children) {
+            enum search_op op = is_not ? SEOP_FALSE : SEOP_TRUE;
+            if (parent) {
+                search_expr_detach(parent, this);
+            }
+            search_expr_free(this);
+            return search_expr_new(parent, op);
         }
     } else {
-        this = search_expr_new(parent, SEOP_AND);
+        if (!json_object_size(filter)) {
+            /* zero properties evaluate to true */
+            return search_expr_new(parent, SEOP_TRUE);
+        }
 
-        /* zero properties evaluate to true */
-        search_expr_new(this, SEOP_TRUE);
+        this = search_expr_new(parent, SEOP_AND);
+        search_expr_t *e;
 
         if ((s = json_string_value(json_object_get(filter, "after")))) {
             time_from_iso8601(s, &t);
