@@ -1,0 +1,122 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_import_received_at
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
+    my @testCases = ({
+        creationId => 'clientSet1',
+        dateHeader => "Date: Sat, 1 Jan 2022 01:00:00 +1100\r\n",
+        receivedHeader => undef,
+        receivedAt => '2022-02-01T12:00:00Z',
+        wantReceivedAt => '2022-02-01T12:00:00Z',
+    }, {
+        creationId => 'clientSet2',
+        dateHeader => "Date: Sat, 1 Jan 2022 01:00:00 +1100\r\n",
+        receivedHeader => "Received: from foo ([192.168.0.1]) by bar (Baz); Mon, 15 Aug 2022 07:49:01 -0400\r\n",
+        receivedAt => '2022-02-01T12:00:00Z',
+        wantReceivedAt => '2022-02-01T12:00:00Z',
+    }, {
+        creationId => 'receivedAtFromReceivedHeader',
+        dateHeader => "Date: Sat, 1 Jan 2022 01:00:00 +1100\r\n",
+        receivedHeader => "Received: from foo ([192.168.0.1]) by bar (Baz); Mon, 15 Aug 2022 07:49:01 -0400\r\n",
+        receivedAt => undef,
+        wantReceivedAt => '2022-08-15T11:49:01Z',
+        skipVersionBefore => qw(3,7),
+    }, {
+        creationId => 'receivedAtFromFirstReceivedHeader',
+        dateHeader => "Date: Sat, 1 Jan 2022 01:00:00 +1100\r\n",
+        receivedHeader => "Received: from rcv1 ([192.168.0.1]) by bar (Baz); Mon, 15 Aug 2022 07:49:01 -0400\r\n" .
+                          "Received: from rcv2 ([192.168.0.2]) by tux (Qux); Mon, 13 Aug 2022 12:01:10 -0200\r\n" .
+                          "Received: from rcv3 ([192.168.0.3]) by baz (Hkl); Mon, 16 Aug 2022 13:01:10 -0200\r\n",
+        receivedAt => undef,
+        wantReceivedAt => '2022-08-15T11:49:01Z',
+        skipVersionBefore => qw(3,7),
+    }, {
+        creationId => 'receivedAtFromDateHeader',
+        dateHeader => "Date: Sat, 1 Jan 2022 01:00:00 +1100\r\n",
+        receivedHeader => undef,
+        receivedAt => undef,
+        wantReceivedAt => '2021-12-31T14:00:00Z',
+        skipVersionBefore => qw(3,7),
+    }, {
+        creationId => 'serverSetNoHeader',
+        receivedHeader => undef,
+        receivedAt => undef,
+        wantReceivedAt => undef,
+    });
+
+    foreach my $tc (@testCases) {
+
+        my ($needMaj, $needMin) = $tc->{skipVersionBefore} || qw(0,0);
+        if ($maj < $needMaj || ($maj == $needMaj && $min < $needMin)) {
+            xlog "maj=$maj needMaj=$needMaj min=$min needMin=$needMin";
+            xlog $self, "Skipping test $tc->{creationId}";
+            next;
+        }
+
+        xlog $self, "Running test $tc->{creationId}";
+
+        my $mime = $tc->{receivedHeader} || '';
+        $mime .= $tc->{dateHeader} || '';
+        $mime .= <<'EOF';
+From: sender@local
+To: receiver@local
+Subject: test
+MIME-Version: 1.0
+Content-Type: text/plain; charset='UTF-8'
+Content-Transfer-Encoding: quoted-printable
+EOF
+        $mime =~ s/\r?\n/\r\n/gs;
+        $mime .= "\r\n";
+        $mime .= $tc->{creationId};
+
+        xlog $self, "Upload blob";
+        my $blobId = ($jmap->Upload($mime, 'message/rfc822'))->{blobId};
+        $self->assert_not_null($blobId);
+
+        xlog $tc->{creationId}, "Import mail";
+        my $res = $jmap->CallMethods([
+            ['Email/import', {
+                emails => {
+                    $tc->{creationId} => {
+                        blobId => $blobId,
+                        mailboxIds => {
+                            '$inbox' => JSON::true
+                        },
+                        receivedAt => $tc->{receivedAt},
+                    },
+                },
+            }, 'R1'],
+            ['Email/get', {
+                ids => [
+                    '#' . $tc->{creationId},
+                ],
+                properties => ['receivedAt', 'sentAt'],
+            }, 'R2']
+        ]);
+
+        $self->assert_not_null($res->[0][1]{created}{$tc->{creationId}});
+
+        xlog $self, "Assert sentAt";
+        if ($tc->{dateHeader}) {
+            $self->assert_str_equals('2022-01-01T01:00:00+11:00',
+                $res->[1][1]{list}[0]{sentAt});
+        } else {
+            $self->assert_null($res->[1][1]{list}[0]{sentAt});
+        }
+
+        xlog $self, "Assert receivedAt";
+        $self->assert_not_null($res->[1][1]{list}[0]{receivedAt});
+        if ($tc->{wantReceivedAt}) {
+            $self->assert_str_equals($tc->{wantReceivedAt},
+                $res->[1][1]{list}[0]{receivedAt});
+        } else {
+            $self->assert_not_null($res->[1][1]{list}[0]{receivedAt});
+        }
+    }
+}
