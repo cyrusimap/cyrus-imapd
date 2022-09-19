@@ -4130,7 +4130,13 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         int r = status_lookup_mbentry(mbentry, data->req->userid,
                                       STATUS_HIGHESTMODSEQ, &sdata);
         if (r) return r;
+        r = conversation_getstatus(req->cstate,
+                                   CONV_FOLDER_KEY_MBE(req->cstate, mbentry),
+                                   &sdata.xconv);
+        if (r) return r;
         mbmodseq = sdata.highestmodseq;
+        if (sdata.xconv.threadmodseq > mbmodseq)
+            mbmodseq = sdata.xconv.threadmodseq;
     } else {
         mbmodseq = mbentry->foldermodseq;
     }
