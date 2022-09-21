@@ -239,7 +239,7 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 done:
     if (r) {
         xsyslog(LOG_ERR, "can not lock mailbox",
-                "name=%s error=%s (%m)", mboxname, error_message(r));
+                "name=<%s> error=<%s>", mboxname, error_message(r));
         remove_lockitem(lockitem);
     }
     else *mboxlockptr = &lockitem->l;
