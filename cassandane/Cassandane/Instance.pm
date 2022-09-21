@@ -1533,7 +1533,7 @@ sub stop
     {
         my $pid = $self->_read_pid_file($name);
         next if (!defined $pid);
-        $self->stop_command($pid)
+        _stop_pid($pid)
             or push @errors, "Cannot shut down $name pid $pid";
     }
     # Note: no need to reap this daemon which is not our child anymore
