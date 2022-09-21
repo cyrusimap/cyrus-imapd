@@ -1884,7 +1884,7 @@ sub test_rename_quotaroot
 }
 
 sub test_search_deleted_folder
-    :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs
+    :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs :needs_component_jmap
 {
     my ($self) = @_;
 
