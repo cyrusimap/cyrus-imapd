@@ -1329,6 +1329,7 @@ BUILT_SOURCES += \
 imap_httpd_SOURCES += \
 	imap/http_jmap.c \
 	imap/http_jmap.h \
+	imap/jmap_admin.c \
 	imap/jmap_api.c \
 	imap/jmap_api.h \
 	imap/jmap_backup.c \

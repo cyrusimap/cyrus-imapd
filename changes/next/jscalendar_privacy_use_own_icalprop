@@ -1,0 +1,30 @@
+Description:
+
+Maps JMAP CalendarEvent privacy to the newly introduced iCalendar
+X-JMAP-PRIVACY property rather than CLASS.
+
+Config changes:
+
+None.
+
+Upgrade instructions:
+
+Previous versions of Cyrus determined the JMAP CalendarEvent privacy of
+an iCalendar VEVENT by the CLASS property. This now gets determined by
+the newly introduced X-JMAP-PRIVACY property, but the CalDAV indexes may
+already have entries for the old mapping and need to be upgraded.
+
+Sites that use JMAP should upgrade their CalDAV database index by calling
+the newly introduced JMAP method `Admin/rewriteCalendarEventPrivacy`.
+This method:
+
+- requires the 'https://cyrusimap.org/ns/jmap/admin' request capability
+- must be called as an admin user (regular user calls are rejected)
+- takes the optional `userIds` argument, whis is a JSON array of
+  userids to migrate. In absence of this argument, all users are migrated
+
+Site that do not use JMAP should upgrade their CalDAV database by
+
+- calling 'DELETE FROM ical_objs WHERE comp_flags >= 1024;' on a user's
+  dav.db
+- followed by calling `dav_reconstruct` for that user
