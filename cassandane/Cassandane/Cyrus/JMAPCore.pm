@@ -822,6 +822,17 @@ sub test_blob_set_complex
     my $self = shift;
     my $jmap = $self->{jmap};
 
+    # GET supported digest algorithms from session object
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    my $session = eval { decode_json($RawResponse->{content}) };
+    my %algs = map { $_ => 1 } @{$session->{capabilities}->{'https://cyrusimap.org/ns/jmap/blob'}->{supportedDigestAlgorithms}};
+
     # XXX: this will be replaced with the upstream one
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
 
@@ -841,14 +852,36 @@ sub test_blob_set_complex
     $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
 
     xlog "Base64 Blob/upload works and returns the right data";
+    my $props = [ 'data:asText', 'size' ];
+    if ($algs{'md5'}) {
+        push @{$props}, 'digest:md5';
+    }
+    if ($algs{'sha'}) {
+        push @{$props}, 'digest:sha';
+    }
+    if ($algs{'sha-256'}) {
+        push @{$props}, 'digest:sha-256';
+    }
+
     $res = $jmap->CallMethods([
       ['Blob/upload', { create => { b2 => { data => [{'data:asBase64' => $bdata}] } } }, 'S2'],
-      ['Blob/get', { ids => ['#b2'], properties => [ 'data:asText', 'size' ] }, 'G2'],
+      ['Blob/get', { ids => ['#b2'], properties => $props }, 'G2'],
+      ['Blob/get', { ids => ['#b2'], offset => 4, length => 9, properties => $props }, 'G2'],
     ]);
     $self->assert_str_equals('Blob/upload', $res->[0][0]);
     $self->assert_str_equals('Blob/get', $res->[1][0]);
     $self->assert_str_equals($data, $res->[1][1]{list}[0]{'data:asText'});
     $self->assert_num_equals(length $data, $res->[1][1]{list}[0]{size});
+    $self->assert_str_equals("quick bro", $res->[2][1]{list}[0]{'data:asText'});
+    if ($algs{'md5'}) {
+        $self->assert_str_equals("tTNHgg3iNoIdHFn81iQD9A==", $res->[2][1]{list}[0]{'digest:md5'});
+    }
+    if ($algs{'sha'}) {
+        $self->assert_str_equals("QiRAPtfyX8K6tm1iOAtZ87Xj3Ww=", $res->[2][1]{list}[0]{'digest:sha'});
+    }
+    if ($algs{'sha-256'}) {
+        $self->assert_str_equals("gdg9INW7lwHK6OQ9u0dwDz2ZY/gubi0En0xlFpKt0OA=", $res->[2][1]{list}[0]{'digest:sha-256'});
+    }
 
     xlog "Complex expression works and returns the right data";
     my $target = "How quick was that?";

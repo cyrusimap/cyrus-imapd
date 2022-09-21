@@ -190,15 +190,23 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
         json_array_append_new(typenames, json_string("Mailbox"));
         json_array_append_new(typenames, json_string("Thread"));
         json_array_append_new(typenames, json_string("Email"));
+        json_t *algorithms = json_array();
+        json_array_append_new(algorithms, json_string("md5"));
+        json_array_append_new(algorithms, json_string("sha"));
+#ifdef HAVE_SSL
+        json_array_append_new(algorithms, json_string("sha-256"));
+#endif
         json_object_set_new(settings->server_capabilities,
                 JMAP_BLOB_EXTENSION,
-                json_pack("{s:i, s:i, s:o}",
+                json_pack("{s:i, s:i, s:o, s:o}",
                     "maxSizeBlobSet",
                     settings->limits[MAX_SIZE_BLOB_SET],
                     "maxCatenateItems",
                     settings->limits[MAX_CATENATE_ITEMS],
                     "supportedTypeNames",
-                    typenames));
+                    typenames,
+                    "supportedDigestAlgorithms",
+                    algorithms));
         json_object_set_new(settings->server_capabilities,
                 JMAP_USERCOUNTERS_EXTENSION, json_object());
 
@@ -422,9 +430,9 @@ static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
 
 static const jmap_property_t blob_xprops[] = {
     {
-        "data:asText",
+        "data",
         NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     },
     {
         "data:asBase64",
@@ -432,10 +440,27 @@ static const jmap_property_t blob_xprops[] = {
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
     },
     {
-        "data",
+        "data:asText",
         NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
     },
+    {
+        "digest:md5",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+    },
+    {
+        "digest:sha",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+    },
+#ifdef HAVE_SSL
+    {
+        "digest:sha-256",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+    },
+#endif
     {
         "size",
         NULL,
@@ -570,6 +595,39 @@ static int jmap_blob_get(jmap_req_t *req)
             if (jmap_wantprop(get.props, "size")) {
                 json_object_set_new(item, "size", json_integer(buf_len(&ctx.blob)));
             }
+
+            if (jmap_wantprop(get.props, "digest:md5")) {
+                unsigned char data[16];
+                memset(data, 0, sizeof(data));
+                md5((unsigned char *)base, len, data);
+                size_t len64 = 24;
+                char output[24];
+                charset_encode_mimebody((char *)data, 16, output, &len64, NULL, 0 /* no wrap */);
+                json_object_set_new(item, "digest:md5", json_stringn(output, 24));
+            }
+
+            // this is "sha1" and we have a built-in so use that
+            if (jmap_wantprop(get.props, "digest:sha")) {
+                unsigned char data[20];
+                xsha1((unsigned char *)base, len, data);
+                size_t len64 = 28;
+                char output[28];
+                charset_encode_mimebody((char *)data, 20, output, &len64, NULL, 0 /* no wrap */);
+                json_object_set_new(item, "digest:sha", json_stringn(output, 28));
+            }
+
+#ifdef HAVE_SSL
+            if (jmap_wantprop(get.props, "digest:sha-256")) {
+                unsigned char data[32];
+                memset(data, 0, sizeof(data));
+                xsha256((unsigned char *)base, len, data);
+                size_t len64 = 44;
+                char output[44];
+                charset_encode_mimebody((char *)data, 32, output, &len64, NULL, 0 /* no wrap */);
+                json_object_set_new(item, "digest:sha-256", json_stringn(output, 44));
+            }
+
+#endif
         }
         jmap_getblob_ctx_fini(&ctx);
     }

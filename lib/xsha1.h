@@ -56,6 +56,8 @@
 #define SHA1_DIGEST_LENGTH (SHA_DIGEST_LENGTH)
 #endif
 
+#define xsha256(d,l,h)     assert(EVP_Digest(d, l, h, NULL, EVP_sha256(), NULL))
+
 #define xsha1(d,l,h)       assert(EVP_Digest(d, l, h, NULL, EVP_sha1(), NULL))
 
 #define SHA1_CTX           EVP_MD_CTX*
