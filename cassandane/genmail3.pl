@@ -63,7 +63,7 @@ my $maxmessages;
 my %params = (
         type => 'imap',
         host => 'localhost',
-        port => 9100,
+        port => 29100,
         folder => 'inbox',
         username => 'cassandane',
         password => 'testpw',
