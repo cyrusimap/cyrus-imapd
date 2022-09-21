@@ -20,6 +20,8 @@ jobs:
     - uses: actions/checkout@v3
     - name: configure and build
       run: |
+        git fetch --unshallow
+        git fetch --tags
         ./tools/build-with-cyruslibs.sh
     - name: update jmap test suite
       run: |
