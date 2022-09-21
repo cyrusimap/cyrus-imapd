@@ -1361,10 +1361,10 @@ EXPORTED void buf_printf(struct buf *buf, const char *fmt, ...)
     va_end(args);
 }
 
-static void buf_replace_buf(struct buf *buf,
-                            size_t offset,
-                            size_t length,
-                            const struct buf *replace)
+EXPORTED void buf_replace_buf(struct buf *buf,
+                              size_t offset,
+                              size_t length,
+                              const struct buf *replace)
 {
     if (offset > buf->len) return;
     if (offset + length > buf->len)
