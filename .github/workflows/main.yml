@@ -31,6 +31,10 @@ jobs:
         git clean -f -x -d
         cpanm --installdeps .
         cd -
+    - name: install missing deps
+      run: |
+        cpanm IO::File::fcntl
+        cpanm Digest::CRC
     - name: run cassandane
       run: |
         cd cassandane
