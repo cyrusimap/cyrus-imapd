@@ -234,10 +234,14 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
                      nonblock, fname);
     if (!r) lockitem->l.locktype = locktype;
     else if (errno == EWOULDBLOCK) r = IMAP_MAILBOX_LOCKED;
-    else r = errno;
+    else r = IMAP_IOERROR;
 
 done:
-    if (r) remove_lockitem(lockitem);
+    if (r) {
+        xsyslog(LOG_ERR, "can not lock mailbox",
+                "name=<%s> error=<%s>", mboxname, error_message(r));
+        remove_lockitem(lockitem);
+    }
     else *mboxlockptr = &lockitem->l;
 
     return r;
