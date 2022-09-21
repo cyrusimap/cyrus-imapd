@@ -4778,6 +4778,7 @@ static int index_storeflag(struct index_state *state,
     int dirty = 0;
     modseq_t oldmodseq;
     struct index_map *im = &state->map[msgno-1];
+    int seen_dirty = 0;
     int r;
 
     memset(modified_flags, 0, sizeof(struct index_modified_flags));
@@ -4803,6 +4804,7 @@ static int index_storeflag(struct index_state *state,
             im->isseen = new;
             state->seen_dirty = 1;
             dirty++;
+            seen_dirty = 1;
         }
     }
 
@@ -4925,6 +4927,7 @@ static int index_storeflag(struct index_state *state,
         else
             system_flags &= ~FLAG_SEEN;
     }
+
     /* add back the internal tracking flags */
     system_flags |= keep;
 
@@ -4941,6 +4944,18 @@ static int index_storeflag(struct index_state *state,
     if (r) return r;
     r = msgrecord_set_userflags(msgrec, user_flags);
     if (r) return r;
+
+    // patch back in seen state for non-internal-seen
+    if (seen_dirty && !state->internalseen) {
+        if (im->isseen) {
+            modified_flags->added_system_flags |= FLAG_SEEN;
+            modified_flags->added_flags++;
+        }
+        else {
+            modified_flags->removed_system_flags |= FLAG_SEEN;
+            modified_flags->removed_flags++;
+        }
+    }
 
     /* if it's silent and unchanged, update the seen value, but
      * not if qresync is enabled - RFC 4551 says that the MODSEQ
