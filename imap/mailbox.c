@@ -3519,7 +3519,6 @@ out:
 
 #ifdef WITH_DAV
 static int mailbox_update_carddav(struct mailbox *mailbox,
-                                  const struct index_record *old,
                                   const struct index_record *new)
 {
     struct carddav_db *carddavdb = NULL;
@@ -3528,13 +3527,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     struct carddav_data *cdata = NULL;
     const char *resource = NULL;
     int r = 0;
-
-    /* conditions in which there's nothing to do */
-    if (!new) goto done;
-
-    /* phantom record - never really existed here */
-    if (!old && (new->internal_flags & FLAG_INTERNAL_UNLINKED))
-        goto done;
 
     r = mailbox_cacherecord(mailbox, new);
     if (r) goto done;
@@ -3610,7 +3602,6 @@ done:
 }
 
 static int mailbox_update_caldav(struct mailbox *mailbox,
-                                 const struct index_record *old,
                                  const struct index_record *new)
 {
     struct caldav_db *caldavdb = NULL;
@@ -3621,13 +3612,6 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     const char *sched_tag = NULL;
     unsigned tzbyref = 0, shared = 0;
     int r = 0;
-
-    /* conditions in which there's nothing to do */
-    if (!new) goto done;
-
-    /* phantom record - never really existed at all */
-    if (!old && (new->internal_flags & FLAG_INTERNAL_UNLINKED))
-        goto done;
 
     r = mailbox_cacherecord(mailbox, new);
     if (r) goto done;
@@ -3736,7 +3720,6 @@ done:
 }
 
 static int mailbox_update_webdav(struct mailbox *mailbox,
-                                 const struct index_record *old,
                                  const struct index_record *new)
 {
     struct webdav_db *webdavdb = NULL;
@@ -3745,13 +3728,6 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     struct webdav_data *wdata = NULL;
     struct buf resource = BUF_INITIALIZER;
     int r = 0;
-
-    /* conditions in which there's nothing to do */
-    if (!new) goto done;
-
-    /* phantom record - never really existed here */
-    if (!old && new->internal_flags & FLAG_INTERNAL_EXPUNGED)
-        goto done;
 
     r = mailbox_cacherecord(mailbox, new);
     if (r) goto done;
@@ -3832,17 +3808,31 @@ static int mailbox_update_dav(struct mailbox *mailbox,
                               const struct index_record *old,
                               const struct index_record *new)
 {
+
+    /* conditions in which there's nothing to do */
+    if (!new) return 0;
+
+    /* phantom record - never really existed here */
+    if (!old && (new->internal_flags & FLAG_INTERNAL_UNLINKED))
+        return 0;
+
+    /* just [un]archiving the message */
+    if (old &&
+        (old->internal_flags ^ new->internal_flags) & FLAG_INTERNAL_ARCHIVED) {
+        return 0;
+    }
+
     /* never have DAV on deleted mailboxes */
     if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL))
         return 0;
 
     switch (mbtype_isa(mailbox_mbtype(mailbox))) {
     case MBTYPE_ADDRESSBOOK:
-        return mailbox_update_carddav(mailbox, old, new);
+        return mailbox_update_carddav(mailbox, new);
     case MBTYPE_CALENDAR:
-        return mailbox_update_caldav(mailbox, old, new);
+        return mailbox_update_caldav(mailbox, new);
     case MBTYPE_COLLECTION:
-        return mailbox_update_webdav(mailbox, old, new);
+        return mailbox_update_webdav(mailbox, new);
     }
 
     return 0;
