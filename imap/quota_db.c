@@ -234,6 +234,7 @@ out:
 EXPORTED int quota_read_withconversations(struct quota *quota)
 {
     int r = quota_read(quota, NULL, 0);
+    if (r) return r;
 
     if (config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS)) {
         struct conversations_state *local_cstate = NULL;
@@ -251,7 +252,7 @@ EXPORTED int quota_read_withconversations(struct quota *quota)
         if (local_cstate) conversations_commit(&local_cstate);
     }
 
-    return r;
+    return 0;
 }
 
 /*
@@ -519,6 +520,7 @@ EXPORTED int quota_update_useds(const char *quotaroot,
     quota_init(&q, quotaroot);
 
     r = quota_read(&q, &tid, 1);
+    if (r) syslog(LOG_ERR, "QUOTAERROR: failed to read quota for %s (%s)", mboxname, error_message(r));
 
     if (!r) {
         int res;
@@ -540,6 +542,7 @@ EXPORTED int quota_update_useds(const char *quotaroot,
             }
         }
         r = quota_write(&q, silent, &tid);
+        if (r) syslog(LOG_ERR, "QUOTAERROR: failed to write quota for %s (%s)", mboxname, error_message(r));
     }
 
     if (r) {
