@@ -859,6 +859,31 @@ static void reconstruct_mbentry(const char *header_path)
                 mbentry->name, mbentry->uniqueid);
     }
 
+    if (!mbentry->name) {
+        /* Look for an existing I record */
+        mbentry_t *mbentry_byid = NULL;
+
+        mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &mbentry_byid, NULL);
+        if (mbentry_byid) {
+            mbentry->name = xstrdupnull(mbentry_byid->name);
+        }
+        mboxlist_entry_free(&mbentry_byid);
+
+        if (!mbentry->name) {
+            xsyslog(LOG_INFO, "neither the mailbox header nor mbentry"
+                    " had a mailbox name, can NOT continue",
+                    "uniqueid=<%s>", mbentry->uniqueid);
+            goto done;
+        }
+        else {
+            xsyslog(LOG_INFO, "mailbox header had no name, setting from mbentry",
+                    "mboxname=<%s> uniqueid=<%s>",
+                    mbentry->name, mbentry->uniqueid);
+
+            fix_header = 1;
+        }
+    }
+
     /* Sanity check the path */
     int legacy = mbentry->mbtype & MBTYPE_LEGACY_DIRS;
     const char *metapath = mboxname_metapath(mbentry->partition, mbentry->name,
