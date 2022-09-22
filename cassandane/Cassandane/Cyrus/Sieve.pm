@@ -4312,7 +4312,7 @@ EOF
 }
 
 sub test_remove_itip_on_jmap_update
-    :needs_component_sieve :needs_component_httpd :min_version_3_5
+    :needs_component_sieve :needs_component_httpd :needs_component_jmap :min_version_3_5
 {
     my ($self) = @_;
 

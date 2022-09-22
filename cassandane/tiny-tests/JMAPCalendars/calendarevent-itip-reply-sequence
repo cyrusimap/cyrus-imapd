@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_itip_reply_sequence
-    :needs_component_httpd :min_version_3_5
+    :needs_component_httpd :needs_component_jmap :min_version_3_5
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
