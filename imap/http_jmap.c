@@ -539,7 +539,7 @@ static int meth_post(struct transaction_t *txn,
  * JMAP Requests
  */
 
-static char *parse_accept_header(const char **hdr)
+__attribute__((nonnull)) static char *parse_accept_header(const char **hdr)
 {
     char *val = NULL;
     struct accept *accept = parse_accept(hdr);

@@ -2465,7 +2465,7 @@ struct accept *parse_accept(const char **hdr)
     struct accept *ret = NULL;
 #define GROW_ACCEPT 10;
 
-    for (i = 0; hdr && hdr[i]; i++) {
+    for (i = 0; hdr[i]; i++) {
         tok_t tok = TOK_INITIALIZER(hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
         char *token;
 
