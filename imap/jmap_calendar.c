@@ -2911,9 +2911,11 @@ static int getcalendarevents_getinstances(json_t *jsevent,
     jmap_req_t *req = rock->req;
     hash_table *props = rock->get->props;
     icalcomponent *myical = NULL;
-    mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
     json_t *jrtzid = json_object_get(jsevent, "timeZone");
     int r = 0;
+
+    mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    if (!mbentry) goto done;
 
     int i;
     for (i = 0; i < ptrarray_size(rock->want_eventids); i++) {
@@ -5417,7 +5419,16 @@ static void setcalendarevents_update(jmap_req_t *req,
         r = IMAP_NOTFOUND;
         goto done;
     }
+
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    if (!mbentry) {
+        xsyslog(LOG_WARNING, "no mbentry for mailbox",
+                "dav.mailbox=<%s> dav.mailbox_byname=<%d>",
+                cdata->dav.mailbox, cdata->dav.mailbox_byname);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+
     resource = xstrdup(cdata->dav.resource);
 
     if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
@@ -5822,6 +5833,13 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     }
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    if (!mbentry) {
+        xsyslog(LOG_WARNING, "no mbentry for mailbox",
+                "dav.mailbox=<%s> dav.mailbox_byname=<%d>",
+                cdata->dav.mailbox, cdata->dav.mailbox_byname);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
     mboxname = xstrdup(mbentry->name);
     resource = xstrdup(cdata->dav.resource);
 
@@ -6278,10 +6296,13 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
     struct geteventchanges_rock *rock = vrock;
     jmap_req_t *req = rock->req;
     struct jmap_changes *changes = rock->changes;
+
     mbentry_t *mbentry = jmap_mbentry_from_dav(req, &jscal->cdata.dav);
+    if (!mbentry)
+        goto done;
 
     /* Check permissions */
-    int rights = mbentry ? jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS) : 0;
+    int rights = jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
     if (!rights)
         goto done;
 
@@ -6580,9 +6601,11 @@ static int eventquery_cb(void *vrock, struct caldav_jscal *jscal)
         return 0;
 
     mbentry_t *mbentry = jmap_mbentry_from_dav(req, &jscal->cdata.dav);
+    if (!mbentry)
+        goto done;
 
     /* Check permissions */
-    int rights = mbentry ? jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS) : 0;
+    int rights = jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
     if (!rights) goto done;
 
     struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
@@ -7422,7 +7445,6 @@ static void _calendarevent_copy(jmap_req_t *req,
     }
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
-
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         *set_err = json_pack("{s:s}", "type", "notFound");
         goto done;
