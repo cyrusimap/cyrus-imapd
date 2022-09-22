@@ -542,8 +542,9 @@ static int meth_post(struct transaction_t *txn,
 static char *parse_accept_header(const char **hdr)
 {
     char *val = NULL;
-    struct accept *accept = parse_accept(hdr);
-    if (accept) {
+    dynarray_t *da = parse_accept(hdr);
+    if (dynarray_size(da)) {
+        struct accept *accept = dynarray_nth(da, 0);
         char *type = NULL;
         char *subtype = NULL;
         struct param *params = NULL;
@@ -553,11 +554,13 @@ static char *parse_accept_header(const char **hdr)
         free(type);
         free(subtype);
         param_free(&params);
-        struct accept *tmp;
-        for (tmp = accept; tmp && tmp->token; tmp++) {
-            free_accept(tmp);
+
+        int i;
+        for (i = 0; i < dynarray_size(da); i++) {
+            accept = dynarray_nth(da, i);
+            free_accept(accept);
         }
-        free(accept);
+        dynarray_free(&da);
     }
     return val;
 }

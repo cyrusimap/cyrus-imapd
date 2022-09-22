@@ -50,6 +50,7 @@
 #include <libical/ical.h>
 
 #include "annotate.h" /* for strlist */
+#include "dynarray.h"
 #include "hash.h"
 #include "http_client.h"
 #include "mailbox.h"
@@ -537,7 +538,6 @@ struct accept {
     char *version;
     char *charset;
     float qual;
-    struct accept *next;
 };
 
 extern struct namespace_t namespace_principal;
@@ -588,7 +588,7 @@ extern int ws_enabled;
 
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
                            const char **errstr);
-extern struct accept *parse_accept(const char **hdr);
+extern dynarray_t *parse_accept(const char **hdr);
 extern void free_accept(struct accept *a);
 extern void parse_query_params(struct transaction_t *txn, const char *query);
 extern time_t calc_compile_time(const char *time, const char *date);

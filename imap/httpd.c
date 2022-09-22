@@ -1842,9 +1842,12 @@ static void postauth_check_hdrs(struct transaction_t *txn)
     if (txn->zstrm &&
         txn->flags.ver == VER_1_1 &&
         (hdr = spool_getheader(txn->req_hdrs, "TE"))) {
-        struct accept *e, *enc = parse_accept(hdr);
+        dynarray_t *enc = parse_accept(hdr);
+        int i;
 
-        for (e = enc; e && e->token; e++) {
+        for (i = 0; i < dynarray_size(enc); i++) {
+            struct accept *e = dynarray_nth(enc, i);
+
             if (e->qual > 0.0 &&
                 (!strcasecmp(e->token, "gzip") ||
                  !strcasecmp(e->token, "x-gzip"))) {
@@ -1853,14 +1856,17 @@ static void postauth_check_hdrs(struct transaction_t *txn)
             }
             free_accept(e);
         }
-        if (enc) free(enc);
+        dynarray_free(&enc);
     }
     else if ((txn->zstrm || txn->brotli || txn->zstd) &&
              (hdr = spool_getheader(txn->req_hdrs, "Accept-Encoding"))) {
-        struct accept *e, *enc = parse_accept(hdr);
+        dynarray_t *enc = parse_accept(hdr);
         float qual = 0.0;
+        int i;
 
-        for (e = enc; e && e->token; e++) {
+        for (i = 0; i < dynarray_size(enc); i++) {
+            struct accept *e = dynarray_nth(enc, i);
+
             if (e->qual > 0.0 && e->qual >= qual) {
                 unsigned ce = CE_IDENTITY;
                 encode_proc_t proc = NULL;
@@ -1892,7 +1898,7 @@ static void postauth_check_hdrs(struct transaction_t *txn)
             }
             free_accept(e);
         }
-        if (enc) free(enc);
+        dynarray_free(&enc);
     }
 }
 
@@ -2459,11 +2465,10 @@ static int compare_accept(const struct accept *a1, const struct accept *a2)
     return 0;
 }
 
-struct accept *parse_accept(const char **hdr)
+dynarray_t *parse_accept(const char **hdr)
 {
-    int i, n = 0, alloc = 0;
-    struct accept *ret = NULL;
-#define GROW_ACCEPT 10;
+    dynarray_t *ret = dynarray_new(sizeof(struct accept));
+    int i;
 
     for (i = 0; hdr && hdr[i]; i++) {
         tok_t tok = TOK_INITIALIZER(hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
@@ -2472,45 +2477,38 @@ struct accept *parse_accept(const char **hdr)
         while ((token = tok_next(&tok))) {
             struct param *params = NULL, *param;
             char *type = NULL, *subtype = NULL;
-
-            if (n + 1 >= alloc)  {
-                alloc += GROW_ACCEPT;
-                ret = xrealloc(ret, alloc * sizeof(struct accept));
-            }
+            struct accept accept = { .qual = 1.0 };
 
             message_parse_type(token, &type, &subtype, &params);
 
             if (type)
-                ret[n].token = lcase(strconcat(type, "/", subtype, NULL));
+                accept.token = lcase(strconcat(type, "/", subtype, NULL));
             else
-                ret[n].token = lcase(xstrdup(token));
-            ret[n].version = NULL;
-            ret[n].charset = NULL;
-            ret[n].qual = 1.0;
+                accept.token = lcase(xstrdup(token));
 
             for (param = params; param; param = param->next) {
                 if (!strcasecmp(param->attribute, "q")) {
-                    ret[n].qual = strtof(param->value, NULL);
+                    accept.qual = strtof(param->value, NULL);
                 }
                 else if (!strcasecmp(param->attribute, "version")) {
-                    ret[n].version = xstrdup(param->value);
+                    accept.version = xstrdup(param->value);
                 }
                 else if (!strcasecmp(param->attribute, "charset")) {
-                    ret[n].charset = xstrdup(param->value);
+                    accept.charset = xstrdup(param->value);
                 }
             }
+
+            dynarray_append(ret, &accept);
 
             param_free(&params);
             free(subtype);
             free(type);
-
-            ret[++n].token = NULL;
         }
         tok_fini(&tok);
     }
 
-    qsort(ret, n, sizeof(struct accept),
-          (int (*)(const void *, const void *)) &compare_accept);
+    dynarray_sort(ret,
+                  (int (*)(const void *, const void *)) &compare_accept);
 
     return ret;
 }

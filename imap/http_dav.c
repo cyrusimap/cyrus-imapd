@@ -1238,9 +1238,12 @@ EXPORTED unsigned get_preferences(struct transaction_t *txn)
 struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types)
 {
     struct mime_type_t *ret = NULL;
-    struct accept *e, *enc = parse_accept(hdr);
+    dynarray_t *enc = parse_accept(hdr);
+    int i;
 
-    for (e = enc; e && e->token; e++) {
+    for (i = 0; i < dynarray_size(enc); i++) {
+        struct accept *e = dynarray_nth(enc, i);
+
         if (!ret && e->qual > 0.0) {
             struct mime_type_t *m;
 
@@ -1254,7 +1257,7 @@ struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types)
 
         free_accept(e);
     }
-    if (enc) free(enc);
+    dynarray_free(&enc);
 
     return ret;
 }
