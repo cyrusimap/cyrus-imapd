@@ -321,6 +321,8 @@ void buf_vprintf(struct buf *buf, const char *fmt, va_list args)
                 __attribute__((format(printf, 2, 0)));
 void buf_printf(struct buf *buf, const char *fmt, ...)
                 __attribute__((format(printf, 2, 3)));
+void buf_replace_buf(struct buf *buf, size_t offset, size_t length,
+                     const struct buf *replace);
 int buf_replace_all(struct buf *buf, const char *match,
                     const char *replace);
 int buf_replace_char(struct buf *buf, char match, char replace);

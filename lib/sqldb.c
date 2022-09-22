@@ -344,15 +344,56 @@ static void _finish_stmt(sqldb_t *open)
     ptrarray_fini(&open->stmts);
 }
 
-EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bval[],
+static void buf_replace_bindvals(struct buf *cmd, struct sqldb_bindval bval[])
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    for (; bval && bval->name; bval++) {
+        /* Does the command contain this bindval? */
+        char *p = strstr(buf_base(cmd), bval->name);
+        size_t matchlen = strlen(bval->name);
+        size_t off = 0;
+
+        if (!p || !strchr(" ,);", p[matchlen])) continue;
+
+        /* Construct the actual value */
+        buf_reset(&buf);
+        switch (bval->type) {
+        case SQLITE_INTEGER:
+            buf_printf(&buf, "%lld", bval->val.i);
+            break;
+
+        case SQLITE_TEXT:
+            if (bval->val.s)
+                buf_printf(&buf, "'%s'", bval->val.s);
+            else
+                buf_setcstr(&buf, "NULL");
+            break;
+        }
+
+        /* Replace all instances of the bindval with actual value */
+        do {
+            off = (p - buf_base(cmd));
+            buf_replace_buf(cmd, off, matchlen, &buf);
+            off += buf_len(&buf);
+
+        } while ((p = strstr(buf_base(cmd) + off, bval->name)) &&
+                 strchr(" ,);", p[matchlen]));
+    }
+
+    buf_free(&buf);
+}
+
+EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bvals[],
                         int (*cb)(sqlite3_stmt *stmt, void *rock), void *rock)
 {
     int rc, r = 0;
+    struct sqldb_bindval *bval;
     sqlite3_stmt *stmt = _prepare_stmt(open, cmd);
     if (!stmt) return -1;
 
     /* bind values */
-    for (; bval && bval->name; bval++) {
+    for (bval = bvals; bval && bval->name; bval++) {
         int cidx = sqlite3_bind_parameter_index(stmt, bval->name);
 
         switch (bval->type) {
@@ -376,9 +417,14 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
     sqlite3_clear_bindings(stmt);
 
     if (!r && rc != SQLITE_DONE) {
+        struct buf newcmd = BUF_INITIALIZER;
+
+        buf_setcstr(&newcmd, cmd);
+        buf_replace_bindvals(&newcmd, bvals);
         xsyslog(LOG_ERR, "DBERROR: step failed",
                          "fname=<%s> cmd=<%s> error=<%s>",
-                         open->fname, cmd, sqlite3_errmsg(open->db));
+                open->fname, buf_cstring(&newcmd), sqlite3_errmsg(open->db));
+        buf_free(&newcmd);
         r = -1;
     }
 
