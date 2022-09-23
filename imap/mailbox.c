@@ -136,6 +136,7 @@ struct mailbox_iter {
     uint32_t num_records;
     unsigned skipflags;
     seqset_t *uidset;
+    int step_inc;
 };
 
 
@@ -3519,7 +3520,8 @@ out:
 
 #ifdef WITH_DAV
 static int mailbox_update_carddav(struct mailbox *mailbox,
-                                  const struct index_record *new)
+                                  const struct index_record *new,
+                                  int is_reconstruct)
 {
     struct carddav_db *carddavdb = NULL;
     struct param *param;
@@ -3550,7 +3552,10 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     carddav_lookup_resource(carddavdb, &mbentry, resource, &cdata, /*tombstones*/1);
 
     /* does it still come from this UID? */
-    if (cdata->dav.imap_uid > new->uid) goto done;
+    if (cdata->dav.imap_uid > new->uid) {
+        if (is_reconstruct)r = IMAP_NO_MSGGONE;
+        goto done;
+    }
 
     if (new->internal_flags & FLAG_INTERNAL_UNLINKED) {
         /* is there an existing record? */
@@ -3602,7 +3607,8 @@ done:
 }
 
 static int mailbox_update_caldav(struct mailbox *mailbox,
-                                 const struct index_record *new)
+                                 const struct index_record *new,
+                                 int is_reconstruct)
 {
     struct caldav_db *caldavdb = NULL;
     struct param *param;
@@ -3642,7 +3648,15 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     caldav_lookup_resource(caldavdb, &mbentry, resource, &cdata, /*tombstones*/1);
 
     /* has this record already been replaced?  Don't write anything */
-    if (cdata->dav.imap_uid > new->uid) goto done;
+    if (cdata->dav.imap_uid > new->uid) {
+        if (is_reconstruct) {
+            /* remove associated alarms */
+            caldav_alarm_delete_record(cdata->dav.mailbox, new->uid);
+
+            r = IMAP_NO_MSGGONE;
+        }
+        goto done;
+    }
 
     if (new->internal_flags & FLAG_INTERNAL_UNLINKED) {
         /* is there an existing record? */
@@ -3720,7 +3734,8 @@ done:
 }
 
 static int mailbox_update_webdav(struct mailbox *mailbox,
-                                 const struct index_record *new)
+                                 const struct index_record *new,
+                                 int is_reconstruct)
 {
     struct webdav_db *webdavdb = NULL;
     struct param *param;
@@ -3751,7 +3766,10 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     webdav_lookup_resource(webdavdb, &mbentry, buf_cstring(&resource), &wdata, /*tombstones*/1);
 
     /* if updated by a newer UID, skip - this record doesn't refer to the current item */
-    if (wdata->dav.imap_uid > new->uid) goto done;
+    if (wdata->dav.imap_uid > new->uid) {
+        if (is_reconstruct) r = IMAP_NO_MSGGONE;
+        goto done;
+    }
 
     if (new->internal_flags & FLAG_INTERNAL_UNLINKED) {
         /* is there an existing record? */
@@ -3806,7 +3824,8 @@ done:
 
 static int mailbox_update_dav(struct mailbox *mailbox,
                               const struct index_record *old,
-                              const struct index_record *new)
+                              const struct index_record *new,
+                              int is_reconstruct)
 {
 
     /* conditions in which there's nothing to do */
@@ -3828,11 +3847,11 @@ static int mailbox_update_dav(struct mailbox *mailbox,
 
     switch (mbtype_isa(mailbox_mbtype(mailbox))) {
     case MBTYPE_ADDRESSBOOK:
-        return mailbox_update_carddav(mailbox, new);
+        return mailbox_update_carddav(mailbox, new, is_reconstruct);
     case MBTYPE_CALENDAR:
-        return mailbox_update_caldav(mailbox, new);
+        return mailbox_update_caldav(mailbox, new, is_reconstruct);
     case MBTYPE_COLLECTION:
-        return mailbox_update_webdav(mailbox, new);
+        return mailbox_update_webdav(mailbox, new, is_reconstruct);
     }
 
     return 0;
@@ -4323,7 +4342,7 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
     if (r) return r;
 
 #ifdef WITH_DAV
-    r = mailbox_update_dav(mailbox, old, new);
+    r = mailbox_update_dav(mailbox, old, new, 0);
     if (r) return r;
 #endif
 
@@ -5942,10 +5961,29 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
     if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL))
         return 0;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0,
+                                                  ITER_STEP_BACKWARD | ITER_SKIP_UNLINKED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        r = mailbox_update_dav(mailbox, NULL, record);
+        r = mailbox_update_dav(mailbox, NULL, record, 1);
+
+        if (r == IMAP_NO_MSGGONE) {
+            struct index_record copyrecord = *record;
+            copyrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+            copyrecord.silentupdate = 1;
+
+            xsyslog(LOG_NOTICE, "DAV object has been replaced, expunging record",
+                    "mailbox=<%s> record=<%u>",
+                    mailbox_name(mailbox), copyrecord.uid);
+
+            r = mailbox_rewrite_index_record(mailbox, &copyrecord);
+            if (r) {
+                xsyslog(LOG_ERR, "expunging record failed",
+                        "mailbox=<%s> record=<%u> err=<%s>",
+                        mailbox_name(mailbox), copyrecord.uid, error_message(r));
+            }
+        }
+
         if (r) break;
     }
     mailbox_iter_done(&iter);
@@ -7916,6 +7954,16 @@ EXPORTED struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
     iter->num_records = mailbox->i.num_records;
     iter->msg = message_new();
 
+    /* Are we iterating forward or backward? */
+    if (flags & ITER_STEP_BACKWARD) {
+        iter->recno = iter->num_records;
+        iter->step_inc = -1;
+    }
+    else {
+        iter->recno = 1;
+        iter->step_inc = 1;
+    }
+
     /* calculate which system_flags to skip over */
     if (flags & ITER_SKIP_UNLINKED)
         iter->skipflags |= FLAG_INTERNAL_UNLINKED;
@@ -7943,8 +7991,10 @@ EXPORTED const message_t *mailbox_iter_step(struct mailbox_iter *iter)
 {
     if (mailbox_wait_cb) mailbox_wait_cb(mailbox_wait_cb_rock);
 
-    for (iter->recno++; iter->recno <= iter->num_records; iter->recno++) {
+    while (iter->recno > 0 && iter->recno <= iter->num_records) {
         message_set_from_mailbox(iter->mailbox, iter->recno, iter->msg);
+        iter->recno += iter->step_inc;
+
         const struct index_record *record = msg_record(iter->msg);
         if (!record->uid) continue; /* can happen on damaged mailboxes */
         if ((record->system_flags & iter->skipflags)) continue;

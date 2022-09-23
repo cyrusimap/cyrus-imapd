@@ -312,7 +312,8 @@ struct mailbox {
 
 #define ITER_SKIP_UNLINKED (1<<0)
 #define ITER_SKIP_EXPUNGED (1<<1)
-#define ITER_SKIP_DELETED (1<<2)
+#define ITER_SKIP_DELETED  (1<<2)
+#define ITER_STEP_BACKWARD (1<<3)
 
 /* pre-declare message_t to avoid circular dependency problems */
 typedef struct message message_t;
