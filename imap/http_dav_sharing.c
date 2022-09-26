@@ -1285,7 +1285,10 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
         /* not allowed to be cross domain */
         if (mbname_localpart(mbname) &&
             strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+        {
+            mbname_free(&mbname);
             return HTTP_NOT_FOUND;
+        }
         mbname_set_domain(mbname, NULL);
     }
 
