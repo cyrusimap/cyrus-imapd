@@ -1538,7 +1538,7 @@ lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
 lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
-lib_libcyrus_la_LIBADD = libcrc32.la ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS)
+lib_libcyrus_la_LIBADD = libcrc32.la ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS) $(LIBM)
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 if USE_ZEROSKIP
@@ -1729,7 +1729,7 @@ master_master_SOURCES = \
 	master/masterconf.c \
 	master/masterconf.h \
 	master/service.h
-master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) -lm
+master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM)
 
 
 netnews_remotepurge_SOURCES = \

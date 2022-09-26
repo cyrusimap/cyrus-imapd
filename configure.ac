@@ -143,6 +143,7 @@ if test $ac_cv_sys_long_file_names = no; then
         AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
 AC_C_INLINE
+LT_LIB_M
 
 gl_VISIBILITY
 AH_BOTTOM([#if HAVE_VISIBILITY
