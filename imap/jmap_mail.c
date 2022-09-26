@@ -333,10 +333,9 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTo
         json_array_append_new(sortopts, json_string(sp->name));
     }
 
-    long max_size_attachments_per_email =
-        config_getint(IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL);
+    int64_t max_size_attachments_per_email =
+        config_getbytesize(IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL, 'K');
 
-    max_size_attachments_per_email *= 1024;
     if (max_size_attachments_per_email <= 0) {
         syslog(LOG_ERR, "jmap: invalid property value: %s",
                 imapopts[IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL].optname);
@@ -7887,7 +7886,8 @@ static int _email_get_bodies(jmap_req_t *req,
                 free(html);
             }
             if (text) {
-                size_t len = config_getint(IMAPOPT_JMAP_PREVIEW_LENGTH);
+                int64_t len = config_getbytesize(IMAPOPT_JMAP_PREVIEW_LENGTH, 'B');
+                if (len < 0) len = 0;
                 char *preview = _email_extract_preview(text, len);
                 json_object_set_new(email, "preview", json_string(preview));
                 free(preview);

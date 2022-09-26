@@ -699,7 +699,7 @@ done:
 int autocreate_user(struct namespace *namespace, const char *userid)
 {
     int r = IMAP_MAILBOX_NONEXISTENT; /* default error if we break early */
-    int autocreatequota = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    int64_t autocreatequota = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
     int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
     int n;
     struct auth_state *auth_state = NULL;
@@ -790,8 +790,8 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
             newquotas[res] = QUOTA_UNLIMITED;
 
-        if (autocreatequota)
-            newquotas[QUOTA_STORAGE] = autocreatequota;
+        if (autocreatequota > 0)
+            newquotas[QUOTA_STORAGE] = autocreatequota / 1024;
 
         if (autocreatequotamessage)
             newquotas[QUOTA_MESSAGE] = autocreatequotamessage;

@@ -69,12 +69,12 @@ static int tear_down(void)
 static void test_int(void)
 {
     int boundary_limit = -1;
-    int archive_maxsize = -1;
+    int conversations_max_thread = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
         "boundary_limit: 120\n"
-        /* archive_maxsize: 1024 (default) */
+        /* conversations_max_thread: 100 (default) */
     );
 
     /* test a value that has been set */
@@ -82,8 +82,8 @@ static void test_int(void)
     CU_ASSERT_EQUAL(boundary_limit, 120);
 
     /* test a value that is defaulted */
-    archive_maxsize = config_getint(IMAPOPT_ARCHIVE_MAXSIZE);
-    CU_ASSERT_EQUAL(archive_maxsize, 1024);
+    conversations_max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
+    CU_ASSERT_EQUAL(conversations_max_thread, 100);
 }
 
 static void test_string(void)
@@ -462,6 +462,294 @@ static void test_duration_parse(void)
     }
 }
 
+static void test_bytesize_value_gibibytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 1G\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 1LL * 1024 * 1024 * 1024);
+}
+
+static void test_bytesize_value_mebibytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 3M\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 3LL * 1024 * 1024);
+}
+
+static void test_bytesize_value_kibibytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 45K\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 45LL * 1024);
+}
+
+static void test_bytesize_value_bytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 25B\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
+    CU_ASSERT_EQUAL(archive_maxsize, 25LL);
+}
+
+static void test_bytesize_value_nounits(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 13\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'M');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024 * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'G');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024 * 1024 * 1024);
+}
+
+static void test_bytesize_value_negative(void)
+{
+    int64_t archive_maxsize = 0xdeadbeef;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: -1\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'M');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024 * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'G');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024 * 1024 * 1024);
+}
+
+static void test_bytesize_default(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* archive_maxsize: 1024 K (default) */
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 1024LL * 1024);
+}
+
+static void test_bytesize_invalid(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: junk\n"
+    );
+    CU_EXPECT_CYRFATAL_END(
+        EX_CONFIG,
+        "unparsable byte size 'junk' for archive_maxsize in line 2"
+    );
+}
+
+struct bytesize_parse_data {
+    const char *str;
+    int expected_result;
+    int64_t expected_bytesize;
+};
+
+static const struct bytesize_parse_data bytesize_parse_tests[] = {
+    /* no digits */
+    { "", -1, 0xdeadbeefLL },
+    { "B", -1, 0xdeadbeefLL },
+    { "KB", -1, 0xdeadbeefLL },
+    { "KiB", -1, 0xdeadbeefLL },
+    { "-B", -1, 0xdeadbeefLL },
+    { "-KB", -1, 0xdeadbeefLL },
+    { "-KiB", -1, 0xdeadbeefLL },
+
+    /* no suffix */
+    { "0",      0,     0LL },
+    { "1",      0,     1LL },
+    { "9876",   0,  9876LL },
+    { "-1234",  0, -1234LL },
+
+    /* bytes suffix */
+    { "0b",     0,     0LL },
+    { "0B",     0,     0LL },
+    { "1b",     0,     1LL },
+    { "1B",     0,     1LL },
+    { "9876b",  0,  9876LL },
+    { "9876B",  0,  9876LL },
+    { "-1234b", 0, -1234LL },
+    { "-1234B", 0, -1234LL },
+
+    /* no such thing as "ibibytes"! */
+    { "0ib",     -1, 0xdeadbeefLL },
+    { "0iB",     -1, 0xdeadbeefLL },
+    { "1ib",     -1, 0xdeadbeefLL },
+    { "1iB",     -1, 0xdeadbeefLL },
+    { "9876ib",  -1, 0xdeadbeefLL },
+    { "9876iB",  -1, 0xdeadbeefLL },
+    { "-1234ib", -1, 0xdeadbeefLL },
+    { "-1234iB", -1, 0xdeadbeefLL },
+
+    /* K suffix */
+    { "0k",     0,     0LL * 1024 },
+    { "0K",     0,     0LL * 1024 },
+    { "1k",     0,     1LL * 1024 },
+    { "1K",     0,     1LL * 1024 },
+    { "9876k",  0,  9876LL * 1024 },
+    { "9876K",  0,  9876LL * 1024 },
+    { "-1234k", 0, -1234LL * 1024 },
+    { "-1234K", 0, -1234LL * 1024 },
+
+    /* KB suffix */
+    { "0kb",     0,     0LL * 1024 },
+    { "0KB",     0,     0LL * 1024 },
+    { "1kb",     0,     1LL * 1024 },
+    { "1KB",     0,     1LL * 1024 },
+    { "9876kb",  0,  9876LL * 1024 },
+    { "9876KB",  0,  9876LL * 1024 },
+    { "-1234kb", 0, -1234LL * 1024 },
+    { "-1234KB", 0, -1234LL * 1024 },
+
+    /* KiB suffix */
+    { "0kib",     0,     0LL * 1024 },
+    { "0KiB",     0,     0LL * 1024 },
+    { "1kib",     0,     1LL * 1024 },
+    { "1KiB",     0,     1LL * 1024 },
+    { "9876kib",  0,  9876LL * 1024 },
+    { "9876KiB",  0,  9876LL * 1024 },
+    { "-1234kib", 0, -1234LL * 1024 },
+    { "-1234KiB", 0, -1234LL * 1024 },
+
+    /* M suffix */
+    { "0m",      0,     0LL * 1024 * 1024 },
+    { "0M",      0,     0LL * 1024 * 1024 },
+    { "1m",      0,     1LL * 1024 * 1024 },
+    { "1M",      0,     1LL * 1024 * 1024 },
+    { "9876m",   0,  9876LL * 1024 * 1024 },
+    { "9876M",   0,  9876LL * 1024 * 1024 },
+    { "-1234m",  0, -1234LL * 1024 * 1024 },
+    { "-1234M",  0, -1234LL * 1024 * 1024 },
+
+    /* MB suffix */
+    { "0mb",     0,     0LL * 1024 * 1024 },
+    { "0MB",     0,     0LL * 1024 * 1024 },
+    { "1mb",     0,     1LL * 1024 * 1024 },
+    { "1MB",     0,     1LL * 1024 * 1024 },
+    { "9876mb",  0,  9876LL * 1024 * 1024 },
+    { "9876MB",  0,  9876LL * 1024 * 1024 },
+    { "-1234mb", 0, -1234LL * 1024 * 1024 },
+    { "-1234MB", 0, -1234LL * 1024 * 1024 },
+
+    /* MiB suffix */
+    { "0mib",     0,     0LL * 1024 * 1024 },
+    { "0MiB",     0,     0LL * 1024 * 1024 },
+    { "1mib",     0,     1LL * 1024 * 1024 },
+    { "1MiB",     0,     1LL * 1024 * 1024 },
+    { "9876mib",  0,  9876LL * 1024 * 1024 },
+    { "9876MiB",  0,  9876LL * 1024 * 1024 },
+    { "-1234mib", 0, -1234LL * 1024 * 1024 },
+    { "-1234MiB", 0, -1234LL * 1024 * 1024 },
+
+    /* G suffix */
+    { "0g",     0,     0LL * 1024 * 1024 * 1024 },
+    { "0G",     0,     0LL * 1024 * 1024 * 1024 },
+    { "1g",     0,     1LL * 1024 * 1024 * 1024 },
+    { "1G",     0,     1LL * 1024 * 1024 * 1024 },
+    { "9876g",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "9876G",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "-1234g", 0, -1234LL * 1024 * 1024 * 1024 },
+    { "-1234G", 0, -1234LL * 1024 * 1024 * 1024 },
+
+    /* GB suffix */
+    { "0gb",     0,     0LL * 1024 * 1024 * 1024 },
+    { "0GB",     0,     0LL * 1024 * 1024 * 1024 },
+    { "1gb",     0,     1LL * 1024 * 1024 * 1024 },
+    { "1GB",     0,     1LL * 1024 * 1024 * 1024 },
+    { "9876gb",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "9876GB",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "-1234gb", 0, -1234LL * 1024 * 1024 * 1024 },
+    { "-1234GB", 0, -1234LL * 1024 * 1024 * 1024 },
+
+    /* GiB suffix */
+    { "0gib",     0,     0LL * 1024 * 1024 * 1024 },
+    { "0GiB",     0,     0LL * 1024 * 1024 * 1024 },
+    { "1gib",     0,     1LL * 1024 * 1024 * 1024 },
+    { "1GiB",     0,     1LL * 1024 * 1024 * 1024 },
+    { "9876gib",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "9876GiB",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "-1234gib", 0, -1234LL * 1024 * 1024 * 1024 },
+    { "-1234GiB", 0, -1234LL * 1024 * 1024 * 1024 },
+
+    /* trailing junk */
+    { "23MB my friends", -1, 0xdeadbeefLL },
+
+    /* unrecognised multiplier */
+    { "6TB", -1, 0xdeadbeefLL },
+    { "6PB", -1, 0xdeadbeefLL },
+
+    /* i case insensitivity */
+    { "25KiB", 0, 25LL * 1024 },
+    { "25KIB", 0, 25LL * 1024 },
+
+    /* optional whitespace between number and multiplier */
+    { "12 K",    0, 12LL * 1024 },
+    { "12 KB",   0, 12LL * 1024 },
+    { "12 KiB",  0, 12LL * 1024 },
+    { "12  K",   0, 12LL * 1024 },
+    { "12  KB",  0, 12LL * 1024 },
+    { "12  KiB", 0, 12LL * 1024 },
+};
+
+static void test_bytesize_parse(void)
+{
+    const size_t n = sizeof(bytesize_parse_tests) / sizeof(bytesize_parse_tests[0]);
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        const struct bytesize_parse_data *test = &bytesize_parse_tests[i];
+        int64_t bytesize = 0xdeadbeefLL;
+        int r = config_parsebytesize(test->str, 'B', &bytesize);
+        CU_ASSERT_EQUAL(r, test->expected_result);
+        CU_ASSERT_EQUAL(bytesize, test->expected_bytesize);
+    }
+}
+
 static void test_magic_configdirectory_value(void)
 {
     const char *idlesocket = NULL;
@@ -492,51 +780,51 @@ static void test_magic_configdirectory_default(void)
 
 static void test_deprecated_int(void)
 {
-    /* { "autocreatequota", 0, INT, "2.5.0", "autocreate_quota" } */
+    /* { "autocreatequotamsg", -1, INT, "2.5.0", "2.5.0", "autocreate_quota_messages" } */
     int val;
 
     /* set the deprecated name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
-        "autocreatequota: 12\n"
+        "autocreatequotamsg: 12\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
     /* should not be able to read the deprecated name */
     CU_EXPECT_CYRFATAL_BEGIN
-    val = config_getint(IMAPOPT_AUTOCREATEQUOTA);
+    val = config_getint(IMAPOPT_AUTOCREATEQUOTAMSG);
     CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
-        "Option 'autocreatequota' is deprecated in favor of "
-        "'autocreate_quota' since version 2.5.0.");
+        "Option 'autocreatequotamsg' is deprecated in favor of "
+        "'autocreate_quota_messages' since version 2.5.0.");
 
     /* should be able to read the value at the new name */
-    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
     CU_ASSERT_EQUAL(val, 12);
 
     /* set the new name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
-        "autocreate_quota: 12\n"
+        "autocreate_quota_messages: 12\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 0);
 
     /* should be able to read it at the new name */
-    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
     CU_ASSERT_EQUAL(val, 12);
 
     /* set both names to different values */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
-        "autocreatequota: 12\n"
-        "autocreate_quota: 15\n"
+        "autocreatequotamsg: 12\n"
+        "autocreate_quota_messages: 15\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
     /* should read new value at the new name */
-    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
     CU_ASSERT_EQUAL(val, 15);
 }
 
@@ -698,6 +986,57 @@ static void test_deprecated_duration(void)
     /* should read new value at the new name */
     val = config_getduration(IMAPOPT_ARCHIVE_AFTER, 'd');
     CU_ASSERT_EQUAL(val, 12 * 24 * 60 * 60);
+}
+
+static void test_deprecated_bytesize(void)
+{
+    /* { "autocreatequota", NULL, BYTESIZE, "UNRELEASED", "2.5.0", "autocreate_quota" } */
+    /* { "autocreate_quota", "-1", BYTESIZE, "UNRELEASED" } */
+    int64_t val;
+
+    /* set the deprecated name only */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreatequota: 8\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should not be able to read the deprecated name */
+    CU_EXPECT_CYRFATAL_BEGIN;
+    val = config_getbytesize(IMAPOPT_AUTOCREATEQUOTA, 'K');
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+        "Option 'autocreatequota' is deprecated in favor of "
+        "'autocreate_quota' since version 2.5.0.");
+
+    /* should be able to read it at the new name */
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    CU_ASSERT_EQUAL(val, 8LL * 1024);
+
+    /* set the new name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreate_quota: 12M\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+
+    /* should be able to read it at the new name */
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    CU_ASSERT_EQUAL(val, 12LL * 1024 * 1024);
+
+    /* set both names to different values */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreatequota: 7\n"
+        "autocreate_quota: 12M\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should read new value at the new name */
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    CU_ASSERT_EQUAL(val, 12LL * 1024 * 1024);
 }
 
 /* vim: set ft=c: */

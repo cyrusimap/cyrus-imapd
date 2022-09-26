@@ -259,7 +259,8 @@ static int meth_get_isched(struct transaction_t *txn,
         struct mime_type_t *mime;
         struct icaltimetype date;
         icaltimezone *utc = icaltimezone_get_utc_timezone();
-        int i, n, maxlen;
+        int i, n;
+        int64_t maxlen;
 
         /* Start construction of our query-result */
         if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
@@ -344,10 +345,10 @@ static int meth_get_isched(struct transaction_t *txn,
             }
         }
 
-        maxlen = config_getint(IMAPOPT_MAXMESSAGESIZE);
-        if (!maxlen) maxlen = INT_MAX;
+        maxlen = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+        if (maxlen <= 0) maxlen = BYTESIZE_UNLIMITED;
         buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%d", maxlen);
+        buf_printf(&txn->buf, "%" PRIi64, maxlen);
         xmlNewChild(capa, NULL, BAD_CAST "max-content-length",
                     BAD_CAST buf_cstring(&txn->buf));
 

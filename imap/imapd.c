@@ -135,7 +135,7 @@ static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
-static size_t maxsize = 0;
+static int64_t maxsize = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -914,8 +914,8 @@ int service_init(int argc, char **argv, char **envp)
 
     prometheus_increment(CYRUS_IMAP_READY_LISTENERS);
 
-    maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
-    if (!maxsize) maxsize = UINT32_MAX;
+    maxsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+    if (maxsize <= 0) maxsize = BYTESIZE_UNLIMITED;
 
     return 0;
 }
@@ -2554,7 +2554,7 @@ static void autocreate_inbox(void)
     if (imapd_userisadmin) return;
     if (imapd_userisproxyadmin) return;
 
-    if (config_getint(IMAPOPT_AUTOCREATE_QUOTA) >= 0) {
+    if (config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K') >= 0) {
         char *inboxname = mboxname_user_mbox(imapd_userid, NULL);
         int r = mboxlist_lookup(inboxname, NULL, NULL);
         free(inboxname);
@@ -3519,7 +3519,7 @@ static void capa_response(int flags)
         prot_printf(imapd_out, " IDLE");
     }
 
-    prot_printf(imapd_out, " APPENDLIMIT=%zu", maxsize);
+    prot_printf(imapd_out, " APPENDLIMIT=%" PRIi64, maxsize);
 }
 
 /*
@@ -4185,12 +4185,12 @@ cleanup:
  * Warn if mailbox is close to or over any quota resource.
  *
  * Warn if the following possibilities occur:
- * - quotawarnkb not set + quotawarn hit
- * - quotawarnkb set larger than mailbox + quotawarn hit
- * - quotawarnkb set + hit + quotawarn hit
- * - quotawarnmsg not set + quotawarn hit
- * - quotawarnmsg set larger than mailbox + quotawarn hit
- * - quotawarnmsg set + hit + quotawarn hit
+ * - quotawarnsize not set + quotawarnpercent hit
+ * - quotawarnsize set larger than mailbox + quotawarnpercent hit
+ * - quotawarnsize set + hit + quotawarnpercent hit
+ * - quotawarnmsg not set + quotawarnpercent hit
+ * - quotawarnmsg set larger than mailbox + quotawarnpercent hit
+ * - quotawarnmsg set + hit + quotawarnpercent hit
  */
 static void warn_about_quota(const char *quotaroot)
 {
@@ -4199,7 +4199,7 @@ static void warn_about_quota(const char *quotaroot)
     int res;
     int r;
     int thresholds[QUOTA_NUMRESOURCES];
-    int pc_threshold = config_getint(IMAPOPT_QUOTAWARN);
+    int pc_threshold = config_getint(IMAPOPT_QUOTAWARNPERCENT);
     int pc_usage;
     struct buf msg = BUF_INITIALIZER;
     static char lastqr[MAX_MAILBOX_PATH+1] = "";
@@ -4220,9 +4220,9 @@ static void warn_about_quota(const char *quotaroot)
         goto out;           /* failed to read */
 
     memset(thresholds, 0, sizeof(thresholds));
-    thresholds[QUOTA_STORAGE] = config_getint(IMAPOPT_QUOTAWARNKB);
+    thresholds[QUOTA_STORAGE] = config_getbytesize(IMAPOPT_QUOTAWARNSIZE, 'K') / 1024;
     thresholds[QUOTA_MESSAGE] = config_getint(IMAPOPT_QUOTAWARNMSG);
-    thresholds[QUOTA_ANNOTSTORAGE] = config_getint(IMAPOPT_QUOTAWARNKB);
+    thresholds[QUOTA_ANNOTSTORAGE] = config_getbytesize(IMAPOPT_QUOTAWARNSIZE, 'K') / 1024;
 
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
         if (q.limits[res] < 0)
@@ -7193,7 +7193,8 @@ localcreate:
     // Clausing autocreate for the INBOX
     if (r == IMAP_PERMISSION_DENIED) {
         if (!strarray_size(mbname_boxes(mbname)) && !strcmpsafe(imapd_userid, mbname_userid(mbname))) {
-            int autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+            int64_t autocreatequotastorage =
+                config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
 
             if (autocreatequotastorage > 0) {
                 mbentry.uniqueid = NULL;
@@ -7216,8 +7217,10 @@ localcreate:
                         newquotas[res] = QUOTA_UNLIMITED;
                     }
 
-                    newquotas[QUOTA_STORAGE] = autocreatequotastorage;
-                    newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
+                    if (autocreatequotastorage > 0)
+                        newquotas[QUOTA_STORAGE] = autocreatequotastorage / 1024;
+                    if (autocreatequotamessage > 0)
+                        newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
 
                     (void) mboxlist_setquotas(mbname_intname(mbname), newquotas, 0, 0);
                 }

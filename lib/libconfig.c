@@ -287,6 +287,128 @@ EXPORTED int config_getduration(enum imapopt opt, int defunit)
     return duration;
 }
 
+/* Parse a size value, converted to bytes.
+ *
+ * On success, 0 is returned and the size in bytes is written to
+ * out_bytesize (if provided).
+ *
+ * On error, -1 is returned and out_bytesize is unchanged.
+ */
+EXPORTED int config_parsebytesize(const char *str,
+                                  int defunit,
+                                  int64_t *out_bytesize)
+{
+    const size_t len = strlen(str);
+    int64_t bytesize;
+    int i_allowed = 0, r = 0;
+    char *copy = NULL, *p;
+
+    assert(strchr("BKMG", defunit) != NULL); /* n.b. also permits \0 */
+
+    /* the default default unit is bytes */
+    if (!defunit) defunit = 'B';
+
+    /* make a copy and append the default unit if necessary */
+    copy = xzmalloc(len + 2);
+    strlcpy(copy, str, len + 2);
+    if (len > 0 && cyrus_isdigit(copy[len-1]))
+        copy[len] = defunit;
+
+    /* start parsing */
+    errno = 0;
+    bytesize = strtoll(copy, &p, 10);
+    if (errno) {
+        xsyslog(LOG_ERR, "unable to parse byte size from string",
+                         "value=<%s>", str);
+        errno = 0;
+        r = -1;
+        goto done;
+    }
+
+    /* better be some digits */
+    if (p == copy) {
+        struct buf msg = BUF_INITIALIZER;
+
+        buf_appendcstr(&msg, "no digit ");
+        if (*p) {
+            buf_printf(&msg, "before '%c' ", *p);
+        }
+        buf_printf(&msg, "in '%s'", str);
+
+        syslog(LOG_DEBUG, "%s: %s", __func__, buf_cstring(&msg));
+        buf_free(&msg);
+
+        r = -1;
+        goto done;
+    }
+
+    /* optional space for readability */
+    while (isspace(*p)) p++;
+
+    /* optional G, M, K multiplier */
+    switch (*p) {
+    case 'g':
+    case 'G':
+        bytesize *= 1024;
+        /* fall through */
+    case 'm':
+    case 'M':
+        bytesize *= 1024;
+        /* fall through */
+    case 'k':
+    case 'K':
+        bytesize *= 1024;
+        i_allowed = 1;
+        p++;
+        break;
+    }
+
+    /* allow multiplier to be spelt as Gi, Mi, Ki */
+    if (i_allowed && (*p == 'i' || *p == 'I')) p++;
+
+    /* optional B suffix */
+    if (*p == 'b' || *p == 'B') p++;
+
+    /* we'd better be at end of string! */
+    if (*p) {
+        syslog(LOG_DEBUG, "%s: bad unit '%c' in %s",
+                          __func__, *p, str);
+        r = -1;
+        goto done;
+    }
+
+done:
+    if (!r && out_bytesize) *out_bytesize = bytesize;
+
+    free(copy);
+    return r;
+}
+
+/* Get a size value, converted to bytes. */
+EXPORTED int64_t config_getbytesize(enum imapopt opt, int defunit)
+{
+    int64_t bytesize;
+
+    assert(config_loaded);
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_BYTESIZE);
+    assert_not_deprecated(opt);
+    assert(strchr("BKMG", defunit) != NULL); /* n.b. also permits \0 */
+
+    if (imapopts[opt].val.s == NULL) return 0;
+
+    if (config_parsebytesize(imapopts[opt].val.s, defunit, &bytesize)) {
+        /* should have been rejected by config_read_file, but just in case */
+        char errbuf[1024];
+        snprintf(errbuf, sizeof(errbuf),
+                 "%s: %s: couldn't parse byte size '%s'",
+                 __func__, imapopts[opt].optname, imapopts[opt].val.s);
+        fatal(errbuf, EX_CONFIG);
+    }
+
+    return bytesize;
+}
+
 EXPORTED const char *config_getoverflowstring(const char *key, const char *def)
 {
     char buf[256];
@@ -439,6 +561,7 @@ static void config_option_deprecate(const int dopt)
     case OPT_STRINGLIST:
     case OPT_STRING:
     case OPT_DURATION:
+    case OPT_BYTESIZE:
         imapopts[opt].val.s = imapopts[dopt].val.s;
         imapopts[dopt].val.s = NULL;
         break;
@@ -480,7 +603,9 @@ EXPORTED void config_reset(void)
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-        if ((imapopts[opt].t == OPT_STRING || imapopts[opt].t == OPT_DURATION) &&
+        if ((imapopts[opt].t == OPT_STRING ||
+             imapopts[opt].t == OPT_DURATION ||
+             imapopts[opt].t == OPT_BYTESIZE) &&
             (imapopts[opt].seen ||
              (imapopts[opt].def.s &&
               imapopts[opt].val.s != imapopts[opt].def.s &&
@@ -522,6 +647,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     char buf[4096];
     char *p;
     int ival;
+    int64_t i64val;
 
     config_loaded = 1;
 
@@ -665,8 +791,16 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     config_serverinfo = config_getenum(IMAPOPT_SERVERINFO);
 
     /* set some limits */
-    config_maxquoted = config_getint(IMAPOPT_MAXQUOTED);
-    config_maxword = config_getint(IMAPOPT_MAXWORD);
+    i64val = config_getbytesize(IMAPOPT_MAXQUOTED, 'B');
+    if (i64val <= 0 || i64val > BYTESIZE_UNLIMITED) {
+        i64val = BYTESIZE_UNLIMITED;
+    }
+    config_maxquoted = i64val;
+    i64val = config_getbytesize(IMAPOPT_MAXWORD, 'B');
+    if (i64val <= 0 || i64val > BYTESIZE_UNLIMITED) {
+        i64val = BYTESIZE_UNLIMITED;
+    }
+    config_maxword = i64val;
 
     ival = config_getenum(IMAPOPT_QOSMARKING);
     config_qosmarking = qos[ival];
@@ -882,7 +1016,8 @@ static void config_read_file(const char *filename)
              * to free the current string if there is one */
             if (imapopts[opt].seen
                 && (imapopts[opt].t == OPT_STRING
-                    || imapopts[opt].t == OPT_DURATION))
+                    || imapopts[opt].t == OPT_DURATION
+                    || imapopts[opt].t == OPT_BYTESIZE))
                 free((char *)imapopts[opt].val.s);
 
             if (service_specific)
@@ -1016,6 +1151,23 @@ static void config_read_file(const char *filename)
 
                 /* but then store it unparsed, it will be parsed again by
                  * config_getduration() where the caller knows the appropriate
+                 * default units */
+                imapopts[opt].val.s = xstrdup(p);
+                break;
+            }
+            case OPT_BYTESIZE:
+            {
+                /* make sure it's parseable, though we don't know the default units */
+                if (config_parsebytesize(p, '\0', NULL)) {
+                    imapopts[opt].seen = 0; /* not seen after all */
+                    snprintf(errbuf, sizeof(errbuf),
+                             "unparsable byte size '%s' for %s in line %d",
+                             p, imapopts[opt].optname, lineno);
+                    fatal(errbuf, EX_CONFIG);
+                }
+
+                /* but then store it unparsed, it will be parsed again by
+                 * config_getbytesize() where the caller knows the appropriate
                  * default units */
                 imapopts[opt].val.s = xstrdup(p);
                 break;

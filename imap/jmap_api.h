@@ -125,7 +125,7 @@ enum {
 typedef struct {
     hash_table methods;
     json_t *server_capabilities;
-    long limits[JMAP_NUM_LIMITS];
+    int64_t limits[JMAP_NUM_LIMITS];
     // internal state
     ptrarray_t getblob_handlers; // array of jmap_getblob_handler
     ptrarray_t event_handlers; // array of (malloced) jmap_handlers

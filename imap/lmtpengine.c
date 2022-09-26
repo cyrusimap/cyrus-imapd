@@ -908,7 +908,7 @@ void lmtpmode(struct lmtp_func *func,
               int fd)
 {
     message_data_t *msg = NULL;
-    int max_msgsize;
+    int64_t max_msgsize;
     char buf[4096];
     char *p;
     int r;
@@ -930,10 +930,10 @@ void lmtpmode(struct lmtp_func *func,
 #endif
     cd.starttls_done = 0;
 
-    max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
+    max_msgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
 
-    /* If max_msgsize is 0, allow any size */
-    if(!max_msgsize) max_msgsize = INT_MAX;
+    /* 0 means "unlimited", which really means our internally-defined limit */
+    if (max_msgsize <= 0) max_msgsize = BYTESIZE_UNLIMITED;
 
     msg_new(&msg, func->namespace);
 
@@ -1152,7 +1152,7 @@ void lmtpmode(struct lmtp_func *func,
                 if (msg->size > max_msgsize) {
                     prot_printf(pout,
                                 "552 5.2.3 Message size (%d) exceeds fixed "
-                                "maximum message size (%d)\r\n",
+                                "maximum message size (%" PRIi64 ")\r\n",
                                 msg->size, max_msgsize);
                     continue;
                 }
@@ -1184,14 +1184,12 @@ void lmtpmode(struct lmtp_func *func,
               const char *mechs;
 
               prot_printf(pout, "250-%s\r\n"
-                          "250-8BITMIME\r\n"
-                          "250-ENHANCEDSTATUSCODES\r\n"
-                          "250-PIPELINING\r\n",
-                          config_servername);
-              if (max_msgsize < INT_MAX)
-                  prot_printf(pout, "250-SIZE %d\r\n", max_msgsize);
-              else
-                  prot_printf(pout, "250-SIZE\r\n");
+                                "250-8BITMIME\r\n"
+                                "250-ENHANCEDSTATUSCODES\r\n"
+                                "250-PIPELINING\r\n"
+                                "250-SIZE %" PRIu64 "\r\n",
+                          config_servername, max_msgsize);
+
               if (tls_enabled() && !cd.starttls_done &&
                   cd.authenticated == NOAUTH) {
                   prot_printf(pout, "250-STARTTLS\r\n");
@@ -1295,7 +1293,7 @@ void lmtpmode(struct lmtp_func *func,
                             msg->size > max_msgsize) {
                             prot_printf(pout,
                                         "552 5.2.3 Message SIZE exceeds fixed "
-                                        "maximum message size (%d)\r\n",
+                                        "maximum message size (%" PRIi64 ")\r\n",
                                         max_msgsize);
                             goto nextcmd;
                         }

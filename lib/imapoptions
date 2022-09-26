@@ -92,6 +92,15 @@ no unit is specified, an option-specific backward-compatible default unit
 is assumed (documented on an option-by-option basis).  These are simple time
 units: 1d=24h, 1h=60m, 1m=60s (daylight savings, timezones, leap adjustments,
 etc are not considered).
+.PP
+Byte size options take the form of a number followed by a unit, for example
+\fB1KiB\fR (1 kibibyte).  Units are \fBB\fR (bytes), \fBKiB\fR (kibibytes),
+\fBMiB\fR (mebibytes), and \fBGiB\fR (gibibytes), which may also be spelt
+\fBKB\fR, \fBMB\fR, and \fBGB\fR.  Units are parsed without regard to case.
+Note that regardless of spelling, these units are always powers of 2, and
+never metric.  That is, 1GiB = 1024MiB, 1MiB = 1024KiB, 1KiB = 1024B.  If no
+unit is specified, an option-specific backward-compatible default unit is
+assumed (documented on an option-by-option basis).
 .SH FIELD DESCRIPTIONS
 .PP
 The sections below detail options that can be placed in the
@@ -324,9 +333,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    assumed.  */
 */
 
-{ "archive_maxsize", 1024, INT, "3.0.0" }
-/* The size in kilobytes of the largest message that won't be archived
-   immediately.  Default is 1Mb */
+{ "archive_maxsize", "1024 K", BYTESIZE, "UNRELEASED" }
+/* The size of the largest message that won't be archived immediately.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed.  */
 
 { "archive_keepflagged", 0, SWITCH, "3.0.0" }
 /* If set, messages with the \\Flagged system flag won't be archived,
@@ -354,7 +365,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "autocreateinboxfolders", NULL, STRING, "2.5.0", "2.5.0", "autocreate_inbox_folders" }
 /* Deprecated in favor of \fIautocreate_inbox_folders\fR. */
 
-{ "autocreatequota", 0, INT, "2.5.0", "2.5.0", "autocreate_quota" }
+{ "autocreatequota", NULL, BYTESIZE, "UNRELEASED", "2.5.0", "autocreate_quota" }
 /* Deprecated in favor of \fIautocreate_quota\fR. */
 
 { "autocreatequotamsg", -1, INT, "2.5.0", "2.5.0", "autocreate_quota_messages" }
@@ -422,7 +433,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    INBOX that does not exist, then the INBOX is automatically created
    by \fIlmtpd(8)\fR and delivery of the message continues. */
 
-{ "autocreate_quota", -1, INT, "2.5.0" }
+{ "autocreate_quota", "-1", BYTESIZE, "UNRELEASED" }
 /* If set to a value of zero or higher, users have their INBOX folders
    created upon a successful login event or upon \fIlmtpd(8)\fR
    message delivery if \fIautocreate_post\fR is enabled, provided their
@@ -431,7 +442,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    The user's quota is set to the value if it is greater than zero,
    otherwise the user has unlimited quota.
 .PP
-   Note that quota is specified in kilobytes. */
+   Note that quota has kibibyte granularity.  Values specified here will
+   be truncated to the nearest whole kibibyte.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed. */
 
 { "autocreate_quota_messages", -1, INT, "3.0.0" }
 /* If set to a value of zero or higher, users who have their INBOX
@@ -505,17 +520,23 @@ Blank lines and lines beginning with ``#'' are ignored.
    partition pathname MUST be specified if backups are in use.  Note that
    there is no relationship between spool partitions and backup partitions. */
 
-{ "backup_compact_minsize", 0, INT, "3.0.0" }
-/* The minimum size in kilobytes of chunks in each backup.  The compact tool
+{ "backup_compact_minsize", "0", BYTESIZE, "UNRELEASED" }
+/* The minimum size of chunks in each backup.  The compact tool
    will try to combine adjacent chunks that are smaller than this.
 .PP
-   Setting this value to zero or negative disables combining of chunks. */
+   Setting this value to zero or negative disables combining of chunks.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed. */
 
-{ "backup_compact_maxsize", 0, INT, "3.0.0" }
-/* The maximum size in kilobytes of chunks in each backup.  The compact tool
+{ "backup_compact_maxsize", "0", BYTESIZE, "UNRELEASED" }
+/* The maximum size of chunks in each backup.  The compact tool
    will try to split chunks larger than this into smaller chunks.
 .PP
-   Setting this value to zero or negative disables splitting of chunks. */
+   Setting this value to zero or negative disables splitting of chunks.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed. */
 
 { "backup_compact_work_threshold", 1, INT, "3.0.0" }
 /* The number of chunks that must obviously need compaction before the compact
@@ -905,9 +926,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    to a size. In "headerbody" mode, it includes full headers and body truncated
    to a size */
 
-{ "event_content_size", 0, INT, "2.5.0" }
+{ "event_content_size", "0", BYTESIZE, "UNRELEASED" }
 /* Truncate the message content that may be included with MessageAppend and
-   MessageNew. Set 0 to include the entire message itself */
+   MessageNew. Set 0 to include the entire message itself.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "event_exclude_flags", NULL, STRING, "2.5.0" }
 /* Don't send event notification for given IMAP flag(s) */
@@ -1119,11 +1142,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    The zero value disables validation of the "iat" JWS claim.
 */
 
-{ "icalendar_max_size", 0, INT, "3.6.0" }
-/* Maximum allowed iCalendar size.
-   If non-zero, CalDAV and JMAP will reject storage of resources whose
-   iCalendar representation is larger than \fIicalendar_max_size\fR bytes.
-   If set to 0, this will allow iCalendar resources of any size (the default). */
+{ "icalendar_max_size", "0", BYTESIZE, "UNRELEASED" }
+/* Maximum allowed iCalendar size. CalDAV and JMAP will reject storage of
+   resources whose iCalendar representation is larger than this.
+.PP
+   If set to 0 (the default), a large internally-defined limit will be applied.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "idlesocket", "{configdirectory}/socket/idle", STRING, "2.3.17" }
 /* Unix domain socket that idled listens on. */
@@ -1226,9 +1251,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that the Content-ID key must be URL-unescaped and enclosed in
    angular brackets, as defined in RFC 2392. */
 
-{ "jmap_preview_length", 64, INT, "3.1.1" }
-/* The maximum byte length of dynamically generated message previews. Previews
-   stored in jmap_preview_annot take precedence. */
+{ "jmap_preview_length", "64B", BYTESIZE, "UNRELEASED" }
+/* The maximum length of dynamically generated message previews. Previews
+   stored in jmap_preview_annot take precedence.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "jmap_max_catenate_items", 100, INT, "3.6.0" }
 /* The maximum number of items that can be catenated together by
@@ -1236,28 +1263,34 @@ Blank lines and lines beginning with ``#'' are ignored.
    value of the JMAP \"urn:ietf:params:jmap:blob\" capabilities object.
    Default value is 100. */
 
-{ "jmap_max_size_upload", 1048576, INT, "3.1.6" }
-/* The maximum size (in kilobytes) that the JMAP API accepts
-   for blob uploads. Returned as the maxSizeUpload property
-   value of the JMAP \"urn:ietf:params:jmap:core\" capabilities object.
-   Default is 1Gb. */
+{ "jmap_max_size_upload", "1G", BYTESIZE, "UNRELEASED" }
+/* The maximum size that the JMAP API accepts for blob uploads. Returned as
+   the maxSizeUpload property value of the JMAP \"urn:ietf:params:jmap:core\"
+   capabilities object.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is assumed.
+   */
 
-{ "jmap_max_size_blob_set", 4096, INT, "3.3.0" }
-/* The maximum size (in kilobytes) that the JMAP API accepts
-   for Blob/set. Returned as the maxSizeBlobSet property
-   value of the JMAP \"https://cyrusimap.org/ns/jmap/blob\" capabilities object.
-   Default is 4Mb. */
+{ "jmap_max_size_blob_set", "4M", BYTESIZE, "UNRELEASED" }
+/* The maximum size that the JMAP API accepts for Blob/set. Returned as the
+   maxSizeBlobSet property value of the JMAP
+   \"https://cyrusimap.org/ns/jmap/blob\" capabilities object.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is assumed.
+   */
 
 { "jmap_max_concurrent_upload", 5, INT, "3.1.6" }
 /* The value to return for the maxConcurrentUpload property of
    the JMAP \"urn:ietf:params:jmap:core\" capabilities object. The Cyrus JMAP
    implementation does not enforce this rate-limit. */
 
-{ "jmap_max_size_request", 10240, INT, "3.1.6" }
-/* The maximum size (in kilobytes) that the JMAP API accepts
-   for requests at the API endpoint. Returned as the
-   maxSizeRequest property value of the JMAP \"urn:ietf:params:jmap:core\"
-   capabilities object. Default is 10Mb. */
+{ "jmap_max_size_request", "10M", BYTESIZE, "UNRELEASED" }
+/* The maximum size that the JMAP API accepts for requests at the API endpoint.
+   Returned as the maxSizeRequest property value of the JMAP
+   \"urn:ietf:params:jmap:core\" capabilities object.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is assumed.
+   */
 
 { "jmap_max_concurrent_requests", 5, INT, "3.1.6" }
 /* The value to return for the maxConcurrentRequests property of
@@ -1291,10 +1324,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    Returned as the maxObjectsInSet property value of the
    JMAP \"urn:ietf:params:jmap:core\" capabilities object. */
 
-{ "jmap_mail_max_size_attachments_per_email", 10240, INT, "3.1.6" }
-/* The value (in kilobytes) to return for the maxSizeAttachmentsPerEmail
-   property of the JMAP \"urn:ietf:params:jmap:mail\" capabilities object. The Cyrus
-   JMAP implementation does not enforce this size limit. Default is 10 Mb.*/
+{ "jmap_mail_max_size_attachments_per_email", "10M", BYTESIZE, "UNRELEASED" }
+/* The value to return for the maxSizeAttachmentsPerEmail property of the JMAP
+   \"urn:ietf:params:jmap:mail\" capabilities object. The Cyrus JMAP
+   implementation does not enforce this size limit.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is assumed.
+   */
 
 { "jmap_nonstandard_extensions", 0, SWITCH, "3.1.9" }
 /* If enabled, support non-standard JMAP extensions.  If not enabled,
@@ -1666,16 +1702,24 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Maximum number of logged in sessions allowed per user,
    zero means no limit */
 
-{ "maxmessagesize", 0, INT, "2.3.17" }
-/* Maximum incoming LMTP message size.  If non-zero, lmtpd will reject
-   messages larger than \fImaxmessagesize\fR bytes.  If set to 0, this
-   will allow messages of any size (the default). */
+{ "maxmessagesize", "0", BYTESIZE, "UNRELEASED" }
+/* Maximum size of messages that will be accepted by Cyrus.  This affects LMTP
+   deliveries, IMAP appends, DAV uploads, etc.  Messages larger than this will
+   be rejected.
+.PP
+   If set to 0 (the default), a large internally-defined limit will be applied.
+.PP
+   If no unit is specified, bytes is assumed. */
 
-{ "maxquoted", 131072, INT, "2.3.17" }
-/* Maximum size of a single quoted string for the parser.  Default 128k */
+{ "maxquoted", "128K", BYTESIZE, "UNRELEASED" }
+/* Maximum size of a single quoted string for the parser.
+.PP
+   If no unit is specified, bytes is assumed. */
 
-{ "maxword", 131072, INT, "2.3.17" }
-/* Maximum size of a single word for the parser.  Default 128k */
+{ "maxword", "128K", BYTESIZE, "UNRELEASED" }
+/* Maximum size of a single word for the parser.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "mboxkey_db", "twoskip", STRINGLIST("skiplist", "twoskip", "zeroskip"), "3.1.6" }
 /* The cyrusdb backend to use for mailbox keys. */
@@ -2129,14 +2173,26 @@ If all partitions are over that limit, this feature is not used anymore.
    conversations quota counts, which count multiple copies of exactly the
    same message (by GUID) as only one */
 
-{ "quotawarn", 90, INT, "2.3.17" }
+{ "quotawarn", 90, INT, "UNRELEASED", "UNRELEASED", "quotawarnpercent" }
+/* Deprecated in favour of \fIquotawarnpercent\fR. */
+
+{ "quotawarnpercent", 90, INT, "UNRELEASED" }
 /* The percent of quota utilization over which the server generates
    warnings. */
 
-{ "quotawarnkb", 0, INT, "2.3.17" }
-/* The maximum amount of free space (in kB) at which to give a quota
-   warning (if this value is 0, or if the quota is smaller than this
-   amount, then warnings are always given). */
+{ "quotawarnkb", NULL, BYTESIZE, "UNRELEASED", "UNRELEASED", "quotawarnsize" }
+/* Deprecated in favour of \fIquotawarnsize\fR. */
+
+{ "quotawarnsize", "0", BYTESIZE, "UNRELEASED" }
+/* The maximum amount of free space at which to give a quota warning
+   (if this value is 0, or if the quota is smaller than this
+   amount, then warnings are always given).
+.PP
+   Note that quota has kibibyte granularity.  Values specified here will
+   be truncated to the nearest whole kibibyte.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed.  */
 
 { "quotawarnmsg", 0, INT, "2.5.0" }
 /* The maximum amount of messages at which to give a quota warning
@@ -2354,11 +2410,13 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The maximum number of seconds to run a search for before aborting.  Default
    of no value means search "forever" until other timeouts. */
 
-{ "search_maxsize", 4096, INT, "3.6.0" }
-/* The maximum size in kilobytes to index for each message part. Message
-   contents that occur after this byte offset will not be indexed or
-   search snippets generated from.
-   Default is 4Mb. Xapian-only. */
+{ "search_maxsize", "4M", BYTESIZE, "UNRELEASED" }
+/* The maximum size to index for each message part. Message contents that
+   occur after this byte offset will not be indexed nor used to generate
+   search snippets. Xapian-only.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed.  */
 
 { "search_queryscan", 5000, INT, "3.1.7" }
 /* The minimum number of records require to do a direct scan of all G keys
@@ -2513,9 +2571,12 @@ product version in the capabilities
 { "sieve_folder", "#sieve", STRING, "3.6.0" }
 /* The name of the folder for storing Sieve scripts (#sieve) */
 
-{ "sieve_maxscriptsize", 32, INT, "2.3.17" }
-/* Maximum size (in kilobytes) any sieve script can be, enforced at
-   submission by timsieved(8). */
+{ "sieve_maxscriptsize", "32K", BYTESIZE, "UNRELEASED" }
+/* Maximum size any sieve script can be, enforced at submission by
+   timsieved(8) and JMAP.
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed.  */
 
 { "sieve_maxscripts", 5, INT, "2.3.17" }
 /* Maximum number of sieve scripts any user may have, enforced at
@@ -3042,11 +3103,14 @@ product version in the capabilities
    character '.'. Note that with the newnews separator, no dots may
    occur in mailbox names.  The default switched in 3.0 from off to on. */
 
-{ "vcard_max_size", 0, INT, "3.6.0" }
+{ "vcard_max_size", "0", BYTESIZE, "UNRELEASED" }
 /* Maximum allowed vCard size.
    If non-zero, CardDAV and JMAP will reject storage of contacts whose
-   vCard representation is larger than \fIvcard_max_size\fR bytes.
-   If set to 0, this will allow vCards of any size (the default). */
+   vCard representation is larger than \fIvcard_max_size\fR.
+.PP
+   If set to 0 (the default), a large internally-defined limit will be applied.
+.PP
+   If no unit is specified, bytes is assumed. */
 
 { "virtdomains", "off", ENUM("off", "userid", "on"), "3.1.8" }
 /* Configure virtual domain support.
@@ -3098,12 +3162,14 @@ of the incoming network interface, or if no record is found, the
    the attachment will be used. For JMAP, the Link.blobId property of
    JSCalendar objects will be disabled. */
 
-{ "webdav_attachments_max_binary_attach_size", 1024, INT, "3.6.0" }
-/* The maximum byte length (in kilobytes) of an ATTACH property value
-   when managed attachment URIs get rewritten to BINARY during iTIP processing.
-   Any attachment that exceeds this byte size keeps its managed attachment
-   URI as ATTACH value. A zero size limit causes attachments of any size
-   be rewritten as BINARY. */
+{ "webdav_attachments_max_binary_attach_size", "1024K", BYTESIZE, "UNRELEASED" }
+/* The maximum byte length of an ATTACH property value when managed attachment
+   URIs get rewritten to BINARY during iTIP processing.  Any attachment that
+   exceeds this byte size keeps its managed attachment URI as ATTACH value. A
+   zero size limit causes attachments of any size be rewritten as BINARY. */
+.PP
+   For backward compatibility, if no unit is specified, kibibytes is
+   assumed.  */
 
 { "xbackup_enabled", 0, SWITCH, "3.0.0" }
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin

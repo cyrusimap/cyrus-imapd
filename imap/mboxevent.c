@@ -1383,8 +1383,9 @@ void mboxevent_extract_content_msgrec(struct mboxevent *event,
                                msgrecord_t *msgrec, FILE* content)
 {
     const char *base = NULL;
-    size_t offset, size, truncate, len = 0;
+    size_t offset, size, len = 0;
     uint32_t record_size, header_size;
+    int64_t truncate;
 
     if (!event)
         return;
@@ -1398,7 +1399,8 @@ void mboxevent_extract_content_msgrec(struct mboxevent *event,
         return;
     }
 
-    truncate = config_getint(IMAPOPT_EVENT_CONTENT_SIZE);
+    truncate = config_getbytesize(IMAPOPT_EVENT_CONTENT_SIZE, 'B');
+    if (truncate < 0) truncate = 0;
 
     switch (config_getenum(IMAPOPT_EVENT_CONTENT_INCLUSION_MODE)) {
     /*  include message up to 'truncate' in size with the notification */
@@ -1452,7 +1454,8 @@ void mboxevent_extract_content(struct mboxevent *event,
                                const struct index_record *record, FILE* content)
 {
     const char *base = NULL;
-    size_t offset, size, truncate, len = 0;
+    size_t offset, size, len = 0;
+    int64_t truncate;
 
     if (!event)
         return;
@@ -1460,7 +1463,8 @@ void mboxevent_extract_content(struct mboxevent *event,
     if (!mboxevent_expected_param(event->type, EVENT_MESSAGE_CONTENT))
         return;
 
-    truncate = config_getint(IMAPOPT_EVENT_CONTENT_SIZE);
+    truncate = config_getbytesize(IMAPOPT_EVENT_CONTENT_SIZE, 'B');
+    if (truncate < 0) truncate = 0;
 
     switch (config_getenum(IMAPOPT_EVENT_CONTENT_INCLUSION_MODE)) {
     /*  include message up to 'truncate' in size with the notification */
