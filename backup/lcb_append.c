@@ -242,6 +242,7 @@ EXPORTED int backup_append(struct backup *backup,
 
 error:
     buf_free(&buf);
+    if (iter) dlist_print_iter_free(&iter);
     return IMAP_INTERNAL;
 }
 
