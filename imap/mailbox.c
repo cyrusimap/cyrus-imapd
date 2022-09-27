@@ -3520,8 +3520,7 @@ out:
 
 #ifdef WITH_DAV
 static int mailbox_update_carddav(struct mailbox *mailbox,
-                                  const struct index_record *new,
-                                  int is_reconstruct)
+                                  const struct index_record *new)
 {
     struct carddav_db *carddavdb = NULL;
     struct param *param;
@@ -3553,7 +3552,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 
     /* does it still come from this UID? */
     if (cdata->dav.imap_uid > new->uid) {
-        if (is_reconstruct)r = IMAP_NO_MSGGONE;
+        r = IMAP_NO_MSGGONE;
         goto done;
     }
 
@@ -3607,8 +3606,7 @@ done:
 }
 
 static int mailbox_update_caldav(struct mailbox *mailbox,
-                                 const struct index_record *new,
-                                 int is_reconstruct)
+                                 const struct index_record *new)
 {
     struct caldav_db *caldavdb = NULL;
     struct param *param;
@@ -3649,12 +3647,10 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
     /* has this record already been replaced?  Don't write anything */
     if (cdata->dav.imap_uid > new->uid) {
-        if (is_reconstruct) {
-            /* remove associated alarms */
-            caldav_alarm_delete_record(cdata->dav.mailbox, new->uid);
+        /* remove associated alarms */
+        caldav_alarm_delete_record(cdata->dav.mailbox, new->uid);
 
-            r = IMAP_NO_MSGGONE;
-        }
+        r = IMAP_NO_MSGGONE;
         goto done;
     }
 
@@ -3734,8 +3730,7 @@ done:
 }
 
 static int mailbox_update_webdav(struct mailbox *mailbox,
-                                 const struct index_record *new,
-                                 int is_reconstruct)
+                                 const struct index_record *new)
 {
     struct webdav_db *webdavdb = NULL;
     struct param *param;
@@ -3767,7 +3762,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
 
     /* if updated by a newer UID, skip - this record doesn't refer to the current item */
     if (wdata->dav.imap_uid > new->uid) {
-        if (is_reconstruct) r = IMAP_NO_MSGGONE;
+        r = IMAP_NO_MSGGONE;
         goto done;
     }
 
@@ -3824,8 +3819,7 @@ done:
 
 static int mailbox_update_dav(struct mailbox *mailbox,
                               const struct index_record *old,
-                              const struct index_record *new,
-                              int is_reconstruct)
+                              const struct index_record *new)
 {
 
     /* conditions in which there's nothing to do */
@@ -3847,11 +3841,11 @@ static int mailbox_update_dav(struct mailbox *mailbox,
 
     switch (mbtype_isa(mailbox_mbtype(mailbox))) {
     case MBTYPE_ADDRESSBOOK:
-        return mailbox_update_carddav(mailbox, new, is_reconstruct);
+        return mailbox_update_carddav(mailbox, new);
     case MBTYPE_CALENDAR:
-        return mailbox_update_caldav(mailbox, new, is_reconstruct);
+        return mailbox_update_caldav(mailbox, new);
     case MBTYPE_COLLECTION:
-        return mailbox_update_webdav(mailbox, new, is_reconstruct);
+        return mailbox_update_webdav(mailbox, new);
     }
 
     return 0;
@@ -4342,7 +4336,7 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
     if (r) return r;
 
 #ifdef WITH_DAV
-    r = mailbox_update_dav(mailbox, old, new, 0);
+    r = mailbox_update_dav(mailbox, old, new);
     if (r) return r;
 #endif
 
@@ -5965,7 +5959,7 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
                                                   ITER_STEP_BACKWARD | ITER_SKIP_UNLINKED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        r = mailbox_update_dav(mailbox, NULL, record, 1);
+        r = mailbox_update_dav(mailbox, NULL, record);
 
         if (r == IMAP_NO_MSGGONE) {
             struct index_record copyrecord = *record;
