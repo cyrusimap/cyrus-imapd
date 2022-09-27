@@ -2308,14 +2308,12 @@ static int sieve_find_script(const char *user, const char *domain,
 
     if (!script) { /* default script */
         script = sievedir_get_active(sievedir);
-
-        if (!script) return 0;  /* no default */
     }
 
-    snprintf(fname, size, "%s/%s.bc", sievedir, script);
-
-    sieve_script_rebuild(userid, sievedir, script);
-
+    if (script) {
+        snprintf(fname, size, "%s/%s.bc", sievedir, script);
+        sieve_script_rebuild(userid, sievedir, script);
+    }
     buf_free(&buf);
 
     return 0;
