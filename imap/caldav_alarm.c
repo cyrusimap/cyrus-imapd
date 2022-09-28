@@ -504,6 +504,25 @@ static int process_alarm_cb(icalcomponent *comp,
 
     int alarmno = 0;
 
+    /* Skip cancelled events */
+    if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) return 1;
+
+    /* Skip declined events */
+    for (prop = icalcomponent_get_first_invitee(comp);
+         prop; prop = icalcomponent_get_next_invitee(comp)) {
+        const char *attendee = icalproperty_get_invitee(prop);
+
+        if (!attendee) continue;
+        if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
+
+        if (!strcasecmp(attendee, data->userid)) {
+            const char *partstat =
+                icalproperty_get_parameter_as_string(prop, "PARTSTAT");
+
+            if (!strcasecmp(partstat, "DECLINED")) return 1;
+        }
+    }
+
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
          alarm;
          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
