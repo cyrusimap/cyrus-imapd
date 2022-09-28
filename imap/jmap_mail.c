@@ -1619,7 +1619,7 @@ static int jmapseen_guid_cb(const conv_guidrec_t *rec, void *rock)
                     jmapseen_flags : jmapseen_db;
                 mailbox_close(&mbox);
             }
-            else if (r) {
+            else {
                 // could try later for locked mailboxes, but
                 // let's not amplify mailbox open attempts
                 xsyslog(LOG_ERR, "can not open mailbox, fall back to system flags",
