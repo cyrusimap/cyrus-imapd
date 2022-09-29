@@ -52,6 +52,7 @@
 #include "append.h"
 #include "caldav_alarm.h"
 #include "caldav_db.h"
+#include "calsched_support.h"
 #include "cyrusdb.h"
 #include "httpd.h"
 #include "http_dav.h"
@@ -497,7 +498,7 @@ static int process_alarm_cb(icalcomponent *comp,
                             void *rock)
 {
     struct get_alarm_rock *data = (struct get_alarm_rock *)rock;
-
+    strarray_t sched_addrs = STRARRAY_INITIALIZER;
     icalcomponent *alarm;
     icalproperty *prop;
     icalvalue *val;
@@ -508,6 +509,8 @@ static int process_alarm_cb(icalcomponent *comp,
     if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) return 1;
 
     /* Skip declined events */
+    get_schedule_addresses(data->mboxname, data->userid, &sched_addrs);
+
     for (prop = icalcomponent_get_first_invitee(comp);
          prop; prop = icalcomponent_get_next_invitee(comp)) {
         const char *attendee = icalproperty_get_invitee(prop);
@@ -515,13 +518,17 @@ static int process_alarm_cb(icalcomponent *comp,
         if (!attendee) continue;
         if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
-        if (!strcasecmp(attendee, data->userid)) {
+        if (strarray_find_case(&sched_addrs, attendee, 0) >= 0) {
             const char *partstat =
                 icalproperty_get_parameter_as_string(prop, "PARTSTAT");
 
-            if (!strcasecmp(partstat, "DECLINED")) return 1;
+            if (!strcasecmp(partstat, "DECLINED")) {
+                strarray_fini(&sched_addrs);
+                return 1;
+            }
         }
     }
+    strarray_fini(&sched_addrs);
 
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
          alarm;
