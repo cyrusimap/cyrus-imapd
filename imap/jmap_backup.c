@@ -919,8 +919,8 @@ static int do_scheduling(jmap_req_t *req,
     /* XXX Hack for Outlook */
     if (!icalcomponent_get_first_invitee(comp)) return 0;
 
-    get_schedule_addresses(req->txn->req_hdrs, mboxname,
-                           req->userid, schedule_addresses);
+    caldav_get_schedule_addresses(req->txn->req_hdrs, mboxname,
+                                  req->userid, schedule_addresses);
 
     if (strarray_find_case(schedule_addresses, organizer, 0) >= 0) {
         /* Organizer scheduling object resource */

@@ -91,7 +91,6 @@
 #include "times.h"
 #include "spool.h"
 #include "strhash.h"
-#include "tok.h"
 #include "user.h"
 #include "util.h"
 #include "version.h"
@@ -126,7 +125,6 @@ static int64_t icalendar_max_size;
 unsigned config_allowsched = IMAP_ENUM_CALDAV_ALLOWSCHEDULING_OFF;
 const char *ical_prodid = NULL;
 icaltimezone *utc_zone = NULL;
-struct strlist *cua_domains = NULL;
 icalarray *rscale_calendars = NULL;
 
 struct partial_comp_t {
@@ -705,10 +703,6 @@ static const struct cal_comp_t {
 
 static void my_caldav_init(struct buf *serverinfo)
 {
-    const char *domains;
-    char *domain;
-    tok_t tok;
-
     buf_printf(serverinfo, " LibiCal/%s", ICAL_VERSION);
 #ifdef HAVE_RSCALE
     if ((rscale_calendars = icalrecurrencetype_rscale_supported_calendars())) {
@@ -768,15 +762,6 @@ static void my_caldav_init(struct buf *serverinfo)
                "-//CyrusIMAP.org/Cyrus %s//EN", CYRUS_VERSION);
     ical_prodid = buf_cstring(&ical_prodid_buf);
 
-    /* Create an array of calendar-user-address-set domains */
-    domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
-    if (!domains) domains = config_defdomain;
-    if (!domains) domains = config_servername;
-
-    tok_init(&tok, domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
-    while ((domain = tok_next(&tok))) appendstrlist(&cua_domains, domain);
-    tok_fini(&tok);
-
     utc_zone = icaltimezone_get_utc_timezone();
 
     icalendar_max_size = config_getbytesize(IMAPOPT_ICALENDAR_MAX_SIZE, 'B');
@@ -835,9 +820,6 @@ static void my_caldav_shutdown(void)
     rscale_calendars = NULL;
 
     buf_free(&ical_prodid_buf);
-
-    freestrlist(cua_domains);
-    cua_domains = NULL;
 
     my_caldav_reset();
     webdav_done();
@@ -1093,8 +1075,10 @@ static int caldav_check_precond(struct transaction_t *txn,
                  * they are organizer. */
                 if (cdata->organizer) {
                     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
-                    get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
-                            txn->req_tgt.userid, &schedule_addresses);
+                    caldav_get_schedule_addresses(txn->req_hdrs,
+                                                  txn->req_tgt.mbentry->name,
+                                                  txn->req_tgt.userid,
+                                                  &schedule_addresses);
                     if (strarray_find(&schedule_addresses, cdata->organizer, 0) < 0) {
                         precond = HTTP_FORBIDDEN;
                     }
@@ -1538,8 +1522,8 @@ static int caldav_delete_cal(struct transaction_t *txn,
             return HTTP_SERVER_ERROR;
         }
 
-        get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
-                               txn->req_tgt.userid, &schedule_addresses);
+        caldav_get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                                      txn->req_tgt.userid, &schedule_addresses);
 
         /* XXX - after legacy records are gone, we can strip this and just not send a
          * cancellation if deleting a record which was never replied to... */
@@ -3101,8 +3085,8 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
         /* XXX - check date range? - don't send in the past */
 
-        get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
-                               txn->req_tgt.userid, &schedule_addresses);
+        caldav_get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                                      txn->req_tgt.userid, &schedule_addresses);
 
         char *userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
             xstrdup(txn->req_tgt.userid) :
@@ -3251,8 +3235,8 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
         goto done;
     }
 
-    get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
-                           txn->req_tgt.userid, &schedule_addresses);
+    caldav_get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                                  txn->req_tgt.userid, &schedule_addresses);
     r = caladdress_lookup(organizer, &sparam, &schedule_addresses);
     if (r) {
         txn->error.precond = CALDAV_VALID_ORGANIZER;
@@ -3943,8 +3927,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
             }
 
-            get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
-                                   txn->req_tgt.userid, &schedule_addresses);
+            caldav_get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                                          txn->req_tgt.userid, &schedule_addresses);
 
             sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
                 xstrdup(txn->req_tgt.userid) :
@@ -5780,11 +5764,13 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
         }
 
         else {
-            struct strlist *domains;
-            for (domains = cua_domains; domains; domains = domains->next) {
+            int i;
+            for (i = 0; i < strarray_size(&config_cua_domains); i++) {
+                const char *domain = strarray_nth(&config_cua_domains, i);
+
                 buf_reset(&fctx->buf);
                 buf_printf(&fctx->buf, "mailto:%s@%s",
-                           fctx->req_tgt->userid, domains->s);
+                           fctx->req_tgt->userid, domain);
 
                 xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
             }
