@@ -1521,7 +1521,6 @@ lib_libcyrus_la_SOURCES = \
 	lib/signals.c \
 	lib/stristr.c \
 	lib/times.c \
-	lib/tok.c \
 	lib/wildmat.c
 if USE_CYRUSDB_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
@@ -1571,6 +1570,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/smallarrayu64.c \
 	lib/strarray.c \
 	lib/strhash.c \
+	lib/tok.c \
 	lib/util.c \
 	lib/vparse.c \
 	lib/xmalloc.c \

@@ -59,6 +59,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "tok.h"
 #include "util.h"
 
 #define CONFIGHASHSIZE 30 /* relatively small,
@@ -80,6 +81,7 @@ EXPORTED const char *config_ident = NULL;         /* the service name */
 EXPORTED int config_hashimapspool;        /* f */
 EXPORTED enum enum_value config_virtdomains;              /* f */
 EXPORTED enum enum_value config_mupdate_config; /* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
+EXPORTED strarray_t config_cua_domains = STRARRAY_INITIALIZER;
 EXPORTED int config_auditlog;
 EXPORTED int config_iolog;
 EXPORTED unsigned config_maxword;
@@ -588,6 +590,7 @@ EXPORTED void config_reset(void)
     if (config_servername != config_getstring(IMAPOPT_SERVERNAME))
         free((char *)config_servername);
     config_servername = NULL;
+    strarray_fini(&config_cua_domains);
     config_defpartition = NULL;
     config_mupdate_server = NULL;
     config_mupdate_config = 0;
@@ -648,6 +651,9 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     char *p;
     int ival;
     int64_t i64val;
+    const char *cua_domains;
+    char *domain;
+    tok_t tok;
 
     config_loaded = 1;
 
@@ -789,6 +795,17 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         gethostname((char *) config_servername, 256);
     }
     config_serverinfo = config_getenum(IMAPOPT_SERVERINFO);
+
+    
+    /* create an array of calendar-user-address-set domains */
+    cua_domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
+    if (!cua_domains) cua_domains = config_defdomain;
+    if (!cua_domains) cua_domains = config_servername;
+
+    tok_init(&tok, cua_domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+    while ((domain = tok_next(&tok)))
+        strarray_append(&config_cua_domains, domain);
+    tok_fini(&tok);
 
     /* set some limits */
     i64val = config_getbytesize(IMAPOPT_MAXQUOTED, 'B');

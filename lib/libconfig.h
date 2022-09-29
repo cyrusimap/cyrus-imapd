@@ -44,6 +44,7 @@
 #define INCLUDED_LIBCONFIG_H
 
 #include "imapopts.h"
+#include "strarray.h"
 
 /* these will assert() if they're called on the wrong type of
    option (imapopts.c) */
@@ -89,6 +90,7 @@ extern enum enum_value config_serverinfo;
 extern const char *config_mupdate_server;
 extern const char *config_defdomain;
 extern const char *config_ident;
+extern strarray_t config_cua_domains;
 extern int config_hashimapspool;
 extern int config_implicitrights;
 extern enum enum_value config_virtdomains;
