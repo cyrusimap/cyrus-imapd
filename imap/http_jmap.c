@@ -1012,7 +1012,7 @@ static int jmap_upload(struct transaction_t *txn)
     struct appendstate as;
     char *normalisedtype = NULL;
     int rawmessage = 0;
-
+    struct conversations_state *cstate = NULL;
     struct mailbox *mailbox = NULL;
     int r = 0;
 
@@ -1041,10 +1041,18 @@ static int jmap_upload(struct transaction_t *txn)
     }
     *slash = '\0';
 
+    r = conversations_open_user(accountid, 0, &cstate);
+    if (r) {
+        syslog(LOG_ERR, "jmap_upload: can't open conversations db for %s: %s",
+               accountid, error_message(r));
+        ret = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
     r = jmap_open_upload_collection(accountid, &mailbox);
     if (r) {
         syslog(LOG_ERR, "jmap_upload: can't open upload collection for %s: %s",
-               error_message(r), accountid);
+               accountid, error_message(r));
         ret = HTTP_NOT_FOUND;
         goto done;
     }
@@ -1217,6 +1225,10 @@ done:
         if (r) mailbox_abort(mailbox);
         else r = mailbox_commit(mailbox);
         mailbox_close(&mailbox);
+    }
+    if (cstate) {
+        if (r) conversations_abort(&cstate);
+        else conversations_commit(&cstate);
     }
 
     /* ensure we didn't leak anything! */
