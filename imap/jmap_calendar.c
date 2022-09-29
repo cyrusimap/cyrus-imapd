@@ -11166,6 +11166,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
                                              const char *mboxid,
                                              uint32_t uid,
                                              hash_table *icsbody_by_partid,
+                                             int allow_multiple_uids,
                                              const struct buf *mime)
 {
     json_t *jsevents_by_partid = json_object();
@@ -11191,6 +11192,33 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
         ical = ical_string_as_icalcomponent(&buf);
         free(decbuf);
         if (!ical) continue;
+
+        if (!allow_multiple_uids) {
+            int is_valid = 0;
+
+            // All real components in VCALENDAR must have the same UID
+            icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+            if (comp) {
+                const char *uid = icalcomponent_get_uid(comp);
+                if (uid) {
+                    icalcomponent_kind kind = icalcomponent_isa(comp);
+
+                    for (comp = icalcomponent_get_next_component(ical, kind);
+                         comp;
+                         comp = icalcomponent_get_next_component(ical, kind)) {
+                        if (strcmpsafe(icalcomponent_get_uid(comp), uid))
+                            break;
+                    }
+
+                    is_valid = !comp;
+                }
+            }
+
+            if (!is_valid) {
+                icalcomponent_free(ical);
+                continue;
+            }
+        }
 
         if (icalcomponent_get_method(ical) != ICAL_METHOD_NONE) {
             /* In-place rewrite BINARY ATTACH to managed attachment */
