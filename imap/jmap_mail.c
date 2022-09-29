@@ -7807,7 +7807,7 @@ static int _email_get_bodies(jmap_req_t *req,
             }
             events = jmap_calendar_events_from_msg(req,
                     mbox ? mailbox_uniqueid(mbox) : NULL, uid,
-                    &icsbody_by_partid, msg->mime);
+                    &icsbody_by_partid, 0, msg->mime);
         }
         json_object_set_new(email, "calendarEvents", events);
 

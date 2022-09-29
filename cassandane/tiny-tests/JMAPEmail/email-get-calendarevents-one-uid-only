@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_calendarevents_one_uid_only
+    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    my $instance = $self->{instance};
+
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $mimeMessage = <<'EOF';
+From: from@local
+To: to@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/related;
+ boundary=c4683f7a320d4d20902b000486fbdf9b
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/plain
+
+test
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/calendar;charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DTEND;TZID=Europe/Vienna:20160928T170000
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:event1
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20170928T160000
+DTEND;TZID=Europe/Vienna:20170928T170000
+UID:b384fb45-afbd-4c25-b059-37f26b29e684
+DTSTAMP:20160928T132434Z
+CREATED:20160928T125212Z
+SUMMARY:event2
+LAST-MODIFIED:20160928T132434Z
+END:VEVENT
+END:VCALENDAR
+
+--c4683f7a320d4d20902b000486fbdf9b--
+EOF
+    $mimeMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mimeMessage) || die $@;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+            properties => ['calendarEvents'],
+        }, 'R2'],
+    ], $using);
+
+    $self->assert_null($res->[1][1]{list}[0]{calendarEvents});
+}

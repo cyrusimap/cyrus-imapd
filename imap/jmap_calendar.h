@@ -54,6 +54,7 @@
 extern json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
                                              const char *mboxid, uint32_t uid,
                                              hash_table *icsbody_by_partid,
+                                             int allow_multiple_uids,
                                              const struct buf *mime);
 
 #endif /* JMAP_CALENDAR_H */
