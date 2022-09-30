@@ -765,7 +765,7 @@ static void reconstruct_mbentry(const char *header_path)
         printf("Invalid/missing cyrus.header at '%s'\n", header_path);
         goto done;
     }
-    else if (!mbentry->partition) {
+    if (!mbentry->partition) {
         printf("Header for mailbox '%s' is not located on a valid [meta]partition\n",
                mbentry->name);
         goto done;
@@ -818,11 +818,10 @@ static void reconstruct_mbentry(const char *header_path)
                        mbentry->name, header_path);
                 goto done;
             }
-            else {
-                xsyslog(LOG_INFO, "mailbox header had no uniqueid, setting from path",
-                        "mboxname=<%s> newuniqueid=<%s>",
-                        mbentry->name, mbentry->uniqueid);
-            }
+
+            xsyslog(LOG_INFO, "mailbox header had no uniqueid, setting from path",
+                    "mboxname=<%s> newuniqueid=<%s>",
+                    mbentry->name, mbentry->uniqueid);
         }
         else {
             /* Look for an existing N record */
@@ -875,13 +874,12 @@ static void reconstruct_mbentry(const char *header_path)
                     "uniqueid=<%s>", mbentry->uniqueid);
             goto done;
         }
-        else {
-            xsyslog(LOG_INFO, "mailbox header had no name, setting from mbentry",
-                    "mboxname=<%s> uniqueid=<%s>",
-                    mbentry->name, mbentry->uniqueid);
 
-            fix_header = 1;
-        }
+        xsyslog(LOG_INFO, "mailbox header had no name, setting from mbentry",
+                "mboxname=<%s> uniqueid=<%s>",
+                mbentry->name, mbentry->uniqueid);
+
+        fix_header = 1;
     }
 
     /* Sanity check the path */
