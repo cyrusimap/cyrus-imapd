@@ -366,7 +366,7 @@ sub test_recover_uniqueid_from_header_path_legacymb
                                    'reconstruct', '-P', $cyrus_header);
     my $syslog = join(q{}, $self->{instance}->getsyslog());
 
-    # should have still existed in cyrus.header
+    # should not have existed in cyrus.header, get from mbentry
     $self->assert_matches(
         qr{mailbox header had no uniqueid, setting from mbentry}, $syslog);
 
@@ -449,7 +449,7 @@ sub test_recover_uniqueid_from_header_path_uuidmb
                                    'reconstruct', '-P', $cyrus_header);
     my $syslog = join(q{}, $self->{instance}->getsyslog());
 
-    # should have still existed in cyrus.header
+    # should not have existed in cyrus.header, get from path
     $self->assert_matches(
         qr{mailbox header had no uniqueid, setting from path}, $syslog);
 
