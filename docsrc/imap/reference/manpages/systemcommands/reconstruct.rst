@@ -167,8 +167,10 @@ Options
 .. option:: -P
 
     Instead of mailbox prefixes, give paths to cyrus.header files on
-    the command line.  This will ONLY create/repair mailboxes.db
-    records using data in cyrus.header and cyrus.index.
+    the command line.  The paths can be mailbox directories, or
+    explicit cyrus.header filenames.
+    This will ONLY create/repair mailboxes.db records using data in
+    cyrus.header and cyrus.index.
 
 Examples
 ========
