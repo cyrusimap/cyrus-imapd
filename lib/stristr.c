@@ -30,16 +30,15 @@
 EXPORTED char *stristr(const char *String, const char *Pattern)
 {
       char *pptr, *sptr, *start;
-      size_t  slen, plen;
+      size_t slen = strlen(String);
+      size_t plen = strlen(Pattern);
 
-      for (start = (char *)String,
-           slen  = strlen(String),
-           plen  = strlen(Pattern);
+      if (!plen) return (char *)String;
+      if (!slen) return NULL;
 
+      for (start = (char *)String;
            /* while string length not shorter than pattern length */
-
            slen >= plen;
-
            start++, slen--)
       {
             /* find start of pattern in string */
