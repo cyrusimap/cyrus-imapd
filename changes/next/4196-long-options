@@ -1,0 +1,18 @@
+Description:
+
+Adds long-options support to various command line tools
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Nothing required
+
+
+GitHub issue:
+
+None
