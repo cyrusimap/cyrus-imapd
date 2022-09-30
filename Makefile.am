@@ -656,6 +656,7 @@ cunit_TESTS += \
 	cunit/strarray.testc \
 	cunit/strconcat.testc \
 	cunit/strhash.testc \
+	cunit/stristr.testc \
 	cunit/times.testc \
 	cunit/tok.testc \
 	cunit/vparse.testc \
