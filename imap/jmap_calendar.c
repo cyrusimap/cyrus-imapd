@@ -10075,8 +10075,6 @@ static int jmap_sharenotification_get(struct jmap_req *req)
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, MODSEQ_FMT, req->counters.davnotificationmodseq);
     get.state = buf_release(&buf);
-    buf_free(&buf);
-
 
     jmap_ok(req, jmap_get_reply(&get));
 
@@ -10588,7 +10586,6 @@ static int jmap_calendareventnotification_get(struct jmap_req *req)
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, MODSEQ_FMT, req->counters.jmapnotificationmodseq);
     get.state = buf_release(&buf);
-    buf_free(&buf);
 
     jmap_ok(req, jmap_get_reply(&get));
 
