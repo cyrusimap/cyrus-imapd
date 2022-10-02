@@ -1,0 +1,48 @@
+Description:
+
+Adds a new BYTESIZE smart type for imapoptions that set sizes
+
+
+Config changes:
+
+Adds a new BYTESIZE smart type for imapoptions that set sizes.  This allows
+sizes to be specified in "KB", etc for better readability.
+
+These imapd.conf options are changed in some way:
+
+* archive_maxsize
+* autocreate_quota
+* autocreatequota
+* backup_compact_minsize
+* backup_compact_maxsize
+* event_content_size
+* icalendar_max_size
+* jmap_preview_length
+* jmap_max_size_upload
+* jmap_max_size_blob_set
+* jmap_max_size_request
+* jmap_mail_max_size_attachments_per_email
+* maxmessagesize
+* maxquoted
+* maxword
+* quotawarn -> quotawarnpercent
+* quotawarnkb -> quotawarnsize
+* search_maxsize
+* sieve_maxscriptsize
+* vcard_max_size
+* webdav_attachments_max_binary_attach_size
+
+
+Upgrade instructions:
+
+This feature is transparent over upgrade and downgrade, provided the
+imapd.conf remains unchanged.
+
+Admins may update their imapd.conf to take advantage of the readability of the
+new smart type, but after doing so will no longer be able to downgrade to a
+version without this feature (unless they also revert their imapd.conf).
+
+
+GitHub issue:
+
+None
