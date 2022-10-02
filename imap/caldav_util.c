@@ -1187,9 +1187,6 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
 
     errno = 0;
 
-    /* Copy add_imapflags, we might need to add some flags */
-    if (add_imapflags) strarray_cat(&myimapflags, add_imapflags);
-
     if (!utc_zone) utc_zone = icaltimezone_get_utc_timezone();
 
     /* Check for supported component type */
@@ -1252,6 +1249,9 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     if (cdata->dav.imap_uid && (flags & PERMS_NOKEEP) == 0) {
         preserve_jmap_permissions(ical, kind, cdata);
     }
+
+    /* Copy add_imapflags, we might need to add some flags */
+    if (add_imapflags) strarray_cat(&myimapflags, add_imapflags);
 
     /* Remove all X-LIC-ERROR properties */
     icalcomponent_strip_errors(ical);
