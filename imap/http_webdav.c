@@ -361,6 +361,7 @@ static int my_webdav_auth(const char *userid)
         else {
             syslog(LOG_ERR, "could not autoprovision DAV drive for userid %s: %s",
                    userid, error_message(r));
+            mbname_free(&mbname);
             if (r == IMAP_INVALID_USER) {
                 /* We successfully authenticated, but don't have a user INBOX.
                    Assume that the user has yet to be fully provisioned,
@@ -514,8 +515,10 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
         if (mbname_localpart(mbname) &&
-            strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+            strcmpsafe(mbname_domain(mbname), httpd_extradomain)) {
+            mbname_free(&mbname);
             return HTTP_NOT_FOUND;
+        }
         mbname_set_domain(mbname, NULL);
     }
 
