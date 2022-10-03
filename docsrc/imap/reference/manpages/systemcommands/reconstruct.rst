@@ -29,6 +29,8 @@ Synopsis
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-r** ]
         [ **-q** ] **-V** *version* **-u** *user*...
 
+    **reconstruct** [ **-C** *config-file* ] **-P** *cyrus-header-paths*...
+
 Description
 ===========
 
@@ -161,6 +163,14 @@ Options
 .. option:: -u
 
     Instead of mailbox prefixes, give usernames on the command line
+
+.. option:: -P
+
+    Instead of mailbox prefixes, give paths to cyrus.header files on
+    the command line.  The paths can be mailbox directories, or
+    explicit cyrus.header filenames.
+    This will ONLY create/repair mailboxes.db records using data in
+    cyrus.header and cyrus.index.
 
 Examples
 ========

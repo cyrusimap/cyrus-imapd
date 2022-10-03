@@ -148,6 +148,28 @@ EOF
   return $buf;
 }
 
+=item $header->write_newheader($fh, $headerData)
+
+Write a new-style header file with the data (e.g. returned from ->{dlistheader})
+to the given filehandle.
+
+=cut
+
+sub write_newheader {
+  my $Self = shift;
+  my $fh = shift;
+  my $dl = shift || $Self->{dlistheader};
+
+  my $buf = <<EOF;
+$HL1
+$HL2
+$HL3
+$dl
+EOF
+
+  $fh->print($buf);
+}
+
 sub parse_header {
   my $Self = shift;
   my $body = shift;
