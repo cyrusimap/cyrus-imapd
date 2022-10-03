@@ -388,6 +388,7 @@ static int handle_request(const char *who, const char *name,
     r = mailbox_open_irl(intname, &mailbox);
     if (r) {
         send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
+        free(intname);
         return r;
     }
 
