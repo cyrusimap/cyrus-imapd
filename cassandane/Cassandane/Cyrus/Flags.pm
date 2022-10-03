@@ -220,35 +220,29 @@ sub test_seen_otheruser
     $admintalk->unselect();
     $admintalk->select('user.cassandane');
 
-    # XXX is this test bogus? it seems to expect admin to have different
-    # XXX seen flags from cassandane user, but there's no untagged response
-    # XXX when setting them as admin, suggesting they were already set,
-    # XXX and there's no explicit test that they were missing before being
-    # XXX set...
-
     xlog $self, "Set \\Seen on message A";
     my $res = $talk->store('1', '+flags', '(\\Seen)');
-#   XXX $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
     $self->check_messages(\%msg, store => $self->{adminstore});
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
     xlog $self, "Set \\Seen on message A as admin";
     $res = $admintalk->store('1', '+flags', '(\\Seen)');
-#   XXX $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
     $self->check_messages(\%msg, store => $self->{adminstore});
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \\Seen on message A";
     $res = $talk->store('1', '-flags', '(\\Seen)');
-#   XXX $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
     $self->check_messages(\%msg, store => $self->{adminstore});
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \\Seen on message A as admin";
     $res = $admintalk->store('1', '-flags', '(\\Seen)');
-#   XXX $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
     $self->check_messages(\%msg, store => $self->{adminstore});
     $self->check_messages(\%msg);
 }
