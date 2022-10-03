@@ -787,12 +787,13 @@ static int write_personal_data(const char *userid,
     struct message_guid guid;
     struct buf value = BUF_INITIALIZER;
     const char *icalstr = icalcomponent_as_ical_string(vpatch);
-    struct dlist *dl = dlist_newkvlist(NULL, "CALDATA");
+    struct dlist *dl;
     int ret;
 
     ret = mailbox_get_annotate_state(mailbox, uid, NULL);
     if (ret) return ret;
 
+    dl = dlist_newkvlist(NULL, "CALDATA");
     dlist_setdate(dl, "LASTMOD", time(0));
     dlist_setnum64(dl, "MODSEQ", modseq);
     message_guid_generate(&guid, icalstr, strlen(icalstr));
