@@ -322,11 +322,12 @@ static int my_webdav_auth(const char *userid)
     }
 
     /* Auto-provision toplevel DAV drive collection for 'userid' */
+    struct mboxlock *namespacelock = NULL;
     mbname_t *mbname = mbname_from_userid(userid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
     int r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        struct mboxlock *namespacelock = user_namespacelock(userid);
+        namespacelock = user_namespacelock(userid);
         // did we lose the race?  Nothing to do!
         r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
         if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
@@ -342,7 +343,6 @@ static int my_webdav_auth(const char *userid)
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
                              &backend_cached, NULL, NULL, httpd_in);
             mboxlist_entry_free(&mbentry);
-            mboxname_release(&namespacelock);
             goto done;
         }
         mboxlist_entry_free(&mbentry);
@@ -366,18 +366,18 @@ static int my_webdav_auth(const char *userid)
                    Assume that the user has yet to be fully provisioned,
                    or the user is being renamed.
                 */
-                return HTTP_UNAVAILABLE;
+                r = HTTP_UNAVAILABLE;
             }
-        
-            return HTTP_SERVER_ERROR;
+            else {
+                r = HTTP_SERVER_ERROR;
+            }
         }
-
-        mboxname_release(&namespacelock);
     }
 
  done:
+    mboxname_release(&namespacelock);
     mbname_free(&mbname);
-    return 0;
+    return r;
 }
 
 
@@ -514,8 +514,10 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
         if (mbname_localpart(mbname) &&
-            strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+            strcmpsafe(mbname_domain(mbname), httpd_extradomain)) {
+            mbname_free(&mbname);
             return HTTP_NOT_FOUND;
+        }
         mbname_set_domain(mbname, NULL);
     }
 
