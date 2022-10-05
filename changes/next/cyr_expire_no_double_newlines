@@ -1,0 +1,17 @@
+Description:
+
+Removes empty lines from cyr_expire verbose output.
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Installations may use external tools to parse cyr_expire verbose output. Such
+tools may need to get updated to not expect empty lines between log messages.
+
+GitHub issue:
+
+None.
