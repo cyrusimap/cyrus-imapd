@@ -396,7 +396,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                     patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
                                                 icalproperty_new_patchtarget(
                                                     buf_cstring(path)),
-                                                0);
+                                                NULL);
                     icalcomponent_add_component(vpatch, patch);
                 }
 
@@ -473,7 +473,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                     patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
                                                 icalproperty_new_patchtarget(
                                                     buf_cstring(path)),
-                                                0);
+                                                NULL);
                     icalcomponent_add_component(vpatch, patch);
                 }
 
@@ -642,7 +642,7 @@ static int personalize_resource(struct transaction_t *txn,
                                                                   0,
                                                                   utc_zone)),
                                 icalproperty_new_uid(buf_cstring(&txn->buf)),
-                                0);
+                                NULL);
         buf_reset(&txn->buf);
 
         /* Extract personal info from owner's resource and create vpatch */
@@ -689,7 +689,7 @@ static int personalize_resource(struct transaction_t *txn,
                                                                   0,
                                                                   utc_zone)),
                                 icalproperty_new_uid(buf_cstring(&txn->buf)),
-                                0);
+                                NULL);
         buf_reset(&txn->buf);
 
         /* Extract personal info from new resource and add to vpatch */
