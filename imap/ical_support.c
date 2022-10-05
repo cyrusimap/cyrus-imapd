@@ -517,7 +517,7 @@ EXPORTED icalcomponent *icalcomponent_new_stream(struct mailbox *mailbox,
                                    icaltime_from_timet_with_zone(mailbox->index_mtime,
                                                                  0, NULL)),
                                icalproperty_new_name(name),
-                               0);
+                               NULL);
 
     buf_free(&buf);
 
