@@ -805,26 +805,31 @@ done:
 
 static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf *msg_buf)
 {
+    /* Fast-path single text body */
     if (bodies->textlist.count == 1) {
         int is_encoding_problem = 0;
-        struct body *textbody = ptrarray_nth(&bodies->textlist, 0);
-        return _decode_to_utf8(textbody->charset_id,
-                               msg_buf->s + textbody->content_offset,
-                               textbody->content_size,
-                               textbody->encoding,
-                               &is_encoding_problem);
+        struct body *part = ptrarray_nth(&bodies->textlist, 0);
+        if (!strcasecmp(part->type, "TEXT") &&
+                !strcasecmpsafe(part->subtype, "PLAIN")) {
+            return _decode_to_utf8(part->charset_id,
+                    msg_buf->s + part->content_offset,
+                    part->content_size,
+                    part->encoding,
+                    &is_encoding_problem);
+        }
     }
 
     /* Concatenate all plain text bodies and replace any
      * inlined images with placeholders. */
-    int i;
     struct buf buf = BUF_INITIALIZER;
+    int i;
     for (i = 0; i < bodies->textlist.count; i++) {
         struct body *part = ptrarray_nth(&bodies->textlist, i);
 
-        if (i) buf_appendcstr(&buf, "\n");
+        if (i && buf_len(&buf)) buf_appendcstr(&buf, "\n");
 
-        if (!strcmp(part->type, "TEXT")) {
+        if (!strcasecmp(part->type, "TEXT") &&
+                !strcasecmpsafe(part->subtype, "PLAIN")) {
             int is_encoding_problem = 0;
             char *t = _decode_to_utf8(part->charset_id,
                                       msg_buf->s + part->content_offset,
@@ -851,7 +856,8 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
             buf_appendcstr(&buf, "]");
         }
     }
-    return buf_release(&buf);
+
+    return buf_releasenull(&buf);
 }
 
 /* Replace any <HTML> and </HTML> tags in t with <DIV> and </DIV>,
@@ -898,6 +904,21 @@ static void _html_concat_div(struct buf *buf, const char *t)
 
 static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *msg_buf)
 {
+    /* Make sure there's at least one HTML body */
+    int has_html = 0;
+    int i;
+    for (i = 0; i < bodies->textlist.count; i++) {
+        struct body *part = ptrarray_nth(&bodies->textlist, 0);
+        if (!strcasecmp(part->type, "TEXT") &&
+                !strcasecmpsafe(part->subtype, "HTML")) {
+            has_html = 1;
+            break;
+        }
+    }
+    if (!has_html)
+        return NULL;
+
+    /* Fast-path single HTML body */
     if (bodies->htmllist.count == 1) {
         const struct body *part = ptrarray_nth(&bodies->htmllist, 0);
         int is_encoding_problem = 0;
@@ -912,7 +933,6 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
     /* Concatenate all TEXT bodies, enclosing PLAIN text
      * in <div> and replacing <html> tags in HTML bodies
      * with <div>. */
-    int i;
     struct buf buf = BUF_INITIALIZER;
     for (i = 0; i < bodies->htmllist.count; i++) {
         struct body *part = ptrarray_nth(&bodies->htmllist, i);
@@ -922,9 +942,8 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
          * already be an <img> tag for their Content-Id
          * header value. If this turns out to be not enough,
          * we can insert the <img> tags here. */
-        if (strcasecmp(part->type, "TEXT")) {
+        if (strcasecmp(part->type, "TEXT"))
             continue;
-        }
 
         if (!i)
             buf_appendcstr(&buf, "<html>"); // XXX use HTML5?
@@ -948,7 +967,7 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
         if (i == bodies->htmllist.count - 1)
             buf_appendcstr(&buf, "</html>");
     }
-    return buf_release(&buf);
+    return buf_releasenull(&buf);
 }
 
 static int _html_to_plain_cb(const struct buf *buf, void *rock)
@@ -989,7 +1008,7 @@ static char *_html_to_plain(const char *html) {
             *q++ = '\n';
             p += 4;
         }
-        else if (!strncmp(p, "p>", 3)) {
+        else if (!strncmp(p, "<p>", 3)) {
             p += 3;
         } else {
             *q++ = *p++;
