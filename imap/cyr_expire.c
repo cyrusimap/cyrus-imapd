@@ -333,7 +333,7 @@ static int expunge_userflags(struct mailbox *mailbox, struct expire_rock *erock)
             continue;
         if (!mailbox->h.flagname[i])
             continue;
-        verbosep("Expunging userflag %u (%s) from %s\n",
+        verbosep("Expunging userflag %u (%s) from %s",
                         i, mailbox->h.flagname[i], mailbox_name(mailbox));
         r = mailbox_remove_user_flag(mailbox, i);
         if (r) return r;
@@ -446,7 +446,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
     /* clean up deleted entries after 7 days */
     if (mbentry->mbtype & MBTYPE_DELETED) {
         if (mbentry->mtime < erock->tombstone_mark) {
-            verbosep("Removing stale tombstone for %s\n", mbentry->name);
+            verbosep("Removing stale tombstone for %s", mbentry->name);
             syslog(LOG_NOTICE, "Removing stale tombstone for %s", mbentry->name);
             mboxlist_deletelock(mbentry);
         }
@@ -478,7 +478,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
                     &erock->table);
 
         if (expire_seconds) {
-            verbosep("expiring messages in %s older than %0.2f days\n",
+            verbosep("expiring messages in %s older than %0.2f days",
                      mbentry->name,
                      ((double)expire_seconds/SECS_IN_A_DAY));
 
@@ -503,7 +503,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
     if (erock->do_userflags)
         expunge_userflags(mailbox, erock);
 
-    verbosep("cleaning up expunged messages in %s\n", mbentry->name);
+    verbosep("cleaning up expunged messages in %s", mbentry->name);
 
     r = mailbox_expunge_cleanup(mailbox, erock->expunge_mark, &numexpunged);
 
@@ -551,7 +551,7 @@ static int delete(const mbentry_t *mbentry, void *rock)
     if ((timestamp == 0) || (timestamp > drock->delete_mark))
         goto done;
 
-    verbosep("Cleaning up %s\n", mbentry->name);
+    verbosep("Cleaning up %s", mbentry->name);
 
     /* Add this mailbox to list of mailboxes to delete */
     strarray_append(&drock->to_delete, mbentry->name);
@@ -586,7 +586,7 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
     if (hash_lookup(filename, &crock->seen))
         goto done;
 
-    verbosep("Pruning conversations from db %s\n", filename);
+    verbosep("Pruning conversations from db %s", filename);
 
     if (!conversations_open_mbox(mbentry->name, 0/*shared*/, &state)) {
         conversations_prune(state, crock->expire_mark, &nseen, &ndeleted);
@@ -638,7 +638,7 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
         } else {
             ctx->erock.expunge_mark = time(0) - ctx->args.expunge_seconds;
 
-            verbosep("Expunging deleted messages in mailboxes older than %0.2f days\n",
+            verbosep("Expunging deleted messages in mailboxes older than %0.2f days",
                            ((double)ctx->args.expunge_seconds/SECS_IN_A_DAY));
         }
 
@@ -658,8 +658,8 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
                            ctx->erock.messages_expunged,
                            ctx->erock.messages_seen,
                            ctx->erock.mailboxes_seen);
-        verbosep("\nExpired %lu and expunged %lu out of %lu "
-                       "messages from %lu mailboxes\n",
+        verbosep("Expired %lu and expunged %lu out of %lu "
+                       "messages from %lu mailboxes",
                        ctx->erock.messages_expired,
                        ctx->erock.messages_expunged,
                        ctx->erock.messages_seen,
@@ -668,7 +668,7 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
         if (ctx->erock.do_userflags) {
             syslog(LOG_NOTICE, "Expunged %lu user flags",
                            ctx->erock.userflags_expunged);
-            verbosep("Expunged %lu user flags\n",
+            verbosep("Expunged %lu user flags",
                            ctx->erock.userflags_expunged);
         }
 
@@ -685,7 +685,7 @@ static int do_cid_expire(struct cyr_expire_ctx *ctx)
         cid_expire_seconds = config_getduration(IMAPOPT_CONVERSATIONS_EXPIRE_AFTER, 'd');
         ctx->crock.expire_mark = time(0) - cid_expire_seconds;
 
-        verbosep("Removing conversation entries older than %0.2f days\n",
+        verbosep("Removing conversation entries older than %0.2f days",
                        (double)(cid_expire_seconds/SECS_IN_A_DAY));
 
         if (ctx->args.userid)
@@ -701,7 +701,7 @@ static int do_cid_expire(struct cyr_expire_ctx *ctx)
                             ctx->crock.msgids_seen,
                             ctx->crock.databases_seen);
         verbosep("Expired %lu entries of %lu entries seen "
-                       "in %lu conversation databases\n",
+                       "in %lu conversation databases",
                        ctx->crock.msgids_expired,
                        ctx->crock.msgids_seen,
                        ctx->crock.databases_seen);
@@ -720,7 +720,7 @@ static int do_delete(struct cyr_expire_ctx *ctx)
         int count = 0;
         int i;
 
-        verbosep("Removing deleted mailboxes older than %0.2f days\n",
+        verbosep("Removing deleted mailboxes older than %0.2f days",
                  ((double)ctx->args.delete_seconds/SECS_IN_A_DAY));
 
         ctx->drock.delete_mark = time(0) - ctx->args.delete_seconds;
@@ -736,7 +736,7 @@ static int do_delete(struct cyr_expire_ctx *ctx)
 
             signals_poll();
 
-            verbosep("Removing: %s\n", name);
+            verbosep("Removing: %s", name);
 
             ret = mboxlist_deletemailboxlock(name, 1, NULL, NULL, NULL,
                                              MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
@@ -745,7 +745,7 @@ static int do_delete(struct cyr_expire_ctx *ctx)
             count++;
         }
 
-        verbosep("Removed %d deleted mailboxes\n", count);
+        verbosep("Removed %d deleted mailboxes", count);
 
         syslog(LOG_NOTICE, "Removed %d deleted mailboxes", count);
     }
