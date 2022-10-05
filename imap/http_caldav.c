@@ -5117,7 +5117,7 @@ static icalcomponent *expand_caldata(icalcomponent **ical,
         icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
                             icalproperty_new_version("2.0"),
                             icalproperty_new_prodid(ical_prodid),
-                            0);
+                            NULL);
 
     /* Copy over any CALSCALE property */
     icalproperty *prop =
@@ -6097,7 +6097,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
                                             icalproperty_new_version("2.0"),
                                             icalproperty_new_prodid(ical_prodid),
                                             vtz,
-                                            0);
+                                            NULL);
 
                     data = icalcomponent_as_ical_string(ical);
                     datalen = strlen(data);
@@ -7561,7 +7561,7 @@ HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
     ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
                                icalproperty_new_version("2.0"),
                                icalproperty_new_prodid(ical_prodid),
-                               0);
+                               NULL);
 
     if (method) icalcomponent_set_method(ical, method);
 
@@ -7571,7 +7571,7 @@ HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
                                          time(0), 0, utc_zone)),
                                  icalproperty_new_dtstart(fbfilter->start),
                                  icalproperty_new_dtend(fbfilter->end),
-                                 0);
+                                 NULL);
 
     icalcomponent_add_component(ical, fbcomp);
 
