@@ -1349,7 +1349,7 @@ static char *_html_to_plain(const char *html) {
             *q++ = '\n';
             p += 4;
         }
-        else if (!strncmp(p, "p>", 3)) {
+        else if (!strncmp(p, "<p>", 3)) {
             p += 3;
         } else {
             *q++ = *p++;
