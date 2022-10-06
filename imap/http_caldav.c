@@ -4960,7 +4960,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
     ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
 			       icalproperty_new_version("2.0"),
 			       icalproperty_new_prodid(ical_prodid),
-			       0);
+			       NULL);
 
     if (method) icalcomponent_set_method(ical, method);
 
@@ -4972,7 +4972,7 @@ static icalcomponent *busytime_query_local(struct transaction_t *txn,
 					 icaltimezone_get_utc_timezone())),
 				 icalproperty_new_dtstart(calfilter->start),
 				 icalproperty_new_dtend(calfilter->end),
-				 0);
+				 NULL);
 
     icalcomponent_add_component(ical, fbcomp);
 
@@ -6283,7 +6283,7 @@ static void sched_pollstatus(const char *organizer,
 			       icalproperty_new_version("2.0"),
 			       icalproperty_new_prodid(ical_prodid),
 			       icalproperty_new_method(ICAL_METHOD_POLLSTATUS),
-			       0);
+			       NULL);
 
     /* Copy over any CALSCALE property */
     prop = icalcomponent_get_first_property(ical, ICAL_CALSCALE_PROPERTY);
@@ -6809,7 +6809,7 @@ static void sched_deliver_local(const char *recipient,
 		   icalcomponent_get_uid(sched_data->itip));
 
 	/* Create new attendee object */
-	ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT, 0);
+	ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT, NULL);
 
 	/* Copy over VERSION property */
 	prop = icalcomponent_get_first_property(sched_data->itip,
@@ -7394,7 +7394,7 @@ static void sched_request(const char *organizer, struct caldav_sched_param *spar
 			      icalproperty_new_version("2.0"),
 			      icalproperty_new_prodid(ical_prodid),
 			      icalproperty_new_method(method),
-			      0);
+			      NULL);
 
     /* XXX  Make sure SEQUENCE is incremented */
 
@@ -7765,7 +7765,7 @@ static void sched_reply(const char *userid,
 			    icalproperty_new_version("2.0"),
 			    icalproperty_new_prodid(ical_prodid),
 			    icalproperty_new_method(ICAL_METHOD_REPLY),
-			    0);
+			    NULL);
 
     /* XXX  Make sure SEQUENCE is incremented */
 
