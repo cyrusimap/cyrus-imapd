@@ -1229,7 +1229,7 @@ static void sched_pollstatus(const char *organizer,
                                icalproperty_new_version("2.0"),
                                icalproperty_new_prodid(ical_prodid),
                                icalproperty_new_method(ICAL_METHOD_POLLSTATUS),
-                               0);
+                               NULL);
 
     /* Copy over any CALSCALE property */
     prop = icalcomponent_get_first_property(ical, ICAL_CALSCALE_PROPERTY);
@@ -1807,7 +1807,7 @@ static void sched_deliver_local(const char *sender, const char *recipient,
                    icalcomponent_get_uid(sched_data->itip));
 
         /* Create new attendee object */
-        ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT, 0);
+        ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT, NULL);
 
         /* Copy over VERSION property */
         prop = icalcomponent_get_first_property(sched_data->itip,
@@ -2339,7 +2339,7 @@ icalcomponent *make_itip(icalproperty_method method, icalcomponent *ical)
                                              icalproperty_new_version("2.0"),
                                              icalproperty_new_prodid(ical_prodid),
                                              icalproperty_new_method(method),
-                                             0);
+                                             NULL);
 
     /* XXX  Make sure SEQUENCE is incremented */
 
