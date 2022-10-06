@@ -3953,7 +3953,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                     patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
                                                 icalproperty_new_patchtarget(
                                                     buf_cstring(path)),
-                                                0);
+                                                NULL);
                     icalcomponent_add_component(vpatch, patch);
                 }
 
@@ -4030,7 +4030,7 @@ static int extract_personal_data(icalcomponent *ical, icalcomponent *oldical,
                     patch = icalcomponent_vanew(ICAL_XPATCH_COMPONENT,
                                                 icalproperty_new_patchtarget(
                                                     buf_cstring(path)),
-                                                0);
+                                                NULL);
                     icalcomponent_add_component(vpatch, patch);
                 }
 
@@ -4196,7 +4196,7 @@ static int personalize_resource(struct transaction_t *txn,
                                                                   0,
                                                                   utc_zone)),
                                 icalproperty_new_uid(buf_cstring(&txn->buf)),
-                                0);
+                                NULL);
         buf_reset(&txn->buf);
 
         /* Extract personal info from owner's resource and create vpatch */
@@ -4243,7 +4243,7 @@ static int personalize_resource(struct transaction_t *txn,
                                                                   0,
                                                                   utc_zone)),
                                 icalproperty_new_uid(buf_cstring(&txn->buf)),
-                                0);
+                                NULL);
         buf_reset(&txn->buf);
 
         /* Extract personal info from new resource and add to vpatch */
@@ -5623,7 +5623,7 @@ static icalcomponent *expand_caldata(icalcomponent **ical,
         icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
                             icalproperty_new_version("2.0"),
                             icalproperty_new_prodid(ical_prodid),
-                            0);
+                            NULL);
 
     /* Copy over any CALSCALE property */
     icalproperty *prop =
@@ -6555,7 +6555,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
                                             icalproperty_new_version("2.0"),
                                             icalproperty_new_prodid(ical_prodid),
                                             vtz,
-                                            0);
+                                            NULL);
 
                     data = icalcomponent_as_ical_string(ical);
                     datalen = strlen(data);
@@ -7874,7 +7874,7 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
     ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
                                icalproperty_new_version("2.0"),
                                icalproperty_new_prodid(ical_prodid),
-                               0);
+                               NULL);
 
     if (method) icalcomponent_set_method(ical, method);
 
@@ -7884,7 +7884,7 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
                                          time(0), 0, utc_zone)),
                                  icalproperty_new_dtstart(fbfilter->start),
                                  icalproperty_new_dtend(fbfilter->end),
-                                 0);
+                                 NULL);
 
     icalcomponent_add_component(ical, fbcomp);
 
