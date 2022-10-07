@@ -1208,7 +1208,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         buf_printf(&resource, "%s.ics", icalcomponent_get_uid(itip));
 
         /* Create new attendee object */
-        ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT, NULL);
+        ical = icalcomponent_new(ICAL_VCALENDAR_COMPONENT);
 
         /* Copy over VERSION property */
         prop = icalcomponent_get_first_property(itip, ICAL_VERSION_PROPERTY);
