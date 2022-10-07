@@ -21,7 +21,8 @@ jobs:
     - name: configure and build
       run: |
         git fetch --unshallow
-        git fetch --tags
+        git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
+        git fetch --tags upstream
         ./tools/build-with-cyruslibs.sh
     - name: update jmap test suite
       run: |
