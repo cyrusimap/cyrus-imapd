@@ -4337,7 +4337,7 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
 
 #ifdef WITH_DAV
     r = mailbox_update_dav(mailbox, old, new);
-    if (r) return r;
+    if (r && r != IMAP_NO_MSGGONE) return r;
 #endif
 
 #ifdef WITH_JMAP
@@ -5962,6 +5962,11 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
         r = mailbox_update_dav(mailbox, NULL, record);
 
         if (r == IMAP_NO_MSGGONE) {
+            if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+                /* Already expunged */
+                continue;
+            }
+
             struct index_record copyrecord = *record;
             copyrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
             copyrecord.silentupdate = 1;
