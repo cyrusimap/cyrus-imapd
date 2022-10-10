@@ -1972,6 +1972,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         case B_ENOTIFY:
         case B_NOTIFY:
         {
+            const char *method = cmd.u.n.method;
             const char *message = cmd.u.n.message;
             const char *priority = priority_to_string(cmd.u.n.priority);
 
@@ -1991,7 +1992,18 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 message = parse_string(message, variables);
             }
 
-            res = do_notify(notify_list, cmd.u.n.id, cmd.u.n.from, cmd.u.n.method,
+            if (op == B_ENOTIFY) {
+                /* Parse/split the method URI */
+                if (!strncmp(method, "mailto:", 7)) {
+                    strarray_insert(cmd.u.n.options, 0, method+7);
+                    method = "mailto";
+                }
+                else if (!strncmp(method, "https://cyrusimap.org/notifiers/", 32)) {
+                    method = method+32;
+                }
+            }
+
+            res = do_notify(notify_list, cmd.u.n.id, cmd.u.n.from, method,
                             (const char **) strarray_safetakevf(cmd.u.n.options),
                             priority, message);
 
