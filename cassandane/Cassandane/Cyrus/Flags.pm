@@ -102,7 +102,8 @@ sub test_deleted
     $self->check_messages(\%msg);
 
     xlog $self, "Mark the middle message \\Deleted";
-    $talk->store('2', '+flags', '(\\Deleted)');
+    my $res = $talk->store('2', '+flags', '(\\Deleted)');
+    $self->assert_deep_equals({ '2' => { 'flags' => [ '\\Deleted' ] }}, $res);
     $msg{B}->set_attribute(flags => ['\\Deleted']);
     $self->check_messages(\%msg);
 
@@ -151,17 +152,20 @@ sub test_seen
     $self->check_messages(\%msg);
 
     xlog $self, "Set \\Seen on message A";
-    $talk->store('1', '+flags', '(\\Seen)');
+    my $res = $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \\Seen on message A";
-    $talk->store('1', '-flags', '(\\Seen)');
+    $res = $talk->store('1', '-flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
     xlog $self, "Set \\Seen on message A again";
-    $talk->store('1', '+flags', '(\\Seen)');
+    $res = $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
@@ -217,25 +221,96 @@ sub test_seen_otheruser
     $admintalk->select('user.cassandane');
 
     xlog $self, "Set \\Seen on message A";
-    $talk->store('1', '+flags', '(\\Seen)');
+    my $res = $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
     $self->check_messages(\%msg, store => $self->{adminstore});
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
     xlog $self, "Set \\Seen on message A as admin";
-    $admintalk->store('1', '+flags', '(\\Seen)');
+    $res = $admintalk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
     $self->check_messages(\%msg, store => $self->{adminstore});
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \\Seen on message A";
-    $talk->store('1', '-flags', '(\\Seen)');
+    $res = $talk->store('1', '-flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
     $self->check_messages(\%msg, store => $self->{adminstore});
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \\Seen on message A as admin";
-    $admintalk->store('1', '-flags', '(\\Seen)');
+    $res = $admintalk->store('1', '-flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
     $self->check_messages(\%msg, store => $self->{adminstore});
+    $self->check_messages(\%msg);
+}
+
+# https://github.com/cyrusimap/cyrus-imapd/issues/3240
+sub test_seen_sharedmb_nosharedseen
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $folder = 'shared';
+
+    # shared mailbox with sharedseen=false
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create($folder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl('shared', 'cassandane' => 'lrswipkxtecdan');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setmetadata($folder,
+        '/shared/vendor/cmu/cyrus-imapd/sharedseen' => 'false'
+    );
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+
+    # add some messages
+    my $talk = $self->{store}->get_client();
+    $self->{store}->set_folder("Shared Folders/$folder");
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    # fiddle with seen flag, making sure we get both the expected results
+    # and the expected untagged fetch response
+    xlog $self, "Set \\Seen on message A";
+    my $res = $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Clear \\Seen on message A";
+    $res = $talk->store('1', '-flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    $msg{A}->set_attribute(flags => []);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Set \\Seen on message A again";
+    $res = $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    # seen flag should survive a reconnect
+    xlog $self, "Reconnect, \\Seen should still be on message A";
+    $self->{store}->disconnect();
+    $self->{store}->connect();
+    $self->{store}->_select();
     $self->check_messages(\%msg);
 }
 
@@ -268,17 +343,20 @@ sub test_flagged
     $self->check_messages(\%msg);
 
     xlog $self, "Set \\Flagged on message A";
-    $talk->store('1', '+flags', '(\\Flagged)');
+    my $res = $talk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Flagged' ] }}, $res);
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \\Flagged on message A";
-    $talk->store('1', '-flags', '(\\Flagged)');
+    $res = $talk->store('1', '-flags', '(\\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
     xlog $self, "Set \\Flagged on message A again";
-    $talk->store('1', '+flags', '(\\Flagged)');
+    $res = $talk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Flagged' ] }}, $res);
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     $self->check_messages(\%msg);
 
@@ -321,17 +399,20 @@ sub test_userflag
     $self->check_messages(\%msg);
 
     xlog $self, "Set \$Foobar on message A";
-    $talk->store('1', '+flags', '($Foobar)');
+    my $res = $talk->store('1', '+flags', '($Foobar)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '$Foobar' ] }}, $res);
     $msg{A}->set_attribute(flags => ['$Foobar']);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \$Foobar on message A";
-    $talk->store('1', '-flags', '($Foobar)');
+    $res = $talk->store('1', '-flags', '($Foobar)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
     xlog $self, "Set \$Foobar on message A again";
-    $talk->store('1', '+flags', '($Foobar)');
+    $res = $talk->store('1', '+flags', '($Foobar)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '$Foobar' ] }}, $res);
     $msg{A}->set_attribute(flags => ['$Foobar']);
     $self->check_messages(\%msg);
 
@@ -375,12 +456,14 @@ sub test_expunge_removeflag
     $self->check_messages(\%msg);
 
     xlog $self, "Set \$Foobar on message A";
-    $talk->store('1', '+flags', '($Foobar)');
+    my $res = $talk->store('1', '+flags', '($Foobar)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '$Foobar' ] }}, $res);
     $msg{A}->set_attribute(flags => ['$Foobar']);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \$Foobar on message A";
-    $talk->store('1', '-flags', '($Foobar)');
+    $res = $talk->store('1', '-flags', '($Foobar)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
@@ -455,12 +538,15 @@ sub test_max_userflags
         }
 
         xlog $self, "Set $flag on message A";
-        $talk->store('1', '+flags', "($flag)");
+        my $res = $talk->store('1', '+flags', "($flag)");
+        $self->assert_deep_equals({ '1' => { 'flags' => [ "$flag" ] }},
+                                  $res);
         $msg{A}->set_attribute(flags => [$flag]);
         $self->check_messages(\%msg);
 
         xlog $self, "Clear $flag on message A";
-        $talk->store('1', '-flags', "($flag)");
+        $res = $talk->store('1', '-flags', "($flag)");
+        $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
         $msg{A}->set_attribute(flags => []);
         $self->check_messages(\%msg);
     }
@@ -468,9 +554,9 @@ sub test_max_userflags
     xlog $self, "Cannot set one more wafer-thin user flag";
     my $flag = '$Farnarkle';
     $self->assert_null($allflags{$flag});
-    my $r = $talk->store('1', '+flags', "($flag)");
+    my $res = $talk->store('1', '+flags', "($flag)");
     my $e = $@;
-    $self->assert_null($r);
+    $self->assert_null($res);
     $self->assert_matches(qr/Too many user flags in mailbox/, $e);
 
     if ($self->{instance}->{have_syslog_replacement}) {
@@ -482,7 +568,9 @@ sub test_max_userflags
     xlog $self, "Can set all the flags at once";
     my @flags = sort { $allflags{$a} <=> $allflags{$b} } (keys %allflags);
     xlog $self, "Set all the user flags on message A";
-    $talk->store('1', '+flags', '(' . join(' ',@flags) . ')');
+    $res = $talk->store('1', '+flags', '(' . join(' ',@flags) . ')');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ @flags ] }},
+                              $res);
     $msg{A}->set_attribute(flags => [@flags]);
     $self->check_messages(\%msg);
 
@@ -515,7 +603,10 @@ sub test_search_allflags
         my $flag = "flag$i";
         $msg{$i} = $self->make_message("Message $i");
         xlog $self, "Set $flag on message $i";
-        $talk->store($i, '+flags', "($flag)");
+        my $res = $talk->store($i, '+flags', "($flag)");
+        $self->assert_deep_equals({ "$i" => { 'flags' => [
+                                        '\\Recent', $flag
+                                  ]}}, $res);
     }
 
     # for debugging
@@ -558,27 +649,44 @@ sub test_multi_flags
     $self->check_messages(\%msg);
 
     xlog $self, "Set many flags on message A";
-    $talk->store('1', '+flags', '(\\Answered \\Flagged \\Draft \\Deleted \\Seen)');
+    my $res = $talk->store('1', '+flags',
+                           '(\\Answered \\Flagged \\Draft \\Deleted \\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Answered \\Flagged \\Draft
+                                   \\Deleted \\Seen)
+                              ]}}, $res);
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Flagged \\Draft \\Deleted \\Seen)]);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \\Flagged on message A";
-    $talk->store('1', '-flags', '(\\Flagged)');
+    $res = $talk->store('1', '-flags', '(\\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Answered \\Draft \\Deleted \\Seen)
+                              ]}}, $res);
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Draft \\Deleted \\Seen)]);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \\Draft and \\Deleted on message A";
-    $talk->store('1', '-flags', '(\\Draft \\Deleted)');
+    $res = $talk->store('1', '-flags', '(\\Draft \\Deleted)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Answered \\Seen)
+                              ]}}, $res);
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Seen)]);
     $self->check_messages(\%msg);
 
     xlog $self, "Set \\Draft and \\Flagged on message A";
-    $talk->store('1', '+flags', '(\\Draft \\Flagged)');
+    $res = $talk->store('1', '+flags', '(\\Draft \\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Answered \\Flagged \\Draft \\Seen)
+                              ]}}, $res);
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Flagged \\Draft \\Seen)]);
     $self->check_messages(\%msg);
 
     xlog $self, "Set to just \\Answered and \\Seen on message A";
-    $talk->store('1', 'flags', '(\\Answered \\Seen)');
+    $res = $talk->store('1', 'flags', '(\\Answered \\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Answered \\Seen)
+                              ]}}, $res);
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Seen)]);
     $self->check_messages(\%msg);
 
@@ -598,7 +706,8 @@ sub test_multi_flags
             push(@flags, $rev_map{$m}) if ($i & $m);
         }
         xlog $self, "Setting " . join(',',@flags) . " on message A";
-        $talk->store('1', 'flags', '(' . join(' ',@flags) . ')');
+        my $res = $talk->store('1', 'flags', '(' . join(' ',@flags) . ')');
+        $self->assert_deep_equals({ '1' => { 'flags' => \@flags }}, $res);
         $msg{A}->set_attribute(flags => \@flags);
         $self->check_messages(\%msg);
     }
@@ -646,13 +755,21 @@ sub test_multi_flags_acl
     );
     my @flags = sort keys %acls;
 
+    my $firsttime = 1;
     while (my ($flag, $acl_bit) = each %acls) {
         xlog $self, "testing flag $flag";
         # reset to no flags set
         $admintalk->setacl("user.cassandane", "cassandane", "lrstw") or die;
         $talk->unselect();
         $talk->select('INBOX');
-        $talk->store('1', 'flags', '()');
+        my $res = $talk->store('1', 'flags', '()');
+        if ($firsttime) {
+            $self->assert_deep_equals({}, $res);
+            $firsttime = 0;
+        }
+        else {
+            $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+        }
         $msg{A}->set_attribute(flags => []);
         $self->check_messages(\%msg);
 
@@ -663,9 +780,10 @@ sub test_multi_flags_acl
         $talk->select('INBOX');
 
         # set a bunch of flags
-        $talk->store('1', '+flags', "(@flags)");
+        $res = $talk->store('1', '+flags', "(@flags)");
 
         # it should work, but only the allowed flag should have been set
+        $self->assert_deep_equals({ '1' => { 'flags' => [ $flag ] }}, $res);
         $self->assert_equals('ok', $talk->get_last_completion_response());
         $msg{A}->set_attribute(flags => [$flag]);
         $self->check_messages(\%msg);
@@ -674,7 +792,9 @@ sub test_multi_flags_acl
         $admintalk->setacl("user.cassandane", "cassandane", "lrstw") or die;
         $talk->unselect();
         $talk->select('INBOX');
-        $talk->store('1', 'flags', "(@flags)");
+        $res = $talk->store('1', 'flags', "(@flags)");
+        $self->assert_not_null($res);
+        $self->assert_deep_equals([@flags], [sort @{$res->{1}->{flags}}]);
         $msg{A}->set_attribute(flags => [@flags]);
         $self->check_messages(\%msg);
 
@@ -685,33 +805,39 @@ sub test_multi_flags_acl
         $talk->select('INBOX');
 
         # remove a bunch of flags
-        $talk->store('1', '-flags', "(@flags)");
+        $res = $talk->store('1', '-flags', "(@flags)");
 
         # it should work, but only the allowed flag should have been changed
+        $self->assert_not_null($res);
+        $self->assert_deep_equals([ grep { $_ ne $flag } @flags ],
+                                  [ sort @{$res->{1}->{flags}} ]);
         $self->assert_equals('ok', $talk->get_last_completion_response());
         $msg{A}->set_attribute(flags => [ grep { $_ ne $flag } @flags ]);
         $self->check_messages(\%msg);
 
         # explicit set with any of them missing permission should fail
-        $talk->store('1', 'flags', "(@flags)");
+        $res = $talk->store('1', 'flags', "(@flags)");
 
         # nothing should have changed
+        $self->assert_null($res);
         $self->assert_equals('no', $talk->get_last_completion_response());
         $self->check_messages(\%msg);
 
         # no flags we're allowed to change
-        $talk->store('1', '+flags',
+        $res = $talk->store('1', '+flags',
                      '(' . join(' ', grep { $_ ne $flag } @flags) . ')');
 
         # nothing should have changed
+        $self->assert_null($res);
         $self->assert_equals('no', $talk->get_last_completion_response());
         $self->check_messages(\%msg);
 
         # no flags we're allowed to change
-        $talk->store('1', '-flags',
+        $res = $talk->store('1', '-flags',
                      '(' . join(' ', grep { $_ ne $flag } @flags) . ')');
 
         # nothing should have changed
+        $self->assert_null($res);
         $self->assert_equals('no', $talk->get_last_completion_response());
         $self->check_messages(\%msg);
     }
@@ -738,7 +864,9 @@ sub test_explicit_store_acl
     $self->check_messages(\%msg);
 
     # set some flags on it
-    $talk->store('1', '+flags', '(\\Deleted \\Seen)');
+    my $res = $talk->store('1', '+flags', '(\\Deleted \\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ qw(\\Deleted \\Seen)] }},
+                              $res);
     $msg{A}->set_attribute(flags => [ '\\Deleted', '\\Seen' ]);
     $self->check_messages(\%msg);
 
@@ -755,7 +883,10 @@ sub test_explicit_store_acl
     # \Seen should be removed, but \Deleted must not be
     $talk->unselect();
     $talk->select('INBOX');
-    $talk->store('1', 'flags', '(\\Flagged)');
+    $res = $talk->store('1', 'flags', '(\\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Flagged \\Deleted)
+                              ]}}, $res);
     $msg{A}->set_attribute(flags => [ '\\Flagged', '\\Deleted' ]);
     $self->check_messages(\%msg);
 }
@@ -836,7 +967,9 @@ sub test_modseq
     my $hms0 = $self->get_highestmodseq();
 
     xlog $self, "Set \\Flagged on message A";
-    $talk->store('1', '+flags', '(\\Flagged)');
+    my $res = $talk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_not_null($res);
+    $self->assert_deep_equals([ '\\Flagged' ], $res->{1}->{flags});
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     my $act1 = $self->check_messages(\%msg);
     my $hms1 = $self->get_highestmodseq();
@@ -848,7 +981,9 @@ sub test_modseq
     $self->assert(get_modseq($act1, 'A') == $hms1);
 
     xlog $self, "Set \\Flagged on message A while already set";
-    $talk->store('1', '+flags', '(\\Flagged)');
+    $res = $talk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_deep_equals({}, $res);
+    $self->assert_equals('ok', $talk->get_last_completion_response());
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     my $act2 = $self->check_messages(\%msg);
     my $hms2 = $self->get_highestmodseq();
@@ -859,7 +994,9 @@ sub test_modseq
     $self->assert(get_modseq($act2, 'A') == $hms2);
 
     xlog $self, "Clear \\Flagged on message A";
-    $talk->store('1', '-flags', '(\\Flagged)');
+    $res = $talk->store('1', '-flags', '(\\Flagged)');
+    $self->assert_not_null($res);
+    $self->assert_deep_equals([], $res->{1}->{flags});
     $msg{A}->set_attribute(flags => []);
     my $act3 = $self->check_messages(\%msg);
     my $hms3 = $self->get_highestmodseq();
@@ -871,7 +1008,9 @@ sub test_modseq
     $self->assert(get_modseq($act3, 'A') == $hms3);
 
     xlog $self, "Clear \\Flagged on message A while already clear";
-    $talk->store('1', '-flags', '(\\Flagged)');
+    $res = $talk->store('1', '-flags', '(\\Flagged)');
+    $self->assert_deep_equals({}, $res);
+    $self->assert_equals('ok', $talk->get_last_completion_response());
     $msg{A}->set_attribute(flags => []);
     my $act4 = $self->check_messages(\%msg);
     my $hms4 = $self->get_highestmodseq();
@@ -1059,7 +1198,12 @@ sub test_unchangedsince_multi
     }
 
     xlog $self, "Bump the modseq on M,N,O";
-    $talk->store('13,14,15', '+flags', '(\\Draft)');
+    my $res = $talk->store('13,14,15', '+flags', '(\\Draft)');
+    $self->assert_deep_equals({
+        '13' => { 'flags' => [ '\\Draft' ] },
+        '14' => { 'flags' => [ '\\Draft' ] },
+        '15' => { 'flags' => [ '\\Draft' ] },
+    }, $res);
     $msg{M}->set_attribute(flags => ['\\Draft']);
     $msg{N}->set_attribute(flags => ['\\Draft']);
     $msg{O}->set_attribute(flags => ['\\Draft']);
@@ -1075,7 +1219,10 @@ sub test_unchangedsince_multi
         for (my $i = 4 ; $i <= 6 ; $i++)
         {
             my $letter = chr(64 + $i);  # D, E, F
-            $talk2->store($i, '+flags', '(\\Deleted)');
+            my $res = $talk2->store($i, '+flags', '(\\Deleted)');
+            $self->assert_deep_equals({
+                "$i" => { 'flags' => [ '\\Deleted' ] }
+            }, $res);
             delete $msg{$letter};
         }
         $talk2->expunge();
@@ -1228,16 +1375,19 @@ sub test_setseen
     $self->check_messages(\%msg);
 
     xlog $self, "Fetch body of message A";
-    $talk->fetch('1', '(body[])');
+    my $res = $talk->fetch('1', '(body[])');
+    $self->assert_deep_equals([ '\\Seen' ], $res->{1}->{flags});
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
     xlog $self, "Fetch body.peek of message B";
-    $talk->fetch('2', '(body.peek[])');
+    $res = $talk->fetch('2', '(body.peek[])');
+    $self->assert(not exists $res->{2}->{flags});
     $self->check_messages(\%msg);
 
     xlog $self, "Fetch binary of message C";
-    $talk->fetch('3', '(binary[])');
+    $res = $talk->fetch('3', '(binary[])');
+    $self->assert_deep_equals([ '\\Seen' ], $res->{3}->{flags});
     $msg{C}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
@@ -1277,7 +1427,12 @@ sub test_setseen_after_store
     $self->check_messages(\%msg);
 
     xlog $self, "Fetch remove the flag again, and immediately fetch the body";
-    $talk->store('1', '-flags.silent', "(\\Seen)");
+    my $res = $talk->store('1', '-flags.silent', "(\\Seen)");
+#    $self->assert_deep_equals({}, $res);
+    # XXX flags.silent should cause there to not be an untagged response
+    # XXX unless the affected data was also modified by another user, but
+    # XXX for some reason Cyrus still returns it here?
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
     $talk->fetch('1', '(body[])');
     $self->check_messages(\%msg);
 
@@ -1312,7 +1467,8 @@ sub test_setseen_notify
     my $notify1 = $self->{instance}->getnotify();
 
     $msg{A}->set_attribute(flags => ['\\Seen']);
-    $talk->store('1', '+flags', '\\Seen');
+    my $res = $talk->store('1', '+flags', '\\Seen');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
 
     my $notify2 = $self->{instance}->getnotify();
 
