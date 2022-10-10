@@ -3606,7 +3606,7 @@ EOF
 }
 
 sub test_notify
-    :needs_component_sieve
+    :needs_component_sieve :min_version_3_7
 {
     my ($self) = @_;
 
@@ -3615,6 +3615,7 @@ require ["notify", "enotify"];
 
 notify :method "addcal" :options ["calendarId","6ae6a9e0-53f5-4559-8c5a-520208f86cfd"];
 notify "https://cyrusimap.org/notifiers/updatecal";
+notify "mailto:foo@example.com";
 EOF
         );
 
@@ -3624,10 +3625,12 @@ EOF
 
     my $data = $self->{instance}->getnotify();
     my ($addcal) = grep { $_->{METHOD} eq 'addcal' } @$data;
-    my ($updatecal) = grep { $_->{METHOD} eq 'https://cyrusimap.org/notifiers/updatecal' } @$data;
+    my ($updatecal) = grep { $_->{METHOD} eq 'updatecal' } @$data;
+    my ($mailto) = grep { $_->{METHOD} eq 'mailto' } @$data;
 
     $self->assert_not_null($addcal);
     $self->assert_not_null($updatecal);
+    $self->assert_not_null($mailto);
 }
 
 sub test_variable_modifiers
