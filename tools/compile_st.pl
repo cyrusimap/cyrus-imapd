@@ -294,12 +294,15 @@ if ($c_flag)
     open GPERF,'-|',@cmd
         or die "Couldn't run gperf";
 
-    # Post-process to fix warnings due to missing
-    # initializers in the wordlist.
+    # Post-process to fix warnings due to missing initializers in the wordlist,
+    # and remove Command-line from output.
     my $s = 0;
+    my $cmdline_pat = qr{^\/\* \s Command-line: \s gperf \s $filename \s+ \*\/$}x;
     while (<GPERF>)
     {
         chomp;
+
+        next if m/$cmdline_pat/;
 
         next if m/^#line/;
         s/{""}/{"", 0}/g if ($s);
