@@ -3480,7 +3480,7 @@ EXPORTED char *charset_extract_plain(const char *html) {
             *q++ = '\n';
             p += 4;
         }
-        else if (!strncmp(p, "p>", 3)) {
+        else if (!strncmp(p, "<p>", 3)) {
             p += 3;
         } else {
             *q++ = *p++;
