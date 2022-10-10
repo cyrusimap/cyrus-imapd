@@ -1,11 +1,11 @@
-.. _imap-developer-thoughts-improved_mboxlist_sort:
-
 ..  Note: This document was converted from the original by Nic Bernstein
     (Onlight).  Any formatting mistakes are my fault and not the
     original author's.  Converted via the pandoc tool from HTML.
 
+.. _enabling improved mboxlist sort:
+
 Enabling improved_mboxlist_sort
-=================================
+===============================
 
 You can't enable and disable ``improved_mboxlist_sort`` on a live
 system. You need to dump and load the necessary database after stopping
