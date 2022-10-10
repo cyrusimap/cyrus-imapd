@@ -1,5 +1,4 @@
 /* ANSI-C code produced by gperf version 3.1 */
-/* Command-line: gperf /tmp/compile_st_5cSAcK.gperf  */
 /* Computed positions: -k'1,10,$' */
 
 #if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) \
