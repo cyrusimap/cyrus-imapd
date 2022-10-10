@@ -136,7 +136,7 @@ struct mailbox_iter {
     uint32_t num_records;
     unsigned skipflags;
     seqset_t *uidset;
-    int step_inc;
+    int32_t step_inc;
 };
 
 
