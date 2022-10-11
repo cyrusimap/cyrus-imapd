@@ -1994,11 +1994,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             if (op == B_ENOTIFY) {
                 /* Parse/split the method URI */
-                if (!strncmp(method, "mailto:", 7)) {
+                if (!strncasecmp(method, "mailto:", 7)) {
                     strarray_insert(cmd.u.n.options, 0, method+7);
                     method = "mailto";
                 }
-                else if (!strncmp(method, "https://cyrusimap.org/notifiers/", 32)) {
+                else if (!strncasecmp(method,
+                                      "https://cyrusimap.org/notifiers/", 32)) {
                     method = method+32;
                 }
             }
