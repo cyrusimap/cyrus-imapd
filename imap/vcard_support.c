@@ -286,16 +286,17 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
             if (!strncmp(propval, "data:", 5)) {
                 /* Rewrite data: URI as 'b' encoded value */
                 char *type = propval + 5;
-                char *encoding = strchr(type, ';');
-                char *data = strchr(encoding ? encoding : type, ',');
+                char *base64 = strstr(type, ";base64,");
+                char *data = base64 ? base64 + 7 : strchr(type, ',');
 
-                if (encoding) {
-                    *encoding++ = '\0';
-                }
-                if (data && !strcmpnull(encoding, "base64")) {
+                if (data) {
                     *data++ = '\0';
                     vparse_set_value(ventry, data);
-                    vparse_add_param(ventry, "ENCODING", "b");
+
+                    if (base64) {
+                        *base64++ = '\0';
+                        vparse_add_param(ventry, "ENCODING", "b");
+                    }
 
                     if (toupper(name[0]) != 'K' && (type = strchr(type, '/'))) {
                         /* Only use subtype for LOGO, PHOTO, SOUND */
