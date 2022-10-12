@@ -118,9 +118,10 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
 
     char *at = strchr(param->userid, '@');
     if (at) {
-        struct strlist *domains = cua_domains;
-        for (; domains; domains = domains->next) {
-            if (!strcmp(at+1, domains->s)) {
+        int i;
+        for (i = 0; i < strarray_size(&config_cua_domains); i++) {
+            const char *domain = strarray_nth(&config_cua_domains, i);
+            if (!strcmp(at+1, domain)) {
                 islocal = 1;
 
                 if (!config_virtdomains) {
@@ -2897,11 +2898,9 @@ void sched_reply(const char *userid, const strarray_t *schedule_addresses,
     if (mynewical) icalcomponent_free(mynewical);
 }
 
-void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
-                            const char *userid, strarray_t *addresses)
+void caldav_get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
+                                   const char *userid, strarray_t *addresses)
 {
-    struct buf buf = BUF_INITIALIZER;
-
     /* allow override of schedule-address per-message (FM specific) */
     const char **hdr = req_hdrs ?
         spool_getheader(req_hdrs, "Schedule-Address") : NULL;
@@ -2913,43 +2912,6 @@ void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
             strarray_add(addresses, hdr[0]);
     }
     else {
-        /* find schedule address based on the destination calendar's user */
-        struct caldav_caluseraddr caluseraddr = CALDAV_CALUSERADDR_INITIALIZER;
-
-        /* check calendar-user-address-set for target user's mailbox */
-        int r = caldav_caluseraddr_read(mboxname, userid, &caluseraddr);
-        if (r) {
-            char *calhome = caldav_mboxname(userid, NULL);
-            r = caldav_caluseraddr_read(calhome, userid, &caluseraddr);
-            free(calhome);
-        }
-
-        if (!r && strarray_size(&caluseraddr.uris)) {
-            int i;
-            for (i = 0; i < strarray_size(&caluseraddr.uris); i++) {
-                const char *item = strarray_nth(&caluseraddr.uris, i);
-                if (!strncasecmp(item, "mailto:", 7)) item += 7;
-                strarray_add(addresses, item);
-            }
-        }
-        else if (strchr(userid, '@')) {
-            /* userid corresponding to target */
-            strarray_add(addresses, userid);
-        }
-        else {
-            /* append fully qualified userids */
-            struct strlist *domains;
-
-            for (domains = cua_domains; domains; domains = domains->next) {
-                buf_reset(&buf);
-                buf_printf(&buf, "%s@%s", userid, domains->s);
-
-                strarray_add(addresses, buf_cstring(&buf));
-            }
-        }
-
-        caldav_caluseraddr_fini(&caluseraddr);
+        get_schedule_addresses(mboxname, userid, addresses);
     }
-
-    buf_free(&buf);
 }

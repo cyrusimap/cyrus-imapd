@@ -416,7 +416,7 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
             is_main_account ? json_true() : json_boolean(rights & JACL_READFB));
 
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
-    get_schedule_addresses(NULL, calhomename, accountid, &schedule_addresses);
+    get_schedule_addresses(calhomename, accountid, &schedule_addresses);
     if (strarray_size(&schedule_addresses)) {
         const char *addr = strarray_nth(&schedule_addresses, 0);
         if (strncasecmp(addr, "mailto:", 7)) {
@@ -3261,7 +3261,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 
         const char *sched_userid = req->accountid;
         strarray_truncate(&rock->schedule_addresses, 0);
-        get_schedule_addresses(NULL, rock->mbentry->name, sched_userid,
+        get_schedule_addresses(rock->mbentry->name, sched_userid,
                 &rock->schedule_addresses);
 
         // reset ical iterator state
@@ -4319,7 +4319,7 @@ static int createevent_lookup_calendar(jmap_req_t *req,
     }
     else {
         create->sched_userid = req->accountid;
-        get_schedule_addresses(NULL, mboxname, create->sched_userid,
+        get_schedule_addresses(mboxname, create->sched_userid,
                 &create->schedule_addresses);
     }
     return r;
@@ -5505,8 +5505,7 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
 
     const char *sched_userid = req->accountid;
-    get_schedule_addresses(NULL, mbentry->name, sched_userid,
-            &schedule_addresses);
+    get_schedule_addresses(mbentry->name, sched_userid, &schedule_addresses);
 
     if (dstmbentry) {
         /* Validate permissions for move */
@@ -5851,7 +5850,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     }
 
     const char *sched_userid = req->accountid;
-    get_schedule_addresses(NULL, mboxname, sched_userid, &schedule_addresses);
+    get_schedule_addresses(mboxname, sched_userid, &schedule_addresses);
 
     /* Check permissions. */
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
@@ -7839,7 +7838,7 @@ static json_t *buildprincipal(struct jmap_req *req,
     json_t *jp = json_object();
     struct buf buf = BUF_INITIALIZER;
     strarray_t addrs = STRARRAY_INITIALIZER;
-    get_schedule_addresses(NULL, calhomename, accountid, &addrs);
+    get_schedule_addresses(calhomename, accountid, &addrs);
 
     json_object_set_new(jp, "id", json_string(accountid));
 
@@ -9970,7 +9969,7 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
                     json_t *email = json_null();
                     char *calhomename = caldav_mboxname(tgt.userid, NULL);
                     strarray_t addrs = STRARRAY_INITIALIZER;
-                    get_schedule_addresses(NULL, calhomename, tgt.userid, &addrs);
+                    get_schedule_addresses(calhomename, tgt.userid, &addrs);
                     if (strarray_size(&addrs)) {
                         const char *addr = strarray_nth(&addrs, 0);
                         if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
@@ -11030,7 +11029,7 @@ static int jmap_participantidentity_get(struct jmap_req *req)
     json_t *jpartidsbyid = json_object();
 
     char *calhomename = caldav_mboxname(req->userid, NULL);
-    get_schedule_addresses(NULL, calhomename, req->userid, &addrs);
+    get_schedule_addresses(calhomename, req->userid, &addrs);
     free(calhomename);
     calhomename = NULL;
 
