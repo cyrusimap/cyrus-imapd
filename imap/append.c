@@ -272,6 +272,11 @@ EXPORTED int append_commit(struct appendstate *as)
             append_addseen(as->mailbox, as->userid, as->seen_seq);
     }
 
+    /* Send the list of MessageCopy or MessageAppend event notifications at once.
+     * We want to do this before the Modseq event gets sent by mailbox_commit().
+     */
+    mboxevent_notify(&as->mboxevents);
+
     /* We want to commit here to guarantee mailbox on disk vs
      * duplicate DB consistency */
     r = mailbox_commit(as->mailbox);
@@ -282,9 +287,6 @@ EXPORTED int append_commit(struct appendstate *as)
         append_abort(as);
         return r;
     }
-
-    /* send the list of MessageCopy or MessageAppend event notifications at once */
-    mboxevent_notify(&as->mboxevents);
 
     append_free(as);
     return 0;
