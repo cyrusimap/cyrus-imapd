@@ -3739,7 +3739,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             }
             last_wsp = j++;
         }
-        buf_appendcstr(&buf, data + i);
+        buf_appendmap(&buf, data + i, len - i);
     }
     else {
         buf_setmap(&buf, data, len);
