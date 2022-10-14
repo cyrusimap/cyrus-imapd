@@ -159,7 +159,7 @@ int main(int argc, char **argv)
 
     progname = basename(argv[0]);
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxdgGqRUMIoOnV:uP")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:p:rmfsxGqRUMIoOnV:uP")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -189,10 +189,6 @@ int main(int argc, char **argv)
             reconstruct_flags &= ~RECONSTRUCT_MAKE_CHANGES;
             break;
 
-        case 'g':
-            fprintf(stderr, "reconstruct: deprecated option -g ignored\n");
-            break;
-
         case 'G':
             reconstruct_flags |= RECONSTRUCT_ALWAYS_PARSE;
             break;
@@ -203,10 +199,6 @@ int main(int argc, char **argv)
 
         case 'x':
             xflag = 1;
-            break;
-
-        case 'k':
-            fprintf(stderr, "reconstruct: deprecated option -k ignored\n");
             break;
 
         case 's':
@@ -432,7 +424,6 @@ static void usage(void)
 
     fprintf(stderr, "-C <config-file>   use <config-file> instead of config from imapd.conf");
     fprintf(stderr, "-p <partition>     use this indicated partition for search\n");
-    fprintf(stderr, "-d                 check mailboxes database and insert missing entries\n");
     fprintf(stderr, "-x                 do not import metadata, create new\n");
     fprintf(stderr, "-r                 recursively reconstruct\n");
     fprintf(stderr, "-f                 examine filesystem underneath the mailbox\n");
