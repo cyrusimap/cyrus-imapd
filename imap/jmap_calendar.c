@@ -3392,6 +3392,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
                         hash_insert(icalproperty_get_value_as_string(prop), comp,
                                 &rock->ical_instances_by_recurid);
                     }
+                    else icalcomponent_free(comp); // ignore duplicate
                 }
             }
         }
