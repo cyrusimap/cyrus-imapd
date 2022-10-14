@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -102,9 +103,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-extern int optind;
-extern char *optarg;
-
 /* current namespace */
 static struct namespace recon_namespace;
 
@@ -159,7 +157,35 @@ int main(int argc, char **argv)
 
     progname = basename(argv[0]);
 
-    while ((opt = getopt(argc, argv, "C:p:rmfsxGqRUMIoOnV:uP")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char *const short_options = "C:GIMOPRUV:fmnop:qrsux";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "force-reparse", no_argument, NULL, 'G' },
+        { "update-uniqueids", no_argument, NULL, 'I' },
+        { "prefer-mboxlist", no_argument, NULL, 'M' },
+        { "delete-odd-files", no_argument, NULL, 'O' },
+        { "header-paths", no_argument, NULL, 'P' },
+        { "guid-mismatch-keep", no_argument, NULL, 'R' },
+        { "guid-mismatch-discard", no_argument, NULL, 'U' },
+        { "set-version", required_argument, NULL, 'V' },
+        { "scan-filesystem", no_argument, NULL, 'f' },
+        { "dry-run", no_argument, NULL, 'n' },
+        { "ignore-odd-files", no_argument, NULL, 'o' },
+        { "partition", required_argument, NULL, 'p' },
+        { "quiet", no_argument, NULL, 'q' },
+        { "recursive", no_argument, NULL, 'r' },
+        { "no-stat", no_argument, NULL, 's' },
+        { "userids", no_argument, NULL, 'u' },
+        { "ignore-disk-metadata", no_argument, NULL, 'x' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
