@@ -46,9 +46,12 @@
 
 #include <config.h>
 
-#include "sqldb.h"
-#include "mailbox.h"
 #include <libical/ical.h>
+
+#include "lib/sqldb.h"
+
+#include "imap/mailbox.h"
+#include "imap/json_support.h"
 
 enum alarm_type {
     ALARM_CALENDAR = 1,
@@ -96,6 +99,17 @@ int caldav_alarm_delete_user(const char *userid);
 
 /* process alarms with triggers before a given time */
 int caldav_alarm_process(time_t runtime, time_t *next, int dryrun);
+
+/* list futurereleases (via proc) before a given time */
+int caldav_alarm_list_futurerelease(time_t runtime,
+                                    int lookahead,
+                                    void (*proc)(time_t nextcheck,
+                                                 uint32_t num_retries,
+                                                 time_t last_run,
+                                                 const char *last_err,
+                                                 json_t *submission,
+                                                 void *rock),
+                                    void *rock);
 
 /* upgrade old databases */
 int caldav_alarm_upgrade();

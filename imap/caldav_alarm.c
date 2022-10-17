@@ -2169,6 +2169,140 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
     return rc;
 }
 
+static void list_one_futurerelease(struct caldav_alarm_data *data,
+                                   void (*proc)(time_t nextcheck,
+                                                uint32_t num_retries,
+                                                time_t last_run,
+                                                const char *last_err,
+                                                json_t *submission,
+                                                void *rock),
+                                   void *rock)
+{
+    struct mailbox *mailbox = NULL;
+    struct index_record record = {0};
+    message_t *msg = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    json_t *submission = NULL;
+    int r;
+
+    assert(data->type == ALARM_SEND);
+
+    r = mailbox_open_irl(data->mboxname, &mailbox);
+    if (r) {
+        xsyslog(LOG_DEBUG, "mailbox open failed",
+                           "mboxname=<%s>, error=<%s>",
+                           data->mboxname, error_message(r));
+        return;
+    }
+
+    r = mailbox_find_index_record(mailbox, data->imap_uid, &record);
+    if (r) {
+        xsyslog(LOG_DEBUG, "mailbox find index record failed",
+                           "mboxname=<%s> uid=<%u> error=<%s>",
+                           data->mboxname, data->imap_uid, error_message(r));
+        goto done;
+    }
+
+    if ((record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        /* XXX record is expunged, why is there still a db record? */
+        goto done;
+    }
+
+    if ((record.system_flags & FLAG_ANSWERED)) {
+        /* XXX message already sent, why is there still a db record? */
+        goto done;
+    }
+
+    if ((record.system_flags & FLAG_FLAGGED)) {
+        /* XXX submission cancelled, why is there still a db record? */
+        goto done;
+    }
+
+    msg = message_new_from_record(mailbox, &record);
+
+    r = message_get_field(msg, JMAP_SUBMISSION_HDR, MESSAGE_RAW, &buf);
+    if (r) {
+        /* XXX no submission header, why is there a db record? */
+        goto done;
+    }
+
+    submission = json_loadb(buf_base(&buf), buf_len(&buf),
+                            JSON_DISABLE_EOF_CHECK, NULL);
+    if (!submission) {
+        /* XXX couldn't parse submission? */
+        goto done;
+    }
+
+    proc(data->nextcheck, data->num_retries,
+         data->last_run, data->last_err,
+         submission, rock);
+
+    json_decref(submission);
+
+done:
+    message_unref(&msg);
+    buf_free(&buf);
+    if (r) mailbox_abort(mailbox);
+    mailbox_close(&mailbox);
+}
+
+/* list futurereleases (via proc) before a given time */
+EXPORTED int caldav_alarm_list_futurerelease(time_t runtime,
+                                             int lookahead,
+                                             void (*proc)(time_t nextcheck,
+                                                          uint32_t num_retries,
+                                                          time_t last_run,
+                                                          const char *last_err,
+                                                          json_t *submission,
+                                                          void *rock),
+                                             void *rock)
+{
+    int i, r;
+
+    if (!lookahead) lookahead = CALDAV_ALARM_LOOKAHEAD;
+
+    struct alarm_read_rock alarm_read_rock = {
+        PTRARRAY_INITIALIZER,
+        runtime,
+        runtime + lookahead,
+    };
+
+    struct sqldb_bindval bval[] = {
+        { ":before",    SQLITE_INTEGER, { .i = alarm_read_rock.next } },
+        { NULL,         SQLITE_NULL,    { .s = NULL      } }
+    };
+
+    sqldb_t *alarmdb = caldav_alarm_open();
+    if (!alarmdb) return HTTP_SERVER_ERROR;
+
+    /* XXX select only the ALARM_SENDs? */
+    r = sqldb_exec(alarmdb, CMD_SELECT_ALARMS, bval,
+                   &alarm_read_cb, &alarm_read_rock);
+
+    caldav_alarm_close(alarmdb);
+    if (r) goto done;
+
+    for (i = 0; i < alarm_read_rock.list.count; i++) {
+        struct caldav_alarm_data *data = ptrarray_nth(&alarm_read_rock.list, i);
+
+        if (data->type != ALARM_SEND) continue;
+
+        /* XXX do we need a namelock around users? in that case,
+         * XXX sql results need to be ordered by mailbox to keep
+         * XXX them together.  but otherwise, they could be
+         * XXX sorted in some more display-friendly order...
+         */
+        list_one_futurerelease(data, proc, rock);
+
+        caldav_alarm_fini(data);
+        free(data);
+    }
+
+done:
+    ptrarray_fini(&alarm_read_rock.list);
+    return r;
+}
+
 static int upgrade_read_cb(sqlite3_stmt *stmt, void *rock)
 {
     strarray_t *target = (strarray_t *)rock;
