@@ -84,6 +84,7 @@ imap/cyr_df
 imap/cyr_expire
 imap/cyr_info
 imap/cyr_ls
+imap/cyr_mailq
 imap/cyr_pwd
 imap/cyr_sequence
 imap/cyr_sphinxmgr
