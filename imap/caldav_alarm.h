@@ -57,6 +57,8 @@ enum alarm_type {
     ALARM_UNSCHEDULED,
 };
 
+#define CALDAV_ALARM_LOOKAHEAD (10)
+
 /* prepare for caldav alarm operations in this process */
 int caldav_alarm_init(void);
 
@@ -92,7 +94,7 @@ int caldav_alarm_delete_mailbox(const char *mboxname);
 /* delete all alarms for a user */
 int caldav_alarm_delete_user(const char *userid);
 
-/* distribute alarms with triggers in the next minute */
+/* process alarms with triggers before a given time */
 int caldav_alarm_process(time_t runtime, time_t *next, int dryrun);
 
 /* upgrade old databases */

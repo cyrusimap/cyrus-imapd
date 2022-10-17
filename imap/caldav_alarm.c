@@ -2079,10 +2079,14 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
         runtime = time(NULL);
     }
 
-    struct alarm_read_rock rock = { PTRARRAY_INITIALIZER, runtime, runtime + 10 };
+    // check some time into the future - if there's something in there,
+    // we'll run again - otherwise we'll wait the time before checking again
+    struct alarm_read_rock rock = {
+        PTRARRAY_INITIALIZER,
+        runtime,
+        runtime + CALDAV_ALARM_LOOKAHEAD,
+    };
 
-    // check 10 seconds into the future - if there's something in there,
-    // we'll run again - otherwise we'll wait the 10 seconds before checking again
     struct sqldb_bindval bval[] = {
         { ":before",    SQLITE_INTEGER, { .i = rock.next } },
         { NULL,         SQLITE_NULL,    { .s = NULL      } }
