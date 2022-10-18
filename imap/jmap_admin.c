@@ -188,7 +188,7 @@ static int rewrite_calevent_privacy(const char *userid, void *vrock)
         goto done;
     }
 
-    get_schedule_addresses(NULL, calhomename, userid, &sched_addrs);
+    get_schedule_addresses(calhomename, userid, &sched_addrs);
 
     rock->txn.userid = userid;
     rock->txn.req_hdrs = spool_new_hdrcache();
