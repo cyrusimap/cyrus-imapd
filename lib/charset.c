@@ -3507,7 +3507,9 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
 }
 
 
-#define ATOM_SPECIALS  "()<>[]:;@\\,.\" \t"
+#define qp_isspace(c) ((c) == ' ' || (c) == '\t')
+
+#define ATOM_SPECIALS  "()<>[]:;@\\,.\" \t\r\n"
 
 /* Find the first email address (addr-spec) in data */
 static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
@@ -3532,7 +3534,7 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         /* domain-literal MUST end with ']' */
         if (*e++ != ']') return NULL;
     }
-    else if (!isspace(*e) && !strchr(ATOM_SPECIALS, *e)) {
+    else if (!strchr(ATOM_SPECIALS, *e)) {
         /* find end of dot-atom */
         while (++e < end && (*e == '.' || !strchr(ATOM_SPECIALS, *e)));
 
@@ -3549,13 +3551,13 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         }
 
         /* gobble trailing whitespace */
-        while (e < end && isspace(*e)) e++;
+        while (e < end && qp_isspace(*e)) e++;
 
         /* multiple addresses MUST only be separated with ',' */
         if (e < end && *e++ != ',') return NULL;
 
         /* gobble trailing whitespace */
-        while (e < end && isspace(*e)) e++;
+        while (e < end && qp_isspace(*e)) e++;
     }
 
 
@@ -3569,7 +3571,7 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         /* quoted-string must start with '"' */
         if (*(s+1) != '"') return NULL;
     }
-    else if (!isspace(*s) && !strchr(ATOM_SPECIALS, *s)) {
+    else if (!qp_isspace(*s) && !strchr(ATOM_SPECIALS, *s)) {
         /* find start of dot-atom */
         while (--s >= data && (*s == '.' || !strchr(ATOM_SPECIALS, *s)));
 
@@ -3584,9 +3586,9 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         if (*s != '<') return NULL;
 
         /* gobble leading whitespace */
-        while (s > data && isspace(*(s-1))) s--;
+        while (s > data && qp_isspace(*(s-1))) s--;
     }
-    else if (!(isspace(*s) || *s == ',')) {
+    else if (!(qp_isspace(*s) || *s == ',')) {
         /* invalid separator */
         return NULL;
     }
