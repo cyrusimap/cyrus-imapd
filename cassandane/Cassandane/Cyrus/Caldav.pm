@@ -5460,7 +5460,7 @@ EOF
 }
 
 sub test_summary_with_embedded_newlines
-    :needs_component_httpd :MagicPlus
+    :needs_component_httpd :MagicPlus :NoAltNameSpace
 {
     my ($self) = @_;
 
