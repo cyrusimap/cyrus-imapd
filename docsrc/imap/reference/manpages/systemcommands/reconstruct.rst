@@ -140,8 +140,9 @@ Options
 
 .. option:: -o, --ignore-odd-files
 
-    Ignore odd files in your mailbox disk directories.  Probably useful
-    if you are using some tool which adds additional tracking files.
+    Ignore odd files in your mailbox disk directories, instead of
+    complaining about them.  Probably useful if you are using some
+    tool which adds additional tracking files.
 
 .. option:: -O, --delete-odd-files
 
