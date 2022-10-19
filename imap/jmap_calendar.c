@@ -11162,7 +11162,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
                                              const char *mboxid,
                                              uint32_t uid,
                                              hash_table *icsbody_by_partid,
-                                             int allow_multiple_uids,
+                                             unsigned allow_max_uids,
                                              const struct buf *mime)
 {
     json_t *jsevents_by_partid = json_object();
@@ -11189,28 +11189,26 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
         free(decbuf);
         if (!ical) continue;
 
-        if (!allow_multiple_uids) {
-            int is_valid = 0;
+        if (allow_max_uids) {
+            // VCALENDAR must not contain more than allow_max_uids main events
+            hash_table seen_uids = HASH_TABLE_INITIALIZER;
+            construct_hash_table(&seen_uids, allow_max_uids + 1, 0);
 
-            // All real components in VCALENDAR must have the same UID
             icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-            if (comp) {
+            while (comp && (unsigned)hash_numrecords(&seen_uids) <= allow_max_uids) {
+                icalcomponent_kind kind = icalcomponent_isa(comp);
+
                 const char *uid = icalcomponent_get_uid(comp);
-                if (uid) {
-                    icalcomponent_kind kind = icalcomponent_isa(comp);
+                if (uid && !hash_lookup(uid, &seen_uids))
+                    hash_insert(uid, (void*)1, &seen_uids);
 
-                    for (comp = icalcomponent_get_next_component(ical, kind);
-                         comp;
-                         comp = icalcomponent_get_next_component(ical, kind)) {
-                        if (strcmpsafe(icalcomponent_get_uid(comp), uid))
-                            break;
-                    }
-
-                    is_valid = !comp;
-                }
+                comp = icalcomponent_get_next_component(ical, kind);
             }
 
-            if (!is_valid) {
+            unsigned nseen_uids = hash_numrecords(&seen_uids);
+            free_hash_table(&seen_uids, NULL);
+
+            if (nseen_uids > allow_max_uids) {
                 icalcomponent_free(ical);
                 continue;
             }
