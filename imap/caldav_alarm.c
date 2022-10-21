@@ -522,7 +522,7 @@ static int process_alarm_cb(icalcomponent *comp,
             const char *partstat =
                 icalproperty_get_parameter_as_string(prop, "PARTSTAT");
 
-            if (!strcasecmp(partstat, "DECLINED")) {
+            if (!strcasecmpsafe(partstat, "DECLINED")) {
                 strarray_fini(&sched_addrs);
                 return 1;
             }
