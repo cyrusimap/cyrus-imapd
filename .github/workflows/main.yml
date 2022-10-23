@@ -14,7 +14,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-        image: cyrusimapdocker/cyrus-buster:latest
+        image: cyrusimapdocker/cyrus-bullseye:latest
         options: --sysctl net.ipv6.conf.all.disable_ipv6=0 --init
     steps:
     - uses: actions/checkout@v3
