@@ -768,7 +768,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
 
         /* Pre-process result references */
         if (process_resultrefs(args, resp, &err)) {
-            if (!err) err = json_pack("{s:s}", "type", "resultReference");
+            if (!err) err = json_pack("{s:s}", "type", "invalidResultReference");
 
             json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
             json_decref(args);
