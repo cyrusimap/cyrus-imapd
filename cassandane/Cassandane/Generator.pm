@@ -188,7 +188,11 @@ sub _generate_messageid
 {
     my ($self, $params) = @_;
     my $idsalt = int(rand(65536));
-    return "fake." . $params->{date}->epoch() . ".$idsalt\@" .  $params->{from}->domain();
+
+    return sprintf 'fake.%d.%d@%s',
+                   $params->{date}->epoch(),
+                   $idsalt,
+                   $params->{from}->domain();
 }
 
 sub _params_defaults
