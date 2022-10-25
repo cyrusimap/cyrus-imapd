@@ -278,6 +278,23 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
             /* Set proper VERSION */
             vparse_set_value(ventry, "3.0");
         }
+        else if (!strcasecmp(name, "uid")) {
+            /* Rewrite UID property */
+            vparam = vparse_get_param(ventry, "value");
+            if (vparam && !strcasecmpsafe(vparam->value, "text")) {
+                /* text -> text (default) */
+                vparse_delete_params(ventry, "value");
+            }
+            else if (!strncmp(propval, "urn:uuid:", 9)) {
+                /* uuid URN -> text */
+                buf_setcstr(&buf, propval+9);
+                vparse_set_value(ventry, buf_cstring(&buf));
+            }
+            else {
+                /* uri (default) -> uri */
+                vparse_add_param(ventry, "VALUE", "uri");
+            }
+        }
         else if (!strcasecmp(name, "key")   ||
                  !strcasecmp(name, "logo")  ||
                  !strcasecmp(name, "photo") ||
@@ -347,6 +364,20 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
         if (!strcasecmp(name, "version")) {
             /* Set proper VERSION */
             vparse_set_value(ventry, "4.0");
+        }
+        else if (!strcasecmp(name, "uid")) {
+            /* Rewrite UID property */
+            vparam = vparse_get_param(ventry, "value");
+            if (vparam && !strcasecmpsafe(vparam->value, "uri")) {
+                /* uri -> uri (default) */
+                vparse_delete_params(ventry, "value");
+            }
+            else if (strncmp(propval, "urn:uuid:", 9)) {
+                /* text (default) -> uuid URN */
+                buf_setcstr(&buf, "urn:uuid:");
+                buf_appendcstr(&buf, propval);
+                vparse_set_value(ventry, buf_cstring(&buf));
+            }
         }
         else if (!strcasecmp(name, "key")   ||
                  !strcasecmp(name, "logo")  ||

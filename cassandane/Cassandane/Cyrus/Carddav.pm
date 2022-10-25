@@ -805,11 +805,12 @@ sub test_allow_change_text_uuid_to_urn_uuid
     $self->assert_not_null($Id);
     $self->assert_str_equals($Id, 'foo');
     my $href = "$Id/bar.vcf";
+    my $uid = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
 
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
-UID:3b678b69-ca41-461e-b2c7-f96b9fe48d68
+UID:$uid
 N:Gump;Forrest;;Mr.
 FN:Forrest Gump
 ORG:Bubba Gump Shrimp Co.
@@ -821,6 +822,12 @@ EOF
     xlog $self, "PUT vCard v3 with text UID";
     eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
 
+    xlog $self, "GET as vCard v4";
+    my $response = $CardDAV->Request('GET', $href, '',
+                                     'Accept' => 'text/vcard; version=4.0');
+    my $newcard = $response->{content};
+    $self->assert_matches(qr/UID:urn:uuid:$uid/, $newcard);
+
     xlog $self, "PUT same vCard as v4 with URL (urn) UID";
     $card =~ s/VERSION:3.0/VERSION:4.0/;
     $card =~ s/UID:/UID:urn:uuid:/;
@@ -829,6 +836,12 @@ EOF
     my $Err = $@;
     $self->assert_matches(qr//, $Err);
 
+    xlog $self, "GET as vCard v3";
+    $response = $CardDAV->Request('GET', $href, '',
+                                  'Accept' => 'text/vcard; version=3.0');
+    $newcard = $response->{content};
+    $self->assert_matches(qr/UID:$uid/, $newcard);
+
     xlog $self, "PUT vCard v3 with text UID";
     $card =~ s/VERSION:4.0/VERSION:3.0/;
     $card =~ s/UID:urn:uuid:/UID:/;
@@ -836,6 +849,12 @@ EOF
     eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
     $Err = $@;
     $self->assert_matches(qr//, $Err);
+
+    xlog $self, "GET as vCard v4";
+    $response = $CardDAV->Request('GET', $href, '',
+                                  'Accept' => 'text/vcard; version=4.0');
+    $newcard = $response->{content};
+    $self->assert_matches(qr/UID:urn:uuid:$uid/, $newcard);
 }
 
 1;
