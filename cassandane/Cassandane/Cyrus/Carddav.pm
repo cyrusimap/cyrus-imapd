@@ -819,8 +819,17 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
+    my %Headers = (
+      'Content-Type' => 'text/vcard',
+      'Authorization' => $CardDAV->auth_header(),
+    );
+
     xlog $self, "PUT vCard v3 with text UID";
-    eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
+    my $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
+        content => $card,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(201, $Response->{status});
 
     xlog $self, "GET as vCard v4";
     my $response = $CardDAV->Request('GET', $href, '',
@@ -832,9 +841,11 @@ EOF
     $card =~ s/VERSION:3.0/VERSION:4.0/;
     $card =~ s/UID:/UID:urn:uuid:/;
 
-    eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
-    my $Err = $@;
-    $self->assert_matches(qr//, $Err);
+    $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
+        content => $card,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(204, $Response->{status});
 
     xlog $self, "GET as vCard v3";
     $response = $CardDAV->Request('GET', $href, '',
@@ -846,15 +857,17 @@ EOF
     $card =~ s/VERSION:4.0/VERSION:3.0/;
     $card =~ s/UID:urn:uuid:/UID:/;
 
-    eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
-    $Err = $@;
-    $self->assert_matches(qr//, $Err);
-
     xlog $self, "GET as vCard v4";
     $response = $CardDAV->Request('GET', $href, '',
                                   'Accept' => 'text/vcard; version=4.0');
     $newcard = $response->{content};
     $self->assert_matches(qr/UID:urn:uuid:$uid/, $newcard);
+
+    $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
+        content => $card,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(204, $Response->{status});
 }
 
 1;
