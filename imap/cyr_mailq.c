@@ -47,6 +47,7 @@
 #endif
 #include <getopt.h>
 #include <sysexits.h>
+#include <time.h>
 
 #include "imap/caldav_alarm.h"
 #include "imap/global.h"
@@ -62,9 +63,10 @@ static void usage(void)
 void printone_json(time_t nextcheck, uint32_t num_retries,
                    time_t last_run, const char *last_err,
                    json_t *submission,
-                   void *rock __attribute__((unused)))
+                   void *rock)
 {
     json_t *j;
+    int *sep = (int *) rock;
 
     j = json_object();
     json_object_set_new(j, "nextcheck", json_integer(nextcheck));
@@ -73,21 +75,58 @@ void printone_json(time_t nextcheck, uint32_t num_retries,
     json_object_set_new(j, "last_err", json_string(last_err));
     json_object_set(j, "submission", submission);
 
-    json_dumpf(submission, stdout, 0);
+    if (sep) {
+       if (*sep) printf("%c\n", *sep);
+        *sep = ',';
+    }
+
+    json_dumpf(j, stdout, 0);
 
     json_decref(j);
+}
+
+void printone_pretty(time_t nextcheck, uint32_t num_retries,
+                     time_t last_run, const char *last_err,
+                     json_t *submission,
+                     void *rock __attribute__((unused)))
+{
+    const time_t now = time(NULL);
+    const char *identityId;
+    json_t *envelope, *mailFrom, *rcptTo, *value;
+    size_t i;
+
+    identityId = json_string_value(json_object_get(submission, "identityId"));
+
+    envelope = json_object_get(submission, "envelope");
+    mailFrom = json_object_get(envelope, "mailFrom");
+    rcptTo = json_object_get(envelope, "rcptTo");
+
+    /* XXX make nextcheck display colour according to magnitude */
+    printf("%g %s ", difftime(nextcheck, now), identityId);
+    if (last_err) {
+        printf("%" PRIu32 ":%g:%s ",
+               num_retries, difftime(last_run, now), last_err);
+    }
+    printf("%s ", json_string_value(json_object_get(mailFrom, "email")));
+    json_array_foreach(rcptTo, i, value) {
+        printf("%s ", json_string_value(json_object_get(value, "email")));
+    }
+
+    fputs("\n", stdout);
 }
 
 int main(int argc, char *argv[])
 {
     int opt, r;
     char *alt_config = NULL;
+    int want_json = 0;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:";
+    static const char short_options[] = "C:j";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
+        { "json", no_argument, NULL, 'j' },
         { 0, 0, 0, 0 },
     };
 
@@ -98,17 +137,26 @@ int main(int argc, char *argv[])
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
+        case 'j':
+            want_json = 1;
+            break;
         default:
             usage();
         }
     }
-    if (argc - optind < 1) {
-        usage();
-    }
 
     cyrus_init(alt_config, "cyr_mailq", 0, 0);
 
-    r = caldav_alarm_list_futurerelease(time(NULL), 0, printone_json, NULL);
+    if (want_json) {
+        int sep = 0;
+        fputs("[\n", stdout);
+        r = caldav_alarm_list_futurerelease(time(NULL), 0, printone_json, &sep);
+        fputs("\n]\n", stdout);
+    }
+    else {
+        r = caldav_alarm_list_futurerelease(time(NULL), 0, printone_pretty, NULL);
+    }
+
     if (r) {
         fprintf(stderr, "whoops, something went wrong? r=%d\n", r);
     }

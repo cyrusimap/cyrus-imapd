@@ -31,6 +31,10 @@ Options
 
     |cli-dash-c-text|
 
+.. option:: -j, --json
+
+    Produce JSON output rather than human-readable output.
+
 Files
 =====
 
