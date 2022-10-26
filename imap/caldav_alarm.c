@@ -1161,7 +1161,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     /* Process any VALARMs in the patched iCalendar resource */
     check = process_alarms(mailbox, uid, userid, floatingtz, myical,
                            prock->alarm->lastrun, prock->runtime, prock->dryrun);
-    if (!prock->alarm->nextcheck || check < prock->alarm->nextcheck) {
+    if (!prock->alarm->nextcheck || (check && check < prock->alarm->nextcheck)) {
         prock->alarm->nextcheck = check;
     }
 
