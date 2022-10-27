@@ -3966,7 +3966,7 @@ static int mailbox_update_pushsub(struct mailbox *mailbox,
     struct buf msg_buf = BUF_INITIALIZER;
     int isexpunged = (new->internal_flags & FLAG_INTERNAL_EXPUNGED ? 1 : 0);
     int isverified = (new->system_flags & FLAG_FLAGGED ? 1 : 0);
-    int r = 0;
+    int r;
 
     if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_JMAPPUSHSUB) return 0;
 
@@ -4143,7 +4143,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
     struct buf msg_buf = BUF_INITIALIZER;
     int isexpunged = (new->internal_flags & FLAG_INTERNAL_EXPUNGED ? 1 : 0);
     int isactive = (new->system_flags & FLAG_FLAGGED ? 1 : 0);
-    int r = 0;
+    int r;
 
     if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_SIEVE) return 0;
 

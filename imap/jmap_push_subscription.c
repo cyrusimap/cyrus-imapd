@@ -46,11 +46,11 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
-#include <errno.h>
 
 #include "append.h"
 #include "http_jmap.h"
@@ -155,6 +155,7 @@ HIDDEN int jmap_pushsub_get(jmap_req_t *req)
                    NULL, NULL, &get, &err);
     if (json_object_get(req->args, "accountId")) {
         jmap_parser_invalid(&parser, "accountId");
+
         if (err) json_decref(err);
         err = json_pack("{s:s s:O}", "type", "invalidArguments",
                         "arguments", parser.invalid);
@@ -236,7 +237,7 @@ static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
     char *data = json_dumps(jpushsub, JSON_INDENT(2));
     size_t datalen = strlen(data);
     time_t now = time(0);
-    FILE *f = NULL;
+    FILE *f;
     char *mimehdr;
     int r = 0;
 
@@ -246,7 +247,7 @@ static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
         return CYRUSDB_IOERROR;
     }
 
-    /* Create RFC 5322 header for script */
+    /* Create RFC 5322 header for subscription */
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
     if (strchr(userid, '@')) {
         buf_printf(&buf, "<%s>", userid);
@@ -412,10 +413,10 @@ static const char *set_create(const char *creation_id, json_t *jpushsub,
                                           json_sprintf("types[%lu]", i));
                     break;
                 }
-                else {
-                    strarray_append(&types, type);
-                }
+
+                strarray_append(&types, type);
             }
+
             jtypes = json_incref(arg);
         }
     }
@@ -592,12 +593,11 @@ static void set_update(const char *id, json_t *jpushsub,
                                               json_sprintf("types[%lu]", i));
                         break;
                     }
-                    else {
-                        r = mailbox_user_flag(mailbox, type, &flagnum, 1);
-                        if (r) goto done;
 
-                        record.user_flags[flagnum/32] |= 1<<(flagnum&31);
-                    }
+                    r = mailbox_user_flag(mailbox, type, &flagnum, 1);
+                    if (r) goto done;
+
+                    record.user_flags[flagnum/32] |= 1<<(flagnum&31);
                 }
             }
         }
@@ -702,7 +702,8 @@ HIDDEN int jmap_pushsub_set(struct jmap_req *req)
     jmap_set_parse(req, &parser, pushsub_props, NULL, NULL, &set, &jerr);
     if ((accountid = json_object_get(req->args, "accountId")) || set.if_in_state) {
         if (accountid) jmap_parser_invalid(&parser, "accountId");
-        if (set.if_in_state) jmap_parser_invalid(&parser, "ifInState");
+        else jmap_parser_invalid(&parser, "ifInState");
+
         if (jerr) json_decref(jerr);
         jerr = json_pack("{s:s s:O}", "type", "invalidArguments",
                          "arguments", parser.invalid);

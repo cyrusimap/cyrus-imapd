@@ -377,11 +377,8 @@ EXPORTED int pushsubdb_delete(struct pushsub_db *pushsubdb, unsigned rowid)
     struct sqldb_bindval bval[] = {
         { ":rowid", SQLITE_INTEGER, { .i = rowid } },
         { NULL,     SQLITE_NULL,    { .s = NULL  } } };
-    int r;
 
-    r = sqldb_exec(pushsubdb->db, CMD_DELETE, bval, NULL, NULL);
-
-    return r;
+    return sqldb_exec(pushsubdb->db, CMD_DELETE, bval, NULL, NULL);
 }
 
 EXPORTED int pushsub_ensure_folder(const char *userid, struct mailbox **mailboxptr)
