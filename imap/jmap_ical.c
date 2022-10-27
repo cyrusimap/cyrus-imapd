@@ -2909,20 +2909,26 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links,
 static json_t *coordinates_from_ical(icalproperty *prop)
 {
     /* Use verbatim coordinate string, rather than the parsed ical value */
-    const char *p, *val = icalproperty_get_value_as_string(prop);
+    const char *val = icalproperty_get_value_as_string(prop);
     struct buf buf = BUF_INITIALIZER;
     json_t *c;
 
     if (!val) return NULL;
 
-    p = strchr(val, ';');
-    if (!p) return NULL;
+    const char *semcol = strchr(val, ';');
+    if (!semcol) return NULL;
 
     buf_setcstr(&buf, "geo:");
+
+    const char *p = semcol;
+    while (p > val + 1 && p[-1] == '0') p--; // omit trailing zeros
     buf_appendmap(&buf, val, p-val);
     buf_appendcstr(&buf, ",");
-    val = p + 1;
-    buf_appendcstr(&buf, val);
+
+    val = semcol + 1;
+    p = val + strlen(val);
+    while (p > val + 1 && p[-1] == '0') p--; // omit trailing zeros
+    buf_appendmap(&buf, val, p-val);
 
     c = json_string(buf_cstring(&buf));
     buf_free(&buf);
