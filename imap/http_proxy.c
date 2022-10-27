@@ -669,7 +669,7 @@ static void send_response(struct transaction_t *txn, long code,
         else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
             txn->resp_body.len = strtoul(hdr[0], NULL, 10);
 
-            if (txn->flags.ver != VER_2) {
+            if (txn->flags.ver < VER_2) {
                 simple_hdr(txn, "Content-Length", "%s", hdr[0]);
             }
         }
@@ -680,7 +680,7 @@ static void send_response(struct transaction_t *txn, long code,
         /* Body is buffered, so send using "identity" TE */
         txn->resp_body.len = len;
 
-        if (txn->flags.ver != VER_2) {
+        if (txn->flags.ver < VER_2) {
             simple_hdr(txn, "Content-Length", "%lu", len);
         }
         txn->conn->end_resp_headers(txn, code);

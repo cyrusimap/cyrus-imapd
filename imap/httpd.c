@@ -69,6 +69,7 @@
 
 #include "httpd.h"
 #include "http_h2.h"
+#include "http_h3.h"
 #include "http_jwt.h"
 #include "http_proxy.h"
 #include "http_ws.h"
@@ -422,6 +423,7 @@ char *httpd_altsvc = NULL;
 static struct http_connection http_conn;
 
 static sasl_ssf_t extprops_ssf = 0;
+int http3 = 0;
 int https = 0;
 static int httpd_tls_required = 0;
 static int httpd_tls_enabled = 0;
@@ -823,8 +825,12 @@ int service_init(int argc __attribute__((unused)),
 
     mboxevent_setnamespace(&httpd_namespace);
 
-    while ((opt = getopt(argc, argv, "sp:q")) != EOF) {
+    while ((opt = getopt(argc, argv, "3sp:q")) != EOF) {
         switch(opt) {
+        case '3': /* HTTP/3 */
+            http3 = 1;
+            break;
+
         case 's': /* https (do TLS right away) */
             https = 1;
             break;
@@ -861,19 +867,35 @@ int service_init(int argc __attribute__((unused)),
                LIBXML_DOTTED_VERSION, JANSSON_VERSION);
 
     r = tls_init(!https, &serverinfo);
-    if (r && https) {
+    if (http3) {
+        if (!r) r = http3_init(&http_conn, &serverinfo);
+
+        if (r) {
+            switch (r) {
+            case HTTP_NOT_IMPLEMENTED:
+                fatal("HTTP/3: no HTTP/3, QUIC, or OpenSSL support", EX_CONFIG);
+            case HTTP_UNAVAILABLE:
+                fatal("HTTP/3: required QUIC/OpenSSL options not present", EX_CONFIG);
+            default:
+                fatal("HTTP/3: QUIC TLS engine initialization failure", EX_SOFTWARE);
+            }
+        }
+    }
+    else if (https && r) {
         switch (r) {
         case HTTP_NOT_IMPLEMENTED:
             fatal("https: no OpenSSL support", EX_CONFIG);
         case HTTP_UNAVAILABLE:
             fatal("https: required OpenSSL options not present", EX_CONFIG);
-        case HTTP_SERVER_ERROR:
+        default:
             fatal("https: TLS engine initialization failure", EX_SOFTWARE);
         }
     }
+    else {
+        http2_enabled = http2_init(&http_conn, &serverinfo);
+    }
     r = 0;
 
-    http2_enabled = http2_init(&http_conn, &serverinfo);
     ws_enabled = ws_init(&http_conn, &serverinfo);
 
 #ifdef HAVE_ZLIB
@@ -1023,9 +1045,12 @@ int service_main(int argc __attribute__((unused)),
     proc_register(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
     /* Construct Alt-Svc header value */
-    struct buf buf = BUF_INITIALIZER;
-    http2_altsvc(&buf);
-    httpd_altsvc = buf_releasenull(&buf);
+    if (!http3) {
+        struct buf buf = BUF_INITIALIZER;
+        http3_altsvc(&buf);
+        http2_altsvc(&buf);
+        httpd_altsvc = buf_releasenull(&buf);
+    }
 
     /* Set inactivity timer */
     httpd_timeout = config_getduration(IMAPOPT_HTTPTIMEOUT, 'm');
@@ -1092,7 +1117,7 @@ void service_abort(int error)
 
 void usage(void)
 {
-    prot_printf(httpd_out, "%s: usage: httpd [-C <alt_config>] [-s]\r\n",
+    prot_printf(httpd_out, "%s: usage: httpd [-C <alt_config>] [-3 | -s]\r\n",
                 error_message(HTTP_SERVER_ERROR));
     prot_flush(httpd_out);
     exit(EX_USAGE);
@@ -1270,6 +1295,10 @@ static int tls_init(int client_auth, struct buf *serverinfo)
     if (status == 0) buf_appendcstr(serverinfo, "-dev");
     else if (status < 15) buf_printf(serverinfo, "-beta%u", status);
     else if (patch) buf_putc(serverinfo, patch + 'a' - 1);
+
+#ifdef HAVE_QUIC
+    buf_appendcstr(serverinfo, "+quic");
+#endif
 
     if (!tls_enabled()) return HTTP_UNAVAILABLE;
 
@@ -1528,7 +1557,8 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     else {
         switch (txn->flags.ver) {
         case VER_2:
-            /* HTTP/2 - check for :authority pseudo header */
+        case VER_3:
+            /* HTTP/2+ - check for :authority pseudo header */
             if (spool_getheader(txn->req_hdrs, ":authority")) break;
 
             /* Fall through and create an :authority pseudo header */
@@ -1555,7 +1585,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     }
 
     /* Check message framing */
-    if ((ret = http_parse_framing(txn->flags.ver == VER_2, txn->req_hdrs,
+    if ((ret = http_parse_framing(txn->flags.ver >= VER_2, txn->req_hdrs,
                                   &txn->req_body, &txn->error.desc))) return ret;
 
     /* Check for Expectations */
@@ -2197,7 +2227,11 @@ static void cmdloop(struct http_connection *conn)
         /* Start command timer */
         cmdtime_starttimer();
 
-        if (conn->sess_ctx) {
+        if (http3) {
+            /* HTTP/3 input */
+            http3_input(conn);
+        }
+        else if (conn->sess_ctx) {
             /* HTTP/2 input */
             http2_input(conn);
         }
@@ -2410,8 +2444,8 @@ static int parse_connection(struct transaction_t *txn)
 
     if (!conn) return 0;
 
-    if (txn->flags.ver == VER_2) {
-        txn->error.desc = "Connection not allowed in HTTP/2";
+    if (txn->flags.ver >= VER_2) {
+        txn->error.desc = "Connection not allowed in HTTP/2+";
         return HTTP_BAD_REQUEST;
     }
 
@@ -2577,6 +2611,7 @@ EXPORTED const char *http_statusline(unsigned ver, long code)
     static struct buf statline = BUF_INITIALIZER;
 
     if (ver == VER_2) buf_setcstr(&statline, HTTP2_VERSION);
+    else if (ver == VER_3) buf_setcstr(&statline, HTTP3_VERSION);
     else {
         buf_setmap(&statline, HTTP_VERSION, HTTP_VERSION_LEN-1);
         buf_putc(&statline, ver + '0');
@@ -4764,7 +4799,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
     int ret;
 
     /* Bootstrap WebSockets over HTTP/2, if requested */
-    if ((txn->flags.ver != VER_2) || !ws_enabled || !cparams) {
+    if ((txn->flags.ver < VER_2) || !ws_enabled || !cparams) {
         return HTTP_NOT_IMPLEMENTED;
     }
 
@@ -4986,8 +5021,8 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
                 txn->req_tgt.allow |= http_namespaces[i]->allow;
         }
 
-        if (ws_enabled && (txn->flags.ver == VER_2)) {
-            /* CONNECT allowed for bootstrapping WebSocket over HTTP/2 */
+        if (ws_enabled && (txn->flags.ver >= VER_2)) {
+            /* CONNECT allowed for bootstrapping WebSocket over HTTP/2+ */
             txn->req_tgt.allow |= ALLOW_CONNECT;
         }
     }
@@ -4998,7 +5033,7 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
             if (r) return r;
         }
         else if (!strcmp(txn->req_uri->path, "/") &&
-                 ws_enabled && (txn->flags.ver == VER_2)) {
+                 ws_enabled && (txn->flags.ver >= VER_2)) {
             /* WS 'echo' endpoint */
             txn->req_tgt.allow |= ALLOW_CONNECT;
         }

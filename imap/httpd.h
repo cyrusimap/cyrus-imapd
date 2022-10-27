@@ -362,11 +362,11 @@ struct http_connection {
 
     ptrarray_t reset_callbacks;         /* Array of functions to reset
                                            auxiliary connection contexts
-                                           (e.g. TLS, HTTP/2, WebSockets) */
+                                           (e.g. TLS, HTTP/2+, WebSockets) */
 
     ptrarray_t shutdown_callbacks;      /* Array of functions to cleanup
                                            auxiliary connection contexts
-                                           (e.g. TLS, HTTP/2, WebSockets) */
+                                           (e.g. TLS, HTTP/2+, WebSockets) */
 };
 
 typedef void (*conn_reset_t)(struct http_connection *conn);
@@ -429,7 +429,8 @@ typedef void (*txn_done_t)(struct transaction_t *txn);
 enum {
     VER_1_0 =           0,
     VER_1_1 =           1,
-    VER_2 =             2
+    VER_2 =             2,
+    VER_3 =             3,
 };
 
 /* Connection token flags */

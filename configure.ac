@@ -1332,7 +1332,20 @@ if test "$with_ssl" != "no"; then
     fi
 
     AC_CHECK_LIB(ssl, SSL_CTX_set_alpn_select_cb,
-       AC_DEFINE(HAVE_TLS_ALPN,[], [Do we have support for TLS ALPN extension?]))
+       AC_DEFINE(HAVE_TLS_ALPN,[], [Do we have support for TLS ALPN extension?])
+
+       # Until OpenSSL gains mainline support for QUIC, check for a patched version.
+       save_CFLAGS="$CFLAGS"
+       save_LIBS="$LIBS"
+       CFLAGS="$SSL_CFLAGS $CFLAGS"
+       LIBS="$SSL_LIBS $LIBS"
+
+       AC_CHECK_LIB(ssl, SSL_is_quic,
+          with_ssl="yes (+quic)")
+
+       CFLAGS="$save_CFLAGS"
+       LIBS="$save_LIBS"
+    )
 fi
 AM_CONDITIONAL([HAVE_SSL], [test "$with_ssl" != "no"])
 AC_SUBST(SSL_CPPFLAGS)
@@ -1667,6 +1680,36 @@ dnl                                [Build DKIM support into iSchedule?]),
 dnl                        AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
 dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
 
+
+        AC_ARG_WITH(nghttp3, [AS_HELP_STRING([--without-nghttp3], [disable HTTP/3 support (check)])],,[with_nghttp3="check"])
+        AC_ARG_WITH(ngtcp2, [AS_HELP_STRING([--without-ngtcp2], [disable QUIC support (check)])],,[with_ngtcp2="check"])
+        if test "x$with_nghttp3" != "xno" -a "x$with_ngtcp2" != "xno"; then
+                PKG_CHECK_MODULES([NGHTTP3], [libnghttp3 libngtcp2 libngtcp2_crypto_openssl], [
+                        with_nghttp3=yes
+                        with_ngtcp2=yes
+
+                        if test "$with_ssl" == "yes (+quic)"; then
+                            AC_DEFINE(HAVE_QUIC,[],
+                                    [Build QUIC support into httpd?])
+                            AC_DEFINE(WITH_HTTP3,[],
+                                    [Build HTTP/3 support into httpd?])
+                        fi
+
+                ], [
+                        if test "x$with_nghttp3" = "xyes"; then
+                                AC_MSG_ERROR([HTTP/3 explicitly requested, but libnghttp3 or libngtcp2 was not found])
+                        fi
+                        AC_MSG_NOTICE([httpd will not have support for HTTP/3.  Consider installing libnghttp3, libngtcp2, and libngtcp2_crypto_openssl])
+                        with_nghttp3=no
+                        with_ngtcp2=no
+                ])
+        else
+                with_nghttp3=no
+                with_ngtcp2=no
+        fi
+        AM_CONDITIONAL([HTTP3], [test "${with_nghttp3}" != "no"])
+
+
         AC_ARG_WITH(nghttp2, [AS_HELP_STRING([--without-nghttp2], [disable HTTP/2 support (check)])],,[with_nghttp2="check"])
         if test "x$with_nghttp2" = "xyes" -o "x$with_nghttp2" = "xcheck"; then
                 PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.34.0], [
@@ -1739,10 +1782,12 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ],
                 AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
-        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
-        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
+        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${NGHTTP3_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
+        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${NGHTTP3_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
 else
         with_nghttp2="no (httpd is not built)"
+        with_nghttp3="no (httpd is not built)"
+        with_ngtcp2="no (httpd is not built)"
         with_wslay="no (httpd is not built)"
         with_brotli="no (httpd is not built)"
         with_zstd="no (httpd is not built)"
@@ -2508,6 +2553,8 @@ External dependencies:
    openio:             $with_openio
    -----------------------
    nghttp2:            $with_nghttp2
+   nghttp3:            $with_nghttp3
+   ngtcp2:             $with_ngtcp2
    wslay:              $with_wslay
    brotli:             $with_brotli
    zstd:               $with_zstd

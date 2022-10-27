@@ -47,6 +47,12 @@
 #ifndef INCLUDED_TLS_H
 #define INCLUDED_TLS_H
 
+struct tls_alpn_t {
+    const char *id;
+    unsigned (*check_availabilty)(void *rock);
+    void *rock;
+};
+
 /* is tls enabled? */
 int tls_enabled(void);
 
@@ -58,12 +64,6 @@ int tls_enabled(void);
 #include <openssl/ssl.h>
 
 #include "global.h" /* for saslprops_t */
-
-struct tls_alpn_t {
-    const char *id;
-    unsigned (*check_availabilty)(void *rock);
-    void *rock;
-};
 
 /* init tls */
 int tls_init_serverengine(const char *ident,

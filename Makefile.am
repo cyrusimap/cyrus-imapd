@@ -789,6 +789,7 @@ include_HEADERS = \
 	lib/nonblock.h \
 	lib/parseaddr.h \
 	lib/procinfo.h \
+	lib/ptrarray.h \
 	lib/retry.h \
 	lib/rfc822tok.h \
 	lib/seqset.h \
@@ -816,7 +817,6 @@ noinst_HEADERS += \
 	lib/libconfig.h \
 	lib/md5.h \
 	lib/prot.h \
-	lib/ptrarray.h \
 	lib/util.h \
 	lib/xsha1.h \
 	lib/xstrlcat.h \
@@ -1286,6 +1286,8 @@ imap_httpd_SOURCES = \
 	imap/http_dblookup.c \
 	imap/http_h2.c \
 	imap/http_h2.h \
+	imap/http_h3.c \
+	imap/http_h3.h \
 	imap/http_ischedule.c \
 	imap/http_jwt.c \
 	imap/http_jwt.h \
@@ -1320,6 +1322,12 @@ imap_httpd_SOURCES = \
 	master/service.c
 
 imap_httpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
+
+if HTTP3
+imap_httpd_SOURCES += \
+	imap/quic.c \
+	imap/quic.h
+endif
 
 if JMAP
 BUILT_SOURCES += \
@@ -1517,7 +1525,6 @@ lib_libcyrus_la_SOURCES = \
 	lib/parseaddr.c \
 	lib/procinfo.c \
 	lib/prot.c \
-	lib/ptrarray.c \
 	lib/rfc822tok.c \
 	lib/seqset.c \
 	lib/signals.c \
@@ -1568,6 +1575,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/hashu64.c \
 	lib/libconfig.c \
 	lib/mpool.c \
+	lib/ptrarray.c \
 	lib/retry.c \
 	lib/smallarrayu64.c \
 	lib/strarray.c \

@@ -48,6 +48,7 @@
 #include "spool.h"
 
 /* Supported HTTP version */
+#define HTTP3_VERSION    "HTTP/3"
 #define HTTP2_VERSION    "HTTP/2"
 #define HTTP_VERSION     "HTTP/1.1"
 #define HTTP_VERSION_LEN 8
@@ -66,6 +67,7 @@ struct body_t {
 enum {
     FRAMING_UNKNOWN = 0,
     FRAMING_HTTP2,
+    FRAMING_HTTP3,
     FRAMING_LENGTH,
     FRAMING_CHUNKED,
     FRAMING_CLOSE

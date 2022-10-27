@@ -109,7 +109,7 @@ static int verbose = 0;
 static int listen_queue_backlog = 32;
 static int pidfd = -1;
 
-static int in_shutdown = 0;
+static volatile sig_atomic_t in_shutdown = 0;
 
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
@@ -154,6 +154,12 @@ enum sstate {
     SERVICE_STATE_DEAD    = 4   /* We received a sigchld from this service */
 };
 
+struct quic_child {
+    int fd;                     /* master -> child data channel */
+    struct buf scid;            /* hex-encoded SCID */
+    struct buf dcid;            /* hex-encoded DCID */
+};
+
 struct centry {
     pid_t pid;
     enum sstate service_state;  /* SERVICE_STATE_* */
@@ -163,6 +169,9 @@ struct centry {
     char *desc;                 /* human readable description for logging */
     struct timeval spawntime;   /* when the centry was allocated */
     time_t sighuptime;          /* when did we send a SIGHUP */
+
+    struct quic_child *quic;
+
     struct centry *next;
 };
 static struct centry *ctable[child_table_size];
@@ -333,6 +342,12 @@ static char *centry_describe(const struct centry *c, pid_t pid)
 /* free a centry */
 static void centry_free(struct centry *c)
 {
+    if (c->quic) {
+        buf_free(&c->quic->scid);
+        buf_free(&c->quic->dcid);
+        xclose(c->quic->fd);
+        free(c->quic);
+    }
     free(c->desc);
     free(c);
 }
@@ -1054,6 +1069,7 @@ static void spawn_service(struct service *s, int si, int wdi)
     static char name_env[100], name_env2[100], name_env3[100];
     struct centry *c;
     int wdpgid_pipe[2];
+    int quic_pipe[2];
     int r;
 
     if (!s->name) {
@@ -1083,6 +1099,17 @@ static void spawn_service(struct service *s, int si, int wdi)
         }
     }
 
+    if (s->quic) {
+        /* Create pipe for sending QUIC data from master to child */
+        r = pipe(quic_pipe);
+        if (r) {
+            syslog(LOG_ERR,
+                   "ERROR: unable to respawn service %s/%s: QUIC pipe failed: %m",
+                   s->name, s->familyname);
+            return;
+        }
+    }
+
     switch (p = fork()) {
     case -1:
         syslog(LOG_ERR, "can't fork process to run service %s/%s: %m",
@@ -1107,7 +1134,26 @@ static void spawn_service(struct service *s, int si, int wdi)
                 syslog(LOG_ERR, "can't duplicate status fd: %m");
                 exit(1);
             }
-            if (dup2(s->socket, LISTEN_FD) < 0) {
+            if (s->quic) {
+                /* Child will receive QUIC data from master via pipe */
+                if (dup2(quic_pipe[0], LISTEN_FD) < 0) {
+                    syslog(LOG_ERR, "can't duplicate QUIC recv fd: %m");
+                    exit(1);
+                }
+                /* Child will send QUIC data to client via UDP socket */
+                int quic_fd = dup(s->socket);
+                if (quic_fd < 0) {
+                    syslog(LOG_ERR, "can't duplicate QUIC send fd: %m");
+                    exit(1);
+                }
+
+                close(quic_pipe[1]);
+                fcntl_unset(quic_fd, FD_CLOEXEC);
+
+                snprintf(name_env3, sizeof(name_env3), "CYRUS_QUIC_FD=%d", quic_fd);
+                putenv(name_env3);
+            }
+            else if (dup2(s->socket, LISTEN_FD) < 0) {
                 syslog(LOG_ERR, "can't duplicate listener fd: %m");
                 exit(1);
             }
@@ -1197,6 +1243,16 @@ static void spawn_service(struct service *s, int si, int wdi)
         c->wdi = wdi;
         centry_set_state(c, SERVICE_STATE_READY);
         centry_add(c, p);
+
+        if (s->quic) {
+            /* Master will transfer QUIC data to child via pipe */
+            c->quic = xzmalloc(sizeof(struct quic_child));
+            c->quic->fd = quic_pipe[1];
+            close(quic_pipe[0]);
+
+            /* Add child to ready array */
+            ptrarray_push(&s->quic->ready, c);
+        }
         break;
     }
 }
@@ -1427,6 +1483,12 @@ static void reap_child(void)
                     /* Shouldn't get here */
                     break;
                 }
+
+                if (s->quic) {
+                    /* remove child from ready array */
+                    int idx = ptrarray_find(&s->quic->ready, c, 0);
+                    if (idx >= 0) ptrarray_remove(&s->quic->ready, idx);
+                }
             } else if (wd) {
                 /* WaitDaemons are only ever in READY state, there's only one
                  * child per service, and it only exits due to SIGHUP or failure
@@ -1632,6 +1694,8 @@ static void sighandler_setup(void)
     struct sigaction action;
     sigset_t siglist;
 
+    signal(SIGPIPE, SIG_IGN);
+
     memset(&siglist, 0, sizeof(siglist));
     sigemptyset(&siglist);
     sigaddset(&siglist, SIGHUP);
@@ -1829,6 +1893,16 @@ static void process_msg(int si, struct notify_message *msg)
                        SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
             centry_set_state(c, SERVICE_STATE_READY);
             s->ready_workers++;
+
+            if (s->quic) {
+                /* Move worker from active table to ready array */
+                if (buf_len(&c->quic->scid))
+                    hash_del(buf_cstring(&c->quic->scid), &s->quic->active);
+                if (buf_len(&c->quic->dcid))
+                    hash_del(buf_cstring(&c->quic->dcid), &s->quic->active);
+
+                ptrarray_push(&s->quic->ready, c);
+            }
             break;
 
         case SERVICE_STATE_DEAD:
@@ -1864,6 +1938,12 @@ static void process_msg(int si, struct notify_message *msg)
                        SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
             centry_set_state(c, SERVICE_STATE_BUSY);
             s->ready_workers--;
+
+            if (s->quic) {
+                /* remove child from ready array */
+                int idx = ptrarray_find(&s->quic->ready, c, 0);
+                if (idx >= 0) ptrarray_remove(&s->quic->ready, idx);
+            }
             break;
 
         case SERVICE_STATE_DEAD:
@@ -2302,6 +2382,32 @@ static void add_service(const char *name, struct entry *e, void *rock)
         if (Services[i].max_workers < 0) {
             Services[i].max_workers = INT_MAX;
         }
+    } else if (!strcmp(Services[i].proto, "quic") ||
+               !strcmp(Services[i].proto, "quic4") ||
+               !strcmp(Services[i].proto, "quic6")) {
+#ifdef HAVE_QUIC
+        int active_size = 4096;  // XXX  Is there a better default max?
+
+        /* Change protocol to UDP */
+        proto = Services[i].proto;
+        Services[i].proto = strconcat("udp", proto+4, NULL);
+
+        Services[i].desired_workers = prefork;
+        Services[i].babysit = babysit;
+        Services[i].max_workers = atoi(max);
+        if (Services[i].max_workers < 0) {
+            Services[i].max_workers = INT_MAX;
+        }
+        else {
+            active_size = Services[i].max_workers;
+        }
+
+        /* Initialize active worker table */
+        Services[i].quic = xzmalloc(sizeof(struct quic_service));
+        construct_hash_table(&Services[i].quic->active, 2*active_size, 0);
+#else
+        fatalf(EX_CONFIG, "no QUIC support for service '%s'", name);
+#endif /* HAVE_QUIC */
     } else {
         /* udp */
         if (prefork > 1) prefork = 1;
@@ -2824,6 +2930,133 @@ static void check_undermanned(struct service *s, int si, int wdi)
     }
 }
 
+#ifdef HAVE_QUIC
+#include "imap/quic.h"
+#include <ngtcp2/ngtcp2.h>
+
+/* XXX  Should separate threads be used for each QUIC service? */
+static void quic_dispatch(struct service *s, int si)
+{
+    struct sockaddr_storage remote_addr;
+    socklen_t remote_addrlen = sizeof(remote_addr);
+    uint8_t data[USHRT_MAX];
+    ssize_t nread;
+    uint8_t msg_count = 0, msg_type[NUM_QUIC_MSG_TYPES];
+    struct iovec iov[3 * NUM_QUIC_MSG_TYPES + 1];
+    int iovcnt = 0;
+
+    /* Always send message count */
+    WRITEV_ADD_TO_IOVEC(iov, iovcnt, &msg_count, 1);
+
+    memset(&remote_addr, 0, remote_addrlen);
+
+    do {
+        nread = recvfrom(s->socket, data, sizeof(data), MSG_DONTWAIT,
+                         (struct sockaddr *) &remote_addr, &remote_addrlen);
+    } while (nread < 0 && errno == EINTR);
+
+    syslog(LOG_DEBUG, "quic_dispatch(): read %zd bytes", nread);
+
+    if (nread < 0) return;
+
+    uint32_t version = 0;
+    const uint8_t *dcid, *scid;
+    size_t dcidlen = 0, scidlen = 0;
+    int r = ngtcp2_pkt_decode_version_cid(&version,
+                                          &dcid, &dcidlen, &scid, &scidlen,
+                                          data, nread, NGTCP2_MAX_CIDLEN);
+
+    syslog(LOG_DEBUG,
+           "ngtcp2_pkt_decode_version_cid: %s (0x%x %ld %ld)",
+           ngtcp2_strerror(r), version, scidlen, dcidlen);
+
+    if (r < 0) return;
+
+    struct centry *centry = NULL;
+    char scid_key[NGTCP2_MAX_CIDLEN * 2 + 1] = "";
+    char dcid_key[NGTCP2_MAX_CIDLEN * 2 + 1] = "";
+
+    bin_to_hex(dcid, dcidlen, dcid_key, 0);
+
+    /* Look for existing connection */
+    if (!scidlen) {
+        centry = hash_lookup(dcid_key, &s->quic->active);
+        if (centry) {
+            hash_del(buf_cstring(&centry->quic->scid), &s->quic->active);
+            buf_reset(&centry->quic->scid);
+        }
+    }
+    else {
+        bin_to_hex(scid, scidlen, scid_key, 0);
+        centry = hash_lookup(scid_key, &s->quic->active);
+
+        if (!centry) {
+            /* New connection - use a ready worker */
+            if (s->nactive < s->max_workers && s->ready_workers == 0) {
+                spawn_service(s, si, SERVICE_NONE);
+            }
+
+            centry = ptrarray_pop(&s->quic->ready);
+            if (centry) {
+                hash_insert(scid_key, centry, &s->quic->active);
+                buf_setcstr(&centry->quic->scid, scid_key);
+                buf_reset(&centry->quic->dcid);
+
+                /* Add client address message */
+                msg_type[msg_count] = QUIC_MSG_ADDR;
+                WRITEV_ADD_TO_IOVEC(iov, iovcnt, &msg_type[msg_count++], 1);
+                WRITEV_ADD_TO_IOVEC(iov, iovcnt, &remote_addrlen, sizeof(remote_addrlen));
+                WRITEV_ADD_TO_IOVEC(iov, iovcnt, &remote_addr, remote_addrlen);
+            }
+        }
+        else if (strcmp(scid_key, buf_cstring(&centry->quic->scid))) {
+            /* SCID has changed - MUST ignore packet */
+            centry = NULL;
+        }
+        else if (strcmp(dcid_key, buf_cstring(&centry->quic->dcid))) {
+            /* DCID has changed - update entry in active table */
+            if (buf_len(&centry->quic->dcid))
+                hash_del(buf_cstring(&centry->quic->dcid), &s->quic->active);
+            hash_insert(dcid_key, centry, &s->quic->active);
+            buf_setcstr(&centry->quic->dcid, dcid_key);
+        }
+    }
+
+    syslog(LOG_DEBUG, "scid: 0x%s, dcid: 0x%s, pid: %d",
+           scid_key, dcid_key, centry ? centry->pid : -1);
+
+    if (centry) {
+        /* Add data message */
+        msg_type[msg_count] = QUIC_MSG_DATA;
+        WRITEV_ADD_TO_IOVEC(iov, iovcnt, &msg_type[msg_count++], 1);
+        WRITEV_ADD_TO_IOVEC(iov, iovcnt, &nread, sizeof(nread));
+        WRITEV_ADD_TO_IOVEC(iov, iovcnt, data, nread);
+
+        /* Send messages to worker servicing this connection */
+        ssize_t nwrite = retry_writev(centry->quic->fd, iov, iovcnt);
+
+        if (config_debug) {
+            size_t total_len = 0;
+
+            while (iovcnt--) {
+                total_len += iov[iovcnt].iov_len;
+            }
+
+            syslog(LOG_DEBUG,
+                   "quic_dispatch(): sent %zd of %zd bytes: %m", nwrite, total_len);
+        }
+    }
+}
+
+#else /* !HAVE_QUIC */
+static void quic_dispatch(struct service *s __attribute__((unused)),
+                          int si __attribute__((unused)))
+{
+    fatal("quic_dispatch() called, but no Ngtcp2", EX_SOFTWARE);
+}
+
+#endif /* HAVE_QUIC */
+
 int main(int argc, char **argv)
 {
     static const char lock_suffix[] = ".lock";
@@ -3200,9 +3433,11 @@ int main(int argc, char **argv)
             if (x > maxfd) maxfd = x;
 
             /* connections */
-            if (y >= 0 && Services[i].ready_workers == 0 &&
-                Services[i].nactive < Services[i].max_workers &&
-                !service_is_fork_limited(&Services[i])) {
+            if (y >= 0 &&
+                (Services[i].quic ||  // ALWAYS listen on QUIC socket
+                 (Services[i].ready_workers == 0 &&
+                  Services[i].nactive < Services[i].max_workers &&
+                  !service_is_fork_limited(&Services[i])))) {
                 if (verbose > 2)
                     syslog(LOG_DEBUG, "listening for connections for %s/%s",
                            Services[i].name, Services[i].familyname);
@@ -3283,12 +3518,17 @@ int main(int argc, char **argv)
                 }
 
                 if (!in_shutdown && Services[i].exec &&
-                    Services[i].nactive < Services[i].max_workers &&
-                    Services[i].ready_workers == 0 &&
                     y >= 0 && FD_ISSET(y, &rfds))
                 {
                     /* huh, someone wants to talk to us */
-                    spawn_service(&Services[i], i, SERVICE_NONE);
+
+                    if (Services[i].quic) {
+                        quic_dispatch(&Services[i], i);
+                    }
+                    else if (Services[i].nactive < Services[i].max_workers &&
+                             Services[i].ready_workers == 0) {
+                        spawn_service(&Services[i], i, SERVICE_NONE);
+                    }
                 }
             }
         }
