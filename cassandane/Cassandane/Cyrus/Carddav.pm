@@ -795,7 +795,7 @@ EOF
     $self->assert_matches(qr/max-resource-size/, $Err);
 }
 
-sub test_allow_change_text_uuid_to_urn_uuid
+sub test_put_get_v3_v4
     :needs_component_httpd :min_version_3_7
 {
     my ($self) = @_;
@@ -806,11 +806,13 @@ sub test_allow_change_text_uuid_to_urn_uuid
     $self->assert_str_equals($Id, 'foo');
     my $href = "$Id/bar.vcf";
     my $uid = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+    my $image = "R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
 UID:$uid
+PHOTO;ENCODING=b;TYPE=GIF:$image
 N:Gump;Forrest;;Mr.
 FN:Forrest Gump
 ORG:Bubba Gump Shrimp Co.
@@ -835,11 +837,14 @@ EOF
     my $response = $CardDAV->Request('GET', $href, '',
                                      'Accept' => 'text/vcard; version=4.0');
     my $newcard = $response->{content};
+    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
     $self->assert_matches(qr/UID:urn:uuid:$uid/, $newcard);
+    $self->assert_matches(qr/PHOTO:data:image\/gif;base64,$image/, $newcard);
 
     xlog $self, "PUT same vCard as v4 with URL (urn) UID";
     $card =~ s/VERSION:3.0/VERSION:4.0/;
     $card =~ s/UID:/UID:urn:uuid:/;
+    $card =~ s/PHOTO;ENCODING=b;TYPE=GIF:/PHOTO:data:image\/gif;base64,/;
 
     $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
         content => $card,
@@ -851,17 +856,22 @@ EOF
     $response = $CardDAV->Request('GET', $href, '',
                                   'Accept' => 'text/vcard; version=3.0');
     $newcard = $response->{content};
+    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
     $self->assert_matches(qr/UID:$uid/, $newcard);
+    $self->assert_matches(qr/PHOTO;ENCODING=b;TYPE=GIF:$image/, $newcard);
 
     xlog $self, "PUT vCard v3 with text UID";
     $card =~ s/VERSION:4.0/VERSION:3.0/;
     $card =~ s/UID:urn:uuid:/UID:/;
+    $card =~ s/PHOTO:data:image\/gif;base64,/PHOTO;ENCODING=b;TYPE=GIF:/;
 
     xlog $self, "GET as vCard v4";
     $response = $CardDAV->Request('GET', $href, '',
                                   'Accept' => 'text/vcard; version=4.0');
     $newcard = $response->{content};
+    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
     $self->assert_matches(qr/UID:urn:uuid:$uid/, $newcard);
+    $self->assert_matches(qr/PHOTO:data:image\/gif;base64,$image/, $newcard);
 
     $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
         content => $card,
