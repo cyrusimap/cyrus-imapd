@@ -267,7 +267,7 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
 
     for (ventry = vcard->objects->properties; ventry; ventry = next) {
         const char *name = ventry->name;
-        char *propval = ventry->v.value;
+        const char *propval = ventry->v.value;
 
         next = ventry->next;
 
@@ -302,28 +302,33 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
             /* Rewrite KEY, LOGO, PHOTO, SOUND properties */
             if (!strncmp(propval, "data:", 5)) {
                 /* Rewrite data: URI as 'b' encoded value */
-                char *type = propval + 5;
-                char *base64 = strstr(type, ";base64,");
-                char *data = base64 ? base64 + 7 : strchr(type, ',');
+                const char *type = propval + 5;
+                const char *base64 = strstr(type, ";base64,");
+                const char *data = NULL;
+                size_t typelen = 0;
 
-                if (data) {
-                    *data++ = '\0';
-                    vparse_set_value(ventry, data);
+                if (base64) {
+                    vparse_add_param(ventry, "ENCODING", "b");
 
-                    if (base64) {
-                        *base64++ = '\0';
-                        vparse_add_param(ventry, "ENCODING", "b");
-                    }
+                    data = base64 + 7;
+                    typelen = base64 - type;
+                }
+                else if ((data = strchr(type, ','))) {
+                    typelen = data - type;
+                }
 
-                    if (toupper(name[0]) != 'K' && (type = strchr(type, '/'))) {
-                        /* Only use subtype for LOGO, PHOTO, SOUND */
-                        type++;
-                    }
-                    if (type && *type) {
-                        buf_setcstr(&buf, type);
-                        vparse_add_param(ventry, "TYPE", buf_ucase(&buf));
+                if (typelen) {
+                    const char *subtype;
+
+                    buf_setmap(&buf, type, typelen);
+                    subtype = strchr(buf_ucase(&buf), '/');
+                    if (subtype) {
+                        vparse_add_param(ventry, "TYPE", subtype+1);
                     }
                 }
+
+                buf_setcstr(&buf, data ? data+1 : "");
+                vparse_set_value(ventry, buf_cstring(&buf));
             }
             else if ((vparam = vparse_get_param(ventry, "mediatype"))) {
                 /* Rename MEDIATYPE parameter */
