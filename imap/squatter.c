@@ -942,7 +942,7 @@ int main(int argc, char **argv)
     setbuf(stdout, NULL);
 
     /* Keep these in alphabetic order */
-    static const char *short_options = "ABC:DFL:N:PRS:T:UXZade:f:hilmn:oprs:t:uvz:";
+    static const char short_options[] = "ABC:DFL:N:PRS:T:UXZade:f:hilmn:oprs:t:uvz:";
 
     /* Keep these ordered by mode */
     static struct option long_options[] = {

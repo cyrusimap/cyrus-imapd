@@ -2887,7 +2887,7 @@ int main(int argc, char **argv)
     prog = strrchr(argv[0], '/') ? strrchr(argv[0], '/')+1 : argv[0];
 
     /* keep this in alphabetical order */
-    static const char *const short_options =
+    static const char short_options[] =
         "?I:P:X:a:cf:hik:l:m:n:o:p:qr:st:u:vw:x:z";
 
     static const struct option long_options[] = {

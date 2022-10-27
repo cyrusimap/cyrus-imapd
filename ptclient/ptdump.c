@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
     char *alt_config = NULL, *tofree = NULL;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "C:";
+    static const char short_options[] = "C:";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */

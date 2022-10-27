@@ -199,7 +199,7 @@ int main(int argc, char **argv)
     int opt, r = 0;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = ":A:C:DF:LM:P:UXaf:m:nru:vw:xz";
+    static const char short_options[] = ":A:C:DF:LM:P:UXaf:m:nru:vw:xz";
 
     static const struct option long_options[] = {
         { "override-acl", optional_argument, NULL, 'A' },

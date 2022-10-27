@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "C:d";
+    static const char short_options[] = "C:d";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */

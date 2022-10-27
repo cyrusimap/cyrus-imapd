@@ -330,7 +330,7 @@ int main(int argc, char **argv)
     struct options_t opts = { 0, 0, 0, 0, 0, 0, 1 /* default to UTF8 */ };
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "7AC:DMSUajlmpqsu";
+    static const char short_options[] = "7AC:DMSUajlmpqsu";
 
     static const struct option long_options[] = {
         { "no-utf8", no_argument, NULL, '7' }, /* XXX undocumented */

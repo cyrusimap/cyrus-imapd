@@ -354,7 +354,7 @@ int main(int argc, char **argv)
     options.wait = BACKUP_OPEN_NONBLOCK;
 
     /* keep in alphabetical order */
-    static const char *const short_options = ":AC:DFPSVcfjmpst:uvwx:";
+    static const char short_options[] = ":AC:DFPSVcfjmpst:uvwx:";
 
     static const struct option long_options[] = {
         { "all", no_argument, NULL, 'A' },
