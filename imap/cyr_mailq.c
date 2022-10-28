@@ -150,11 +150,11 @@ int main(int argc, char *argv[])
     if (want_json) {
         int sep = 0;
         fputs("[\n", stdout);
-        r = caldav_alarm_list_futurerelease(time(NULL), 0, printone_json, &sep);
+        r = caldav_alarm_list_futurerelease(0, 0, printone_json, &sep);
         fputs("\n]\n", stdout);
     }
     else {
-        r = caldav_alarm_list_futurerelease(time(NULL), 0, printone_pretty, NULL);
+        r = caldav_alarm_list_futurerelease(0, 0, printone_pretty, NULL);
     }
 
     if (r) {
