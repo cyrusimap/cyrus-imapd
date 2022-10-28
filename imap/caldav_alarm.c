@@ -200,14 +200,14 @@ static struct sqldb_upgrade upgrade[] = {
     "  num_retries, last_run, last_err"                     \
     " FROM events WHERE"                                    \
     " nextcheck < :before"                                  \
-    " ORDER BY mboxname, imap_uid, nextcheck"               \
+    " ORDER BY mboxname, nextcheck, imap_uid"               \
     ";"
 
 #define CMD_SELECT_ALARMS                                   \
     "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts,"\
     "  num_retries, last_run, last_err"                     \
     " FROM events"                                          \
-    " ORDER BY mboxname, imap_uid, nextcheck"               \
+    " ORDER BY mboxname, nextcheck, imap_uid"               \
     ";"
 
 static sqldb_t *my_alarmdb;
