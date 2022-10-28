@@ -195,11 +195,18 @@ static struct sqldb_upgrade upgrade[] = {
     " mboxname LIKE :prefix"                                \
     ";"
 
-#define CMD_SELECT_ALARMS                                   \
+#define CMD_SELECT_ALARMS_BEFORE                            \
     "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts,"\
     "  num_retries, last_run, last_err"                     \
     " FROM events WHERE"                                    \
     " nextcheck < :before"                                  \
+    " ORDER BY mboxname, imap_uid, nextcheck"               \
+    ";"
+
+#define CMD_SELECT_ALARMS                                   \
+    "SELECT mboxname, imap_uid, nextcheck, type, num_rcpts,"\
+    "  num_retries, last_run, last_err"                     \
+    " FROM events"                                          \
     " ORDER BY mboxname, imap_uid, nextcheck"               \
     ";"
 
@@ -1197,7 +1204,7 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 
     time_t nextcheck = sqlite3_column_int(stmt, 2);
 
-    if (nextcheck <= alarm->runtime) {
+    if (alarm->runtime == 0 || nextcheck <= alarm->runtime) {
         struct caldav_alarm_data *data = xzmalloc(sizeof(struct caldav_alarm_data));
         data->mboxname     = xstrdup((const char *) sqlite3_column_text(stmt, 0));
         data->imap_uid     = sqlite3_column_int(stmt, 1);
@@ -2096,7 +2103,8 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
     if (!alarmdb)
         return HTTP_SERVER_ERROR;
 
-    int rc = sqldb_exec(alarmdb, CMD_SELECT_ALARMS, bval, &alarm_read_cb, &rock);
+    int rc = sqldb_exec(alarmdb, CMD_SELECT_ALARMS_BEFORE, bval,
+                        &alarm_read_cb, &rock);
 
     caldav_alarm_close(alarmdb);
 
@@ -2276,8 +2284,9 @@ EXPORTED int caldav_alarm_list_futurerelease(time_t runtime,
     if (!alarmdb) return HTTP_SERVER_ERROR;
 
     /* XXX select only the ALARM_SENDs? */
-    r = sqldb_exec(alarmdb, CMD_SELECT_ALARMS, bval,
-                   &alarm_read_cb, &alarm_read_rock);
+    r = sqldb_exec(alarmdb,
+                   runtime ? CMD_SELECT_ALARMS_BEFORE : CMD_SELECT_ALARMS,
+                   bval, &alarm_read_cb, &alarm_read_rock);
 
     caldav_alarm_close(alarmdb);
     if (r) goto done;
