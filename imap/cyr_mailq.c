@@ -104,9 +104,9 @@ void printone_pretty(time_t nextcheck, uint32_t num_retries,
                      json_t *submission,
                      void *rock __attribute__((unused)))
 {
-    const time_t now = time(NULL);
     const char *identityId;
     json_t *envelope, *mailFrom, *rcptTo, *value;
+    char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
     size_t i;
 
     identityId = json_string_value(json_object_get(submission, "identityId"));
@@ -116,14 +116,17 @@ void printone_pretty(time_t nextcheck, uint32_t num_retries,
     rcptTo = json_object_get(envelope, "rcptTo");
 
     /* XXX make nextcheck display colour according to magnitude */
-    printf("%g %s ", difftime(nextcheck, now), identityId);
-    if (last_err) {
-        printf("%" PRIu32 ":%g:%s ",
-               num_retries, difftime(last_run, now), last_err);
-    }
-    printf("%s ", json_string_value(json_object_get(mailFrom, "email")));
+    time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
+    printf("%s userid=<%s> ", timebuf, identityId);
+    printf("from=<%s> ", json_string_value(json_object_get(mailFrom, "email")));
     json_array_foreach(rcptTo, i, value) {
-        printf("%s ", json_string_value(json_object_get(value, "email")));
+        printf("to=<%s> ", json_string_value(json_object_get(value, "email")));
+    }
+    if (last_err) {
+        memset(timebuf, 0, sizeof(timebuf));
+        time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
+        printf("attempts=<%" PRIu32 "> error=<%s|%s> ",
+               num_retries, timebuf, last_err);
     }
 
     fputs("\n", stdout);
