@@ -162,10 +162,9 @@ int main(int argc, char *argv[])
     cyrus_init(alt_config, "cyr_mailq", 0, 0);
 
     if (want_json) {
-        int sep = 0;
-        fputs("[\n", stdout);
+        int sep = '[';
         r = caldav_alarm_list_futurerelease(0, 0, printone_json, &sep);
-        fputs("\n]\n", stdout);
+        if (sep == ',') fputs("\n]\n", stdout);
     }
     else {
         r = caldav_alarm_list_futurerelease(0, 0, printone_pretty, NULL);
