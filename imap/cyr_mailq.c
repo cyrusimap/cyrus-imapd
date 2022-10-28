@@ -49,6 +49,8 @@
 #include <sysexits.h>
 #include <time.h>
 
+#include "lib/times.h"
+
 #include "imap/caldav_alarm.h"
 #include "imap/global.h"
 #include "imap/json_support.h"
@@ -67,11 +69,23 @@ void printone_json(time_t nextcheck, uint32_t num_retries,
 {
     json_t *j;
     int *sep = (int *) rock;
+    char timebuf[ISO8601_DATETIME_MAX + 1];
 
     j = json_object();
-    json_object_set_new(j, "nextcheck", json_integer(nextcheck));
+
+    if (nextcheck) {
+        memset(timebuf, 0, sizeof(timebuf));
+        time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
+        json_object_set_new(j, "nextcheck", json_string(timebuf));
+    }
+
+    if (last_run) {
+        memset(timebuf, 0, sizeof(timebuf));
+        time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
+        json_object_set_new(j, "last_run", json_string(timebuf));
+    }
+
     json_object_set_new(j, "num_retries", json_integer(num_retries));
-    json_object_set_new(j, "last_run", json_integer(last_run));
     json_object_set_new(j, "last_err", json_string(last_err));
     json_object_set(j, "submission", submission);
 
