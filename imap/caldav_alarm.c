@@ -1141,15 +1141,18 @@ HIDDEN int caldav_alarm_delete_record(const char *mboxname, uint32_t imap_uid)
 }
 
 static int caldav_alarm_bump_nextcheck(struct caldav_alarm_data *data,
-                                       time_t nextcheck,
-                                       time_t last_run, const char *last_err)
+                                       time_t nextcheck, const char *last_err)
 {
     uint32_t num_retries = data->num_retries;
+    time_t last_run = data->last_run;
 
-    if (last_err) num_retries++;
-    else last_err = data->last_err;
-
-    if (!last_run) last_run = data->last_run;
+    if (last_err) {
+        num_retries++;
+        last_run = time(NULL);
+    }
+    else {
+        last_err = data->last_err;
+    }
 
     return update_alarmdb(data->mboxname, data->imap_uid, nextcheck, data->type,
                           data->num_rcpts, num_retries, last_run, last_err);
@@ -1793,7 +1796,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
 
         if (!cancel) {
             /* Retry */
-            caldav_alarm_bump_nextcheck(data, runtime + duration, runtime, err);
+            caldav_alarm_bump_nextcheck(data, runtime + duration, err);
             if (sm) smtpclient_close(&sm);
             goto done;
         }
@@ -1935,7 +1938,7 @@ static int process_snoozed(struct caldav_alarm_data *data,
 
     /* Check runtime against wakeup and adjust as necessary */
     if (dryrun || wakeup > runtime) {
-        caldav_alarm_bump_nextcheck(data, wakeup, 0, NULL);
+        caldav_alarm_bump_nextcheck(data, wakeup, NULL);
         goto done;
     }
 
@@ -1949,7 +1952,7 @@ static int process_snoozed(struct caldav_alarm_data *data,
         syslog(LOG_ERR, "IOERROR: failed to unsnooze %s:%u (%s)",
                mailbox_name(mailbox), record->uid, error_message(r));
         /* try again in 5 minutes */
-        caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
+        caldav_alarm_bump_nextcheck(data, runtime + 300, error_message(r));
     }
 
  done:
@@ -2007,7 +2010,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
         /* Temporary error - skip over this message for now and try again in 5 minutes */
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for uid %u (%s)",
                data->mboxname, data->imap_uid, error_message(r));
-        caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
+        caldav_alarm_bump_nextcheck(data, runtime + 300, error_message(r));
         return;
     }
 
@@ -2025,7 +2028,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
         syslog(LOG_ERR, "IOERROR: error reading mailbox %s uid %u (%s)",
                data->mboxname, data->imap_uid, error_message(r));
         /* XXX no index record? item deleted or transient error? */
-        caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
+        caldav_alarm_bump_nextcheck(data, runtime + 300, error_message(r));
         goto done;
     }
 
@@ -2047,7 +2050,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
 #ifdef WITH_JMAP
     case ALARM_SEND:
         if (record.internaldate > runtime || dryrun) {
-            caldav_alarm_bump_nextcheck(data, record.internaldate, 0, NULL);
+            caldav_alarm_bump_nextcheck(data, record.internaldate, NULL);
             goto done;
         }
         r = process_futurerelease(data, mailbox, &record, runtime);
