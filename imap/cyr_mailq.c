@@ -62,16 +62,145 @@ static void usage(void)
     exit(EX_USAGE);
 }
 
-void printone_json(time_t nextcheck, uint32_t num_retries,
-                   time_t last_run, const char *last_err,
-                   json_t *submission,
-                   void *rock)
+static void printone_calendar_json(const char *mboxname,
+                                   uint32_t imap_uid,
+                                   time_t nextcheck,
+                                   uint32_t num_rcpts,
+                                   uint32_t num_retries,
+                                   time_t last_run,
+                                   const char *last_err,
+                                   void *rock)
 {
     json_t *j;
     int *sep = (int *) rock;
     char timebuf[ISO8601_DATETIME_MAX + 1];
 
     j = json_object();
+    json_object_set_new(j, "type", json_string("calendar"));
+
+    if (nextcheck) {
+        memset(timebuf, 0, sizeof(timebuf));
+        time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
+        json_object_set_new(j, "nextcheck", json_string(timebuf));
+    }
+
+    json_object_set_new(j, "mboxname", json_string(mboxname));
+    json_object_set_new(j, "imap_uid", json_integer(imap_uid));
+    json_object_set_new(j, "num_rcpts", json_integer(num_rcpts));
+    json_object_set_new(j, "num_retries", json_integer(num_retries));
+    if (last_run) {
+        memset(timebuf, 0, sizeof(timebuf));
+        time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
+        json_object_set_new(j, "last_run", json_string(timebuf));
+    }
+    json_object_set_new(j, "last_err", json_string(last_err));
+
+    if (sep) {
+       if (*sep) printf("%c\n", *sep);
+        *sep = ',';
+    }
+
+    json_dumpf(j, stdout, 0);
+
+    json_decref(j);
+}
+
+static void printone_calendar_pretty(const char *mboxname,
+                                     uint32_t imap_uid,
+                                     time_t nextcheck,
+                                     uint32_t num_rcpts,
+                                     uint32_t num_retries,
+                                     time_t last_run,
+                                     const char *last_err,
+                                     void *rock __attribute__((unused)))
+{
+    char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
+
+    time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
+    printf("%s type=<calendar> ", timebuf);
+    printf("mboxname=<%s> uid=<%" PRIu32 "> ", mboxname, imap_uid);
+    printf("num_rcpts=<%" PRIu32 "> ", num_rcpts);
+    printf("num_retries=<%" PRIu32 "> ", num_retries);
+    memset(timebuf, 0, sizeof(timebuf));
+    time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
+    printf("last_run=<%s> last_err=<%s>\n", timebuf, last_err);
+}
+
+static void printone_snooze_json(const char *mboxname,
+                                 uint32_t imap_uid,
+                                 time_t nextcheck,
+                                 uint32_t num_rcpts,
+                                 uint32_t num_retries,
+                                 time_t last_run,
+                                 const char *last_err,
+                                 void *rock)
+{
+    json_t *j;
+    int *sep = (int *) rock;
+    char timebuf[ISO8601_DATETIME_MAX + 1];
+
+    j = json_object();
+    json_object_set_new(j, "type", json_string("snooze"));
+
+    if (nextcheck) {
+        memset(timebuf, 0, sizeof(timebuf));
+        time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
+        json_object_set_new(j, "nextcheck", json_string(timebuf));
+    }
+
+    json_object_set_new(j, "mboxname", json_string(mboxname));
+    json_object_set_new(j, "imap_uid", json_integer(imap_uid));
+    json_object_set_new(j, "num_rcpts", json_integer(num_rcpts));
+    json_object_set_new(j, "num_retries", json_integer(num_retries));
+    if (last_run) {
+        memset(timebuf, 0, sizeof(timebuf));
+        time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
+        json_object_set_new(j, "last_run", json_string(timebuf));
+    }
+    json_object_set_new(j, "last_err", json_string(last_err));
+
+    if (sep) {
+       if (*sep) printf("%c\n", *sep);
+        *sep = ',';
+    }
+
+    json_dumpf(j, stdout, 0);
+
+    json_decref(j);
+}
+
+static void printone_snooze_pretty(const char *mboxname,
+                                   uint32_t imap_uid,
+                                   time_t nextcheck,
+                                   uint32_t num_rcpts,
+                                   uint32_t num_retries,
+                                   time_t last_run,
+                                   const char *last_err,
+                                   void *rock __attribute__((unused)))
+{
+    char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
+
+    time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
+    printf("%s type=<snooze> ", timebuf);
+    printf("mboxname=<%s> uid=<%" PRIu32 "> ", mboxname, imap_uid);
+    printf("num_rcpts=<%" PRIu32 "> ", num_rcpts);
+    printf("num_retries=<%" PRIu32 "> ", num_retries);
+    memset(timebuf, 0, sizeof(timebuf));
+    time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
+    printf("last_run=<%s> last_err=<%s>\n", timebuf, last_err);
+}
+
+static void printone_send_json(time_t nextcheck, uint32_t num_retries,
+                               time_t last_run, const char *last_err,
+                               json_t *submission,
+                               void *rock)
+{
+    json_t *j;
+    int *sep = (int *) rock;
+    char timebuf[ISO8601_DATETIME_MAX + 1];
+
+    j = json_object();
+    json_object_set_new(j, "type", json_string("send"));
 
     if (nextcheck) {
         memset(timebuf, 0, sizeof(timebuf));
@@ -99,10 +228,10 @@ void printone_json(time_t nextcheck, uint32_t num_retries,
     json_decref(j);
 }
 
-void printone_pretty(time_t nextcheck, uint32_t num_retries,
-                     time_t last_run, const char *last_err,
-                     json_t *submission,
-                     void *rock __attribute__((unused)))
+static void printone_send_pretty(time_t nextcheck, uint32_t num_retries,
+                                 time_t last_run, const char *last_err,
+                                 json_t *submission,
+                                 void *rock __attribute__((unused)))
 {
     const char *identityId;
     json_t *envelope, *mailFrom, *rcptTo, *value;
@@ -117,7 +246,7 @@ void printone_pretty(time_t nextcheck, uint32_t num_retries,
 
     /* XXX make nextcheck display colour according to magnitude */
     time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
-    printf("%s userid=<%s> ", timebuf, identityId);
+    printf("%s userid=<%s> type=<send> ", timebuf, identityId);
     printf("from=<%s> ", json_string_value(json_object_get(mailFrom, "email")));
     json_array_foreach(rcptTo, i, value) {
         printf("to=<%s> ", json_string_value(json_object_get(value, "email")));
@@ -130,6 +259,70 @@ void printone_pretty(time_t nextcheck, uint32_t num_retries,
     }
 
     fputs("\n", stdout);
+}
+
+static void printone_unscheduled_json(const char *mboxname,
+                                      uint32_t imap_uid,
+                                      time_t nextcheck,
+                                      uint32_t num_rcpts,
+                                      uint32_t num_retries,
+                                      time_t last_run,
+                                      const char *last_err,
+                                      void *rock)
+{
+    json_t *j;
+    int *sep = (int *) rock;
+    char timebuf[ISO8601_DATETIME_MAX + 1];
+
+    j = json_object();
+    json_object_set_new(j, "type", json_string("unscheduled"));
+
+    if (nextcheck) {
+        memset(timebuf, 0, sizeof(timebuf));
+        time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
+        json_object_set_new(j, "nextcheck", json_string(timebuf));
+    }
+
+    json_object_set_new(j, "mboxname", json_string(mboxname));
+    json_object_set_new(j, "imap_uid", json_integer(imap_uid));
+    json_object_set_new(j, "num_rcpts", json_integer(num_rcpts));
+    json_object_set_new(j, "num_retries", json_integer(num_retries));
+    if (last_run) {
+        memset(timebuf, 0, sizeof(timebuf));
+        time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
+        json_object_set_new(j, "last_run", json_string(timebuf));
+    }
+    json_object_set_new(j, "last_err", json_string(last_err));
+
+    if (sep) {
+       if (*sep) printf("%c\n", *sep);
+        *sep = ',';
+    }
+
+    json_dumpf(j, stdout, 0);
+
+    json_decref(j);
+}
+
+static void printone_unscheduled_pretty(const char *mboxname,
+                                        uint32_t imap_uid,
+                                        time_t nextcheck,
+                                        uint32_t num_rcpts,
+                                        uint32_t num_retries,
+                                        time_t last_run,
+                                        const char *last_err,
+                                        void *rock __attribute__((unused)))
+{
+    char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
+
+    time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
+    printf("%s type=<unscheduled> ", timebuf);
+    printf("mboxname=<%s> uid=<%" PRIu32 "> ", mboxname, imap_uid);
+    printf("num_rcpts=<%" PRIu32 "> ", num_rcpts);
+    printf("num_retries=<%" PRIu32 "> ", num_retries);
+    memset(timebuf, 0, sizeof(timebuf));
+    time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
+    printf("last_run=<%s> last_err=<%s>\n", timebuf, last_err);
 }
 
 int main(int argc, char *argv[])
@@ -166,11 +359,21 @@ int main(int argc, char *argv[])
 
     if (want_json) {
         int sep = '[';
-        r = caldav_alarm_list_futurerelease(0, 0, printone_json, &sep);
+        r = caldav_alarm_list(0, 0,
+                              printone_calendar_json,
+                              printone_snooze_json,
+                              printone_send_json,
+                              printone_unscheduled_json,
+                              &sep);
         if (sep == ',') fputs("\n]\n", stdout);
     }
     else {
-        r = caldav_alarm_list_futurerelease(0, 0, printone_pretty, NULL);
+        r = caldav_alarm_list(0, 0,
+                              printone_calendar_pretty,
+                              printone_snooze_pretty,
+                              printone_send_pretty,
+                              printone_unscheduled_pretty,
+                              NULL);
     }
 
     if (r) {

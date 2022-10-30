@@ -2180,14 +2180,35 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
     return rc;
 }
 
-static void list_one_futurerelease(struct caldav_alarm_data *data,
-                                   void (*proc)(time_t nextcheck,
-                                                uint32_t num_retries,
-                                                time_t last_run,
-                                                const char *last_err,
-                                                json_t *submission,
-                                                void *rock),
-                                   void *rock)
+static void list_one_calendar(struct caldav_alarm_data *data,
+                              list_calendar_proc proc,
+                              void *rock)
+{
+    assert(data->type == ALARM_CALENDAR);
+
+    /* XXX what's useful here? */
+    proc(data->mboxname, data->imap_uid,
+         data->nextcheck, data->num_rcpts,
+         data->num_retries, data->last_run,
+         data->last_err, rock);
+}
+
+static void list_one_snooze(struct caldav_alarm_data *data,
+                            list_snooze_proc proc,
+                            void *rock)
+{
+    assert(data->type == ALARM_SNOOZE);
+
+    /* XXX what's useful here? */
+    proc(data->mboxname, data->imap_uid,
+         data->nextcheck, data->num_rcpts,
+         data->num_retries, data->last_run,
+         data->last_err, rock);
+}
+
+static void list_one_send(struct caldav_alarm_data *data,
+                          list_send_proc proc,
+                          void *rock)
 {
     struct mailbox *mailbox = NULL;
     struct index_record record = {0};
@@ -2257,16 +2278,27 @@ done:
     mailbox_close(&mailbox);
 }
 
-/* list futurereleases (via proc) before a given time */
-EXPORTED int caldav_alarm_list_futurerelease(time_t runtime,
-                                             int lookahead,
-                                             void (*proc)(time_t nextcheck,
-                                                          uint32_t num_retries,
-                                                          time_t last_run,
-                                                          const char *last_err,
-                                                          json_t *submission,
-                                                          void *rock),
-                                             void *rock)
+static void list_one_unscheduled(struct caldav_alarm_data *data,
+                                 list_unscheduled_proc proc,
+                                 void *rock)
+{
+    assert(data->type == ALARM_UNSCHEDULED);
+
+    /* XXX what's useful here? */
+    proc(data->mboxname, data->imap_uid,
+         data->nextcheck, data->num_rcpts,
+         data->num_retries, data->last_run,
+         data->last_err, rock);
+}
+
+/* list alarms (via callbacks) before a given time */
+EXPORTED int caldav_alarm_list(time_t runtime,
+                               int lookahead,
+                               list_calendar_proc calendar_proc,
+                               list_snooze_proc snooze_proc,
+                               list_send_proc send_proc,
+                               list_unscheduled_proc unscheduled_proc,
+                               void *rock)
 {
     int i, r;
 
@@ -2286,7 +2318,6 @@ EXPORTED int caldav_alarm_list_futurerelease(time_t runtime,
     sqldb_t *alarmdb = caldav_alarm_open();
     if (!alarmdb) return HTTP_SERVER_ERROR;
 
-    /* XXX select only the ALARM_SENDs? */
     r = sqldb_exec(alarmdb,
                    runtime ? CMD_SELECT_ALARMS_BEFORE : CMD_SELECT_ALARMS,
                    bval, &alarm_read_cb, &alarm_read_rock);
@@ -2297,14 +2328,30 @@ EXPORTED int caldav_alarm_list_futurerelease(time_t runtime,
     for (i = 0; i < alarm_read_rock.list.count; i++) {
         struct caldav_alarm_data *data = ptrarray_nth(&alarm_read_rock.list, i);
 
-        if (data->type != ALARM_SEND) continue;
-
         /* XXX do we need a namelock around users? in that case,
          * XXX sql results need to be ordered by mailbox to keep
          * XXX them together.  but otherwise, they could be
          * XXX sorted in some more display-friendly order...
          */
-        list_one_futurerelease(data, proc, rock);
+
+        switch (data->type) {
+        case ALARM_CALENDAR:
+            if (calendar_proc)
+                list_one_calendar(data, calendar_proc, rock);
+            break;
+        case ALARM_SNOOZE:
+            if (snooze_proc)
+                list_one_snooze(data, snooze_proc, rock);
+            break;
+        case ALARM_SEND:
+            if (send_proc)
+                list_one_send(data, send_proc, rock);
+            break;
+        case ALARM_UNSCHEDULED:
+            if (unscheduled_proc)
+                list_one_unscheduled(data, unscheduled_proc, rock);
+            break;
+        }
 
         caldav_alarm_fini(data);
         free(data);
