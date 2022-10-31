@@ -62,6 +62,19 @@ static void usage(void)
     exit(EX_USAGE);
 }
 
+static inline const char *format_localtime(time_t t, char *buf, size_t len)
+{
+    struct timeval tv = { t, 0 };
+
+    memset(buf, 0, len);
+    timeval_to_iso8601(&tv, timeval_s, buf, len);
+
+    buf[10] = ' '; /* replace T */
+    buf[19] = '\0'; /* drop tz */
+
+    return buf;
+}
+
 static void printone_calendar_json(const char *mboxname,
                                    uint32_t imap_uid,
                                    time_t nextcheck,
@@ -116,14 +129,13 @@ static void printone_calendar_pretty(const char *mboxname,
 {
     char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
 
-    time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
-    printf("%s type=<calendar> ", timebuf);
-    printf("mboxname=<%s> uid=<%" PRIu32 "> ", mboxname, imap_uid);
+    printf("%s ", format_localtime(nextcheck, timebuf, sizeof(timebuf)));
+    printf("type=<calendar> mboxname=<%s> ", mboxname);
+    printf("uid=<%" PRIu32 "> ", imap_uid);
     printf("num_rcpts=<%" PRIu32 "> ", num_rcpts);
     printf("num_retries=<%" PRIu32 "> ", num_retries);
-    memset(timebuf, 0, sizeof(timebuf));
-    time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
-    printf("last_run=<%s> last_err=<%s>\n", timebuf, last_err);
+    printf("last_run=<%s> ", format_localtime(last_run, timebuf, sizeof(timebuf)));
+    printf("last_err=<%s>\n", last_err);
 }
 
 static void printone_snooze_json(const char *mboxname,
@@ -180,14 +192,13 @@ static void printone_snooze_pretty(const char *mboxname,
 {
     char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
 
-    time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
-    printf("%s type=<snooze> ", timebuf);
-    printf("mboxname=<%s> uid=<%" PRIu32 "> ", mboxname, imap_uid);
+    printf("%s ", format_localtime(nextcheck, timebuf, sizeof(timebuf)));
+    printf("type=<snooze> mboxname=<%s> ", mboxname);
+    printf("uid=<%" PRIu32 "> ", imap_uid);
     printf("num_rcpts=<%" PRIu32 "> ", num_rcpts);
     printf("num_retries=<%" PRIu32 "> ", num_retries);
-    memset(timebuf, 0, sizeof(timebuf));
-    time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
-    printf("last_run=<%s> last_err=<%s>\n", timebuf, last_err);
+    printf("last_run=<%s> ", format_localtime(last_run, timebuf, sizeof(timebuf)));
+    printf("last_err=<%s>\n", last_err);
 }
 
 static void printone_send_json(time_t nextcheck, uint32_t num_retries,
@@ -245,17 +256,18 @@ static void printone_send_pretty(time_t nextcheck, uint32_t num_retries,
     rcptTo = json_object_get(envelope, "rcptTo");
 
     /* XXX make nextcheck display colour according to magnitude */
-    time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
-    printf("%s userid=<%s> type=<send> ", timebuf, identityId);
+    printf("%s userid=<%s> type=<send> ",
+           format_localtime(nextcheck, timebuf, sizeof(timebuf)),
+           identityId);
     printf("from=<%s> ", json_string_value(json_object_get(mailFrom, "email")));
     json_array_foreach(rcptTo, i, value) {
         printf("to=<%s> ", json_string_value(json_object_get(value, "email")));
     }
     if (last_err) {
-        memset(timebuf, 0, sizeof(timebuf));
-        time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
         printf("attempts=<%" PRIu32 "> error=<%s|%s> ",
-               num_retries, timebuf, last_err);
+               num_retries,
+               format_localtime(last_run, timebuf, sizeof(timebuf)),
+               last_err);
     }
 
     fputs("\n", stdout);
@@ -315,14 +327,13 @@ static void printone_unscheduled_pretty(const char *mboxname,
 {
     char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
 
-    time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
-    printf("%s type=<unscheduled> ", timebuf);
-    printf("mboxname=<%s> uid=<%" PRIu32 "> ", mboxname, imap_uid);
+    printf("%s ", format_localtime(nextcheck, timebuf, sizeof(timebuf)));
+    printf("type=<unscheduled> mboxname=<%s> ", mboxname);
+    printf("uid=<%" PRIu32 "> ", imap_uid);
     printf("num_rcpts=<%" PRIu32 "> ", num_rcpts);
     printf("num_retries=<%" PRIu32 "> ", num_retries);
-    memset(timebuf, 0, sizeof(timebuf));
-    time_to_iso8601(last_run, timebuf, sizeof(timebuf), 1);
-    printf("last_run=<%s> last_err=<%s>\n", timebuf, last_err);
+    printf("last_run=<%s> ", format_localtime(last_run, timebuf, sizeof(timebuf)));
+    printf("last_err=<%s>\n", last_err);
 }
 
 int main(int argc, char *argv[])
