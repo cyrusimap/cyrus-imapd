@@ -2197,13 +2197,22 @@ static void list_one_snooze(struct caldav_alarm_data *data,
                             list_snooze_proc proc,
                             void *rock)
 {
+    json_t *snoozed;
+    char *userid = NULL;
+
     assert(data->type == ALARM_SNOOZE);
 
-    /* XXX what's useful here? */
-    proc(data->mboxname, data->imap_uid,
-         data->nextcheck, data->num_rcpts,
-         data->num_retries, data->last_run,
-         data->last_err, rock);
+    snoozed = jmap_fetch_snoozed(data->mboxname, data->imap_uid);
+    if (!snoozed) return;
+
+    userid = mboxname_to_userid(data->mboxname);
+
+    proc(userid, data->nextcheck, data->num_retries,
+         data->last_run, data->last_err,
+         snoozed, rock);
+
+    free(userid);
+    json_decref(snoozed);
 }
 
 static void list_one_send(struct caldav_alarm_data *data,

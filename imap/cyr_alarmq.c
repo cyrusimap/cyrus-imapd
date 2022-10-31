@@ -201,13 +201,12 @@ static void printone_calendar_pretty(const char *mboxname,
     printf("last_err=<%s>\n", last_err);
 }
 
-static void printone_snooze_json(const char *mboxname,
-                                 uint32_t imap_uid,
+static void printone_snooze_json(const char *userid,
                                  time_t nextcheck,
-                                 uint32_t num_rcpts,
                                  uint32_t num_retries,
                                  time_t last_run,
                                  const char *last_err,
+                                 json_t *snoozed,
                                  void *rock)
 {
     json_t *j;
@@ -217,15 +216,14 @@ static void printone_snooze_json(const char *mboxname,
     j = json_object();
     json_object_set_new(j, "type", json_string("snooze"));
 
+    json_object_set_new(j, "userid", json_string(userid));
+
     if (nextcheck) {
         memset(timebuf, 0, sizeof(timebuf));
         time_to_iso8601(nextcheck, timebuf, sizeof(timebuf), 1);
         json_object_set_new(j, "nextcheck", json_string(timebuf));
     }
 
-    json_object_set_new(j, "mboxname", json_string(mboxname));
-    json_object_set_new(j, "imap_uid", json_integer(imap_uid));
-    json_object_set_new(j, "num_rcpts", json_integer(num_rcpts));
     json_object_set_new(j, "num_retries", json_integer(num_retries));
     if (last_run) {
         memset(timebuf, 0, sizeof(timebuf));
@@ -233,6 +231,8 @@ static void printone_snooze_json(const char *mboxname,
         json_object_set_new(j, "last_run", json_string(timebuf));
     }
     json_object_set_new(j, "last_err", json_string(last_err));
+
+    json_object_set(j, "snoozed", snoozed);
 
     if (sep) {
        if (*sep) printf("%c\n", *sep);
@@ -244,24 +244,24 @@ static void printone_snooze_json(const char *mboxname,
     json_decref(j);
 }
 
-static void printone_snooze_pretty(const char *mboxname,
-                                   uint32_t imap_uid,
+static void printone_snooze_pretty(const char *userid,
                                    time_t nextcheck,
-                                   uint32_t num_rcpts,
                                    uint32_t num_retries,
                                    time_t last_run,
                                    const char *last_err,
+                                   json_t *snoozed,
                                    void *rock __attribute__((unused)))
 {
     char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
 
     printf("%s ", format_localtime(nextcheck, timebuf, sizeof(timebuf)));
-    printf("type=<snooze> mboxname=<%s> ", mboxname);
-    printf("uid=<%" PRIu32 "> ", imap_uid);
-    printf("num_rcpts=<%" PRIu32 "> ", num_rcpts);
+    printf("userid=<%s> type=<snooze>", userid);
     printf("num_retries=<%" PRIu32 "> ", num_retries);
     printf("last_run=<%s> ", format_localtime(last_run, timebuf, sizeof(timebuf)));
     printf("last_err=<%s>\n", last_err);
+
+    /* XXX extract details from snoozed */
+    (void) snoozed;
 }
 
 static void printone_send_json(const char *userid,
