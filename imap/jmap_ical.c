@@ -2921,13 +2921,11 @@ static json_t *coordinates_from_ical(icalproperty *prop)
     buf_setcstr(&buf, "geo:");
 
     const char *p = semcol;
-    while (p > val + 1 && p[-1] == '0') p--; // omit trailing zeros
     buf_appendmap(&buf, val, p-val);
     buf_appendcstr(&buf, ",");
 
     val = semcol + 1;
     p = val + strlen(val);
-    while (p > val + 1 && p[-1] == '0') p--; // omit trailing zeros
     buf_appendmap(&buf, val, p-val);
 
     c = json_string(buf_cstring(&buf));
