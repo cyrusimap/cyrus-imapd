@@ -1,4 +1,4 @@
-/* cyr_mailq.c -- Program to display pending JMAP Scheduled Send mail
+/* cyr_alarmq.c -- Program to display pending calalarmd work
  *
  * Copyright (c) 1994-2022 Carnegie Mellon University.  All rights reserved.
  *
@@ -355,7 +355,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    cyrus_init(alt_config, "cyr_mailq", 0, 0);
+    cyrus_init(alt_config, "cyr_alarmq", 0, 0);
 
     if (want_json) {
         int sep = '[';
