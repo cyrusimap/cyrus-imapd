@@ -45,21 +45,84 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <errno.h>
 #include <getopt.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdint.h>
 #include <sysexits.h>
 #include <time.h>
 
+#include "lib/strhash.h"
 #include "lib/times.h"
+#include "lib/util.h"
 
 #include "imap/caldav_alarm.h"
 #include "imap/global.h"
 #include "imap/json_support.h"
+
+static int overdue_threshold = CALDAV_ALARM_LOOKAHEAD;
+static int want_color = -1;
 
 static void usage(void) __attribute__((noreturn));
 static void usage(void)
 {
     fprintf(stderr, "XXX someone better write a usage() for this!\n");
     exit(EX_USAGE);
+}
+
+/* XXX move to lib/util.c once the implementation stabilises */
+#define SGR_DONE (-1)
+#define COLOR_RED       (31)
+#define COLOR_GREEN     (32)
+#define COLOR_YELLOW    (33)
+static void _buf_appendsgr(struct buf *dst, ...)
+{
+    va_list ap;
+    int n, sep = 0;
+
+    buf_appendcstr(dst, "\033[");
+    va_start(ap, dst);
+    while ((n = va_arg(ap, int)) >= 0) {
+        if (sep) buf_putc(dst, sep);
+        buf_printf(dst, "%d", n);
+        sep = ';';
+    }
+    buf_putc(dst, 'm');
+}
+
+static void _buf_append_kv(struct buf *dst, int sep, int want_color,
+                           const char *key, const char *value)
+{
+    if (sep) buf_putc(dst, sep);
+    buf_appendcstr(dst, key);
+    buf_appendcstr(dst, "=<");
+    if (want_color) {
+        unsigned color = 17 + strhash(value) % 214; /* xterm-256 colour cube */
+        _buf_appendsgr(dst, 38, 5, color, SGR_DONE);
+        buf_appendcstr(dst, value);
+        _buf_appendsgr(dst, 0, SGR_DONE);
+    }
+    else {
+        buf_appendcstr(dst, value);
+    }
+    buf_appendcstr(dst, ">");
+}
+
+__attribute__((format(printf, 5, 6)))
+static void _buf_append_kvf(struct buf *dst, int sep, int want_color,
+                            const char *key, const char *valfmt,
+                            ...)
+{
+    va_list ap;
+    struct buf valbuf = BUF_INITIALIZER;
+
+    va_start(ap, valfmt);
+    buf_vprintf(&valbuf, valfmt, ap);
+
+    _buf_append_kv(dst, sep, want_color, key, buf_cstring(&valbuf));
+
+    buf_free(&valbuf);
 }
 
 static inline const char *format_localtime(time_t t, char *buf, size_t len)
@@ -247,7 +310,11 @@ static void printone_send_pretty(time_t nextcheck, uint32_t num_retries,
     const char *identityId;
     json_t *envelope, *mailFrom, *rcptTo, *value;
     char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
+    static struct buf buf = BUF_INITIALIZER;
     size_t i;
+    int sep = ' ';
+
+    buf_reset(&buf);
 
     identityId = json_string_value(json_object_get(submission, "identityId"));
 
@@ -255,22 +322,43 @@ static void printone_send_pretty(time_t nextcheck, uint32_t num_retries,
     mailFrom = json_object_get(envelope, "mailFrom");
     rcptTo = json_object_get(envelope, "rcptTo");
 
-    /* XXX make nextcheck display colour according to magnitude */
-    printf("%s userid=<%s> type=<send> ",
-           format_localtime(nextcheck, timebuf, sizeof(timebuf)),
-           identityId);
-    printf("from=<%s> ", json_string_value(json_object_get(mailFrom, "email")));
+    /* color nextcheck time according to whether and how overdue it is */
+    if (want_color) {
+        double diff = difftime(time(NULL), nextcheck);
+        int color = COLOR_GREEN;
+
+        if (diff > 0) color = COLOR_YELLOW;
+        if (diff > overdue_threshold) color = COLOR_RED;
+        _buf_appendsgr(&buf, color, SGR_DONE);
+    }
+    buf_printf(&buf, "%s",
+               format_localtime(nextcheck, timebuf, sizeof(timebuf)));
+    if (want_color) _buf_appendsgr(&buf, 0, SGR_DONE);
+
+    _buf_append_kv(&buf, sep, want_color, "userid", identityId);
+    _buf_append_kv(&buf, sep, 0, "type", "send");
+    _buf_append_kv(&buf, sep, 0, "from",
+                   json_string_value(json_object_get(mailFrom, "email")));
+
     json_array_foreach(rcptTo, i, value) {
-        printf("to=<%s> ", json_string_value(json_object_get(value, "email")));
+        _buf_append_kv(&buf, sep, 0, "to",
+                       json_string_value(json_object_get(value, "email")));
     }
     if (last_err) {
-        printf("attempts=<%" PRIu32 "> error=<%s|%s> ",
-               num_retries,
-               format_localtime(last_run, timebuf, sizeof(timebuf)),
-               last_err);
+        _buf_append_kvf(&buf, sep, 0, "attempts", "%" PRIu32, num_retries);
+        buf_printf(&buf, " error=<%s|",
+                   format_localtime(last_run, timebuf, sizeof(timebuf)));
+
+        /* error message in color */
+        if (want_color) _buf_appendsgr(&buf, COLOR_RED, SGR_DONE);
+        buf_printf(&buf, "%s", last_err);
+        if (want_color) _buf_appendsgr(&buf, 0, SGR_DONE);
+
+        buf_putc(&buf, '>');
     }
 
-    fputs("\n", stdout);
+    buf_putc(&buf, '\n');
+    fputs(buf_cstring(&buf), stdout);
 }
 
 static void printone_unscheduled_json(const char *mboxname,
@@ -336,6 +424,21 @@ static void printone_unscheduled_pretty(const char *mboxname,
     printf("last_err=<%s>\n", last_err);
 }
 
+static int parse_color_arg(const char *arg)
+{
+    switch (arg[0]) {
+    case 'y': /* yes */
+        return 1;
+    case 'n': /* no */
+        return 0;
+    case 'a': /* always, auto */
+        if (0 == strcmp(arg, "always")) return 1;
+        return -1;
+    default:
+        usage();
+    }
+}
+
 int main(int argc, char *argv[])
 {
     int opt, r;
@@ -345,8 +448,13 @@ int main(int argc, char *argv[])
     /* keep this in alphabetical order */
     static const char short_options[] = "C:j";
 
+    enum {
+        LONGOPT_COLOR = 1,
+    };
+
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
+        { "color", optional_argument, NULL, LONGOPT_COLOR },
         { "json", no_argument, NULL, 'j' },
         { 0, 0, 0, 0 },
     };
@@ -361,9 +469,18 @@ int main(int argc, char *argv[])
         case 'j':
             want_json = 1;
             break;
+        case LONGOPT_COLOR:
+            if (optarg) want_color = parse_color_arg(optarg);
+            else want_color = 1;
+            break;
         default:
             usage();
         }
+    }
+
+    if (want_color < 0) {
+        want_color = isatty(STDOUT_FILENO);
+        errno = 0;
     }
 
     cyrus_init(alt_config, "cyr_alarmq", 0, 0);
