@@ -16,6 +16,8 @@
 import sys
 import os
 
+import datetime
+
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -81,7 +83,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Cyrus IMAP'
-copyright = u'1993-2018, The Cyrus Team'
+copyright = u'1993–%s, The Cyrus Team' % datetime.date.today().year
 
 
 # The version info for the project you're documenting, acts as replacement for
