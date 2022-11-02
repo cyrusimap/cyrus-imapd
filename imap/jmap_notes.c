@@ -978,7 +978,7 @@ static int change_cmp(const void **a, const void **b)
 static int jmap_note_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     struct mailbox *mbox = NULL;
     mbentry_t *mbentry = NULL;
     int userflag;

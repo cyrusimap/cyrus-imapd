@@ -4301,7 +4301,7 @@ done:
 static int jmap_mailbox_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     json_t *err = NULL;
 
     /* Parse request */

@@ -1099,7 +1099,7 @@ done:
 static int jmap_calendar_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     json_t *err = NULL;
     int r = 0;
 
@@ -6348,7 +6348,7 @@ done:
 static int jmap_calendarevent_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     json_t *err = NULL;
     struct caldav_db *db;
     struct geteventchanges_rock rock = {
@@ -8555,7 +8555,7 @@ done:
 static int jmap_principal_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     json_t *err = NULL;
 
     jmap_changes_parse(req, &parser, 0, NULL, NULL, &changes, &err);
@@ -10135,7 +10135,7 @@ done:
 static int jmap_sharenotification_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     mbentry_t *notifmb = NULL;
     json_t *err = NULL;
 
@@ -10908,7 +10908,7 @@ done:
 static int jmap_calendareventnotification_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     json_t *err = NULL;
 
     jmap_changes_parse(req, &parser, req->counters.jmapnotificationdeletedmodseq,
@@ -11141,7 +11141,7 @@ done:
 static int jmap_participantidentity_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     json_t *err = NULL;
 
     jmap_changes_parse(req, &parser, req->counters.caldavfoldersdeletedmodseq,
