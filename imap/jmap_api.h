@@ -421,6 +421,8 @@ struct jmap_changes {
     json_t *destroyed;
 };
 
+#define JMAP_CHANGES_INITIALIZER {0}
+
 extern void jmap_changes_parse(jmap_req_t *req, struct jmap_parser *parser,
                                modseq_t minmodseq,
                                jmap_args_parse_cb args_parse, void *args_rock,

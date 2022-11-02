@@ -779,7 +779,7 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     }
 
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     json_t *err = NULL;
     struct carddav_db *db = NULL;
     mbentry_t *mbentry = NULL;

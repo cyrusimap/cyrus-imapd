@@ -5316,7 +5316,7 @@ done:
 static int jmap_email_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
 
     /* Parse request */
     json_t *err = NULL;
@@ -5433,7 +5433,7 @@ done:
 static int jmap_thread_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
 
     /* Parse request */
     json_t *err = NULL;
