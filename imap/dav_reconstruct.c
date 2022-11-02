@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     const char *audit_tool = NULL;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "C:A:a";
+    static const char short_options[] = "C:A:a";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */

@@ -296,7 +296,7 @@ int main(int argc, char *argv[])
     unsigned nuids = 0;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "C:adf:lt:uv";
+    static const char short_options[] = "C:adf:lt:uv";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */

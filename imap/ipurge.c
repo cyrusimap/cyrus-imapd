@@ -106,7 +106,7 @@ int main (int argc, char *argv[]) {
     int r, opt;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "C:MXb:d:fhik:m:nosvx";
+    static const char short_options[] = "C:MXb:d:fhik:m:nosvx";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */

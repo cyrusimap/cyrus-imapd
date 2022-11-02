@@ -767,7 +767,7 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
     int opt;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "A:C:D:E:X:achp:tu:vx";
+    static const char short_options[] = "A:C:D:E:X:achp:tu:vx";
 
     static const struct option long_options[] = {
         { "archive-duration", required_argument, NULL, 'A' },

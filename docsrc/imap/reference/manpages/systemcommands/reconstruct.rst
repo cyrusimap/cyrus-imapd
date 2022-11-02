@@ -65,17 +65,17 @@ Options
 
 .. program:: reconstruct
 
-.. option:: -C  config-file
+.. option:: -C config-file
 
     |cli-dash-c-text|
 
-.. option:: -p  partition
+.. option:: -p partition, --partition=partition
 
     Search for the listed (non-existant) mailboxes on the indicated
     *partition*. Create the mailboxes in the database in addition to
     reconstructing them. (not compatible with the use of wildcards)
 
-.. option:: -x
+.. option:: -x, --ignore-disk-metadata
 
     When processing a mailbox which is not in the mailbox list (e.g.
     via the **-p** or **-f** options), do not import the metadata from
@@ -83,52 +83,52 @@ Options
     least the mailbox's seen state unique identifier, user flags, and
     ACL).
 
-.. option:: -r
+.. option:: -r, --recursive
 
     Recursively reconstruct all sub-mailboxes of the mailboxes or
     mailbox prefixes given as arguments.
 
-.. option:: -f
+.. option:: -f, --scan-filesystem
 
     Examine the filesystem underneath mailbox, adding all directories
     with a ``cyrus.header`` found there as new mailboxes.  Useful for
     restoring mailboxes from backups.
 
-.. option:: -s
+.. option:: -s, --no-stat
 
     Don't stat underlying files.  This makes reconstruct run faster, at
     the expense of not noticing some issues (like zero byte files or
     size mismatches).  "**reconstruct -s**" should be quite fast.
 
-.. option:: -q
+.. option:: -q, --quiet
 
     Emit less verbose information to syslog.
 
-.. option:: -n
+.. option:: -n, --dry-run
 
     Don't make any changes.  Problems are reported, but not fixed.
 
-.. option:: -G
+.. option:: -G, --force-reparse
 
     Force re-parsing of the underlying message (checks GUID
     correctness). Reconstruct with -G should fix all possible
     individual message issues, including corrupted data files.
 
-.. option:: -I
+.. option:: -I, --update-uniqueids
 
     If two mailboxes exist with the same UNIQUEID and reconstruct visits
     both of them, -I will cause the second mailbox to have a new UNIQUEID
     created for it.  If you don't specify -I, you will just get a syslog
     entry telling you of the clash.
 
-.. option:: -R
+.. option:: -R, --guid-mismatch-keep
 
     Perform a UID upgrade operation on GUID mismatch files.  Use this
     option if you think your index is corrupted rather than your
     message files, or if all backup attempts have failed and you're
     happy to be served the missing files.
 
-.. option:: -U
+.. option:: -U, --guid-mismatch-discard
 
     Use this option if you have corrupt message files in your spool and
     have been unable to restore them from backup.  This will make the
@@ -138,33 +138,34 @@ Options
     this deletes corrupt message files for ever - so make sure you've
     exhausted other options first!
 
-.. option:: -o
+.. option:: -o, --ignore-odd-files
 
-    Ignore odd files in your mailbox disk directories.  Probably useful
-    if you are using some tool which adds additional tracking files.
+    Ignore odd files in your mailbox disk directories, instead of
+    complaining about them.  Probably useful if you are using some
+    tool which adds additional tracking files.
 
-.. option:: -O
+.. option:: -O, --delete-odd-files
 
     Delete odd files.  This is the opposite of **-o**.
 
-.. option:: -M
+.. option:: -M, --prefer-mboxlist
 
     Prefer mailboxes.db over cyrus.header - will rewrite ACL or
     uniqueid from the mailboxes.db into the header file rather than the
     other way around.  |v3-new-feature|
 
-.. option:: -V version
+.. option:: -V version, --set-version=version
 
     Change the ``cyrus.index`` minor version to a specific *version*.
     This can be useful for upgrades or downgrades. Use a magical
     version of *max* to upgrade to the latest available database format
     version.
 
-.. option:: -u
+.. option:: -u, --userids
 
-    Instead of mailbox prefixes, give usernames on the command line
+    Instead of mailbox prefixes, give userids on the command line
 
-.. option:: -P
+.. option:: -P, --header-paths
 
     Instead of mailbox prefixes, give paths to cyrus.header files on
     the command line.  The paths can be mailbox directories, or

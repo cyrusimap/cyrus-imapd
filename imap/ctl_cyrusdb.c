@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -296,8 +297,7 @@ static void check_convert(struct cyrusdb *db, const char *fname)
 
 int main(int argc, char *argv[])
 {
-    extern char *optarg;
-    int opt, r, r2;
+    int opt, r = 0, r2 = 0;
     char *alt_config = NULL;
     int reserve_flag = 1;
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
@@ -306,9 +306,21 @@ int main(int argc, char *argv[])
     char *msg = "";
     int i, rotated = 0;
 
-    r = r2 = 0;
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:crx";
 
-    while ((opt = getopt(argc, argv, "C:rxc")) != EOF) {
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "checkpoint", no_argument, NULL, 'c' },
+        { "recover", no_argument, NULL, 'r' },
+        { "no-cleanup", no_argument, NULL, 'x' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

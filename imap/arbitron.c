@@ -118,7 +118,7 @@ int main(int argc, char **argv)
     time_t now = time(0);
 
     /* keep these in alphabetical order */
-    static const char *const short_options = "C:D:d:lop:u";
+    static const char short_options[] = "C:D:d:lop:u";
 
     static const struct option long_options[] = {
         /* n.b. no long form for -C option */

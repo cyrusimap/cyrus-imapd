@@ -267,7 +267,7 @@ int main(int argc, char *argv[])
     int y2k_compliant_date_format = 0;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "C:a:f:np:s:w:y";
+    static const char short_options[] = "C:a:f:np:s:w:y";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */

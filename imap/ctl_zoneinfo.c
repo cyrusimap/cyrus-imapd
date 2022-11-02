@@ -90,7 +90,7 @@ int main(int argc, char **argv)
     enum { REBUILD, WINZONES, NONE } op = NONE;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "C:r:vw:";
+    static const char short_options[] = "C:r:vw:";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */

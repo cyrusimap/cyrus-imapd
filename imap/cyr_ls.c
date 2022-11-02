@@ -349,7 +349,7 @@ int main(int argc, char **argv)
     int is_path = 0;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "17C:Rilmp";
+    static const char short_options[] = "17C:Rilmp";
 
     static const struct option long_options[] = {
         { "one-per-line", no_argument, NULL, '1' },

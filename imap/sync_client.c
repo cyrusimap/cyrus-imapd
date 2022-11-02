@@ -469,7 +469,7 @@ int main(int argc, char **argv)
     setbuf(stdout, NULL);
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "1AC:F:LNORS:ad:f:lmn:op:rst:uvw:z";
+    static const char short_options[] = "1AC:F:LNORS:ad:f:lmn:op:rst:uvw:z";
 
     static const struct option long_options[] = {
         { "rolling-once", no_argument, NULL, '1' },

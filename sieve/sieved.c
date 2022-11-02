@@ -108,7 +108,7 @@ int main(int argc, char * argv[])
     unsigned long len;
 
     /* keep this in alphabetical order */
-    static const char *const short_options = "s";
+    static const char short_options[] = "s";
 
     static const struct option long_options[] = {
         { "as-sieve", no_argument, NULL, 's' },
