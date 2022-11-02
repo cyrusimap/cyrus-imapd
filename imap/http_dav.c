@@ -7653,6 +7653,11 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
 
     /* Open the DAV DB corresponding to the mailbox */
     fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
+    if (!fctx->davdb) {
+        fctx->txn->error.desc = "Can't open database";
+        ret = HTTP_SERVER_ERROR;
+        goto done;
+    }
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
