@@ -1,0 +1,13 @@
+Description:
+
+Adds support for IMAP Multimailbox Search (RFC 7377).
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None

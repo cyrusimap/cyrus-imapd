@@ -576,6 +576,131 @@ static int get_search_date(struct protstream *pin, time_t *start, time_t *end)
 }
 
 /*
+ * Parse a list of mailboxes
+ */
+EXPORTED int get_search_source_mboxes(struct protstream *pin,
+                                      struct protstream *pout,
+                                      struct searchargs *searchargs,
+                                      strarray_t *mboxes)
+{
+    int c, multi = 1;
+    char *intname;
+    struct buf extname = BUF_INITIALIZER;
+
+    c = prot_getc(pin);
+    if (c != '(') {
+        prot_ungetc(c, pin);
+        multi = 0;
+    }
+
+    do {
+        c = getastring(pin, pout, &extname);
+        if (!buf_len(&extname)) goto bad;
+
+        intname = mboxname_from_external(buf_cstring(&extname),
+                                         searchargs->namespace,
+                                         searchargs->userid);
+        strarray_appendm(mboxes, intname);
+
+        if (!multi) goto done;
+
+    } while (c == ' ');
+
+    if (c != ')') {
+        prot_printf(pout,
+                    "%s BAD Missing close parenthesis in Search\r\n",
+                    searchargs->tag);
+        goto bad;
+    }
+
+    c = prot_getc(pin);
+
+  done:
+    buf_free(&extname);
+    return c;
+
+  bad:
+    buf_free(&extname);
+    if (c != EOF) prot_ungetc(c, pin);
+    return EOF;
+}
+
+EXPORTED int get_search_source_opts(struct protstream *pin,
+                                    struct protstream *pout,
+                                    struct searchargs *searchargs)
+{
+    int c;
+    static struct buf opt;
+
+    /* Client specified source opts, so clear default of "selected" */
+    searchargs->filter = 0;
+
+    c = prot_getc(pin);
+    if (c != '(') {
+        prot_printf(pout,
+                    "%s BAD Missing source options in Search\r\n",
+                    searchargs->tag);
+        goto bad;
+    }
+
+    do {
+        c = getword(pin, &opt);
+        if (!opt.s[0]) break;
+
+        lcase(opt.s);
+        if (!strcmp(opt.s, "selected")) {
+            searchargs->filter |= SEARCH_SOURCE_SELECTED;
+        }
+        else if (!strcmp(opt.s, "inboxes")) {
+            searchargs->filter |= SEARCH_SOURCE_INBOXES;
+        }
+        else if (!strcmp(opt.s, "personal")) {
+            searchargs->filter |= SEARCH_SOURCE_PERSONAL;
+        }
+        else if (!strcmp(opt.s, "subscribed")) {
+            searchargs->filter |= SEARCH_SOURCE_SUBSCRIBED;
+        }
+        else if (!strcmp(opt.s, "subtree")) {
+            searchargs->filter |= SEARCH_SOURCE_SUBTREE;
+            c = get_search_source_mboxes(pin, pout,
+                                         searchargs, &searchargs->subtree);
+        }
+        else if (!strcmp(opt.s, "subtree-one")) {
+            searchargs->filter |= SEARCH_SOURCE_SUBTREE_ONE;
+            c = get_search_source_mboxes(pin, pout,
+                                         searchargs, &searchargs->subtree_one);
+        }
+        else if (!strcmp(opt.s, "mailboxes")) {
+            searchargs->filter |= SEARCH_SOURCE_MAILBOXES;
+            c = get_search_source_mboxes(pin, pout,
+                                         searchargs, &searchargs->mailboxes);
+        }
+        else {
+            prot_printf(pout,
+                        "%s BAD Invalid Search source option %s\r\n",
+                        searchargs->tag, opt.s);
+            goto bad;
+        }
+
+    } while (c == ' ');
+
+    if (c != ')') {
+        prot_printf(pout,
+                    "%s BAD Missing close parenthesis in Search\r\n",
+                    searchargs->tag);
+        goto bad;
+    }
+
+    c = prot_getc(pin);
+
+    return c;
+
+bad:
+    if (c != EOF) prot_ungetc(c, pin);
+    return EOF;
+}
+
+/*
  * Parse search return options
  */
 EXPORTED int get_search_return_opts(struct protstream *pin,
@@ -1042,6 +1167,16 @@ static int get_search_criterion(struct protstream *pin,
         else goto badcri;
         break;
 
+    case 'i':
+        if ((base->state & GETSEARCH_SOURCE) &&
+                 !strcmp(criteria.s, "in")) {           /* RFC 7377 */
+            c = get_search_source_opts(pin, pout, base);
+            if (c == EOF) return EOF;
+            keep_charset = 1;
+        }
+        else goto badcri;
+        break;
+
     case 'k':
         if (!strcmp(criteria.s, "keyword")) {           /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1372,7 +1507,10 @@ static int get_search_criterion(struct protstream *pin,
 
     if (!keep_charset)
         base->state &= ~GETSEARCH_CHARSET_KEYWORD;
-    base->state &= ~GETSEARCH_RETURN;
+    if (base->state & GETSEARCH_SOURCE)
+        base->state &= ~GETSEARCH_SOURCE;
+    else
+        base->state &= ~GETSEARCH_RETURN;
 
     return c;
 

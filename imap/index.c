@@ -356,7 +356,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     index_refresh_locked(state);
 
     /* have to get the vanished list while we're still locked */
-    if (init)
+    if (init && init->select)
         init->vanishedlist = index_vanished(state, &init->vanished);
 
     index_unlock(state);
@@ -1913,7 +1913,22 @@ static void begin_esearch_response(struct index_state *state,
      */
     prot_printf(state->out, "* ESEARCH");
     if (searchargs->tag) {
-        prot_printf(state->out, " (TAG \"%s\")", searchargs->tag);
+        prot_printf(state->out, " (TAG \"%s\"", searchargs->tag);
+
+        if (searchargs->filter) {
+            /* RFC 7377: 2.1
+             * Each ESEARCH response MUST contain the MAILBOX, TAG,
+             * and UIDVALIDITY correlators. */
+            char *extname = mboxname_to_external(index_mboxname(state),
+                                                 searchargs->namespace,
+                                                 searchargs->userid);
+            prot_printf(state->out, " MAILBOX \"%s\" UIDVALIDITY %d",
+                        
+                        extname, mailbox_uidvalidity(state->mailbox));
+            free(extname);
+        }
+
+        prot_putc(')', state->out);
     }
     /* RFC 4731: 3.1
      * An extended UID SEARCH command MUST cause an ESEARCH response with
@@ -1973,7 +1988,7 @@ EXPORTED int index_search(struct index_state *state,
     int r;
 
     /* update the index */
-    if (index_check(state, 0, 0))
+    if (!searchargs->filter && index_check(state, 0, 0))
         return 0;
 
     highestmodseq = needs_modseq(searchargs, NULL);
@@ -1994,6 +2009,14 @@ EXPORTED int index_search(struct index_state *state,
         nmsg = 0;
 
     if (searchargs->returnopts) {
+        if (searchargs->filter && !nmsg) {
+            /* RFC 7377: 2.1
+             * An ESEARCH response MUST NOT be returned for
+             * mailboxes that contain no matching messages.
+             */
+            goto out;
+        }
+
         begin_esearch_response(state, searchargs, usinguid, folder, nmsg);
 
         if (nmsg) {
@@ -8190,6 +8213,14 @@ EXPORTED struct searchargs *new_searchargs(const char *tag, int state,
     sa->authstate = authstate;
     sa->isadmin = isadmin;
 
+    if (state & GETSEARCH_SOURCE) {
+        /* RFC 7377: 2.2
+         * If the source options are not present, the value "selected" is
+         * assumed -- that is, only the currently selected mailbox is searched.
+         */
+        sa->filter = SEARCH_SOURCE_SELECTED;
+    }
+
     return sa;
 }
 
@@ -8202,6 +8233,9 @@ EXPORTED void freesearchargs(struct searchargs *s)
 
     charset_free(&s->charset);
     search_expr_free(s->root);
+    strarray_fini(&s->subtree);
+    strarray_fini(&s->subtree_one);
+    strarray_fini(&s->mailboxes);
     free(s);
 }
 

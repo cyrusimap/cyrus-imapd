@@ -339,7 +339,7 @@ static struct capa_struct base_capabilities[] = {
     /*METADATA-SERVER   RFC 5464.  Sending METADATA implies METADATA-SERVER */
     { "MOVE",                  2 }, /* RFC 6851 */
     { "MULTIAPPEND",           2 }, /* RFC 3502 */
-    /* MULTISEARCH      RFC 7377 is not implemented */
+    { "MULTISEARCH",           2 }, /* RFC 7377 */
     { "NAMESPACE",             2 }, /* RFC 2342 */
     /* NOTIFY           RFC 5465 is not implemented */
     { "OBJECTID",              2 }, /* RFC 8474 */
@@ -410,7 +410,7 @@ static int parse_fetch_args(const char *tag, const char *cmd,
                             struct fetchargs *fa);
 static void cmd_fetch(char *tag, char *sequence, int usinguid);
 static void cmd_store(char *tag, char *sequence, int usinguid);
-static void cmd_search(char *tag, int usinguid);
+static void cmd_search(char *tag, char *cmd);
 static void cmd_sort(char *tag, int usinguid);
 static void cmd_thread(char *tag, int usinguid);
 static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove);
@@ -1530,6 +1530,13 @@ static void cmdloop(void)
 
                 cmd_enable(tag.s);
             }
+            else if (!strcmp(cmd.s, "Esearch")) {
+                if (c != ' ') goto missingargs;
+
+                cmd_search(tag.s, cmd.s);
+
+                prometheus_increment(CYRUS_IMAP_ESEARCH_TOTAL);
+            }
             else if (!strcmp(cmd.s, "Expunge")) {
                 if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
@@ -1976,11 +1983,10 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Search")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
-                usinguid = 0;
                 if (c != ' ') goto missingargs;
             search:
 
-                cmd_search(tag.s, usinguid);
+                cmd_search(tag.s, cmd.s);
 
                 prometheus_increment(CYRUS_IMAP_SEARCH_TOTAL);
             }
@@ -6051,18 +6057,78 @@ notflagsdammit:
     free(modified);
 }
 
-static void cmd_search(char *tag, int usinguid)
+struct multisearch_rock {
+    struct searchargs *args;
+    search_expr_t *expr;  // pristine copy
+    hash_table mailboxes; // for duplicate suppression
+    unsigned filter;
+    int root_depth;       // for subtree-one
+    int *n;
+    struct index_init init;
+};
+
+static int multisearch_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct multisearch_rock *mrock = (struct multisearch_rock *) rock;
+    struct index_state *state = NULL;
+    int r;
+
+    /* Skip non-email mailboxes and avoid duplicates */
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
+        hash_lookup(mbentry->name, &mrock->mailboxes))
+        return 0;
+
+    switch (mrock->filter) {
+    case SEARCH_SOURCE_INBOXES:
+        /* Only allow user's INBOX or those postable by anonymous */
+        if (!mboxname_isusermailbox(mbentry->name, /*isinbox*/1) &&
+            !(cyrus_acl_myrights(NULL, mbentry->acl) & ACL_POST))
+            return 0;
+        break;
+
+    case SEARCH_SOURCE_SUBTREE_ONE: {
+        /* Only allow parent and children - no other ancestors */
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        int depth = strarray_size(mbname_boxes(mbname));
+        mbname_free(&mbname);
+
+        if (depth > mrock->root_depth + 1) return 0;
+        break;
+    }
+    }
+
+    if (imapd_index && !strcmp(mbentry->name, index_mboxname(imapd_index))) {
+        /* Mailbox is already selected - use current index state */
+        state = imapd_index;
+    }
+    else if ((r = index_open(mbentry->name, &mrock->init, &state))) {
+        return r;
+    }
+
+    /* Use a fresh search_expr_t for each mailbox */
+    if (mrock->args->root) search_expr_free(mrock->args->root);
+    mrock->args->root = search_expr_duplicate(mrock->expr);
+
+    *mrock->n += index_search(state, mrock->args, /*usinguid*/1);
+    if (state != imapd_index) index_close(&state);
+
+    /* Keep track of each mailbox we search */
+    hash_insert(mbentry->name, (void *) 1, &mrock->mailboxes);
+
+    return 0;
+}
+
+static void cmd_search(char *tag, char *cmd)
 {
     int c;
     struct searchargs *searchargs;
     clock_t start = clock();
     char mytime[100];
-    int n;
+    int usinguid = 0, n = 0;
+    int state = GETSEARCH_CHARSET_KEYWORD|GETSEARCH_RETURN;
 
     if (backend_current) {
         /* remote mailbox */
-        const char *cmd = usinguid ? "UID Search" : "Search";
-
         prot_printf(backend_current->out, "%s %s ", tag, cmd);
         if (!pipe_command(backend_current, 65536)) {
             pipe_including_tag(backend_current, tag, 0);
@@ -6070,8 +6136,19 @@ static void cmd_search(char *tag, int usinguid)
         return;
     }
 
+    switch (cmd[0]) {
+    case 'E':  // Esearch (multisearch)
+        state |= GETSEARCH_SOURCE;
+
+        GCC_FALLTHROUGH
+
+    case 'U':  // Uid Search
+        usinguid = 1;
+        break;
+    }
+
     /* local mailbox */
-    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_KEYWORD|GETSEARCH_RETURN,
+    searchargs = new_searchargs(tag, state,
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
 
@@ -6114,21 +6191,121 @@ static void cmd_search(char *tag, int usinguid)
     if (searchargs->charset == CHARSET_UNKNOWN_CHARSET) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag,
                error_message(IMAP_UNRECOGNIZED_CHARSET));
+        goto done;
+    }
+
+    if (searchargs->filter) {
+        /* Multisearch */
+        struct multisearch_rock mrock = {
+            searchargs, search_expr_duplicate(searchargs->root),
+            HASH_TABLE_INITIALIZER, 0, 0, &n,
+            { .userid       = imapd_userid,
+              .authstate    = imapd_authstate,
+              .out          = imapd_out,
+              .examine_mode = 1
+            }
+        };
+
+        construct_hash_table(&mrock.mailboxes, 100, 0);  // arbitrary size
+
+        if (!searchargs->returnopts) {
+            /* RFC 7377: 2.1
+             * Presence of a source option in the absence of a result option
+             * implies the "ALL" result option.
+             */
+            searchargs->returnopts = SEARCH_RETURN_ALL;
+        }
+
+        /* Cycle through each of the possible source filters */
+        for (mrock.filter = SEARCH_SOURCE_SELECTED;
+             mrock.filter <= SEARCH_SOURCE_MAILBOXES; mrock.filter <<= 1) {
+
+            if (!(searchargs->filter & mrock.filter)) continue;
+
+            switch (mrock.filter) {
+            case SEARCH_SOURCE_SELECTED:
+                if (!imapd_index) {
+                    prot_printf(imapd_out,
+                                "%s BAD Please select a mailbox first\r\n", tag);
+                    goto done;
+                }
+
+                if (!index_check(imapd_index, 0, 0)) {
+                    n += index_search(imapd_index, searchargs, /* usinguid */1);
+
+                    hash_insert(index_mboxname(imapd_index),
+                                (void *) 1, &mrock.mailboxes);
+                }
+                break;
+
+            case SEARCH_SOURCE_PERSONAL:
+            case SEARCH_SOURCE_INBOXES:
+                mboxlist_usermboxtree(searchargs->userid, searchargs->authstate,
+                                      multisearch_cb, &mrock, 0);
+                break;
+
+            case SEARCH_SOURCE_SUBSCRIBED:
+                mboxlist_usersubs(searchargs->userid, multisearch_cb, &mrock, 0);
+                break;
+
+            default: {
+                strarray_t *mailboxes = NULL;
+                unsigned flags = 0;
+                int i;
+
+                switch (mrock.filter) {
+                case SEARCH_SOURCE_SUBTREE:
+                    mailboxes = &searchargs->subtree;
+                    break;
+
+                case SEARCH_SOURCE_SUBTREE_ONE:
+                    mailboxes = &searchargs->subtree_one;
+                    break;
+
+                case SEARCH_SOURCE_MAILBOXES:
+                    /* Just the mailbox - no children */
+                    flags = MBOXTREE_SKIP_CHILDREN;
+                    mailboxes = &searchargs->mailboxes;
+                    break;
+                }
+                
+                /* Cycle through each mailbox [tree] */
+                for (i = 0; i < strarray_size(mailboxes); i++) {
+                    const char *intname = strarray_nth(mailboxes, i);
+
+                    if (mrock.filter == SEARCH_SOURCE_SUBTREE_ONE) {
+                        /* Calculate the depth of the "root" mailbox */
+                        mbname_t *mbname = mbname_from_intname(intname);
+                        mrock.root_depth = strarray_size(mbname_boxes(mbname));
+                        mbname_free(&mbname);
+                    }
+
+                    mboxlist_mboxtree(intname, multisearch_cb, &mrock, flags);
+                }
+                break;
+            }
+            }
+        }
+
+        search_expr_free(mrock.expr);
+        free_hash_table(&mrock.mailboxes, NULL);
     }
     else {
         n = index_search(imapd_index, searchargs, usinguid);
-        int r = cmd_cancelled(/*insearch*/1);
-        if (!r) {
-            snprintf(mytime, sizeof(mytime), "%2.3f",
-                    (clock() - start) / (double) CLOCKS_PER_SEC);
-            prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
-                        error_message(IMAP_OK_COMPLETED), n, mytime);
-        }
-        else {
-            prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-        }
     }
 
+    int r = cmd_cancelled(/*insearch*/1);
+    if (!r) {
+        snprintf(mytime, sizeof(mytime), "%2.3f",
+                 (clock() - start) / (double) CLOCKS_PER_SEC);
+        prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
+                    error_message(IMAP_OK_COMPLETED), n, mytime);
+    }
+    else {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+
+  done:
     freesearchargs(searchargs);
 }
 

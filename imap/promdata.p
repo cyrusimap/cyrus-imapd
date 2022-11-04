@@ -55,6 +55,7 @@ metric counter cyrus_imap_starttls_total                The total number of IMAP
 metric counter cyrus_imap_store_total                   The total number of IMAP STOREs
 metric counter cyrus_imap_select_total                  The total number of IMAP SELECTs
 metric counter cyrus_imap_search_total                  The total number of IMAP SEARCHs
+metric counter cyrus_imap_esearch_total                 The total number of IMAP ESEARCHs
 metric counter cyrus_imap_subscribe_total               The total number of IMAP SUBSCRIBEs
 metric counter cyrus_imap_setacl_total                  The total number of IMAP SETACLs
 metric counter cyrus_imap_setannotation_total           The total number of IMAP SETANNOTATIONs
