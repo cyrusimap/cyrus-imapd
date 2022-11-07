@@ -61,6 +61,7 @@ sub new
     $config->set(httpmodules => 'caldav');
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
+    $config->set(calendar_minimum_alarm_interval => '61s');
     return $class->SUPER::new({
         config => $config,
         adminstore => 1,
@@ -3023,9 +3024,10 @@ sub test_disable_high_freq
 
     # create hourly, minutely and secondly occurring events
     for my $freq (qw(HOURLY MINUTELY SECONDLY)) {
-        my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9-$freq";
-        my $href = "$CalendarId/$uuid.ics";
-        my $card = <<EOF;
+        for (my $int = 1; $int < 90; $int += 30) {
+            my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9-$freq-$int";
+            my $href = "$CalendarId/$uuid.ics";
+            my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -3034,9 +3036,9 @@ BEGIN:VEVENT
 CREATED:20150806T234327Z
 UID:$uuid
 TRANSP:OPAQUE
-SUMMARY:$freq
+SUMMARY:$freq-$int
 DTSTART:$start
-RRULE:FREQ=$freq
+RRULE:FREQ=$freq;INTERVAL=$int
 DTSTAMP:20150806T234327Z
 SEQUENCE:0
 BEGIN:VALARM
@@ -3049,7 +3051,8 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-        $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+            $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+        }
     }
 
     # clean notification cache
@@ -3057,10 +3060,13 @@ EOF
 
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
-    # assert that only the HOURLY event creates an alarm. If SECONDLY would
-    # not be disabled, this test would take a couple of seconds and the
-    # notifications would include the SECONDLY and MINUTELY alarms, too.
-    $self->assert_alarms({summary => 'HOURLY', start => $start });
+    # assert that only the alarms that fire >= 61s intervals are created
+    $self->assert_alarms({summary => 'HOURLY-1', start => $start },
+                         {summary => 'HOURLY-31', start => $start },
+                         {summary => 'HOURLY-61', start => $start },
+                         {summary => 'MINUTELY-31', start => $start },
+                         {summary => 'MINUTELY-61', start => $start },
+                         {summary => 'SECONDLY-61', start => $start });
 }
 
 1;

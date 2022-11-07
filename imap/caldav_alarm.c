@@ -103,6 +103,7 @@ struct get_alarm_rock {
 };
 
 static struct namespace caldav_alarm_namespace;
+static int min_interval;
 
 EXPORTED int caldav_alarm_init(void)
 {
@@ -113,6 +114,10 @@ EXPORTED int caldav_alarm_init(void)
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
+
+    min_interval =
+        config_getduration(IMAPOPT_CALENDAR_MINIMUM_ALARM_INTERVAL, 'm');
+    if (min_interval < 0) min_interval = 0;
 
     return sqldb_init();
 }
@@ -809,6 +814,45 @@ static int has_alarms(void *data, struct mailbox *mailbox,
 
         syslog(LOG_DEBUG, "checking resource");
         for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+            icalproperty *prop;
+
+            /* Disable alarms that fire too frequently */
+            for (prop =
+                     icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+                 prop;
+                 prop =
+                     icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+                struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
+                short interval = rrule.interval;
+
+                switch (rrule.freq) {
+                case ICAL_HOURLY_RECURRENCE:
+                    interval *= 60;
+
+                    GCC_FALLTHROUGH
+
+                case ICAL_MINUTELY_RECURRENCE:
+                    interval *= 60;
+
+                    GCC_FALLTHROUGH
+
+                case ICAL_SECONDLY_RECURRENCE:
+                    if (interval < min_interval) {
+                        xsyslog(LOG_NOTICE,
+                                "Disabling alarms for high frequence calendar entry",
+                                "freq=<%s> mboxname=<%s> imap_uid=<%d>",
+                                icalrecur_freq_to_string(rrule.freq),
+                                mailbox_name(mailbox), uid);
+                        return 0;
+                    }
+                    break;
+
+                default:
+                    break;
+                }
+
+            }
+
             if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT))
                 return 1;
             else if (has_usedefaultalarms(comp))
@@ -869,29 +913,6 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
                              time_t runtime, int dryrun)
 {
     icalcomponent *myical = NULL;
-
-    /* Disable alarms for SECONDLY and MINUTELY recurrences */
-    for (icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-         comp;
-         comp = icalcomponent_get_next_component(ical, icalcomponent_isa(comp))) {
-
-        icalproperty *prop;
-        for (prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-             prop;
-             prop = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
-
-            struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
-            if (rrule.freq == ICAL_SECONDLY_RECURRENCE ||
-                rrule.freq == ICAL_MINUTELY_RECURRENCE) {
-                xsyslog(LOG_NOTICE,
-                        "Disabling alarms for high frequence calendar entry",
-                        "freq=<%s> mboxname=<%s> imap_uid=<%d>",
-                        icalrecur_freq_to_string(rrule.freq),
-                        mboxname, imap_uid);
-                return 0;
-            }
-        }
-    }
 
     /* Add default alarms */
     if (icalcomponent_read_usedefaultalerts(ical) > 0) {
