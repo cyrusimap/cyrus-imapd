@@ -3001,7 +3001,8 @@ EOF
     $self->assert_alarms();
 }
 
-sub test_disable_high_freq
+# this test depends on calendar_min_alarm_interval=61 which is configured in new()
+sub test_disable_high_freq_slow
     :min_version_3_7 :needs_component_calalarmd
 {
     my ($self) = @_;
@@ -3021,8 +3022,22 @@ sub test_disable_high_freq
     my $startdt = $now->clone();
     $startdt->add(DateTime::Duration->new(seconds => 2));
     my $start = $startdt->strftime('%Y%m%dT%H%M%SZ');
+    my $startsec = $startdt->second;
+    my $startmin = $startdt->minute;
 
     # create hourly, minutely and secondly occurring events
+    #
+    # hourly with interval=
+    #   1,31,61: should result in an alarm since there is a > 60s interval
+    #
+    # minutely with interval=
+    #   1: should NOT result in an alarm since there is only a 60s interval
+    #   31,61: should NOT result in an alarm since there is a > 60s interval
+    #
+    # secondly with interval=
+    #   1,31: should NOT result in an alarm since there is a < 60s interval
+    #   61 should result in an alarm since there is a 60s interval
+    #
     for my $freq (qw(HOURLY MINUTELY SECONDLY)) {
         for (my $int = 1; $int < 90; $int += 30) {
             my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9-$freq-$int";
@@ -3055,18 +3070,98 @@ EOF
         }
     }
 
+    # create minutely occurring events with bysecond=startsec
+    #
+    # interval=1 should NOT result in an alarm since there is only a 60s interval
+    #
+    # interval=2 should result in an alarm since there is a 120s interval
+    #
+    for (my $int = 1; $int < 3; $int += 1) {
+        my $freq = 'MINUTELY';
+        my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9-$freq-$int-$startsec";
+        my $href = "$CalendarId/$uuid.ics";
+        my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+TRANSP:OPAQUE
+SUMMARY:$freq-$int-$startsec
+DTSTART:$start
+RRULE:FREQ=$freq;INTERVAL=$int;BYSECOND=$startsec
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:PT0S
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+        $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+    }
+
+    # create hourly occurring events with a set of byminute
+    #
+    # byminute=startmin and +1 should fail since there is only a 60s interval
+    #
+    # byminute=startmin and +2 should succeed since there is a 120s interval
+    #
+    my $bymin_ok = $startmin + 2;
+    for (my $bymin = $startmin + 1; $bymin < $startmin + 3; $bymin += 1) {
+        $bymin = $bymin % 60;
+
+        my $freq = 'HOURLY';
+        my $int  = 1;
+        my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9-$freq-$int-$bymin";
+        my $href = "$CalendarId/$uuid.ics";
+        my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+TRANSP:OPAQUE
+SUMMARY:$freq-$int-$bymin
+DTSTART:$start
+RRULE:FREQ=$freq;INTERVAL=$int;BYMINUTE=$bymin,$startmin
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:PT0S
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+        $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+    }
+
     # clean notification cache
     $self->{instance}->getnotify();
 
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
-    # assert that only the alarms that fire >= 61s intervals are created
+    # assert that only the alarms that fire at >= 61s intervals are created
     $self->assert_alarms({summary => 'HOURLY-1', start => $start },
                          {summary => 'HOURLY-31', start => $start },
                          {summary => 'HOURLY-61', start => $start },
                          {summary => 'MINUTELY-31', start => $start },
                          {summary => 'MINUTELY-61', start => $start },
-                         {summary => 'SECONDLY-61', start => $start });
+                         {summary => 'SECONDLY-61', start => $start },
+                         {summary => "MINUTELY-2-$startsec", start => $start },
+                         {summary => "HOURLY-1-$bymin_ok", start => $start });
 }
 
 1;
