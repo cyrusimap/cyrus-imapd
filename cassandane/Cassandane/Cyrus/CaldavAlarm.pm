@@ -3002,7 +3002,7 @@ EOF
 }
 
 # this test depends on calendar_min_alarm_interval=61 which is configured in new()
-sub test_disable_high_freq_slow
+sub test_disable_high_freq
     :min_version_3_7 :needs_component_calalarmd
 {
     my ($self) = @_;
