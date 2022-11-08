@@ -56,7 +56,7 @@ EOF
         }, 'R1'],
     ]);
     my $eventId = $res->[0][1]{list}[0]{id};
-    $self->assert_str_equals('public', $res->[0][1]{list}[0]->{privacy});
+    $self->assert_null($res->[0][1]{list}[0]->{privacy});
     my $xhref = $res->[0][1]{list}[0]{'x-href'};
     $self->assert_not_null($xhref);
 

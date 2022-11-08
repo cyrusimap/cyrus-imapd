@@ -3712,7 +3712,13 @@ calendarevent_from_ical(icalcomponent *comp,
             buf_lcase(&buf);
             v = buf_cstring(&buf);
         }
-        json_object_set_new(event, "privacy", json_string(v ? v : "public"));
+
+        if (!v && props) {
+            // client explicitly asked for property, return default value
+            v = "public";
+        }
+
+        if (v) json_object_set_new(event, "privacy", json_string(v));
     }
 
     /* replyTo */
@@ -7448,8 +7454,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "privacy");
     if (json_is_string(jprop)) {
         const char *val = json_string_value(jprop);
-        if (!strcmp(val, "public") ||
-            !strcmp(val, "private") ||
+        if (!strcmp(val, "private") ||
             !strcmp(val, "secret")) {
 
             struct buf buf = BUF_INITIALIZER;
@@ -7459,6 +7464,9 @@ static void calendarevent_to_ical(icalcomponent *comp,
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_PRIVACY);
             icalcomponent_add_property(comp, prop);
             buf_free(&buf);
+        }
+        else if (!strcmp(val, "public")) {
+            // no need to write default value
         } else {
             jmap_parser_invalid(parser, "privacy");
         }
