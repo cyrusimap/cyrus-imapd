@@ -868,13 +868,15 @@ static int has_alarms(void *data, struct mailbox *mailbox,
 
                 struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
                 int recur_interval = rrule.interval;
-                char *bypart = "";
+                const char *bypart = "";
                 int disable = 0;
 
                 switch (rrule.freq) {
                 case ICAL_YEARLY_RECURRENCE:
                 case ICAL_MONTHLY_RECURRENCE:
                 case ICAL_WEEKLY_RECURRENCE:
+                    /* Any frequency over weekly is pointless,
+                       but we still want to check BY parts for any insanity */
                     recur_interval *= 7;
 
                     GCC_FALLTHROUGH
