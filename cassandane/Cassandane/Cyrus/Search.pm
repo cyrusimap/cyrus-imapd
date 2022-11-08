@@ -328,12 +328,14 @@ EOF
     xlog $self, "Search the newly selected mailbox";
     @results = ();
     $res = $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
-                                'IN', '(SELECTED)',
+                                'IN', '(SELECTED)', 'RETURN', '(MIN MAX ALL)',
                                 'subject', 'test');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_num_equals(1, scalar @results);
     $self->assert_str_equals('INBOX', $results[0][0][3]);
-    $self->assert_str_equals('1:3', $results[0][3]);
+    $self->assert_num_equals(1, $results[0][3]);
+    $self->assert_num_equals(3, $results[0][5]);
+    $self->assert_str_equals('1:3', $results[0][7]);
 
     xlog $self, "Search the personal namespace, returning just counts";
     @results = ();
