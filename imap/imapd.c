@@ -6227,6 +6227,8 @@ static void cmd_search(char *tag, char *cmd)
                 if (!imapd_index) {
                     prot_printf(imapd_out,
                                 "%s BAD Please select a mailbox first\r\n", tag);
+                    search_expr_free(mrock.expr);
+                    free_hash_table(&mrock.mailboxes, NULL);
                     goto done;
                 }
 
