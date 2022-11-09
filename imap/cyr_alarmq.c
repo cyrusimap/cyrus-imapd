@@ -138,6 +138,43 @@ static inline const char *format_localtime(time_t t, char *buf, size_t len)
     return buf;
 }
 
+static void pretty_nextcheck(struct buf *dst, time_t nextcheck)
+{
+    char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
+
+    /* color nextcheck time according to whether and how overdue it is */
+    if (want_color) {
+        double diff = difftime(time(NULL), nextcheck);
+        int color = COLOR_GREEN;
+
+        if (diff > 0) color = COLOR_YELLOW;
+        if (diff > overdue_threshold) color = COLOR_RED;
+        _buf_appendsgr(dst, color, SGR_DONE);
+    }
+    buf_appendcstr(dst, format_localtime(nextcheck, timebuf, sizeof(timebuf)));
+    if (want_color) _buf_appendsgr(dst, 0, SGR_DONE);
+}
+
+static void pretty_error(struct buf *dst, uint32_t num_retries,
+                         time_t last_run, const char *last_err)
+{
+    char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
+    int sep = ' ';
+
+    if (last_err) {
+        _buf_append_kvf(dst, sep, 0, "attempts", "%" PRIu32, num_retries);
+        buf_printf(dst, " error=<%s|",
+                   format_localtime(last_run, timebuf, sizeof(timebuf)));
+
+        /* error message in color */
+        if (want_color) _buf_appendsgr(dst, COLOR_RED, SGR_DONE);
+        buf_appendcstr(dst, last_err);
+        if (want_color) _buf_appendsgr(dst, 0, SGR_DONE);
+
+        buf_putc(dst, '>');
+    }
+}
+
 static void printone_calendar_json(const char *mboxname,
                                    uint32_t imap_uid,
                                    time_t nextcheck,
@@ -252,16 +289,48 @@ static void printone_snooze_pretty(const char *userid,
                                    json_t *snoozed,
                                    void *rock __attribute__((unused)))
 {
-    char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
+    static struct buf buf = BUF_INITIALIZER;
+    json_t *until, *moveToMailboxId, *setKeywords;
+    int sep = ' ';
 
-    printf("%s ", format_localtime(nextcheck, timebuf, sizeof(timebuf)));
-    printf("userid=<%s> type=<snooze>", userid);
-    printf("num_retries=<%" PRIu32 "> ", num_retries);
-    printf("last_run=<%s> ", format_localtime(last_run, timebuf, sizeof(timebuf)));
-    printf("last_err=<%s>\n", last_err);
+    buf_reset(&buf);
 
-    /* XXX extract details from snoozed */
-    (void) snoozed;
+    pretty_nextcheck(&buf, nextcheck);
+    _buf_append_kv(&buf, sep, want_color, "userid", userid);
+    _buf_append_kv(&buf, sep, 0, "type", "snooze");
+
+    until = json_object_get(snoozed, "until");
+    moveToMailboxId = json_object_get(snoozed, "moveToMailboxId");
+    setKeywords = json_object_get(snoozed, "setKeywords");
+
+    if (until) {
+        /* XXX can we parse this and then format_localtime it? */
+        _buf_append_kv(&buf, sep, 0, "until", json_string_value(until));
+    }
+
+    if (moveToMailboxId) {
+        _buf_append_kv(&buf, sep, 0, "moveToMailboxId",
+                       json_string_value(moveToMailboxId));
+    }
+
+    if (setKeywords) {
+        const char *key;
+        json_t *value;
+
+        json_object_foreach(setKeywords, key, value) {
+            if (json_is_true(value)) {
+                _buf_append_kv(&buf, sep, 0, "setKeyword", key);
+            }
+            else {
+                _buf_append_kv(&buf, sep, 0, "unsetKeyword", key);
+            }
+        }
+    }
+
+    pretty_error(&buf, num_retries, last_run, last_err);
+
+    buf_putc(&buf, '\n');
+    fputs(buf_cstring(&buf), stdout);
 }
 
 static void printone_send_json(const char *userid,
@@ -315,7 +384,6 @@ static void printone_send_pretty(const char *userid,
 {
     const char *identityId;
     json_t *envelope, *mailFrom, *rcptTo, *value;
-    char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
     static struct buf buf = BUF_INITIALIZER;
     size_t i;
     int sep = ' ';
@@ -328,18 +396,7 @@ static void printone_send_pretty(const char *userid,
     mailFrom = json_object_get(envelope, "mailFrom");
     rcptTo = json_object_get(envelope, "rcptTo");
 
-    /* color nextcheck time according to whether and how overdue it is */
-    if (want_color) {
-        double diff = difftime(time(NULL), nextcheck);
-        int color = COLOR_GREEN;
-
-        if (diff > 0) color = COLOR_YELLOW;
-        if (diff > overdue_threshold) color = COLOR_RED;
-        _buf_appendsgr(&buf, color, SGR_DONE);
-    }
-    buf_printf(&buf, "%s",
-               format_localtime(nextcheck, timebuf, sizeof(timebuf)));
-    if (want_color) _buf_appendsgr(&buf, 0, SGR_DONE);
+    pretty_nextcheck(&buf, nextcheck);
 
     _buf_append_kv(&buf, sep, want_color, "userid", userid);
     _buf_append_kv(&buf, sep, 0, "type", "send");
@@ -351,18 +408,8 @@ static void printone_send_pretty(const char *userid,
         _buf_append_kv(&buf, sep, 0, "to",
                        json_string_value(json_object_get(value, "email")));
     }
-    if (last_err) {
-        _buf_append_kvf(&buf, sep, 0, "attempts", "%" PRIu32, num_retries);
-        buf_printf(&buf, " error=<%s|",
-                   format_localtime(last_run, timebuf, sizeof(timebuf)));
 
-        /* error message in color */
-        if (want_color) _buf_appendsgr(&buf, COLOR_RED, SGR_DONE);
-        buf_printf(&buf, "%s", last_err);
-        if (want_color) _buf_appendsgr(&buf, 0, SGR_DONE);
-
-        buf_putc(&buf, '>');
-    }
+    pretty_error(&buf, num_retries, last_run, last_err);
 
     buf_putc(&buf, '\n');
     fputs(buf_cstring(&buf), stdout);
