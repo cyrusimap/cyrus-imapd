@@ -600,7 +600,7 @@ EXPORTED int get_search_source_mboxes(struct protstream *pin,
         intname = mboxname_from_external(buf_cstring(&extname),
                                          searchargs->namespace,
                                          searchargs->userid);
-        strarray_appendm(mboxes, intname);
+        if (intname) strarray_appendm(mboxes, intname);
 
         if (!multi) goto done;
 
