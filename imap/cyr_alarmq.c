@@ -264,7 +264,8 @@ static void printone_snooze_pretty(const char *mboxname,
     printf("last_err=<%s>\n", last_err);
 }
 
-static void printone_send_json(time_t nextcheck, uint32_t num_retries,
+static void printone_send_json(const char *userid,
+                               time_t nextcheck, uint32_t num_retries,
                                time_t last_run, const char *last_err,
                                json_t *submission,
                                void *rock)
@@ -275,6 +276,10 @@ static void printone_send_json(time_t nextcheck, uint32_t num_retries,
 
     j = json_object();
     json_object_set_new(j, "type", json_string("send"));
+
+    if (userid) {
+        json_object_set_new(j, "userid", json_string(userid));
+    }
 
     if (nextcheck) {
         memset(timebuf, 0, sizeof(timebuf));
@@ -302,7 +307,8 @@ static void printone_send_json(time_t nextcheck, uint32_t num_retries,
     json_decref(j);
 }
 
-static void printone_send_pretty(time_t nextcheck, uint32_t num_retries,
+static void printone_send_pretty(const char *userid,
+                                 time_t nextcheck, uint32_t num_retries,
                                  time_t last_run, const char *last_err,
                                  json_t *submission,
                                  void *rock __attribute__((unused)))
@@ -335,8 +341,9 @@ static void printone_send_pretty(time_t nextcheck, uint32_t num_retries,
                format_localtime(nextcheck, timebuf, sizeof(timebuf)));
     if (want_color) _buf_appendsgr(&buf, 0, SGR_DONE);
 
-    _buf_append_kv(&buf, sep, want_color, "userid", identityId);
+    _buf_append_kv(&buf, sep, want_color, "userid", userid);
     _buf_append_kv(&buf, sep, 0, "type", "send");
+    _buf_append_kv(&buf, sep, want_color, "identityId", identityId);
     _buf_append_kv(&buf, sep, 0, "from",
                    json_string_value(json_object_get(mailFrom, "email")));
 

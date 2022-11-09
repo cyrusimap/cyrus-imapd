@@ -2215,6 +2215,7 @@ static void list_one_send(struct caldav_alarm_data *data,
     message_t *msg = NULL;
     struct buf buf = BUF_INITIALIZER;
     json_t *submission = NULL;
+    char *userid = NULL;
     int r;
 
     assert(data->type == ALARM_SEND);
@@ -2226,6 +2227,8 @@ static void list_one_send(struct caldav_alarm_data *data,
                            data->mboxname, error_message(r));
         return;
     }
+
+    userid = mboxname_to_userid(mailbox_name(mailbox));
 
     r = mailbox_find_index_record(mailbox, data->imap_uid, &record);
     if (r) {
@@ -2265,13 +2268,14 @@ static void list_one_send(struct caldav_alarm_data *data,
         goto done;
     }
 
-    proc(data->nextcheck, data->num_retries,
+    proc(userid, data->nextcheck, data->num_retries,
          data->last_run, data->last_err,
          submission, rock);
 
     json_decref(submission);
 
 done:
+    free(userid);
     message_unref(&msg);
     buf_free(&buf);
     if (r) mailbox_abort(mailbox);
