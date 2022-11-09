@@ -1923,7 +1923,6 @@ static void begin_esearch_response(struct index_state *state,
                                                  searchargs->namespace,
                                                  searchargs->userid);
             prot_printf(state->out, " MAILBOX \"%s\" UIDVALIDITY %d",
-                        
                         extname, mailbox_uidvalidity(state->mailbox));
             free(extname);
         }
