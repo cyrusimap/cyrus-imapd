@@ -1535,6 +1535,7 @@ static int mailbox_read_header(struct mailbox *mailbox, const char *fname)
 
     xzfree(mailbox->h.quotaroot);
     xzfree(mailbox->h.uniqueid);
+    xzfree(mailbox->h.acl);
 
     /* check for DLIST mboxlist */
     if (*p == '%') {
