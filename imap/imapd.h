@@ -203,8 +203,19 @@ enum {
     GETSEARCH_CHARSET_KEYWORD = 0x01,
     GETSEARCH_RETURN = 0x02,
     GETSEARCH_CHARSET_FIRST = 0x04,
+    GETSEARCH_SOURCE = 0x08,
 };
 
+/* Bitmasks for search source options */
+enum {
+    SEARCH_SOURCE_SELECTED    = (1<<0),
+    SEARCH_SOURCE_PERSONAL    = (1<<1),
+    SEARCH_SOURCE_INBOXES     = (1<<2),
+    SEARCH_SOURCE_SUBSCRIBED  = (1<<3),
+    SEARCH_SOURCE_SUBTREE     = (1<<4),
+    SEARCH_SOURCE_SUBTREE_ONE = (1<<5),
+    SEARCH_SOURCE_MAILBOXES   = (1<<6)
+};
 
 /* Bitmasks for search return options */
 enum {
@@ -230,6 +241,12 @@ struct searchargs {
     const char *userid;
     struct auth_state *authstate;
     int isadmin;
+
+    /* For MULTISEARCH */
+    unsigned filter;
+    strarray_t subtree;
+    strarray_t subtree_one;
+    strarray_t mailboxes;
 };
 
 /* Windowing arguments for the XCONVSORT command */

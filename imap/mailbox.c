@@ -1204,6 +1204,11 @@ EXPORTED const char *mailbox_quotaroot(const struct mailbox *mailbox)
     return mailbox->h.quotaroot;
 }
 
+EXPORTED uint32_t mailbox_uidvalidity(const struct mailbox *mailbox)
+{
+    return mailbox->i.uidvalidity;
+}
+
 EXPORTED void mailbox_index_dirty(struct mailbox *mailbox)
 {
     assert(mailbox_index_islocked(mailbox, 1));
