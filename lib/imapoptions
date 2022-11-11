@@ -654,6 +654,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    if the CalDAV client hasn't specified a restriction in the creation
    request. */
 
+{ "calendar_minimum_alarm_interval", "5m", DURATION, "UNRELEASED" }
+/* The minimum allowed interval between alarms for a recurring event.
+   Primarily used to suppress alarms for MINUTELY and SECONDLY recurrences.
+   The default is 5 minutes.  The minimum value is 0, which will
+   allow all alarms. */
+
 { "carddav_allowaddmember", 0, SWITCH, "3.1.3" }
 /* Enable support for POST add-member on the CardDAV server. */
 

@@ -103,6 +103,7 @@ struct get_alarm_rock {
 };
 
 static struct namespace caldav_alarm_namespace;
+static int min_interval;
 
 EXPORTED int caldav_alarm_init(void)
 {
@@ -113,6 +114,10 @@ EXPORTED int caldav_alarm_init(void)
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
+
+    min_interval =
+        config_getduration(IMAPOPT_CALENDAR_MINIMUM_ALARM_INTERVAL, 'm');
+    if (min_interval < 0) min_interval = 0;
 
     return sqldb_init();
 }
@@ -781,6 +786,49 @@ done:
     return 0;
 }
 
+static int short_cmp(const void *a, const void *b)
+{
+    return *((short*) a) - *((short*) b);
+}
+
+static int check_by_array(const short *byX, short size,
+                          int recur_interval, short to_seconds)
+{
+    short *my_byX;
+    short i, len;
+    int disable = 0;
+
+    /* make a working copy of the array
+       (add extra slot for 1st value of next recurrence interval) */
+    my_byX = xmalloc((size+1) * sizeof(short));
+    memcpy(my_byX, byX, size * sizeof(short));
+
+    /* convert each value to seconds and determine actual length of data */
+    for (len = 0; len < size && my_byX[len] != ICAL_RECURRENCE_ARRAY_MAX; len++) {
+        my_byX[len] *= to_seconds;
+    }
+
+    /* append 1st value of next recurrence interval */
+    my_byX[len] = my_byX[0] + recur_interval;
+
+    /* sort the array */
+    qsort(my_byX, len, sizeof(short), &short_cmp);
+
+    /* check interval between adjacent values */
+    for (i = 0; i < len; i++) {
+        int interval = my_byX[i+1] - my_byX[i];
+
+        if (interval < min_interval) {
+            disable = 1;
+            break;
+        }
+    }
+
+    free(my_byX);
+
+    return disable;
+}
+
 static int has_alarms(void *data, struct mailbox *mailbox,
                       uint32_t uid, unsigned *num_rcpts)
 {
@@ -809,6 +857,80 @@ static int has_alarms(void *data, struct mailbox *mailbox,
 
         syslog(LOG_DEBUG, "checking resource");
         for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+            icalproperty *prop;
+
+            /* Disable alarms that fire too frequently */
+            for (prop =
+                     icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+                 prop;
+                 prop =
+                     icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+
+                struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
+                int recur_interval = rrule.interval;
+                const char *bypart = "";
+                int disable = 0;
+
+                switch (rrule.freq) {
+                case ICAL_YEARLY_RECURRENCE:
+                case ICAL_MONTHLY_RECURRENCE:
+                case ICAL_WEEKLY_RECURRENCE:
+                    /* Any frequency over weekly is pointless,
+                       but we still want to check BY parts for any insanity */
+                    recur_interval *= 7;
+
+                    GCC_FALLTHROUGH
+
+                case ICAL_DAILY_RECURRENCE:
+                    recur_interval *= 24;
+
+                    GCC_FALLTHROUGH
+
+                case ICAL_HOURLY_RECURRENCE:
+                    recur_interval *= 60;
+
+                    GCC_FALLTHROUGH
+
+                case ICAL_MINUTELY_RECURRENCE:
+                    recur_interval *= 60;
+                    break;
+
+                case ICAL_SECONDLY_RECURRENCE:
+                default:
+                    break;
+                }
+
+                if (rrule.by_second[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+                    bypart = "SECOND";
+                    disable = check_by_array(rrule.by_second, ICAL_BY_SECOND_SIZE,
+                                             recur_interval, 1);
+                }
+                else if (rrule.by_minute[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+                    bypart = "MINUTE";
+                    disable = check_by_array(rrule.by_minute, ICAL_BY_MINUTE_SIZE,
+                                             recur_interval, 60);
+                }
+                else if (rrule.by_hour[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+                    bypart = "HOUR";
+                    disable = check_by_array(rrule.by_hour, ICAL_BY_HOUR_SIZE,
+                                             recur_interval, 3600);
+                }
+                else if (recur_interval < min_interval) {
+                    disable = 1;
+                }
+
+                if (disable) {
+                    xsyslog(LOG_NOTICE,
+                            "Disabling alarms for high frequence calendar entry",
+                            "freq=<%s> interval=<%u> bypart=<%s>"
+                            " mboxname=<%s> imap_uid=<%d>",
+                            icalrecur_freq_to_string(rrule.freq),
+                            rrule.interval, bypart,
+                            mailbox_name(mailbox), uid);
+                    return 0;
+                }
+            }
+
             if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT))
                 return 1;
             else if (has_usedefaultalarms(comp))
