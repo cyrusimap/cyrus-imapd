@@ -193,7 +193,7 @@ extern struct char_counts charset_count_validutf8(const char *data, size_t datal
 /* Encode and append a MIME parameter 'name' and 'value' to 'buf'.
  * RFC 2231 encoding is used if 'extended' != 0.  Otherwise RFC 2047 'Q' is used.
  * 'cur_len' specifies the current length of the header field which is used
- * in determining if/when to insert folding whitespace befoee the parameter.
+ * in determining if/when to insert folding whitespace before the parameter.
  */
 extern void charset_write_mime_param(struct buf *buf, int extended, size_t cur_len,
                                      const char *name, const char *value);
