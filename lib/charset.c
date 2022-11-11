@@ -3728,13 +3728,13 @@ static char *qp_encode(const char *data, size_t len, int isheader,
         if (isheader) buf_appendcstr(&buf, "?=");
     }
     else if (need_fold) {
-        /* fold header every 78 characters (if possible) */
+        /* fold header every MIME_MAX_HEADER_LENGTH characters (if possible) */
         size_t i = 0, j = 0, last_wsp = 0;
 
-        while ((len - i > 78) && (j < len)) {
+        while ((len - i > MIME_MAX_HEADER_LENGTH) && (j < len)) {
             j += strcspn(data + j, " \t");
 
-            if (last_wsp && (j - i > 78)) {
+            if (last_wsp && (j - i > MIME_MAX_HEADER_LENGTH)) {
                 buf_appendmap(&buf, data + i, last_wsp - i);
                 buf_appendcstr(&buf, "\r\n");
                 i = last_wsp;
@@ -4065,4 +4065,108 @@ EXPORTED int charset_decode_percent(struct buf *dst, const char *val)
     }
 
     return r;
+}
+
+const char QSTRINGCHAR[256] = {
+/* control chars 9 (TAB), 10 (LF), 13 (CR) and space (32)
+ * are not permitted, all other control characters obsolete */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+/* All printable ASCII characters (decimal values between 33 and 126) */
+/* are safe to use in quoted string. 1=use verbatim, 2=escape */
+/* XXX 32 (space) is allowed here, as most MUAs expect that */
+    1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
+/* all high bits are unsafe */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+EXPORTED void charset_write_mime_param(struct buf *buf, int extended, size_t cur_len,
+                                       const char *name, const char *value)
+{
+    struct buf valbuf = BUF_INITIALIZER;
+    int is_qstring = 1;
+    const char *p;
+    char *xvalue = NULL;
+
+    cur_len += strlen(name) + 4;
+
+    /* Check if param value can be encoded as quoted string */
+    for (p = value; *p && is_qstring; p++) {
+        switch (QSTRINGCHAR[(unsigned char)*p]) {
+            case 0:
+                is_qstring = 0;
+                break;
+            case 2:
+                buf_putc(&valbuf, '\\');
+                /* fall through */
+            default:
+                buf_putc(&valbuf, *p);
+        }
+    }
+
+    /* Encode the value? */
+    if (extended && !is_qstring) {
+        /* RFC 2231 encode */
+        xvalue = charset_encode_mimexvalue(value, NULL);
+    }
+    else if (!extended &&
+             (!is_qstring ||
+              cur_len + buf_len(&valbuf) > MIME_MAX_HEADER_LENGTH)) {
+        /* RFC 2047 encode */
+        xvalue = charset_encode_mimeheader(value, 0, /*qpencode*/1);
+    }
+    else {
+        xvalue = buf_release(&valbuf);
+    }
+
+    /* Attempt to stuff param in one line */
+    if (cur_len + strlen(xvalue) < MIME_MAX_HEADER_LENGTH) {
+        if (extended && !is_qstring)
+            buf_printf(buf, "; %s*=%s", name, xvalue);
+        else
+            buf_printf(buf, "; %s=\"%s\"", name, xvalue);
+    }
+    else if (!extended) {
+        buf_printf(buf, ";\r\n\t%s=\"%s\"", name, xvalue);
+    }
+    else {
+        /* Break value into continuations */
+        int section = 0;
+        struct buf line = BUF_INITIALIZER;
+        for (p = xvalue; *p; section++) {
+            /* Build parameter continuation line. */
+            buf_setcstr(&line, ";\r\n\t");
+            buf_printf(&line, "%s*%d", name, section);
+            buf_appendcstr(&line, is_qstring ? "=\"" : "*=");
+            /* Write at least one character of the value */
+            int n = buf_len(&line) + 1;
+            do {
+                buf_putc(&line, *p);
+                n++;
+                p++;
+                if (!is_qstring && *p == '%' && n >= MIME_MAX_HEADER_LENGTH - 2)
+                    break;
+            } while (*p && n < MIME_MAX_HEADER_LENGTH);
+            if (is_qstring)
+                buf_putc(&line, '"');
+            /* Write line */
+            buf_append(buf, &line);
+        }
+        buf_free(&line);
+    }
+
+    buf_free(&valbuf);
+    free(xvalue);
 }
