@@ -1245,7 +1245,14 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
 
     fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(&buf));
-    fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
+
+    /* Since we use the vCard UID in the resource name,
+       this param may be long and needs to get properly split per RFC 2231 */
+    struct buf value = BUF_INITIALIZER;
+    charset_write_mime_param(&value, /*extended*/1, MIME_MAX_HEADER_LENGTH,
+                             "filename", resource);
+    fprintf(f, "Content-Disposition: inline%s\r\n", buf_cstring(&value));
+    buf_free(&value);
 
     /* XXX  Check domain of data and use appropriate CTE */
 
