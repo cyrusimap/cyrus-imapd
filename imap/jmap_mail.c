@@ -8497,93 +8497,6 @@ static char *_mime_make_boundary()
     return boundary;
 }
 
-/* A soft limit for MIME header lengths when generating MIME from JMAP.
- * See the header_from_Xxx functions for usage. */
-#define MIME_MAX_HEADER_LENGTH 78
-
-const char QSTRINGCHAR[256] = {
-/* control chars 9 (TAB), 10 (LF), 13 (CR) and space (32)
- * are not permitted, all other control characters obsolete */
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-/* All printable ASCII characters (decimal values between 33 and 126) */
-/* are safe to use in quoted string. 1=use verbatim, 2=escape */
-/* XXX 32 (space) is allowed here, as most MUAs expect that */
-    1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
-/* all high bits are unsafe */
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-
-static void _mime_write_xparam(struct buf *buf, const char *name, const char *value)
-{
-    /* Encode header value */
-    struct buf valbuf = BUF_INITIALIZER;
-    int is_qstring = 1;
-    const char *p;
-    for (p = value; *p && is_qstring; p++) {
-        switch (QSTRINGCHAR[(unsigned char)*p]) {
-            case 0:
-                is_qstring = 0;
-                break;
-            case 2:
-                buf_putc(&valbuf, '\\');
-                /* fall through */
-            default:
-                buf_putc(&valbuf, *p);
-        }
-    }
-    char *xvalue = is_qstring ? buf_release(&valbuf) : charset_encode_mimexvalue(value, NULL);
-
-    /* Attempt to stuff header in one line */
-    if (strlen(name) + strlen(xvalue) + 1 < MIME_MAX_HEADER_LENGTH) {
-        if (is_qstring)
-            buf_printf(buf, ";%s=\"%s\"", name, xvalue);
-        else
-            buf_printf(buf, ";%s*=%s", name, xvalue);
-        goto done;
-    }
-
-    /* Break value into continuations */
-    int section = 0;
-    struct buf line = BUF_INITIALIZER;
-    for (p = xvalue; *p; section++) {
-        /* Build parameter continuation line. */
-        buf_setcstr(&line, ";\r\n ");
-        buf_printf(&line, "%s*%d", name, section);
-        buf_appendcstr(&line, is_qstring ? "=\"" : "*=");
-        /* Write at least one character of the value */
-        int n = buf_len(&line) + 1;
-        do {
-            buf_putc(&line, *p);
-            n++;
-            p++;
-            if (!is_qstring && *p == '%' && n >= MIME_MAX_HEADER_LENGTH - 2)
-                break;
-        } while (*p && n < MIME_MAX_HEADER_LENGTH);
-        if (is_qstring)
-            buf_putc(&line, '"');
-        /* Write line */
-        buf_append(buf, &line);
-    }
-    buf_free(&line);
-
-done:
-    buf_free(&valbuf);
-    free(xvalue);
-}
-
 static int _copy_msgrecords(struct auth_state *authstate,
                             const char *user_id,
                             struct namespace *namespace,
@@ -9720,7 +9633,9 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         part->disposition = xstrdup(json_string_value(jdisposition));
         buf_setcstr(&buf, part->disposition);
         if (part->filename) {
-            _mime_write_xparam(&buf, "filename", part->filename);
+            charset_write_mime_param(&buf, /*extended*/1,
+                                     strlen("Content-Disposition") + buf_len(&buf),
+                                     "filename", part->filename);
         }
         _headers_add_new(&part->headers,
                 _header_make("Content-Disposition", "disposition", &buf, parser));
@@ -9733,7 +9648,9 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         part->disposition = xstrdup("attachment");
         buf_printf(&buf, "attachment");
         if (part->filename) {
-            _mime_write_xparam(&buf, "filename", part->filename);
+            charset_write_mime_param(&buf, /*extended*/1,
+                                     strlen("Content-Disposition") + buf_len(&buf),
+                                     "filename", part->filename);
         }
         _headers_add_new(&part->headers,
                 _header_make("Content-Disposition", "name", &buf, parser));
@@ -9791,40 +9708,9 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         }
 
         if (part->filename) {
-            /* Check if filename can be encoded as quoted string */
-            struct buf valbuf = BUF_INITIALIZER;
-            int is_qstring = 1;
-            const char *p;
-            for (p = part->filename; *p && is_qstring; p++) {
-                switch (QSTRINGCHAR[(unsigned char)*p]) {
-                    case 0:
-                        is_qstring = 0;
-                        break;
-                    case 2:
-                        buf_putc(&valbuf, '\\');
-                        /* fall through */
-                    default:
-                        buf_putc(&valbuf, *p);
-                }
-            }
-            /* Encode and write header value */
-            char *value;
-            if (!is_qstring || buf_len(&valbuf) > MIME_MAX_HEADER_LENGTH) {
-                value = charset_encode_mimeheader(part->filename, 0, /*qpencode*/1);
-                if (strlen(value) > MIME_MAX_HEADER_LENGTH) {
-                    buf_appendcstr(&buf, ";\r\n ");
-                }
-                else buf_appendcstr(&buf, "; ");
-            }
-            else {
-                value = buf_release(&valbuf);
-                buf_appendcstr(&buf, "; ");
-            }
-            buf_appendcstr(&buf, "name=\"");
-            buf_appendcstr(&buf, value);
-            buf_appendcstr(&buf, "\"");
-            buf_free(&valbuf);
-            free(value);
+            charset_write_mime_param(&buf, /*extended*/0,
+                                     strlen("Content-Type") + buf_len(&buf),
+                                     "name", part->filename);
         }
 
         if (part->boundary) {

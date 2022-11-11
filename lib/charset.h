@@ -62,6 +62,9 @@
 
 #define CHARSET_UNKNOWN_CHARSET (NULL)
 
+/* RFC 5322, 2.1.1 */
+#define MIME_MAX_HEADER_LENGTH 78
+
 #include "util.h"
 #include "xsha1.h"
 
@@ -186,5 +189,13 @@ struct char_counts {
 /* Count the number of valid, invalid and replacement UTF-8 characters
  * in the first INT32_MAX bytes of data. */
 extern struct char_counts charset_count_validutf8(const char *data, size_t datalen);
+
+/* Encode and append a MIME parameter 'name' and 'value' to 'buf'.
+ * RFC 2231 encoding is used if 'extended' != 0.  Otherwise RFC 2047 'Q' is used.
+ * 'cur_len' specifies the current length of the header field which is used
+ * in determining if/when to insert folding whitespace befoee the parameter.
+ */
+extern void charset_write_mime_param(struct buf *buf, int extended, size_t cur_len,
+                                     const char *name, const char *value);
 
 #endif /* INCLUDED_CHARSET_H */
