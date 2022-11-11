@@ -95,8 +95,13 @@ static void _buf_append_kv(struct buf *dst, int sep, int want_color,
                            const char *key, const char *value)
 {
     if (sep) buf_putc(dst, sep);
-    buf_appendcstr(dst, key);
-    buf_appendcstr(dst, "=<");
+
+    if (key) {
+        buf_appendcstr(dst, key);
+        buf_appendcstr(dst, "=<");
+    }
+
+    /* XXX what about null value */
     if (want_color) {
         unsigned color = 17 + strhash(value) % 214; /* xterm-256 colour cube */
         _buf_appendsgr(dst, 38, 5, color, SGR_DONE);
@@ -106,7 +111,10 @@ static void _buf_append_kv(struct buf *dst, int sep, int want_color,
     else {
         buf_appendcstr(dst, value);
     }
-    buf_appendcstr(dst, ">");
+
+    if (key) {
+        buf_appendcstr(dst, ">");
+    }
 }
 
 __attribute__((format(printf, 5, 6)))
@@ -296,8 +304,8 @@ static void printone_snooze_pretty(const char *userid,
     buf_reset(&buf);
 
     pretty_nextcheck(&buf, nextcheck);
+    _buf_append_kv(&buf, sep, want_color, NULL, "snooze");
     _buf_append_kv(&buf, sep, want_color, "userid", userid);
-    _buf_append_kv(&buf, sep, 0, "type", "snooze");
 
     until = json_object_get(snoozed, "until");
     moveToMailboxId = json_object_get(snoozed, "moveToMailboxId");
@@ -397,10 +405,13 @@ static void printone_send_pretty(const char *userid,
     rcptTo = json_object_get(envelope, "rcptTo");
 
     pretty_nextcheck(&buf, nextcheck);
+    _buf_append_kv(&buf, sep, want_color, NULL, "send");
 
     _buf_append_kv(&buf, sep, want_color, "userid", userid);
-    _buf_append_kv(&buf, sep, 0, "type", "send");
-    _buf_append_kv(&buf, sep, want_color, "identityId", identityId);
+    if (0 != strcmp(userid, identityId)) {
+        /* XXX skip identityId if it's the same as userid? */
+        _buf_append_kv(&buf, sep, want_color, "identityId", identityId);
+    }
     _buf_append_kv(&buf, sep, 0, "from",
                    json_string_value(json_object_get(mailFrom, "email")));
 
