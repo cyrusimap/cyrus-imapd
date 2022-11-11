@@ -241,7 +241,7 @@ static void printone_calendar_pretty(const char *mboxname,
     buf_reset(&buf);
 
     pretty_nextcheck(&buf, nextcheck);
-    _buf_append_kv(&buf, sep, want_color, NULL, "calendar");
+    _buf_append_kv(&buf, sep, want_color, NULL, "CAL");
     _buf_append_kv(&buf, sep, want_color, "mboxname", mboxname);
     _buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
     _buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
@@ -309,7 +309,7 @@ static void printone_snooze_pretty(const char *userid,
     buf_reset(&buf);
 
     pretty_nextcheck(&buf, nextcheck);
-    _buf_append_kv(&buf, sep, want_color, NULL, "snooze");
+    _buf_append_kv(&buf, sep, want_color, NULL, "SNZ");
     _buf_append_kv(&buf, sep, want_color, "userid", userid);
 
     until = json_object_get(snoozed, "until");
@@ -410,7 +410,7 @@ static void printone_send_pretty(const char *userid,
     rcptTo = json_object_get(envelope, "rcptTo");
 
     pretty_nextcheck(&buf, nextcheck);
-    _buf_append_kv(&buf, sep, want_color, NULL, "send");
+    _buf_append_kv(&buf, sep, want_color, NULL, "SND");
 
     _buf_append_kv(&buf, sep, want_color, "userid", userid);
     if (0 != strcmp(userid, identityId)) {
@@ -489,7 +489,7 @@ static void printone_unscheduled_pretty(const char *mboxname,
     buf_reset(&buf);
 
     pretty_nextcheck(&buf, nextcheck);
-    _buf_append_kv(&buf, sep, want_color, NULL, "unscheduled");
+    _buf_append_kv(&buf, sep, want_color, NULL, "UNS");
     _buf_append_kv(&buf, sep, want_color, "mboxname", mboxname);
     _buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
     _buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
