@@ -235,15 +235,20 @@ static void printone_calendar_pretty(const char *mboxname,
                                      const char *last_err,
                                      void *rock __attribute__((unused)))
 {
-    char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
+    static struct buf buf = BUF_INITIALIZER;
+    int sep = ' ';
 
-    printf("%s ", format_localtime(nextcheck, timebuf, sizeof(timebuf)));
-    printf("type=<calendar> mboxname=<%s> ", mboxname);
-    printf("uid=<%" PRIu32 "> ", imap_uid);
-    printf("num_rcpts=<%" PRIu32 "> ", num_rcpts);
-    printf("num_retries=<%" PRIu32 "> ", num_retries);
-    printf("last_run=<%s> ", format_localtime(last_run, timebuf, sizeof(timebuf)));
-    printf("last_err=<%s>\n", last_err);
+    buf_reset(&buf);
+
+    pretty_nextcheck(&buf, nextcheck);
+    _buf_append_kv(&buf, sep, want_color, NULL, "calendar");
+    _buf_append_kv(&buf, sep, want_color, "mboxname", mboxname);
+    _buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
+    _buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
+    pretty_error(&buf, num_retries, last_run, last_err);
+
+    buf_putc(&buf, '\n');
+    fputs(buf_cstring(&buf), stdout);
 }
 
 static void printone_snooze_json(const char *userid,
@@ -478,15 +483,20 @@ static void printone_unscheduled_pretty(const char *mboxname,
                                         const char *last_err,
                                         void *rock __attribute__((unused)))
 {
-    char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
+    static struct buf buf = BUF_INITIALIZER;
+    int sep = ' ';
 
-    printf("%s ", format_localtime(nextcheck, timebuf, sizeof(timebuf)));
-    printf("type=<unscheduled> mboxname=<%s> ", mboxname);
-    printf("uid=<%" PRIu32 "> ", imap_uid);
-    printf("num_rcpts=<%" PRIu32 "> ", num_rcpts);
-    printf("num_retries=<%" PRIu32 "> ", num_retries);
-    printf("last_run=<%s> ", format_localtime(last_run, timebuf, sizeof(timebuf)));
-    printf("last_err=<%s>\n", last_err);
+    buf_reset(&buf);
+
+    pretty_nextcheck(&buf, nextcheck);
+    _buf_append_kv(&buf, sep, want_color, NULL, "unscheduled");
+    _buf_append_kv(&buf, sep, want_color, "mboxname", mboxname);
+    _buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
+    _buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
+    pretty_error(&buf, num_retries, last_run, last_err);
+
+    buf_putc(&buf, '\n');
+    fputs(buf_cstring(&buf), stdout);
 }
 
 static int parse_color_arg(const char *arg)
