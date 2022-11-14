@@ -880,7 +880,7 @@ sub test_restore_calendars_all_dryrun
     $self->assert_null($imip);
 }
 
-sub test_restore_calendars_batch_size_bug
+sub test_restore_calendars_batch_size_bug_slow
     :min_version_3_7 :needs_component_jmap
 {
     my ($self) = @_;
@@ -919,6 +919,8 @@ sub test_restore_calendars_batch_size_bug
                 %events
             }}, "R1"]
     ]);
+
+    sleep(1);
 
     xlog "fetch the id of event 513";
     $res = $jmap->CallMethods([
