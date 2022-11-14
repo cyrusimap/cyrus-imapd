@@ -1275,9 +1275,10 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
             /* Calendar was destroyed after cutoff -
                restore calendar and resources */
             struct mailbox *newmailbox = NULL;
-            struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+            struct mboxlock *namespacelock = NULL;
 
             if (!(rrock->jrestore->mode & DRY_RUN)) {
+                namespacelock = user_namespacelock(req->accountid);
                 r = recreate_calendar(mbentry, rrock, &newmailbox);
             }
 
