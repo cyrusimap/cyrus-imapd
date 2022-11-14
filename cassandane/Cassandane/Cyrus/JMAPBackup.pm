@@ -880,6 +880,91 @@ sub test_restore_calendars_all_dryrun
     $self->assert_null($imip);
 }
 
+sub test_restore_calendars_batch_size_bug
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                "1" => {
+                    name => "foo"
+                }
+            }
+         }, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"1"}{id};
+
+    xlog "create a bunch of events";
+    my %events = ();
+    foreach my $n (1..514) {
+        $events{"$n"} = {
+            "calendarIds" => {
+                $calid => JSON::true,
+            },
+            "title" => "foo",
+            "start" => "2015-10-06T16:45:00",
+            "timeZone" => "Australia/Melbourne",
+            "duration" => "PT15M"
+        }
+    }
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                %events
+            }}, "R1"]
+    ]);
+
+    xlog "fetch the id of event 513";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+        }, 'R1']
+    ]);
+    my $id513 = $res->[0][1]{ids}[512];
+    $self->assert_not_null($id513);
+
+    xlog "delete event 513";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            destroy => [$id513]
+         }, 'R2']
+    ]);
+    $self->assert_str_equals($id513, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "expire 513 from disk";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X' => '0d' );
+
+    xlog "delete calendar";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            destroy => ["$calid"],
+            onDestroyRemoveEvents => JSON::true,
+         }, "R2."]
+    ]);
+    $self->assert_str_equals($calid, $res->[0][1]{destroyed}[0]);
+
+    xlog "restore calendar";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreCalendars', {
+            performDryRun => JSON::true,
+            undoPeriod => "PT3S",
+            undoAll => JSON::true
+         }, "R4"]
+    ]);
+
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreCalendars', $res->[0][0]);
+    $self->assert_str_equals('R4', $res->[0][2]);
+    $self->assert_num_equals(0, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
+    $self->assert_num_equals(513, $res->[0][1]{numDestroysUndone});
+}
+
 sub test_restore_mail_simple
     :min_version_3_3 :needs_component_jmap
 {
