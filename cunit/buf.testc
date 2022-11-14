@@ -4,6 +4,7 @@
 #include "xmalloc.h"
 #include "util.h"
 #include "retry.h"
+#include "strhash.h"
 #include "map.h"
 #include "util.h"
 #include <sys/mman.h>
@@ -1651,6 +1652,218 @@ static void test_tocrlf(void)
         CU_ASSERT_STRING_EQUAL(tc.expect, buf_cstring(&buf));
         buf_reset(&buf);
     }
+    buf_free(&buf);
+}
+
+static char *escape_ansi_string(const char *src)
+{
+    char *dst, *escaped;
+
+    /* each char in src is potentially four once escaped */
+    escaped = xzmalloc(4 * strlen(src) + 1);
+
+    for (dst = escaped; src && *src; dst++, src++) {
+        if (*src == '\033') {
+            strcpy(dst, "\\033");
+            dst += 3; /* plus one more from the loop iterator */
+        }
+        else {
+            *dst = *src;
+        }
+    }
+
+    return escaped;
+}
+
+#define MY_ASSERT_ANSI_STRING_EQUAL(actual,expected) do {               \
+    const char *_a = (actual), *_e = (expected);                        \
+    char *escaped_actual, *escaped_expected;                            \
+                                                                        \
+    escaped_actual = escape_ansi_string(_a);                            \
+    escaped_expected = escape_ansi_string(_e);                          \
+                                                                        \
+    CU_assertFormatImplementation(!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
+        __FILE__, "", CU_FALSE,                                         \
+        "MY_ASSERT_ANSI_STRING_EQUAL(%s=\"%s\",%s=\"%s\")",             \
+        #actual, escaped_actual, #expected, escaped_expected);          \
+                                                                        \
+    free(escaped_actual);                                               \
+    free(escaped_expected);                                             \
+} while (0);
+
+static void test_append_sgr(void)
+{
+    struct {
+        int in_values[5];
+        char *expect;
+    } testcases[] = {
+        { { SGR_DONE },             "\033[m" },
+        { { -123, SGR_DONE },       "\033[m" },
+        { { 0, SGR_DONE },          "\033[0m" },
+        { { 33, SGR_DONE },         "\033[33m" },
+        { { 38, 5, 127, SGR_DONE }, "\033[38;5;127m" },
+        { { 0, SGR_DONE, 2, 3, 4 }, "\033[0m" },
+    };
+    const size_t n_testcases = sizeof(testcases) / sizeof(testcases[0]);
+    size_t i;
+    struct buf buf = BUF_INITIALIZER;
+
+    for (i = 0; i < n_testcases; i++) {
+        buf_reset(&buf);
+
+        buf_append_sgr(&buf, testcases[i].in_values[0],
+                             testcases[i].in_values[1],
+                             testcases[i].in_values[2],
+                             testcases[i].in_values[3],
+                             testcases[i].in_values[4],
+                             SGR_DONE /* belt and suspenders */);
+
+        MY_ASSERT_ANSI_STRING_EQUAL(buf_cstring(&buf), testcases[i].expect);
+    }
+
+    buf_free(&buf);
+}
+
+static void test_append_kv_basic(void)
+{
+    struct {
+        int   in_sep;
+        char *in_key;
+        char *in_value;
+        char *expect;
+    } testcases[] = {
+        { 0,   NULL,    NULL,       "" },
+        { ' ', NULL,    NULL,       " " },
+        { 0,   "mykey", NULL,       "mykey=<>" },
+        { ' ', "mykey", NULL,       " mykey=<>" },
+        { 0,   NULL,    "myvalue",  "myvalue" },
+        { ' ', NULL,    "myvalue",  " myvalue" },
+        { 0,   "mykey", "myvalue",  "mykey=<myvalue>" },
+        { ' ', "mykey", "myvalue",  " mykey=<myvalue>" },
+    };
+    const size_t n_testcases = sizeof(testcases) / sizeof(testcases[0]);
+    size_t i;
+    struct buf buf = BUF_INITIALIZER;
+
+    for (i = 0; i < n_testcases; i++) {
+        buf_reset(&buf);
+
+        buf_append_kv(&buf, testcases[i].in_sep, 0,
+                      testcases[i].in_key, testcases[i].in_value);
+
+        MY_ASSERT_ANSI_STRING_EQUAL(buf_cstring(&buf), testcases[i].expect);
+    }
+
+    buf_free(&buf);
+}
+
+static void test_append_kv_color(void)
+{
+    struct {
+        char *in_value;
+        struct buf out_result;
+        struct buf expect;
+    } testcases[] = {
+        { NULL,             BUF_INITIALIZER, BUF_INITIALIZER },
+        { "myvalue",        BUF_INITIALIZER, BUF_INITIALIZER },
+        { "something",      BUF_INITIALIZER, BUF_INITIALIZER },
+        { "something else", BUF_INITIALIZER, BUF_INITIALIZER },
+        { "another",        BUF_INITIALIZER, BUF_INITIALIZER },
+        { "and one more",   BUF_INITIALIZER, BUF_INITIALIZER },
+    };
+    const size_t n_testcases = sizeof(testcases) / sizeof(testcases[0]);
+    size_t i;
+    struct buf tmp = BUF_INITIALIZER;
+
+    for (i = 0; i < n_testcases; i++) {
+        const int sep = ' ';
+        const char *key = "mykey";
+
+        buf_reset(&tmp);
+
+        /* construct expect string */
+        buf_printf(&testcases[i].expect, "%c%s=<", sep, key);
+        if (testcases[i].in_value)
+            buf_printf(&testcases[i].expect,
+                       "\033[38;5;%um%s\033[0m",
+                       17 + strhash(testcases[i].in_value) % 214,
+                       testcases[i].in_value);
+        buf_putc(&testcases[i].expect, '>');
+
+        /* get the result */
+        buf_append_kv(&testcases[i].out_result, sep, 1,
+                      key, testcases[i].in_value);
+
+        /* better get the result we expected */
+        MY_ASSERT_ANSI_STRING_EQUAL(buf_cstring(&testcases[i].out_result),
+                                    buf_cstring(&testcases[i].expect));
+
+        /* better get same output for same inputs */
+        buf_append_kv(&tmp, sep, 1, key, testcases[i].in_value);
+        MY_ASSERT_ANSI_STRING_EQUAL(buf_cstring(&tmp),
+                                    buf_cstring(&testcases[i].out_result));
+    }
+
+    /* different inputs have hopefully produced different colours */
+    for (i = 1; i < n_testcases - 1; i++) {
+        char *copy_a, *copy_b;
+        char *p, *q;
+        int color_a, color_b, r;
+
+        copy_a = xstrdup(buf_cstring(&testcases[i].out_result));
+        copy_b = xstrdup(buf_cstring(&testcases[i + 1].out_result));
+
+        p = strchr(copy_a, '\033') + 1;
+        q = strchr(p, 'm');
+        *q = '\0';
+        r = sscanf(p, "[38;5;%d", &color_a);
+        CU_ASSERT_EQUAL(1, r);
+
+        p = strchr(copy_b, '\033') + 1;
+        q = strchr(p, 'm');
+        *q = '\0';
+        r = sscanf(p, "[38;5;%d", &color_b);
+        CU_ASSERT_EQUAL(1, r);
+
+        CU_ASSERT_NOT_EQUAL(color_a, color_b);
+
+        free(copy_a);
+        free(copy_b);
+    }
+
+    /* clean up */
+    for (i = 0; i < n_testcases; i++) {
+        buf_free(&testcases[i].out_result);
+        buf_free(&testcases[i].expect);
+    }
+    buf_free(&tmp);
+}
+
+static void test_append_kvf(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    /* single-arg format */
+    buf_append_kvf(&buf, 0, 0, "mykey", "%s", "myvalue");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "mykey=<myvalue>");
+    buf_reset(&buf);
+
+    buf_append_kvf(&buf, 0, 0, "num", "%d", 1234);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "num=<1234>");
+    buf_reset(&buf);
+
+    /* multi-arg format */
+    buf_append_kvf(&buf, 0, 0, "error", "%s|%s",
+                   "14:37:30+11:00",
+                   "No such file or directory: /dev/bogus");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf),
+        "error=<14:37:30+11:00|No such file or directory: /dev/bogus>");
+
+    /* XXX would be nice to test color too, but a nuisance, and since
+     * XXX buf_append_kvf() is just a wrapper around buf_append_kv(),
+     * XXX it's already tested by test_assert_kv_color anyway.
+     */
+
     buf_free(&buf);
 }
 

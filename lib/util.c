@@ -75,6 +75,7 @@
 #include "libconfig.h"
 #include "map.h"
 #include "retry.h"
+#include "strhash.h"
 #include "util.h"
 #include "assert.h"
 #include "xmalloc.h"
@@ -2192,4 +2193,62 @@ EXPORTED char *modseqtoa(modseq_t modseq)
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, MODSEQ_FMT, modseq);
     return buf_release(&buf);
+}
+
+EXPORTED void buf_append_sgr(struct buf *dst, ...)
+{
+    va_list ap;
+    int n, sep = 0;
+
+    buf_appendcstr(dst, "\033[");
+    va_start(ap, dst);
+    while ((n = va_arg(ap, int)) >= 0) {
+        if (sep) buf_putc(dst, sep);
+        buf_printf(dst, "%d", n);
+        sep = ';';
+    }
+    buf_putc(dst, 'm');
+}
+
+EXPORTED void buf_append_kv(struct buf *dst, int sep, int want_color,
+                            const char *key, const char *value)
+{
+    if (sep) buf_putc(dst, sep);
+
+    if (key) {
+        buf_appendcstr(dst, key);
+        buf_appendcstr(dst, "=<");
+    }
+
+    if (value) {
+        if (want_color) {
+            /* choose deterministically from xterm-256 colour cube */
+            unsigned color = 17 + strhash(value) % 214;
+            buf_append_sgr(dst, 38, 5, color, SGR_DONE);
+            buf_appendcstr(dst, value);
+            buf_append_sgr(dst, 0, SGR_DONE);
+        }
+        else {
+            buf_appendcstr(dst, value);
+        }
+    }
+
+    if (key) {
+        buf_appendcstr(dst, ">");
+    }
+}
+
+EXPORTED void buf_append_kvf(struct buf *dst, int sep, int want_color,
+                             const char *key, const char *valfmt,
+                             ...)
+{
+    va_list ap;
+    struct buf valbuf = BUF_INITIALIZER;
+
+    va_start(ap, valfmt);
+    buf_vprintf(&valbuf, valfmt, ap);
+
+    buf_append_kv(dst, sep, want_color, key, buf_cstring(&valbuf));
+
+    buf_free(&valbuf);
 }
