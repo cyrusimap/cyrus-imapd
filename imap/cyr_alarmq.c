@@ -61,6 +61,10 @@
 #include "imap/global.h"
 #include "imap/json_support.h"
 
+#define COLOR_RED       (31)
+#define COLOR_GREEN     (32)
+#define COLOR_YELLOW    (33)
+
 static int overdue_threshold = CALDAV_ALARM_LOOKAHEAD;
 static int want_color = -1;
 
@@ -69,68 +73,6 @@ static void usage(void)
 {
     fprintf(stderr, "XXX someone better write a usage() for this!\n");
     exit(EX_USAGE);
-}
-
-/* XXX move to lib/util.c once the implementation stabilises */
-#define SGR_DONE (-1)
-#define COLOR_RED       (31)
-#define COLOR_GREEN     (32)
-#define COLOR_YELLOW    (33)
-static void _buf_appendsgr(struct buf *dst, ...)
-{
-    va_list ap;
-    int n, sep = 0;
-
-    buf_appendcstr(dst, "\033[");
-    va_start(ap, dst);
-    while ((n = va_arg(ap, int)) >= 0) {
-        if (sep) buf_putc(dst, sep);
-        buf_printf(dst, "%d", n);
-        sep = ';';
-    }
-    buf_putc(dst, 'm');
-}
-
-static void _buf_append_kv(struct buf *dst, int sep, int want_color,
-                           const char *key, const char *value)
-{
-    if (sep) buf_putc(dst, sep);
-
-    if (key) {
-        buf_appendcstr(dst, key);
-        buf_appendcstr(dst, "=<");
-    }
-
-    /* XXX what about null value */
-    if (want_color) {
-        unsigned color = 17 + strhash(value) % 214; /* xterm-256 colour cube */
-        _buf_appendsgr(dst, 38, 5, color, SGR_DONE);
-        buf_appendcstr(dst, value);
-        _buf_appendsgr(dst, 0, SGR_DONE);
-    }
-    else {
-        buf_appendcstr(dst, value);
-    }
-
-    if (key) {
-        buf_appendcstr(dst, ">");
-    }
-}
-
-__attribute__((format(printf, 5, 6)))
-static void _buf_append_kvf(struct buf *dst, int sep, int want_color,
-                            const char *key, const char *valfmt,
-                            ...)
-{
-    va_list ap;
-    struct buf valbuf = BUF_INITIALIZER;
-
-    va_start(ap, valfmt);
-    buf_vprintf(&valbuf, valfmt, ap);
-
-    _buf_append_kv(dst, sep, want_color, key, buf_cstring(&valbuf));
-
-    buf_free(&valbuf);
 }
 
 static inline const char *format_localtime(time_t t, char *buf, size_t len)
@@ -157,10 +99,10 @@ static void pretty_nextcheck(struct buf *dst, time_t nextcheck)
 
         if (diff > 0) color = COLOR_YELLOW;
         if (diff > overdue_threshold) color = COLOR_RED;
-        _buf_appendsgr(dst, color, SGR_DONE);
+        buf_append_sgr(dst, color, SGR_DONE);
     }
     buf_appendcstr(dst, format_localtime(nextcheck, timebuf, sizeof(timebuf)));
-    if (want_color) _buf_appendsgr(dst, 0, SGR_DONE);
+    if (want_color) buf_append_sgr(dst, 0, SGR_DONE);
 }
 
 static void pretty_error(struct buf *dst, uint32_t num_retries,
@@ -170,14 +112,14 @@ static void pretty_error(struct buf *dst, uint32_t num_retries,
     int sep = ' ';
 
     if (last_err) {
-        _buf_append_kvf(dst, sep, 0, "attempts", "%" PRIu32, num_retries);
+        buf_append_kvf(dst, sep, 0, "attempts", "%" PRIu32, num_retries);
         buf_printf(dst, " error=<%s|",
                    format_localtime(last_run, timebuf, sizeof(timebuf)));
 
         /* error message in color */
-        if (want_color) _buf_appendsgr(dst, COLOR_RED, SGR_DONE);
+        if (want_color) buf_append_sgr(dst, COLOR_RED, SGR_DONE);
         buf_appendcstr(dst, last_err);
-        if (want_color) _buf_appendsgr(dst, 0, SGR_DONE);
+        if (want_color) buf_append_sgr(dst, 0, SGR_DONE);
 
         buf_putc(dst, '>');
     }
@@ -241,10 +183,10 @@ static void printone_calendar_pretty(const char *mboxname,
     buf_reset(&buf);
 
     pretty_nextcheck(&buf, nextcheck);
-    _buf_append_kv(&buf, sep, want_color, NULL, "CAL");
-    _buf_append_kv(&buf, sep, want_color, "mboxname", mboxname);
-    _buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
-    _buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
+    buf_append_kv(&buf, sep, want_color, NULL, "CAL");
+    buf_append_kv(&buf, sep, want_color, "mboxname", mboxname);
+    buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
+    buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
     pretty_error(&buf, num_retries, last_run, last_err);
 
     buf_putc(&buf, '\n');
@@ -309,8 +251,8 @@ static void printone_snooze_pretty(const char *userid,
     buf_reset(&buf);
 
     pretty_nextcheck(&buf, nextcheck);
-    _buf_append_kv(&buf, sep, want_color, NULL, "SNZ");
-    _buf_append_kv(&buf, sep, want_color, "userid", userid);
+    buf_append_kv(&buf, sep, want_color, NULL, "SNZ");
+    buf_append_kv(&buf, sep, want_color, "userid", userid);
 
     until = json_object_get(snoozed, "until");
     moveToMailboxId = json_object_get(snoozed, "moveToMailboxId");
@@ -318,11 +260,11 @@ static void printone_snooze_pretty(const char *userid,
 
     if (until) {
         /* XXX can we parse this and then format_localtime it? */
-        _buf_append_kv(&buf, sep, 0, "until", json_string_value(until));
+        buf_append_kv(&buf, sep, 0, "until", json_string_value(until));
     }
 
     if (moveToMailboxId) {
-        _buf_append_kv(&buf, sep, 0, "moveToMailboxId",
+        buf_append_kv(&buf, sep, 0, "moveToMailboxId",
                        json_string_value(moveToMailboxId));
     }
 
@@ -332,10 +274,10 @@ static void printone_snooze_pretty(const char *userid,
 
         json_object_foreach(setKeywords, key, value) {
             if (json_is_true(value)) {
-                _buf_append_kv(&buf, sep, 0, "setKeyword", key);
+                buf_append_kv(&buf, sep, 0, "setKeyword", key);
             }
             else {
-                _buf_append_kv(&buf, sep, 0, "unsetKeyword", key);
+                buf_append_kv(&buf, sep, 0, "unsetKeyword", key);
             }
         }
     }
@@ -410,18 +352,18 @@ static void printone_send_pretty(const char *userid,
     rcptTo = json_object_get(envelope, "rcptTo");
 
     pretty_nextcheck(&buf, nextcheck);
-    _buf_append_kv(&buf, sep, want_color, NULL, "SND");
+    buf_append_kv(&buf, sep, want_color, NULL, "SND");
 
-    _buf_append_kv(&buf, sep, want_color, "userid", userid);
+    buf_append_kv(&buf, sep, want_color, "userid", userid);
     if (0 != strcmp(userid, identityId)) {
         /* XXX skip identityId if it's the same as userid? */
-        _buf_append_kv(&buf, sep, want_color, "identityId", identityId);
+        buf_append_kv(&buf, sep, want_color, "identityId", identityId);
     }
-    _buf_append_kv(&buf, sep, 0, "from",
+    buf_append_kv(&buf, sep, 0, "from",
                    json_string_value(json_object_get(mailFrom, "email")));
 
     json_array_foreach(rcptTo, i, value) {
-        _buf_append_kv(&buf, sep, 0, "to",
+        buf_append_kv(&buf, sep, 0, "to",
                        json_string_value(json_object_get(value, "email")));
     }
 
@@ -489,10 +431,10 @@ static void printone_unscheduled_pretty(const char *mboxname,
     buf_reset(&buf);
 
     pretty_nextcheck(&buf, nextcheck);
-    _buf_append_kv(&buf, sep, want_color, NULL, "UNS");
-    _buf_append_kv(&buf, sep, want_color, "mboxname", mboxname);
-    _buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
-    _buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
+    buf_append_kv(&buf, sep, want_color, NULL, "UNS");
+    buf_append_kv(&buf, sep, want_color, "mboxname", mboxname);
+    buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
+    buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
     pretty_error(&buf, num_retries, last_run, last_err);
 
     buf_putc(&buf, '\n');
