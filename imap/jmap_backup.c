@@ -1230,7 +1230,10 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
         if (record->uid < mailbox->i.last_uid &&
             record->recno % BATCH_SIZE == 0) {
             /* Close and re-open mailbox (to avoid deadlocks) */
-            uint32_t nextuid = record->uid+1;
+            const message_t *nextmsg = mailbox_iter_step(iter);
+            uint32_t nextuid;
+
+            message_get_uid((message_t *) nextmsg, &nextuid);
 
             mailbox_iter_done(&iter);
             jmap_closembox(req, &mailbox);
