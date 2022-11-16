@@ -729,6 +729,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Email Filtering: Detecting Duplicate Deliveries
 
+:rfc:`7377`
+
+    IMAP4 Multimailbox SEARCH Extension
+
 :rfc:`7529`
 
     Non-Gregorian Recurrence Rules in the Internet Calendaring and
@@ -993,10 +997,6 @@ RFC Wishlist
 
     IMAP Extensions: Quick Flag Changes Resynchronization (CONDSTORE)
     and Quick Mailbox Resynchronization (QRESYNC)
-
-:rfc:`7377`
-
-    IMAP4 Multimailbox SEARCH Extension
 
 :rfc:`7888`
 
