@@ -428,7 +428,7 @@ sub test_sharing_samedomain
 
     my $Addressbooks = $talk1->GetAddressBooks();
 
-    $self->assert_str_equals('personal', $Addressbooks->[0]{name});
+    $self->assert_str_equals('Personal', $Addressbooks->[0]{name});
     $self->assert_str_equals('Default', $Addressbooks->[0]{path});
     $self->assert_str_equals('/dav/addressbooks/user/user1@example.com/Default/', $Addressbooks->[0]{href});
     $self->assert_num_equals(0, $Addressbooks->[0]{isReadOnly});
@@ -473,7 +473,7 @@ sub test_sharing_rename_sharee
 
     my $Addressbooks = $cardtalk->GetAddressBooks();
 
-    $self->assert_str_equals('personal', $Addressbooks->[0]{name});
+    $self->assert_str_equals('Personal', $Addressbooks->[0]{name});
     $self->assert_str_equals('Default', $Addressbooks->[0]{path});
     $self->assert_str_equals('/dav/addressbooks/user/foo/Default/', $Addressbooks->[0]{href});
     $self->assert_num_equals(0, $Addressbooks->[0]{isReadOnly});
@@ -499,7 +499,7 @@ sub test_sharing_rename_sharee
 
     $Addressbooks = $cardtalk->GetAddressBooks();
 
-    $self->assert_str_equals('personal', $Addressbooks->[0]{name});
+    $self->assert_str_equals('Personal', $Addressbooks->[0]{name});
     $self->assert_str_equals('Default', $Addressbooks->[0]{path});
     $self->assert_str_equals('/dav/addressbooks/user/bar/Default/', $Addressbooks->[0]{href});
     $self->assert_num_equals(0, $Addressbooks->[0]{isReadOnly});
@@ -547,7 +547,7 @@ sub test_sharing_crossdomain
 
     my $Addressbooks = $talk1->GetAddressBooks();
 
-    $self->assert_str_equals('personal', $Addressbooks->[0]{name});
+    $self->assert_str_equals('Personal', $Addressbooks->[0]{name});
     $self->assert_str_equals('Default', $Addressbooks->[0]{path});
     $self->assert_str_equals('/dav/addressbooks/user/user1@example.com/Default/', $Addressbooks->[0]{href});
     $self->assert_num_equals(0, $Addressbooks->[0]{isReadOnly});
@@ -618,7 +618,7 @@ EOF
 
     my $Addressbooks = $talk1->GetAddressBooks();
 
-    $self->assert_str_equals('personal', $Addressbooks->[0]{name});
+    $self->assert_str_equals('Personal', $Addressbooks->[0]{name});
     $self->assert_str_equals('Default', $Addressbooks->[0]{path});
     $self->assert_str_equals('/dav/addressbooks/user/user1@example.com/Default/', $Addressbooks->[0]{href});
     $self->assert_num_equals(0, $Addressbooks->[0]{isReadOnly});
@@ -878,6 +878,58 @@ EOF
         headers => \%Headers,
     });
     $self->assert_num_equals(204, $Response->{status});
+}
+
+sub test_addressbook_default_name
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $carddav = $self->{carddav};
+
+    xlog $self, 'PROPFIND default displayname';
+    my $res = $carddav->Request(
+        'PROPFIND',
+        'Default',
+        x('D:propfind', $carddav->NS(),
+            x('D:prop',
+                x('D:displayname'),
+            ),
+        ),
+        'Content-Type' => 'application/xml',
+        'Depth' => '0'
+    );
+
+    $self->assert_str_equals('Personal', $res->{'{DAV:}response'}[0]{
+        '{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}displayname'}{content});
+
+    xlog $self, "PROPPATCH remove displayname";
+    $res = $carddav->Request(
+        'PROPPATCH',
+        'Default',
+        x('D:propertyupdate', $carddav->NS(),
+            x('D:remove',
+                x('D:prop',
+                    x('D:displayname'),
+                )
+            )
+        ),
+    );
+
+    xlog $self, 'PROPFIND default displayname';
+    $res = $carddav->Request(
+        'PROPFIND',
+        'Default',
+        x('D:propfind', $carddav->NS(),
+            x('D:prop',
+                x('D:displayname'),
+            ),
+        ),
+        'Content-Type' => 'application/xml',
+        'Depth' => '0'
+    );
+    $self->assert_str_equals('Default', $res->{'{DAV:}response'}[0]{
+        '{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}displayname'}{content});
 }
 
 1;
