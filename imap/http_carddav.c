@@ -503,7 +503,7 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = _create_mailbox(userid, mbname_intname(mbname),
-                            MBTYPE_ADDRESSBOOK, "personal",
+                            MBTYPE_ADDRESSBOOK, "Personal",
                             &namespacelock);
     }
 
