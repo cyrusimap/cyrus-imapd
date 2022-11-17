@@ -3093,12 +3093,11 @@ static int mboxlist_have_admin_rights(const char *rights) {
  * pointer, removes the ACL entry for 'identifier'.   'isadmin' is
  * nonzero if user is a mailbox admin.  'userid' is the user's login id.
  *
- * 1. Start transaction
- * 2. Check rights
- * 3. Set db entry
- * 4. Change backup copy (cyrus.header)
- * 5. Commit transaction
- * 6. Change mupdate entry
+ * 1. Open and writelock mailbox
+ * 2. Update ACL in mailbox header
+ * 4. Commit mailbox
+ * 3. Update db entry
+ * 5. Change mupdate entry
  *
  */
 EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((unused)),
@@ -3108,6 +3107,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
                     const struct auth_state *auth_state)
 {
     mbentry_t *mbentry = NULL;
+    modseq_t foldermodseq = 0;
     int r;
     int myrights;
     int mode = ACL_MODE_SET;
@@ -3117,18 +3117,18 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     int ensure_owner_rights = 0;
     int mask;
     const char *mailbox_owner = NULL;
-    struct mailbox *mailbox = NULL;
     char *newacl = NULL;
-    struct txn *tid = NULL;
 
     init_internal();
+
+    // the namespacelock will protect us from all races on the local mailboxes.db
+    // so we can just read away and know it won't change under us.
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
 
     /* round trip identifier to potentially strip domain */
     mbname_t *idname = mbname_from_userid(identifier);
     /* XXX - enforce cross domain restrictions */
     identifier = mbname_userid(idname);
-
-    char *dbname = mboxname_to_dbname(name);
 
     /* checks if the mailbox belongs to the user who is trying to change the
        access rights */
@@ -3152,40 +3152,16 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
        the identifier */
     ensure_owner_rights = isusermbox || isidentifiermbox;
 
-    /* 1. Start Transaction */
-    /* lookup the mailbox to make sure it exists and get its acl */
-    do {
-        r = mboxlist_mylookup(dbname, &mbentry, &tid, 1, 1);
-    } while(r == IMAP_AGAIN);
+    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+    if (r) goto done;
 
     /* Can't do this to an in-transit or reserved mailbox */
-    if (!r && mbentry->mbtype & (MBTYPE_MOVING | MBTYPE_RESERVE | MBTYPE_DELETED)) {
+    if (mbentry->mbtype & (MBTYPE_MOVING | MBTYPE_RESERVE | MBTYPE_DELETED)) {
         r = IMAP_MAILBOX_NOTSUPPORTED;
+        goto done;
     }
 
-    /* if it is not a remote mailbox, we need to unlock the mailbox list,
-     * lock the mailbox, and re-lock the mailboxes list */
-    /* we must do this to obey our locking rules */
-    if (!r && !(mbentry->mbtype & MBTYPE_REMOTE)) {
-        cyrusdb_abort(mbdb, tid);
-        tid = NULL;
-        mboxlist_entry_free(&mbentry);
-
-        /* open & lock mailbox header */
-        r = mailbox_open_iwl(name, &mailbox);
-
-        if (!r) {
-            do {
-                /* lookup the mailbox to make sure it exists and get its acl */
-                r = mboxlist_mylookup(dbname, &mbentry, &tid, 1, 1);
-            } while (r == IMAP_AGAIN);
-        }
-
-        if(r) goto done;
-    }
-
-    /* 2. Check Rights */
-    if (!r && !isadmin) {
+    if (!isadmin) {
         myrights = cyrus_acl_myrights(auth_state, mbentry->acl);
         if (!(myrights & ACL_ADMIN)) {
             r = (myrights & ACL_LOOKUP) ?
@@ -3194,111 +3170,102 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
         }
     }
 
-    /* 2.1 Only admin user can set 'anyone' rights if config says so */
-    if (!r && !isadmin && !anyoneuseracl && !strncmp(identifier, "anyone", 6)) {
-      r = IMAP_PERMISSION_DENIED;
-      goto done;
+    if (!isadmin && !anyoneuseracl && !strncmp(identifier, "anyone", 6)) {
+        r = IMAP_PERMISSION_DENIED;
+        goto done;
     }
 
-    /* 3. Set DB Entry */
-    if(!r) {
-        /* Make change to ACL */
-        newacl = xstrdup(mbentry->acl);
-        if (rights && *rights) {
-            /* rights are present and non-empty */
-            mode = ACL_MODE_SET;
-            if (*rights == '+') {
-                rights++;
-                mode = ACL_MODE_ADD;
-            }
-            else if (*rights == '-') {
-                rights++;
-                mode = ACL_MODE_REMOVE;
-            }
-            /* do not allow non-admin user to remove the admin rights from mailbox owner */
-            if (!isadmin && isidentifiermbox && mode != ACL_MODE_ADD) {
-                int has_admin_rights = mboxlist_have_admin_rights(rights);
-                if ((has_admin_rights && mode == ACL_MODE_REMOVE) ||
-                   (!has_admin_rights && mode != ACL_MODE_REMOVE)) {
-                    syslog(LOG_ERR, "Denied removal of admin rights on "
-                           "folder \"%s\" (owner: %s) by user \"%s\"", name,
-                           mailbox_owner, userid);
-                    r = IMAP_PERMISSION_DENIED;
-                    goto done;
-                }
-            }
-
-            r = cyrus_acl_strtomask(rights, &mask);
-
-            if (!r && cyrus_acl_set(&newacl, identifier, mode, mask,
-                                    ensure_owner_rights ? mboxlist_ensureOwnerRights : 0,
-                                    (void *)mailbox_owner)) {
-                r = IMAP_INVALID_IDENTIFIER;
-            }
-        } else {
-            /* do not allow to remove the admin rights from mailbox owner */
-            if (!isadmin && isidentifiermbox) {
+    /* generate new rights string */
+    newacl = xstrdup(mbentry->acl);
+    if (rights && *rights) {
+        /* rights are present and non-empty */
+        mode = ACL_MODE_SET;
+        if (*rights == '+') {
+            rights++;
+            mode = ACL_MODE_ADD;
+        }
+        else if (*rights == '-') {
+            rights++;
+            mode = ACL_MODE_REMOVE;
+        }
+        /* do not allow non-admin user to remove the admin rights from mailbox owner */
+        if (!isadmin && isidentifiermbox && mode != ACL_MODE_ADD) {
+            int has_admin_rights = mboxlist_have_admin_rights(rights);
+            if ((has_admin_rights && mode == ACL_MODE_REMOVE) ||
+               (!has_admin_rights && mode != ACL_MODE_REMOVE)) {
                 syslog(LOG_ERR, "Denied removal of admin rights on "
                        "folder \"%s\" (owner: %s) by user \"%s\"", name,
                        mailbox_owner, userid);
                 r = IMAP_PERMISSION_DENIED;
                 goto done;
             }
+        }
 
-            if (cyrus_acl_remove(&newacl, identifier,
-                                 ensure_owner_rights ? mboxlist_ensureOwnerRights : 0,
-                                 (void *)mailbox_owner)) {
-                r = IMAP_INVALID_IDENTIFIER;
-            }
+        r = cyrus_acl_strtomask(rights, &mask);
+
+        if (!r && cyrus_acl_set(&newacl, identifier, mode, mask,
+                                ensure_owner_rights ? mboxlist_ensureOwnerRights : 0,
+                                (void *)mailbox_owner)) {
+            r = IMAP_INVALID_IDENTIFIER;
         }
     }
+    else {
+        /* do not allow to remove the admin rights from mailbox owner */
+        if (!isadmin && isidentifiermbox) {
+            syslog(LOG_ERR, "Denied removal of admin rights on "
+                   "folder \"%s\" (owner: %s) by user \"%s\"", name,
+                   mailbox_owner, userid);
+            r = IMAP_PERMISSION_DENIED;
+            goto done;
+        }
 
-    if (!r) {
-        /* ok, change the database */
-        free(mbentry->acl);
-        mbentry->acl = xstrdupnull(newacl);
-        mbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
-
-        r = mboxlist_update_entry(name, mbentry, &tid);
-
-        if (r) {
-            xsyslog(LOG_ERR, "DBERROR: error updating acl",
-                             "mailbox=<%s> error=<%s>",
-                             name, cyrusdb_strerror(r));
-            r = IMAP_IOERROR;
+        if (cyrus_acl_remove(&newacl, identifier,
+                             ensure_owner_rights ? mboxlist_ensureOwnerRights : 0,
+                             (void *)mailbox_owner)) {
+            r = IMAP_INVALID_IDENTIFIER;
         }
     }
+    if (r) goto done;
 
-    /* 4. Commit transaction */
-    if (!r) {
-        if((r = cyrusdb_commit(mbdb, tid)) != 0) {
-            xsyslog(LOG_ERR, "DBERROR: failed on commit",
-                             "error=<%s>",
-                             cyrusdb_strerror(r));
-            r = IMAP_IOERROR;
+    /* if it is not a remote mailbox, we need to update the copy in the mailbox header */
+    if (!(mbentry->mbtype & MBTYPE_REMOTE)) {
+        struct mailbox *mailbox = NULL;
+        r = mailbox_open_iwl(name, &mailbox);
+        if (!r) {
+            foldermodseq = mailbox_modseq_dirty(mailbox);
+            mailbox_set_acl(mailbox, newacl);
+
+            /* send a AclChange event notification */
+            struct mboxevent *mboxevent = mboxevent_new(EVENT_ACL_CHANGE);
+            mboxevent_extract_mailbox(mboxevent, mailbox);
+            mboxevent_set_acl(mboxevent, identifier, rights);
+            mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox_name(mailbox), 0);
+            mboxevent_notify(&mboxevent);
+            mboxevent_free(&mboxevent);
+
+            r = mailbox_commit(mailbox);
+            mailbox_close(&mailbox);
         }
-        tid = NULL;
+        if (r) goto done;
     }
 
-    /* 5. Change backup copy (cyrus.header) */
-    /* we already have it locked from above */
-    if (!r && !(mbentry->mbtype & MBTYPE_REMOTE)) {
-        mailbox_set_acl(mailbox, newacl);
-        /* want to commit immediately to ensure ordering */
-        r = mailbox_commit(mailbox);
+    /* change the local database */
+    free(mbentry->acl);
+    mbentry->acl = xstrdupnull(newacl);
+    if (mbentry->foldermodseq < foldermodseq)
+        mbentry->foldermodseq = foldermodseq;
 
-        /* send an AclChange event notification */
-        struct mboxevent *mboxevent = mboxevent_new(EVENT_ACL_CHANGE);
-        mboxevent_extract_mailbox(mboxevent, mailbox);
-        mboxevent_set_acl(mboxevent, identifier, rights);
-        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox_name(mailbox), 0);
-
-        mboxevent_notify(&mboxevent);
-        mboxevent_free(&mboxevent);
+    r = mboxlist_update_entry(name, mbentry, NULL);
+    if (r) {
+        xsyslog(LOG_ERR, "DBERROR: error updating acl",
+                         "mailbox=<%s> error=<%s>",
+                         name, cyrusdb_strerror(r));
+        r = IMAP_IOERROR;
+        goto done;
     }
 
-    /* 6. Change mupdate entry  */
-    if (!r && config_mupdate_server) {
+    /* Update the remote database */
+    if (config_mupdate_server) {
         mupdate_handle *mupdate_h = NULL;
         /* commit the update to MUPDATE */
         char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
@@ -3306,11 +3273,12 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
         snprintf(buf, sizeof(buf), "%s!%s", config_servername, mbentry->partition);
 
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
-        if(r) {
+        if (r) {
             syslog(LOG_ERR,
                    "cannot connect to mupdate server for setacl on '%s'",
                    name);
-        } else {
+        }
+        else {
             r = mupdate_activate(mupdate_h, name, buf, newacl);
             if(r) {
                 syslog(LOG_ERR,
@@ -3322,20 +3290,10 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     }
 
   done:
-    if (r && tid) {
-        /* if we are mid-transaction, abort it! */
-        int r2 = cyrusdb_abort(mbdb, tid);
-        if (r2) {
-            syslog(LOG_ERR,
-                   "DBERROR: error aborting txn in mboxlist_setacl: %s",
-                   cyrusdb_strerror(r2));
-        }
-    }
-    mailbox_close(&mailbox);
     free(newacl);
     mboxlist_entry_free(&mbentry);
     mbname_free(&idname);
-    free(dbname);
+    mboxname_release(&namespacelock);
 
     return r;
 }
@@ -3343,15 +3301,24 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
 /* change the ACL for mailbox 'name' when we have nothing but the name and the new value */
 EXPORTED int mboxlist_updateacl_raw(const char *name, const char *newacl)
 {
+    // the namespacelock will protect us from all races on the local mailboxes.db
+    // so we can just read away and know it won't change under us.
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
+
     struct mailbox *mailbox = NULL;
+    modseq_t foldermodseq = 0;
+
     int r = mailbox_open_iwl(name, &mailbox);
-    if (!r)
-        r = mboxlist_sync_setacls(name, newacl, mailbox_modseq_dirty(mailbox));
     if (!r) {
+        foldermodseq = mailbox_modseq_dirty(mailbox);
         mailbox_set_acl(mailbox, newacl);
         r = mailbox_commit(mailbox);
     }
     mailbox_close(&mailbox);
+
+    if (!r) r = mboxlist_sync_setacls(name, newacl, foldermodseq);
+
+    mboxname_release(&namespacelock);
     return r;
 }
 
@@ -3369,18 +3336,15 @@ EXPORTED int mboxlist_updateacl_raw(const char *name, const char *newacl)
 EXPORTED int
 mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodseq)
 {
+    // the namespacelock will protect us from all races on the local mailboxes.db
+    // so we can just read away and know it won't change under us.
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
     mbentry_t *mbentry = NULL;
     int r;
-    struct txn *tid = NULL;
-    char *dbname = mboxname_to_dbname(name);
 
     init_internal();
 
-    /* 1. Start Transaction */
-    /* lookup the mailbox to make sure it exists and get its acl */
-    do {
-        r = mboxlist_mylookup(dbname, &mbentry, &tid, 1, 1);
-    } while(r == IMAP_AGAIN);
+    r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) goto done;
 
     // nothing to change, great
@@ -3399,7 +3363,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
     if (mbentry->foldermodseq < foldermodseq)
         mbentry->foldermodseq = foldermodseq;
 
-    r = mboxlist_update_entry(name, mbentry, &tid);
+    r = mboxlist_update_entry(name, mbentry, NULL);
 
     if (r) {
         xsyslog(LOG_ERR, "DBERROR: error updating acl",
@@ -3408,17 +3372,6 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
         r = IMAP_IOERROR;
         goto done;
     }
-
-    /* 3. Commit transaction */
-    r = cyrusdb_commit(mbdb, tid);
-    if (r) {
-        xsyslog(LOG_ERR, "DBERROR: failed on commit",
-                         "mailbox=<%s> error=<%s>",
-                         name, cyrusdb_strerror(r));
-        r = IMAP_IOERROR;
-        goto done;
-    }
-    tid = NULL;
 
     /* 4. Change mupdate entry  */
     if (config_mupdate_server) {
@@ -3444,19 +3397,8 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
     }
 
 done:
-    free(dbname);
-
-    if (tid) {
-        /* if we are mid-transaction, abort it! */
-        int r2 = cyrusdb_abort(mbdb, tid);
-        if (r2) {
-            syslog(LOG_ERR,
-                   "DBERROR: error aborting txn in sync_setacls %s: %s",
-                   name, cyrusdb_strerror(r2));
-        }
-    }
-
     mboxlist_entry_free(&mbentry);
+    mboxname_release(&namespacelock);
 
     return r;
 }
