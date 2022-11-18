@@ -137,6 +137,7 @@ struct index_state {
     int want_expunged;
     unsigned num_expunged;
     message_t *m;
+    seqset_t *searchres; /* RFC 5182 search results */
 };
 
 struct copyargs {

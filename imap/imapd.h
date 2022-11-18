@@ -223,7 +223,8 @@ enum {
     SEARCH_RETURN_MAX =         (1<<1),
     SEARCH_RETURN_ALL =         (1<<2),
     SEARCH_RETURN_COUNT =       (1<<3),
-    SEARCH_RETURN_RELEVANCY =   (1<<4)
+    SEARCH_RETURN_SAVE =        (1<<4),
+    SEARCH_RETURN_RELEVANCY =   (1<<5)
 };
 
 /* Things that may be searched for */
@@ -247,6 +248,9 @@ struct searchargs {
     strarray_t subtree;
     strarray_t subtree_one;
     strarray_t mailboxes;
+
+    /* For SEARCHRES */
+    ptrarray_t result_vars;
 };
 
 /* Windowing arguments for the XCONVSORT command */

@@ -293,6 +293,7 @@ EXPORTED void index_close(struct index_state **stateptr)
     free(state->map);
     free(state->mboxname);
     free(state->userid);
+    seqset_free(&state->searchres);
     for (i = 0; i < MAX_USER_FLAGS; i++)
         free(state->flagname[i]);
     free(state);
@@ -1183,7 +1184,25 @@ EXPORTED int index_fetch(struct index_state *state,
     r = index_lock(state, /*readonly*/0);  // can't be readonly because of FETCH_SETSEEN
     if (r) return r;
 
-    seq = _parse_sequence(state, sequence, usinguid);
+    if (!strcmp("$", sequence)) {
+        seq = state->searchres;
+        usinguid = 1;
+
+        if (!seqset_first(state->searchres)) {
+            /* RFC 5182: 2.1
+             * Note that even if the "$" marker contains the empty list of
+             * messages, it must be treated by all commands accepting message
+             * sets as parameters as a valid, but non-matching list of messages.
+             * For example, the "FETCH * $" command would return a tagged OK
+             * response and no * FETCH responses.
+             */
+            *fetchedsomething = 1;  /* force OK response in imapd.c */
+            goto done;
+        }
+    }
+    else {
+        seq = _parse_sequence(state, sequence, usinguid);
+    }
 
     /* set the \Seen flag if necessary - while we still have the lock */
     if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining && state->myrights & ACL_SETSEEN) {
@@ -1232,8 +1251,9 @@ EXPORTED int index_fetch(struct index_state *state,
 
     index_fetchresponses(state, seq, usinguid, fetchargs, fetchedsomething);
 
-    seqset_free(&seq);
+    if (seq != state->searchres) seqset_free(&seq);
 
+  done:
     index_tellchanges(state, usinguid, usinguid, 0);
 
     return r;
@@ -1318,7 +1338,22 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
 
     mailbox = state->mailbox;
 
-    seq = _parse_sequence(state, sequence, storeargs->usinguid);
+    if (!strcmp("$", sequence)) {
+        seq = state->searchres;
+        storeargs->usinguid = 1;
+
+        if (!seqset_first(state->searchres)) {
+            /* RFC 5182: 2.1
+             * Note that even if the "$" marker contains the empty list of
+             * messages, it must be treated by all commands accepting message
+             * sets as parameters as a valid, but non-matching list of messages.
+             */
+            goto done;
+        }
+    }
+    else {
+        seq = _parse_sequence(state, sequence, storeargs->usinguid);
+    }
 
     for (i = 0; i < flags->count ; i++) {
         r = mailbox_user_flag(mailbox, flags->data[i], &userflag, 1);
@@ -1443,7 +1478,10 @@ out:
     mboxevent_freequeue(&mboxevents);
     if (storeargs->operation == STORE_ANNOTATION && r)
         annotate_state_abort(&mailbox->annot_state);
-    seqset_free(&seq);
+
+    if (seq != state->searchres) seqset_free(&seq);
+
+done:
     index_unlock(state);
     index_tellchanges(state, storeargs->usinguid, storeargs->usinguid,
                       (storeargs->unchangedsince != ~0ULL));
@@ -1986,15 +2024,31 @@ EXPORTED int index_search(struct index_state *state,
     modseq_t highestmodseq = 0;
     int r;
 
-    /* update the index */
-    if (!searchargs->filter && index_check(state, 0, 0))
-        return 0;
-
     highestmodseq = needs_modseq(searchargs, NULL);
+
+    /* Substitute actual search results wherever the $ variable was used */
+    for (i = 0; i < ptrarray_size(&searchargs->result_vars); i++) {
+        search_expr_t *e = ptrarray_nth(&searchargs->result_vars, i);
+
+        e->value.s = seqset_cstring(state->searchres);
+        if (!e->value.s) e->value.s = xstrdup("0");  /* force no match */
+    }
 
     query = search_query_new(state, searchargs);
     r = search_query_run(query);
-    if (r) goto out;        /* search failed */
+    if (r) {
+        /* search failed */
+        if (searchargs->returnopts & SEARCH_RETURN_SAVE) {
+            /* RFC 5182: 2.1
+             * A SEARCH command with the SAVE result option that caused the server
+             * to return the NO tagged response sets the value of the search result
+             * variable to the empty sequence.
+             */
+            seqset_free(&state->searchres);
+        }
+
+        goto out;
+    }
     folder = search_query_find_folder(query, index_mboxname(state));
 
     if (folder) {
@@ -2008,6 +2062,60 @@ EXPORTED int index_search(struct index_state *state,
         nmsg = 0;
 
     if (searchargs->returnopts) {
+        seqset_t *seq = NULL;
+
+        if (searchargs->returnopts & SEARCH_RETURN_SAVE) {
+            seqset_free(&state->searchres);
+
+            if (!(searchargs->returnopts &
+                  (SEARCH_RETURN_MIN | SEARCH_RETURN_MAX))) {
+                /* RFC 5182: 2.4:
+                 * If the SAVE result option is combined with the ALL and/or
+                 * COUNT result option(s), the "$" marker would always contain
+                 * all messages found by the SEARCH or UID SEARCH command.
+                 */
+                seq = search_folder_get_seqset(folder);
+            }
+            else if (nmsg) {
+                /* RFC 5182: 2.4
+                 * When the SAVE result option is combined with the MIN or MAX
+                 * result option, and none of the other ESEARCH result options
+                 * are present, the corresponding MIN/MAX is returned
+                 * (if the search result is not empty), but the "$" marker would
+                 * contain a single message as returned in the MIN/MAX return
+                 * item.
+                 *
+                 * If the SAVE result option is combined with both MIN and MAX
+                 * result options, and none of the other ESEARCH result options
+                 * are present, the "$" marker would contain one or two messages
+                 * as returned in the MIN/MAX return items.
+                 */
+                seq = seqset_init(0, SEQ_SPARSE);
+
+                if (searchargs->returnopts & SEARCH_RETURN_MIN) {
+                    seqset_add(seq, search_folder_get_min(folder), 1);
+                }
+                if (searchargs->returnopts & SEARCH_RETURN_MAX) {
+                    seqset_add(seq, search_folder_get_max(folder), 1);
+                }
+            }
+
+            if (usinguid) {
+                state->searchres = seq;
+            }
+            else {
+                /* Convert message number set to UID set */
+                uint32_t msgno;
+
+                state->searchres = seqset_init(0, SEQ_SPARSE);
+                for (seqset_reset(seq); (msgno = seqset_getnext(seq)) > 0; ) {
+                    seqset_add(state->searchres, state->map[msgno-1].uid, 1);
+                }
+                seqset_free(&seq);
+                seq = state->searchres;
+            }
+        }
+
         if (searchargs->filter && !nmsg) {
             /* RFC 7377: 2.1
              * An ESEARCH response MUST NOT be returned for
@@ -2020,7 +2128,7 @@ EXPORTED int index_search(struct index_state *state,
 
         if (nmsg) {
             if (searchargs->returnopts & SEARCH_RETURN_ALL) {
-                seqset_t *seq = search_folder_get_seqset(folder);
+                if (!seq) seq = search_folder_get_seqset(folder);
 
                 if (seqset_first(seq)) {
                     char *str = seqset_cstring(seq);
@@ -2028,7 +2136,7 @@ EXPORTED int index_search(struct index_state *state,
                     free(str);
                 }
 
-                seqset_free(&seq);
+                if (seq != state->searchres) seqset_free(&seq);
             }
             if (searchargs->returnopts & SEARCH_RETURN_RELEVANCY) {
                 prot_printf(state->out, " RELEVANCY (");
@@ -3030,7 +3138,22 @@ index_copy(struct index_state *state,
 
     srcmailbox = state->mailbox;
 
-    seq = _parse_sequence(state, sequence, usinguid);
+    if (!strcmp("$", sequence)) {
+        if (!seqset_first(state->searchres)) {
+            /* RFC 5182: 2.1
+             * Note that even if the "$" marker contains the empty list of
+             * messages, it must be treated by all commands accepting message
+             * sets as parameters as a valid, but non-matching list of messages.
+             */
+            return 0;
+        }
+
+        seq = state->searchres;
+        usinguid = 1;
+    }
+    else {
+        seq = _parse_sequence(state, sequence, usinguid);
+    }
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
         im = &state->map[msgno-1];
@@ -3040,7 +3163,7 @@ index_copy(struct index_state *state,
         index_copysetup(state, msgno, &copyargs);
     }
 
-    seqset_free(&seq);
+    if (seq != state->searchres) seqset_free(&seq);
 
     if (copyargs.nummsg == 0) {
         r =  IMAP_NO_NOSUCHMSG;
@@ -3850,6 +3973,9 @@ static void index_tellexpunge(struct index_state *state)
                 seqset_add(vanishedlist, im->uid, 1);
             else
                 prot_printf(state->out, "* %u EXPUNGE\r\n", msgno);
+
+            /* remove expunged message from saved search results */
+            seqset_remove(state->searchres, im->uid);
             continue;
         }
 
@@ -8235,6 +8361,7 @@ EXPORTED void freesearchargs(struct searchargs *s)
     strarray_fini(&s->subtree);
     strarray_fini(&s->subtree_one);
     strarray_fini(&s->mailboxes);
+    ptrarray_fini(&s->result_vars);
     free(s);
 }
 
