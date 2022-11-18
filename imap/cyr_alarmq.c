@@ -259,8 +259,19 @@ static void printone_snooze_pretty(const char *userid,
     setKeywords = json_object_get(snoozed, "setKeywords");
 
     if (until) {
-        /* XXX can we parse this and then format_localtime it? */
-        buf_append_kv(&buf, sep, 0, "until", json_string_value(until));
+        time_t t;
+        char timebuf[ISO8601_DATETIME_MAX + 1] = {0};
+        int r;
+
+        r = time_from_iso8601(json_string_value(until), &t);
+        if (r < 0) {
+            /* couldn't parse for some reason, just spit it out as is */
+            buf_append_kv(&buf, sep, 0, "until", json_string_value(until));
+        }
+        else {
+            buf_append_kv(&buf, sep, 0, "until",
+                          format_localtime(t, timebuf, sizeof(timebuf)));
+        }
     }
 
     if (moveToMailboxId) {
