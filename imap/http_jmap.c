@@ -919,8 +919,8 @@ static int _create_upload_collection(const char *accountid,
         cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
                       JACL_READITEMS | JACL_WRITE, NULL, NULL);
 
-        xsyslog(LOG_NOTICE, "reset ACL", "userid=<%s> newacl=<%s>",
-                httpd_userid, newacl);
+        xsyslog(LOG_NOTICE, "reset ACL", "userid=<%s> oldacl=<%s> newacl=<%s>",
+                httpd_userid, mailbox_acl(*mailboxp), newacl);
 
         /* ok, change the mailboxes database */
         r = mboxlist_sync_setacls(mbentry->name, newacl,
