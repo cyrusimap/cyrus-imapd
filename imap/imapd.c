@@ -4649,6 +4649,17 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     seqset_free(&init.vanishedlist);
 
+    if (client_capa & CAPA_IMAP4REV2) {
+        struct listargs listargs = {
+            LIST_CMD_EXTENDED, 0, LIST_RET_CHILDREN | LIST_RET_SPECIALUSE,
+            "", STRARRAY_INITIALIZER, NULL, 0, {0}, STRARRAY_INITIALIZER
+        };
+
+        strarray_append(&listargs.pat, name);
+        list_data(&listargs);
+        strarray_fini(&listargs.pat);
+    }
+
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
                 index_hasrights(imapd_index, ACL_READ_WRITE) ?
                 "WRITE" : "ONLY", error_message(IMAP_OK_COMPLETED));
