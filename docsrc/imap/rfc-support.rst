@@ -409,6 +409,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Email Filtering: Body Extension
 
+:rfc:`5182`
+
+    IMAP Extension for Referencing the Last SEARCH Result
+
 :rfc:`5183`
 
     Sieve Email Filtering: Environment Extension
@@ -947,10 +951,6 @@ RFC Wishlist
 :rfc:`3229`
 
     Delta encoding in HTTP
-
-:rfc:`5182`
-
-    IMAP Extension for Referencing the Last SEARCH Result
 
 :rfc:`5255`
 

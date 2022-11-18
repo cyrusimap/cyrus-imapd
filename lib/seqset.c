@@ -57,6 +57,8 @@ struct seq_range {
     unsigned high;
 };
 
+#define RANGE_SIZE sizeof(struct seq_range)
+
 struct seqset {
     struct seq_range *set;
     size_t len;
@@ -128,8 +130,7 @@ EXPORTED void seqset_add(seqset_t *seq, unsigned num, int ismember)
     if (!seq->set || seq->set[seq->len-1].high < seq->prev || num <= seq->prev) {
         if (seq->len == seq->alloc) {
             seq->alloc += SETGROWSIZE;
-            seq->set =
-                xrealloc(seq->set, seq->alloc * sizeof(struct seq_range));
+            seq->set = xrealloc(seq->set, seq->alloc * RANGE_SIZE);
         }
         seq->set[seq->len].low = num;
         seq->len++;
@@ -137,6 +138,44 @@ EXPORTED void seqset_add(seqset_t *seq, unsigned num, int ismember)
     /* update the final high value */
     seq->set[seq->len-1].high = num;
     seq->prev = num;
+}
+
+/*
+ * Remove a number `num' from the sequence set `seq'.
+ */
+EXPORTED void seqset_remove(seqset_t *seq, unsigned num)
+{
+    if (!seqset_ismember(seq, num)) return;
+
+    struct seq_range *cur = &seq->set[seq->current];
+
+    if (cur->low == cur->high) {
+        /* Single value - remove from the set */
+        memmove(cur, cur+1, (seq->len - seq->current - 1) * RANGE_SIZE);
+        seq->len--;
+    }
+    else if (num == cur->low) {
+        /* Increment the low value */
+        cur->low = num + 1;
+    }
+    else if (num == cur->high) {
+        /* Decrement the high value */
+        cur->high = num - 1;
+    }
+    else {
+        /* Split the range - insert a new one after current */
+        if (seq->len == seq->alloc) {
+            seq->alloc += SETGROWSIZE;
+            seq->set = xrealloc(seq->set, seq->alloc * RANGE_SIZE);
+        }
+
+        cur = &seq->set[seq->current];  // xrealloc may have changed ptr location
+        memmove(cur+1, cur, (seq->len - seq->current) + RANGE_SIZE);
+        seq->len++;
+
+        cur->high = num - 1;
+        (cur+1)->low = num + 1;
+    }
 }
 
 

@@ -351,7 +351,7 @@ static struct capa_struct base_capabilities[] = {
     /* SASL-IR          RFC 4959 is announced in capa_response() */
     { "SAVEDATE",              2 }, /* RFC 8514 */
     { "SEARCH=FUZZY",          2 }, /* RFC 6203 */
-    /* SEARCHRES        RFC 5182 is not implemented */
+    { "SEARCHRES",             2 }, /* RFC 5182 */
     { "SORT",                  2 }, /* RFC 5256 */
     { "SORT=DISPLAY",          2 }, /* RFC 5957 */
     { "SPECIAL-USE",           2 }, /* RFC 6154 */
@@ -1443,7 +1443,9 @@ static void cmdloop(void)
             copy:
                 c = getword(imapd_in, &arg1);
                 if (c == '\r') goto missingargs;
-                if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
+                /* Allow RFC 5282 search result variable or explicit sequence */
+                if (c != ' ' || (strcmp("$", arg1.s) && !imparse_issequence(arg1.s)))
+                    goto badsequence;
                 c = getastring(imapd_in, imapd_out, &arg2);
                 if (c == EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
@@ -1567,7 +1569,9 @@ static void cmdloop(void)
             fetch:
                 c = getword(imapd_in, &arg1);
                 if (c == '\r') goto missingargs;
-                if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
+                /* Allow RFC 5282 search result variable or explicit sequence */
+                if (c != ' ' || (strcmp("$", arg1.s) && !imparse_issequence(arg1.s)))
+                    goto badsequence;
 
                 cmd_fetch(tag.s, arg1.s, usinguid);
 
@@ -1792,7 +1796,9 @@ static void cmdloop(void)
             move:
                 c = getword(imapd_in, &arg1);
                 if (c == '\r') goto missingargs;
-                if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
+                /* Allow RFC 5282 search result variable or explicit sequence */
+                if (c != ' ' || (strcmp("$", arg1.s) && !imparse_issequence(arg1.s)))
+                    goto badsequence;
                 c = getastring(imapd_in, imapd_out, &arg2);
                 if (c == EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
@@ -1965,7 +1971,9 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
             store:
                 c = getword(imapd_in, &arg1);
-                if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
+                /* Allow RFC 5282 search result variable or explicit sequence */
+                if (c != ' ' || (strcmp("$", arg1.s) && !imparse_issequence(arg1.s)))
+                    goto badsequence;
 
                 cmd_store(tag.s, arg1.s, usinguid);
 
@@ -6196,6 +6204,30 @@ static void cmd_search(char *tag, char *cmd)
 
     if (searchargs->filter) {
         /* Multisearch */
+        if ((searchargs->filter & SEARCH_SOURCE_SELECTED) && !imapd_index) {
+            /* RFC 7377: 2.2
+             * If the source options include (or default to) "selected", the IMAP
+             * session MUST be in "selected" state.
+             */
+            prot_printf(imapd_out,
+                        "%s BAD Please select a mailbox first\r\n", tag);
+            goto done;
+        }
+        if ((searchargs->filter & ~SEARCH_SOURCE_SELECTED) &&
+            (searchargs->returnopts & SEARCH_RETURN_SAVE)) {
+            /* RFC 7377: 2.2
+             * If the server supports the SEARCHRES [RFC5182] extension, then the
+             * "SAVE" result option is valid only if "selected" is specified or
+             * defaulted to as the sole mailbox to be searched.  If any source
+             * option other than "selected" is specified, the ESEARCH command MUST
+             * return a "BAD" result.
+             */
+            prot_printf(imapd_out,
+                        "%s BAD Search results requested for unselected mailbox(es)\r\n",
+                        tag);
+            goto done;
+        }
+
         struct multisearch_rock mrock = {
             searchargs, search_expr_duplicate(searchargs->root),
             HASH_TABLE_INITIALIZER, 0, 0, &n,
@@ -6224,15 +6256,7 @@ static void cmd_search(char *tag, char *cmd)
 
             switch (mrock.filter) {
             case SEARCH_SOURCE_SELECTED:
-                if (!imapd_index) {
-                    prot_printf(imapd_out,
-                                "%s BAD Please select a mailbox first\r\n", tag);
-                    search_expr_free(mrock.expr);
-                    free_hash_table(&mrock.mailboxes, NULL);
-                    goto done;
-                }
-
-                if (!index_check(imapd_index, 0, 0)) {
+                if (!index_check(imapd_index, 0, 0)) {  /* update the index */
                     n += index_search(imapd_index, searchargs, /* usinguid */1);
 
                     hash_insert(index_mboxname(imapd_index),
@@ -6292,7 +6316,7 @@ static void cmd_search(char *tag, char *cmd)
         search_expr_free(mrock.expr);
         free_hash_table(&mrock.mailboxes, NULL);
     }
-    else {
+    else if (!index_check(imapd_index, 0, 0)) {  /* update the index */
         n = index_search(imapd_index, searchargs, usinguid);
     }
 

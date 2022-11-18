@@ -734,6 +734,9 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
         else if (!strcmp(opt.s, "count")) {
             searchargs->returnopts |= SEARCH_RETURN_COUNT;
         }
+        else if (!strcmp(opt.s, "save")) {      /* RFC 5182 */
+            searchargs->returnopts |= SEARCH_RETURN_SAVE;
+        }
         else if (!strcmp(opt.s, "relevancy")) { /* RFC 6203 */
             searchargs->returnopts |= SEARCH_RETURN_RELEVANCY;
         }
@@ -746,13 +749,14 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
 
     } while (c == ' ');
 
-    /* RFC 4731:
-     * If the list of result options is empty, that requests the server to
-     * return an ESEARCH response instead of the SEARCH response.  This is
-     * equivalent to "(ALL)".
-     */
-    if (!searchargs->returnopts)
-        searchargs->returnopts = SEARCH_RETURN_ALL;
+    if (!(searchargs->returnopts & ~(SEARCH_RETURN_SAVE|SEARCH_RETURN_RELEVANCY))) {
+        /* RFC 4731:
+         * If the list of result options is empty, that requests the server to
+         * return an ESEARCH response instead of the SEARCH response.  This is
+         * equivalent to "(ALL)".
+         */
+        searchargs->returnopts |= SEARCH_RETURN_ALL;
+    }
 
     if (c != ')') {
         prot_printf(pout,
@@ -968,6 +972,21 @@ static int get_search_criterion(struct protstream *pin,
             return EOF;
         }
         c = prot_getc(pin);
+        break;
+
+    case '$':
+        if (!strcmp("$", criteria.s)) {
+ result_var:
+            /* RFC 5182 search result variable.
+             *
+             * Add this expr to the list of those that need to have the
+             * variable substituted with the actual search results (UIDs).
+            */
+            e = search_expr_new(parent, SEOP_MATCH);
+            e->attr = search_attr_find("uid");
+            ptrarray_append(&base->result_vars, e);
+        }
+        else goto badcri;
         break;
 
     case '0': case '1': case '2': case '3': case '4':
@@ -1412,6 +1431,7 @@ static int get_search_criterion(struct protstream *pin,
             seqset_t *seq;
             if (c != ' ') goto missingarg;
             c = getword(pin, &arg);
+            if (!strcmp("$", arg.s)) goto result_var;
             if (!imparse_issequence(arg.s)) goto badcri;
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find(criteria.s);

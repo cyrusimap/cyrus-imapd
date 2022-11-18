@@ -519,4 +519,35 @@ static void test_simplify(void)
     seqset_free(&seq);
 }
 
+static void test_remove(void)
+{
+    seqset_t *seq;
+    char *s;
+
+    seq = seqset_parse("1:8,10,12:14,16:20", NULL, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
+
+    seqset_remove(seq, 18);
+    s = seqset_cstring(seq);
+    CU_ASSERT_STRING_EQUAL(s, "1:8,10,12:14,16:17,19:20");
+    free(s);
+
+    seqset_remove(seq, 1);
+    s = seqset_cstring(seq);
+    CU_ASSERT_STRING_EQUAL(s, "2:8,10,12:14,16:17,19:20");
+    free(s);
+
+    seqset_remove(seq, 14);
+    s = seqset_cstring(seq);
+    CU_ASSERT_STRING_EQUAL(s, "2:8,10,12:13,16:17,19:20");
+    free(s);
+
+    seqset_remove(seq, 10);
+    s = seqset_cstring(seq);
+    CU_ASSERT_STRING_EQUAL(s, "2:8,12:13,16:17,19:20");
+    free(s);
+
+    seqset_free(&seq);
+}
+
 /* vim: set ft=c: */
