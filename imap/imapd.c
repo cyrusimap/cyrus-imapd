@@ -6444,6 +6444,14 @@ static void cmd_search(char *tag, char *cmd)
         free_hash_table(&mrock.mailboxes, NULL);
     }
     else {
+        if ((client_capa & CAPA_IMAP4REV2) && !searchargs->returnopts) {
+            /* RFC 9051: Appendix E.4
+             * SEARCH command now requires to return the ESEARCH response
+             * (SEARCH response is now deprecated).
+             */
+            searchargs->returnopts = SEARCH_RETURN_ALL;
+        }
+
         n = index_search(imapd_index, searchargs, usinguid);
     }
 
