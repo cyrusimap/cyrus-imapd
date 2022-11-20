@@ -88,26 +88,39 @@ sub add_pass
 {
     my $self = shift;
     my $test = shift;
-    $self->_print(_getpaddedname($test) . "[  " . $self->ansi([32], 'OK') . "  ]\n");
+
+    my $line = sprintf "%s %s\n",
+                       $self->ansi([32], '[  OK  ]'),
+                       _getname($test);
+    $self->_print($line);
 }
 
 sub add_error
 {
     my $self = shift;
     my $test = shift;
+
     $self->record_failed($test);
-    $self->_print(_getpaddedname($test) . "[" . $self->ansi([31], 'ERROR') . " ]\n");
+
+    my $line = sprintf "%s %s\n",
+                       $self->ansi([31], '[ERROR ]'),
+                       _getname($test);
+    $self->_print($line);
 }
 
 sub add_failure
 {
     my $self = shift;
     my $test = shift;
+
     $self->record_failed($test);
-    $self->_print(_getpaddedname($test) . "[" . $self->ansi([33], 'FAILED') . "]\n");
+    my $line = sprintf "%s %s\n",
+                       $self->ansi([33], '[FAILED]'),
+                       _getname($test);
+    $self->_print($line);
 }
 
-sub _getpaddedname
+sub _getname
 {
     my $test = shift;
     my $suite = ref($test);
@@ -116,15 +129,7 @@ sub _getpaddedname
     my $testname = $test->{"Test::Unit::TestCase_name"};
     $testname =~ s/^test_//;
 
-    my $res = "$suite.$testname";
-
-    if (length($res) > 70) {
-        $res = substr($res, 0, 67) . '...';
-    }
-
-    $res .= ' ' x (72 - length($res));
-
-    return $res;
+    return "$suite.$testname";
 }
 
 sub _prettytest
