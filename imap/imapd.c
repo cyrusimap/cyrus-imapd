@@ -6105,11 +6105,7 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
     }
     }
 
-    if (imapd_index && !strcmp(mbentry->name, index_mboxname(imapd_index))) {
-        /* Mailbox is already selected - use current index state */
-        state = imapd_index;
-    }
-    else if ((r = index_open(mbentry->name, &mrock->init, &state))) {
+    if ((r = index_open(mbentry->name, &mrock->init, &state))) {
         return r;
     }
 
@@ -6118,7 +6114,7 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
     mrock->args->root = search_expr_duplicate(mrock->expr);
 
     *mrock->n += index_search(state, mrock->args, /*usinguid*/1);
-    if (state != imapd_index) index_close(&state);
+    index_close(&state);
 
     /* Keep track of each mailbox we search */
     hash_insert(mbentry->name, (void *) 1, &mrock->mailboxes);
