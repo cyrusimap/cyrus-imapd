@@ -1040,16 +1040,14 @@ static int mailbox_open_advanced(const char *name,
 
     // lock the user namespace FIRST before the mailbox namespace
     char *userid = mboxname_to_userid(name);
-    if (userid) {
-        int haslock = user_isnamespacelocked(userid);
-        if (haslock) {
-            if (index_locktype & LOCK_EXCLUSIVE) assert(haslock & LOCK_EXCLUSIVE);
-        }
-        else {
-            mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
-        }
-        free(userid);
+    int haslock = user_isnamespacelocked(userid);
+    if (haslock) {
+        if (index_locktype & LOCK_EXCLUSIVE) assert(haslock & LOCK_EXCLUSIVE);
     }
+    else {
+        mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
+    }
+    free(userid);
 
     if (mbe) mbentry = mboxlist_entry_copy(mbe);
     else r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
