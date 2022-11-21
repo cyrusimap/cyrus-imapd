@@ -375,15 +375,13 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     open_conversations = open;
 
     /* first ensure that the usernamespace is locked */
-    if (userid) {
-        int haslock = user_isnamespacelocked(userid);
-        if (haslock) {
-            if (!shared) assert(haslock != LOCK_SHARED);
-        }
-        else {
-            int locktype = shared ? LOCK_SHARED : LOCK_EXCLUSIVE;
-            open->local_namespacelock = user_namespacelock_full(userid, locktype);
-        }
+    int haslock = user_isnamespacelocked(userid);
+    if (haslock) {
+        if (!shared) assert(haslock != LOCK_SHARED);
+    }
+    else {
+        int locktype = shared ? LOCK_SHARED : LOCK_EXCLUSIVE;
+        open->local_namespacelock = user_namespacelock_full(userid, locktype);
     }
 
     /* open db */
