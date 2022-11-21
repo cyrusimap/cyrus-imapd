@@ -559,6 +559,7 @@ int main(int argc, char *argv[])
     script_data_t sd = { NULL, "", NULL, 0 };
     FILE *f;
     unsigned uid = 0;
+    char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
 
     /* prevent crashes if -e or -t aren't specified */
     strarray_append(&e_from, "");
@@ -631,7 +632,6 @@ int main(int argc, char *argv[])
     }
     else {
         char magic[BYTECODE_MAGIC_LEN];
-        char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
         sieve_script_t *s = NULL;
         bytecode_info_t *bc = NULL;
         char *err = NULL;
