@@ -168,7 +168,7 @@ sub test_header_multiple
 }
 
 sub test_esearch
-    :NoAltNameSpace
+    :NoAltNameSpace :needs_search_xapian :Conversations :min_version_3_7
 {
     my ($self) = @_;
 
@@ -305,6 +305,8 @@ EOF
     $imaptalk->append('INBOX.f',     "()", $raw{F}) || die $@;
     $imaptalk->append('shared',      "()", $raw{G}) || die $@;
 
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
     my @results;
     my %handlers =
     (
@@ -438,10 +440,20 @@ EOF
     $self->assert_str_equals('INBOX.d', $results[2][0][3]);
     $self->assert_str_equals('shared', $results[3][0][3]);
     $self->assert_str_equals('INBOX.a', $results[4][0][3]);
+
+    xlog $self, "Fuzzy search the personal namespace";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(PERSONAL)', 'FUZZY', 'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(3, scalar @results);
+    $self->assert_str_equals('INBOX', $results[0][0][3]);
+    $self->assert_str_equals('INBOX.a', $results[1][0][3]);
+    $self->assert_str_equals('INBOX.a.b', $results[2][0][3]);
 }
 
 sub test_searchres
-    :NoAltNameSpace
+    :NoAltNameSpace :min_version_3_7
 {
     my ($self) = @_;
 
