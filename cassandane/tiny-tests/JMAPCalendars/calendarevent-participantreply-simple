@@ -59,7 +59,7 @@ sub test_calendarevent_participantreply_simple
                             "showWithoutTime" => JSON::false,
                             "start" => "2022-11-23T16:45:00",
                             "recurrenceRules" => [{
-                                "@type" => "RecurrenceRule",
+                                "\@type" => "RecurrenceRule",
                                 "frequency" => "weekly"
                             }],
                             "timeZone" => "Australia/Melbourne",
@@ -105,7 +105,7 @@ sub test_calendarevent_participantreply_simple
 
     $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REPLY");
-return;
+
     xlog $self, "set attendee status on override";
     my $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
         eventId => encode_eventid(substr($id, 2), "20221130T164500"),

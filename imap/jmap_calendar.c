@@ -7903,6 +7903,8 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
 
         buf_insertcstr(&buf, 0, "recurrenceOverrides/");
         buf_putc(&buf, '/');
+
+        if (!update.is_standalone) update.eid->ical_recurid = NULL;
     }
     buf_printf(&buf, "participants/%s/participationStatus", part_id);
 
