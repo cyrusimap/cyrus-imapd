@@ -109,14 +109,16 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-    $self->{jmap}->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:principals',
-        'urn:ietf:params:jmap:calendars:preferences',
-        'https://cyrusimap.org/ns/jmap/calendars',
-        'https://cyrusimap.org/ns/jmap/debug',
-    ]);
+    if ($self->{_want}->{start_instances}) {
+        $self->{jmap}->DefaultUsing([
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:calendars',
+            'urn:ietf:params:jmap:principals',
+            'urn:ietf:params:jmap:calendars:preferences',
+            'https://cyrusimap.org/ns/jmap/calendars',
+            'https://cyrusimap.org/ns/jmap/debug',
+        ]);
+    }
 }
 
 sub encode_eventid
