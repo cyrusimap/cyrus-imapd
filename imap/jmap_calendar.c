@@ -5337,6 +5337,31 @@ static void remove_itip_messages(struct caldav_db *db,
     }
 }
 
+static int is_standalone(struct jmap_caleventid *eid,
+                         struct caldav_db *db, int *is_standalone)
+{
+    struct caldav_jscal_filter jscal_filter = {
+        .ical_uid = eid->ical_uid,
+        .ical_recurid = eid->ical_recurid
+    };
+    int r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, 0,
+                             updateevent_check_exists_cb, NULL);
+    if (r && r != CYRUSDB_DONE)
+        return r;
+
+    *is_standalone = (r == CYRUSDB_DONE);
+    if (!*is_standalone) {
+        // if it isn't there must be a main event
+        jscal_filter.ical_recurid = "";
+        r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, 0,
+                                 updateevent_check_exists_cb, NULL);
+        if (r != CYRUSDB_DONE)
+            return HTTP_NOT_FOUND;
+    }
+
+    return 0;
+}
+
 static void setcalendarevents_update(jmap_req_t *req,
                                      struct mailbox *notifmbox,
                                      struct mailbox *schedinbox,
@@ -5374,26 +5399,8 @@ static void setcalendarevents_update(jmap_req_t *req,
 
     // Determine if event is a standalone recurrence instance
     if (eid->ical_recurid) {
-        struct caldav_jscal_filter jscal_filter = {
-            .ical_uid = eid->ical_uid,
-            .ical_recurid = eid->ical_recurid
-        };
-        r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, 0,
-                updateevent_check_exists_cb, NULL);
-        if (r && r != CYRUSDB_DONE)
-            goto done;
-        update.is_standalone = r == CYRUSDB_DONE;
-        if (!update.is_standalone) {
-            // if it isn't there must be a main event
-            jscal_filter.ical_recurid = "";
-            r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, 0,
-                    updateevent_check_exists_cb, NULL);
-            if (r != CYRUSDB_DONE) {
-                r = HTTP_NOT_FOUND;
-                goto done;
-            }
-        }
-        r = 0;
+        r = is_standalone(eid, db, &update.is_standalone);
+        if (r) goto done;
     }
 
     /* Determine mailbox and resource name of calendar event. */
