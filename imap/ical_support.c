@@ -2172,6 +2172,24 @@ EXPORTED void icalproperty_set_xparam(icalproperty *prop,
     icalproperty_add_parameter(prop, param);
 }
 
+EXPORTED const char *icalproperty_get_xparam_value(icalproperty *prop,
+                                                   const char *name)
+{
+    icalparameter *param;
+
+    for (param = icalproperty_get_first_parameter(prop, ICAL_ANY_PARAMETER);
+         param;
+         param = icalproperty_get_next_parameter(prop, ICAL_ANY_PARAMETER)) {
+
+        if (strcasecmpsafe(icalparameter_get_xname(param), name)) {
+            continue;
+        }
+        return icalparameter_get_xvalue(param);
+    }
+
+    return NULL;
+}
+
 EXPORTED int icalcomponent_read_usedefaultalerts(icalcomponent *comp)
 {
     icalcomponent *ical = NULL;
