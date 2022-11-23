@@ -99,6 +99,7 @@ static int jmap_calendarevent_query(struct jmap_req *req);
 static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 static int jmap_calendarevent_parse(jmap_req_t *req);
+static int jmap_calendarevent_participantreply(jmap_req_t *req);
 static int jmap_principal_get(struct jmap_req *req);
 static int jmap_principal_query(struct jmap_req *req);
 static int jmap_principal_changes(struct jmap_req *req);
@@ -179,6 +180,12 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendarevent_parse,
         JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarEvent/participantReply",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendarevent_participantreply,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "CalendarEventNotification/get",
@@ -7700,6 +7707,274 @@ done:
     jmap_parse_fini(&parse);
     free_hash_table(props, NULL);
     free(props);
+    return 0;
+}
+
+static int jmap_calendarevent_participantreply(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    const char *part_email = NULL;
+    const char *part_stat = NULL;
+    struct caldav_db *db = NULL;
+    struct caldav_data *cdata = NULL;
+    mbentry_t *mbentry = NULL;
+    struct mailbox *mbox = NULL;
+    strarray_t schedule_addr = STRARRAY_INITIALIZER;
+    struct updateevent update = { .schedule_addresses = &schedule_addr };
+    json_t *res = json_object();
+    json_t *err = NULL;
+    int r = 0;
+
+    /* Parse arguments */
+    json_t *jprop = json_object_get(req->args, "eventId");
+    if (!json_is_string(jprop) ||
+        !(update.eid = jmap_caleventid_decode(json_string_value(jprop)))) {
+        jmap_parser_invalid(&parser, "eventId");
+    }
+    jprop = json_object_get(req->args, "participantEmail");
+    if (json_is_string(jprop)) {
+        part_email = json_string_value(jprop);
+        strarray_append(&schedule_addr, part_email);
+    }
+    else {
+        jmap_parser_invalid(&parser, "participantEmail");
+    }
+    jprop = json_object_get(req->args, "updates");
+    if (json_is_object(jprop)) {
+        icalparameter_partstat ical_part_stat = ICAL_PARTSTAT_NONE;
+
+        jmap_parser_push(&parser, "updates");
+        jprop = json_object_get(jprop, "participationStatus");
+        if (json_is_string(jprop)) {
+            part_stat = json_string_value(jprop);
+            char *tmp = ucase(xstrdup(part_stat));
+            ical_part_stat = icalparameter_string_to_enum(tmp);
+            free(tmp);
+        }
+
+        switch (ical_part_stat) {
+        case ICAL_PARTSTAT_ACCEPTED:
+        case ICAL_PARTSTAT_DECLINED:
+        case ICAL_PARTSTAT_TENTATIVE:
+            break;
+        default:
+            jmap_parser_invalid(&parser, "participationStatus");
+        }
+
+        jmap_parser_pop(&parser);
+    }
+    else {
+        jmap_parser_invalid(&parser, "updates");
+    }
+
+    if (json_array_size(parser.invalid)) {
+        goto done;
+    }
+
+    db = caldav_open_userid(req->accountid);
+    if (!db) {
+        syslog(LOG_ERR,
+               "caldav_open_mailbox failed for user %s", req->accountid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Determine if event is a standalone recurrence instance */
+    if (update.eid->ical_recurid) {
+        r = is_standalone(update.eid, db, &update.is_standalone);
+        if (r) goto done;
+    }
+
+    /* Determine mailbox and IMAP UID of calendar event. */
+    r = caldav_lookup_uid(db, update.eid->ical_uid, &cdata);
+    if (r && r != CYRUSDB_NOTFOUND) {
+        syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
+               update.eid->ical_uid, error_message(r));
+        goto done;
+    }
+    if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
+            !cdata->dav.rowid || !cdata->dav.imap_uid ||
+            cdata->comp_type != CAL_COMP_VEVENT) {
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+
+    mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    if (!mbentry) {
+        xsyslog(LOG_WARNING, "no mbentry for mailbox",
+                "dav.mailbox=<%s> dav.mailbox_byname=<%d>",
+                cdata->dav.mailbox, cdata->dav.mailbox_byname);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+
+    if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+        xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
+                "mailbox is deleted, but ical_objs row exists",
+                "mboxid=<%s> imap_uid=<%d>",
+                mbentry->uniqueid, cdata->dav.imap_uid);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+
+    /* Check permissions. */
+    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+
+    /* Check privacy for sharees */
+    if (strcmp(req->accountid, req->userid)) {
+        if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
+            r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
+                IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
+            goto done;
+        }
+    }
+
+    /* Open mailbox for reading */
+    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    if (r) {
+        syslog(LOG_ERR, "jmap_openmbox(req, %s) failed: %s",
+                mbentry->name, error_message(r));
+        goto done;
+    }
+
+    /* Fetch index record for the resource. */
+    struct index_record record = { };
+    r = mailbox_find_index_record(mbox, cdata->dav.imap_uid, &record);
+    if (r) {
+        syslog(LOG_ERR, "mailbox_index_record(0x%x) failed: %s",
+                cdata->dav.imap_uid, error_message(r));
+        goto done;
+    }
+    /* Load VEVENT from record. */
+    update.oldical = record_to_ical(mbox, &record, NULL);
+    if (!update.oldical) {
+        syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
+                cdata->dav.imap_uid, mbentry->name);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    jmap_closembox(req, &mbox);
+
+    /* Find participantId */
+    icalcomponent *comp = icalcomponent_get_first_real_component(update.oldical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    const char *part_id = NULL;
+
+    for (; comp; comp = icalcomponent_get_next_component(update.oldical, kind)) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+
+        if (update.eid->ical_recurid) {
+            /* Is it the correct override? */
+            if (!prop || strcmp(update.eid->ical_recurid,
+                                icalproperty_get_value_as_string(prop))) {
+                continue;
+            }
+        }
+        else if (prop) {
+            /* Not the master */
+            continue;
+        }
+
+        prop = find_attendee(comp, part_email);
+        if (prop) {
+            part_id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+            break;
+        }
+    }
+
+    if (!part_id) {
+        r = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    /* Create patch */
+    struct buf buf = BUF_INITIALIZER;
+    if (update.eid->ical_recurid) {
+        /* XXX  FIX ME */
+        struct icaltimetype tt = icaltime_from_string(update.eid->ical_recurid);
+        struct jmapical_datetime dt;
+
+        jmapical_datetime_from_icaltime(tt, &dt);
+        jmapical_localdatetime_as_string(&dt, &buf);
+
+        buf_insertcstr(&buf, 0, "recurrenceOverrides/");
+        buf_putc(&buf, '/');
+    }
+    buf_printf(&buf, "participants/%s/participationStatus", part_id);
+
+    update.event_patch = json_pack("{s:s}", buf_cstring(&buf), part_stat);
+    update.mbentry = mbentry;
+    update.cdata = cdata;
+    buf_free(&buf);
+
+    /* Apply patch */
+    r = updateevent_apply_patch(req, &update, parser.invalid, NULL, &err);
+    if (err || r || json_array_size(parser.invalid)) goto done;
+
+    /* Create and send the reply */
+    sched_reply(req->accountid, &schedule_addr, update.oldical, update.newical);
+
+    /* Get SCHEDULE_STATUS */
+    for (comp = icalcomponent_get_first_component(update.newical, kind);
+         comp;
+         comp = icalcomponent_get_next_component(update.newical, kind)) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+
+        if (update.eid->ical_recurid) {
+            /* Is it the correct override? */
+            if (!prop || strcmp(update.eid->ical_recurid,
+                                icalproperty_get_value_as_string(prop))) {
+                continue;
+            }
+        }
+        else if (prop) {
+            /* Not the master */
+            continue;
+        }
+
+        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+        icalparameter *param = icalproperty_get_schedulestatus_parameter(prop);
+        json_object_set_new(res, "scheduleStatus",
+                            json_string(icalparameter_get_schedulestatus(param)));
+        break;
+    }
+
+    /* Build response */
+    req->accountid = NULL;
+    jmap_ok(req, res);
+
+done:
+    if (!err) {
+        if (json_array_size(parser.invalid)) {
+            err = json_pack("{s:s}", "type", "invalidArguments");
+            json_object_set(err, "arguments", parser.invalid);
+        }
+        else if (r) {
+            switch (r) {
+            case HTTP_NOT_FOUND:
+            case IMAP_NOTFOUND:
+                err = json_pack("{s:s}", "type", "notFound");
+                break;
+            default:
+                err = jmap_server_error(r);
+            }
+        }
+    }
+    if (err) jmap_error(req, err);
+
+    jmap_parser_fini(&parser);
+    jmap_caleventid_free(&update.eid);
+    if (db) caldav_close(db);
+    if (mbox) jmap_closembox(req, &mbox);
+    if (update.oldical) icalcomponent_free(update.oldical);
+    if (update.newical) icalcomponent_free(update.newical);
+    strarray_fini(&schedule_addr);
+    mboxlist_entry_free(&mbentry);
     return 0;
 }
 

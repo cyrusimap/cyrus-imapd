@@ -1,0 +1,128 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_participantreply_simple
+    :min_version_3_7 :needs_component_jmap :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $instance = $self->{instance};
+    $instance->{config}->set(defaultdomain => 'internal');
+    $instance->{config}->set(calendar_user_address_set => 'internal');
+
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $jmap = $self->{jmap};
+    $jmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'urn:ietf:params:jmap:calendars:preferences',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ]);
+
+    my $participants = {
+        "org" => {
+            "name" => "Cassandane",
+            roles => {
+                'owner' => JSON::true,
+            },
+            sendTo => {
+                imip => 'cassandane@example.com',
+            },
+        },
+        "att" => {
+            "name" => "Bugs Bunny",
+            roles => {
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'bugs@looneytunes.com',
+            },
+        },
+    };
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "create scheduled event";
+    my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            calendarIds => {
+                                Default => JSON::true,
+                            },
+                            "title" => "foo",
+                            "description" => "foo's description",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::false,
+                            "start" => "2022-11-23T16:45:00",
+                            "recurrenceRules" => [{
+                                "@type" => "RecurrenceRule",
+                                "frequency" => "weekly"
+                            }],
+                            "timeZone" => "Australia/Melbourne",
+                            "duration" => "PT1H",
+                            "replyTo" => { imip => "mailto:cassandane\@example.com"},
+                            "participants" => $participants,
+                            "recurrenceOverrides" => {
+                                "2022-11-30T16:45:00" => {
+                                    "start" => "2022-12-01T16:45:00",
+                                }
+                            }
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "verify invitation sent from organizer to attendee";
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    my $payload = decode_json($imip->{MESSAGE});
+    my $ical = $payload->{ical};
+
+    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REQUEST");
+
+    xlog $self, "set attendee status";
+    my $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
+        eventId => $id,
+        participantEmail => "bugs\@looneytunes.com",
+        updates => {
+            participationStatus => "accepted"
+        }
+    }, "R2"]]);
+
+    xlog $self, "verify reply sent from attendee to organizer";
+    $data = $self->{instance}->getnotify();
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    $payload = decode_json($imip->{MESSAGE});
+    $ical = $payload->{ical};
+
+    $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REPLY");
+return;
+    xlog $self, "set attendee status on override";
+    my $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
+        eventId => encode_eventid(substr($id, 2), "20221130T164500"),
+        participantEmail => "bugs\@looneytunes.com",
+        updates => {
+            participationStatus => "declined"
+        }
+    }, "R2"]]);
+
+    xlog $self, "verify reply sent from attendee to organizer";
+    $data = $self->{instance}->getnotify();
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    $payload = decode_json($imip->{MESSAGE});
+    $ical = $payload->{ical};
+
+    $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REPLY");
+}
