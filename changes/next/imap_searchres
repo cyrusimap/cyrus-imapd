@@ -1,0 +1,13 @@
+Description:
+
+Adds support for IMAP Saved Search Results (RFC 5182).
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None
