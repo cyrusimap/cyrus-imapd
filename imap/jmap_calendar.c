@@ -7893,18 +7893,22 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
 
     /* Create patch */
     struct buf buf = BUF_INITIALIZER;
-    if (update.eid->ical_recurid) {
-        /* XXX  FIX ME */
+    if (update.eid->ical_recurid && !update.is_standalone) {
         struct icaltimetype tt = icaltime_from_string(update.eid->ical_recurid);
         struct jmapical_datetime dt;
 
+        /* Add recurrence-id to buf */
         jmapical_datetime_from_icaltime(tt, &dt);
         jmapical_localdatetime_as_string(&dt, &buf);
 
+        /* Prepend BEFORE recurrence-id */
         buf_insertcstr(&buf, 0, "recurrenceOverrides/");
+
+        /* Append trailing slash */
         buf_putc(&buf, '/');
 
-        if (!update.is_standalone) update.eid->ical_recurid = NULL;
+        /* Done with recurid (and keeping it causes the patch to fail) */
+        update.eid->ical_recurid = NULL;
     }
     buf_printf(&buf, "participants/%s/participationStatus", part_id);
 
