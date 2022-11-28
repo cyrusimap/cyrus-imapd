@@ -5344,8 +5344,8 @@ static void remove_itip_messages(struct caldav_db *db,
     }
 }
 
-static int is_standalone(struct jmap_caleventid *eid,
-                         struct caldav_db *db, int *is_standalone)
+static int check_eventid_exists(struct jmap_caleventid *eid,
+                                struct caldav_db *db, int *is_standalone)
 {
     struct caldav_jscal_filter jscal_filter = {
         .ical_uid = eid->ical_uid,
@@ -5406,7 +5406,7 @@ static void setcalendarevents_update(jmap_req_t *req,
 
     // Determine if event is a standalone recurrence instance
     if (eid->ical_recurid) {
-        r = is_standalone(eid, db, &update.is_standalone);
+        r = check_eventid_exists(eid, db, &update.is_standalone);
         if (r) goto done;
     }
 
@@ -7781,7 +7781,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
 
     /* Determine if event is a standalone recurrence instance */
     if (update.eid->ical_recurid) {
-        r = is_standalone(update.eid, db, &update.is_standalone);
+        r = check_eventid_exists(update.eid, db, &update.is_standalone);
         if (r) goto done;
     }
 
