@@ -61,7 +61,7 @@ Major changes since the 3.4 series
 * Added an inactivity timeout for WebSocket connections, configurable with
   the `websocket_timeout` :cyrusman:`imapd.conf(5)` option.
 * Mailboxes and user metadata directories are now organised on disk by UUID
-  rather than by mailbox name.  See :ref:`relnotes_storage_changes` below.
+  rather than by mailbox name.  See :ref:`relnotes_3.6.0-rc1_storage_changes` below.
 * Sieve scripts are now stored in a special mailbox, rather than in
   `sievedir`.  Compiled bytecode is still stored in `sievedir`.  The name of
   the mailbox can be overridden with the `sieve_folder`
@@ -91,7 +91,7 @@ Major changes since the 3.4 series
 * Preliminary support for building with OpenSSL 3.
 
 
-.. _relnotes_storage_changes:
+.. _relnotes_3.6.0-rc1_storage_changes:
 
 Storage changes
 ===============
