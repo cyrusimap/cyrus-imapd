@@ -7921,6 +7921,8 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     sched_reply(req->accountid, &schedule_addr, update.oldical, update.newical);
 
     /* Get SCHEDULE_STATUS */
+    const char *organizer = NULL;
+    const char *sched_stat = NULL;
     for (comp = icalcomponent_get_first_component(update.newical, kind);
          comp;
          comp = icalcomponent_get_next_component(update.newical, kind)) {
@@ -7940,11 +7942,20 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         }
 
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+        organizer = icalproperty_get_organizer(prop);
+        if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
+
         icalparameter *param = icalproperty_get_schedulestatus_parameter(prop);
-        json_object_set_new(res, "scheduleStatus",
-                            json_string(icalparameter_get_schedulestatus(param)));
+        sched_stat = icalparameter_get_schedulestatus(param);
+        json_object_set_new(res, "scheduleStatus", json_string(sched_stat));
+
+        prop = find_attendee(comp, part_email);
+        param = icalparameter_new_scheduleforcesend(ICAL_SCHEDULEFORCESEND_REQUEST);
+        icalproperty_add_parameter(prop, param);
         break;
     }
+
+    sched_request(req->accountid, NULL, organizer, update.oldical, update.newical);
 
     /* Build response */
     req->accountid = NULL;

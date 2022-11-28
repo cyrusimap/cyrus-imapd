@@ -33,13 +33,22 @@ sub test_calendarevent_participantreply_simple
                 imip => 'cassandane@example.com',
             },
         },
-        "att" => {
+        "att1" => {
             "name" => "Bugs Bunny",
             roles => {
                 'attendee' => JSON::true,
             },
             sendTo => {
                 imip => 'bugs@looneytunes.com',
+            },
+        },
+        "att2" => {
+            "name" => "Road Runner",
+            roles => {
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'rr@looneytunes.com',
             },
         },
     };
@@ -75,16 +84,30 @@ sub test_calendarevent_participantreply_simple
                     }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    xlog $self, "verify invitation sent from organizer to attendee";
+    xlog $self, "verify invitation sent from organizer to attendees";
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my (@imips) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my $imip = $imips[0];
     $self->assert_not_null($imip);
 
     my $payload = decode_json($imip->{MESSAGE});
     my $ical = $payload->{ical};
 
-    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
+    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+    $self->assert_matches(qr/(bugs|rr)\@looneytunes.com/, $payload->{recipient});
     $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
+
+    $imip = $imips[1];
+    $self->assert_not_null($imip);
+
+    $payload = decode_json($imip->{MESSAGE});
+    $ical = $payload->{ical};
+
+    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+    $self->assert_matches(qr/(bugs|rr)\@looneytunes.com/, $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
 
     xlog $self, "set attendee status";
     my $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
@@ -97,19 +120,34 @@ sub test_calendarevent_participantreply_simple
 
     xlog $self, "verify reply sent from attendee to organizer";
     $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    (@imips) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $imip = $imips[0];
     $self->assert_not_null($imip);
 
     $payload = decode_json($imip->{MESSAGE});
     $ical = $payload->{ical};
 
+    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{sender});
     $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REPLY");
+    $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+
+    xlog $self, "verify updated request sent from organizer to attendee";
+    $imip = $imips[1];
+    $self->assert_not_null($imip);
+
+    $payload = decode_json($imip->{MESSAGE});
+    $ical = $payload->{ical};
+
+    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "PARTSTAT=ACCEPTED");
 
     xlog $self, "set attendee status on override";
     my $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
         eventId => encode_eventid(substr($id, 2), "20221130T164500"),
-        participantEmail => "bugs\@looneytunes.com",
+        participantEmail => "rr\@looneytunes.com",
         updates => {
             participationStatus => "declined"
         }
@@ -117,12 +155,27 @@ sub test_calendarevent_participantreply_simple
 
     xlog $self, "verify reply sent from attendee to organizer";
     $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    (@imips) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $imip = $imips[0];
     $self->assert_not_null($imip);
 
     $payload = decode_json($imip->{MESSAGE});
     $ical = $payload->{ical};
 
+    $self->assert_str_equals("rr\@looneytunes.com", $payload->{sender});
     $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REPLY");
+    $self->assert($ical =~ "PARTSTAT=DECLINED");
+
+    xlog $self, "verify updated request sent from organizer to attendee";
+    $imip = $imips[1];
+    $self->assert_not_null($imip);
+
+    $payload = decode_json($imip->{MESSAGE});
+    $ical = $payload->{ical};
+
+    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+    $self->assert_str_equals("rr\@looneytunes.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "PARTSTAT=DECLINED");
 }
