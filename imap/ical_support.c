@@ -59,6 +59,10 @@
 #include "util.h"
 #include "icu_wrap.h"
 
+#ifdef WITH_JMAP
+#include "jmap_ical.h"
+#endif
+
 #ifdef HAVE_ICAL
 
 static int initialized = 0;
@@ -2973,6 +2977,53 @@ EXPORTED int ical_categories_is_color(icalproperty *cprop)
     }
 
     return is_css3_color(categories);
+}
+
+EXPORTED void icalcomponent_normalize_x(icalcomponent *ical)
+{
+    if (!ical) return;
+
+    icalcomponent_normalize(ical);
+
+#ifdef WITH_JMAP
+    icalcomponent *comp;
+    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
+
+        icalcomponent_kind kind = icalcomponent_isa(comp);
+        if (kind != ICAL_VEVENT_COMPONENT && kind != ICAL_VTODO_COMPONENT)
+            continue;
+
+        icalproperty *prop, *nextprop;
+        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+                prop; prop = nextprop) {
+
+            nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+            const char *xname = icalproperty_get_x_name(prop);
+            const char *xval = icalproperty_get_value_as_string(prop);
+            int is_default = 0;
+
+            if (!strcasecmp(xname, JMAPICAL_XPROP_SHOWWITHOUTTIME)) {
+                is_default = !strcasecmp(xval, "FALSE");
+            }
+            else if (!strcasecmp(xname, JMAPICAL_XPROP_PRIVACY)) {
+                is_default = !strcasecmp(xval, "PUBLIC");
+            }
+            else if (!strcasecmp(xname, JMAPICAL_XPROP_MAYINVITESELF) ||
+                     !strcasecmp(xname, JMAPICAL_XPROP_MAYINVITEOTHERS) ||
+                     !strcasecmp(xname, JMAPICAL_XPROP_HIDEATTENDEES)) {
+                is_default = !strcasecmp(xval, "FALSE");
+            }
+
+            if (is_default) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
+        }
+    }
+#endif
 }
 
 #endif /* HAVE_ICAL */

@@ -194,6 +194,7 @@ static void jmap_init(struct buf *serverinfo)
 #ifdef USE_SIEVE
     jmap_sieve_init(&my_jmap_settings);
 #endif
+    jmap_admin_init(&my_jmap_settings);
 
     if (ws_enabled) {
         jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL, 's');

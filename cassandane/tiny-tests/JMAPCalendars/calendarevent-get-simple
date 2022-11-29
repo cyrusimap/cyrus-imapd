@@ -29,5 +29,4 @@ sub test_calendarevent_get_simple
     $self->assert_str_equals("2015-09-28T13:24:34Z", $event->{updated});
     $self->assert_num_equals(9, $event->{sequence});
     $self->assert_num_equals(3, $event->{priority});
-    $self->assert_str_equals("public", $event->{privacy});
 }

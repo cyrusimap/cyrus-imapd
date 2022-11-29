@@ -1008,10 +1008,10 @@ static int caldav_store_preprocess(struct transaction_t *txn,
         /* Extract personal info from user's resource and create vpatch */
         if (oldical) {
             /* Normalize existing resource for comparison */
-            icalcomponent_normalize(oldical);
+            icalcomponent_normalize_x(oldical);
 
             /* Normalize new resource for comparison */
-            icalcomponent_normalize(ical);
+            icalcomponent_normalize_x(ical);
         }
 
         /* Create UID for sharee VPATCH */

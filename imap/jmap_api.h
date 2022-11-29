@@ -78,6 +78,7 @@
 #define JMAP_NOTES_EXTENSION         "https://cyrusimap.org/ns/jmap/notes"
 #define JMAP_SIEVE_EXTENSION         "https://cyrusimap.org/ns/jmap/sieve"
 #define JMAP_USERCOUNTERS_EXTENSION  "https://cyrusimap.org/ns/jmap/usercounters"
+#define JMAP_ADMIN_EXTENSION         "https://cyrusimap.org/ns/jmap/admin"
 
 enum {
     MAX_SIZE_REQUEST = 0,
@@ -249,6 +250,7 @@ extern void jmap_vacation_init(jmap_settings_t *settings);
 extern void jmap_backup_init(jmap_settings_t *settings);
 extern void jmap_notes_init(jmap_settings_t *settings);
 extern void jmap_sieve_init(jmap_settings_t *settings);
+extern void jmap_admin_init(jmap_settings_t *settings);
 
 extern void jmap_core_capabilities(json_t *account_capabilities);
 extern void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTopLevel);
@@ -264,6 +266,7 @@ extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_backup_capabilities(json_t *account_capabilities);
 extern void jmap_notes_capabilities(json_t *account_capabilities);
 extern void jmap_sieve_capabilities(json_t *account_capabilities);
+extern void jmap_admin_capabilities(json_t *account_capabilities);
 
 extern void jmap_accounts(json_t *accounts, json_t *primary_accounts);
 

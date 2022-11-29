@@ -8,7 +8,7 @@ sub test_calendarevent_get_privacy_ignore_override
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    xlog "PUT event where CLASS differs in override";
+    xlog "PUT event where privacy differs in override";
     my $ical = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
@@ -22,7 +22,7 @@ DURATION:PT1H
 RRULE:FREQ=DAILY;COUNT=3
 SUMMARY:An Event
 SEQUENCE:1
-CLASS:PRIVATE
+X-JMAP-PRIVACY:PRIVATE
 END:VEVENT
 BEGIN:VEVENT
 CREATED:20210923T034327Z
@@ -33,7 +33,7 @@ DTSTART;TZID=American/New_York:20210102T153000
 DURATION:PT1H
 SUMMARY:An event exception
 SEQUENCE:1
-CLASS:PUBLIC
+X-JMAP-PRIVACY:PUBLIC
 END:VEVENT
 END:VCALENDAR
 EOF
