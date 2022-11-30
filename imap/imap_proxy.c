@@ -438,8 +438,8 @@ int pipe_command(struct backend *s, int optimistic_literal)
     }
 }
 
-void print_listresponse(unsigned cmd, const char *extname, char hier_sep,
-                        uint32_t attributes, struct buf *extraflags)
+void print_listresponse(unsigned cmd, const char *extname, const char *oldname,
+                        char hier_sep, uint32_t attributes, struct buf *extraflags)
 {
     const struct mbox_name_attribute *attr;
     const char *resp, *sep;
@@ -473,16 +473,35 @@ void print_listresponse(unsigned cmd, const char *extname, char hier_sep,
 
     prot_printastring(imapd_out, extname);
 
-    if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED) {
-        prot_puts(imapd_out, " (CHILDINFO (");
-        /* RFC 5258:
-         *     ; Note 2: The selection options are always returned
-         *     ; quoted, unlike their specification in
-         *     ; the extended LIST command.
-         */
-        if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
-            prot_puts(imapd_out, "\"SUBSCRIBED\"");
-        prot_puts(imapd_out, "))");
+    if (oldname || (attributes & MBOX_ATTRIBUTE_CHILDINFO_MASK)) {
+        sep = "";
+        prot_puts(imapd_out, " (");
+
+        if (oldname) {
+            prot_printf(imapd_out, "OLDNAME (");
+            prot_printastring(imapd_out, oldname);
+            prot_puts(imapd_out, ")");
+            sep = " ";
+        }
+        if (attributes & MBOX_ATTRIBUTE_CHILDINFO_MASK) {
+            prot_printf(imapd_out, "%sCHILDINFO (", sep);
+
+            for (sep = "", attr = mbox_name_childinfo; attr->id; attr++) {
+                if (attributes & attr->flag) {
+                    /* RFC 5258:
+                     *     ; Note 2: The selection options are always returned
+                     *     ; quoted, unlike their specification in
+                     *     ; the extended LIST command.
+                     */
+                    prot_printf(imapd_out, "%s\"%s\"", sep, attr->id);
+                    sep = " ";
+                }
+            }
+
+            prot_puts(imapd_out, ")");
+        }
+
+        prot_puts(imapd_out, ")");
     }
 
     prot_puts(imapd_out, "\r\n");
@@ -763,8 +782,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
             if (!suppress_resp) {
                 /* send response to the client */
-                print_listresponse(listargs->cmd, name.s, sep.s[0],
-                                   attributes, &extraflags);
+                print_listresponse(listargs->cmd, name.s, NULL,
+                                   sep.s[0], attributes, &extraflags);
 
                 /* send any PROXY_ONLY metadata items */
                 for (c = 0; c < listargs->metaitems.count; c++) {

@@ -399,12 +399,15 @@ enum {
     MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED=(1<<9),
 };
 
+#define MBOX_ATTRIBUTE_CHILDINFO_MASK   (MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
+
 struct mbox_name_attribute {
     uint32_t flag;   /* MBOX_ATTRIBUTE_* */
     const char *id;  /* string value */
 };
 
 extern const struct mbox_name_attribute mbox_name_attributes[];
+extern const struct mbox_name_attribute mbox_name_childinfo[];
 
 /* Bitmask for client capabilities */
 enum {

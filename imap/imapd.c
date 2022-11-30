@@ -255,6 +255,13 @@ const struct mbox_name_attribute mbox_name_attributes[] = {
     { 0, NULL }
 };
 
+const struct mbox_name_attribute mbox_name_childinfo[] = {
+    /* from RFC 5258 */
+    { MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED, "SUBSCRIBED" },
+
+    { 0, NULL }
+};
+
 /*
  * These bitmasks define how List selection options can be combined:
  * list_select_mod_opts may only be used if at least one list_select_base_opt
@@ -13540,7 +13547,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         }
     }
 
-    print_listresponse(listargs->cmd, extname,
+    print_listresponse(listargs->cmd, extname, NULL,
                        imapd_namespace.hier_sep, attributes, &specialuse);
     buf_free(&specialuse);
 
