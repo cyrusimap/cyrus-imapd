@@ -663,7 +663,7 @@ int main(int argc, char **argv)
     }
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&sync_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&sync_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
     mboxevent_setnamespace(&sync_namespace);

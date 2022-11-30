@@ -265,7 +265,7 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
+    if ((r = mboxname_init_namespace(sync_namespacep, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
 

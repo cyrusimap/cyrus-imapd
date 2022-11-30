@@ -716,7 +716,7 @@ int main(int argc, char *argv[])
     /* Load configuration file. */
     cyrus_init(alt_config, "test", 0, 0);
 
-    mboxname_init_namespace(&test_namespace, /*isadmin*/0);
+    mboxname_init_namespace(&test_namespace, /*options*/0);
     sd.ns = &test_namespace;
     // anyone authstate
     sd.authstate = auth_newstate("anyone");

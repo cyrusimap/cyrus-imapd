@@ -445,12 +445,11 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "mbpath", 0, 0);
 
 
-    r = mboxname_init_namespace(&mbpath_namespace, 1);
+    r = mboxname_init_namespace(&mbpath_namespace,
+                                NAMESPACE_OPTION_ADMIN | NAMESPACE_OPTION_UTF8);
     if (r) {
         fatal(error_message(r), EX_SOFTWARE);
     }
-
-    mbpath_namespace.isutf8 = opts.utf8;
 
     for (i = optind; i < argc; i++) {
         /* Translate mailboxname */

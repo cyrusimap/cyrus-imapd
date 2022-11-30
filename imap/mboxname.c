@@ -1352,17 +1352,19 @@ EXPORTED const strarray_t *mbname_boxes(const mbname_t *mbname)
 /*
  * Create namespace based on config options.
  */
-EXPORTED int mboxname_init_namespace(struct namespace *namespace, int isadmin)
+EXPORTED int mboxname_init_namespace(struct namespace *namespace, unsigned options)
 {
     const char *prefix;
 
     assert(namespace != NULL);
 
-    namespace->isadmin = isadmin;
+    namespace->isutf8  = !!(options & NAMESPACE_OPTION_UTF8);
+    namespace->isadmin = !!(options & NAMESPACE_OPTION_ADMIN);
 
     namespace->hier_sep =
         config_getswitch(IMAPOPT_UNIXHIERARCHYSEP) ? '/' : '.';
-    namespace->isalt = !isadmin && config_getswitch(IMAPOPT_ALTNAMESPACE);
+    namespace->isalt =
+        !namespace->isadmin && !!config_getswitch(IMAPOPT_ALTNAMESPACE);
 
     namespace->accessible[NAMESPACE_INBOX] = 1;
     namespace->accessible[NAMESPACE_USER] = !config_getswitch(IMAPOPT_DISABLE_USER_NAMESPACE);
@@ -1387,7 +1389,7 @@ EXPORTED int mboxname_init_namespace(struct namespace *namespace, int isadmin)
             !strncmp(namespace->prefix[NAMESPACE_USER], prefix, strlen(prefix)))
             return IMAP_NAMESPACE_BADPREFIX;
 
-        if (!isadmin) {
+        if (!namespace->isadmin) {
             sprintf(namespace->prefix[NAMESPACE_SHARED], "%.*s%c",
                 MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep);
         }
@@ -1409,7 +1411,7 @@ EXPORTED struct namespace *mboxname_get_adminnamespace()
 {
     static struct namespace ns;
     if (!admin_namespace) {
-        mboxname_init_namespace(&ns, /*isadmin*/1);
+        mboxname_init_namespace(&ns, NAMESPACE_OPTION_ADMIN);
         admin_namespace = &ns;
     }
     return admin_namespace;

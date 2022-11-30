@@ -58,6 +58,10 @@ enum { NAMESPACE_INBOX = 0,
        NAMESPACE_USER = 1,
        NAMESPACE_SHARED = 2 };
 
+/* namespace option flags */
+enum { NAMESPACE_OPTION_ADMIN = (1<<0),
+       NAMESPACE_OPTION_UTF8  = (1<<1) };
+
 /* categorise mailboxes */
 enum { MBNAME_INBOX = 1,
        MBNAME_INBOXSUB = 2,
@@ -72,14 +76,14 @@ enum { MBNAME_INBOX = 1,
 /* structure holding server namespace info */
 struct namespace {
     char hier_sep;
-    int isalt;  /* are we using the alternate namespace? */
-    int isutf8; /* are we using utf-8 mailbox names? */
-    int isadmin; /* current user is an admin */
+    u_char isutf8  : 1; /* are we using utf-8 mailbox names? */
+    u_char isalt   : 1; /* are we using the alternate namespace? */
+    u_char isadmin : 1; /* current user is an admin */
     char prefix[3][MAX_NAMESPACE_PREFIX+1];
     int accessible[3];
 };
 
-#define NAMESPACE_INITIALIZER { '.', 0, 0, \
+#define NAMESPACE_INITIALIZER { '.', 0, 0, 0,              \
                                 { "INBOX.", "user.", "" }, \
                                 { 0, 0, 0, } }
 
@@ -135,7 +139,7 @@ int mboxname_islocked(const char *mboxname);
 struct mboxlock *mboxname_usernamespacelock(const char *mboxname);
 
 /* Create namespace based on config options. */
-int mboxname_init_namespace(struct namespace *namespace, int isadmin);
+int mboxname_init_namespace(struct namespace *namespace, unsigned options);
 
 struct namespace *mboxname_get_adminnamespace();
 

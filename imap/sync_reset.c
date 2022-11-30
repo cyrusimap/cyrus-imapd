@@ -232,7 +232,7 @@ main(int argc, char **argv)
     cyrus_init(alt_config, "sync_reset", 0, CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
+    if ((r = mboxname_init_namespace(sync_namespacep, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
 

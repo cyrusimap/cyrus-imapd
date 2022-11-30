@@ -364,7 +364,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "cyr_backup", 0, 0);
 
-    if ((r = mboxname_init_namespace(&cyr_backup_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&cyr_backup_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
     mboxevent_setnamespace(&cyr_backup_namespace);

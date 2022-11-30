@@ -1185,7 +1185,7 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "squatter", init_flags, CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&squat_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&squat_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
 

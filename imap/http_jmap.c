@@ -211,8 +211,10 @@ static void jmap_init(struct buf *serverinfo)
 static int jmap_auth(const char *userid __attribute__((unused)))
 {
     /* Set namespace */
-    mboxname_init_namespace(&jmap_namespace,
-                            httpd_userisadmin || httpd_userisproxyadmin);
+    unsigned options =
+        (httpd_userisadmin || httpd_userisproxyadmin) ? NAMESPACE_OPTION_ADMIN : 0;
+    mboxname_init_namespace(&jmap_namespace, options);
+
     return 0;
 }
 

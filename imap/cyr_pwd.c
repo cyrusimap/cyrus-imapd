@@ -100,7 +100,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "cyr_pwd", 0, 0);
 
-    r = mboxname_init_namespace(&cyr_pwd_namespace, 1);
+    r = mboxname_init_namespace(&cyr_pwd_namespace, NAMESPACE_OPTION_ADMIN);
     if (r) {
         fatal(error_message(r), -1);
     }

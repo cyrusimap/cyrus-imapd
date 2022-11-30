@@ -813,7 +813,7 @@ int service_init(int argc __attribute__((unused)),
     idle_enabled();
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&httpd_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&httpd_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
 

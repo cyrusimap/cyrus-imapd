@@ -233,12 +233,12 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&lmtpd_namespace, 0)) != 0) {
+    unsigned options =
+        config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO) ? NAMESPACE_OPTION_UTF8 : 0;
+    if ((r = mboxname_init_namespace(&lmtpd_namespace, options))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
-
-    lmtpd_namespace.isutf8 = config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO);
 
     mboxevent_setnamespace(&lmtpd_namespace);
 

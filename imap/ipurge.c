@@ -197,7 +197,7 @@ int main (int argc, char *argv[]) {
     cyrus_init(alt_config, "ipurge", 0, CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&purge_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
     mboxevent_setnamespace(&purge_namespace);

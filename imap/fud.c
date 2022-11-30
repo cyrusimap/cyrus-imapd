@@ -177,7 +177,7 @@ int service_main(int argc __attribute__((unused)),
     int r = 0;
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&fud_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&fud_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }

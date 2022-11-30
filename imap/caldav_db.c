@@ -106,7 +106,7 @@ EXPORTED int caldav_init(void)
     struct icaltimetype date;
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&caldav_namespace, 1))) {
+    if ((r = mboxname_init_namespace(&caldav_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }

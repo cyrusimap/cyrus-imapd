@@ -1083,7 +1083,7 @@ int service_main(int argc __attribute__((unused)),
     prometheus_increment(CYRUS_IMAP_CONNECTIONS_TOTAL);
 
     /* Setup a default namespace until replaced after authentication. */
-    mboxname_init_namespace(&imapd_namespace, /*isadmin*/1);
+    mboxname_init_namespace(&imapd_namespace, NAMESPACE_OPTION_ADMIN);
     mboxevent_setnamespace(&imapd_namespace);
 
     index_text_extractor_init(imapd_in);
@@ -2705,8 +2705,9 @@ static void authentication_success(const char *tag, int ssf, const char *reply)
     imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
 
     /* Set namespace */
-    r = mboxname_init_namespace(&imapd_namespace,
-                                imapd_userisadmin || imapd_userisproxyadmin);
+    unsigned options =
+        (imapd_userisadmin || imapd_userisproxyadmin) ? NAMESPACE_OPTION_ADMIN : 0;
+    r = mboxname_init_namespace(&imapd_namespace, options);
 
     mboxevent_setnamespace(&imapd_namespace);
 

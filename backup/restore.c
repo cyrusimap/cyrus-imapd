@@ -332,7 +332,7 @@ int main(int argc, char **argv)
     /* okay, arguments seem sane, we are go */
     cyrus_init(alt_config, "restore", 0, 0);
 
-    if ((r = mboxname_init_namespace(&restore_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&restore_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
     mboxevent_setnamespace(&restore_namespace);
