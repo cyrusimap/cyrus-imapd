@@ -3354,7 +3354,7 @@ struct mboxset_state {
     int has_conflict;
     hash_table *id_by_imapname;
     hash_table *entry_by_id;
-    hash_table *siblings_by_parent_id;
+    hash_table *siblingnames_by_parent_id;
     hash_table *specialuses_by_id;
 };
 
@@ -3431,10 +3431,10 @@ static void _mboxset_state_conflict_cb(const char *id, void *data, void *rock)
     if (entry->parent_id) parent_id = entry->parent_id;
 
     /* A mailbox must not have siblings with the same name. */
-    strarray_t *siblings = hash_lookup(parent_id, state->siblings_by_parent_id);
+    strarray_t *siblings = hash_lookup(parent_id, state->siblingnames_by_parent_id);
     if (!siblings) {
         siblings = strarray_new();
-        hash_insert(parent_id, siblings, state->siblings_by_parent_id);
+        hash_insert(parent_id, siblings, state->siblingnames_by_parent_id);
     }
     int i;
     for (i = 0; i < strarray_size(siblings); i++) {
@@ -3775,9 +3775,9 @@ static int _mboxset_state_validate(jmap_req_t *req,
     construct_hash_table(&entry_by_id, 1024, 0);
     state->entry_by_id = &entry_by_id;
 
-    hash_table siblings_by_parent_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&siblings_by_parent_id, 1024, 0);
-    state->siblings_by_parent_id = &siblings_by_parent_id;
+    hash_table siblingnames_by_parent_id = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&siblingnames_by_parent_id, 1024, 0);
+    state->siblingnames_by_parent_id = &siblingnames_by_parent_id;
 
     mboxlist_usermboxtree(req->accountid, NULL, _mboxset_state_mboxlist_cb, state,
                           MBOXTREE_INTERMEDIATES);
@@ -3807,7 +3807,7 @@ static int _mboxset_state_validate(jmap_req_t *req,
     /* Clean up state */
     free_hash_table(&entry_by_id, _mboxset_entry_free);
     free_hash_table(&id_by_imapname, free);
-    free_hash_table(&siblings_by_parent_id, (void(*)(void*))strarray_free);
+    free_hash_table(&siblingnames_by_parent_id, (void(*)(void*))strarray_free);
     free_hash_table(&specialuses_by_id, (void(*)(void*))strarray_free);
     free(state);
 
