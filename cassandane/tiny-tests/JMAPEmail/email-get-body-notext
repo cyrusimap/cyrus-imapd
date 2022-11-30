@@ -11,8 +11,8 @@ sub test_email_get_body_notext
     my $talk = $store->get_client();
     my $inbox = 'INBOX';
 
-    # Generate a email to have some blob ids
-    xlog $self, "Generate a email in $inbox via IMAP";
+    # Generate an email to have some blob ids
+    xlog $self, "Generate an email in $inbox via IMAP";
     $self->make_message("foo",
         mime_type => "application/zip",
         body => "boguszip",

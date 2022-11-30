@@ -1070,7 +1070,7 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
             fatal("can't get local addr", EX_SOFTWARE);
         }
     } else {
-        /* we're not connected to a internet socket! */
+        /* we're not connected to an internet socket! */
         buf_setcstr(&clientbuf, UNIX_SOCKET);
     }
 

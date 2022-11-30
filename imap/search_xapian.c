@@ -230,7 +230,7 @@ static strarray_t *activefile_read(struct mappedfile *activefile)
     return strarray_nsplit(mappedfile_base(activefile), mappedfile_size(activefile), NULL, 1);
 }
 
-/* to write a activefile file safely, we need to do the create .NEW,
+/* to write an activefile file safely, we need to do the create .NEW,
  * write, fsync, rename dance.  This unlocks the original file, so
  * callers will need to lock again if they need a locked file.
  * The 'mappedfile' API isn't a perfect match for what we need here,
@@ -1200,7 +1200,7 @@ static int upgrade(const char *userid)
         goto out;
     }
 
-    /* need to hold an read-only lock on the activefile file
+    /* need to hold a read-only lock on the activefile file
      * to ensure no databases are deleted out from under us */
     r = activefile_open(mailbox_name(inbox), mailbox_partition(inbox), &activefile, AF_LOCK_READ, &active);
     if (r) goto out;

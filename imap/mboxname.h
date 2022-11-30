@@ -175,7 +175,7 @@ int mboxname_isa(const char *name, int mbtype,
     mboxname_isa(name, mbtype, IMAPOPT_CALENDARPREFIX, MBTYPE_CALENDAR)
 
 /*
- * If (internal) mailbox 'name' is a ADDRESSBOOK mailbox
+ * If (internal) mailbox 'name' is an ADDRESSBOOK mailbox
  * returns non-zero
  */
 #define mboxname_isaddressbookmailbox(name, mbtype) \

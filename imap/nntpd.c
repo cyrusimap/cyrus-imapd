@@ -3449,7 +3449,7 @@ static int cancel_cb(const duplicate_t *dkey,
 {
     struct mailbox *mailbox = NULL;
 
-    /* make sure its a message in a mailbox that we're serving via NNTP */
+    /* make sure it is a message in a mailbox that we're serving via NNTP */
     if (is_newsgroup(dkey->to)) {
         int r;
 

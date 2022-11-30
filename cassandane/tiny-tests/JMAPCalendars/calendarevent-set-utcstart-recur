@@ -75,7 +75,7 @@ sub test_calendarevent_set_utcstart_recur
     $self->assert_str_equals('Australia/Melbourne', $event->{timeZone});
     $self->assert_str_equals('PT1H', $event->{duration});
 
-    # Updating utcStart on a expanded recurrence instance is OK.
+    # Updating utcStart on an expanded recurrence instance is OK.
     my $eventInstanceId = encode_eventid('eventuid1local', '20191213T123000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {

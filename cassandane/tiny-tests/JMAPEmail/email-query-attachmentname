@@ -21,7 +21,7 @@ sub test_email_query_attachmentname
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
-    # create a email with an attachment
+    # create an email with an attachment
     my $logofile = abs_path('data/logo.gif');
     open(FH, "<$logofile");
     local $/ = undef;

@@ -14,8 +14,8 @@ sub test_email_snooze_awaken_bad_mailbox
     push @using, 'https://cyrusimap.org/ns/jmap/mail';
     $jmap->DefaultUsing(\@using);
 
-    xlog $self, "Generate a email via IMAP";
-    $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
+    xlog $self, "Generate an email via IMAP";
+    $self->make_message("foo", body => "an email\r\nwithCRLF\r\n") or die;
 
     xlog $self, "Get email id, Inbox id, and create snoozed & awaken mailboxes";
     my $res = $jmap->CallMethods([

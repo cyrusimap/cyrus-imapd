@@ -3287,7 +3287,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
         /* want to commit immediately to ensure ordering */
         r = mailbox_commit(mailbox);
 
-        /* send a AclChange event notification */
+        /* send an AclChange event notification */
         struct mboxevent *mboxevent = mboxevent_new(EVENT_ACL_CHANGE);
         mboxevent_extract_mailbox(mboxevent, mailbox);
         mboxevent_set_acl(mboxevent, identifier, rights);

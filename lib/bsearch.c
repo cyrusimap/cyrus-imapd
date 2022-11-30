@@ -89,7 +89,7 @@ static unsigned char convert_to_compare[256] = {
 /*
  * Search for a line starting with 'word'.  The search respects case.
  * The search is performed in 'base', which is of length 'len'.
- * 'hint' gives a idea of where to start looking.
+ * 'hint' gives an idea of where to start looking.
  *
  * On success, the offset in 'base' of the found line is returned and
  * the length of the found line is put in the unsigned long pointed to

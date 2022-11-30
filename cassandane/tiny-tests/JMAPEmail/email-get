@@ -20,7 +20,7 @@ sub test_email_get
     my $maildate = DateTime->now();
     $maildate->add(DateTime::Duration->new(seconds => -10));
 
-    xlog $self, "Generate a email in INBOX via IMAP";
+    xlog $self, "Generate an email in INBOX via IMAP";
     my %exp_inbox;
     my %params = (
         date => $maildate,
