@@ -667,7 +667,7 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
     const char *imip_method = icalproperty_method_to_string(
                                   icalcomponent_get_method(sched_data->itip));
 
-    json_t *val = json_pack("{s:s s:s s:s s:s s:o s:s s:o s:o s:b}",
+    json_t *val = json_pack("{s:s s:s s:s s:s s:o s:s s:o s:o s:b s:s}",
                             "calendarOwner", userid,
                             "recipient", buf_cstring(&recipient),
                             "sender", sender,
@@ -676,7 +676,9 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
                             "ical", ical_str,
                             "jsevent", jsevent,
                             "patch", patch,
-                            "is_update", SCHED_IS_UPDATE(sched_data));
+                            "is_update", SCHED_IS_UPDATE(sched_data),
+                            "schedulingMechanism",
+                            sched_mechanisms[sched_data->mech]);
     char *serial = json_dumps(val, JSON_COMPACT);
     notify(notifier, "IMIP", NULL, userid, NULL, 0, NULL, serial, NULL);
     free(serial);
@@ -1349,7 +1351,8 @@ void sched_deliver(const char *userid, const char *sender, const char *recipient
             if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
                 sched_pollstatus(recipient, &sparam, ical, attendee);
             else
-                sched_request(userid, NULL, recipient, NULL, ical); // oldical?
+                sched_request(userid, NULL, recipient,
+                              NULL, ical, sched_data->mech); // oldical?
         }
         if (ical) icalcomponent_free(ical);
     }
@@ -1818,10 +1821,12 @@ static int icalcomponent_is_historical(icalcomponent *comp, icaltimetype cutoff)
     return (icaltime_compare(span.end, cutoff) < 0);
 }
 
-static void schedule_full_cancel(const char *userid, const strarray_t *schedule_addresses,
+static void schedule_full_cancel(const char *userid,
+                                 const strarray_t *schedule_addresses,
                                  const char *organizer, const char *attendee,
                                  icalcomponent *mastercomp, icaltimetype h_cutoff,
-                                 icalcomponent *oldical, icalcomponent *newical)
+                                 icalcomponent *oldical, icalcomponent *newical,
+                                 enum sched_mechanism mech)
 {
     /* we need to send a cancel for all recurrences with this attendee,
        and add exdates to the master for all without this attendee */
@@ -1864,7 +1869,7 @@ static void schedule_full_cancel(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { 0, itip, oldical, newical,
+            { mech, 0, itip, oldical, newical,
               ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
     }
@@ -1873,10 +1878,12 @@ static void schedule_full_cancel(const char *userid, const strarray_t *schedule_
 }
 
 /* we've already tested that master does NOT contain this attendee */
-static void schedule_sub_cancels(const char *userid, const strarray_t *schedule_addresses,
+static void schedule_sub_cancels(const char *userid,
+                                 const strarray_t *schedule_addresses,
                                  const char *organizer, const char *attendee,
                                  icaltimetype h_cutoff,
-                                 icalcomponent *oldical, icalcomponent *newical)
+                                 icalcomponent *oldical, icalcomponent *newical,
+                                 enum sched_mechanism mech)
 {
     if (!oldical) return;
 
@@ -1914,7 +1921,7 @@ static void schedule_sub_cancels(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { 0, itip, oldical, newical,
+            { mech, 0, itip, oldical, newical,
               ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
 
@@ -1934,10 +1941,12 @@ icalparameter_scheduleforcesend get_forcesend(icalproperty *prop)
 
 /* we've already tested that master does NOT contain this attendee or that
  * master doesn't need to be scheduled */
-static void schedule_sub_updates(const char *userid, const strarray_t *schedule_addresses,
+static void schedule_sub_updates(const char *userid,
+                                 const strarray_t *schedule_addresses,
                                  const char *organizer, const char *attendee,
                                  icaltimetype h_cutoff,
-                                 icalcomponent *oldical, icalcomponent *newical)
+                                 icalcomponent *oldical, icalcomponent *newical,
+                                 enum sched_mechanism mech)
 {
     if (!newical) return;
 
@@ -2012,7 +2021,7 @@ static void schedule_sub_updates(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { flags, itip, oldical, newical,
+            { mech, flags, itip, oldical, newical,
               force_send, schedule_addresses, NULL, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
         update_attendee_status(newical, &recurids, attendee, sched.status);
@@ -2026,7 +2035,8 @@ static void schedule_sub_updates(const char *userid, const strarray_t *schedule_
 static void schedule_full_update(const char *userid, const strarray_t *schedule_addresses,
                                  const char *organizer, const char *attendee,
                                  icalcomponent *mastercomp, icaltimetype h_cutoff,
-                                 icalcomponent *oldical, icalcomponent *newical)
+                                 icalcomponent *oldical, icalcomponent *newical,
+                                 enum sched_mechanism mech)
 {
     /* create an itip for the complete event */
     icalcomponent *itip = make_itip(ICAL_METHOD_REQUEST, newical);
@@ -2101,7 +2111,7 @@ static void schedule_full_update(const char *userid, const strarray_t *schedule_
 
     if (do_send) {
         struct sched_data sched =
-            { flags, itip, oldical, newical,
+            { mech, flags, itip, oldical, newical,
               force_send, schedule_addresses, NULL, NULL };
         sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
 
@@ -2109,7 +2119,8 @@ static void schedule_full_update(const char *userid, const strarray_t *schedule_
     }
     else {
         /* just look for sub updates */
-        schedule_sub_updates(userid, schedule_addresses, organizer, attendee, h_cutoff, oldical, newical);
+        schedule_sub_updates(userid, schedule_addresses, organizer, attendee,
+                             h_cutoff, oldical, newical, mech);
     }
 
     icalcomponent_free(itip);
@@ -2117,29 +2128,34 @@ static void schedule_full_update(const char *userid, const strarray_t *schedule_
 
 /* sched_request() helper
  * handles scheduling for a single attendee */
-static void schedule_one_attendee(const char *userid, const strarray_t *schedule_addresses,
+static void schedule_one_attendee(const char *userid,
+                                  const strarray_t *schedule_addresses,
                                   const char *organizer, const char *attendee,
                                   icaltimetype h_cutoff,
-                                  icalcomponent *oldical, icalcomponent *newical)
+                                  icalcomponent *oldical, icalcomponent *newical,
+                                  enum sched_mechanism mech)
 {
     /* case: this attendee is attending the master event */
     icalcomponent *mastercomp;
     if ((mastercomp = find_attended_component(newical, "", attendee))) {
         schedule_full_update(userid, schedule_addresses, organizer, attendee,
-                             mastercomp, h_cutoff, oldical, newical);
+                             mastercomp, h_cutoff, oldical, newical, mech);
         return;
     }
 
     /* otherwise we need to cancel for each sub event and then we'll still
      * send the updates if any */
     if ((mastercomp = find_attended_component(oldical, "", attendee))) {
-        schedule_full_cancel(userid, schedule_addresses, organizer, attendee, mastercomp, h_cutoff, oldical, newical);
+        schedule_full_cancel(userid, schedule_addresses, organizer, attendee,
+                             mastercomp, h_cutoff, oldical, newical, mech);
     }
     else {
-        schedule_sub_cancels(userid, schedule_addresses, organizer, attendee, h_cutoff, oldical, newical);
+        schedule_sub_cancels(userid, schedule_addresses, organizer, attendee,
+                             h_cutoff, oldical, newical, mech);
     }
 
-    schedule_sub_updates(userid, schedule_addresses, organizer, attendee, h_cutoff, oldical, newical);
+    schedule_sub_updates(userid, schedule_addresses, organizer, attendee,
+                         h_cutoff, oldical, newical, mech);
 }
 
 static int has_attach(icalcomponent *ical)
@@ -2401,7 +2417,8 @@ static int get_hide_attendees(icalcomponent *ical)
 /* Create and deliver an organizer scheduling request */
 void sched_request(const char *userid, const strarray_t *schedule_addresses,
                    const char *organizer,
-                   icalcomponent *oldical, icalcomponent *newical)
+                   icalcomponent *oldical, icalcomponent *newical,
+                   enum sched_mechanism mech)
 {
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     int rights = 0;
@@ -2476,7 +2493,7 @@ void sched_request(const char *userid, const strarray_t *schedule_addresses,
         syslog(LOG_NOTICE, "iTIP scheduling request from %s to %s",
                organizer, attendee);
         schedule_one_attendee(userid, schedule_addresses, organizer, attendee,
-                h_cutoff, oldical, newical);
+                              h_cutoff, oldical, newical, mech);
 
         if (hide_attendees) {
             /* Remove and free attendee */
@@ -2855,7 +2872,8 @@ static void schedule_full_reply(const char *attendee,
 
 /* Create and deliver an attendee scheduling reply */
 void sched_reply(const char *userid, const strarray_t *schedule_addresses,
-                 icalcomponent *oldical, icalcomponent *newical)
+                 icalcomponent *oldical, icalcomponent *newical,
+                 enum sched_mechanism mech)
 {
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     int rights = 0;
@@ -2906,7 +2924,7 @@ void sched_reply(const char *userid, const strarray_t *schedule_addresses,
         if (reply.do_send) {
             unsigned flags = SCHEDFLAG_IS_REPLY;
             struct sched_data sched =
-                { flags, reply.itip, oldical, newical,
+                { mech, flags, reply.itip, oldical, newical,
                   reply.force_send, schedule_addresses, NULL, NULL };
             syslog(LOG_NOTICE, "iTIP scheduling reply from %s to %s",
                    attendee, reply.organizer ? reply.organizer : "<unknown>");
