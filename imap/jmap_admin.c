@@ -54,6 +54,7 @@
 
 #include "bsearch.h"
 #include "caldav_util.h"
+#include "defaultalarms.h"
 #include "hash.h"
 #include "http_caldav_sched.h"
 #include "http_jmap.h"
@@ -65,12 +66,19 @@
 #include "imap/imap_err.h"
 
 static int jmap_admin_rewrite_calevent_privacy(jmap_req_t *req);
+static int jmap_admin_migrate_defaultalarms(jmap_req_t *req);
 
 static jmap_method_t jmap_admin_methods_nonstandard[] = {
     {
         "Admin/rewriteCalendarEventPrivacy",
         JMAP_ADMIN_EXTENSION,
         &jmap_admin_rewrite_calevent_privacy,
+        /*flags*/0
+    },
+    {
+        "Admin/migrateCalendarDefaultAlarms",
+        JMAP_ADMIN_EXTENSION,
+        &jmap_admin_migrate_defaultalarms,
         /*flags*/0
     },
     { NULL, NULL, NULL, 0}
@@ -398,6 +406,186 @@ static int jmap_admin_rewrite_calevent_privacy(jmap_req_t *req)
     json_decref(rock.not_rewritten);
 
 done:
+    jmap_parser_fini(&parser);
+    return 0;
+}
+
+static int collect_userids(const char *userid, void *rock)
+{
+    strarray_append((strarray_t*)rock, userid);
+    return 0;
+}
+
+struct migrate_defaultalarms_rock {
+    const char *userid;
+    json_t *migrated;
+    json_t *not_migrated;
+};
+
+static int migrate_defaultalarms(const mbentry_t *mbentry, void *vrock)
+{
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    struct mailbox *mbox  = NULL;
+    struct migrate_defaultalarms_rock *rock = vrock;
+    int r = 0;
+
+    if (mbentry->mbtype != MBTYPE_CALENDAR)
+        goto done;
+
+    if (!mboxname_iscalendarmailbox(mbname_intname(mbname), 0))
+        goto done;
+
+    const strarray_t *boxes = mbname_boxes(mbname);
+    if (strarray_size(boxes) < 2)
+        goto done;
+
+    const char *collname = strarray_nth(boxes, strarray_size(boxes) - 1);
+    if (!strncmpsafe(collname, SCHED_INBOX, strlen(SCHED_INBOX)-1) ||
+        !strncmpsafe(collname, SCHED_OUTBOX, strlen(SCHED_OUTBOX)-1) ||
+        !strncmpsafe(collname, MANAGED_ATTACH, strlen(MANAGED_ATTACH)-1)) {
+        goto done;
+    }
+
+    r = mailbox_open_iwl(mbentry->name, &mbox);
+    if (r) goto done;
+
+    int did_migrate = 0;
+    r = defaultalarms_migrate(mbox, rock->userid, &did_migrate);
+    if (r) {
+        xsyslog(LOG_ERR, "could not migrate",
+                "mboxname=<%s> mboxid=<%s> error=<%s>",
+                mbentry->name, mbentry->uniqueid, cyrusdb_strerror(r));
+        goto done;
+    }
+
+    if (did_migrate) {
+        json_array_append_new(rock->migrated, json_string(mbentry->name));
+    }
+
+done:
+    if (r) {
+        json_object_set_new(rock->not_migrated, mbentry->name,
+                jmap_server_error(r));
+    }
+    mbname_free(&mbname);
+    mailbox_close(&mbox);
+    return 0;
+}
+
+static int jmap_admin_migrate_defaultalarms(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    json_t *migrated_userids = json_object();
+    json_t *not_migrated_userids = json_object();
+    strarray_t userids = STRARRAY_INITIALIZER;
+
+    if (!httpd_userisadmin) {
+        jmap_error(req, json_pack("{s:s}", "type", "forbidden"));
+        goto done;
+    }
+
+    // Validate arguments
+
+    const char *arg;
+    json_t *jarg;
+    json_object_foreach(req->args, arg, jarg) {
+        if (!strcmp(arg, "userIds")) {
+            if (json_is_array(jarg)) {
+                size_t i;
+                json_t *jval;
+                json_array_foreach(jarg, i, jval) {
+                    if (!json_is_string(jval)) {
+                        jmap_parser_push_index(&parser, "userIds", i, NULL);
+                        jmap_parser_invalid(&parser, NULL);
+                        jmap_parser_pop(&parser);
+                    }
+                }
+            }
+            else {
+                jmap_parser_invalid(&parser, "userIds");
+            }
+        }
+        else {
+            jmap_parser_invalid(&parser, arg);
+        }
+    }
+
+    if (json_array_size(parser.invalid)) {
+        json_t *err = json_pack("{s:s s:O}",
+                "type", "invalidArguments",
+                "arguments", parser.invalid);
+        jmap_error(req, err);
+        goto done;
+    }
+
+    // Collect user ids
+    json_t *juserids = json_object_get(req->args, "userIds");
+    if (json_is_array(juserids)) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(juserids, i, jval) {
+            strarray_append(&userids, json_string_value(jval));
+        }
+    }
+    else {
+        mboxlist_alluser(collect_userids, &userids);
+    }
+    strarray_sort(&userids, cmpstringp_raw);
+
+    // Process users
+    for (int i = 0; i < strarray_size(&userids); i++) {
+        const char *userid = strarray_nth(&userids, i);
+
+        struct mboxlock *namespacelock = user_namespacelock(userid);
+        if (!namespacelock) {
+            json_t *err = jmap_server_error(IMAP_INTERNAL);
+            json_object_set_new(err, "description",
+                    json_string("can not lock namespace"));
+            json_object_set_new(not_migrated_userids, userid, err);
+            continue;
+        }
+
+        struct migrate_defaultalarms_rock rock = {
+            .userid = userid,
+            .migrated = json_array(),
+            .not_migrated = json_object()
+        };
+
+        int r = mboxlist_usermboxtree(userid, NULL,
+                migrate_defaultalarms, &rock, MBOXTREE_PLUS_RACL);
+
+        if (json_object_size(rock.not_migrated)) {
+            json_object_set(not_migrated_userids,
+                    userid, rock.not_migrated);
+        }
+        else if (r) {
+            json_object_set_new(not_migrated_userids, userid,
+                    jmap_server_error(r));
+        }
+
+        json_object_set(migrated_userids, userid,
+                json_array_size(rock.migrated) ?
+                rock.migrated : json_null());
+
+        json_decref(rock.migrated);
+        json_decref(rock.not_migrated);
+
+        mboxname_release(&namespacelock);
+    }
+
+    // Create response
+    json_t *res = json_object();
+    json_object_set(res, "migrated", migrated_userids);
+    if (json_object_size(not_migrated_userids)) {
+        json_object_set(res, "notMigrated", not_migrated_userids);
+    }
+    jmap_ok(req, res);
+
+    json_decref(migrated_userids);
+    json_decref(not_migrated_userids);
+
+done:
+    strarray_fini(&userids);
     jmap_parser_fini(&parser);
     return 0;
 }

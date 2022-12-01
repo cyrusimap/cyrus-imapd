@@ -74,4 +74,7 @@ extern void defaultalarms_fini(struct defaultalarms *alarms);
 extern void defaultalarms_insert(struct defaultalarms *alarms,
                                  icalcomponent *ical, int force);
 
+extern int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
+                                 int *did_migratep);
+
 #endif /* DEFAULTALARMS_H */

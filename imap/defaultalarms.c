@@ -229,18 +229,64 @@ EXPORTED int defaultalarms_save(struct mailbox *mailbox,
         xsyslog(LOG_ERR, "failed to get annotation state",
                 "mboxname=<%s> err=<%s>",
                 mailbox_name(mailbox), error_message(r));
+        r = CYRUSDB_INTERNAL;
         goto done;
     }
 
     r = annotate_state_write(astate, annot, userid, &buf);
     if (r) {
         xsyslog(LOG_ERR, "failed to write annotation",
-                "annot=<%s> err=<%s>", annot, error_message(r));
+                "annot=<%s> err=<%s>", annot, cyrusdb_strerror(r));
         goto done;
     }
 
 done:
     dlist_free(&root);
+    buf_free(&buf);
+    return r;
+}
+
+
+HIDDEN int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
+                                 int *did_migratep)
+{
+    struct defaultalarms defalarms = DEFAULTALARMS_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+    *did_migratep = 0;
+
+    static const char *annot = JMAP_ANNOT_DEFAULTALERTS;
+    int r = annotatemore_lookup(mailbox_name(mbox), annot, userid, &buf);
+    if (r || buf_len(&buf))
+        goto done;
+
+    r = load_legacy_alarms(mailbox_name(mbox), userid,
+            CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME,
+            &defalarms.with_time.ical,
+            &defalarms.with_time.guid, &buf);
+    if (r) goto done;
+
+    r = load_legacy_alarms(mailbox_name(mbox), userid,
+            CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE,
+            &defalarms.with_date.ical,
+            &defalarms.with_date.guid, &buf);
+    if (r) goto done;
+
+    if (!defalarms.with_time.ical && !defalarms.with_date.ical) {
+        // No default alarms defined. Skip writing empty
+        // default alarms for calendar sharees.
+        mbname_t *mbname = mbname_from_intname(mailbox_name(mbox));
+        int is_owner = !strcmpsafe(mbname_userid(mbname), userid);
+        mbname_free(&mbname);
+        if (!is_owner) goto done;
+    }
+
+    r = defaultalarms_save(mbox, userid,
+            defalarms.with_time.ical, defalarms.with_date.ical);
+
+    *did_migratep = 1;
+
+done:
+    defaultalarms_fini(&defalarms);
     buf_free(&buf);
     return r;
 }
@@ -498,4 +544,3 @@ EXPORTED void defaultalarms_insert(struct defaultalarms *alarms,
                 alarms->with_date.ical : alarms->with_time.ical);
     }
 }
-

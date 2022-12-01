@@ -1,7 +1,7 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_debug_defaultalerts_fallback_nonmigrated
+sub test_admin_migrate_fallback_non_migrated
     :min_version_3_7 :needs_component_jmap :MagicPlus
 {
     my ($self) = @_;
