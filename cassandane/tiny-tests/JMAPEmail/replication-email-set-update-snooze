@@ -17,8 +17,8 @@ sub test_replication_email_set_update_snooze
     xlog $self, "Get mailbox id of Inbox";
     my $inboxId = $self->getinbox()->{id};
 
-    xlog $self, "Generate a email via IMAP";
-    $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
+    xlog $self, "Generate an email via IMAP";
+    $self->make_message("foo", body => "an email\r\nwithCRLF\r\n") or die;
 
     xlog $self, "get email id";
     my $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R2" ] ] );

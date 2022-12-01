@@ -510,7 +510,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     u_int lmtp_readTimeout ;
 +     TimeoutId lmtp_readBlockedTimerId ;
 +
-+     /* Timer for the max amount of time to wait for a any amount of data
++     /* Timer for the max amount of time to wait for any amount of data
 +        to be written to the remote */
 +     u_int lmtp_writeTimeout ;
 +     TimeoutId lmtp_writeBlockedTimerId ;
@@ -556,7 +556,7 @@ polarbear:/afs/andrew/system/src/host/inn/013/innfeed> diff -c /dev/null imap_co
 +     u_int imap_readTimeout ;
 +     TimeoutId imap_readBlockedTimerId ;
 +
-+     /* Timer for the max amount of time to wait for a any amount of data
++     /* Timer for the max amount of time to wait for any amount of data
 +        to be written to the remote */
 +     u_int imap_writeTimeout ;
 +     TimeoutId imap_writeBlockedTimerId ;

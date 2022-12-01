@@ -213,7 +213,7 @@ static int meth_get_isched(struct transaction_t *txn,
     /* Fill in iSchedule-Capabilities */
     isched_capa_hdr(txn, &lastmod, &sbuf);
 
-    /* We don't handle GET on a anything other than ?action=capabilities */
+    /* We don't handle GET on anything other than ?action=capabilities */
     action = hash_lookup("action", &txn->req_qparams);
     if (!action || action->next || strcmp(action->s, "capabilities")) {
         txn->error.desc = "Invalid action";

@@ -17,9 +17,9 @@ sub test_misc_upload_multiaccount
     # Create user but don't share mailbox
     $self->{instance}->create_user("bar");
 
-    my @res = $jmap->Upload("a email with some text", "text/rubbish", "foo");
+    my @res = $jmap->Upload("an email with some text", "text/rubbish", "foo");
     $self->assert_str_equals('201', $res[0]->{status});
 
-    @res = $jmap->Upload("a email with some text", "text/rubbish", "bar");
+    @res = $jmap->Upload("an email with some text", "text/rubbish", "bar");
     $self->assert_str_equals('404', $res[0]->{status});
 }

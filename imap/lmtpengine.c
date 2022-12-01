@@ -943,7 +943,7 @@ void lmtpmode(struct lmtp_func *func,
     /* determine who we're talking to */
     cd.clienthost = get_clienthost(fd, &localip, &remoteip);
     if (!strcmp(cd.clienthost, UNIX_SOCKET)) {
-        /* we're not connected to a internet socket! */
+        /* we're not connected to an internet socket! */
         func->preauth = 1;
     }
     else if (localip && remoteip) {

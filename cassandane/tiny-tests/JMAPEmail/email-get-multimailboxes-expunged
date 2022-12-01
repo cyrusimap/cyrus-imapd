@@ -13,7 +13,7 @@ sub test_email_get_multimailboxes_expunged
 
     my $now = DateTime->now();
 
-    xlog $self, "Generate a email in INBOX via IMAP";
+    xlog $self, "Generate an email in INBOX via IMAP";
     my $res = $self->make_message("foo") || die;
     my $uid = $res->{attrs}->{uid};
     my $msg;

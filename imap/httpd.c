@@ -5032,7 +5032,7 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
 }
 
 
-/* Perform an PROPFIND request on "/" iff we support CalDAV */
+/* Perform a PROPFIND request on "/" iff we support CalDAV */
 static int meth_propfind_root(struct transaction_t *txn,
                               void *params __attribute__((unused)))
 {
@@ -5093,7 +5093,7 @@ static void trace_cachehdr(const char *name, const char *contents, const char *r
     }
 }
 
-/* Perform an TRACE request */
+/* Perform a TRACE request */
 EXPORTED int meth_trace(struct transaction_t *txn, void *params)
 {
     parse_path_t parse_path = (parse_path_t) params;

@@ -2449,7 +2449,7 @@ sub test_mailbox_set_destroy_empty
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog $self, "Generate a email in INBOX via IMAP";
+    xlog $self, "Generate an email in INBOX via IMAP";
     $self->make_message("Email A") || die;
 
     xlog $self, "get email list";

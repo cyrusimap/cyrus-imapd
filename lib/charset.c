@@ -1412,7 +1412,7 @@ restart:
         if (html_isalpha(c)) {
             buf_putc(&s->name, c);
             /* TODO: we're supposed to look this up
-             * to see if it's an known character so that
+             * to see if it's a known character so that
              * &notit; is parsed as the 4 chars
              * '¬' 'i' 't' ';' */
         }

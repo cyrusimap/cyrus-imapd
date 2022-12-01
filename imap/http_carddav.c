@@ -853,10 +853,10 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
 
     if (!defaultlen) defaultlen = strlen(DEFAULT_ADDRBOOK);
 
-    /* Make sure its a addrendar */
+    /* Make sure it is an addressbook */
     if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) goto done;
 
-    /* Make sure its readable */
+    /* Make sure it is readable */
     rights = httpd_myrights(httpd_authstate, mbentry);
     if ((rights & DACL_READ) != DACL_READ) goto done;
 
@@ -887,7 +887,7 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
         addr->flags |= ADDR_IS_DEFAULT;
     }
 
-    /* Can we delete this addrendar? */
+    /* Can we delete this addressbook? */
     else if (rights & DACL_RMCOL) {
         addr->flags |= ADDR_CAN_DELETE;
     }

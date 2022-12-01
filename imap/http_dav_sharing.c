@@ -988,7 +988,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
     }
     if (ret) goto done;
 
-    /* Make sure its a invite-reply element */
+    /* Make sure it is an invite-reply element */
     if (xmlStrcmp(root->name, BAD_CAST "invite-reply")) {
         txn->error.desc =
             "Missing invite-reply element in POST request";
@@ -1951,7 +1951,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     }
     if (ret) goto done;
 
-    /* Make sure its a share-resource element */
+    /* Make sure it is a share-resource element */
     if (!xmlStrcmp(root->name, BAD_CAST "share")) legacy = 1;
     else if (xmlStrcmp(root->name, BAD_CAST "share-resource")) {
         txn->error.desc =

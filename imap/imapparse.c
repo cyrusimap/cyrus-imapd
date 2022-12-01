@@ -775,7 +775,7 @@ bad:
 }
 
 /*
- * Parse a ANNOTATION item for SEARCH (RFC 5257) into a struct
+ * Parse an ANNOTATION item for SEARCH (RFC 5257) into a struct
  * searchannot and append it to the chain of such structures at *lp.
  * Returns the next character.
  */

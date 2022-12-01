@@ -26,10 +26,10 @@ sub test_email_set_move
     my $c = $res->[0][1]{created}{"c"}{id};
     my $d = $res->[0][1]{created}{"d"}{id};
 
-    xlog $self, "Generate a email via IMAP";
+    xlog $self, "Generate an email via IMAP";
     my %exp_sub;
     $exp_sub{A} = $self->make_message(
-        "foo", body => "a email",
+        "foo", body => "an email",
     );
 
     xlog $self, "get email id";

@@ -1989,10 +1989,10 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
 
-    /* Make sure its a calendar */
+    /* Make sure it is a calendar */
     if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR) goto done;
 
-    /* Make sure its readable */
+    /* Make sure it is readable */
     rights = httpd_myrights(httpd_authstate, mbentry);
     if ((rights & DACL_READ) != DACL_READ) goto done;
 
