@@ -67,7 +67,7 @@ static struct namespace expire_namespace; /* current namespace */
 struct args {
     const char *altconfig;
     int expire_seconds;
-    int expunge_seconds;
+    int unlink_seconds;
     int lock_seconds;
     strarray_t userids;
 };
@@ -94,7 +94,7 @@ static inline void verbosep(const char *fmt, ...)
 struct jmapnotif_rock {
     const struct args *args;
     time_t expire_before;
-    time_t expunge_before;
+    time_t unlink_before;
     unsigned lock_millis;
     unsigned nexpired;
 };
@@ -156,10 +156,10 @@ static int expire_jmapnotifs(const mbentry_t *mbentry, void *vrock)
     struct mailbox *mailbox = NULL;
     unsigned lock_millis = args->lock_seconds * 1000L;
 
-    /* First, expunge previously expired notifications */
+    /* First, unlink previously expired notifications */
 
-    if (args->expunge_seconds >= 0) {
-        unsigned nexpunged = 0;
+    if (args->unlink_seconds >= 0) {
+        unsigned nunlinked = 0;
         struct timespec start = {0};
         struct timespec until = {0};
 
@@ -182,9 +182,9 @@ static int expire_jmapnotifs(const mbentry_t *mbentry, void *vrock)
             mailbox_iter_timer(iter, until, 1000);
         }
         r = mailbox_expunge_cleanup(mailbox, iter,
-                rock->expunge_before, &nexpunged);
+                rock->unlink_before, &nunlinked);
         if (r) {
-            verbosep("%s: failed to expunge notifications %s",
+            verbosep("%s: failed to unlink notifications %s",
                 mbentry->name, error_message(r));
         }
         mailbox_iter_done(&iter);
@@ -195,7 +195,7 @@ static int expire_jmapnotifs(const mbentry_t *mbentry, void *vrock)
             print_lock(mbentry->name, start, until);
         }
 
-        verbosep("%s: expunged %u notifications", mbentry->name, nexpunged);
+        verbosep("%s: unlinked %u notifications", mbentry->name, nunlinked);
 
         libcyrus_run_delayed(); // TODO(rsto): this should support lock_millis
     }
@@ -256,8 +256,8 @@ static void do_jmapnotifs(const struct args *args)
         rock.expire_before = time(0) - args->expire_seconds;
     }
 
-    if (args->expunge_seconds >= 0) {
-        rock.expunge_before = time(0) - args->expunge_seconds;
+    if (args->unlink_seconds >= 0) {
+        rock.unlink_before = time(0) - args->unlink_seconds;
     }
 
     if (strarray_size(&args->userids)) {
@@ -303,7 +303,7 @@ static void usage(void)
     fprintf(stderr,
         "Mandatory arguments (at least one required):\n"
         "-E --notif-expire=<dur>    expire notifications older than duration\n"
-        "-X --notif-expunge=<dur>   expunge notifications older than duration\n"
+        "-X --notif-unlink=<dur>    unlink notifications older than duration\n"
         "\n"
         "Optional arguments:\n"
         "-C <config-file>          use <config-file> instead of config from imapd.conf\n"
@@ -325,7 +325,7 @@ static int parse_args(int argc, char *argv[], struct args *args)
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
         {"notif-expire", required_argument, NULL, 'E'},
-        {"notif-expunge", required_argument, NULL, 'X'},
+        {"notif-unlink", required_argument, NULL, 'X'},
         {"lock", required_argument, NULL, 'l'},
         {"user", required_argument, NULL, 'u'},
         {"verbose", no_argument, NULL, 'v'},
@@ -351,7 +351,7 @@ static int parse_args(int argc, char *argv[], struct args *args)
         case 'X':
             if (config_parseduration(optarg, 's', &dur) < 0 || dur < 0)
                 usage();
-            args->expunge_seconds = dur;
+            args->unlink_seconds = dur;
             break;
 
         case 'l':
@@ -384,7 +384,7 @@ static int parse_args(int argc, char *argv[], struct args *args)
     }
 
     if (args->expire_seconds  == -1 &&
-        args->expunge_seconds == -1) {
+        args->unlink_seconds == -1) {
         fprintf(stderr, "Missing mandatory arguments\n\n");
         usage();
         return -EINVAL;
@@ -421,7 +421,7 @@ int main(int argc, char *argv[])
     int exitcode = 0;
     struct args args = {0};
     args.expire_seconds = -1;
-    args.expunge_seconds = -1;
+    args.unlink_seconds = -1;
 
     progname = basename(argv[0]);
     if (parse_args(argc, argv, &args) != 0) exit(EXIT_FAILURE);

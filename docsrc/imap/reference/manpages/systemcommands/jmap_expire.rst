@@ -17,7 +17,7 @@ Synopsis
 
     **jmap_expire** [ **-C** *config-file* ]
     [ **-E** *notif-expire-duration* ]
-    [ **-X** *notif-expunge-duration* ]
+    [ **-X** *notif-unlink-duration* ]
     [ **-h** or **--help**]
     [ **-l** or **--lock** *lock-duration*]
     [ **-u** *username* ]
@@ -29,7 +29,7 @@ Description
 **jmap_expire** is used to run a number of regular maintenance tasks for
 JMAP mailboxes and databases, specifically:
 
-- expires and expunges JMAP CalendarEventNotification objects
+- expires and unlinks JMAP CalendarEventNotification objects
 
 **jmap_expire** requires at least one of the **-E -X** optionss.
 
@@ -56,9 +56,9 @@ Options
     The duration must be zero or positive. Setting this flag causes the
     JMAP notification to not be visible anymore to JMAP methods, but preserves
     them on the file system. This is required to allow Cyrus replica to
-    synchronize their state. Also see the **--notif-expunge** option.
+    synchronize their state. Also see the **--notif-unlink** option.
 
-.. option:: -X duration, --notif-expunge=duration
+.. option:: -X duration, --notif-unlink=duration
 
     Removes already previously expired JMAP notifications in the
     *jmapnotificationfolder* mailbox if their last modification time
@@ -75,7 +75,7 @@ Options
 .. option:: -l --lock=duration
 
     Attempt to lock a mailbox at most *duration* seconds for each
-    operation (e.g expire, expunge). Without this option, each
+    operation (e.g expire, unlink). Without this option, each
     mailbox is exclusively locked as long as it takes to complete
     the requested operation. For large mailboxes, this may get other
     processes stuck waiting for the mailbox. With this option, the
