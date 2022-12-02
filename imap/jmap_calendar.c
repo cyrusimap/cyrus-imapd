@@ -9094,8 +9094,11 @@ static void principal_getavailability(jmap_req_t *req,
         struct busyperiod *prevbp = dynarray_nth(busyperiods, count-1);
         if (bp->jevent || bp->status != prevbp->status ||
                 jmapical_datetime_compare(&prevbp->utcend, &bp->utcstart) < 0) {
-            /* Insert new busy period */
-            dynarray_set(busyperiods, count++, bp);
+            if (count != i) {
+                /* Insert new busy period */
+                dynarray_set(busyperiods, count, bp);
+            }
+            count++;
         }
         else if (jmapical_datetime_compare(&prevbp->utcend, &bp->utcend) < 0) {
             /* Merge busy period */
