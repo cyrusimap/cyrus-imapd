@@ -6309,7 +6309,7 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
 
     // check privacy
     if (rock->is_sharee && jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET)
-        return 0;
+        goto done;
 
     if (jscal->cdata.comp_type != CAL_COMP_VEVENT)
         goto done;
