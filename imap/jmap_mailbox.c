@@ -3687,7 +3687,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
     }
 
     /* Validate: no children for specialuse_nochildren roles */
-    if (config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN)) {
+    if (!state->has_conflict && config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN)) {
         strarray_t *nochildren =
             strarray_split(config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN),
                 NULL, STRARRAY_TRIM);
@@ -3711,6 +3711,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
         strarray_free(nochildren);
         hash_iter_free(&iter);
     }
+
     /* Handle conflicts */
     if (state->has_conflict) {
         struct buf desc = BUF_INITIALIZER;
