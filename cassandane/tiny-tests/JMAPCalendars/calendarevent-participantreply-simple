@@ -62,6 +62,7 @@ sub test_calendarevent_participantreply_simple
                             calendarIds => {
                                 Default => JSON::true,
                             },
+                            "sequence" => 1,
                             "title" => "foo",
                             "description" => "foo's description",
                             "freeBusyStatus" => "busy",
@@ -97,6 +98,7 @@ sub test_calendarevent_participantreply_simple
     $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
     $self->assert_matches(qr/(bugs|rr)\@looneytunes.com/, $payload->{recipient});
     $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "SEQUENCE:1");
     $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
 
     $imip = $imips[1];
@@ -109,6 +111,7 @@ sub test_calendarevent_participantreply_simple
     $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
     $self->assert_matches(qr/(bugs|rr)\@looneytunes.com/, $payload->{recipient});
     $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "SEQUENCE:1");
     $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
 
     xlog $self, "set attendee status";
@@ -134,6 +137,7 @@ sub test_calendarevent_participantreply_simple
     $self->assert_str_equals("bugs\@looneytunes.com", $payload->{sender});
     $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REPLY");
+    $self->assert($ical =~ "SEQUENCE:1");
     $self->assert($ical =~ "PARTSTAT=ACCEPTED");
 
     xlog $self, "verify updated request sent from organizer to attendee";
@@ -148,6 +152,7 @@ sub test_calendarevent_participantreply_simple
     $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
     $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "SEQUENCE:1");
     $self->assert($ical =~ "PARTSTAT=ACCEPTED");
 
     xlog $self, "set attendee status on override";
@@ -173,6 +178,7 @@ sub test_calendarevent_participantreply_simple
     $self->assert_str_equals("rr\@looneytunes.com", $payload->{sender});
     $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REPLY");
+    $self->assert($ical =~ "SEQUENCE:1");
     $self->assert($ical =~ "PARTSTAT=DECLINED");
 
     xlog $self, "verify updated request sent from organizer to attendee";
@@ -187,5 +193,6 @@ sub test_calendarevent_participantreply_simple
     $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
     $self->assert_str_equals("rr\@looneytunes.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "SEQUENCE:1");
     $self->assert($ical =~ "PARTSTAT=DECLINED");
 }
