@@ -206,7 +206,7 @@ enum {
     GETSEARCH_SOURCE = 0x08,
 };
 
-/* Bitmasks for search source options */
+/* Bitmasks for search source options (RFC 7377) */
 enum {
     SEARCH_SOURCE_SELECTED    = (1<<0),
     SEARCH_SOURCE_PERSONAL    = (1<<1),
@@ -217,14 +217,14 @@ enum {
     SEARCH_SOURCE_MAILBOXES   = (1<<6)
 };
 
-/* Bitmasks for search return options */
+/* Bitmasks for search return options (RFC 4731) */
 enum {
     SEARCH_RETURN_MIN =         (1<<0),
     SEARCH_RETURN_MAX =         (1<<1),
     SEARCH_RETURN_ALL =         (1<<2),
     SEARCH_RETURN_COUNT =       (1<<3),
-    SEARCH_RETURN_SAVE =        (1<<4),
-    SEARCH_RETURN_RELEVANCY =   (1<<5)
+    SEARCH_RETURN_SAVE =        (1<<4),  /* RFC 5182 */
+    SEARCH_RETURN_RELEVANCY =   (1<<5)   /* RFC 6203 */
 };
 
 /* Things that may be searched for */
@@ -297,21 +297,23 @@ struct snippetargs
     } uids;
 };
 
-/* Bitmask for status queries */
+/* Bitmask for status queries (RFC 3501) */
 enum {
     STATUS_MESSAGES =           (1<<0),
     STATUS_RECENT =             (1<<1),
     STATUS_UIDNEXT =            (1<<2),
     STATUS_UIDVALIDITY =        (1<<3),
     STATUS_UNSEEN =             (1<<4),
-    STATUS_MAILBOXID =          (1<<5),
-    STATUS_SIZE =               (1<<6),
-    STATUS_HIGHESTMODSEQ =      (1<<7),
-    STATUS_XCONVEXISTS =        (1<<8),
-    STATUS_XCONVUNSEEN =        (1<<9),
-    STATUS_XCONVMODSEQ =        (1<<10),
-    STATUS_CREATEDMODSEQ =      (1<<11),
-    STATUS_MBOPTIONS =          (1<<12)
+    STATUS_HIGHESTMODSEQ =      (1<<5),  /* RFC 7162 */
+    STATUS_SIZE =               (1<<6),  /* RFC 8438 */
+    STATUS_MAILBOXID =          (1<<7),  /* RFC 8474 */
+
+    /* Non-standard */
+    STATUS_XCONVEXISTS =        (1<<11),
+    STATUS_XCONVUNSEEN =        (1<<12),
+    STATUS_XCONVMODSEQ =        (1<<13),
+    STATUS_CREATEDMODSEQ =      (1<<14),
+    STATUS_MBOPTIONS =          (1<<15)
     /* New items MUST be handled in imapd.c:list_data_remote() */
 };
 
@@ -351,27 +353,29 @@ enum {
     LIST_CMD_XLIST,
 };
 
-/* Bitmask for List selection options */
+/* Bitmask for List selection options (RFC 5258) */
 enum {
     LIST_SEL_SUBSCRIBED =       (1<<0),
     LIST_SEL_REMOTE =           (1<<1),
     LIST_SEL_RECURSIVEMATCH =   (1<<2),
-    LIST_SEL_SPECIALUSE =       (1<<3),
-    LIST_SEL_DAV =              (1<<4),
-    LIST_SEL_METADATA =         (1<<5),
-    LIST_SEL_INTERMEDIATES =    (1<<6),
-    LIST_SEL_DELETED =          (1<<7)
+    LIST_SEL_SPECIALUSE =       (1<<3),  /* RFC 6154 */
+
+    /* Non-standard */
+    LIST_SEL_DAV =              (1<<12),
+    LIST_SEL_METADATA =         (1<<13),
+    LIST_SEL_INTERMEDIATES =    (1<<14),
+    LIST_SEL_DELETED =          (1<<15)
     /* New options MUST be handled in imapd.c:list_data_remote() */
 };
 
-/* Bitmask for List return options */
+/* Bitmask for List return options (RFC 5258) */
 enum {
     LIST_RET_SUBSCRIBED =       (1<<0),
     LIST_RET_CHILDREN =         (1<<1),
-    LIST_RET_SPECIALUSE =       (1<<2),
-    LIST_RET_STATUS =           (1<<3),
-    LIST_RET_MYRIGHTS =         (1<<4),
-    LIST_RET_METADATA =         (1<<5)
+    LIST_RET_SPECIALUSE =       (1<<2),  /* RFC 6154 */
+    LIST_RET_STATUS =           (1<<3),  /* RFC 5819 */
+    LIST_RET_MYRIGHTS =         (1<<4),  /* RFC 8440 */
+    LIST_RET_METADATA =         (1<<5)   /* draft-murchison-imap-list-metadata */
     /* New options MUST be handled in imapd.c:list_data_remote() */
 };
 
@@ -401,11 +405,11 @@ extern const struct mbox_name_attribute mbox_name_attributes[];
 
 /* Bitmask for client capabilities */
 enum {
-    CAPA_CONDSTORE =    (1<<0),
-    CAPA_QRESYNC =      (1<<1)
+    CAPA_CONDSTORE =    (1<<0),  /* RFC 7162 */
+    CAPA_QRESYNC =      (1<<1)   /* RFC 7162 */
 };
 
-/* Bitmask for urlfetch params */
+/* Bitmask for urlfetch params (RFC 5524) */
 enum {
     URLFETCH_BODY =                     (1<<0),
     URLFETCH_BINARY =                   (1<<1),
