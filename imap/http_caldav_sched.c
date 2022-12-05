@@ -1662,10 +1662,13 @@ static int check_changes(icalcomponent *old, icalcomponent *comp, const char *at
     int needs_action = 0;
     int res = check_changes_any(old, comp, &needs_action);
     if (needs_action) {
-        /* Make sure SEQUENCE is set properly */
-        int oldseq = icalcomponent_get_sequence(old);
-        int newseq = icalcomponent_get_sequence(comp);
-        if (oldseq >= newseq) icalcomponent_set_sequence(comp, oldseq + 1);
+        if (old) {
+            /* Make sure SEQUENCE is set properly */
+            int oldseq = icalcomponent_get_sequence(old);
+            int newseq = icalcomponent_get_sequence(comp);
+            if (oldseq >= newseq) icalcomponent_set_sequence(comp, oldseq + 1);
+        }
+
         icalproperty *prop = find_attendee(comp, attendee);
         if (prop) {
             icalparameter *param =
