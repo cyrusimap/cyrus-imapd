@@ -228,5 +228,46 @@ sub test_important
     $self->assert_equals('no', $imaptalk->get_last_completion_response());
 }
 
+sub test_nochildren
+    :min_version_3_7 :NoStartInstances :NoAltNamespace
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('specialuse_nochildren' => '\\Trash');
+    $self->_start_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    # should not be able to create a child
+    $imaptalk->create("INBOX.Trash.child");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+
+    # should not be able to create a grandchild either
+    $imaptalk->create("INBOX.Trash.child.grandchild");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+
+    # better not have accidentally created anything
+    $imaptalk->select("INBOX.Trash.child");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->select("INBOX.Trash.child.grandchild");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+
+    # what if we remove the annotation
+    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", undef);
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    # should be able to create a child
+    $imaptalk->create("INBOX.Trash.child");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    # should not be able to add the annotation back
+    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", '\\Trash');
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+}
+
 # compile
 1;

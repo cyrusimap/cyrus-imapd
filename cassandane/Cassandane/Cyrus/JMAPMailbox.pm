@@ -54,6 +54,9 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
+use lib '../perl/imap';
+use Cyrus::DList;
+
 use charnames ':full';
 
 sub new
@@ -77,14 +80,25 @@ sub new
     }, @args);
 }
 
-sub set_up
+sub setup_default_using
 {
     my ($self) = @_;
-    $self->SUPER::set_up();
     $self->{jmap}->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
     ]);
+}
+
+sub set_up
+{
+    my ($self) = @_;
+    $self->SUPER::set_up();
+
+    if ($self->{jmap}) {
+        $self->setup_default_using();
+    }
+    # n.b. tests that use :NoStartInstances will need to call
+    # $self->setup_default_using() themselves!
 }
 
 sub getinbox
@@ -5280,6 +5294,85 @@ sub test_mailbox_ignore_notes_subfolders
     $self->assert_deep_equals([$inboxId], $res->[0][1]{ids});
     $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
     $self->assert_str_equals($inboxId, $res->[1][1]{list}[0]{id});
+}
+
+sub test_mailbox_set_create_specialuse_nochildren
+    :min_version_3_7 :needs_component_jmap :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('specialuse_nochildren' => '\\Trash');
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+    $self->setup_default_using();
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    # set up a Trash folder with \Trash special-use annotation
+    my $res = $jmap->CallMethods([[ 'Mailbox/set', {
+        create => {
+            trashmbox => {
+                name => 'Trash',
+                role => 'trash',
+            }
+        }
+    }, 'R1']]);
+    my $trash_id = $res->[0][1]->{created}->{trashmbox}->{id};
+    $self->assert_not_null($trash_id);
+
+    # should not be able to create a child of \Trash
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            1 => {
+                parentId => $trash_id,
+                name => 'child',
+            },
+        },
+    }, "R1"]]);
+
+    # XXX that syslogs an IOERROR, surprisingly -- ignore it
+    $self->{instance}->getsyslog();
+
+    $self->assert_null($res->[0][1]->{created});
+    $self->assert_deep_equals({ 1 => { type => 'forbidden' } },
+                              $res->[0][1]->{notCreated});
+
+    # what if we remove the annotation
+    # (doing this with IMAP because JMAP can't simply remove it)
+    $imaptalk->setmetadata("Trash", "/private/specialuse", undef);
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    # should be able to create the child now
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            1 => {
+                parentId => $trash_id,
+                name => 'child',
+            },
+        },
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]->{created}->{1}->{id});
+
+    # should not be able to add the annotation back
+    $imaptalk->setmetadata("Trash", "/private/specialuse", '\\Trash');
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+
+    # should not be able to add the JMAP role back either
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $trash_id => {
+                role => 'trash',
+            }
+        }
+    }, "R1"]]);
+
+    $self->assert_not_null($res->[0][1]->{notUpdated}->{$trash_id});
+    $self->assert_null($res->[0][1]->{updated});
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]->{notUpdated}{$trash_id}{type});
+    $self->assert_deep_equals(['role'],
+        $res->[0][1]->{notUpdated}{$trash_id}{properties});
 }
 
 1;
