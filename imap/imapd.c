@@ -1443,7 +1443,7 @@ static void cmdloop(void)
             copy:
                 c = getword(imapd_in, &arg1);
                 if (c == '\r') goto missingargs;
-                /* Allow RFC 5282 search result variable or explicit sequence */
+                /* Allow RFC 5182 search result variable or explicit sequence */
                 if (c != ' ' || (strcmp("$", arg1.s) && !imparse_issequence(arg1.s)))
                     goto badsequence;
                 c = getastring(imapd_in, imapd_out, &arg2);
@@ -1569,7 +1569,7 @@ static void cmdloop(void)
             fetch:
                 c = getword(imapd_in, &arg1);
                 if (c == '\r') goto missingargs;
-                /* Allow RFC 5282 search result variable or explicit sequence */
+                /* Allow RFC 5182 search result variable or explicit sequence */
                 if (c != ' ' || (strcmp("$", arg1.s) && !imparse_issequence(arg1.s)))
                     goto badsequence;
 
@@ -1796,7 +1796,7 @@ static void cmdloop(void)
             move:
                 c = getword(imapd_in, &arg1);
                 if (c == '\r') goto missingargs;
-                /* Allow RFC 5282 search result variable or explicit sequence */
+                /* Allow RFC 5182 search result variable or explicit sequence */
                 if (c != ' ' || (strcmp("$", arg1.s) && !imparse_issequence(arg1.s)))
                     goto badsequence;
                 c = getastring(imapd_in, imapd_out, &arg2);
@@ -1971,7 +1971,7 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
             store:
                 c = getword(imapd_in, &arg1);
-                /* Allow RFC 5282 search result variable or explicit sequence */
+                /* Allow RFC 5182 search result variable or explicit sequence */
                 if (c != ' ' || (strcmp("$", arg1.s) && !imparse_issequence(arg1.s)))
                     goto badsequence;
 
