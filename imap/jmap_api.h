@@ -320,6 +320,7 @@ extern int jmap_findblob_exact(jmap_req_t *req, const char *accountid,
                                struct buf *blob);
 
 #define JMAP_MODSEQ_RELOAD (1<<0)
+#define JMAP_MODSEQ_FOLDER (1<<1)
 extern modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags);
 
 /* Helpers for DAV-based JMAP types */
