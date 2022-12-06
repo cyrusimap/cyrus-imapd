@@ -1388,23 +1388,34 @@ HIDDEN modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags)
     }
 
     modseq_t modseq;
+    int is_folder = flags & JMAP_MODSEQ_FOLDER;
 
     /* Determine current counter by mailbox type. */
     switch (mbtype_isa(mbtype)) {
         case MBTYPE_CALENDAR:
-            modseq = req->counters.caldavmodseq;
+            modseq = is_folder ?
+                req->counters.caldavfoldersmodseq :
+                req->counters.caldavmodseq;
             break;
         case MBTYPE_ADDRESSBOOK:
-            modseq = req->counters.carddavmodseq;
+            modseq = is_folder ?
+                req->counters.carddavfoldersmodseq :
+                req->counters.carddavmodseq;
             break;
         case MBTYPE_JMAPSUBMIT:
-            modseq = req->counters.submissionmodseq;
+            modseq = is_folder ?
+                req->counters.submissionfoldersmodseq :
+                req->counters.submissionmodseq;
             break;
         case MBTYPE_SIEVE:
-            modseq = req->counters.sievemodseq;
+            modseq = is_folder ?
+                req->counters.sievefoldersmodseq :
+                req->counters.sievemodseq;
             break;
         case MBTYPE_EMAIL:
-            modseq = req->counters.mailmodseq;
+            modseq = is_folder ?
+                req->counters.mailfoldersmodseq :
+                req->counters.mailmodseq;
             break;
         default:
             modseq = req->counters.highestmodseq;
