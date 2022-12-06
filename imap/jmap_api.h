@@ -319,11 +319,8 @@ extern int jmap_findblob_exact(jmap_req_t *req, const char *accountid,
                                struct mailbox **mbox, msgrecord_t **mr,
                                struct buf *blob);
 
-/* JMAP states */
-extern char *jmap_getstate(jmap_req_t *req, int mbtype, int refresh);
-extern json_t *jmap_fmtstate(modseq_t modseq);
-extern int jmap_cmpstate(jmap_req_t *req, json_t *state, int mbtype);
-extern modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype);
+#define JMAP_MODSEQ_RELOAD (1<<0)
+extern modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags);
 
 /* Helpers for DAV-based JMAP types */
 extern char *jmap_xhref(const char *mboxname, const char *resource);

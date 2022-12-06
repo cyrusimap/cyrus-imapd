@@ -1373,7 +1373,8 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     if (mbox) jmap_closembox(req, &mbox);
 
     /* Build response */
-    get.state = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
+    get.state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT,
+                created ? JMAP_MODSEQ_RELOAD : 0));
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -1512,18 +1513,14 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     if (r) goto done;
 
     if (set.if_in_state) {
-        /* TODO rewrite state function to use char* not json_t* */
-        json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_JMAPSUBMIT)) {
+        if (atomodseq_t(set.if_in_state) != jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-            json_decref(jstate);
             goto done;
         }
-        json_decref(jstate);
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        set.old_state = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/0);
+        set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0));
     }
 
     /* create */
@@ -1585,7 +1582,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     /* force modseq to stable */
     if (submbox) mailbox_unlock_index(submbox, NULL);
 
-    set.new_state = jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/1);
+    set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT, JMAP_MODSEQ_RELOAD));
 
     jmap_ok(req, jmap_set_reply(&set));
 
@@ -1669,7 +1666,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         mboxlist_entry_free(&mbentry);
         r = 0;
-        changes.new_modseq = jmap_highestmodseq(req, MBTYPE_JMAPSUBMIT);
+        changes.new_modseq = jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0);
         jmap_ok(req, jmap_changes_reply(&changes));
         goto done;
     }
@@ -1732,7 +1729,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     // if we issued a query for changes since 6, max_changes 1 - we'd get back
     // has_more_changes: true, new_modseq 15, and we'd never see UID=4 as having changed.
     changes.new_modseq = changes.has_more_changes ?
-        highest_modseq : jmap_highestmodseq(req, MBTYPE_JMAPSUBMIT);
+        highest_modseq : jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0);
 
     jmap_ok(req, jmap_changes_reply(&changes));
 
@@ -2131,8 +2128,8 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         mboxlist_entry_free(&mbentry);
         r = 0;
         /* Build response */
-        query.query_state =
-            jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
+        query.query_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT,
+                    created ? JMAP_MODSEQ_RELOAD : 0));
         query.result_position = 0;
         query.can_calculate_changes = 0;
         jmap_ok(req, jmap_query_reply(&query));
@@ -2244,8 +2241,8 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     free(sortcrit);
 
     /* Build response */
-    query.query_state =
-        jmap_getstate(req, MBTYPE_JMAPSUBMIT, /*refresh*/ created);
+    query.query_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT,
+                created ? JMAP_MODSEQ_RELOAD : 0));
     query.result_position = query.position;
     query.can_calculate_changes = 0;
     jmap_ok(req, jmap_query_reply(&query));

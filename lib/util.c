@@ -2179,3 +2179,10 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
     buf_free(&buf);
     errno = saved_errno;
 }
+
+EXPORTED char *modseqtoa(modseq_t modseq)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+    return buf_release(&buf);
+}

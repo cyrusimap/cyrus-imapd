@@ -1379,43 +1379,14 @@ HIDDEN int jmap_findblob_exact(jmap_req_t *req, const char *from_accountid,
                           mbox, mr, NULL /*body*/, NULL /*part*/, blob);
 }
 
-HIDDEN int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
+HIDDEN modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags)
 {
-    if (JNOTNULL(state)) {
-        const char *s = json_string_value(state);
-        if (!s) {
-            return -1;
-        }
-        modseq_t client_modseq = atomodseq_t(s);
-        modseq_t server_modseq = 0;
-        switch (mbtype_isa(mbtype)) {
-         case MBTYPE_CALENDAR:
-             server_modseq = req->counters.caldavmodseq;
-             break;
-         case MBTYPE_ADDRESSBOOK:
-             server_modseq = req->counters.carddavmodseq;
-             break;
-         case MBTYPE_JMAPSUBMIT:
-             server_modseq = req->counters.submissionmodseq;
-             break;
-         case MBTYPE_SIEVE:
-             server_modseq = req->counters.sievemodseq;
-             break;
-         default:
-             server_modseq = req->counters.mailmodseq;
-        }
-        if (client_modseq < server_modseq)
-            return -1;
-        else if (client_modseq > server_modseq)
-            return 1;
-        else
-            return 0;
+    if (flags & JMAP_MODSEQ_RELOAD) {
+        char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+        assert (!mboxname_read_counters(inboxname, &req->counters));
+        free(inboxname);
     }
-    return 0;
-}
 
-HIDDEN modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
-{
     modseq_t modseq;
 
     /* Determine current counter by mailbox type. */
@@ -1440,33 +1411,6 @@ HIDDEN modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
     }
 
     return modseq;
-}
-
-HIDDEN char *jmap_getstate(jmap_req_t *req, int mbtype, int refresh)
-{
-    if (refresh) {
-        char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-        assert (!mboxname_read_counters(inboxname, &req->counters));
-        free(inboxname);
-    }
-
-    struct buf buf = BUF_INITIALIZER;
-    modseq_t modseq = jmap_highestmodseq(req, mbtype);
-
-    buf_printf(&buf, MODSEQ_FMT, modseq);
-
-    return buf_release(&buf);
-}
-
-
-HIDDEN json_t *jmap_fmtstate(modseq_t modseq)
-{
-    struct buf buf = BUF_INITIALIZER;
-    json_t *state = NULL;
-    buf_printf(&buf, MODSEQ_FMT, modseq);
-    state = json_string(buf_cstring(&buf));
-    buf_free(&buf);
-    return state;
 }
 
 HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
@@ -2117,16 +2061,21 @@ HIDDEN void jmap_changes_fini(struct jmap_changes *changes)
 HIDDEN json_t *jmap_changes_reply(struct jmap_changes *changes)
 {
     json_t *res = json_object();
-    json_object_set_new(res, "oldState", jmap_fmtstate(changes->since_modseq));
-    json_object_set_new(res, "newState", jmap_fmtstate(changes->new_modseq));
+    char *old_state = modseqtoa(changes->since_modseq);
+    char *new_state = modseqtoa(changes->new_modseq);
+
+    json_object_set_new(res, "oldState", json_string(old_state));
+    json_object_set_new(res, "newState", json_string(new_state));
     json_object_set_new(res, "hasMoreChanges",
             json_boolean(changes->has_more_changes));
     json_object_set(res, "created", changes->created);
     json_object_set(res, "updated", changes->updated);
     json_object_set(res, "destroyed", changes->destroyed);
+
+    free(old_state);
+    free(new_state);
     return res;
 }
-
 
 /* Foo/copy */
 

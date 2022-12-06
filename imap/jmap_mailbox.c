@@ -959,7 +959,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     }
 
     /* Build response */
-    get.state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
+    get.state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
     jmap_ok(req, jmap_get_reply(&get));
 
     _shared_mboxes_free(shared_mboxes);
@@ -3909,7 +3909,7 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
     }
 
     /* Fetch mailbox state */
-    set->super.new_state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
+    set->super.new_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD));
 
     /* Prune intermediary mailbox trees without any children. Do this
      * after we fetched the mailbox state, so clients are forced to
@@ -4106,16 +4106,14 @@ static int jmap_mailbox_set(jmap_req_t *req)
         goto done;
     }
     if (set.super.if_in_state) {
-        json_t *jstate = json_string(set.super.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_EMAIL)) {
+        if (atomodseq_t(set.super.if_in_state) != jmap_modseq(req, MBTYPE_EMAIL, 0)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-        json_decref(jstate);
         set.super.old_state = xstrdup(set.super.if_in_state);
     }
     else {
-        set.super.old_state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
+        set.super.old_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
     }
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     _mboxset(req, &set);
@@ -4314,7 +4312,7 @@ static int _mbox_changes(jmap_req_t *req,
     }
 
     changes->new_modseq = changes->has_more_changes ?
-        windowmodseq : jmap_highestmodseq(req, 0);
+        windowmodseq : jmap_modseq(req, MBTYPE_EMAIL, 0);
 
 done:
     if (data.created) json_decref(data.created);

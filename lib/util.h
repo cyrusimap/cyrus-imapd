@@ -106,6 +106,7 @@ typedef unsigned long long int bit64;
 typedef unsigned long long int modseq_t;
 #define MODSEQ_FMT "%llu"
 #define atomodseq_t(s) strtoull(s, NULL, 10)
+char *modseqtoa(modseq_t modseq);
 
 #define Uisalnum(c) isalnum((int)((unsigned char)(c)))
 #define Uisalpha(c) isalpha((int)((unsigned char)(c)))

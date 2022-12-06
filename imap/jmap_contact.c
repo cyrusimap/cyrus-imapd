@@ -704,7 +704,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     }
 
     /* Build response */
-    get.state = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
+    get.state = modseqtoa(jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0));
     jmap_ok(req, jmap_get_reply(&get));
 
   done:
@@ -818,7 +818,7 @@ static int _contacts_changes(struct jmap_req *req, int kind)
 
     /* Determine new state. */
     changes.new_modseq = changes.has_more_changes ?
-        rock.highestmodseq : jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK);
+        rock.highestmodseq : jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0);
 
     /* Build response */
     jmap_ok(req, jmap_changes_reply(&changes));
@@ -967,18 +967,14 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
     }
 
     if (set.if_in_state) {
-        /* TODO rewrite state function to use char* not json_t* */
-        json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_ADDRESSBOOK)) {
+        if (atomodseq_t(set.if_in_state) != jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-            json_decref(jstate);
             goto done;
         }
-        json_decref(jstate);
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        set.old_state = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
+        set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0));
     }
 
     r = carddav_create_defaultaddressbook(req->accountid);
@@ -1392,7 +1388,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
     /* force modseq to stable */
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
-    set.new_state = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/1);
+    set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_ADDRESSBOOK, JMAP_MODSEQ_RELOAD));
 
     jmap_ok(req, jmap_set_reply(&set));
     r = 0;
@@ -3266,7 +3262,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind)
     }
 
     /* Build response */
-    query.query_state = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
+    query.query_state = modseqtoa(jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0));
 
     json_t *res = jmap_query_reply(&query);
     jmap_ok(req, res);
