@@ -4597,9 +4597,9 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     json_t *res = NULL;
     int r = 0;
 
-    modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
+    modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     modseq_t addrbook_modseq = contactgroups->size ?
-        jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK) : 0;
+        jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0) : 0;
     char *querystate = _email_make_querystate(modseq, 0, addrbook_modseq);
 
     struct buf fingerprint = BUF_INITIALIZER;
@@ -4799,7 +4799,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
                                       "description", "invalid query state");
         return;
     }
-    if (addrbook_modseq && addrbook_modseq != jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK)) {
+    if (addrbook_modseq && addrbook_modseq != jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
                                       "description", "addressbook changed");
 
@@ -4983,7 +4983,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     free_hash_table(&touched_ids, NULL);
     free_hashu64_table(&touched_cids, NULL);
 
-    modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
+    modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     query->new_querystate = _email_make_querystate(modseq, 0, addrbook_modseq);
 
 done:
@@ -5015,7 +5015,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
                                       "description", "invalid query state");
         return;
     }
-    if (addrbook_modseq && addrbook_modseq != jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK)) {
+    if (addrbook_modseq && addrbook_modseq != jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
                                       "description", "addressbook changed");
         return;
@@ -5146,7 +5146,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
     free_hash_table(&touched_ids, NULL);
 
-    modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
+    modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     query->new_querystate = _email_make_querystate(modseq, 0, addrbook_modseq);
 
 done:
@@ -5218,8 +5218,9 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     int r = 0;
 
     /* Run search */
-    json_t *filter = json_pack("{s:o}", "sinceEmailState",
-                               jmap_fmtstate(changes->since_modseq));
+    char *since_state = modseqtoa(changes->since_modseq);
+    json_t *filter = json_pack("{s:s}", "sinceEmailState", since_state);
+    xzfree(since_state);
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
 
     struct emailsearch search;
@@ -5298,7 +5299,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
 
     /* Set new state */
     changes->new_modseq = changes->has_more_changes ?
-        highest_modseq : jmap_highestmodseq(req, MBTYPE_EMAIL);
+        highest_modseq : jmap_modseq(req, MBTYPE_EMAIL, 0);
 
 done:
     json_decref(filter);
@@ -5349,8 +5350,9 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     int r = 0;
 
     /* Run search */
-    json_t *filter = json_pack("{s:o}", "sinceEmailState",
-                               jmap_fmtstate(changes->since_modseq));
+    char *since_state = modseqtoa(changes->since_modseq);
+    json_t *filter = json_pack("{s:s}", "sinceEmailState", since_state);
+    xzfree(since_state);
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
 
     struct emailsearch search;
@@ -5414,7 +5416,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
 
     /* Set new state */
     changes->new_modseq = changes->has_more_changes ?
-        highest_modseq : jmap_highestmodseq(req, MBTYPE_EMAIL);
+        highest_modseq : jmap_modseq(req, MBTYPE_EMAIL, 0);
 
 done:
     conversation_fini(&conv);
@@ -6142,7 +6144,7 @@ static int jmap_thread_get(jmap_req_t *req)
         goto done;
     }
 
-    get.state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
+    get.state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -8317,7 +8319,7 @@ static int jmap_email_get(jmap_req_t *req)
     else
         jmap_email_get_full(req, &get, &args);
 
-    get.state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
+    get.state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
 
     jmap_ok(req, jmap_get_reply(&get));
 
@@ -13020,17 +13022,14 @@ static int jmap_email_set(jmap_req_t *req)
     }
 
     if (set.if_in_state) {
-        /* TODO rewrite state function to use char* not json_t* */
-        json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_EMAIL)) {
+        if (atomodseq_t(set.if_in_state) != jmap_modseq(req, MBTYPE_EMAIL, 0)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-        json_decref(jstate);
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        set.old_state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
+        set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
     }
 
     json_t *email;
@@ -13058,7 +13057,7 @@ static int jmap_email_set(jmap_req_t *req)
 
     _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed);
 
-    set.new_state = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
+    set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD));
 
     json_t *reply = jmap_set_reply(&set);
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
