@@ -754,6 +754,19 @@ sub test_fetch_urlfetch
     $res = $talk->fetch($uid, '(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE)])');
     $self->assert_str_equals($res->{$uid}->{headers}->{'content-type'}[0], "text/plain");
     $self->assert_str_equals($res->{$uid}->{body}, "body3");
+
+    # Extract part of an embedded RFC822 message into a new standalone message
+    $res = $talk->_imap_cmd('append', 0, \%handlers,
+        'INBOX', [], "14-Jul-2013 17:01:02 +0000",
+        "CATENATE", [
+            "URL", "/INBOX/;uid=1/;section=3.HEADER",
+            "URL", "/INBOX/;uid=1/;section=3.TEXT;partial=1.3",
+        ],
+    );
+    $self->assert_not_null($uid);
+    $res = $talk->fetch($uid, '(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE)])');
+    $self->assert_str_equals($res->{$uid}->{headers}->{'content-type'}[0], "text/plain");
+    $self->assert_str_equals($res->{$uid}->{body}, "ody");
 }
 
 sub test_fetch_flags_before_exists

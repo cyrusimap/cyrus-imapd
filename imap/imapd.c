@@ -362,7 +362,7 @@ static struct capa_struct base_capabilities[] = {
     { "UIDPLUS",               2 }, /* RFC 4315 */
     /* UNAUTHENTICATE   RFC 8437 is implemented */
     { "UNSELECT",              2 }, /* RFC 3691 */
-    /* URL-PARTIAL      RFC 5550 is not implemented */
+    { "URL-PARTIAL"            2 }, /* RFC 5550 */
 #ifdef HAVE_SSL
     { "URLAUTH",               2 }, /* RFC 4467 */
     { "URLAUTH=BINARY",        2 }, /* RFC 5524 */
@@ -14540,7 +14540,8 @@ static void cmd_genurlauth(char *tag)
             eatline(imapd_in, c);
             prot_printf(imapd_out,
                         "%s NO Error authorizing %s: %s\r\n",
-                        tag, arg1.s, cyrusdb_strerror(r));
+                        tag, arg1.s,
+                        r == IMAP_BADURL ? error_message(r) : cyrusdb_strerror(r));
             free(url.freeme);
             free(intname);
             return;
