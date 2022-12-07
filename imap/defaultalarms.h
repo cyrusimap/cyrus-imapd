@@ -49,9 +49,26 @@
 #include "dav_util.h"
 #include "mailbox.h"
 
-#define DEFAULTALARMS_INITIALIZER {{0},{0}}
+#define DEFAULTALARMS_PREFS_INITIALIZER { 0 }
+
+struct defaultalarms_prefs {
+    int keep_user_alarms  : 1;
+    int keep_apple_alarms : 1;
+    int fake_apple_alarms : 1;
+};
+
+extern int defaultalarms_prefs_load(const char *calhomename,
+                                    struct defaultalarms_prefs *prefs);
+
+extern int defaultalarms_prefs_save(struct mailbox *calhome,
+                                    const struct defaultalarms_prefs *prefs);
+
+#define DEFAULTALARMS_INITIALIZER { \
+    DEFAULTALARMS_PREFS_INITIALIZER, {0},{0} \
+}
 
 struct defaultalarms {
+    struct defaultalarms_prefs prefs;
     struct {
         icalcomponent *ical;
         struct message_guid guid;
@@ -71,7 +88,7 @@ extern int defaultalarms_save(struct mailbox *mbox, const char *userid,
 
 extern void defaultalarms_fini(struct defaultalarms *alarms);
 
-extern void defaultalarms_insert(struct defaultalarms *alarms,
+extern void defaultalarms_insert(const struct defaultalarms *alarms,
                                  icalcomponent *ical, int force);
 
 extern int defaultalarms_migrate(struct mailbox *mbox, const char *userid,

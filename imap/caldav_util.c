@@ -1813,11 +1813,10 @@ static int copy_defaultalarms_cb(const mbentry_t *mbentry, void *vrock)
     }
     mbname_free(&mbname);
 
-    if (!defaultalarms_load(mbentry->name, rock->userid, &rock->defalarms)) {
-        return CYRUSDB_DONE;
-    }
+    defaultalarms_load(mbentry->name, rock->userid, &rock->defalarms);
 
-    return 0;
+    return (rock->defalarms.with_time.ical || rock->defalarms.with_date.ical) ?
+        CYRUSDB_DONE : 0;
 }
 
 HIDDEN int caldav_init_jmapcalendar(const char *userid, struct mailbox *mailbox)

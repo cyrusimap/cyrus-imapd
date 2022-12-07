@@ -15,6 +15,12 @@
 #define JMAP_ANNOT_DEFAULTALERTS \
     DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">defaultalerts"
 
+#define JMAP_ANNOT_DEFAULTALERTS_PREFS \
+    DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">defaultalerts-prefs"
+
+static const struct defaultalarms_prefs default_prefs =
+                            DEFAULTALARMS_PREFS_INITIALIZER;
+
 EXPORTED void defaultalarms_fini(struct defaultalarms *defalarms)
 {
     if (defalarms) {
@@ -30,6 +36,9 @@ EXPORTED void defaultalarms_fini(struct defaultalarms *defalarms)
 
         message_guid_set_null(&defalarms->with_time.guid);
         message_guid_set_null(&defalarms->with_date.guid);
+
+        memcpy(&defalarms->prefs, &default_prefs,
+                sizeof(struct defaultalarms_prefs));
     }
 }
 
@@ -127,11 +136,20 @@ EXPORTED int defaultalarms_load(const char *mboxname,
                                 const char *userid,
                                 struct defaultalarms *defalarms)
 {
-    static const char *annot = JMAP_ANNOT_DEFAULTALERTS;
     struct buf buf = BUF_INITIALIZER;
     defaultalarms_fini(defalarms);
+    char *calhomename = caldav_mboxname(userid, NULL);
 
-    int r = annotatemore_lookup(mboxname, annot, userid, &buf);
+    int r = defaultalarms_prefs_load(calhomename, &defalarms->prefs);
+    if (r && r != CYRUSDB_NOTFOUND) {
+        xsyslog(LOG_ERR, "failed to read defaultalarm preferences",
+                "calhome=<%s> userid=<%s> err=<%s>",
+                calhomename, userid, cyrusdb_strerror(r));
+        goto done;
+    }
+
+    const char *annot = JMAP_ANNOT_DEFAULTALERTS;
+    r = annotatemore_lookup(mboxname, annot, userid, &buf);
     if (!r && buf_len(&buf)) {
         struct dlist *root;
         if (!dlist_parsemap(&root, 1, 0, buf_base(&buf), buf_len(&buf))) {
@@ -170,11 +188,8 @@ EXPORTED int defaultalarms_load(const char *mboxname,
             defaultalarms_fini(defalarms);
     }
 
-    if (!defalarms->with_time.ical && !defalarms->with_date.ical) {
-        defaultalarms_fini(defalarms);
-        if (!r) r = CYRUSDB_NOTFOUND;
-    }
-
+done:
+    free(calhomename);
     buf_free(&buf);
     return r;
 }
@@ -242,6 +257,74 @@ EXPORTED int defaultalarms_save(struct mailbox *mailbox,
 
 done:
     dlist_free(&root);
+    buf_free(&buf);
+    return r;
+}
+
+EXPORTED int defaultalarms_prefs_load(const char *calhomename,
+                                      struct defaultalarms_prefs *prefs)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    const char *annot = JMAP_ANNOT_DEFAULTALERTS_PREFS;
+    int r = annotatemore_lookupmask(calhomename, annot, "", &buf);
+
+    if (!r && buf_len(&buf)) {
+        struct dlist *dl;
+        if (!dlist_parsemap(&dl, 1, 0, buf_base(&buf), buf_len(&buf))) {
+
+            uint32_t bval = 0;
+            dlist_getnum32(dl, "KEEP_USER", &bval);
+            prefs->keep_user_alarms = bval;
+
+            bval = 0;
+            dlist_getnum32(dl, "KEEP_APPLE", &bval);
+            prefs->keep_apple_alarms = bval;
+
+            bval = 0;
+            dlist_getnum32(dl, "FAKE_APPLE", &bval);
+            prefs->fake_apple_alarms = bval;
+        }
+        dlist_free(&dl);
+    }
+
+    buf_free(&buf);
+    return r;
+}
+
+EXPORTED int defaultalarms_prefs_save(struct mailbox *calhome,
+                                      const struct defaultalarms_prefs *prefs)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    annotate_state_t *astate;
+    int r = mailbox_get_annotate_state(calhome, 0, &astate);
+    if (r) {
+        xsyslog(LOG_ERR, "failed to get annotation state",
+                "mboxname=<%s> err=<%s>",
+                mailbox_name(calhome), error_message(r));
+        r = CYRUSDB_INTERNAL;
+        goto done;
+    }
+
+    if (memcmp(prefs, &default_prefs, sizeof(struct defaultalarms_prefs))) {
+        struct dlist *dl = dlist_newkvlist(NULL, "PREFS");
+        dlist_setnum32(dl, "KEEP_USER", prefs->keep_user_alarms);
+        dlist_setnum32(dl, "KEEP_APPLE", prefs->keep_apple_alarms);
+        dlist_setnum32(dl, "FAKE_APPLE", prefs->fake_apple_alarms);
+        dlist_printbuf(dl, 1, &buf);
+        dlist_free(&dl);
+    }
+
+    static const char *annot = JMAP_ANNOT_DEFAULTALERTS_PREFS;
+    r = annotate_state_writemask(astate, annot, "", &buf);
+    if (r) {
+        xsyslog(LOG_ERR, "failed to write annotation",
+                "annot=<%s> err=<%s>", annot, cyrusdb_strerror(r));
+        goto done;
+    }
+
+done:
     buf_free(&buf);
     return r;
 }
@@ -323,34 +406,39 @@ static void init_alarms(icalcomponent *alarms)
     buf_free(&buf);
 }
 
-static int compare_valarm_reverse(const void **va, const void **vb)
+static int compare_valarm(const void **va, const void **vb)
 {
     icalcomponent *a = (icalcomponent*)(*va);
     icalcomponent *b = (icalcomponent*)(*vb);
 
-    // Regular alarms sort before snooze alarms
+    // Regular alarms sort after snooze alarms
     int is_snooze_a =
         !!icalcomponent_get_first_property(a, ICAL_RELATEDTO_PROPERTY);
     int is_snooze_b =
         !!icalcomponent_get_first_property(b, ICAL_RELATEDTO_PROPERTY);
-
     if (is_snooze_a != is_snooze_b)
         return -(is_snooze_a - is_snooze_b);
 
-    // Default alarms sort before non-default alarms
+    // Alarms with UID sort after alarms without UID
+    int has_uid_a = !!icalcomponent_get_uid(a);
+    int has_uid_b = !!icalcomponent_get_uid(b);
+    if (has_uid_a != has_uid_b)
+        return has_uid_a - has_uid_b;
+
+    // Default alarms sort after non-default alarms
     int is_default_a =
         !!icalcomponent_get_x_property_by_name(a, "X-JMAP-DEFAULT-ALARM");
     int is_default_b =
         !!icalcomponent_get_x_property_by_name(b, "X-JMAP-DEFAULT-ALARM");
-
     if (is_default_a != is_default_b)
-        return -(is_default_a - is_default_b);
+        return is_default_a - is_default_b;
 
-    // Finally, sort by UID
-    return -strcmpsafe(icalcomponent_get_uid(a), icalcomponent_get_uid(b));
+    // Break ties by UID
+    return strcmp(icalcomponent_get_uid(a), icalcomponent_get_uid(b));
 }
 
-static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
+static void merge_alarms(icalcomponent *comp, icalcomponent *alarms,
+                         const struct defaultalarms_prefs *prefs)
 {
     // Remove existing alarms
     ptrarray_t old_alarms = PTRARRAY_INITIALIZER;
@@ -381,9 +469,17 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
              valarm;
              valarm = icalcomponent_get_next_component(alarms, ICAL_VALARM_COMPONENT)) {
 
-
             icalcomponent *myalarm = icalcomponent_clone(valarm);
             ptrarray_append(&new_alarms, myalarm);
+
+            if (prefs->fake_apple_alarms) {
+                if (!icalcomponent_get_x_property_by_name(myalarm, "X-APPLE-DEFAULT-ALARM")) {
+                    icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+                    icalproperty_set_x_name(prop, "X-APPLE-DEFAULT-ALARM");
+                    icalproperty_set_value(prop, icalvalue_new_boolean(1));
+                    icalcomponent_add_property(myalarm, prop);
+                }
+            }
 
             /* Replace default description with component summary */
             const char *desc = icalcomponent_get_summary(comp);
@@ -402,16 +498,11 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
 
     strarray_sort(&related_uids, cmpstringp_raw);
 
-    // Sort in reverse order, we'll pop from the arrays later.
-    ptrarray_sort(&old_alarms, compare_valarm_reverse);
-    ptrarray_sort(&new_alarms, compare_valarm_reverse);
+    // Sort alarms, we'll pop from the arrays later.
+    ptrarray_sort(&old_alarms, compare_valarm);
+    ptrarray_sort(&new_alarms, compare_valarm);
 
-    int is_recur_main =
-        !icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY) &&
-        (icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY) ||
-         icalcomponent_get_first_property(comp, ICAL_RDATE_PROPERTY));
-
-    // Combine old and new default alarms
+    // Combine old and new alarms. All new alarms are default alarms.
     icalcomponent *old, *new;
     do {
         old = ptrarray_pop(&old_alarms);
@@ -424,7 +515,7 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
                 const char *old_uid = icalcomponent_get_uid(old);
                 const char *new_uid = icalcomponent_get_uid(new);
                 if (!strcmpsafe(old_uid, new_uid)) {
-                    // A default alarm with the same UID already
+                    // An alarm with the same UID already
                     // existed in the component. Use its new
                     // definition, but keep it acknowledged.
                     icalproperty *prop, *nextprop;
@@ -446,58 +537,70 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
         }
 
         if (old) {
+            const char *old_uid = icalcomponent_get_uid(old);
+
             int is_default =
                 !!icalcomponent_get_x_property_by_name(old, "X-JMAP-DEFAULT-ALARM");
 
+            int is_apple = !is_default &&
+                !!icalcomponent_get_x_property_by_name(old, "X-APPLE-DEFAULT-ALARM");
+
+            int is_snoozed = old_uid &&
+                strarray_find(&related_uids, old_uid, 0) >= 0;
+
+            int is_acked = !!icalcomponent_get_first_property(old,
+                    ICAL_ACKNOWLEDGED_PROPERTY);
+
+            int is_snooze = !!icalcomponent_get_first_property(old,
+                    ICAL_RELATEDTO_PROPERTY);
+
             if (is_default) {
-                // This is an outdated default alarm.
-                const char *old_uid = icalcomponent_get_uid(old);
-                int is_related = old_uid &&
-                    strarray_find(&related_uids, old_uid, 0) >= 0;
-
-                int is_acked = !!icalcomponent_get_first_property(old,
-                        ICAL_ACKNOWLEDGED_PROPERTY);
-
-                if (is_related || is_acked) {
-                    // Keep acknowledged and snoozed alarms
+                // This is a stale default alarm.
+                if (is_snoozed) {
+                    // Some snooze alarm refers to this alarm. Keep it.
                     icalcomponent_add_component(comp, old);
 
+                    // Make sure it can't trigger anymore.
+                    icalproperty *trigger =
+                        icalcomponent_get_first_property(old, ICAL_TRIGGER_PROPERTY);
+                    if (trigger) {
+                        // Use Apple's magic 5545 timestamp
+                        struct icaltriggertype expired_trigger = {
+                            .time = {
+                                .year = 1976,
+                                .month = 4,
+                                .day = 1,
+                                .hour = 0,
+                                .minute = 55,
+                                .second = 45,
+                                .zone = icaltimezone_get_utc_timezone()
+                            }
+                        };
+                        icalproperty_set_trigger(trigger, expired_trigger);
+                    }
+
                     if (!is_acked) {
-                        // Acknowledge so that clients ignore it.
                         icalcomponent_add_property(old,
                                 icalproperty_new_acknowledged(
                                     icaltime_current_time_with_zone(
                                         icaltimezone_get_utc_timezone())));
-
-                    }
-
-                    if (is_recur_main) {
-                        // Make sure this alarm can't fire anymore.
-                        icalproperty *trigger =
-                            icalcomponent_get_first_property(old, ICAL_TRIGGER_PROPERTY);
-                        if (trigger) {
-                            // Use Apple's magic 5545 timestamp
-                            struct icaltriggertype expired_trigger = {
-                                .time = {
-                                    .year = 1976,
-                                    .month = 4,
-                                    .day = 1,
-                                    .hour = 0,
-                                    .minute = 55,
-                                    .second = 45,
-                                    .zone = icaltimezone_get_utc_timezone()
-                                }
-                            };
-                            icalproperty_set_trigger(trigger, expired_trigger);
-                        }
                     }
                 }
-                else icalcomponent_free(old);
+                else {
+                    // Remove obsolete default alarm
+                    icalcomponent_free(old);
+                }
             }
-            else {
-                // Keep user-defined alarm
+            else if (is_snoozed || is_snooze) {
                 icalcomponent_add_component(comp, old);
             }
+            else if (is_apple && prefs->keep_apple_alarms) {
+                icalcomponent_add_component(comp, old);
+            }
+            else if (!is_apple && prefs->keep_user_alarms) {
+                icalcomponent_add_component(comp, old);
+            }
+            else icalcomponent_free(old);
         }
     } while (old || new);
 
@@ -506,17 +609,17 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
     strarray_fini(&related_uids);
 }
 
-EXPORTED void defaultalarms_insert(struct defaultalarms *alarms,
+EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
                                    icalcomponent *ical, int force)
 {
-    if (!alarms || (!alarms->with_time.ical && !alarms->with_date.ical))
+    if (!defalarms || (!defalarms->with_time.ical && !defalarms->with_date.ical))
         return;
 
-    if (alarms->with_time.ical)
-        init_alarms(alarms->with_time.ical);
+    if (defalarms->with_time.ical)
+        init_alarms(defalarms->with_time.ical);
 
-    if (alarms->with_date.ical)
-        init_alarms(alarms->with_date.ical);
+    if (defalarms->with_date.ical)
+        init_alarms(defalarms->with_date.ical);
 
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
@@ -541,6 +644,7 @@ EXPORTED void defaultalarms_insert(struct defaultalarms *alarms,
         else is_date = icalcomponent_get_dtstart(comp).is_date;
 
         merge_alarms(comp, is_date ?
-                alarms->with_date.ical : alarms->with_time.ical);
+                defalarms->with_date.ical : defalarms->with_time.ical,
+                &defalarms->prefs);
     }
 }

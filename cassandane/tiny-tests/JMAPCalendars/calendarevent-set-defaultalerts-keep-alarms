@@ -9,6 +9,31 @@ sub test_calendarevent_set_defaultalerts_keep_alarms
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
+    my @using = qw(
+    urn:ietf:params:jmap:core
+    urn:ietf:params:jmap:calendars
+    urn:ietf:params:jmap:calendars:preferences
+    https://cyrusimap.org/ns/jmap/admin
+    https://cyrusimap.org/ns/jmap/calendars
+    https://cyrusimap.org/ns/jmap/debug
+    https://cyrusimap.org/ns/jmap/performance
+);
+
+    xlog $self, "Set default alert preferences";
+    $res = $jmap->CallMethods([
+        ['CalendarPreferences/set', {
+            update => {
+                singleton => {
+                    defaultAlertsPreferences => {
+                        keepUserAlarms => JSON::true,
+                        keepAppleAlarms => JSON::true,
+                    }
+                },
+            },
+        }, 'R1'],
+    ], \@using);
+    $self->assert(exists $res->[0][1]{updated}{singleton});
+
     xlog $self, "Prepare non-recurring event";
     my $ical = <<EOF;
 BEGIN:VCALENDAR
@@ -100,12 +125,12 @@ RELATED-TO:$uids{snoozedDefaultAlarm}
 END:VALARM
 EOF
 
-    $uids{acknowledgedDefaultAlarm} = '5a8283a7-cd3b-4c5d-b32a-17c0e7c3954b';
+    $uids{acknowledgedStaleDefaultAlarm} = '5a8283a7-cd3b-4c5d-b32a-17c0e7c3954b';
     $ical .= <<EOF;
 BEGIN:VALARM
-DESCRIPTION:An acknowledged default alarm
+DESCRIPTION:An acknowledged stale default alarm
 X-JMAP-DEFAULT-ALARM;VALUE=BOOLEAN:TRUE
-UID:$uids{acknowledgedDefaultAlarm}
+UID:$uids{acknowledgedStaleDefaultAlarm}
 TRIGGER:-PT6M
 ACTION:DISPLAY
 ACKNOWLEDGED:20160928T145400Z
@@ -179,7 +204,7 @@ EOF
     $self->assert_not_null($valarmsByUid{$uids{snoozedUserAlarm}});
     $self->assert_not_null($valarmsByUid{$uids{snoozeUserAlarm}});
 
-    $self->assert_not_null($valarmsByUid{$uids{acknowledgedDefaultAlarm}});
+    $self->assert_null($valarmsByUid{$uids{acknowledgedStaleDefaultAlarm}});
     $self->assert_not_null($valarmsByUid{$uids{snoozedDefaultAlarm}});
     $self->assert_not_null($valarmsByUid{$uids{snoozeDefaultAlarm}});
     $self->assert_not_null($valarmsByUid{$uids{snoozedUnacknowledgedDefaultAlarm}});
