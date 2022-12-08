@@ -362,7 +362,7 @@ static struct capa_struct base_capabilities[] = {
     { "UIDPLUS",               2 }, /* RFC 4315 */
     /* UNAUTHENTICATE   RFC 8437 is implemented */
     { "UNSELECT",              2 }, /* RFC 3691 */
-    { "URL-PARTIAL"            2 }, /* RFC 5550 */
+    { "URL-PARTIAL",           2 }, /* RFC 5550 */
 #ifdef HAVE_SSL
     { "URLAUTH",               2 }, /* RFC 4467 */
     { "URLAUTH=BINARY",        2 }, /* RFC 5524 */
