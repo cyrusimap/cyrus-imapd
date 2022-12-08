@@ -43,6 +43,8 @@ use warnings;
 
 use base qw(Test::Unit::TestCase);
 use Data::Dumper;
+use DateTime;
+use DateTime::Format::ISO8601;
 
 use lib '.';
 use Cassandane::Util::Log;
@@ -328,6 +330,58 @@ sub assert_num_lte
 
     $self->assert(($actual <= $expected),
                   "$actual is not less-than-or-equal-to $expected");
+}
+
+sub assert_date_matches
+{
+    my ($self, $expected, $actual, $tolerance) = @_;
+
+    my ($expected_dt, $expected_str, $actual_dt, $actual_str);
+
+    # $expected may be a DateTime object or an ISO8601 string
+    my $reftype = ref $expected;
+    if (not $reftype) {
+        $expected_str = $expected;
+        $expected_dt = DateTime::Format::ISO8601->parse_datetime($expected);
+    }
+    elsif ($reftype ne 'DateTime') {
+        die "wanted string or 'DateTime' for expected, got '$reftype'";
+    }
+    else {
+        $expected_dt = $expected;
+        $expected_str = $expected_dt->stringify();
+    }
+
+    # $actual may be a DateTime object or an ISO8601 string
+    $reftype = ref $actual;
+    if (not $reftype) {
+        $actual_str = $actual;
+        $actual_dt = DateTime::Format::ISO8601->parse_datetime($actual);
+    }
+    elsif ($reftype ne 'DateTime') {
+        die "wanted string or 'DateTime' for actual, got '$reftype'";
+    }
+    else {
+        $actual_dt = $actual;
+        $actual_str = $actual_dt->stringify();
+    }
+
+    # $tolerance is in seconds, default 0
+    $tolerance //= 0;
+
+    # XXX here is where to check that timezones match:
+    # XXX * if one has a timezone and the other doesn't, fail
+    # XXX * if both have timezones but they're different, fail
+    # XXX otherwise, carry on...
+
+    my $diff = $expected_dt->epoch() - $actual_dt->epoch();
+
+    my $msg = "expected '$expected_str', got '$actual_str'";
+    if ($tolerance) {
+        $msg .= " (difference $diff is greater than $tolerance)";
+    }
+
+    $self->assert((abs($diff) <= $tolerance), $msg);
 }
 
 sub new_test_url {

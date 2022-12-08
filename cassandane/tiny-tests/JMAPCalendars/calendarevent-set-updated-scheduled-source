@@ -93,5 +93,5 @@ sub test_calendarevent_set_updated_scheduled_source
         }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
-    $self->assert_str_equals($updated, $res->[1][1]{list}[0]{updated});
+    $self->assert_date_matches($updated, $res->[1][1]{list}[0]{updated}, 2);
 }
