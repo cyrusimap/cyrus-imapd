@@ -7895,6 +7895,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
 
     /* Create patch */
     struct buf buf = BUF_INITIALIZER;
+    const char *ical_recurid = update.eid->ical_recurid; // save a copy
     if (update.eid->ical_recurid && !update.is_standalone) {
         struct icaltimetype tt = icaltime_from_string(update.eid->ical_recurid);
         struct jmapical_datetime dt;
@@ -7927,7 +7928,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     sched_reply(req->accountid, &schedule_addr,
                 update.oldical, update.newical, SCHED_MECH_JMAP_PARTREPLY);
 
-    /* Get SCHEDULE_STATUS */
+    /* Get SCHEDULE-STATUS */
     const char *organizer = NULL;
     const char *sched_stat = NULL;
     for (comp = icalcomponent_get_first_component(update.newical, kind);
@@ -7936,10 +7937,10 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         icalproperty *prop =
             icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
 
-        if (update.eid->ical_recurid) {
+        if (ical_recurid) {
             /* Is it the correct override? */
-            if (!prop || strcmp(update.eid->ical_recurid,
-                                icalproperty_get_value_as_string(prop))) {
+            if (!prop ||
+                strcmp(ical_recurid, icalproperty_get_value_as_string(prop))) {
                 continue;
             }
         }

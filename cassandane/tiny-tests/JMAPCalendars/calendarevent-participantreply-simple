@@ -124,6 +124,7 @@ sub test_calendarevent_participantreply_simple
             participationStatus => "accepted"
         }
     }, "R2"]]);
+    $self->assert_str_equals("1.1", $res->[0][1]{scheduleStatus});
 
     xlog $self, "verify reply sent from attendee to organizer";
     $data = $self->{instance}->getnotify();
@@ -167,6 +168,7 @@ sub test_calendarevent_participantreply_simple
             participationStatus => "declined"
         }
     }, "R2"]]);
+    $self->assert_str_equals("1.1", $res->[0][1]{scheduleStatus});
 
     xlog $self, "verify reply sent from attendee to organizer";
     $data = $self->{instance}->getnotify();
