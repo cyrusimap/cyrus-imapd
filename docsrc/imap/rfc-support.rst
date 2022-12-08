@@ -544,6 +544,16 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     iCalendar Transport-Independent Interoperability Protocol (iTIP)
 
+:rfc:`5550`
+
+    The Internet Email to Support Diverse Service Environments (Lemonade) Profile
+
+    .. NOTE::
+
+        The URL-PARTIAL capability is implemented.  The CONTEXT=SEARCH,
+        CONTEXT=SORT, CONVERT, I18NLEVEL=1, and NOTIFY capabilities
+        are not implemented.
+
 :rfc:`5593`
 
     Internet Message Access Protocol (IMAP) - URL Access Identifier
@@ -972,10 +982,6 @@ RFC Wishlist
 :rfc:`5466`
 
     IMAP4 Extension for Named Searches (Filters)
-
-:rfc:`5550`
-
-    The Internet Email to Support Diverse Service Environments (Lemonade) Profile
 
 :rfc:`5842`
 

@@ -1,0 +1,13 @@
+Description:
+
+Advertise support for IMAP URL-PARTIAL (RFC 5550).
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None
