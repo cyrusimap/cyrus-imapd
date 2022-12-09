@@ -1652,6 +1652,7 @@ static int caldav_read_defaultalarms(const char *mboxname,
     struct buf mybuf = BUF_INITIALIZER;
     annotatemore_lookupmask(mboxname, annot, userid, &mybuf);
     if (buf_len(&mybuf)) {
+        buf_trim(&mybuf);
         struct dlist *dl = NULL;
         if (dlist_parsemap(&dl, 1, 0, buf_base(&mybuf), buf_len(&mybuf)) == 0) {
             const char *content = NULL;

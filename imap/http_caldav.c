@@ -6608,6 +6608,7 @@ static int propfind_defaultalarm(const xmlChar *name, xmlNsPtr ns,
     if (r) return HTTP_SERVER_ERROR;
     if (!buf_len(&attrib)) return HTTP_NOT_FOUND;
 
+    buf_trim(&attrib);
     const char *val = buf_cstring(&attrib);
     size_t len = buf_len(&attrib);
 
@@ -6645,9 +6646,21 @@ static void proppatch_defaultalarm_proc(struct proppatch_ctx *ctx)
 static int proppatch_defaultalarm(xmlNodePtr prop, unsigned set,
                                   struct proppatch_ctx *pctx,
                                   struct propstat propstat[],
-                                  void *rock __attribute__((unused)))
+                                  void *rock)
 {
-    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
+    if (pctx->txn->req_tgt.resource) {
+        // Do not allow to patch alarms on resource
+        xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
+        *pctx->ret = HTTP_FORBIDDEN;
+        return 0;
+    }
+    else if (!pctx->txn->req_tgt.collection) {
+        // Patch as "dead" property on calendar home
+        return proppatch_todb(prop, set, pctx, propstat, rock);
+    }
+    else {
+        // Patch as structured value on calendar collections
         xmlChar *freeme = NULL;
         const char *icalstr = "";
         struct buf buf = BUF_INITIALIZER;
@@ -6678,13 +6691,6 @@ static int proppatch_defaultalarm(xmlNodePtr prop, unsigned set,
 
         return 0;
     }
-
-    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
-                 &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
-
-    *pctx->ret = HTTP_FORBIDDEN;
-
-    return 0;
 }
 
 static int propfind_shareesactas(const xmlChar *name, xmlNsPtr ns,
