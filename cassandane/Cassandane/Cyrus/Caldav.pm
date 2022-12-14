@@ -5508,6 +5508,10 @@ EOF
     # as a Subject header field when constructing the message on disk
     $self->assert_num_equals(201, $Response->{status});
 
+    xlog $self, "Check that the event made it to calendar";
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+
     xlog "Check Subject header";
     my $subject = "=?UTF-8?Q?Send_image_for_61st_anniversary_exhibition_at_gallery_--_Inclu?=\r\n";
     $subject .= " =?UTF-8?Q?deyour_name,_the_title_and_the_media.__To_be_of_appropriate_q?=\r\n";
@@ -5521,6 +5525,57 @@ EOF
     $imaptalk->select("INBOX.#calendars.$CalendarId");
     $Response = $imaptalk->fetch(1, '(BODY.PEEK[HEADER.FIELDS (SUBJECT)])');
     $self->assert_str_equals($Response->{1}->{headers}->{subject}[0], $subject);
+}
+
+sub test_summary_with_trailing_newlines
+    :needs_component_httpd :MagicPlus :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND:20221225T000000Z
+TRANSP:OPAQUE
+SUMMARY:Make Phone Calls: Chair Bugs Bunny\\, 
+ bugs\@example.com\\, (555)444-4444  \\n
+DTSTART:20160831T153000Z
+DTSTAMP:20220806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my %Headers = (
+      'Content-Type' => 'text/calendar',
+      'Authorization' => $CalDAV->auth_header(),
+    );
+
+    xlog "Create event";
+    my $Response = $CalDAV->{ua}->request('PUT', $CalDAV->request_url($href), {
+      content => $card,
+      headers => \%Headers,
+    });
+
+    # This only succeeds if we strip trailing newlines from the SUMMARY
+    # when used as a Subject header field when constructing the message on disk
+    $self->assert_num_equals(201, $Response->{status});
+
+    xlog $self, "Check that the event made it to calendar";
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
 }
 
 1;
