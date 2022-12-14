@@ -1,5 +1,5 @@
-<sup>master: </sup>[![Build Status:master](https://api.travis-ci.com/cyrusimap/cyrus-imapd.svg?branch=master)](https://travis-ci.com/cyrusimap/cyrus-imapd)
-<sup> stable(3.6): </sup>[![Build Status:3.6](https://api.travis-ci.com/cyrusimap/cyrus-imapd.svg?branch=cyrus-imapd-3.6)](https://travis-ci.com/cyrusimap/cyrus-imapd)
+<sup>master: </sup>[![Build Status:master](https://github.com/cyrusimap/cyrus-imapd/actions/workflows/main.yml/badge.svg)](https://github.com/cyrusimap/cyrus-imapd/actions/workflows/main.yml)
+<sup> stable(3.6): </sup>[![Build Status:3.6](https://github.com/cyrusimap/cyrus-imapd/actions/workflows/main.yml/badge.svg?branch=cyrus-imapd-3.6)](https://github.com/cyrusimap/cyrus-imapd/actions/workflows/main.yml)
 
 -----
 
