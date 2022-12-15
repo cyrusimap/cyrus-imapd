@@ -56,6 +56,7 @@
 #include <sasl/saslutil.h>
 
 #include "http_h2.h"
+#include "proc.h"
 #include "retry.h"
 #include "telemetry.h"
 #include "tok.h"
@@ -890,6 +891,16 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
 
     /* Set inactivity timer */
     prot_settimeout(txn->conn->pin, ws_timeout);
+
+    /* Register service/module as a WebSocket */
+    const struct namespace_t *namespace = txn->req_tgt.namespace;
+    struct buf service = BUF_INITIALIZER;
+    buf_printf(&service, "%s%s", config_ident,
+               namespace->well_known ? strrchr(namespace->well_known, '/') :
+               namespace->prefix);
+    proc_register(buf_cstring(&service), txn->conn->clienthost, httpd_userid,
+                  txn->req_tgt.path, "WS");
+    buf_free(&service);
 
     return 0;
 }
