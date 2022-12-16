@@ -471,6 +471,11 @@ sub badscript_common
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/syntax error/, $errs);
 
+    ($res, $errs) = $self->compile_sieve_script('badchar1',
+        "require [\"fileinto\"];\n☃;\nfileinto \"foo\";\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/non-ASCII/, $errs);
+
     ($res, $errs) = $self->compile_sieve_script('goodfileinto7',
         "require [\"fileinto\",\"copy\"];\nfileinto \"foo\";\n");
     $self->assert_str_equals('success', $res);
