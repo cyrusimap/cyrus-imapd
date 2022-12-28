@@ -261,6 +261,9 @@ sub test_ipurge_mboxevent
     );
     my $events = $self->{instance}->getnotify();
 
+    # if it stays selected you see the intermittent state
+    $talk->unselect();
+
     # the messages we just created should've been expunged
     $stat = $talk->status($shared_folder, '(highestmodseq unseen messages)');
     $self->assert_num_equals(0, $stat->{unseen});
