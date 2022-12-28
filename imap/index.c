@@ -1876,13 +1876,8 @@ static int index_lock(struct index_state *state, int readonly)
 
 EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 {
-    int r = index_lock(state, /*readonly*/1);
-    if (r) return r;
-
     status_fill_mailbox(state->mailbox, sdata);
     status_fill_seen(state->userid, sdata, state->numrecent, state->numunseen);
-
-    index_unlock(state);
     return 0;
 }
 
