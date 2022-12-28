@@ -9390,7 +9390,7 @@ static void cmd_status(char *tag, char *name)
                                  &backend_current, &backend_inbox, imapd_in);
             if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
-            imapd_check(s, 0);
+            imapd_check(s, 1);
 
             if (!r) {
                 prot_printf(s->out, "%s Status {" SIZE_T_FMT "+}\r\n%s ", tag,
@@ -9435,7 +9435,7 @@ static void cmd_status(char *tag, char *name)
 
     // status of selected mailbox, we need to refresh
     if (!r && !strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
-        imapd_check(NULL, 0);
+        imapd_check(NULL, 1);
 
     if (!r) r = imapd_statusdata(mbentry, statusitems, &sdata);
 
