@@ -2393,7 +2393,6 @@ EXPORTED int index_convmultisort(struct index_state *state,
     query = search_query_new(state, searchargs);
     query->multiple = 1;
     query->need_ids = 1;
-    query->need_expunge = 1;
     query->sortcrit = sortcrit;
 
     r = search_query_run(query);
