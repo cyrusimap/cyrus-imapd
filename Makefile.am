@@ -64,7 +64,7 @@ if HAVE_LDAP
 AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif # HAVE_LDAP
 
-AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
+AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS) -ldl
 
 # have distcheck try to build with all optional components enabled, to aid
 # detection of missing files for these components
@@ -1569,6 +1569,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/hashu64.c \
 	lib/libconfig.c \
 	lib/mpool.c \
+	lib/ptrarray.c \
 	lib/retry.c \
 	lib/smallarrayu64.c \
 	lib/strarray.c \
