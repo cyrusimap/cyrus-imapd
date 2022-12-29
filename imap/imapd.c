@@ -6198,6 +6198,9 @@ static void cmd_search(char *tag, char *cmd)
         goto done;
     }
 
+    // this refreshes the index, we may be looking at it in our search
+    imapd_check(NULL, 0);
+
     if (searchargs->filter) {
         /* Multisearch */
         if ((searchargs->filter & SEARCH_SOURCE_SELECTED) && !imapd_index) {
@@ -6312,7 +6315,7 @@ static void cmd_search(char *tag, char *cmd)
         search_expr_free(mrock.expr);
         free_hash_table(&mrock.mailboxes, NULL);
     }
-    else if (!index_check(imapd_index, 0, 0)) {  /* update the index */
+    else {
         n = index_search(imapd_index, searchargs, usinguid);
     }
 
