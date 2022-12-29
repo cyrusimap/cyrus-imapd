@@ -352,13 +352,6 @@ static int query_begin_index(search_query_t *query,
         index_checkflags(*statep, 0, 0);
     }
 
-    if (query->need_expunge) {
-        /* make sure \Deleted messages are expunged.  Will also lock the
-         * mailbox state and read any new information */
-        r = index_expunge(*statep, NULL, 1);
-        if (r) goto out;
-    }
-
     r = cmd_cancelled(!query->ignore_timer);
 
 out:
