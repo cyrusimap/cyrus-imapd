@@ -6103,6 +6103,9 @@ static void cmd_search(char *tag, int usinguid)
         return;
     }
 
+    // this refreshes the index, we may be looking at it in our search
+    imapd_check(NULL, 0);
+
     if (searchargs->charset == CHARSET_UNKNOWN_CHARSET) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag,
                error_message(IMAP_UNRECOGNIZED_CHARSET));
