@@ -832,6 +832,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         goto done;
     }
 
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     char *addrhomeset = carddav_mboxname(req->accountid, NULL);
 
     syslog(restore.log_level, "jmap_backup_restore_contacts(%s, %ld)",
@@ -857,6 +858,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     free(addrhomeset);
     carddav_close(crock.carddavdb);
     buf_free(&crock.buf);
+    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {
@@ -1274,7 +1276,6 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
             /* Calendar was destroyed after cutoff -
                restore calendar and resources */
             struct mailbox *newmailbox = NULL;
-            struct mboxlock *namespacelock = user_namespacelock(req->accountid);
 
             if (!(rrock->jrestore->mode & DRY_RUN)) {
                 r = recreate_calendar(mbentry, rrock, &newmailbox);
@@ -1291,7 +1292,6 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
                                            req->accountid, req->authstate,
                                            /*mboxevent*/NULL, /*flags*/0);
             }
-            mboxname_release(&namespacelock);
         }
         else {
             /* Calendar was destroyed before cutoff - not interested */
@@ -1319,6 +1319,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
         goto done;
     }
 
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     char *calhomeset = caldav_mboxname(req->accountid, NULL);
 
     syslog(restore.log_level, "jmap_backup_restore_calendars(%s, %ld)",
@@ -1342,6 +1343,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     free(crock.inboxname);
     free(crock.outboxname);
     caldav_close(crock.caldavdb);
+    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {
@@ -1410,6 +1412,7 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         goto done;
     }
 
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     const char *subfolder = config_getstring(IMAPOPT_NOTESMAILBOX);
 
     syslog(restore.log_level, "jmap_backup_restore_notes(%s, %ld)",
@@ -1429,6 +1432,8 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         }
         free(notes);
     }
+
+    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {
@@ -1821,7 +1826,6 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
             }
         }
         else {
-            struct mboxlock *namespacelock = user_namespacelock(req->accountid);
             mbentry_t newmbentry = MBENTRY_INITIALIZER;
             mbentry_t *parent = NULL;
 
@@ -1873,7 +1877,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                         }
                     }
                 }
-                
+
                 mbname_free(&ancestor);
             }
             mboxlist_entry_free(&parent);
@@ -1891,7 +1895,6 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                                            0/*flags*/,
                                            &newmailbox);
             }
-            mboxname_release(&namespacelock);
 
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to create mailbox %s: %s",
@@ -2048,6 +2051,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
         goto done;
     }
 
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     hash_table mailboxes = HASH_TABLE_INITIALIZER;
     hash_table emailids = HASH_TABLE_INITIALIZER;
     hash_table msgids = HASH_TABLE_INITIALIZER;
@@ -2093,6 +2097,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     free_hash_table(&emailids, &message_t_free);
     free_hash_table(&msgids, &message_t_free);
     free(inbox);
+    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {
