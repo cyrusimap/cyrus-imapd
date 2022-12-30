@@ -361,7 +361,7 @@ static struct capa_struct base_capabilities[] = {
     { "BINARY",                CAPA_POSTAUTH,           { 0 } }, /* RFC 3516 */
     { "CATENATE",              CAPA_POSTAUTH,           { 0 } }, /* RFC 4469 */
     { "CHILDREN",              CAPA_POSTAUTH,           { 0 } }, /* RFC 3348 */
-    { "COMPRESS=DEFLATE",      CAPA_POSTAUTH|CAPA_STATE,         /* RFC 2595 */
+    { "COMPRESS=DEFLATE",      CAPA_POSTAUTH|CAPA_STATE,         /* RFC 4978 */
       { .statep = &imapd_compress_allowed }                   },
     { "CONDSTORE",             CAPA_POSTAUTH,           { 0 } }, /* RFC 7162, but the implementation is likely from RFC 4551 */
     /* CONTEXT=SEARCH   RFC 5267 is not fully implemented. Only ESORT is ready */
@@ -382,12 +382,12 @@ static struct capa_struct base_capabilities[] = {
     { "LIST-EXTENDED",         CAPA_POSTAUTH,           { 0 } }, /* RFC 5258 */
     { "LIST-MYRIGHTS",         CAPA_POSTAUTH,           { 0 } }, /* RFC 8440 */
     { "LIST-STATUS",           CAPA_POSTAUTH,           { 0 } }, /* RFC 5819 */
-    { "LITERAL+",              CAPA_OMNIAUTH|CAPA_REVCONFIG,     /* RFC 7888, but likely the implementation is for RFC 2088 */
+    { "LITERAL+",              CAPA_OMNIAUTH|CAPA_REVCONFIG,     /* RFC 7888 */
       { .config = IMAPOPT_LITERALMINUS }                      },
     { "LITERAL-",              CAPA_OMNIAUTH|CAPA_CONFIG,        /* RFC 7888 */
       { .config = IMAPOPT_LITERALMINUS }                      },
     /* LOGIN-REFERRALS  RFC 2221 is not implemented */
-    { "LOGINDISABLED",         CAPA_OMNIAUTH|CAPA_STATE,    /* RFC 2595/3591 */
+    { "LOGINDISABLED",         CAPA_OMNIAUTH|CAPA_STATE,    /* RFC 2595/3501 */
       { .statep = &imapd_login_disabled }                     },
     { "MAILBOX-REFERRALS",     CAPA_POSTAUTH|CAPA_REVCONFIG,     /* RFC 2193 */
       { .config = IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS }  },
