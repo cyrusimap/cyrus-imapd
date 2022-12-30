@@ -363,7 +363,7 @@ static struct capa_struct base_capabilities[] = {
     { "CHILDREN",              CAPA_POSTAUTH,           { 0 } }, /* RFC 3348 */
     { "COMPRESS=DEFLATE",      CAPA_POSTAUTH|CAPA_STATE,         /* RFC 4978 */
       { .statep = &imapd_compress_allowed }                   },
-    { "CONDSTORE",             CAPA_POSTAUTH,           { 0 } }, /* RFC 7162, but the implementation is likely from RFC 4551 */
+    { "CONDSTORE",             CAPA_POSTAUTH,           { 0 } }, /* RFC 7162 */
     /* CONTEXT=SEARCH   RFC 5267 is not fully implemented. Only ESORT is ready */
     /* CONTEXT=SORT     RFC 5267 is not fully implemented. Only ESORT is ready */
     /* CONVERT          RFC 5259 is not implemented */
@@ -4651,6 +4651,17 @@ static void cmd_close(char *tag, char *cmd)
                 tag, error_message(IMAP_OK_COMPLETED));
 }
 
+static void condstore_enabled(const char *cmd)
+{
+    if (!(client_capa & CAPA_CONDSTORE)) {
+        client_capa |= CAPA_CONDSTORE;
+        if (imapd_index) {
+            prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]"
+                        " CONDSTORE enabled by %s\r\n",
+                        index_highestmodseq(imapd_index), cmd);
+        }
+    }
+}
 
 /*
  * Append to the section list.
@@ -5247,12 +5258,7 @@ badannotation:
     }
 
     if (fa->fetchitems & FETCH_MODSEQ) {
-        if (!(client_capa & CAPA_CONDSTORE)) {
-            client_capa |= CAPA_CONDSTORE;
-            if (imapd_index)
-                prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] CONDSTORE enabled by MODSEQ fetch\r\n",
-                        index_highestmodseq(imapd_index));
-        }
+        condstore_enabled(fa->changedsince ? "FETCH CHANGEDSINCE" : "FETCH MODSEQ");
     }
 
     if (fa->fetchitems & (FETCH_ANNOTATION|FETCH_FOLDER|FETCH_MAILBOXES)) {
@@ -6089,11 +6095,8 @@ notflagsdammit:
         goto freeflags;
     }
 
-    if ((storeargs.unchangedsince != ULONG_MAX) &&
-        !(client_capa & CAPA_CONDSTORE)) {
-        client_capa |= CAPA_CONDSTORE;
-        prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] CONDSTORE enabled by UNCHANGEDSINCE\r\n",
-                    index_highestmodseq(imapd_index));
+    if (storeargs.unchangedsince != ULONG_MAX) {
+        condstore_enabled("STORE UNCHANGEDSINCE");
     }
 
     r = index_store(imapd_index, sequence, &storeargs);
@@ -6379,6 +6382,9 @@ static void cmd_search(char *tag, char *cmd)
         n = index_search(imapd_index, searchargs, usinguid);
     }
 
+    if (searchargs->state & GETSEARCH_MODSEQ)
+        condstore_enabled("SEARCH MODSEQ");
+
     int r = cmd_cancelled(/*insearch*/1);
     if (!r) {
         snprintf(mytime, sizeof(mytime), "%2.3f",
@@ -6447,6 +6453,10 @@ static void cmd_sort(char *tag, int usinguid)
     }
 
     n = index_sort(imapd_index, sortcrit, searchargs, usinguid);
+
+    if (searchargs->state & GETSEARCH_MODSEQ)
+        condstore_enabled("SORT MODSEQ");
+
     snprintf(mytime, sizeof(mytime), "%2.3f",
              (clock() - start) / (double) CLOCKS_PER_SEC);
     if (CONFIG_TIMING_VERBOSE) {
@@ -6862,6 +6872,10 @@ static void cmd_thread(char *tag, int usinguid)
     }
 
     n = index_thread(imapd_index, alg, searchargs, usinguid);
+
+    if (searchargs->state & GETSEARCH_MODSEQ)
+        condstore_enabled("THREAD MODSEQ");
+
     snprintf(mytime, sizeof(mytime), "%2.3f",
              (clock() - start) / (double) CLOCKS_PER_SEC);
     prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
@@ -9723,6 +9737,9 @@ static void cmd_status(char *tag, char *name)
     // status of selected mailbox, we need to refresh
     if (!r && !strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
         imapd_check(NULL, 0);
+
+    if (statusitems & STATUS_HIGHESTMODSEQ)
+        condstore_enabled("STATUS (HIGHESTMODSEQ)");
 
     if (!r) r = imapd_statusdata(mbentry, statusitems, &sdata);
 

@@ -1928,7 +1928,7 @@ static int needs_modseq(const struct searchargs *searchargs,
 {
     int i;
 
-    if (search_expr_uses_attr(searchargs->root, "modseq"))
+    if (searchargs->state & GETSEARCH_MODSEQ)
         return 1;
 
     if (sortcrit) {

@@ -1236,6 +1236,8 @@ static int get_search_criterion(struct protstream *pin,
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("modseq");
             e->value.u = modseq;
+
+            base->state |= GETSEARCH_MODSEQ;  // CONDSTORE enabling command
         }
         else goto badcri;
         break;
