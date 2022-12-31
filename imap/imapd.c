@@ -400,7 +400,7 @@ static struct capa_struct base_capabilities[] = {
     /* NOTIFY           RFC 5465 is not implemented */
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
     { "PREVIEW",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8970 */
-    { "QRESYNC",               CAPA_POSTAUTH,           { 0 } }, /* RFC 7162, but the implementation is likely from RFC 4551 and RFC 5162 */
+    { "QRESYNC",               CAPA_POSTAUTH,           { 0 } }, /* RFC 7162 */
     { "QUOTA",                 CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
     /* QUOTA=           RFC 9208 is not implemented */
     { "QUOTASET",              CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
@@ -4644,9 +4644,8 @@ static void cmd_close(char *tag, char *cmd)
 
     index_close(&imapd_index);
 
-    /* http://www.rfc-editor.org/errata_search.php?rfc=5162
-     * Errata ID: 1808 - don't send HIGHESTMODSEQ to a close
-     * command, because it can lose synchronisation */
+    /* RFC 7162, Section 3.2.8 - don't send HIGHESTMODSEQ to a close
+     * command, because it can cause client to lose synchronization */
     prot_printf(imapd_out, "%s OK %s\r\n",
                 tag, error_message(IMAP_OK_COMPLETED));
 }

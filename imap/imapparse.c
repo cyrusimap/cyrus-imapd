@@ -1221,7 +1221,7 @@ static int get_search_criterion(struct protstream *pin,
         break;
 
     case 'm':
-        if (!strcmp(criteria.s, "modseq")) {            /* RFC 4551 */
+        if (!strcmp(criteria.s, "modseq")) {            /* RFC 7162 */
             modseq_t modseq;
             if (c != ' ') goto missingarg;
             /* Check for optional search-modseq-ext */

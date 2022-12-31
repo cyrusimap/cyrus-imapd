@@ -737,8 +737,7 @@ static void index_refresh_locked(struct index_state *state)
         /* for expunged records, just track the modseq */
         if (im->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             num_expunged++;
-            /* http://www.rfc-editor.org/errata_search.php?rfc=5162
-             * Errata ID: 1809 - if there are expunged records we
+            /* RFC 7162, Section 6 - if there are expunged records we
              * aren't telling about, need to make the highestmodseq
              * be one lower so the client can safely resync */
             if (!delayed_modseq || im->modseq < delayed_modseq)
@@ -988,7 +987,7 @@ seqset_t *index_vanished(struct index_state *state,
                mailbox_name(mailbox));
 
         /* use the sequence to uid mapping provided by the client to
-         * skip over any initial matches - see RFC 5162 section 3.1 */
+         * skip over any initial matches - see RFC 7162 section 3.2.5 */
         if (params->match_seq && params->match_uid) {
             msgnolist = _parse_sequence(state, params->match_seq, 0);
             uidlist = _parse_sequence(state, params->match_uid, 1);
@@ -1917,7 +1916,7 @@ static void index_unlock(struct index_state *state)
 }
 
 /*
- * RFC 4551 says:
+ * RFC 7162, Section 3.1.5 says:
  * If client specifies a MODSEQ criterion in a SEARCH command
  * and the server returns a non-empty SEARCH result, the server
  * MUST also append (to the end of the untagged SEARCH response)
@@ -4280,8 +4279,7 @@ static void index_printflags(struct index_state *state,
     struct index_map *im = &state->map[msgno-1];
 
     index_fetchflags(state, msgno);
-    /* http://www.rfc-editor.org/errata_search.php?rfc=5162
-     * Errata ID: 1807 - MUST send UID and MODSEQ to all
+    /* RFC 7162, Section 3.1 - MUST send UID and MODSEQ to all
      * untagged FETCH unsolicited responses */
     if (usinguid || (client_capa & CAPA_QRESYNC))
         prot_printf(state->out, " UID %u", im->uid);
@@ -5113,8 +5111,8 @@ static int index_storeflag(struct index_state *state,
         }
     }
 
-    /* RFC 4551:
-     * 3.8.  Additional Quality-of-Implementation Issues
+    /* RFC 7162:
+     * 3.1.11.  Additional Quality-of-Implementation Issues
      *
      * Server implementations should follow the following rule, which
      * applies to any successfully completed STORE/UID STORE (with and
@@ -5166,7 +5164,7 @@ static int index_storeflag(struct index_state *state,
     }
 
     /* if it's silent and unchanged, update the seen value, but
-     * not if qresync is enabled - RFC 4551 says that the MODSEQ
+     * not if qresync is enabled - RFC 7162 says that the MODSEQ
      * must always been told, and we prefer just to tell flags
      * as well in this case, it's simpler and not much more
      * bandwidth */
