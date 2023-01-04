@@ -56,12 +56,12 @@
 #include "caldav_util.h"
 #include "hash.h"
 #include "http_caldav_sched.h"
-#include "http_err.h"
 #include "http_jmap.h"
 #include "user.h"
 #include "util.h"
 
 /* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
 #include "imap/imap_err.h"
 
 static int jmap_admin_rewrite_calevent_privacy(jmap_req_t *req);
