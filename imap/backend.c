@@ -1311,7 +1311,18 @@ EXPORTED int backend_version(struct backend *be)
         return MAILBOX_MINOR_VERSION;
     }
 
-    /* unstable 3.7 series ranges from 17..?? */
+    /* unstable 3.9 series ranges from 17..?? */
+    if (strstr(be->banner, "Cyrus IMAP 3.9")) {
+        /* all versions of 3.9 support at least this version */
+        return 17;
+    }
+
+    /* version 3.8 is 17 */
+    if (strstr(be->banner, "Cyrus IMAP 3.8")) {
+        return 17;
+    }
+
+    /* unstable 3.7 series is 17 */
     if (strstr(be->banner, "Cyrus IMAP 3.7")) {
         /* all versions of 3.7 support at least this version */
         return 17;
