@@ -959,6 +959,7 @@ static icalcomponent *read_calendar_icalalarms(const char *mboxname,
     annotatemore_lookupmask(mboxname, annot, userid, &buf);
 
     if (buf_len(&buf)) {
+        buf_trim(&buf);
         struct dlist *dl = NULL;
         if (dlist_parsemap(&dl, 1, 0, buf_base(&buf), buf_len(&buf)) == 0) {
             const char *content = NULL;
@@ -969,6 +970,7 @@ static icalcomponent *read_calendar_icalalarms(const char *mboxname,
         dlist_free(&dl);
     }
     if (buf_len(&buf)) {
+        buf_trim(&buf);
         ical = icalparser_parse_string(buf_cstring(&buf));
         if (ical) {
             if (icalcomponent_isa(ical) == ICAL_VALARM_COMPONENT) {

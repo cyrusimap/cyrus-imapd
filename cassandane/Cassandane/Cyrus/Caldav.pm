@@ -5523,4 +5523,101 @@ EOF
     $self->assert_str_equals($Response->{1}->{headers}->{subject}[0], $subject);
 }
 
+sub test_defaultalarms_calhome
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $CalDAV = $self->{caldav};
+
+    # Assert that Apple default alarms can be set on the calendar
+    # home for any version other than 3.7. This is a regression
+    # test as we erroneously broke Apple default alarms in the
+    # experimental 3.7 version. We don't want that to leak into
+    # the stable 3.8 release.
+
+    my $rawAlarmDateTime = <<EOF;
+BEGIN:VALARM
+TRIGGER:-PT5M
+ACTION:DISPLAY
+DESCRIPTION:alarmTime1
+END:VALARM
+EOF
+
+    xlog "Set alarms";
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-datetime>
+$rawAlarmDateTime
+</C:default-alarm-vevent-datetime>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    my $res = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane",
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    $self->assert_matches(qr/200 OK/,
+        $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}status'}{content});
+
+    xlog "Get alarms";
+    my $propfindXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+     <C:default-alarm-vevent-datetime/>
+  </D:prop>
+</D:propfind>
+EOF
+    $res = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane",
+        $propfindXml, 'Content-Type' => 'text/xml', 'Depth' => '0');
+
+    xlog "Assert alarm values";
+    my $assert_propval = sub {
+        my ($Response, $propname, $wantVal, $wantStatus) = @_;
+        my $propStat = $Response->{'{DAV:}response'}[0]->{'{DAV:}propstat'}[0];
+        my $prop = $propStat->{'{DAV:}prop'};
+        $wantVal =~ s/^\s+|\s+$//g;
+        my $got = $prop->{'{urn:ietf:params:xml:ns:caldav}'. $propname}->{content};
+        $got =~ s/^\s+|\s+$//g;
+        $self->assert_str_equals($wantVal, $got);
+        my $status = $propStat->{'{DAV:}status'};
+        $self->assert_str_equals($wantStatus, $status->{content});
+    };
+    $assert_propval->($res, 'default-alarm-vevent-datetime',
+        $rawAlarmDateTime, 'HTTP/1.1 200 OK');
+
+    xlog "Remove alarms";
+    $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:remove>
+    <D:prop>
+        <C:default-alarm-vevent-datetime/>
+    </D:prop>
+  </D:remove>
+</D:propertyupdate>
+EOF
+    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane",
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    xlog "Get alarms";
+    $propfindXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+     <C:default-alarm-vevent-datetime/>
+  </D:prop>
+</D:propfind>
+EOF
+    $res = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane",
+        $propfindXml, 'Content-Type' => 'text/xml', 'Depth' => '0');
+
+    xlog "Assert alarm values do not exist";
+    $assert_propval->($res, 'default-alarm-vevent-datetime',
+                      '', 'HTTP/1.1 404 Not Found');
+}
+
 1;
