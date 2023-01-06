@@ -212,7 +212,7 @@ extern int create_tempfile(const char *path);
 extern char *create_tempdir(const char *path, const char *subname);
 
 /* recursively call remove(3) on path and its descendants, except
- * symlinks. Returns zero on sucess, or the first non-zero return
+ * symlinks. Returns zero on success, or the first non-zero return
  * value of remove on error. */
 extern int removedir(const char *path);
 
