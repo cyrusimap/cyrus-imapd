@@ -400,7 +400,15 @@ ws              [ \t]+
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
 <INITIAL>[ \t\n\r] ;          /* ignore whitespace */
-.                             return yytext[0];
+.                             {
+                                  /* RFC 5228: With the exceptions of strings
+                                     and comments, the language is limited to
+                                     US-ASCII characters. */
+                                  if (!isascii(yytext[0])) {
+                                      sieveerror(sscript, "non-ASCII character");
+                                  }
+                                  return yytext[0];
+                              }
 
 %%
 
