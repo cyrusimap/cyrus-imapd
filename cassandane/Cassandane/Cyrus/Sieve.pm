@@ -3969,6 +3969,85 @@ EOF
     $self->assert_str_equals($uuid, $events->[0]{uid});
 }
 
+sub test_imip_invite_funky_uid
+    :needs_component_sieve :needs_component_httpd :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $IMAP = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $IMAP->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Create calendar user";
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = 'Default';
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :outcome "outcome";
+    if string "\${outcome}" "added" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    my $itip_b64 = <<EOF;
+QkVHSU46VkNBTEVOREFSDQpWRVJTSU9OOjIuMA0KUFJPRElEOi0vL0N5cnVzSU1BUC5vcmcvQ3ly
+dXMgDQogMy43LjAtYWxwaGEwLTExODUtZzg0MTE1NzMwMGEtZm0tMjAyMjEyMDguMDAyLWc4NDEx
+NTczMC8vRU4NCk1FVEhPRDpSRVFVRVNUDQpDQUxTQ0FMRTpHUkVHT1JJQU4NCkJFR0lOOlZFVkVO
+VA0KVUlEOiA2ZGUyODBjOS1lZGZmLTQwMTktDQ0NCiA4ZWJkLWNmZWJjNzNmODIwMQ0KU0VRVUVO
+Q0U6MA0KRFRTVEFNUDoyMDIyMTIxM1QxOTI4MzdaDQpDUkVBVEVEOjIwMjIxMjEzVDE5MjgzMloN
+CkRUU1RBUlQ6MjAyMjEyMTNUMjAyODAwDQpEVVJBVElPTjpQVDFIDQpQUklPUklUWTowDQpTVU1N
+QVJZOjU0ODA0ODJBLTdCMUMtMTFFRC05QUNCLTJFMzE5NTYyMjlCMQ0KT1JHQU5JWkVSO1gtSk1B
+UC1JRD01NDgwNjUxMi03QjFDLTExRUQtOUFDQi0yRTMxOTU2MjI5QjE7Q049VGhlIE9yZ2FuaXpl
+cjsNCiBFTUFJTD10ZXN0dXNlcl84NzA3NzZfM18xNjcwOTU5NzA2QGZhc3RtYWlsZGV2LmNvbTpt
+YWlsdG86DQogdGVzdHVzZXJfODcwNzc2XzNfMTY3MDk1OTcwNkBmYXN0bWFpbGRldi5jb20NCkFU
+VEVOREVFO1gtSk1BUC1JRD01NDgwNjUxMi03QjFDLTExRUQtOUFDQi0yRTMxOTU2MjI5QjE7Q049
+VGhlIE9yZ2FuaXplcjsNCiBFTUFJTD10ZXN0dXNlcl84NzA3NzZfM18xNjcwOTU5NzA2QGZhc3Rt
+YWlsZGV2LmNvbTtDVVRZUEU9SU5ESVZJRFVBTDsNCiBYLUpNQVAtUk9MRT1vd25lcjtYLUpNQVAt
+Uk9MRT1hdHRlbmRlZTtQQVJUU1RBVD1BQ0NFUFRFRDtSU1ZQPUZBTFNFOg0KIG1haWx0bzp0ZXN0
+dXNlcl84NzA3NzZfM18xNjcwOTU5NzA2QGZhc3RtYWlsZGV2LmNvbQ0KQVRURU5ERUU7WC1KTUFQ
+LUlEPTU0ODA2NkZDLTdCMUMtMTFFRC05QUNCLTJFMzE5NTYyMjlCMTtDTj1BIHBhcnRpY2lwYW50
+Ow0KIEVNQUlMPXRlc3R1c2VyXzg3MDc3Nl80XzE2NzA5NTk3MDlAZmFzdG1haWxkZXYuY29tO0NV
+VFlQRT1JTkRJVklEVUFMOw0KIFgtSk1BUC1ST0xFPWF0dGVuZGVlO1BBUlRTVEFUPUFDQ0VQVEVE
+O1gtRFRTVEFNUD0yMjEyMTNUMTkyODM1WjsNCiBYLVNFUVVFTkNFPTA6bWFpbHRvOnRlc3R1c2Vy
+Xzg3MDc3Nl80XzE2NzA5NTk3MDlAZmFzdG1haWxkZXYuY29tDQpYLUpNQVAtU0VOVC1CWTtWQUxV
+RT1URVhUOnRlc3R1c2VyXzg3MDc3Nl80XzE2NzA5NTk3MDlAZmFzdG1haWxkZXYuY29tDQpFTkQ6
+VkVWRU5UDQpFTkQ6VkNBTEVOREFSDQo=
+EOF
+
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+Content-Transfer-Encoding: base64
+X-Cassandane-Unique: $uuid
+
+$itip_b64
+EOF
+
+    xlog $self, "Deliver iMIP invite";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 1,
+                        flags => [ '\\Recent', '\\Flagged' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Check that the event made it to calendar";
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+}
+
 sub test_imip_invite_multipart
     :needs_component_sieve :needs_component_httpd :min_version_3_5
 {

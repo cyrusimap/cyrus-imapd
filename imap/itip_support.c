@@ -1158,7 +1158,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         goto done;
     }
 
-    caldav_lookup_uid(caldavdb, icalcomponent_get_uid(itip), &cdata);
+    const char *uid = icalcomponent_get_uid(itip);
+    caldav_lookup_uid(caldavdb, uid, &cdata);
 
     if (cdata->dav.mailbox) {
         if (cdata->dav.mailbox_byname)
@@ -1231,8 +1232,11 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             }
         }
         buf_reset(&resource);
-        /* XXX - sanitize the uid? */
-        buf_printf(&resource, "%s.ics", icalcomponent_get_uid(itip));
+        /* Sanitize the UID */
+        for (const char *p = uid; *p; p++) {
+            if (isascii(*p) && !iscntrl(*p)) buf_putc(&resource, *p);
+        }
+        buf_appendcstr(&resource, ".ics");
 
         /* Create new attendee object */
         ical = icalcomponent_new(ICAL_VCALENDAR_COMPONENT);
@@ -1359,7 +1363,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                     comp = icalcomponent_get_first_real_component(ical);
                     if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
                         int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
-                                mailbox_name(mailbox), icalcomponent_get_uid(itip),
+                                mailbox_name(mailbox), uid,
                                 &recipient_addresses, 0, oldical, NULL);
                         if (r2) {
                             xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
@@ -1476,7 +1480,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         comp = icalcomponent_get_first_real_component(ical);
         if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
             int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
-                    mailbox_name(mailbox), icalcomponent_get_uid(itip),
+                    mailbox_name(mailbox), uid,
                     &recipient_addresses, 0, oldical, ical);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",

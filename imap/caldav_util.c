@@ -1311,9 +1311,16 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
         }
     }
 
-    prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
-    if (prop) {
-        mimehdr = charset_encode_mimeheader(icalproperty_get_summary(prop), 0, 0);
+    const char *summary = icalcomponent_get_summary(comp);
+    if (summary) {
+        int force = !!strchr(summary, '\n'); // force encoding if embedded LF
+
+        mimehdr = charset_encode_mimeheader(summary, 0, force);
+
+        /*  trim trailing WS (LF will break our MIME message header) */
+        char *end = mimehdr + strlen(mimehdr) - 1;
+        while (end >= mimehdr && isspace(*end)) *end-- = '\0';
+
         spool_replace_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
     }
     else spool_replace_header(xstrdup("Subject"),
