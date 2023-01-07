@@ -99,7 +99,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`2088`
 
-    IMAP4 non-synchronizing literals
+    IMAP4 non-synchronizing literals, obsoleted by :rfc:`7888`.
 
 :rfc:`2177`
 
@@ -333,7 +333,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`4551`
 
     IMAP Extension for Conditional STORE Operation or Quick Flag Changes
-    Resynchronization
+    Resynchronization, obsoleted by :rfc:`7162`.
 
 :rfc:`4559`
 
@@ -403,7 +403,8 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`5162`
 
-    IMAP4 Extensions for Quick Mailbox Resynchronization
+    IMAP4 Extensions for Quick Mailbox Resynchronization, obsoleted by
+    :rfc:`7162`.
 
 :rfc:`5173`
 
@@ -699,6 +700,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     JavaScript Object Notation (JSON) Pointer
 
+:rfc:`7162`
+
+    IMAP Extensions: Quick Flag Changes Resynchronization (CONDSTORE)
+    and Quick Mailbox Resynchronization (QRESYNC)
+
 :rfc:`7230`
 
     Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
@@ -792,6 +798,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`7809`
 
     CalDAV: Time Zones by Reference
+
+:rfc:`7888`
+
+    IMAP4 Non-synchronizing Literals
 
 :rfc:`7889`
 
@@ -998,15 +1008,6 @@ RFC Wishlist
 :rfc:`6855`
 
     IMAP Support for UTF-8
-
-:rfc:`7162`
-
-    IMAP Extensions: Quick Flag Changes Resynchronization (CONDSTORE)
-    and Quick Mailbox Resynchronization (QRESYNC)
-
-:rfc:`7888`
-
-    IMAP4 Non-synchronizing Literals
 
 :rfc:`8470`
 
