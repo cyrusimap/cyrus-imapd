@@ -1221,7 +1221,7 @@ static int get_search_criterion(struct protstream *pin,
         break;
 
     case 'm':
-        if (!strcmp(criteria.s, "modseq")) {            /* RFC 4551 */
+        if (!strcmp(criteria.s, "modseq")) {            /* RFC 7162 */
             modseq_t modseq;
             if (c != ' ') goto missingarg;
             /* Check for optional search-modseq-ext */
@@ -1236,6 +1236,8 @@ static int get_search_criterion(struct protstream *pin,
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("modseq");
             e->value.u = modseq;
+
+            base->state |= GETSEARCH_MODSEQ;  // CONDSTORE enabling command
         }
         else goto badcri;
         break;
