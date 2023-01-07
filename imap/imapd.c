@@ -132,6 +132,7 @@ extern char *optarg;
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 static int imaps = 0;
+static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
@@ -186,6 +187,10 @@ struct auth_state *imapd_authstate = 0;
 static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
+static int imapd_idle_enabled = 0;
+static int imapd_login_disabled = 0;
+static int imapd_compress_allowed = 0;
+static int imapd_tls_allowed = 0;
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 static int imapd_tls_required = 0; /* is tls required? */
 static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
@@ -286,108 +291,173 @@ struct list_rock_recursivematch {
     struct list_entry *array;
 };
 
-/* CAPABILITIES are defined here, not including TLS/SASL ones,
-   and those that are configurable */
+/* CAPABILITIES are defined here */
 
 enum {
-    CAPA_PREAUTH = 0x1,
-    CAPA_POSTAUTH = 0x2
+    CAPA_PREAUTH     = (1<<0),   /* advertised pre-authentication             */
+    CAPA_POSTAUTH    = (1<<1),   /* advertised post-authentication            */
+    CAPA_REQD        = (1<<2),   /* required (can't be suppressed)            */
+    CAPA_STATE       = (1<<3),   /* depends on a server state variable        */
+    CAPA_CONFIG      = (1<<4),   /* depends on an imapd.conf config switch    */
+    CAPA_REVERSE     = (1<<5),   /* reverse state/switch logic                */
+    CAPA_COMPLEX     = (1<<6),   /* function to print "complex" capability    */
+    CAPA_VALUE       = (1<<7),   /* has a formatted value based on config opt */
+    CAPA_MULTI       = (1<<8),   /* has multiple string values                */
 };
+
+#define CAPA_OMNIAUTH  (CAPA_PREAUTH|CAPA_POSTAUTH)
+#define CAPA_REVCONFIG (CAPA_CONFIG|CAPA_REVERSE)
 
 struct capa_struct {
-    const char *str;
-    int mask;
+    const char *str;            /* capability name                            */
+    int mask;                   /* mask of CAPA_* flags                       */
+
+    /* availability/value(s) optionally based on one of the following:        */
+    union {
+        int *statep;            /* CAPA_STATE:   ptr to server state variable */
+        enum imapopt config;    /* CAPA_CONFIG:  config switch option name    */
+        void (*complex)(void);  /* CAPA_COMPLEX: function to print capablity  */
+
+        struct {                /* CAPA_VALUE: prot_printf(fmt, *strp, *i64p) */
+            const char *fmt;    /*   format using "%1$s" and/or "%2$" PRIi64  */
+            const char **strp;  /*   arg1: optional ptr to string config var
+                                     (*strp == NULL means capa is disabled)   */
+            int64_t *i64p;      /*   arg2: optional ptr to int64 config var   */
+        } value;
+
+        struct {                /* CAPA_MULTI:                                */
+            const char **val;   /*   array of string values                   */
+            int num;            /*   number of values                         */
+        } multi;
+    } u;
 };
 
+static void capa_auth(void)
+{
+    const char *sasllist; /* the list of SASL mechanisms */
+    int mechcount;
+
+    if (!imapd_tls_required && (!imapd_authstate || saslprops.ssf) &&
+        sasl_listmech(imapd_saslconn, NULL, " AUTH=", " AUTH=", "",
+                      &sasllist, NULL, &mechcount) == SASL_OK &&
+        mechcount > 0) {
+
+        prot_puts(imapd_out, sasllist);
+    }
+}
+
 static struct capa_struct base_capabilities[] = {
-/* pre-auth capabilities */
-    { "IMAP4rev1",             3 },
-    { "LITERAL+",              3 }, /* This is in RFC 7888, but likely the implementation is for RFC 2088 */
-    /* LITERAL- (RFC 7888) sent instead of LITERAL+ when literalminus=yes */
-    { "ID",                    3 }, /* RFC 2971 */
-    { "ENABLE",                3 }, /* RFC 5161 */
-/* post-auth capabilities
- * this is kept sorted, so that it can be easily compared to https://www.iana.org/assignments/imap-capabilities/imap-capabilities.xhtml */
-    { "ACL",                   2 }, /* RFC 4314 */
-    { "ANNOTATE-EXPERIMENT-1", 2 }, /* RFC 5257 */
-    /* APPENDLIMIT=     RFC 7889 is announced in capa_response() */
-    /* AUTH=            RFC 3501 is announced conditionally in capa_response() */
-    { "BINARY",                2 }, /* RFC 3516 */
-    { "CATENATE",              2 }, /* RFC 4469 */
-    { "CHILDREN",              2 }, /* RFC 3348 */
-    /* COMPRESS=DEFLATE RFC 4498 is announced conditionally in capa_response() */
-    { "CONDSTORE",             2 }, /* RFC 7162, but the implementation is likely from RFC 4551 */
-    /* CONTEXT=SEARCH   RFC 5267 is not implemented.  From that RFC only ESORT is ready */
-    /* CONTEXT=SORT     RFC 5267 is not implemented.  From that RFC only ESORT is ready */
+/* required capabilities */
+    { "IMAP4rev1",             CAPA_OMNIAUTH|CAPA_REQD, { 0 } }, /* RFC 3501 */
+
+/* this is kept sorted, so that it can be easily compared to
+   https://www.iana.org/assignments/imap-capabilities/imap-capabilities.xhtml */
+    { "ACL",                   CAPA_POSTAUTH,           { 0 } }, /* RFC 4314 */
+    { "ANNOTATE-EXPERIMENT-1", CAPA_POSTAUTH,           { 0 } }, /* RFC 5257 */
+    { "APPENDLIMIT=",          CAPA_POSTAUTH|CAPA_VALUE,         /* RFC 7889 */
+      { .value = { "%2$" PRIi64, .i64p = &maxsize } }         },
+    { "AUTH=",                 CAPA_OMNIAUTH|CAPA_COMPLEX,       /* RFC 3501 */
+      { .complex = &capa_auth }                               },
+    { "BINARY",                CAPA_POSTAUTH,           { 0 } }, /* RFC 3516 */
+    { "CATENATE",              CAPA_POSTAUTH,           { 0 } }, /* RFC 4469 */
+    { "CHILDREN",              CAPA_POSTAUTH,           { 0 } }, /* RFC 3348 */
+    { "COMPRESS=DEFLATE",      CAPA_POSTAUTH|CAPA_STATE,         /* RFC 2595 */
+      { .statep = &imapd_compress_allowed }                   },
+    { "CONDSTORE",             CAPA_POSTAUTH,           { 0 } }, /* RFC 7162, but the implementation is likely from RFC 4551 */
+    /* CONTEXT=SEARCH   RFC 5267 is not fully implemented. Only ESORT is ready */
+    /* CONTEXT=SORT     RFC 5267 is not fully implemented. Only ESORT is ready */
     /* CONVERT          RFC 5259 is not implemented */
-    { "CREATE-SPECIAL-USE",    2 }, /* RFC 6154 */
-    { "ESEARCH",               2 }, /* RFC 4731 */
-    { "ESORT",                 2 }, /* RFC 5267 */
+    { "CREATE-SPECIAL-USE",    CAPA_POSTAUTH,           { 0 } }, /* RFC 6154 */
+    { "ENABLE",                CAPA_OMNIAUTH,           { 0 } }, /* RFC 5161 */
+    { "ESEARCH",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4731 */
+    { "ESORT",                 CAPA_POSTAUTH,           { 0 } }, /* RFC 5267 */
     /* FILTERS          RFC 5466 is not implemented */
     /* I18NLEVEL=1      RFC 5255 is not implemented */
     /* I18NLEVEL=2      RFC 5255 is not implemented */
-    /* IDLE             RFC 2177 is announced conditionally in capa_response() */
+    { "ID",                    CAPA_OMNIAUTH,           { 0 } }, /* RFC 2971 */
+    { "IDLE",                  CAPA_POSTAUTH|CAPA_STATE,         /* RFC 2177 */
+      { .statep = &imapd_idle_enabled }                       },
     /* IMAPSIEVE=       RFC 6785 is not implemented */
     /* LANGUAGE         RFC 5255 is not implemented */
-    { "LIST-EXTENDED",         2 }, /* RFC 5258 */
-    { "LIST-MYRIGHTS",         2 }, /* RFC 8440 */
-    { "LIST-STATUS",           2 }, /* RFC 5819 */
+    { "LIST-EXTENDED",         CAPA_POSTAUTH,           { 0 } }, /* RFC 5258 */
+    { "LIST-MYRIGHTS",         CAPA_POSTAUTH,           { 0 } }, /* RFC 8440 */
+    { "LIST-STATUS",           CAPA_POSTAUTH,           { 0 } }, /* RFC 5819 */
+    { "LITERAL+",              CAPA_OMNIAUTH|CAPA_REVCONFIG,     /* RFC 7888, but likely the implementation is for RFC 2088 */
+      { .config = IMAPOPT_LITERALMINUS }                      },
+    { "LITERAL-",              CAPA_OMNIAUTH|CAPA_CONFIG,        /* RFC 7888 */
+      { .config = IMAPOPT_LITERALMINUS }                      },
     /* LOGIN-REFERRALS  RFC 2221 is not implemented */
-    /* LOGINDISABLED    RFC 2595/RFC 3591 is announced conditionally in capa_response() */
-    { "MAILBOX-REFERRALS",     2 }, /* RFC 2193 */
-    { "METADATA",              2 }, /* RFC 5464 */
-    /*METADATA-SERVER   RFC 5464.  Sending METADATA implies METADATA-SERVER */
-    { "MOVE",                  2 }, /* RFC 6851 */
-    { "MULTIAPPEND",           2 }, /* RFC 3502 */
-    { "MULTISEARCH",           2 }, /* RFC 7377 */
-    { "NAMESPACE",             2 }, /* RFC 2342 */
+    { "LOGINDISABLED",         CAPA_OMNIAUTH|CAPA_STATE,    /* RFC 2595/3591 */
+      { .statep = &imapd_login_disabled }                     },
+    { "MAILBOX-REFERRALS",     CAPA_POSTAUTH|CAPA_REVCONFIG,     /* RFC 2193 */
+      { .config = IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS }  },
+    { "METADATA",              CAPA_POSTAUTH,           { 0 } }, /* RFC 5464 */
+    /* METADATA-SERVER  RFC 5464.  Sending METADATA implies METADATA-SERVER */
+    { "MOVE",                  CAPA_POSTAUTH,           { 0 } }, /* RFC 6851 */
+    { "MULTIAPPEND",           CAPA_POSTAUTH,           { 0 } }, /* RFC 3502 */
+    { "MULTISEARCH",           CAPA_POSTAUTH,           { 0 } }, /* RFC 7377 */
+    { "NAMESPACE",             CAPA_POSTAUTH,           { 0 } }, /* RFC 2342 */
     /* NOTIFY           RFC 5465 is not implemented */
-    { "OBJECTID",              2 }, /* RFC 8474 */
-    { "PREVIEW",               2 }, /* RFC 8970 */
-    { "QRESYNC",               2 }, /* RFC 7162, but the implementation is likely from RFC 4551 and RFC 5162 */
-    { "QUOTA",                 2 }, /* RFC 2087 */
+    { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
+    { "PREVIEW",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8970 */
+    { "QRESYNC",               CAPA_POSTAUTH,           { 0 } }, /* RFC 7162, but the implementation is likely from RFC 4551 and RFC 5162 */
+    { "QUOTA",                 CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
+    /* QUOTA=           RFC 9208 is not implemented */
+    { "QUOTASET",              CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
     /* REPLACE          RFC 8508 is not implemented */
-    { "RIGHTS=kxten",          2 }, /* RFC 4314 */
-    /* SASL-IR          RFC 4959 is announced in capa_response() */
-    { "SAVEDATE",              2 }, /* RFC 8514 */
-    { "SEARCH=FUZZY",          2 }, /* RFC 6203 */
-    { "SEARCHRES",             2 }, /* RFC 5182 */
-    { "SORT",                  2 }, /* RFC 5256 */
-    { "SORT=DISPLAY",          2 }, /* RFC 5957 */
-    { "SPECIAL-USE",           2 }, /* RFC 6154 */
-    /* STARTTLS         RFC 2595, RFC 3501 is announced in capa_response() */
-    { "STATUS=SIZE",           2 }, /* RFC 8438 */
-    { "THREAD=ORDEREDSUBJECT", 2 }, /* RFC 5256 */
-    { "THREAD=REFERENCES",     2 }, /* RFC 5256 */
-    { "UIDPLUS",               2 }, /* RFC 4315 */
-    /* UNAUTHENTICATE   RFC 8437 is implemented */
-    { "UNSELECT",              2 }, /* RFC 3691 */
-    { "URL-PARTIAL",           2 }, /* RFC 5550 */
+    { "RIGHTS=kxten",          CAPA_POSTAUTH,           { 0 } }, /* RFC 4314 */
+    { "SASL_IR",               CAPA_PREAUTH,            { 0 } }, /* RFC 4959 */
+    { "SAVEDATE",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8514 */
+    { "SEARCH=FUZZY",          CAPA_POSTAUTH,           { 0 } }, /* RFC 6203 */
+    { "SEARCHRES",             CAPA_POSTAUTH,           { 0 } }, /* RFC 5182 */
+    { "SORT",                  CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
+    { "SORT=DISPLAY",          CAPA_POSTAUTH,           { 0 } }, /* RFC 5957 */
+    { "SPECIAL-USE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 6154 */
+    { "STARTTLS",              CAPA_PREAUTH|CAPA_STATE,     /* RFC 2595/3501 */
+      { .statep = &imapd_tls_allowed }                        },
+    { "STATUS=SIZE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 8438 */
+    { "THREAD=ORDEREDSUBJECT", CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
+    { "THREAD=REFERENCES",     CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
+    { "UIDPLUS",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4315 */
+    { "UNAUTHENTICATE",        CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8437 */
+      { .statep = &imapd_userisadmin }                        },
+    { "UNSELECT",              CAPA_POSTAUTH,           { 0 } }, /* RFC 3691 */
+    { "URL-PARTIAL",           CAPA_POSTAUTH,           { 0 } }, /* RFC 5550 */
 #ifdef HAVE_SSL
-    { "URLAUTH",               2 }, /* RFC 4467 */
-    { "URLAUTH=BINARY",        2 }, /* RFC 5524 */
+    { "URLAUTH",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4467 */
+    { "URLAUTH=BINARY",        CAPA_POSTAUTH,           { 0 } }, /* RFC 5524 */
 #endif
     /* UTF8=ACCEPT      RFC 6855 is not implemented */
     /* UTF8=ONLY        RFC 6855 is not implemented */
-    { "WITHIN",                2 }, /* RFC 5032 */
-    /* drafts, non-standard */
-    { "ANNOTATEMORE",          2 }, /* legacy SETANNOTATION/GETANNOTATION commands */
-    { "DIGEST=SHA1",           2 }, /* Cyrus custom */
-    { "LIST-METADATA",         2 }, /* not standard */
-    { "NO_ATOMIC_RENAME",      2 },
-    { "SCAN",                  2 },
-    { "SORT=MODSEQ",           2 },
-    { "SORT=UID",              2 }, /* not standard */
-    { "THREAD=REFS",           2 }, /* draft-ietf-morg-inthread */
-    { "X-CREATEDMODSEQ",       2 }, /* Cyrus custom */
-    { "X-REPLICATION",         2 }, /* Cyrus custom */
-    { "X-SIEVE-MAILBOX",       2 }, /* Cyrus custom */
-    { "X-REPLICATION-ARCHIVE", 2 }, /* Cyrus custom */
-    { "XLIST",                 2 }, /* not standard */
-    { "XMOVE",                 2 }, /* not standard */
+    { "WITHIN",                CAPA_POSTAUTH,           { 0 } }, /* RFC 5032 */
+
+/* drafts, non-standard (NS), Cyrus custom (CY) */
+    { "ANNOTATEMORE",          CAPA_POSTAUTH|CAPA_CONFIG,        /* legacy SETANNOTATION/GETANNOTATION commands */
+      { .config = IMAPOPT_ANNOTATION_ENABLE_LEGACY_COMMANDS } },
+    { "DIGEST=SHA1",           CAPA_POSTAUTH,           { 0 } }, /* CY */
+    { "LIST-METADATA",         CAPA_POSTAUTH,           { 0 } }, /* draft-murchison-imap-list-metadata */
+    { "MUPDATE=",              CAPA_OMNIAUTH|CAPA_VALUE,         /* CY */
+      { .value = { "mupdate://%1$s/", .strp = &config_mupdate_server } } },
+    { "NO_ATOMIC_RENAME",      CAPA_POSTAUTH,           { 0 } }, /* CY */
+    { "SCAN",                  CAPA_POSTAUTH,           { 0 } }, /* NS */
+    { "SORT=MODSEQ",           CAPA_POSTAUTH,           { 0 } }, /* NS */
+    { "SORT=UID",              CAPA_POSTAUTH,           { 0 } }, /* NS */
+    { "THREAD=REFS",           CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-morg-inthread */
+    { "X-CREATEDMODSEQ",       CAPA_POSTAUTH,           { 0 } }, /* CY */
+    { "X-QUOTA=",              CAPA_POSTAUTH|CAPA_MULTI,         /* CY */
+      { .multi = { (const char **) quota_names, QUOTA_NUMRESOURCES } } },
+    { "X-REPLICATION",         CAPA_POSTAUTH,           { 0 } }, /* CY */
+    { "X-REPLICATION-ARCHIVE", CAPA_POSTAUTH,           { 0 } }, /* CY */
+    { "X-SIEVE-MAILBOX",       CAPA_POSTAUTH,           { 0 } }, /* CY */
+    { "XAPPLEPUSHSERVICE",     CAPA_OMNIAUTH|CAPA_STATE,         /* NS */
+      { .statep = &apns_enabled }                             },
+    { "XCONVERSATIONS",        CAPA_POSTAUTH|CAPA_CONFIG,        /* CY */
+      { .config = IMAPOPT_CONVERSATIONS }                     },
+    { "XLIST",                 CAPA_POSTAUTH,           { 0 } }, /* NS */
+    { "XMOVE",                 CAPA_POSTAUTH,           { 0 } }, /* NS */
 
 /* keep this to mark the end of the list */
-    { 0,                       0 }
+    { 0,                       0,                       { 0 } }
 };
 
 
@@ -540,8 +610,6 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
-
-static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 static int imapd_canon_user(sasl_conn_t *conn, void *context,
                             const char *user, unsigned ulen,
@@ -844,6 +912,10 @@ static void imapd_reset(void)
     imapd_compress_done = 0;
     imapd_tls_comp = NULL;
     imapd_starttls_done = 0;
+    imapd_tls_allowed = tls_enabled();
+#ifdef HAVE_ZLIB
+    imapd_compress_allowed = 1;
+#endif
     plaintextloginalert = NULL;
 
     saslprops_reset(&saslprops);
@@ -869,8 +941,14 @@ int service_init(int argc, char **argv, char **envp)
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
+    imapd_tls_allowed = tls_enabled();
+#ifdef HAVE_ZLIB
+    imapd_compress_allowed = 1;
+#endif
+
     /* setup for sending IMAP IDLE notifications */
     idle_init();
+    imapd_idle_enabled = idle_enabled();
 
     /* setup for mailbox event notifications */
     events = mboxevent_init();
@@ -983,6 +1061,8 @@ int service_main(int argc __attribute__((unused)),
         fatal("Failed to set SASL property", EX_TEMPFAIL);
 
     imapd_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
+    imapd_login_disabled = imapd_tls_required ||
+        ((extprops_ssf < 2) && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT));
 
     proc_register(config_ident, imapd_clienthost, NULL, NULL, NULL);
 
@@ -1250,7 +1330,7 @@ static void cmdloop(void)
     struct applepushserviceargs applepushserviceargs;
     int readonly = config_getswitch(IMAPOPT_READONLY);
 
-    prot_printf(imapd_out, "* OK [CAPABILITY ");
+    prot_printf(imapd_out, "* OK [CAPABILITY");
     capa_response(CAPA_PREAUTH);
     prot_printf(imapd_out, "]");
     if (config_serverinfo) prot_printf(imapd_out, " %s", config_servername);
@@ -1643,7 +1723,7 @@ static void cmdloop(void)
                 prometheus_increment(CYRUS_IMAP_ID_TOTAL);
             }
             else if (!imapd_userid) goto nologin;
-            else if (!strcmp(cmd.s, "Idle") && idle_enabled()) {
+            else if (!strcmp(cmd.s, "Idle") && imapd_idle_enabled) {
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_idle(tag.s);
 
@@ -2578,13 +2658,23 @@ static void autocreate_inbox(void)
 }
 #endif // USE_AUTOCREATE
 
-static void authentication_success(void)
+static void authentication_success(const char *tag, int ssf, const char *reply)
 {
     int r;
     struct mboxevent *mboxevent;
 
+    imapd_login_disabled = 1;
+
     /* authstate already created by mysasl_proxy_policy() */
     imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
+
+    prot_printf(imapd_out, "%s OK", tag);
+    if (!ssf) {
+        prot_puts(imapd_out, " [CAPABILITY");
+        capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
+        prot_puts(imapd_out, "]");
+    }
+    prot_printf(imapd_out, " %s\r\n", reply);
 
     /* Create telemetry log */
     imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
@@ -2813,11 +2903,7 @@ static void cmd_login(char *tag, char *user)
 
     if (checklimits(tag)) return;
 
-    prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
-    capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
-    prot_printf(imapd_out, "] %s\r\n", reply);
-
-    authentication_success();
+    authentication_success(tag, 0, replybuf);
 }
 
 /*
@@ -2825,6 +2911,7 @@ static void cmd_login(char *tag, char *user)
  */
 static void cmd_authenticate(char *tag, char *authtype, char *resp)
 {
+    char replybuf[MAX_MAILBOX_BUFFER];
     int sasl_result;
 
     const void *val;
@@ -2957,20 +3044,13 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
         return;
     }
 
-    if (!saslprops.ssf) {
-        prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
-        capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
-        prot_printf(imapd_out, "] Success (%s) SESSIONID=<%s>\r\n",
-                    ssfmsg, session_id());
-    } else {
-        prot_printf(imapd_out, "%s OK Success (%s) SESSIONID=<%s>\r\n",
-                    tag, ssfmsg, session_id());
-    }
-
     prot_setsasl(imapd_in,  imapd_saslconn);
     prot_setsasl(imapd_out, imapd_saslconn);
 
-    authentication_success();
+    snprintf(replybuf, sizeof(replybuf),
+             "Success (%s) SESSIONID=<%s>", ssfmsg, session_id());
+
+    authentication_success(tag, saslprops.ssf, replybuf);
 }
 
 /*
@@ -3030,7 +3110,7 @@ static void cmd_unauthenticate(char *tag)
 
     /* Send response
        (MUST be done with current SASL and/or commpression layer still active) */
-    prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
+    prot_printf(imapd_out, "%s OK [CAPABILITY", tag);
     capa_response(CAPA_PREAUTH);
     prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
     prot_flush(imapd_out);
@@ -3451,89 +3531,72 @@ static void cmd_idle(char *tag)
 
 static void capa_response(int flags)
 {
-    const char *sasllist; /* the list of SASL mechanisms */
-    int mechcount;
-    int need_space = 0;
+    const char *capa;
     int i;
 
-    int lminus = config_getswitch(IMAPOPT_LITERALMINUS);
+    for (i = 0; (capa = base_capabilities[i].str); i++) {
+        int mask = base_capabilities[i].mask;
 
-    for (i = 0; base_capabilities[i].str; i++) {
-        const char *capa = base_capabilities[i].str;
         /* Filter capabilities if requested */
-        if (capa_is_disabled(capa))
+        if (!(mask & CAPA_REQD) && capa_is_disabled(capa))
             continue;
-        /* Don't show "MAILBOX-REFERRALS" if disabled by config */
-        if (config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS) &&
-            !strcmp(capa, "MAILBOX-REFERRALS"))
-            continue;
-        /* Don't show "ANNOTATEMORE" if not enabled by config */
-        if (!config_getswitch(IMAPOPT_ANNOTATION_ENABLE_LEGACY_COMMANDS) &&
-            !strcmp(capa, "ANNOTATEMORE"))
-            continue;
+
         /* Don't show if they're not shown at this level of login */
-        if (!(base_capabilities[i].mask & flags))
+        if (!(mask & flags) || (imapd_authstate && !(mask & CAPA_POSTAUTH)))
             continue;
-        /* cheap and nasty version of LITERAL- (RFC 7888) support - just say so */
-        if (lminus && !strcmp(capa, "LITERAL+"))
-            capa = "LITERAL-";
-        /* print the capability */
-        if (need_space) prot_putc(' ', imapd_out);
-        else need_space = 1;
-        prot_printf(imapd_out, "%s", base_capabilities[i].str);
+
+        /* Don't show if they're disabled by config switch */
+        if (mask & CAPA_CONFIG) {
+            enum imapopt config = base_capabilities[i].u.config;
+            if (!config_getswitch(config) == !(mask & CAPA_REVERSE))
+                continue;
+        }
+
+        /* Don't show if they're disallowed by server state */
+        if (mask & CAPA_STATE) {
+            int state = *base_capabilities[i].u.statep;
+            if (!state == !(mask & CAPA_REVERSE))
+                continue;
+        }
+
+        if (mask & CAPA_COMPLEX) {
+            /* Complex capability */
+            base_capabilities[i].u.complex();
+        }
+        else {
+            /* Print the capability */
+            const char **strp = NULL, *s = "", *valfmt = "";
+            int64_t *i64p = NULL, i64 = INT64_MIN;
+            int num = 1, n = 0;
+
+            if (mask & CAPA_VALUE) {
+                /* Capability with formatted value */
+                strp = base_capabilities[i].u.value.strp;
+                i64p = base_capabilities[i].u.value.i64p;
+
+                if (strp) s = *strp;
+                if (i64p) i64 = *i64p;
+
+                /* Don't show if disabled by a NULL string argument */
+                if (!s) continue;
+
+                valfmt = base_capabilities[i].u.value.fmt;
+            }
+            else if (mask & CAPA_MULTI) {
+                num = base_capabilities[i].u.multi.num;
+                strp = (const char **) base_capabilities[i].u.multi.val;
+                s = *strp;
+                valfmt = "%1$s";
+            }
+
+            do {
+                prot_putc(' ', imapd_out);
+                prot_puts(imapd_out, capa);
+                prot_printf(imapd_out, valfmt, s, i64);
+
+            } while ((mask & CAPA_MULTI) && (++n < num) && (s = *(++strp)));
+        }
     }
-
-    if (config_mupdate_server) {
-        prot_printf(imapd_out, " MUPDATE=mupdate://%s/", config_mupdate_server);
-    }
-
-    if (apns_enabled) {
-        prot_printf(imapd_out, " XAPPLEPUSHSERVICE");
-    }
-
-    if (tls_enabled() && !imapd_starttls_done && !imapd_authstate) {
-        prot_printf(imapd_out, " STARTTLS");
-    }
-    if (imapd_tls_required || imapd_authstate ||
-        (!imapd_starttls_done && (extprops_ssf < 2) &&
-         !config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
-        prot_printf(imapd_out, " LOGINDISABLED");
-    }
-
-    /* add the SASL mechs */
-    if (!imapd_tls_required && (!imapd_authstate || saslprops.ssf) &&
-        sasl_listmech(imapd_saslconn, NULL,
-                      "AUTH=", " AUTH=",
-                      !imapd_authstate ? " SASL-IR" : "", &sasllist,
-                      NULL, &mechcount) == SASL_OK && mechcount > 0) {
-        prot_printf(imapd_out, " %s", sasllist);
-    } else {
-        /* else don't show anything */
-    }
-
-    if (!(flags & CAPA_POSTAUTH)) return;
-
-    if (imapd_authstate && imapd_userisadmin) {
-        prot_printf(imapd_out, " UNAUTHENTICATE");
-    }
-
-    if (config_getswitch(IMAPOPT_CONVERSATIONS))
-        prot_printf(imapd_out, " XCONVERSATIONS");
-
-#ifdef HAVE_ZLIB
-    if (!imapd_compress_done && !imapd_tls_comp) {
-        prot_printf(imapd_out, " COMPRESS=DEFLATE");
-    }
-#endif // HAVE_ZLIB
-
-    for (i = 0 ; i < QUOTA_NUMRESOURCES ; i++)
-        prot_printf(imapd_out, " X-QUOTA=%s", quota_names[i]);
-
-    if (idle_enabled()) {
-        prot_printf(imapd_out, " IDLE");
-    }
-
-    prot_printf(imapd_out, " APPENDLIMIT=%" PRIi64, maxsize);
 }
 
 /*
@@ -3543,7 +3606,7 @@ static void cmd_capability(char *tag)
 {
     imapd_check(NULL, 0);
 
-    prot_printf(imapd_out, "* CAPABILITY ");
+    prot_printf(imapd_out, "* CAPABILITY");
 
     capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
 
@@ -9377,10 +9440,11 @@ static void cmd_starttls(char *tag, int imaps)
     prot_settls(imapd_out, tls_conn);
 
     imapd_starttls_done = 1;
-    imapd_tls_required = 0;
+    imapd_login_disabled = imapd_tls_allowed = imapd_tls_required = 0;
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     imapd_tls_comp = (void *) SSL_get_current_compression(tls_conn);
+    if (imapd_tls_comp) imapd_compress_allowed = 0;
 #endif
 }
 #else
@@ -14677,6 +14741,7 @@ static void cmd_compress(char *tag, char *alg)
         prot_setcompress(imapd_out);
 
         imapd_compress_done = 1;
+        imapd_compress_allowed = 0;
     }
 }
 #endif /* HAVE_ZLIB */
