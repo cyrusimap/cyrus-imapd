@@ -1,7 +1,7 @@
 :tocdepth: 3
 
 ==============================
-ryrus IMAP 3.8.0 Release Notes
+Cyrus IMAP 3.8.0 Release Notes
 ==============================
 
 Download from GitHub:
