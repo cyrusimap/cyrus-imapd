@@ -1853,6 +1853,7 @@ struct emailsearch_folders_value {
     strarray_t folderids;
     strarray_t foldernames;
     bitvector_t foldernums;
+    int jmapupload_foldernum;
     int is_otherthan : 1;
     int want_expunged : 1;
 };
@@ -1900,6 +1901,21 @@ emailsearch_folders_value_new(jmap_req_t *req,
                 strarray_append(&val->folderids, mbentry->uniqueid);
             }
         }
+    }
+
+    // JMAP upload blobs can never match
+    val->jmapupload_foldernum = -1;
+    const char *jmapuploads = config_getstring(IMAPOPT_JMAPUPLOADFOLDER);
+    if (jmapuploads) {
+        mbname_t *mbname = mbname_from_userid(req->accountid);
+        mbname_push_boxes(mbname, jmapuploads);
+        mbentry_t *mbentry;
+        if (!mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL)) {
+            val->jmapupload_foldernum = conversation_folder_number(req->cstate,
+                    CONV_FOLDER_KEY_MBE(req->cstate, mbentry), 0);
+            mboxlist_entry_free(&mbentry);
+        }
+        mbname_free(&mbname);
     }
 
     if (!bv_count(&val->foldernums)) {
@@ -1964,11 +1980,13 @@ static void emailsearch_folders_internalise(struct index_state *state,
 static int emailsearch_folders_match_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct emailsearch_folders_value *val = rock;
-    if (!val->want_expunged &&
-            ((rec->system_flags & FLAG_DELETED) ||
-             (rec->internal_flags & FLAG_INTERNAL_EXPUNGED))) {
+    if (rec->foldernum == val->jmapupload_foldernum ||
+            (!val->want_expunged &&
+             ((rec->system_flags & FLAG_DELETED) ||
+              (rec->internal_flags & FLAG_INTERNAL_EXPUNGED)))) {
         return 0;
     }
+
     int isset = bv_isset(&val->foldernums, rec->foldernum);
     return !isset == !val->is_otherthan ? 0 : IMAP_OK_COMPLETED;
 }
@@ -1992,6 +2010,7 @@ static int emailsearch_folders_match(message_t *m,
     const struct message_guid *guid = NULL;
     int r = message_get_guid(m, &guid);
     if (r) return 0;
+
     r = conversations_guid_foreach(internal->cstate,
             message_guid_encode(guid), emailsearch_folders_match_cb, val);
     return r == IMAP_OK_COMPLETED;
@@ -2085,6 +2104,7 @@ static void emailsearch_folders_duplicate(union search_value *new,
 
     newv->is_otherthan = oldv->is_otherthan;
     newv->want_expunged = oldv->want_expunged;
+    newv->jmapupload_foldernum = oldv->jmapupload_foldernum;
 
     new->v = newv;
 }
@@ -2881,6 +2901,10 @@ static int _jmap_checkfolder(const char *mboxname, void *rock)
 
     // ignore Notes mailbox
     if (mboxname_isnondeliverymailbox(mboxname, 0))
+        return 0;
+
+    // ignore imported email blobs
+    if (mboxname_isjmapuploadmailbox(mboxname, 0))
         return 0;
 
     // we only want to look in folders that the user is allowed to read
