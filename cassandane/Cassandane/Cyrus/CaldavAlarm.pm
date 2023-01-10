@@ -3113,9 +3113,9 @@ EOF
     #
     # byminute=startmin and +2 should succeed since there is a 120s interval
     #
-    my $bymin_ok = $startmin + 2;
-    for (my $bymin = $startmin + 1; $bymin < $startmin + 3; $bymin += 1) {
-        $bymin = $bymin % 60;
+    my $bymin_ok = ($startmin + 2) % 60;
+    foreach my $addend (1..2) {
+        my $bymin = ($startmin + $addend) % 60;
 
         my $freq = 'HOURLY';
         my $int  = 1;
