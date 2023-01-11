@@ -158,7 +158,7 @@ static int index_store_annotation(struct index_state *state, uint32_t msgno,
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
                             const struct fetchargs *fetchargs);
 static void index_printflags(struct index_state *state, uint32_t msgno,
-                             int usinguid, int printmodseq);
+                             unsigned tell_flags);
 static char *get_localpart_addr(const char *header);
 static char *get_displayname(const char *header);
 static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
@@ -881,7 +881,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 continue;
             if (im->modseq <= init->vanished.modseq)
                 continue;
-            index_printflags(state, msgno, 1, 0);
+            index_printflags(state, msgno, TELL_UID);
         }
         seqset_free(&seq);
     }
@@ -928,7 +928,8 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 
     if (r) return r;
 
-    index_tellchanges(state, usinguid, printuid, 0);
+    index_tellchanges(state,
+                      (usinguid ? TELL_EXPUNGED : 0) | (printuid ? TELL_UID : 0));
     index_unlock(state);
 
     return r;
@@ -1145,7 +1146,7 @@ EXPORTED void index_fetchresponses(struct index_state *state,
         im = &state->map[msgno-1];
         if (seq && !seqset_ismember(seq, usinguid ? im->uid : msgno)) {
             if (im->told_modseq !=0 && im->modseq > im->told_modseq)
-                index_printflags(state, msgno, usinguid, 0);
+                index_printflags(state, msgno, (usinguid ? TELL_UID : 0));
             continue;
         }
 
@@ -1253,7 +1254,7 @@ EXPORTED int index_fetch(struct index_state *state,
     if (seq != state->searchres) seqset_free(&seq);
 
   done:
-    index_tellchanges(state, usinguid, usinguid, 0);
+    index_tellchanges(state, (usinguid ? TELL_EXPUNGED | TELL_UID : 0));
 
     return r;
 }
@@ -1482,8 +1483,11 @@ out:
 
 done:
     index_unlock(state);
-    index_tellchanges(state, storeargs->usinguid, storeargs->usinguid,
-                      (storeargs->unchangedsince != ~0ULL));
+    unsigned tell_flags = 0;
+    if (storeargs->silent) tell_flags |= TELL_SILENT;
+    if (storeargs->usinguid) tell_flags |= (TELL_UID | TELL_EXPUNGED);
+    if (storeargs->unchangedsince != ~0ULL) tell_flags |= TELL_MODSEQ;
+    index_tellchanges(state, tell_flags);
 
     return r;
 }
@@ -1595,7 +1599,8 @@ out:
     }
     index_unlock(state);
 
-    index_tellchanges(state, usinguid, usinguid, 1);
+    index_tellchanges(state,
+                      TELL_MODSEQ | (usinguid ? TELL_EXPUNGED | TELL_UID : 0));
 
     return r;
 }
@@ -4004,8 +4009,7 @@ static void index_tellexists(struct index_state *state)
     state->oldexists = state->exists;
 }
 
-EXPORTED void index_tellchanges(struct index_state *state, int canexpunge,
-                       int printuid, int printmodseq)
+EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
 {
     uint32_t msgno;
     struct index_map *im;
@@ -4014,21 +4018,29 @@ EXPORTED void index_tellchanges(struct index_state *state, int canexpunge,
      * the size of oldexists to mention expunges, and tellexists will reset
      * oldexists.  If we do these out of order, we will tell the user about
      * expunges of messages they never saw, which would be wrong */
-    if (canexpunge) index_tellexpunge(state);
+    if (tell_flags & TELL_EXPUNGED) index_tellexpunge(state);
 
     if (state->oldexists != state->exists) index_tellexists(state);
 
     if (state->oldhighestmodseq == state->highestmodseq) return;
 
-    index_checkflags(state, 1, 0);
+    index_checkflags(state, !(tell_flags & TELL_SILENT), 0);
+
+    if (client_capa & CAPA_CONDSTORE) tell_flags |= TELL_MODSEQ;
 
     /* print any changed message flags */
     for (msgno = 1; msgno <= state->exists; msgno++) {
         im = &state->map[msgno-1];
 
         /* report if it's changed since last told */
-        if (im->modseq > im->told_modseq)
-            index_printflags(state, msgno, printuid, printmodseq);
+        if (im->modseq > im->told_modseq) {
+            /* Per RFC 7162: MODSEQ overrides .SILENT */
+            if ((tell_flags & (TELL_SILENT | TELL_MODSEQ)) != TELL_SILENT)
+                index_printflags(state, msgno, tell_flags);
+
+            /* Update reported MODSEQ even if we were .SILENT */
+            im->told_modseq = im->modseq;
+        }
     }
 }
 
@@ -4216,9 +4228,7 @@ static int index_fetchmailboxids(struct index_state *state,
 }
 
 /*
- * Helper function to send * FETCH (FLAGS data.
- * Does not send the terminating close paren or CRLF.
- * Also sends preceeding * FLAGS if necessary.
+ * Helper function to send FLAGS () data.
  */
 static void index_fetchflags(struct index_state *state,
                              uint32_t msgno)
@@ -4228,7 +4238,7 @@ static void index_fetchflags(struct index_state *state,
     bit32 flagmask = 0;
     struct index_map *im = &state->map[msgno-1];
 
-    prot_printf(state->out, "* %u FETCH (FLAGS ", msgno);
+    prot_puts(state->out, "FLAGS ");
 
     if (im->isrecent) {
         prot_printf(state->out, "%c\\Recent", sepchar);
@@ -4272,19 +4282,30 @@ static void index_fetchflags(struct index_state *state,
     im->told_modseq = im->modseq;
 }
 
-static void index_printflags(struct index_state *state,
-                             uint32_t msgno, int usinguid,
-                             int printmodseq)
+static void index_printflags(struct index_state *state, 
+                             uint32_t msgno, unsigned tell_flags)
 {
     struct index_map *im = &state->map[msgno-1];
+    int sepchar = '(';
 
-    index_fetchflags(state, msgno);
+    prot_printf(state->out, "* %u FETCH ", msgno);
+    if (!(tell_flags & TELL_SILENT)) {
+        prot_putc('(', state->out);
+        index_fetchflags(state, msgno);
+        sepchar = ' ';
+    }
     /* RFC 7162, Section 3.1 - MUST send UID and MODSEQ to all
      * untagged FETCH unsolicited responses */
-    if (usinguid || (client_capa & CAPA_QRESYNC))
-        prot_printf(state->out, " UID %u", im->uid);
-    if (printmodseq || (client_capa & CAPA_CONDSTORE))
-        prot_printf(state->out, " MODSEQ (" MODSEQ_FMT ")", im->modseq);
+    if ((tell_flags & TELL_UID) || (client_capa & CAPA_QRESYNC)) {
+        prot_printf(state->out, "%cUID %u", sepchar, im->uid);
+        sepchar = ' ';
+    }
+    if ((tell_flags & TELL_MODSEQ) || (client_capa & CAPA_CONDSTORE)) {
+        prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
+                    sepchar, im->modseq);
+        sepchar = ' ';
+    }
+    if (sepchar == '(') prot_putc('(', state->out);
     prot_printf(state->out, ")\r\n");
 }
 
@@ -4366,6 +4387,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
     /* display flags if asked _OR_ if they've changed */
     if (fetchitems & FETCH_FLAGS || ischanged) {
+        prot_printf(state->out, "* %u FETCH (", msgno);
         index_fetchflags(state, msgno);
         sepchar = ' ';
     }
