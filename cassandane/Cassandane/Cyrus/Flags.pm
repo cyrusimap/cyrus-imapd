@@ -1404,6 +1404,9 @@ sub test_setseen_after_store
 {
     my ($self) = @_;
 
+    # need to version-gate IMAP features that aren't in 3.9...
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $talk->uid());
@@ -1428,11 +1431,15 @@ sub test_setseen_after_store
 
     xlog $self, "Fetch remove the flag again, and immediately fetch the body";
     my $res = $talk->store('1', '-flags.silent', "(\\Seen)");
-#    $self->assert_deep_equals({}, $res);
-    # XXX flags.silent should cause there to not be an untagged response
-    # XXX unless the affected data was also modified by another user, but
-    # XXX for some reason Cyrus still returns it here?
-    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    if ($maj > 3 || ($maj == 3 && $min >= 9)) {
+       $self->assert_deep_equals({}, $res);
+    }
+    else {
+       # XXX flags.silent should cause there to not be an untagged response
+       # XXX unless the affected data was also modified by another user, but
+       # XXX for some reason Cyrus still returns it here?
+       $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    }
     $talk->fetch('1', '(body[])');
     $self->check_messages(\%msg);
 

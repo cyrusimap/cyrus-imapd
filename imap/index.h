@@ -229,6 +229,14 @@ enum index_warmup_flags
     WARMUP_ALL              = (~WARMUP_SEARCH)
 };
 
+enum index_changes_flags
+{
+    TELL_UID                = (1<<0),
+    TELL_MODSEQ             = (1<<1),
+    TELL_EXPUNGED           = (1<<2),
+    TELL_SILENT             = (1<<3),
+};
+
 /* non-locking, non-updating - just do a fetch on the state
  * we already have */
 void index_fetchresponses(struct index_state *state,
@@ -295,8 +303,7 @@ extern void index_release(struct index_state *state);
 extern void index_close(struct index_state **stateptr);
 extern uint32_t index_finduid(struct index_state *state, uint32_t uid);
 extern uint32_t index_getuid(struct index_state *state, uint32_t msgno);
-extern void index_tellchanges(struct index_state *state, int canexpunge,
-                              int printuid, int printmodseq);
+extern void index_tellchanges(struct index_state *state, unsigned tell_flags);
 extern modseq_t index_highestmodseq(struct index_state *state);
 extern int index_check(struct index_state *state, int usinguid, int printuid);
 extern seqset_t *index_vanished(struct index_state *state,
