@@ -387,6 +387,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     struct buf attrib = BUF_INITIALIZER;
 #endif
     int (*addproc)(struct mailbox *) = NULL;
+    int writelock = 0;
     int r = 0;
 
     signals_poll();
@@ -397,6 +398,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     case MBTYPE_COLLECTION:
     case MBTYPE_ADDRESSBOOK:
         addproc = &mailbox_add_dav;
+        writelock = 1; // write lock so we can delete stale index records
         break;
 #endif
 #ifdef USE_SIEVE
@@ -428,7 +430,10 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     if (addproc) {
         struct mailbox *mailbox = NULL;
         /* Open/lock header */
-        r = mailbox_open_irl(mbentry->name, &mailbox);
+        if (writelock)
+            r = mailbox_open_iwl(mbentry->name, &mailbox);
+        else
+            r = mailbox_open_irl(mbentry->name, &mailbox);
         if (!r) r = addproc(mailbox);
         mailbox_close(&mailbox);
     }
