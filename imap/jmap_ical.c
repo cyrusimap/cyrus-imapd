@@ -827,6 +827,24 @@ static char *xjmapid_from_ical(icalproperty *prop)
     return buf_len(&buf) ? buf_release(&buf) : NULL;
 }
 
+/* Same process used by participants_from_ical() */
+EXPORTED const char *jmap_partid_from_ical(icalproperty *prop)
+{
+    static char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+    const char *id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+
+    if (!id) {
+        char *uri = normalized_uri(icalproperty_get_value_as_string(prop));
+
+        if (!uri) return NULL;
+
+        id = sha1hexstr(uri, keybuf);
+        free(uri);
+    }
+
+    return id;
+}
+
 static void xjmapid_to_ical(icalproperty *prop, const char *id)
 {
     struct buf buf = BUF_INITIALIZER;

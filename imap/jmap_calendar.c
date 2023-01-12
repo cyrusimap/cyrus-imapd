@@ -7893,13 +7893,13 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
 
         prop = find_attendee(comp, part_email);
         if (prop) {
-            part_id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+            part_id = jmap_partid_from_ical(prop);
             break;
         }
     }
 
     if (!part_id) {
-        syslog(LOG_NOTICE, "failed to find participantId in RSVP");
+        syslog(LOG_NOTICE, "failed to find participantId in event");
         r = HTTP_NOT_FOUND;
         goto done;
     }
