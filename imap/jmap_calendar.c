@@ -7770,6 +7770,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
 
     if (json_array_size(parser.invalid)) {
+        syslog(LOG_NOTICE, "failed to parse RSVP");
         goto done;
     }
 
@@ -7784,7 +7785,12 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     /* Determine if event is a standalone recurrence instance */
     if (update.eid->ical_recurid) {
         r = check_eventid_exists(update.eid, db, &update.is_standalone);
-        if (r) goto done;
+        if (r) {
+            syslog(LOG_NOTICE, "can't find event with UID: %s %s",
+                   update.eid->ical_uid,
+                   update.eid->ical_recurid ? update.eid->ical_recurid : "");
+            goto done;
+        }
     }
 
     /* Determine mailbox and IMAP UID of calendar event. */
@@ -7797,6 +7803,8 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
             !cdata->dav.rowid || !cdata->dav.imap_uid ||
             cdata->comp_type != CAL_COMP_VEVENT) {
+        syslog(LOG_NOTICE, "can't find DAV event record for UID: %s",
+               update.eid->ical_uid);
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -7821,6 +7829,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
 
     /* Check permissions. */
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+        syslog(LOG_NOTICE, "no permissions to read event");
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -7828,6 +7837,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     /* Check privacy for sharees */
     if (strcmp(req->accountid, req->userid)) {
         if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
+            syslog(LOG_NOTICE, "no permissions for sharee to read event");
             r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
                 IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
             goto done;
@@ -7889,6 +7899,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
 
     if (!part_id) {
+        syslog(LOG_NOTICE, "failed to find participantId in RSVP");
         r = HTTP_NOT_FOUND;
         goto done;
     }
@@ -7922,7 +7933,10 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
 
     /* Apply patch */
     r = updateevent_apply_patch(req, &update, parser.invalid, NULL, &err);
-    if (err || r || json_array_size(parser.invalid)) goto done;
+    if (err || r || json_array_size(parser.invalid)) {
+        syslog(LOG_NOTICE, "failed to patch RSVP into event");
+        goto done;
+    }
 
     /* Create and send the reply */
     sched_reply(req->accountid, &schedule_addr,
@@ -7987,7 +8001,13 @@ done:
             }
         }
     }
-    if (err) jmap_error(req, err);
+    if (err) {
+        char *errstr = json_dumps(err, JSON_COMPACT);
+        syslog(LOG_NOTICE, "RSVP failed: %s", errstr);
+        free(errstr);
+
+        jmap_error(req, err);
+    }
 
     jmap_parser_fini(&parser);
     jmap_caleventid_free(&update.eid);
