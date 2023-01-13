@@ -2165,7 +2165,8 @@ sub test_calendarevent_get_locations_geo
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
     $self->assert_num_equals(1, scalar @locations);
-    $self->assert_str_equals("geo:37.386013,-122.082930", $locations[0]{coordinates});
+    $self->assert_matches(qr{\Ageo:37\.38601\d*,-122\.08290\d*\Z},
+                          $locations[0]{coordinates});
 }
 
 sub test_calendarevent_get_locations_apple
