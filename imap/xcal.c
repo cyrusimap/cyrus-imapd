@@ -50,6 +50,7 @@
 #include <libxml/tree.h>
 
 #include "httpd.h"
+#include "ical_support.h"
 #include "tok.h"
 #include "util.h"
 #include "version.h"
