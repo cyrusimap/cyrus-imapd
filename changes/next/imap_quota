@@ -1,0 +1,14 @@
+Description:
+
+Upgrade IMAP Quota support to RFC 9208.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Sites running a Murder should upgrade frontend machines first,
+then backends.
