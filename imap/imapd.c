@@ -4025,14 +4025,21 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
     }
     if (r) {
         eatline(imapd_in, ' ');
+
+        const char *respcode = "";
+        if (r == IMAP_QUOTA_EXCEEDED) {
+            respcode = "[OVERQUOTA] ";
+        }
+        else if (r == IMAP_MAILBOX_NONEXISTENT &&
+                 mboxlist_createmailboxcheck(intname, 0, 0,
+                                             imapd_userisadmin,
+                                             imapd_userid, imapd_authstate,
+                                             NULL, NULL, 0) == 0) {
+            respcode = "[TRYCREATE] ";
+        }
+        
         prot_printf(imapd_out, "%s NO %s%s\r\n",
-                    tag,
-                    (r == IMAP_MAILBOX_NONEXISTENT &&
-                     mboxlist_createmailboxcheck(intname, 0, 0,
-                                                 imapd_userisadmin,
-                                                 imapd_userid, imapd_authstate,
-                                                 NULL, NULL, 0) == 0)
-                    ? "[TRYCREATE] " : "", error_message(r));
+                    tag, respcode, error_message(r));
         free(intname);
         return r;
     }
@@ -4250,6 +4257,9 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         else if (r == IMAP_USERFLAG_EXHAUSTED ||
                  r == IMAP_CONVERSATION_GUIDLIMIT) {
             respcode = "[LIMIT] ";
+        }
+        else if (r == IMAP_QUOTA_EXCEEDED) {
+            respcode = "[OVERQUOTA] ";
         }
         else if (r == IMAP_MAILBOX_NONEXISTENT &&
                  mboxlist_createmailboxcheck(intname, 0, 0,
@@ -7084,6 +7094,9 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
         const char *respcode = "";
         if (r == IMAP_MAILBOX_NOTSUPPORTED) {
             respcode = "[CANNOT] ";
+        }
+        else if (r == IMAP_QUOTA_EXCEEDED) {
+            respcode = "[OVERQUOTA] ";
         }
         else if (r == IMAP_MAILBOX_NONEXISTENT &&
                  mboxlist_createmailboxcheck(intname, 0, 0,
