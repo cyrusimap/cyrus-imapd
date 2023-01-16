@@ -850,10 +850,15 @@ static int _add_group_entries(struct jmap_req *req,
                               struct vparse_card *card, json_t *members,
                               json_t *invalid)
 {
-    vparse_delete_entries(card, NULL, "X-ADDRESSBOOKSERVER-MEMBER");
+    const char *group_propname = "X-ADDRESSBOOKSERVER-MEMBER";
+    struct vparse_entry *ventry = vparse_get_entry(card, NULL, "VERSION");
     int r = 0;
     size_t index;
     struct buf buf = BUF_INITIALIZER;
+
+    if (ventry && atof(ventry->v.value) >= 4.0) group_propname =  "MEMBER";
+
+    vparse_delete_entries(card, NULL, group_propname);
 
     for (index = 0; index < json_array_size(members); index++) {
         const char *item = _json_array_get_string(members, index);
@@ -866,8 +871,7 @@ static int _add_group_entries(struct jmap_req *req,
         }
         buf_setcstr(&buf, "urn:uuid:");
         buf_appendcstr(&buf, uid);
-        vparse_add_entry(card, NULL,
-                         "X-ADDRESSBOOKSERVER-MEMBER", buf_cstring(&buf));
+        vparse_add_entry(card, NULL, group_propname, buf_cstring(&buf));
         buf_reset(&buf);
     }
 
@@ -1141,7 +1145,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         }
 
         struct vparse_card *card = vcard->objects;
-        vparse_replace_entry(card, NULL, "VERSION", "3.0");
+        if (!vparse_get_entry(card, NULL, "VERSION"))
+            vparse_replace_entry(card, NULL, "VERSION", "3.0");
         vparse_replace_entry(card, NULL, "PRODID", _prodid);
 
         if (kind == CARDDAV_KIND_GROUP) {
