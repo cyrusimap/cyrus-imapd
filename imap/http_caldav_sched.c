@@ -1660,7 +1660,15 @@ static int check_changes_any(icalcomponent *old,
 static int check_changes(icalcomponent *old, icalcomponent *comp, const char *attendee)
 {
     int needs_action = 0;
-    int res = check_changes_any(old, comp, &needs_action);
+    int res;
+
+    if (!find_attendee(old, attendee)) {
+        res = needs_action = 1;
+    }
+    else {
+        res = check_changes_any(old, comp, &needs_action);
+    }
+
     if (needs_action) {
         if (old) {
             /* Make sure SEQUENCE is set properly */
@@ -1968,6 +1976,9 @@ static void schedule_sub_updates(const char *userid, const strarray_t *schedule_
         /* unchanged event - we don't need to send anything */
         if (!check_changes(oldcomp, comp, attendee)) {
             if (force_send == ICAL_SCHEDULEFORCESEND_NONE) {
+                syslog(LOG_INFO,
+                       "Not sending iTIP request for attendee %s (event %s):"
+                       " no changes", attendee, recurid);
                 if (freeme) icalcomponent_free(freeme);
                 continue;
             }
@@ -1983,8 +1994,17 @@ static void schedule_sub_updates(const char *userid, const strarray_t *schedule_
 
         strarray_add(&recurids, recurid);
 
-        if (!do_send && !icalcomponent_is_historical(copy, h_cutoff))
-            do_send = 1;
+        if (!do_send) {
+            if (icalcomponent_is_historical(copy, h_cutoff)) {
+                syslog(LOG_INFO,
+                       "Not sending iTIP request for attendee %s (event %s):"
+                       " historical cutoff %s",
+                       attendee, recurid, icaltime_as_ical_string(h_cutoff));
+            }
+            else {
+                do_send = 1;
+            }
+        }
 
         if (freeme) icalcomponent_free(freeme);
     }
