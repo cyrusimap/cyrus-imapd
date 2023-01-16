@@ -1405,7 +1405,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;
     message_data_t *m = mydata->m;
-    icalcomponent *itip = NULL, *comp;
+    icalcomponent *itip = NULL, *comp, *first;
     icalcomponent_kind kind = 0;
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
@@ -1460,19 +1460,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
         goto done;
     }
 
-    cyrus_icalrestriction_check(itip);
-    if ((errstr = get_icalcomponent_errstr(itip)) &&
-        (meth != ICAL_METHOD_REPLY ||
-         !strstr(errstr, "Failed iTIP restrictions for ORGANIZER property"))) {
-        /* XXX  Outlook sends METHOD:REPLY with no ORGANIZER,
-           but libical doesn't allow them in its restrictions checks */
-        buf_setcstr(&imip->outcome, "error");
-        buf_reset(&imip->errstr);
-        buf_printf(&imip->errstr, "invalid iCalendar data: %s", errstr);
-        goto done;
-    }
-
-    comp = icalcomponent_get_first_real_component(itip);
+    comp = first = icalcomponent_get_first_real_component(itip);
     if (!comp) {
         buf_setcstr(&imip->outcome, "error");
         buf_setcstr(&imip->errstr, "no component to schedule");
@@ -1487,6 +1475,24 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
         goto done;
     }
 
+    /* Strip VALARMs, TRANSP, COLOR, and CATEGORIES (if color) */
+    for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
+        itip_strip_personal_data(comp);
+    }
+
+    cyrus_icalrestriction_check(itip);
+    if ((errstr = get_icalcomponent_errstr(itip)) &&
+        (meth != ICAL_METHOD_REPLY ||
+         !strstr(errstr, "Failed iTIP restrictions for ORGANIZER property"))) {
+        /* XXX  Outlook sends METHOD:REPLY with no ORGANIZER,
+           but libical doesn't allow them in its restrictions checks */
+        buf_setcstr(&imip->outcome, "error");
+        buf_reset(&imip->errstr);
+        buf_printf(&imip->errstr, "invalid iCalendar data: %s", errstr);
+        goto done;
+    }
+
+    comp = first;
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) {
         organizer = icalproperty_get_organizer(prop);
