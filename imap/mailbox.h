@@ -143,10 +143,12 @@ struct statusdata {
     quota_t size;
     modseq_t createdmodseq;
     modseq_t highestmodseq;
+    uint32_t deleted;
+    quota_t deleted_storage;
     conv_status_t xconv;
 };
 
-#define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
+#define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, 0, 0, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
 
 struct index_record {
     uint32_t uid;

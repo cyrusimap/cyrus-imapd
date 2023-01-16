@@ -291,6 +291,54 @@ sub test_using_storage
     $self->_check_usages(storage => int($expected/1024));
 }
 
+sub test_deleted_storage
+{
+    my ($self) = @_;
+
+    xlog $self, "test DELETED and DELETED-STORAGE STATUS items";
+    $self->_set_quotaroot('user.cassandane');
+    xlog $self, "set ourselves a basic limit";
+    $self->_set_limits(storage => 100000);
+    $self->_check_usages(storage => 0);
+    my $talk = $self->{store}->get_client();
+
+    # append some messages
+    my $expected = 0;
+    for (1..10)
+    {
+        my $msg = $self->make_message("Message $_",
+                                      extra_lines => 10 + rand(5000));
+        my $len = length($msg->as_string());
+        $expected += $len;
+        xlog $self, "added $len bytes of message";
+        $self->_check_usages(storage => int($expected/1024));
+    }
+
+    # delete messages
+    $talk->select("INBOX");
+    $talk->store('1:*', '+flags.silent', '(\\deleted)');
+
+    # check deleted[-storage] status items
+    my $res = $talk->status('INBOX', '(messages size deleted deleted-storage)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_num_equals(10, $res->{'messages'});
+    $self->assert_num_equals(10, $res->{'deleted'});
+    $self->assert_num_equals($expected, $res->{'size'});
+    $self->assert_num_equals($expected, $res->{'deleted-storage'});
+
+    $talk->close();
+
+    # check deleted[-storage] status items
+    $res = $talk->status('INBOX', '(messages size deleted deleted-storage)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_num_equals(0, $res->{'messages'});
+    $self->assert_num_equals(0, $res->{'deleted'});
+    $self->assert_num_equals(0, $res->{'size'});
+    $self->assert_num_equals(0, $res->{'deleted-storage'});
+
+    $self->_check_usages(storage => 0);
+}
+
 sub test_using_storage_late
 {
     my ($self) = @_;
