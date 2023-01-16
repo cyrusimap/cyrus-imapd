@@ -51,6 +51,7 @@ metric counter cyrus_imap_lsub_total                    The total number of IMAP
 metric counter cyrus_imap_listrights_total              The total number of IMAP LISTRIGHTSs
 metric counter cyrus_imap_myrights_total                The total number of IMAP MYRIGHTSs
 metric counter cyrus_imap_mupdatepush_total             The total number of IMAP MUPDATEPUSHs
+metric counter cyrus_imap_replace_total                 The total number of IMAP REPLACEs
 metric counter cyrus_imap_starttls_total                The total number of IMAP STARTTLSs
 metric counter cyrus_imap_store_total                   The total number of IMAP STOREs
 metric counter cyrus_imap_select_total                  The total number of IMAP SELECTs

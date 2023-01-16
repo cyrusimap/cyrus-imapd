@@ -1070,4 +1070,66 @@ sub test_copy_across_backends
     $self->check_messages(\%exp, store => $self->{frontend_store});
 }
 
+sub test_replace_same_backend
+    :needs_component_murder :NoAltNamespace :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $talk = $self->{frontend_store}->get_client();
+
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $self->{store});
+    $self->check_messages(\%exp);
+
+    $talk->select('INBOX');
+
+    %exp = ();
+    $exp{B} = $self->{gen}->generate(subject => "Message B");
+
+    $talk->_imap_cmd('REPLACE', 0, '', "1", "INBOX",
+                     { Literal => $exp{B}->as_string() });
+    $self->check_messages(\%exp);
+}
+
+sub test_replace_across_backends
+    :needs_component_murder :NoAltNamespace :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $shared = 'shared';
+
+    my $admintalk = $self->{backend2_adminstore}->get_client();
+
+    # create a shared folder (on backend2)
+    $admintalk->create($shared);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl($shared, 'anyone', 'lrswi');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # put some messages into the INBOX
+    $self->make_message("Message A", store => $self->{frontend_store});
+    $self->make_message("Message B", store => $self->{frontend_store});
+
+    my $frontend = $self->{frontend_store}->get_client();
+
+    my $res = $frontend->select('INBOX');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # expunge the first message so that seqno != uid
+    $frontend->store('1', '+flags', '(\\Deleted)');
+    $frontend->expunge();
+
+    my %exp;
+    $exp{C} = $self->{gen}->generate(subject => "Message C", uid => 1);
+
+    $res = $frontend->_imap_cmd('REPLACE', 0, '', "1", "shared",
+                                { Literal => $exp{C}->as_string() });
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $self->check_messages({});
+
+    $self->{frontend_store}->set_folder($shared);
+    $self->check_messages(\%exp, store => $self->{frontend_store});
+}
+
 1;

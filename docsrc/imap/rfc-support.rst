@@ -866,6 +866,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP Extension for Object Identifiers
 
+:rfc:`8508`
+
+    IMAP REPLACE Extension
+
 :rfc:`8514`
 
     Internet Message Access Protocol (IMAP) - SAVEDATE Extension
@@ -1012,7 +1016,3 @@ RFC Wishlist
 :rfc:`8470`
 
     Using Early Data in HTTP
-
-:rfc:`8508`
-
-    IMAP REPLACE Extension
