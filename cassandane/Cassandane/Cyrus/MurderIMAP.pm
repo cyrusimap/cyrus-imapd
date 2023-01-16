@@ -1030,4 +1030,44 @@ sub test_xfer_no_user_intermediates
 # XXX test_xfer_mboxpattern
 # XXX shared mailboxes!
 
+sub test_copy_across_backends
+    :needs_component_murder :NoAltNamespace
+{
+    my ($self) = @_;
+
+    my $shared = 'shared';
+
+    my $admintalk = $self->{backend2_adminstore}->get_client();
+
+    # create a shared folder (on backend2)
+    $admintalk->create($shared);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl($shared, 'anyone', 'lrswi');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # put some messages into the INBOX
+    my %exp;
+    $self->make_message("Message A", store => $self->{frontend_store});
+    $exp{B} = $self->make_message("Message B", store => $self->{frontend_store});
+    $self->make_message("Message C", store => $self->{frontend_store});
+    $exp{D} = $self->make_message("Message D", store => $self->{frontend_store});
+
+    my $frontend = $self->{frontend_store}->get_client();
+
+    my $res = $frontend->select('INBOX');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # expunge the some messages so that seqno != uid
+    $frontend->store('1,3', '+flags', '(\\Deleted)');
+    $frontend->expunge();
+
+    $res = $frontend->copy('1:*', $shared);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $exp{B}->set_attribute('uid', 1);
+    $exp{D}->set_attribute('uid', 2);
+    $self->{frontend_store}->set_folder($shared);
+    $self->check_messages(\%exp, store => $self->{frontend_store});
+}
+
 1;

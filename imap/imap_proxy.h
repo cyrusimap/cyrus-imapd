@@ -84,6 +84,11 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 void print_listresponse(unsigned cmd, const char *extname, char hier_sep,
                         uint32_t attributes, struct buf *extraflags);
 
+int proxy_fetch(char *sequence, int usinguid, unsigned items,
+                void (*item_cb)(uint32_t seqno, unsigned item,
+                                void *datap, void *rock),
+                void *rock);
+
 void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 int usinguid, struct backend *s);
 
