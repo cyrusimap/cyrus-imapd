@@ -9577,6 +9577,12 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "createdmodseq")) {
             statusitems |= STATUS_CREATEDMODSEQ;
         }
+        else if (!strcmp(arg.s, "deleted")) {
+            statusitems |= STATUS_DELETED;
+        }
+        else if (!strcmp(arg.s, "deleted-storage")) {
+            statusitems |= STATUS_DELETED_STORAGE;
+        }
         else if (hasconv && !strcmp(arg.s, "xconvexists")) {
             statusitems |= STATUS_XCONVEXISTS;
         }
@@ -9647,7 +9653,7 @@ static int print_statusline(const char *extname, unsigned statusitems,
         sepchar = ' ';
     }
     if (statusitems & STATUS_SIZE) {
-        prot_printf(imapd_out, "%cSIZE %llu", sepchar, sd->size);
+        prot_printf(imapd_out, "%cSIZE " QUOTA_T_FMT, sepchar, sd->size);
         sepchar = ' ';
     }
     if (statusitems & STATUS_CREATEDMODSEQ) {
@@ -9658,6 +9664,15 @@ static int print_statusline(const char *extname, unsigned statusitems,
     if (statusitems & STATUS_HIGHESTMODSEQ) {
         prot_printf(imapd_out, "%cHIGHESTMODSEQ " MODSEQ_FMT,
                     sepchar, sd->highestmodseq);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_DELETED) {
+        prot_printf(imapd_out, "%cDELETED %u", sepchar, sd->deleted);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_DELETED_STORAGE) {
+        prot_printf(imapd_out, "%cDELETED-STORAGE " QUOTA_T_FMT,
+                    sepchar, sd->deleted_storage);
         sepchar = ' ';
     }
     if (statusitems & STATUS_XCONVEXISTS) {
@@ -14226,7 +14241,7 @@ static int list_data_remote(struct backend *be, char *tag,
                     /* XXX  MUST be in same order as STATUS_* bitmask */
                     "messages", "recent", "uidnext", "uidvalidity",
                     "unseen", "highestmodseq", "size", "mailboxid",
-                    "", "", "",
+                    "deleted", "deleted-storage", "",
                     "xconvexists", "xconvunseen", "xconvmodseq",
                     "createdmodseq", "sharedseen", NULL
                 };
