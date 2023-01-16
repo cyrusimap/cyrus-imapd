@@ -14069,7 +14069,9 @@ static int list_data_remote(struct backend *be, char *tag,
             const char *select_opts[] = {
                 /* XXX  MUST be in same order as LIST_SEL_* bitmask */
                 "subscribed", "remote", "recursivematch",
-                "special-use", "vendor.cmu-dav", "metadata", NULL
+                "special-use", "", "", "", "", "", "", "", "",
+                "vendor.cmu-dav", "metadata", "vendor.fm-include-nonexistent",
+                "vendor.cmu-include-deleted", NULL
             };
             char c = '(';
             int i;
@@ -14147,7 +14149,8 @@ static int list_data_remote(struct backend *be, char *tag,
                 const char *status_items[] = {
                     /* XXX  MUST be in same order as STATUS_* bitmask */
                     "messages", "recent", "uidnext", "uidvalidity",
-                    "unseen", "uniqueid", "size", "highestmodseq",
+                    "unseen", "highestmodseq", "size", "mailboxid",
+                    "", "", "",
                     "xconvexists", "xconvunseen", "xconvmodseq",
                     "createdmodseq", "sharedseen", NULL
                 };
