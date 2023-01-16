@@ -3611,7 +3611,7 @@ EOF
 }
 
 sub test_notify
-    :needs_component_sieve :min_version_3_7
+    :needs_component_sieve :min_version_3_2
 {
     my ($self) = @_;
 
