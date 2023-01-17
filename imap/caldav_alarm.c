@@ -678,29 +678,6 @@ static int update_alarmdb(const char *mboxname,
     return -1;
 }
 
-static icaltimezone *get_floatingtz(const char *mailbox, const char *userid)
-{
-    icaltimezone *floatingtz = NULL;
-
-    struct buf buf = BUF_INITIALIZER;
-    const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
-    if (!annotatemore_lookupmask(mailbox, annotname, userid, &buf)) {
-        icalcomponent *comp = NULL;
-        comp = icalparser_parse_string(buf_cstring(&buf));
-        icalcomponent *subcomp =
-            icalcomponent_get_first_component(comp, ICAL_VTIMEZONE_COMPONENT);
-        if (subcomp) {
-            floatingtz = icaltimezone_new();
-            icalcomponent_remove_component(comp, subcomp);
-            icaltimezone_set_component(floatingtz, subcomp);
-        }
-        icalcomponent_free(comp);
-    }
-    buf_free(&buf);
-
-    return floatingtz;
-}
-
 static icalcomponent *vpatch_from_peruserdata(struct dlist *dl)
 {
     const char *icalstr;
@@ -1278,7 +1255,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     icalcomponent_free(vpatch);
 
     /* Fetch per-user timezone for floating events */
-    floatingtz = get_floatingtz(mailbox, userid);
+    floatingtz = caldav_get_calendar_tz(mailbox, userid);
 
     /* Process any VALARMs in the patched iCalendar resource */
     check = process_alarms(mailbox, uid, userid, floatingtz, myical,
@@ -2053,7 +2030,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
 
     switch (data->type) {
     case ALARM_CALENDAR: {
-        icaltimezone *floatingtz = get_floatingtz(mailbox_name(mailbox), "");
+        icaltimezone *floatingtz = caldav_get_calendar_tz(mailbox_name(mailbox), "");
         r = process_valarms(mailbox, &record, floatingtz, runtime, dryrun);
         if (floatingtz) icaltimezone_free(floatingtz, 1);
         break;
@@ -2230,7 +2207,7 @@ EXPORTED int caldav_alarm_upgrade()
         caldav_alarm_close(alarmdb);
         if (rc) continue;
 
-        icaltimezone *floatingtz = get_floatingtz(mailbox_name(mailbox), "");
+        icaltimezone *floatingtz = caldav_get_calendar_tz(mailbox_name(mailbox), "");
 
         /* add alarms for all records */
         struct mailbox_iter *iter =
