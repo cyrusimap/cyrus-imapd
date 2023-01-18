@@ -1,0 +1,21 @@
+Description:
+
+XFER to newer backends now assumes at least the current mailbox version,
+rather than the oldest supported mailbox version.
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+This is the future absence of an upgrade instruction: a server containing
+this change no longer needs to be upgraded to a version that specifically
+recognises newer backends prior to XFERing mailboxes to them.
+
+
+GitHub issue:
+
+https://github.com/cyrusimap/cyrus-imapd/issues/4380
