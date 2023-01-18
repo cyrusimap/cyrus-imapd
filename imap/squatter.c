@@ -837,6 +837,9 @@ static void do_rolling(const char *channel)
 
         strarray_free(mboxnames);
         mboxnames = NULL;
+
+        // handle any delayed compaction runs
+        libcyrus_run_delayed();
     }
 
     /* XXX - we don't really get here... */
