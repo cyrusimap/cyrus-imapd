@@ -440,6 +440,7 @@ static void test_unrecognised_backend_version(void)
     struct backend_version_data data[] = {
         { "BOGUS", 6 }, /* completely unrecognised */
         { "Cyrus IMAP v2.3.B (OGUS)", 6 }, /* junk 2.3 revision */
+        { "Cyrus IMAP 10.0.0", MAILBOX_MINOR_VERSION }, /* unknown future version */
     };
 
     default_conditions();
@@ -467,7 +468,7 @@ static void test_unrecognised_backend_version(void)
         CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
         CU_ASSERT_EQUAL(server_state->is_tls, 0);
 
-        CU_SYSLOG_MATCH("Assuming index version 6!");
+        CU_SYSLOG_MATCH("Assuming index version [0-9]+!");
         got_version = backend_version(be);
         CU_ASSERT_EQUAL(got_version, data[i].version);
         CU_ASSERT_SYSLOG(/*all*/0, 1);

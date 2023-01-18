@@ -75,9 +75,7 @@
  * changed to be able to convert both backwards and forwards between the
  * new version and all supported previous versions.
  * If you change MAILBOX_MINOR_VERSION you MUST also make corresponding
- * changes to backend_version() in backend.c, AND backport those changes to
- * all supported older versions, to avoid breaking XFER.  Annoyingly, older
- * versions placed this function in imapd.c FYI!
+ * changes to backend_version() in backend.c.
  */
 #define MAILBOX_MINOR_VERSION   17
 #define MAILBOX_CACHE_MINOR_VERSION 10
