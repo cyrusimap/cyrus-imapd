@@ -117,18 +117,6 @@ sub test_frontend_commands
     $self->assert_not_null($result);
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
-    my $res_mailbox = 'MAILBOX';
-    my ($maj, $min) = Cassandane::Instance->get_version();
-    if ($maj < 3 || ($maj == 3 && $min < 9)) {
-        $res_mailbox = 'X-NUM-FOLDERS';
-    }
-
-    my $frontend_admin = $self->{frontend_adminstore}->get_client();
-    $result = $frontend_admin->setquota('user.cassandane',
-                                        "(STORAGE 1024 MESSAGE 5000 $res_mailbox 100)");
-    $self->assert_not_null($result);
-    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
-
     # XXX test other commands
 }
 
