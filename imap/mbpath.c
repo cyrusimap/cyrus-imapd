@@ -450,6 +450,8 @@ int main(int argc, char **argv)
         fatal(error_message(r), EX_SOFTWARE);
     }
 
+    mbpath_namespace.isutf8 = opts.utf8;
+
     for (i = optind; i < argc; i++) {
         /* Translate mailboxname */
         mbname_t *mbname = NULL;
@@ -460,9 +462,6 @@ int main(int argc, char **argv)
         }
         else if (opts.mode == MODE_PATH) {
             mbname = mbname_from_path(argv[i]);
-        }
-        else if (opts.utf8) {
-            mbname = mbname_from_extnameUTF8(argv[i], &mbpath_namespace, "cyrus");
         }
         else {
             mbname = mbname_from_extname(argv[i], &mbpath_namespace, "cyrus");

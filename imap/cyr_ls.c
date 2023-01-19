@@ -420,17 +420,14 @@ int main(int argc, char **argv)
         fatal(error_message(r), -1);
     }
 
+    cyr_ls_namespace.isutf8 = opts.utf8;
+
     /* Translate mailboxname */
     mbname_t *mbname = NULL;
     r = IMAP_MAILBOX_NONEXISTENT;
     if (!is_path && (optind != argc)) {
         /* Is this an actual mailbox name */
-        if (opts.utf8) {
-            mbname = mbname_from_extnameUTF8(argv[optind], &cyr_ls_namespace, "cyrus");
-        }
-        else {
-            mbname = mbname_from_extname(argv[optind], &cyr_ls_namespace, "cyrus");
-        }
+        mbname = mbname_from_extname(argv[optind], &cyr_ls_namespace, "cyrus");
 
         r = mboxlist_lookup_allow_all(mbname_intname(mbname), NULL, NULL);
     }

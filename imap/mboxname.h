@@ -73,6 +73,7 @@ enum { MBNAME_INBOX = 1,
 struct namespace {
     char hier_sep;
     int isalt;  /* are we using the alternate namespace? */
+    int isutf8; /* are we using utf-8 mailbox names? */
     int isadmin; /* current user is an admin */
     char prefix[3][MAX_NAMESPACE_PREFIX+1];
     int accessible[3];
@@ -107,7 +108,6 @@ mbname_t *mbname_from_userid(const char *userid);
 mbname_t *mbname_from_localdom(const char *localpart, const char *domain);
 mbname_t *mbname_from_intname(const char *intname);
 mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid);
-mbname_t *mbname_from_extnameUTF8(const char *extname, const struct namespace *ns, const char *userid);
 mbname_t *mbname_from_extsub(const char *extsub, const struct namespace *ns, const char *userid);
 mbname_t *mbname_from_recipient(const char *recip, const struct namespace *ns);
 mbname_t *mbname_from_path(const char *path);
@@ -123,8 +123,6 @@ char *mbname_pop_boxes(mbname_t *mbname); /* free it yourself punk */
 void mbname_truncate_boxes(mbname_t *mbname, size_t len);
 void mbname_free(mbname_t **mbnamep);
 
-char *mboxname_from_externalUTF8(const char *extname,
-                                 const struct namespace *ns, const char *userid);
 char *mboxname_from_external(const char *extname, const struct namespace *ns, const char *userid);
 char *mboxname_to_external(const char *intname, const struct namespace *ns, const char *userid);
 

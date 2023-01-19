@@ -179,8 +179,8 @@ static int deleteheader(void *mc, const char *head, int index)
 static int getmailboxexists(void *sc, const char *extname)
 {
     script_data_t *sd = (script_data_t *)sc;
-    char *intname = mboxname_from_externalUTF8(extname, sd->ns,
-                                               mbname_userid(sd->mbname));
+    char *intname = mboxname_from_external(extname, sd->ns,
+                                           mbname_userid(sd->mbname));
     int r = mboxlist_lookup(intname, NULL, NULL);
     free(intname);
     return r ? 0 : 1; /* 0 => exists */
@@ -208,7 +208,7 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
     int i, r = 1;
 
     if (extname) {
-        char *intname = mboxname_from_externalUTF8(extname, sd->ns, userid);
+        char *intname = mboxname_from_external(extname, sd->ns, userid);
         struct buf attrib = BUF_INITIALIZER;
 
         annotatemore_lookup(intname, "/specialuse", userid, &attrib);
@@ -253,7 +253,7 @@ static int getmetadata(void *sc, const char *extname, const char *keyname, char 
     script_data_t *sd = (script_data_t *)sc;
     struct buf attrib = BUF_INITIALIZER;
     char *intname = !extname ? xstrdup("") :
-        mboxname_from_externalUTF8(extname, sd->ns, mbname_userid(sd->mbname));
+        mboxname_from_external(extname, sd->ns, mbname_userid(sd->mbname));
     int r;
     if (!strncmp(keyname, "/private/", 9)) {
         r = annotatemore_lookup(intname, keyname+8, mbname_userid(sd->mbname), &attrib);
@@ -1115,7 +1115,7 @@ static int sieve_fileinto(void *ac,
                 if (ret) free(intname);
             }
             if (ret) {
-                intname = mboxname_from_externalUTF8(fc->mailbox, sd->ns, userid);
+                intname = mboxname_from_external(fc->mailbox, sd->ns, userid);
             }
         }
     }
@@ -1896,7 +1896,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
         intname = mboxlist_find_specialuse(fcc->specialuse, userid);
     }
     if (!intname) {
-        intname = mboxname_from_externalUTF8(fcc->mailbox, sdata->ns, userid);
+        intname = mboxname_from_external(fcc->mailbox, sdata->ns, userid);
 
         r = mboxlist_lookup(intname, NULL, NULL);
         if (r == IMAP_MAILBOX_NONEXISTENT) {

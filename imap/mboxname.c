@@ -577,8 +577,34 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
     return mbname;
 }
 
-EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid)
+EXPORTED mbname_t *mbname_from_extname(const char *extname,
+                                       const struct namespace *ns,
+                                       const char *userid)
 {
+    mbname_t *mbname = NULL, *userparts = NULL;
+    char *freeme = NULL;
+
+    if (extname && ns->isutf8) {
+        /* Encode extname from UTF-8 to IMAP UTF-7. */
+        charset_t cs = charset_lookupname("utf-8");
+        if (cs == CHARSET_UNKNOWN_CHARSET) {
+            /* huh? */
+            syslog(LOG_INFO, "charset utf-8 is unknown");
+            return NULL;
+        }
+
+        /* Encode mailbox name in IMAP UTF-7 */
+        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
+        charset_free(&cs);
+
+        if (!freeme) {
+            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
+            return NULL;
+        }
+
+        extname = freeme;
+    }
+
     int crossdomains = config_getswitch(IMAPOPT_CROSSDOMAINS) && !ns->isadmin;
     int cdother = config_getswitch(IMAPOPT_CROSSDOMAINS_ONLYOTHER);
     /* old-school virtdomains requires admin to be a different domain than the userid */
@@ -587,27 +613,27 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     /* specialuse magic */
     if (extname && extname[0] == '\\') {
         char *intname = mboxlist_find_specialuse(extname, userid);
-        mbname_t *mbname = mbname_from_intname(intname);
+        mbname = mbname_from_intname(intname);
         free(intname);
-        return mbname;
+        goto done;
     }
 
-    mbname_t *mbname = xzmalloc(sizeof(mbname_t));
+    mbname = xzmalloc(sizeof(mbname_t));
     char sepstr[2];
     char *p = NULL;
 
     if (!extname)
-        return mbname;
+        goto done;
 
     if (!*extname)
-        return mbname; // empty string, *sigh*
+        goto done; // empty string, *sigh*
 
     sepstr[0] = ns->hier_sep;
     sepstr[1] = '\0';
 
     mbname->extname = xstrdup(extname); // may as well cache it
 
-    mbname_t *userparts = mbname_from_userid(userid);
+    userparts = mbname_from_userid(userid);
 
     if (admindomains) {
         p = strrchr(mbname->extname, '@');
@@ -766,36 +792,6 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
  done:
     mbname_free(&userparts);
-
-    return mbname;
-}
-
-EXPORTED mbname_t *mbname_from_extnameUTF8(const char *extname, const struct namespace *ns, const char *userid)
-{
-    mbname_t *mbname;
-    char *freeme = NULL;
-
-    if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-        charset_t cs = charset_lookupname("utf-8");
-        if (cs == CHARSET_UNKNOWN_CHARSET) {
-            /* huh? */
-            syslog(LOG_INFO, "charset utf-8 is unknown");
-            return NULL;
-        }
-
-        /* Encode mailbox name in IMAP UTF-7 */
-        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
-        charset_free(&cs);
-
-        if (!freeme) {
-            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
-            return NULL;
-        }
-
-        extname = freeme;
-    }
-
-    mbname = mbname_from_extname(extname, ns, userid);
     free(freeme);
 
     return mbname;
@@ -898,38 +894,6 @@ EXPORTED char *mboxname_to_userid(const char *intname)
     char *res = xstrdupnull(mbname_userid(mbname));
     mbname_free(&mbname);
     return res;
-}
-
-EXPORTED char *mboxname_from_externalUTF8(const char *extname,
-                                          const struct namespace *ns,
-                                          const char *userid)
-{
-    char *intname, *freeme = NULL;
-
-    if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-        charset_t cs = charset_lookupname("utf-8");
-        if (cs == CHARSET_UNKNOWN_CHARSET) {
-            /* huh? */
-            syslog(LOG_INFO, "charset utf-8 is unknown");
-            return NULL;
-        }
-
-        /* Encode mailbox name in IMAP UTF-7 */
-        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
-        charset_free(&cs);
-
-        if (!freeme) {
-            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
-            return NULL;
-        }
-
-        extname = freeme;
-    }
-
-    intname = mboxname_from_external(extname, ns, userid);
-    free(freeme);
-
-    return intname;
 }
 
 EXPORTED char *mboxname_from_external(const char *extname, const struct namespace *ns, const char *userid)

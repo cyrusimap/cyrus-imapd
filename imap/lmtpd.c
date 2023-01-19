@@ -238,6 +238,8 @@ int service_init(int argc __attribute__((unused)),
         fatal(error_message(r), EX_CONFIG);
     }
 
+    lmtpd_namespace.isutf8 = config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO);
+
     mboxevent_setnamespace(&lmtpd_namespace);
 
     prometheus_increment(CYRUS_LMTP_READY_LISTENERS);
