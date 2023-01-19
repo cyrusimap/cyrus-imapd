@@ -2320,3 +2320,79 @@ static int upgradev4(sqldb_t *db)
 
     return r;
 }
+
+struct floating_rock {
+    struct caldav_db *caldavdb;
+    struct mailbox *mailbox;
+    const char *userid;
+};
+
+static int floating_cb(void *rock, struct caldav_data *cdata)
+{
+    struct floating_rock *frock = (struct floating_rock *) rock;
+
+    return update_alarmdb(mailbox_name(frock->mailbox), cdata->dav.imap_uid,
+                          time(0), ALARM_CALENDAR, 0, 0, 0, NULL);
+}
+
+static int calendar_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct floating_rock *frock = (struct floating_rock *) rock;
+    const char *tzid_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+    const char *tz_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+    struct buf attrib = BUF_INITIALIZER;
+
+    if ((annotatemore_lookupmask(mbentry->name,
+                                 tzid_annot, frock->userid, &attrib) == 0 &&
+         buf_len(&attrib)) ||
+        (annotatemore_lookupmask(mbentry->name,
+                                 tz_annot, frock->userid, &attrib) == 0 &&
+         buf_len(&attrib))) {
+        /* calendar has its own time zone for floating events -- skip it */
+        return 0;
+    }
+
+    int r = mailbox_open_irl(mbentry->name, &frock->mailbox);
+    if (!r) {
+        r = caldav_get_floating_events(frock->caldavdb, mbentry,
+                                       &floating_cb, &frock);
+    }
+
+    mailbox_close(&frock->mailbox);
+
+    return r;
+}
+
+EXPORTED int caldav_alarm_update_floating(struct mailbox *mailbox,
+                                          const char *userid)
+{
+    struct floating_rock frock = { NULL, NULL, userid };
+    struct caldav_db *caldavdb = NULL;
+    int r;
+
+    if (!mailbox) return 0;
+
+    caldavdb = frock.caldavdb = caldav_open_mailbox(mailbox);
+    if (!caldavdb) return -1;
+
+    const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    const char *mboxname = mailbox_name(mailbox);
+    const char *homeset = strstr(mboxname, prefix);
+
+    if (strlen(homeset) == strlen(prefix)) {
+        /* update all contained calendars without a time zone on them */
+        r = mboxlist_mboxtree(mboxname, calendar_cb, &frock, MBOXTREE_SKIP_ROOT);
+    }
+    else {
+        /* update the specified calendar */
+        frock.mailbox = mailbox;
+        r = caldav_get_floating_events(caldavdb, mailbox->mbentry,
+                                       &floating_cb, &frock);
+    }
+
+    caldav_close(caldavdb);
+
+    return (r == SQLITE_OK ? 0 : -1);
+}

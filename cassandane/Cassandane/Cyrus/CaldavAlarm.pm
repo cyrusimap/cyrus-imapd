@@ -44,6 +44,7 @@ use DateTime;
 use DateTime::Format::ISO8601;
 use JSON::XS;
 use Net::CalDAVTalk 0.05;
+use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use POSIX;
 use Carp;
@@ -58,12 +59,15 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane');
-    $config->set(httpmodules => 'caldav');
+    $config->set(conversations => 'yes');
+    $config->set(httpmodules => 'caldav jmap tzdist');
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
     $config->set(calendar_minimum_alarm_interval => '61s');
+    $config->set(jmap_nonstandard_extensions => 'yes');
     return $class->SUPER::new({
         config => $config,
+        jmap => 1,
         adminstore => 1,
         services => ['imap', 'http'],
     }, @_);
@@ -84,6 +88,14 @@ sub set_up
         url => '/',
         expandurl => 1,
     );
+    $self->{jmap}->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'urn:ietf:params:jmap:calendars:preferences',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ]);
 }
 
 sub _can_match {
@@ -3162,6 +3174,167 @@ EOF
                          {summary => 'SECONDLY-61', start => $start },
                          {summary => "MINUTELY-2-$startsec", start => $start },
                          {summary => "HOURLY-1-$bymin_ok", start => $start });
+}
+
+sub test_recurring_allday_floating
+    :min_version_3_9 :needs_component_calalarmd :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $jmap = $self->{jmap};
+
+my $UTC = <<EOF;
+BEGIN:VCALENDAR
+BEGIN:VTIMEZONE
+TZID:Etc/UTC
+BEGIN:STANDARD
+TZNAME:UTC
+TZOFFSETFROM:+0000
+TZOFFSETTO:+0000
+DTSTART:16010101T000000
+END:STANDARD
+END:VTIMEZONE
+END:VCALENDAR
+EOF
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timeZone => $UTC});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->today();
+    $now->set_time_zone('Etc/UTC');
+
+    # define the event to start next week
+    my $startdt = $now->clone();
+    $startdt->add(days => 7);
+    my $start = $startdt->strftime('%Y%m%d');
+
+    # set the trigger to notify us 5 hours before the event
+    my $trigger="-PT5H";
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART;VALUE=DATE:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+RRULE:FREQ=WEEKLY
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:EMAIL
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $now->subtract(hours => 5);
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() + 60 );
+
+    $self->assert_alarms();
+
+    $now->add(days => 7);
+
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() + 60);
+
+    $self->assert_alarms({summary => 'Simple', start => $start});
+
+    $now->add(days => 7);
+    $startdt->add(days => 7);
+    $start = $startdt->strftime('%Y%m%d');
+
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() + 60);
+
+    $self->assert_alarms({summary => 'Simple', start => $start});
+
+    # Change floating time zone on the calendar 2 hours to the east
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-timezone-id>Etc/GMT-2</C:calendar-timezone-id>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    my $res = $CalDAV->Request('PROPPATCH',
+                               "/dav/calendars/user/cassandane/". $CalendarId,
+                               $xml, 'Content-Type' => 'text/xml');
+
+    $now->add(days => 7);
+    $startdt->add(days => 7);
+    $start = $startdt->strftime('%Y%m%d');
+
+    # Need to trigger 2 hours earlier
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() - 7200 + 60);
+
+    $self->assert_alarms({summary => 'Simple', start => $start});
+
+    # Change floating time zone on the calendar 2 more hours to the east
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {update => {$CalendarId => {
+                            timeZone => "Etc/GMT-4"
+            }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    $now->add(days => 7);
+    $startdt->add(days => 7);
+    $start = $startdt->strftime('%Y%m%d');
+
+    # Need to trigger 4 hours earlier
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() - 14400 + 60);
+
+    $self->assert_alarms({summary => 'Simple', start => $start});
+
+    # Change floating time zone on the calendar back to original
+    $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-timezone>$UTC</C:calendar-timezone>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    $res = $CalDAV->Request('PROPPATCH',
+                            "/dav/calendars/user/cassandane/". $CalendarId,
+                            $xml, 'Content-Type' => 'text/xml');
+
+    $now->add(days => 7);
+    $startdt->add(days => 7);
+    $start = $startdt->strftime('%Y%m%d');
+
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() + 60);
+
+    $self->assert_alarms({summary => 'Simple', start => $start});
 }
 
 1;

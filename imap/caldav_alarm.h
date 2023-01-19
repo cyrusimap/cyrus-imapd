@@ -98,4 +98,7 @@ int caldav_alarm_process(time_t runtime, time_t *next, int dryrun);
 /* upgrade old databases */
 int caldav_alarm_upgrade();
 
+/* update nextcheck for floating events */
+int caldav_alarm_update_floating(struct mailbox *mailbox, const char *userid);
+
 #endif /* CALDAV_ALARM_H */

@@ -1519,3 +1519,28 @@ EXPORTED icaltimezone *caldav_get_calendar_tz(const char *mboxname,
 
     return tz;
 }
+
+#define CMD_SELFLOATING CMD_READFIELDS \
+    " WHERE mailbox = :mailbox AND dtstart NOT LIKE '%T%' ORDER BY imap_uid;"
+
+EXPORTED int caldav_get_floating_events(struct caldav_db *caldavdb,
+                                        const mbentry_t *mbentry,
+                                        caldav_cb_t *cb, void *rock)
+{
+    const char *mailbox = (caldavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",      SQLITE_TEXT,    { .s = mailbox   } },
+        { NULL,            SQLITE_NULL,    { .s = NULL      } }
+    };
+    struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, 0, cb, rock };
+    int r;
+
+    r = sqldb_exec(caldavdb->db, CMD_SELFLOATING, bval, &read_cb, &rrock);
+    if (r) {
+        syslog(LOG_ERR, "caldav error %s", error_message(r));
+    }
+
+    return r;
+}

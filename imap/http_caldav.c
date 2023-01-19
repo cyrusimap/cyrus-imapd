@@ -6460,6 +6460,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
         pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
         xmlChar *freeme = NULL;
         const char *tzid = NULL;
+        const icaltimezone *tz = NULL;
         unsigned valid = 1;
         int r;
 
@@ -6467,20 +6468,13 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
             freeme = xmlNodeGetContent(prop);
             tzid = (const char *) freeme;
 
-            /* Verify we have tzid record in the database */
-            r = zoneinfo_lookup(tzid, NULL);
-            if (r) {
-                if (r == CYRUSDB_NOTFOUND) {
-                    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
-                                 &propstat[PROPSTAT_FORBID],
-                                 prop->name, prop->ns, NULL,
-                                 CALDAV_VALID_TIMEZONE);
-                }
-                else {
-                    xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
-                                 &propstat[PROPSTAT_ERROR],
-                                 prop->name, prop->ns, NULL, 0);
-                }
+           /* Verify that we have the tz */
+            tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+            if (!tz) {
+                xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                             &propstat[PROPSTAT_FORBID],
+                             prop->name, prop->ns, NULL,
+                             CALDAV_VALID_TIMEZONE);
                 *pctx->ret = HTTP_FORBIDDEN;
                 valid = 0;
             }
