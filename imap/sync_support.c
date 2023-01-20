@@ -820,13 +820,8 @@ void sync_encode_quota_limits(struct dlist *kl, const quota_t limits[QUOTA_NUMRE
     dlist_setnum32(kl, "LIMIT", limits[QUOTA_STORAGE]);
 
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
-        if (limits[res] >= 0) {
+        if (limits[res] >= 0)
             dlist_setnum32(kl, quota_names[res], limits[res]);
-
-            /* For backwards compatibility, we also encode the
-             * legacy X-ANNOTATION-STORAGE and X-NUM-FOLDERS limits. */
-            dlist_updatenum32(kl, legacy_quota_names[res], limits[res]);
-        }
     }
 }
 
@@ -848,10 +843,6 @@ void sync_decode_quota_limits(/*const*/ struct dlist *kl, quota_t limits[QUOTA_N
 
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
         if (dlist_getnum32(kl, quota_names[res], &limit))
-            limits[res] = limit;
-
-        /* For backwards compatibility */
-        else if (dlist_getnum32(kl, legacy_quota_names[res], &limit))
             limits[res] = limit;
     }
 }

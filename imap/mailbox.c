@@ -1867,7 +1867,6 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     case 15:
     case 16:
     case 17:
-    case 18:
         headerlen = 160;
         break;
     default:
@@ -1923,11 +1922,6 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     if (i->minor_version < 17) goto crc;
 
     i->changes_epoch = ntohl(*((bit32 *)(buf+OFFSET_CHANGES_EPOCH)));
-
-    if (i->minor_version < 18) goto crc;
-
-    i->quota_deleted_used = align_ntohll(buf+OFFSET_QUOTA_DELETED_USED);
-    i->quota_expunged_used = align_ntohll(buf+OFFSET_QUOTA_EXPUNGED_USED);
 
 crc:
     /* CRC is always the last 4 bytes */
@@ -2901,11 +2895,6 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
         *((bit32 *)(buf+OFFSET_CHANGES_EPOCH)) = htonl(i->changes_epoch);
     }
 
-    if (i->minor_version > 17) {
-        align_htonll(buf+OFFSET_QUOTA_DELETED_USED, i->quota_deleted_used);
-        align_htonll(buf+OFFSET_QUOTA_EXPUNGED_USED, i->quota_expunged_used);
-    }
-
     /* Update checksum */
     crc = htonl(crc32_map((char *)buf, headerlen-4));
     *((bit32 *)(buf+headerlen-4)) = crc;
@@ -3189,50 +3178,42 @@ static void mailbox_quota_dirty(struct mailbox *mailbox)
     }
 }
 
-#define UPDATE_COUNT(count, is_add)             \
-    if (is_add) count++;                        \
-    else if (count) count--;
-
-#define UPDATE_QUOTA_USED(quota_used, size, is_add)                     \
-    if (is_add) quota_used += size;                                     \
-    /* corruption prevention - check we don't go negative */            \
-    else if (quota_used > size) quota_used -= size;                     \
-    else quota_used = 0;
-
 static void header_update_counts(struct index_header *i,
                                  const struct index_record *record,
                                  int is_add)
 {
-    /* we don't track counts for UNLINKED records */
-    if (record->internal_flags & FLAG_INTERNAL_UNLINKED)
-        return;
+    int num = is_add ? 1 : -1;
 
-    /* we don't track flag counts for EXPUNGED records */
-    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        UPDATE_QUOTA_USED(i->quota_expunged_used, record->size, is_add);
+    /* we don't track counts for EXPUNGED records */
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
         return;
-    }
 
     /* update mailbox header fields */
-    if (record->system_flags & FLAG_ANSWERED) {
-        UPDATE_COUNT(i->answered, is_add);
-    }
+    if (record->system_flags & FLAG_ANSWERED)
+        i->answered += num;
 
-    if (record->system_flags & FLAG_FLAGGED) {
-        UPDATE_COUNT(i->flagged, is_add);
-    }
+    if (record->system_flags & FLAG_FLAGGED)
+        i->flagged += num;
 
-    if (record->system_flags & FLAG_DELETED) {
-        UPDATE_COUNT(i->deleted, is_add);
-        UPDATE_QUOTA_USED(i->quota_deleted_used, record->size, is_add);
-    }
+    if (record->system_flags & FLAG_DELETED)
+        i->deleted += num;
 
-    if (!(record->system_flags & FLAG_SEEN)) {
-        UPDATE_COUNT(i->unseen, is_add);
-    }
+    if (!(record->system_flags & FLAG_SEEN))
+        i->unseen += num;
 
-    UPDATE_COUNT(i->exists, is_add);
-    UPDATE_QUOTA_USED(i->quota_mailbox_used, record->size, is_add);
+    if (is_add) {
+        i->exists++;
+        i->quota_mailbox_used += record->size;
+    }
+    else {
+        if (i->exists) i->exists--;
+
+        /* corruption prevention - check we don't go negative */
+        if (i->quota_mailbox_used > record->size)
+            i->quota_mailbox_used -= record->size;
+        else
+            i->quota_mailbox_used = 0;
+    }
 }
 
 /*************************** Sync CRC ***************************/
@@ -3518,8 +3499,6 @@ EXPORTED int mailbox_index_recalc(struct mailbox *mailbox)
     mailbox->i.exists = 0;
     mailbox->i.quota_mailbox_used = 0;
     mailbox->i.quota_annot_used = 0;
-    mailbox->i.quota_deleted_used = 0;
-    mailbox->i.quota_expunged_used = 0;
     mailbox->i.synccrcs.basic = CRC_INIT_BASIC;
     mailbox->i.synccrcs.annot = CRC_INIT_ANNOT;
 
@@ -3533,7 +3512,7 @@ EXPORTED int mailbox_index_recalc(struct mailbox *mailbox)
     /* and make sure it stays locked for the whole process */
     annotate_state_begin(astate);
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         mailbox_index_update_counts(mailbox, record, 1);
@@ -4862,7 +4841,6 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
         break;
     case 16:
     case 17:
-    case 18:
         repack->newmailbox.i.start_offset = 160;
         repack->newmailbox.i.record_size = 112;
         break;
@@ -7508,24 +7486,6 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
         syslog(LOG_ERR, "%s updating quota_annot_used: "
                QUOTA_T_FMT " => " QUOTA_T_FMT, mailbox_name(mailbox),
                old->quota_annot_used, new->quota_annot_used);
-    }
-
-    if (old->quota_deleted_used != new->quota_deleted_used) {
-        printf("%s updating quota_deleted_used: "
-               QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox_name(mailbox),
-               old->quota_deleted_used, new->quota_deleted_used);
-        syslog(LOG_ERR, "%s updating quota_deleted_used: "
-               QUOTA_T_FMT " => " QUOTA_T_FMT, mailbox_name(mailbox),
-               old->quota_deleted_used, new->quota_deleted_used);
-    }
-
-    if (old->quota_expunged_used != new->quota_expunged_used) {
-        printf("%s updating quota_expunged_used: "
-               QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox_name(mailbox),
-               old->quota_expunged_used, new->quota_expunged_used);
-        syslog(LOG_ERR, "%s updating quota_expunged_used: "
-               QUOTA_T_FMT " => " QUOTA_T_FMT, mailbox_name(mailbox),
-               old->quota_expunged_used, new->quota_expunged_used);
     }
 
     if (old->answered != new->answered) {
