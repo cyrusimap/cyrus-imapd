@@ -46,7 +46,7 @@ struct server_state {
 
     /* global state */
     int rend_sock;
-    char banner[32];
+    char banner[64];
 
     /* per-connection state */
     int is_connected;
@@ -197,7 +197,7 @@ static void test_badservice(void)
  * Test that backend_version detects the remote version correctly.
  */
 struct backend_version_data {
-    char banner[32];
+    char banner[64];
     int version;
 };
 
@@ -399,6 +399,14 @@ static void backend_version_common(void)
         { "Cyrus IMAP 3.9.7", 17 },
         { "Cyrus IMAP 3.9.8", 17 },
         { "Cyrus IMAP 3.9.9", 17 },
+
+        /* better test some pre-release version strings too, would be bad if
+         * the parser chokes on them!
+         */
+        { "Cyrus IMAP 3.0.0-rc1", 13 },
+        { "Cyrus IMAP 3.2.0-beta4", 16 },
+        { "Cyrus IMAP 3.6.0-beta2", 17 },
+        { "Cyrus IMAP 3.7.0-alpha0-1155-gf86d12f44a", 17 },
     };
 
     /* XXX there's something wrong with the toy test server that results in
@@ -455,6 +463,8 @@ static void unrecognised_backend_version_common(void)
         { "BOGUS", 6 }, /* completely unrecognised */
         { "Cyrus IMAP v2.3.B (OGUS)", 6 }, /* junk 2.3 revision */
         { "Cyrus IMAP 10.0.0", MAILBOX_MINOR_VERSION }, /* unknown future version */
+        { "Cyrus IMAP 10.0.0-rc1", MAILBOX_MINOR_VERSION },
+        { "Cyrus IMAP 10.0.0-alpha0-57-g1f6140ee54", MAILBOX_MINOR_VERSION },
     };
 
     /* XXX there's something wrong with the toy test server that results in
