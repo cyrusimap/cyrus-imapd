@@ -1292,7 +1292,7 @@ EXPORTED void backend_disconnect(struct backend *s)
 
 EXPORTED int backend_version(struct backend *be)
 {
-    const char *two_three_minor;
+    const char *banner_version, *two_three_minor;
     int major, minor;
 
     /* IMPORTANT:
@@ -1313,8 +1313,15 @@ EXPORTED int backend_version(struct backend *be)
     }
 
     /* contemporary numbering */
-    if (2 == sscanf(be->banner, "OK Cyrus IMAP %d.%d.%*d server ready",
-                                &major, &minor))
+    banner_version = strstr(be->banner, "Cyrus IMAP ");
+    if (banner_version != NULL
+        && (2 == sscanf(banner_version,
+                        "Cyrus IMAP %d.%d.%*d server ready",
+                        &major, &minor)
+            || 2 == sscanf(banner_version,
+                           "Cyrus IMAP %d.%d.%*d-%*s server ready",
+                           &major, &minor)
+       ))
     {
         if (major > 3) {
             /* unrecognised future version surely supports at least whatever
