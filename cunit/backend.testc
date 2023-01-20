@@ -201,7 +201,7 @@ struct backend_version_data {
     int version;
 };
 
-static void test_backend_version(void)
+static void backend_version_common(void)
 {
     size_t i, n_tests;
     struct backend_version_data data[] = {
@@ -401,8 +401,6 @@ static void test_backend_version(void)
         { "Cyrus IMAP 3.9.9", 17 },
     };
 
-    default_conditions();
-
     /* XXX there's something wrong with the toy test server that results in
      * XXX the banner not being set with auto_capa enabled???
      */
@@ -434,7 +432,23 @@ static void test_backend_version(void)
     }
 }
 
-static void test_unrecognised_backend_version(void)
+static void test_backend_version_multiline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 1;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    backend_version_common();
+}
+
+static void test_backend_version_oneline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 0;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
+    backend_version_common();
+}
+
+static void unrecognised_backend_version_common(void)
 {
     size_t i, n_tests;
     struct backend_version_data data[] = {
@@ -442,8 +456,6 @@ static void test_unrecognised_backend_version(void)
         { "Cyrus IMAP v2.3.B (OGUS)", 6 }, /* junk 2.3 revision */
         { "Cyrus IMAP 10.0.0", MAILBOX_MINOR_VERSION }, /* unknown future version */
     };
-
-    default_conditions();
 
     /* XXX there's something wrong with the toy test server that results in
      * XXX the banner not being set with auto_capa enabled???
@@ -476,6 +488,22 @@ static void test_unrecognised_backend_version(void)
         backend_disconnect(be);
         free(be);
     }
+}
+
+static void test_unrecognised_backend_version_multiline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 1;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    unrecognised_backend_version_common();
+}
+
+static void test_unrecognised_backend_version_oneline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 0;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
+    unrecognised_backend_version_common();
 }
 
 /*
