@@ -11,6 +11,7 @@
 #include "lib/util.h"       /* for VECTOR_SIZE */
 //#include "message.h"      /* for VECTOR_SIZE */
 #include "xmalloc.h"
+#include "xunlink.h"
 
 #define DBDIR   "test-dbdir"
 #define DBNAME  DBDIR "/conversations.db"
@@ -1312,7 +1313,7 @@ static void test_dump(void)
     CU_ASSERT_EQUAL(r, 0);
 
     fclose(fp);
-    unlink(filename);
+    xunlink(filename);
     strarray_fini(&mboxnames);
     arrayu64_fini(&cids);
 #undef N_MSGID_TO_CID
@@ -1428,3 +1429,4 @@ static int tear_down(void)
 
     return r;
 }
+/* vim: set ft=c: */

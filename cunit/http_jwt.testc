@@ -9,6 +9,7 @@
 
 #include "charset.h"
 #include "util.h"
+#include "xunlink.h"
 
 #include "imap/http_jwt.h"
 
@@ -85,8 +86,8 @@ static void test_init_multi(void)
     CU_ASSERT_EQUAL(0, r);
     CU_ASSERT_EQUAL(1, http_jwt_is_enabled());
 
-    unlink(fnames[0]);
-    unlink(fnames[1]);
+    xunlink(fnames[0]);
+    xunlink(fnames[1]);
     free(fnames[0]);
     free(fnames[1]);
     rmdir(dname);
@@ -108,7 +109,7 @@ static void test_init_nokeys(void)
     CU_ASSERT_NOT_EQUAL(-1, r);
     CU_ASSERT_NOT_EQUAL(1, http_jwt_is_enabled());
 
-    unlink(fname);
+    xunlink(fname);
     free(fname);
     rmdir(dname);
     http_jwt_reset();
@@ -292,7 +293,7 @@ static void test_validate(void)
     buf_free(&tok);
 
     EVP_PKEY_free(pkey);
-    unlink(fname);
+    xunlink(fname);
     free(fname);
     rmdir(dname);
     http_jwt_reset();
@@ -359,8 +360,8 @@ static void test_auth(void)
     EVP_PKEY_free(pkey);
     BIO_free(bp);
 
-    unlink(fnames[0]);
-    unlink(fnames[1]);
+    xunlink(fnames[0]);
+    xunlink(fnames[1]);
     free(fnames[0]);
     free(fnames[1]);
     rmdir(dname);

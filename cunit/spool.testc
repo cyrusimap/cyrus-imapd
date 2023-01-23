@@ -7,6 +7,7 @@
 #include "lib/libconfig.h"
 #include "lib/libcyr_cfg.h"
 #include "imap/spool.h"
+#include "xunlink.h"
 
 #define DBDIR       "test-dbdir"
 #define DELIVERED   "Fri, 29 Oct 2010 13:07:07 +1100"
@@ -212,7 +213,7 @@ static void test_fill(void)
     spool_free_hdrcache(cache);
     fclose(fout);
     prot_free(pin);
-    unlink(tempfile);
+    xunlink(tempfile);
 }
 
 static void test_folded_headers(void)
@@ -276,7 +277,7 @@ static void test_folded_headers(void)
     spool_free_hdrcache(cache);
     fclose(fout);
     prot_free(pin);
-    unlink(tempfile);
+    xunlink(tempfile);
 }
 
 static void test_empty_headers(void)
@@ -394,7 +395,7 @@ static void test_empty_headers(void)
     spool_free_hdrcache(cache);
     fclose(fout);
     prot_free(pin);
-    unlink(tempfile);
+    xunlink(tempfile);
 }
 
 /* BZ3640: headers with NULL bytes shall be rejected. */
@@ -443,7 +444,7 @@ static void test_fill_null(void)
     spool_free_hdrcache(cache);
     fclose(fout);
     prot_free(pin);
-    unlink(tempfile);
+    xunlink(tempfile);
 }
 
 /* BZ3386: insert more unique headers than the internal limit of 4009
