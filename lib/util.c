@@ -78,6 +78,7 @@
 #include "util.h"
 #include "assert.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 #ifdef HAVE_ZLIB
 #include "zlib.h"
 #endif
@@ -479,7 +480,7 @@ EXPORTED int create_tempfile(const char *path)
     pattern = strconcat(path, "/cyrus_tmpfile_XXXXXX", (char *)NULL);
 
     fd = mkstemp(pattern);
-    if (fd >= 0 && unlink(pattern) == -1) {
+    if (fd >= 0 && xunlink(pattern) == -1) {
         close(fd);
         fd = -1;
     }
@@ -570,7 +571,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     if (!nolink) {
         if (link(from, to) == 0) return 0;
         if (errno == EEXIST) {
-            if (unlink(to) == -1) {
+            if (xunlink(to) == -1) {
                 xsyslog(LOG_ERR, "IOERROR: unlinking to recreate failed",
                                  "filename=<%s>", to);
                 return -1;
@@ -618,7 +619,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
         xsyslog(LOG_ERR, "IOERROR: retry_write failed",
                          "filename=<%s>", to);
         r = -1;
-        unlink(to);  /* remove any rubbish we created */
+        xunlink(to);  /* remove any rubbish we created */
         goto done;
     }
 
@@ -677,7 +678,7 @@ EXPORTED int cyrus_copyfile(const char *from, const char *to, int flags)
 
     if (!r && (flags & COPYFILE_RENAME)) {
         /* remove the original file if the copy succeeded */
-        unlink(from);
+        xunlink(from);
     }
 
     return r;

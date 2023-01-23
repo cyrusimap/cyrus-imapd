@@ -87,6 +87,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -233,7 +234,7 @@ static int delete_cb(const char *sievedir, const char *name,
 
     snprintf(path, sizeof(path), "%s/%s", sievedir, name);
 
-    unlink(path);
+    xunlink(path);
 
     return SIEVEDIR_OK;
 }

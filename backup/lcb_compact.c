@@ -48,6 +48,7 @@
 
 #include "lib/gzuncat.h"
 #include "lib/libconfig.h"
+#include "lib/xunlink.h"
 
 #include "imap/imap_err.h"
 #include "imap/sync_support.h"
@@ -151,8 +152,8 @@ static int compact_closerename(struct backup **originalp,
 
     if (r) {
         /* on error, trash the new links and bail out */
-        unlink(buf_cstring(&ts_data_fname));
-        unlink(buf_cstring(&ts_index_fname));
+        xunlink(buf_cstring(&ts_data_fname));
+        xunlink(buf_cstring(&ts_index_fname));
         goto done;
     }
 
@@ -162,8 +163,8 @@ static int compact_closerename(struct backup **originalp,
 
     if (r) {
         /* on error, put original files back */
-        unlink(original->data_fname);
-        unlink(original->index_fname);
+        xunlink(original->data_fname);
+        xunlink(original->index_fname);
         if (link(buf_cstring(&ts_data_fname), original->data_fname))
             xsyslog(LOG_ERR, "IOERROR: failed to link file back!",
                              "source=<%s> dest=<%s>",
@@ -179,8 +180,8 @@ static int compact_closerename(struct backup **originalp,
 
     /* finally, clean up the timestamped ones */
     if (!config_getswitch(IMAPOPT_BACKUP_KEEP_PREVIOUS)) {
-        unlink(buf_cstring(&ts_data_fname));
-        unlink(buf_cstring(&ts_index_fname));
+        xunlink(buf_cstring(&ts_data_fname));
+        xunlink(buf_cstring(&ts_index_fname));
     }
 
     /* release our locks */

@@ -84,6 +84,7 @@
 #include "quota.h"
 #include "convert_code.h"
 #include "util.h"
+#include "xunlink.h"
 #include <jansson.h>
 
 /* generated headers are not necessarily in current directory */
@@ -322,7 +323,7 @@ static void test_sync_done(const char *mboxname)
     syslog(LOG_ERR, "quota -Z done with %s", mboxname);
 
     filename = strconcat(config_dir, "/quota-sync/", mboxname, (char *)NULL);
-    unlink(filename);
+    xunlink(filename);
     free(filename);
 }
 

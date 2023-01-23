@@ -60,6 +60,7 @@
 #include "sievedir.h"
 #include "util.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 
 #ifdef USE_SIEVE
 #include "sieve/bc_parse.h"
@@ -244,7 +245,7 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
     if (rename(tmp, active) < 0) {
         xsyslog(LOG_ERR, "IOERROR: failed to rename active script link",
                 "oldpath=<%s> newpath=<%s>", tmp, active);
-        unlink(tmp);
+        xunlink(tmp);
         return SIEVEDIR_IOERROR;
     }
 
@@ -258,7 +259,7 @@ EXPORTED int sievedir_deactivate_script(const char *sievedir)
     assert(sievedir);
 
     snprintf(active, sizeof(active), "%s/defaultbc", sievedir);
-    if (unlink(active) != 0 && errno != ENOENT) {
+    if (xunlink(active) != 0 && errno != ENOENT) {
         xsyslog(LOG_ERR, "IOERROR: failed to delete active script link",
                 "link=<%s>", active);
         return SIEVEDIR_IOERROR;
@@ -275,7 +276,7 @@ EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
 
     /* delete bytecode */
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-    if (unlink(path) != 0 && errno != ENOENT) {
+    if (xunlink(path) != 0 && errno != ENOENT) {
         xsyslog(LOG_ERR, "IOERROR: failed to delete bytecode file",
                 "path=<%s>", path);
         return SIEVEDIR_IOERROR;
@@ -344,7 +345,7 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     }
 
     /* make sure no stray hardlink is lying around */
-    unlink(new_bcpath);
+    xunlink(new_bcpath);
 
     /* open the new bytecode file */
     fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
@@ -381,7 +382,7 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
  done:
     if (fd >= 0) {
         close(fd);
-        if (r) unlink(new_bcpath);
+        if (r) xunlink(new_bcpath);
     }
     if (bc) sieve_free_bytecode(&bc);
     if (s) sieve_script_free(&s);

@@ -61,6 +61,7 @@
 #include "mappedfile.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /*
  * twoskip disk format.
@@ -1944,7 +1945,7 @@ static int mycheckpoint(struct dbengine *db)
 
     /* open fname.NEW */
     snprintf(newfname, sizeof(newfname), "%s.NEW", FNAME(db));
-    unlink(newfname);
+    xunlink(newfname);
 
     cr.db = NULL;
     cr.tid = NULL;
@@ -1999,7 +2000,7 @@ static int mycheckpoint(struct dbengine *db)
 
  err:
     if (cr.tid) myabort(cr.db, cr.tid);
-    unlink(FNAME(cr.db));
+    xunlink(FNAME(cr.db));
     dispose_db(cr.db);
     unlock(db);
     return CYRUSDB_IOERROR;
@@ -2251,7 +2252,7 @@ static int recovery2(struct dbengine *db, int *count)
 
     /* open fname.NEW */
     snprintf(newfname, sizeof(newfname), "%s.NEW", FNAME(db));
-    unlink(newfname);
+    xunlink(newfname);
 
     r = opendb(newfname, db->open_flags | CYRUSDB_CREATE, &newdb, NULL);
     if (r) return r;
@@ -2326,7 +2327,7 @@ static int recovery2(struct dbengine *db, int *count)
     return 0;
 
  err:
-    unlink(FNAME(newdb));
+    xunlink(FNAME(newdb));
     myclose(newdb);
     return r;
 }

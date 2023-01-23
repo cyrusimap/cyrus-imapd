@@ -76,6 +76,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 #include "hash.h"
 #include "times.h"
 
@@ -733,7 +734,7 @@ int main(int argc, char *argv[])
 
     if (tmpscript) {
         /* Remove temp bytecode file */
-        unlink(tmpscript);
+        xunlink(tmpscript);
     }
 
     if (extname) {

@@ -119,6 +119,7 @@
 #include "xstrlcpy.h"
 #include "ptrarray.h"
 #include "xstats.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -15034,7 +15035,7 @@ static void cmd_syncrestart(const char *tag, struct sync_reserve_list **reserve_
             if (!msg->fname) continue;
             pl = partition_list_add(res->part, pl);
 
-            unlink(msg->fname);
+            xunlink(msg->fname);
         }
     }
     sync_reserve_list_free(reserve_listp);

@@ -59,6 +59,7 @@
 #include "xstrlcat.h"
 #include "idlemsg.h"
 #include "global.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -124,7 +125,7 @@ EXPORTED int idle_init_sock(const struct sockaddr_un *local)
     }
 
     /* bind it to a local file */
-    unlink(local->sun_path);
+    xunlink(local->sun_path);
     len = sizeof(local->sun_family) + strlen(local->sun_path) + 1;
 
     oldumask = umask((mode_t) 0); /* for Linux */
@@ -147,7 +148,7 @@ EXPORTED void idle_done_sock(void)
 {
     if (idle_sock >= 0) {
         close(idle_sock);
-        unlink(idle_local.sun_path);
+        xunlink(idle_local.sun_path);
         memset(&idle_local, 0, sizeof(struct sockaddr_un));
     }
 

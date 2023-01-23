@@ -63,6 +63,7 @@
 #include "message.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -659,7 +660,7 @@ static int do_audit(const char *userid)
     assert(strcmp(filename_temp, filename_real));
 
     /* Initialise the temp copy of the database */
-    unlink(filename_temp);
+    xunlink(filename_temp);
     r = cyrusdb_copyfile(filename_real, filename_temp);
     if (r) {
         fprintf(stderr, "Cannot make temp copy of conversations db %s: %s\n",

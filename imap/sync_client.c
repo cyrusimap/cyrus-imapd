@@ -85,6 +85,7 @@
 #include "signals.h"
 #include "cyrusdb.h"
 #include "hash.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -196,7 +197,7 @@ static int do_daemon_work(const char *sync_shutdown_file,
 
         /* Check for shutdown file */
         if (sync_shutdown_file && !stat(sync_shutdown_file, &sbuf)) {
-            unlink(sync_shutdown_file);
+            xunlink(sync_shutdown_file);
             /* Have to exit with r == 0 or do_daemon() will call us again.
              * The value of r is unknown from calls to sync_log_reader_begin() below.
              */

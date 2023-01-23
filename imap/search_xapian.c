@@ -72,6 +72,7 @@
 #include "cyr_lock.h"
 #include "xapian_wrap.h"
 #include "command.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -263,7 +264,7 @@ static int activefile_write(struct mappedfile *mf, const strarray_t *new)
     if (r) goto done;
 
     r = mappedfile_rename(newfile, mappedfile_fname(mf));
-    if (r) unlink(newname);
+    if (r) xunlink(newname);
 
     /* we lose control over the lock here, so we have to release */
     mappedfile_unlock(mf);
@@ -4231,7 +4232,7 @@ static int delete_user(const mbentry_t *mbentry)
 
     struct delete_rock drock = { mbentry, mbname };
     config_foreachoverflowstring(delete_one, &drock);
-    unlink(activename);
+    xunlink(activename);
 
 out:
     if (activefile) {

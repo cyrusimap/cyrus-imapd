@@ -98,6 +98,7 @@
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 #include "strarray.h"
 
 enum {
@@ -546,7 +547,7 @@ static void service_create(struct service *s, int is_startup)
                   "over-long listen path not detected earlier!",
                   EX_SOFTWARE);
         }
-        unlink(s->listen);
+        xunlink(s->listen);
     } else { /* inet socket */
         char *port;
         char *listen_addr;
@@ -2932,7 +2933,7 @@ int main(int argc, char **argv)
      *     exit(failure)
      * [B] write pid to pidfile
      * [B] write success code to pipe & finish starting up
-     * [A] unlink pidfile.lock and exit(code read from pipe)
+     * [A] xunlink pidfile.lock and exit(code read from pipe)
      *
      */
     if(daemon_mode) {
@@ -2986,10 +2987,10 @@ int main(int argc, char **argv)
             /* Parent, wait for child */
             if(read(startup_pipe[0], &exit_code, sizeof(exit_code)) == -1) {
                 syslog(LOG_ERR, "could not read from startup_pipe (%m)");
-                unlink(pidfile_lock);
+                xunlink(pidfile_lock);
                 exit(EX_OSERR);
             } else {
-                unlink(pidfile_lock);
+                xunlink(pidfile_lock);
                 exit(exit_code);
             }
         }

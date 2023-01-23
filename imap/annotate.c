@@ -79,6 +79,7 @@
 #include "xstrlcat.h"
 #include "tok.h"
 #include "quota.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -3499,7 +3500,7 @@ static int annotation_set_tofile(annotate_state_t *state
 
     /* XXX how do we do this atomically with other annotations? */
     if (entry->shared.s == NULL)
-        return unlink(path);
+        return xunlink(path);
     else {
         r = cyrus_mkdir(path, 0755);
         if (r)

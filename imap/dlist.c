@@ -70,6 +70,7 @@
 #include "message.h"
 #include "util.h"
 #include "prot.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -207,7 +208,7 @@ static int reservefile(struct protstream *in, const char *part,
     *fname = dlist_reserve_path(part, isarchive, isbackup, guid);
 
     /* remove any duplicates if they're still here */
-    unlink(*fname);
+    xunlink(*fname);
 
     file = fopen(*fname, "w+");
     if (!file) {
@@ -271,7 +272,7 @@ static int reservefile(struct protstream *in, const char *part,
 error:
     if (file) {
         fclose(file);
-        unlink(*fname);
+        xunlink(*fname);
         *fname = NULL;
     }
     return r;
@@ -745,7 +746,7 @@ EXPORTED void dlist_unlink_files(struct dlist *dl)
     if (!dl->sval) return;
 
     syslog(LOG_DEBUG, "%s: unlinking %s", __func__, dl->sval);
-    unlink(dl->sval);
+    xunlink(dl->sval);
 }
 
 EXPORTED void dlist_free(struct dlist **dlp)

@@ -66,6 +66,7 @@
 #include "xmalloc.h"
 #include "mailbox.h"
 #include "mboxlist.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -401,7 +402,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     if (rename(script_names.bctmpname, script_names.bcscriptname)) {
         syslog(LOG_ERR, "autocreate_sieve: rename %s -> %s failed: %m",
                script_names.bctmpname, script_names.bcscriptname);
-        unlink(script_names.bcscriptname);
+        xunlink(script_names.bcscriptname);
         goto failed2;
     }
 
@@ -409,8 +410,8 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     if (symlink(script_names.bclinkname, script_names.defaultname)) {
         if (errno != EEXIST) {
             syslog(LOG_WARNING, "autocreate_sieve: error the symlink-ing %m.");
-            unlink(script_names.scriptname);
-            unlink(script_names.bcscriptname);
+            xunlink(script_names.scriptname);
+            xunlink(script_names.bcscriptname);
         }
     }
 
@@ -454,7 +455,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
                        "%s: %m", script_names.tmpname2);
                 xclose(out_fd);
                 xclose(in_fd);
-                unlink(script_names.tmpname2);
+                xunlink(script_names.tmpname2);
                 goto success;
            }
         } /* while */
@@ -467,15 +468,15 @@ static int autocreate_sieve(const char *userid, const char *source_script)
                        "%s: %m", script_names.bcscriptname);
                 xclose(out_fd);
                 xclose(in_fd);
-                unlink(script_names.tmpname2);
+                xunlink(script_names.tmpname2);
                 goto success;
         } /* if else if */
 
         /* rename the temporary created sieve script to its final name. */
         if (rename(script_names.tmpname2, compiled_source_script)) {
             if (errno != EEXIST) {
-                unlink(script_names.tmpname2);
-                unlink(compiled_source_script);
+                xunlink(script_names.tmpname2);
+                xunlink(compiled_source_script);
             } /* if (errno) */
             goto success;
         }
@@ -488,9 +489,9 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     return 0;
 
  failed3:
-    unlink(script_names.tmpname1);
+    xunlink(script_names.tmpname1);
  failed2:
-    unlink(script_names.bctmpname);
+    xunlink(script_names.bctmpname);
     xclose(in_fd);
  failed1:
     xclose(out_fd);

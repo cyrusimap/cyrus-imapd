@@ -73,6 +73,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -2174,7 +2175,7 @@ done:
     buf_free(&buf);
     if (tmpname) {
         /* Remove temp bytecode file */
-        unlink(tmpname);
+        xunlink(tmpname);
     }
     return 0;
 }
