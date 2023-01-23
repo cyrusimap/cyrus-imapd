@@ -802,7 +802,8 @@ include_HEADERS = \
 	lib/tok.h \
 	lib/vparse.h \
 	lib/wildmat.h \
-	lib/xmalloc.h
+	lib/xmalloc.h \
+	lib/xunlink.h
 
 nodist_include_HEADERS = \
 	lib/imapopts.h
@@ -1579,7 +1580,8 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/xmalloc.c \
 	lib/xstrlcat.c \
 	lib/xstrlcpy.c \
-	lib/xstrnchr.c
+	lib/xstrnchr.c \
+	lib/xunlink.c
 if !HAVE_SSL
 lib_libcyrus_min_la_SOURCES += lib/xsha1.c
 endif
