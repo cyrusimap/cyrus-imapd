@@ -346,6 +346,9 @@ struct listargs {
     unsigned statusitems;       /* for RETURN STATUS */
     struct getmetadata_options metaopts; /* for RETURN METADATA */
     strarray_t metaitems;       /* for RETURN METADATA */
+    const char *denormalized;   /* for IMAP4rev2 OLDNAME -
+                                   Denormalized UTF-8 mailbox name from
+                                   SELECT/EXAMINE/CREATE/DELETE/RENAME/APPEND */
 };
 
 /* Value for List command variant */
