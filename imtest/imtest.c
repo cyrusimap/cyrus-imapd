@@ -81,6 +81,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
@@ -252,7 +253,7 @@ imtest_fatal(const char *msg, ...)
     if (output_socket && output_socket_opened &&
         stat(output_socket, &sbuf) != -1 &&
         sbuf.st_ino == output_socket_ino) {
-        unlink(output_socket);
+        xunlink(output_socket);
     }
     if (msg != NULL) {
         va_list ap;
@@ -1295,7 +1296,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
         /* can't have this and a file for input */
         sunsock.sun_family = AF_UNIX;
         strlcpy(sunsock.sun_path, output_socket, sizeof(sunsock.sun_path));
-        unlink(output_socket);
+        xunlink(output_socket);
 
         listen_sock = socket(AF_UNIX, SOCK_STREAM, 0);
         if(listen_sock < 0) imtest_fatal("could not create output socket");
@@ -1524,7 +1525,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 
         if(stat(output_socket, &sbuf) != -1
            && sbuf.st_ino == output_socket_ino) {
-            unlink(output_socket);
+            xunlink(output_socket);
         }
     }
 

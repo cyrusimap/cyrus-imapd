@@ -84,6 +84,7 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 
 #ifdef ENABLE_BACKUP
 #include "backup/backup.h"
@@ -417,7 +418,7 @@ int main(int argc, char *argv[])
                     while ((dirent = readdir(dirp)) != NULL) {
                         if (dirent->d_name[0] == '.') continue;
                         file = strconcat(backup2, "/", dirent->d_name, (char *)NULL);
-                        unlink(file);
+                        xunlink(file);
                         free(file);
                     }
 

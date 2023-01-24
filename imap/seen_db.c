@@ -65,6 +65,7 @@
 #include "seen.h"
 #include "sync_log.h"
 #include "imparse.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -399,7 +400,7 @@ HIDDEN int seen_delete_user(const char *user)
                user);
     }
 
-    if (unlink(fname) && errno != ENOENT) {
+    if (xunlink(fname) && errno != ENOENT) {
         syslog(LOG_ERR, "error unlinking %s: %m", fname);
         r = IMAP_IOERROR;
     }

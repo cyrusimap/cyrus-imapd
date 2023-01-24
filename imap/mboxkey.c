@@ -64,6 +64,7 @@
 #include "xmalloc.h"
 #include "mailbox.h"
 #include "mboxkey.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -338,7 +339,7 @@ EXPORTED int mboxkey_delete_user(const char *user)
     }
 
     /* erp! */
-    r = unlink(fname);
+    r = xunlink(fname);
     if (r < 0 && errno == ENOENT) {
         syslog(LOG_DEBUG, "cannot unlink %s: %m", fname);
         /* but maybe the user just never read anything? */

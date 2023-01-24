@@ -81,6 +81,7 @@
 #include "strarray.h"
 #include "ptrarray.h"
 #include "sievedir.h"
+#include "xunlink.h"
 
 #ifdef USE_CALALARMD
 #include "caldav_alarm.h"
@@ -3320,7 +3321,7 @@ static int remove_cb(const char *sievedir, const char *fname,
     }
 
     snprintf(path, sizeof(path), "%s/%s", sievedir, fname);
-    unlink(path);
+    xunlink(path);
 
     return SIEVEDIR_OK;
 }

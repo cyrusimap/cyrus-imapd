@@ -4,6 +4,7 @@
 #include "xmalloc.h"
 #include "prot.h"
 #include "imap/global.h"
+#include "xunlink.h"
 
 
 #define PROLOG \
@@ -25,7 +26,7 @@
         if ((n) >= 0) (b)[(n)] = '\0'; \
     }
 #define EPILOG \
-    unlink(_fname); \
+    xunlink(_fname); \
     free(_fname); \
     close(_fd)
 

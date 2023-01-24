@@ -65,6 +65,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "xunlink.h"
 
 /* we have the file locked iff we have an outstanding transaction */
 
@@ -173,7 +174,7 @@ static int abort_txn(struct dbengine *db, struct txn *tid)
 
     /* cleanup done while lock is held */
     if (tid->fnamenew) {
-        unlink(tid->fnamenew);
+        xunlink(tid->fnamenew);
         free(tid->fnamenew);
         rw = 1;
     }
@@ -681,7 +682,7 @@ static int mystore(struct dbengine *db,
         strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     }
 
-    unlink(fnamebuf);
+    xunlink(fnamebuf);
     r = writefd = open(fnamebuf, O_RDWR | O_CREAT, 0666);
     if (r < 0) {
         syslog(LOG_ERR, "opening %s for writing failed: %m", fnamebuf);

@@ -58,6 +58,7 @@
 
 #include "lib/retry.h"
 #include "lib/libconfig.h"
+#include "lib/xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "cunit/registers.h"
@@ -309,7 +310,7 @@ EXPORTED void config_read_string(const char *s)
     retry_write(fd, s, strlen(s));
     config_reset();
     config_read(fname, 0);
-    unlink(fname);
+    xunlink(fname);
     free(fname);
     close(fd);
 }

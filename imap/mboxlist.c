@@ -73,6 +73,7 @@
 #include "partlist.h"
 #include "xstrlcat.h"
 #include "user.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -5575,7 +5576,7 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     }
 
     /* open a new db file */
-    unlink(newfname);
+    xunlink(newfname);
     mboxlist_open(newfname);
 
     /* perform upgrade from backup to new db */
@@ -5713,7 +5714,7 @@ static int mboxlist_upgrade_subs_work(const char *userid, const char *subsfname,
         db_r = cyrusdb_open(SUBDB, subsfname, 0, subs);
     }
 
-    unlink(newsubsfname);
+    xunlink(newsubsfname);
     free(newsubsfname);
     buf_free(&buf);
 

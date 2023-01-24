@@ -73,6 +73,7 @@
 #include "retry.h"
 #include "quota.h"
 #include "util.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -344,7 +345,7 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     strlcat(stagefile, stage->fname, sizeof(stagefile));
 
     /* create this file and put it into stage->parts[0] */
-    unlink(stagefile);
+    xunlink(stagefile);
     if (sourcefile) {
         r = mailbox_copyfile(sourcefile, stagefile, 0);
         if (r) {
@@ -1001,7 +1002,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
             xsyslog(LOG_ERR, "IOERROR: creating message file",
                              "filename=<%s>", stagefile);
-            unlink(stagefile);
+            xunlink(stagefile);
             goto out;
         }
 
@@ -1133,7 +1134,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     if (r) goto out;
 
     if (in_object_storage) {  // must delete local file
-        if (unlink(fname) != 0) // unlink should do it.
+        if (xunlink(fname) != 0) // unlink should do it.
             if (!remove (fname))  // we must insist
                 syslog(LOG_ERR, "Removing local file <%s> error", fname);
     }
@@ -1190,7 +1191,7 @@ EXPORTED int append_removestage(struct stagemsg *stage)
 
     while ((p = strarray_pop(&stage->parts))) {
         /* unlink the staging file */
-        if (unlink(p) != 0) {
+        if (xunlink(p) != 0) {
             xsyslog(LOG_ERR, "IOERROR: error unlinking file",
                              "filename=<%s>", p);
         }
@@ -1243,7 +1244,7 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     if (r) goto out;
     as->nummsg++;
 
-    unlink(fname);
+    xunlink(fname);
     destfile = fopen(fname, "w+");
     if (!destfile) {
         xsyslog(LOG_ERR, "IOERROR: creating message file",

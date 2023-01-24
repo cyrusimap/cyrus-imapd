@@ -99,6 +99,7 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -957,7 +958,7 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
         for (msg = res->list->head; msg; msg = msg->next) {
             if (!msg->fname) continue;
             pl = partition_list_add(res->part, pl);
-            unlink(msg->fname);
+            xunlink(msg->fname);
         }
     }
     sync_reserve_list_free(reserve_listp);

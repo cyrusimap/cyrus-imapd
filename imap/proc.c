@@ -59,6 +59,7 @@
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 #ifdef HAVE_DIRENT_H
 # include <dirent.h>
@@ -157,7 +158,7 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
 
     if (rename(newfname, procfname)) {
         syslog(LOG_ERR, "IOERROR: renaming %s to %s: %m", newfname, procfname);
-        unlink(newfname);
+        xunlink(newfname);
         fatal("can't write proc file", EX_IOERR);
     }
 
@@ -170,7 +171,7 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
 EXPORTED void proc_cleanup(void)
 {
     if (procfname) {
-        unlink(procfname);
+        xunlink(procfname);
         free(procfname);
         procfname = NULL;
     }

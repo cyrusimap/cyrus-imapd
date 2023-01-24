@@ -114,6 +114,7 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "xstats.h"
+#include "xunlink.h"
 
 
 #if defined ENABLE_OBJECTSTORE
@@ -2789,7 +2790,7 @@ static int mailbox_commit_header(struct mailbox *mailbox)
                          "newfname=<%s>",
                          newfname);
         close(fd);
-        unlink(newfname);
+        xunlink(newfname);
         return IMAP_IOERROR;
     }
 
@@ -4642,7 +4643,7 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
     const char *spoolfname = mailbox_spool_fname(mailbox, uid);
     const char *archivefname = mailbox_archive_fname(mailbox, uid);
 
-    if (unlink(spoolfname) == 0) {
+    if (xunlink(spoolfname) == 0) {
         if (config_auditlog) {
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
@@ -4652,7 +4653,7 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
     }
 
     if (strcmp(spoolfname, archivefname)) {
-        if (unlink(archivefname) == 0) {
+        if (xunlink(archivefname) == 0) {
             if (config_auditlog) {
                 syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
                        "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
@@ -4670,7 +4671,7 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
     if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)) {
         /* we always remove the spool file here, because we've archived it */
         if (record->system_flags & FLAG_INTERNAL_ARCHIVED)
-            unlink(spoolfname);
+            xunlink(spoolfname);
 
         /* if the record is also deleted, we remove the objectstore copy */
         if (record->system_flags & FLAG_INTERNAL_UNLINKED)
@@ -4714,11 +4715,11 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
         if (record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
             /* XXX - stat to make sure the other file exists first? - we mostly
             *  trust that we didn't do stupid things everywhere else, so maybe not */
-            unlink(spoolfname);
+            xunlink(spoolfname);
         }
 
         else {
-            unlink(archivefname);
+            xunlink(archivefname);
         }
     }
 }
@@ -4952,7 +4953,7 @@ static void mailbox_repack_abort(struct mailbox_repack **repackptr)
 
     /* close and remove index */
     xclose(repack->newmailbox.index_fd);
-    unlink(mailbox_meta_newfname(repack->mailbox, META_INDEX));
+    xunlink(mailbox_meta_newfname(repack->mailbox, META_INDEX));
 
     /* close and remove all new caches */
     for (i = 0; i < repack->caches.count; i++) {
@@ -4961,7 +4962,7 @@ static void mailbox_repack_abort(struct mailbox_repack **repackptr)
         mappedfile_commit(cachefile);  /* gotta commit to clear the dirty flag.  Alternative would be an unlink function */
         mappedfile_unlock(cachefile);
         mappedfile_close(&cachefile);
-        unlink(fname);
+        xunlink(fname);
         free(fname);
     }
     ptrarray_fini(&repack->caches);
@@ -5080,7 +5081,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
 
     for (i = 0; i < cachefiles.count; i++) {
         const char *fname = strarray_nth(&cachefiles, i);
-        if (!unlink(fname))
+        if (!xunlink(fname))
             syslog(LOG_NOTICE, "Removed unused cache file %s", fname);
     }
 
@@ -5403,7 +5404,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                     // didn't manage to store it, so remove the ARCHIVED flag
                     continue;
                 }
-                r = unlink (srcname);
+                r = xunlink (srcname);
                 if (r < 0)
                     syslog(LOG_ERR, "unlink(%s) failed: %m", srcname);
             }
@@ -5919,7 +5920,7 @@ static void mailbox_delete_files(const char *path)
                         f->d_name[2] == '\0'))) {
                 /* readdir() can return "." or "..", and I got a bug report
                    that SCO might blow the file system to smithereens if we
-                   unlink("..").  Let's not do that. */
+                   xunlink("..").  Let's not do that. */
                 continue;
             }
 
@@ -5930,7 +5931,7 @@ static void mailbox_delete_files(const char *path)
                 fatal("Path too long", EX_OSFILE);
             }
             strcpy(tail, f->d_name);
-            unlink(buf);
+            xunlink(buf);
             *tail = '\0';
         }
         closedir(dirp);
@@ -6374,7 +6375,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
         xstrncpy(newbuf, mboxname_metapath(newpart, newname, newuniqueid, mf->metaflag, 0),
                 MAX_MAILBOX_PATH);
 
-        unlink(newbuf); /* Make link() possible */
+        xunlink(newbuf); /* Make link() possible */
 
         if (!mf->optional || stat(oldbuf, &sbuf) != -1) {
             r = mailbox_copyfile(oldbuf, newbuf, mf->nolink);
@@ -6781,7 +6782,7 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
                         printf("%s odd file %s\n", mailbox_name(mailbox), buf);
                         syslog(LOG_ERR, "%s odd file %s", mailbox_name(mailbox), buf);
                         if (flags & RECONSTRUCT_REMOVE_ODDFILES)
-                            unlink(buf);
+                            xunlink(buf);
                         else {
                             printf("run reconstruct with -O to remove odd files\n");
                             syslog(LOG_ERR, "run reconstruct with -O to "
@@ -6866,7 +6867,7 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
     }
 
     fname = mailbox_meta_fname(mailbox, META_EXPUNGE);
-    unlink(fname);
+    xunlink(fname);
 
 done:
     if (expunge_base) map_free(&expunge_base, &expunge_len);
@@ -7131,7 +7132,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         }
 
         /* otherwise we have issues, mark it unlinked */
-        unlink(fname);
+        xunlink(fname);
         record->internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
         r = mailbox_rewrite_index_record(mailbox, record);
@@ -7232,7 +7233,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         }
 
         /* otherwise we have issues, mark it unlinked */
-        unlink(fname);
+        xunlink(fname);
         record->internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
         r = mailbox_rewrite_index_record(mailbox, record);
@@ -7398,7 +7399,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
         r = 0;
 
         if (make_changes)
-            unlink(fname);
+            xunlink(fname);
 
         goto out;
     }
@@ -7760,7 +7761,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
                 /* we can just unlink this one, already processed one copy */
                 const char *fname = mailbox_archive_fname(mailbox, record.uid);
                 printf("Removing duplicate archive file %s\n", fname);
-                unlink(fname);
+                xunlink(fname);
             }
             else {
                 if (files.found[files.pos].isarchive) {

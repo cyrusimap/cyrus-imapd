@@ -61,6 +61,7 @@
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 
 //#define DEBUGDB 1
 
@@ -543,7 +544,7 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
         tofname = newfname = strconcat(fromfname, ".NEW", NULL);
 
     /* remove any rubbish lying around */
-    unlink(tofname);
+    xunlink(tofname);
 
     r = cyrusdb_open(tobackend, tofname, CYRUSDB_CREATE, &todb);
     if (r) goto err;
@@ -583,7 +584,7 @@ err:
     if (fromtid) cyrusdb_abort(fromdb, fromtid);
     if (fromdb) cyrusdb_close(fromdb);
 
-    unlink(tofname);
+    xunlink(tofname);
     free(newfname);
 
     return r;
@@ -715,7 +716,7 @@ HIDDEN int cyrusdb_generic_noarchive(const strarray_t *fnames __attribute__((unu
 HIDDEN int cyrusdb_generic_unlink(const char *fname, int flags __attribute__((unused)))
 {
     if (fname)
-        unlink(fname);
+        xunlink(fname);
     /* XXX - check that it exists unless FORCE flag? */
     return 0;
 }

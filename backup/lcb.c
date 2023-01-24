@@ -60,6 +60,7 @@
 #include "lib/xsha1.h"
 #include "lib/xstrlcat.h"
 #include "lib/xstrlcpy.h"
+#include "lib/xunlink.h"
 
 #include "imap/dlist.h"
 #include "imap/global.h"
@@ -101,7 +102,7 @@ EXPORTED void backup_cleanup_staging_path(void)
 
             char *tmp = strconcat(name, "/", d->d_name, NULL);
             syslog(LOG_INFO, "%s: unlinking leftover stage file: %s", __func__, tmp);
-            unlink(tmp);
+            xunlink(tmp);
             free(tmp);
         }
         closedir(dirp);
@@ -349,7 +350,7 @@ static const char *_make_path(const mbname_t *mbname, int *out_fd)
         syslog(LOG_ERR,
                "unable to make backup path for %s: path too long",
                userid);
-        unlink(template);
+        xunlink(template);
         goto error;
     }
     ret = pathresult;
@@ -410,7 +411,7 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
 
         /* if we didn't store it in the database successfully, trash the file,
          * it won't be used */
-        if (r) unlink(backup_path);
+        if (r) xunlink(backup_path);
     }
 
     if (r) goto done;
@@ -489,7 +490,7 @@ EXPORTED int backup_close(struct backup **backupp)
         }
         else {
             if (!config_getswitch(IMAPOPT_BACKUP_KEEP_PREVIOUS)) {
-                unlink(backup->oldindex_fname);
+                xunlink(backup->oldindex_fname);
             }
         }
     }
@@ -514,8 +515,8 @@ EXPORTED int backup_unlink(struct backup **backupp)
 {
     struct backup *backup = *backupp;
 
-    unlink(backup->index_fname);
-    unlink(backup->data_fname);
+    xunlink(backup->index_fname);
+    xunlink(backup->data_fname);
 
     return backup_close(backupp);
 }
@@ -796,9 +797,9 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
     if (r) goto error; // FIXME log
 
     /* database update succeeded. unlink old names */
-    unlink(old.fname);
+    xunlink(old.fname);
     *old.ext_ptr = '.';
-    unlink(old.fname);
+    xunlink(old.fname);
     *old.ext_ptr = '\0';
 
     /* unlock and close backup files */
@@ -818,9 +819,9 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
 error:
     /* we didn't finish, so unlink the new filenames if we got that far */
     if (new.fname) {
-        unlink(new.fname);
+        xunlink(new.fname);
         *new.ext_ptr = '.';
-        unlink(new.fname);
+        xunlink(new.fname);
         *new.ext_ptr = '\0';
     }
 

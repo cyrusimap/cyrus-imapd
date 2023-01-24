@@ -60,6 +60,7 @@
 #include "lib/retry.h"
 #include "lib/strarray.h"
 #include "lib/util.h"
+#include "lib/xunlink.h"
 
 #include "imap/global.h"
 #include "imap/mboxlist.h"
@@ -131,7 +132,7 @@ static int do_cleanup(void)
             continue;
         }
 
-        unlink(path);
+        xunlink(path);
     }
 
     closedir(dh);
@@ -280,7 +281,7 @@ static void do_collate_report(struct buf *buf)
                       hash_numrecords(&all_stats));
 
     /* release .doneprocs.lock */
-    unlink(doneprocs_lock_fname);
+    xunlink(doneprocs_lock_fname);
     lock_unlock(doneprocs_lock_fd, doneprocs_lock_fname);
     close(doneprocs_lock_fd);
     free(doneprocs_lock_fname);
@@ -728,7 +729,7 @@ int main(int argc, char **argv)
     report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
     syslog(LOG_DEBUG, "updating %s every %d seconds", report_fname, frequency);
 
-    unlink(report_fname);
+    xunlink(report_fname);
     r = mappedfile_open(&report_file, report_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
     free(report_fname);
     if (r) fatal("couldn't open report file", EX_IOERR);

@@ -63,6 +63,7 @@
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -501,13 +502,13 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
         if (audit_tool) {
             printf("Not auditing %s, reconstruct failed %s\n", userid, error_message(r));
         }
-        unlink(buf_cstring(&newfname));
+        xunlink(buf_cstring(&newfname));
     }
     else {
         syslog(LOG_NOTICE, "dav_reconstruct_user: %s SUCCEEDED", userid);
         if (audit_tool) {
             run_audit_tool(audit_tool, userid, buf_cstring(&fname), buf_cstring(&newfname));
-            unlink(buf_cstring(&newfname));
+            xunlink(buf_cstring(&newfname));
         }
         else {
             rename(buf_cstring(&newfname), buf_cstring(&fname));

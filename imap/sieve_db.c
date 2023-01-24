@@ -60,6 +60,7 @@
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 #include "sieve/bytecode.h"
 #include "sieve/bc_parse.h"
@@ -846,7 +847,7 @@ static int migrate_cb(const char *sievedir,
 
             /* delete script */
             snprintf(path, sizeof(path), "%s/%s", sievedir, fname);
-            unlink(path);
+            xunlink(path);
 
             if (deletebc) {
                 sievedir_delete_script(sievedir, myname);

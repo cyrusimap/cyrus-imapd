@@ -68,6 +68,7 @@
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 #define PROB (0.5)
 
@@ -235,7 +236,7 @@ static int myinit(const char *dbdir, int myflags)
          * everything */
         if (stat(cleanfile, &sbuf) == 0) {
             syslog(LOG_NOTICE, "skiplist: clean shutdown detected, starting normally");
-            unlink(cleanfile);
+            xunlink(cleanfile);
             goto normal;
         }
 
@@ -1853,7 +1854,7 @@ static int mycheckpoint(struct dbengine *db)
         /* clean up */
         close(db->fd);
         db->fd = oldfd;
-        unlink(fname);
+        xunlink(fname);
     }
     else {
         struct stat sbuf;

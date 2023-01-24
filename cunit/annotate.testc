@@ -6,6 +6,7 @@
 #include "xmalloc.h"
 #include "retry.h"
 #include "util.h"
+#include "xunlink.h"
 #include "imap/global.h"
 #include "libcyr_cfg.h"
 #include "imap/annotate.h"
@@ -49,7 +50,7 @@ static void set_annotation_definitions(const char *s)
         close(fd);
     }
     else {
-        unlink(fname);
+        xunlink(fname);
     }
 
     imapopts[IMAPOPT_ANNOTATION_DEFINITIONS].val.s = fname;

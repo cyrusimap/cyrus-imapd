@@ -68,6 +68,7 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -618,7 +619,7 @@ EXPORTED int sync_log_reader_end(sync_log_reader_t *slr)
          * log file we rename()d to the work file.  Now that
          * we've done with the work file we can unlink it.
          * Further checks at this point are just paranoia. */
-        if (slr->work_file && unlink(slr->work_file) < 0) {
+        if (slr->work_file && xunlink(slr->work_file) < 0) {
             syslog(LOG_ERR, "Unlink %s failed: %m", slr->work_file);
             return IMAP_IOERROR;
         }

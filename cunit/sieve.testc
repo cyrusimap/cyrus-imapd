@@ -24,6 +24,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 #define DBDIR       "test-sieve-dbdir"
 #define PARTITION   "default"
@@ -631,7 +632,7 @@ static void context_setup(sieve_test_context_t *ctx,
     /* Now load the compiled bytecode */
     r = sieve_script_load(tempfile, &ctx->exe);
     CU_ASSERT_EQUAL(r, SIEVE_OK);
-    unlink(tempfile);
+    xunlink(tempfile);
 }
 
 static void context_cleanup(sieve_test_context_t *ctx)
@@ -753,7 +754,7 @@ static void message_free(sieve_test_message_t *msg)
     if (msg->content.body)
         message_free_body(msg->content.body);
     buf_free(&msg->content.map);
-    unlink(msg->filename);
+    xunlink(msg->filename);
     free(msg->filename);
     free(msg);
 }

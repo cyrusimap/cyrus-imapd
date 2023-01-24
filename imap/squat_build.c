@@ -103,6 +103,7 @@
 #include "util.h"
 #include "index.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /* A simple write-buffering module which avoids copying of the output data. */
 
@@ -537,7 +538,7 @@ static int init_write_buffer_to_temp(SquatIndex *index,
         return SQUAT_ERR;
     }
 
-    if (unlink(tmp_path) < 0) {
+    if (xunlink(tmp_path) < 0) {
         squat_set_last_error(SQUAT_ERR_SYSERR);
         goto cleanup_fd;
     }

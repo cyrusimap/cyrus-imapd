@@ -58,6 +58,7 @@
 #include "lib/map.h"
 #include "lib/ptrarray.h"
 #include "lib/util.h"
+#include "lib/xunlink.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
@@ -223,7 +224,7 @@ static void prometheus_done(void *rock __attribute__((unused)))
     mappedfile_unlock(promhandle->mf);
 
     /* unlink per-process stats file, we don't need it anymore */
-    r = unlink(mappedfile_fname(promhandle->mf));
+    r = xunlink(mappedfile_fname(promhandle->mf));
     if (r && errno != ENOENT) goto done;
     unlinked = 1;
 
@@ -261,7 +262,7 @@ done:
 
     /* release .doneprocs.lock */
     if (doneprocs_lock_fd != -1) {
-        unlink(doneprocs_lock_fname);
+        xunlink(doneprocs_lock_fname);
         lock_unlock(doneprocs_lock_fd, doneprocs_lock_fname);
         close(doneprocs_lock_fd);
     }
