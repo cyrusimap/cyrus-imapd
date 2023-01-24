@@ -963,7 +963,7 @@ static int store_resource(struct transaction_t *txn, struct vparse_card *vcard,
 {
     int ret = HTTP_CREATED, r;
     struct vparse_entry *ventry;
-    struct carddav_data *cdata;
+    struct carddav_data *cdata = NULL;
     FILE *f = NULL;
     struct index_record oldrecord;
     struct stagemsg *stage;
