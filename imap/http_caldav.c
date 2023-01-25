@@ -3748,7 +3748,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) {
         organizer = icalproperty_get_organizer(prop);
-        if (organizer && !strncasecmp(organizer, "mailto:", 7)) organizer += 7;
+        if (organizer) {
+            if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
+            if (!*organizer) organizer = NULL;
+        }
     }
 
     /* Make sure DTEND/DURATION are sane */
@@ -3772,7 +3775,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                                                 ICAL_ORGANIZER_PROPERTY);
         if (prop) {
             nextorg = icalproperty_get_organizer(prop);
-            if (nextorg && !strncasecmp(nextorg, "mailto:", 7)) nextorg += 7;
+            if (nextorg) {
+                if (!strncasecmp(nextorg, "mailto:", 7)) nextorg += 7;
+                if (!*nextorg) nextorg = NULL;
+            }
         }
         /* if no toplevel organizer, use the one from here */
         if (!organizer && nextorg) organizer = nextorg;
