@@ -1125,11 +1125,11 @@ EXPORTED void index_fetchresponses(struct index_state *state,
 
             if (usinguid) {
                 if (first > 1)
-                    start = index_finduid(state, first);
+                    start = index_finduid(state, first, FIND_LE);
                 if (first == last)
                     end = start;
                 else if (last < state->last_uid)
-                    end = index_finduid(state, last);
+                    end = index_finduid(state, last, FIND_LE);
             }
             else {
                 start = first;
@@ -3370,11 +3370,12 @@ EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
 }
 
 /*
- * Returns the msgno of the message with UID 'uid'.
- * If no message with UID 'uid', returns the message with
- * the highest UID not greater than 'uid'.
+ * Returns the msgno of the message with UID corresponding to 'uid', based on 'mode'
+ * If mode is EQ, msgno with             UID == 'uid', otherwise 0
+ * If mode is GE, msgno with the lowest  UID >= 'uid'
+ * If mode is LE, msgno with the highest UID <= 'uid'
  */
-EXPORTED uint32_t index_finduid(struct index_state *state, uint32_t uid)
+EXPORTED uint32_t index_finduid(struct index_state *state, uint32_t uid, int mode)
 {
     unsigned low = 1;
     unsigned high = state->exists;
@@ -3391,6 +3392,9 @@ EXPORTED uint32_t index_finduid(struct index_state *state, uint32_t uid)
         else
             low = mid + 1;
     }
+
+    if (mode == FIND_EQ) return 0;
+    if (mode == FIND_GE) return high+1;
     return high;
 }
 

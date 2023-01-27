@@ -301,7 +301,14 @@ extern void index_select(struct index_state *state, struct index_init *init);
 extern int index_status(struct index_state *state, struct statusdata *sdata);
 extern void index_release(struct index_state *state);
 extern void index_close(struct index_state **stateptr);
-extern uint32_t index_finduid(struct index_state *state, uint32_t uid);
+
+enum {
+    FIND_EQ = 0,
+    FIND_GE,
+    FIND_LE
+};
+
+extern uint32_t index_finduid(struct index_state *state, uint32_t uid, int mode);
 extern uint32_t index_getuid(struct index_state *state, uint32_t msgno);
 extern void index_tellchanges(struct index_state *state, unsigned tell_flags);
 extern modseq_t index_highestmodseq(struct index_state *state);

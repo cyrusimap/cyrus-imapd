@@ -3847,8 +3847,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
                (state->mailbox->i.uidvalidity != url.uidvalidity)) {
         *parseerr = "Uidvalidity of mailbox has changed";
         r = IMAP_BADURL;
-    } else if (!url.uid || !(msgno = index_finduid(state, url.uid)) ||
-               (index_getuid(state, msgno) != url.uid)) {
+    } else if (!url.uid || !(msgno = index_finduid(state, url.uid, FIND_EQ))) {
         *parseerr = "No such message in mailbox";
         r = IMAP_BADURL;
     } else {
@@ -14514,8 +14513,7 @@ static void cmd_urlfetch(char *tag)
         if (url.uidvalidity &&
            (state->mailbox->i.uidvalidity != url.uidvalidity)) {
             r = IMAP_BADURL;
-        } else if (!url.uid || !(msgno = index_finduid(state, url.uid)) ||
-                   (index_getuid(state, msgno) != url.uid)) {
+        } else if (!url.uid || !(msgno = index_finduid(state, url.uid, FIND_EQ))) {
             r = IMAP_BADURL;
         } else {
             r = index_urlfetch(state, msgno, params, url.section,
@@ -15225,8 +15223,7 @@ static void cmd_replace(char *tag, char *seqno, char *name, int usinguid)
     }
     else if (usinguid) {
         uid = strtoul(seqno, NULL, 10);
-        if (!uid || !(msgno = index_finduid(imapd_index, uid)) ||
-            (index_getuid(imapd_index, msgno) != uid)) {
+        if (!uid || !(msgno = index_finduid(imapd_index, uid, FIND_EQ))) {
             r = IMAP_NO_NOSUCHMSG;
         }
         else {

@@ -1015,11 +1015,8 @@ static void cmdloop(void)
                     if (LISTGROUP) {
                         int msgno, last_msgno;
 
-                        msgno = index_finduid(group_state, uid);
-                        if (!msgno || index_getuid(group_state, msgno) != uid) {
-                            msgno++;
-                        }
-                        last_msgno = index_finduid(group_state, last);
+                        msgno = index_finduid(group_state, uid, FIND_GE);
+                        last_msgno = index_finduid(group_state, last, FIND_LE);
 
                         for (; msgno <= last_msgno; msgno++) {
                             prot_printf(nntp_out, "%u\r\n",
@@ -1836,8 +1833,7 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
     FILE *msgfile;
     struct index_record record;
 
-    msgno = index_finduid(group_state, uid);
-    if (!msgno || index_getuid(group_state, msgno) != uid) {
+    if (!(msgno = index_finduid(group_state, uid, FIND_EQ))) {
         prot_printf(nntp_out, "423 No such article in this newsgroup\r\n");
         return;
     }
@@ -2260,9 +2256,8 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 
     lcase(hdr);
 
-    msgno = index_finduid(group_state, uid);
-    if (!msgno || index_getuid(group_state, msgno) != uid) msgno++;
-    last_msgno = index_finduid(group_state, last);
+    msgno = index_finduid(group_state, uid, FIND_GE);
+    last_msgno = index_finduid(group_state, last, FIND_LE);
 
     for (; msgno <= last_msgno; msgno++) {
         char *body;
@@ -2786,9 +2781,8 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
     struct nntp_overview *over;
     int found = 0;
 
-    msgno = index_finduid(group_state, uid);
-    if (!msgno || index_getuid(group_state, msgno) != uid) msgno++;
-    last_msgno = index_finduid(group_state, last);
+    msgno = index_finduid(group_state, uid, FIND_GE);
+    last_msgno = index_finduid(group_state, last, FIND_LE);
 
     for (; msgno <= last_msgno; msgno++) {
         if (!found++)

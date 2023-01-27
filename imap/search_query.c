@@ -158,8 +158,7 @@ EXPORTED void search_folder_use_msn(search_folder_t *folder, struct index_state 
     bitvector_t msns = BV_INITIALIZER;
 
     search_folder_foreach(folder, uid) {
-        msgno = index_finduid(state, uid);
-        if (index_getuid(state, msgno) == (unsigned)uid)
+        if ((msgno = index_finduid(state, uid, FIND_EQ)))
             bv_set(&msns, msgno);
     }
     bv_fini(&folder->uids);
