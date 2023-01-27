@@ -8593,7 +8593,7 @@ struct email_uidrec {
 };
 
 static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
-                                ptrarray_t *uidrecs, json_t *errors)
+                                ptrarray_t *uidrecs, json_t *errors, json_t *success)
 {
     int r;
     struct mboxevent *mboxevent = NULL;
@@ -8627,6 +8627,9 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
         }
         // if errors, record the issue
         if (r) json_object_set_new(errors, uidrec->email_id, jmap_server_error(r));
+        // otherwise, record the success
+        else if (success && json_array_find(success, uidrec->email_id) < 0)
+            json_array_append(success, json_string(uidrec->email_id));
     }
     if (mrw) msgrecord_unref(&mrw);
 
@@ -12729,7 +12732,7 @@ static void _email_bulkupdate_exec_delete(struct email_bulkupdate *bulk)
     hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
     while (hash_iter_next(iter)) {
         struct email_updateplan *plan = hash_iter_val(iter);
-        _email_multiexpunge(bulk->req, plan->mbox, &plan->delete, bulk->set_errors);
+        _email_multiexpunge(bulk->req, plan->mbox, &plan->delete, bulk->set_errors, NULL);
     }
     hash_iter_free(&iter);
 }
@@ -13004,8 +13007,8 @@ static void _email_destroy_bulk(jmap_req_t *req,
         int j;
         int r = jmap_openmbox(req, mboxrec->mboxname, &mbox, 1);
         if (!r) {
-            /* Expunge messages one by one, marking any failed message */
-            _email_multiexpunge(req, mbox, &mboxrec->uidrecs, not_destroyed);
+            /* Expunge messages one by one, marking any failed/expunged message */
+            _email_multiexpunge(req, mbox, &mboxrec->uidrecs, not_destroyed, destroyed);
         }
         else {
             /* Mark all messages of this mailbox as failed */
@@ -13020,11 +13023,14 @@ static void _email_destroy_bulk(jmap_req_t *req,
         jmap_closembox(req, &mbox);
     }
 
-    /* Report successful destroys */
-    json_array_foreach(destroy, iz, jval) {
-        const char *email_id = json_string_value(jval);
-        if (!json_object_get(not_destroyed, email_id))
-            json_array_append(destroyed, jval);
+    /* An email not reported was not found (already expunged) */
+    for (i = 0; i < strarray_size(&email_ids); i++) {
+        const char *email_id = strarray_nth(&email_ids, i);
+        if (!json_object_get(not_destroyed, email_id) &&
+            json_array_find(destroyed, email_id) < 0) {
+            json_object_set_new(not_destroyed, email_id,
+                                json_pack("{s:s}", "type", "notFound"));
+        }
     }
 
     _email_mboxrecs_free(&mboxrecs);
