@@ -78,7 +78,7 @@
  * If you change MAILBOX_MINOR_VERSION you MUST also make corresponding
  * changes to backend_version() in backend.c.
  */
-#define MAILBOX_MINOR_VERSION   17
+#define MAILBOX_MINOR_VERSION   18
 #define MAILBOX_CACHE_MINOR_VERSION 11
 
 #define FNAME_HEADER "/cyrus.header"
@@ -220,6 +220,8 @@ struct index_header {
 
     time_t pop3_show_after;
     quota_t quota_annot_used;
+    quota_t quota_deleted_used;
+    quota_t quota_expunged_used;
 };
 
 #define CHANGE_ISAPPEND (1<<0)
@@ -352,21 +354,15 @@ struct mailbox_iter;
                                     * to POP3 */
 #define OFFSET_QUOTA_ANNOT_USED 116 /* bytes of per-mailbox and per-message
                                      * annotations for this mailbox */
-                          /* Spares - only use these if the index */
-                          /*  record size remains the same */
 #define OFFSET_SYNCCRCS_ANNOT 120 /* SYNC_CRC of the annotations */
 #define OFFSET_UNSEEN 124         /* total number of UNSEEN messages (owner) */
-/* NEXT UPDATE - add Bug #3562 "TOTAL_MAILBOX_USED" field, 64 bit
- * value which counts the total size of all files included expunged
- * files. We've created the header space now, but will also need code
- * changes, so holding off */
 #define OFFSET_MAILBOX_CREATEDMODSEQ 128 /* MODSEQ at creation time */
 #define OFFSET_CHANGES_EPOCH 136   /* time from which we can calculate changes */
-#define OFFSET_SPARE1 140
-#define OFFSET_SPARE2 144
-#define OFFSET_SPARE3 148
-#define OFFSET_SPARE4 152
-#define OFFSET_HEADER_CRC 156 /* includes all zero for the spares! */
+#define OFFSET_QUOTA_DELETED_USED 140  /* bytes of \Deleted messages
+                                        * for this mailbox (64-bit) */
+#define OFFSET_QUOTA_EXPUNGED_USED 148 /* bytes of \Expunged messages
+                                        * for this mailbox (64-bit) */
+#define OFFSET_HEADER_CRC 156
 
 /* Offsets of index_record fields in index/expunge file
  *
