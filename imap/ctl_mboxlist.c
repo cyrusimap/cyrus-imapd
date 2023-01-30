@@ -89,6 +89,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 #include "imap/mupdate_err.h"
+#include "lib/ptrarray.h"
 
 enum mboxop { DUMP,
               M_POPULATE,
@@ -962,45 +963,37 @@ struct found_data {
     char path[MAX_MAILBOX_PATH+1];
 };
 
-struct found_list {
-    int idx;
-    int size;
-    int alloc;
-    struct found_data *data;
-};
-
-static void add_path(struct found_list *found, int type,
+static void add_path(ptrarray_t *found, int type,
               const char *name, const char *part, const char *path)
 {
     struct found_data *new;
 
-    if (found->size == found->alloc) {
-        /* reached the end of our allocated array, double it */
-        found->alloc *= 2;
-        found->data = xrealloc(found->data,
-                               found->alloc * sizeof(struct found_data));
-    }
-
-    /* add our new node to the end of the array */
-    new = &found->data[found->size++];
+    new = malloc(sizeof(struct found_data));
     new->type = type;
     strcpy(new->mboxname, name);
     strcpy(new->partition, part);
     strcpy(new->path, path);
+
+    /* add our new node to the end of the list */
+    ptrarray_append(found, new);
 }
 
-static void add_part(struct found_list *found,
+static void add_part(ptrarray_t *found,
               const char *part, const char *path, int override)
 {
     int i;
+    struct found_data *entry;
 
     /* see if we already added a partition having this name */
-    for (i = 0; i < found->size; i++){
-        if (!strcmp(found->data[i].partition, part)) {
+    for (i = 0; i < ptrarray_size(found); i++){
+        entry = ptrarray_nth(found, i);
+        if (!strcmp(entry->partition, part)) {
             /* found it */
             if (override) {
                 /* replace the path with the one containing cyrus.header */
-                strcpy(found->data[i].path, path);
+                if (entry->path)
+                    free(entry->path);
+                strcpy(entry->path, path);
             }
 
             /* we already have the proper path, so we're done */
@@ -1015,7 +1008,7 @@ static void add_part(struct found_list *found,
 static void get_partitions(const char *key, const char *value, void *rock)
 {
     static int check_meta = -1;
-    struct found_list *found = (struct found_list *) rock;
+    ptrarray_t *found = (ptrarray_t *) rock;
 
     if (check_meta == -1) {
         /* see if cyrus.header might be contained in a metapartition */
@@ -1032,10 +1025,10 @@ static void get_partitions(const char *key, const char *value, void *rock)
     /* skip any other overflow strings */
 }
 
-static int compar_mbox(const void *v1, const void *v2)
+static int compar_mbox(const void **v1, const void **v2)
 {
-    struct found_data *d1 = (struct found_data *) v1;
-    struct found_data *d2 = (struct found_data *) v2;
+    struct found_data *d1 = (struct found_data *) *v1;
+    struct found_data *d2 = (struct found_data *) *v2;
 
     /* non-mailboxes get pushed to the end of the array,
        otherwise we do an ASCII sort */
@@ -1052,7 +1045,7 @@ static int add_mbox_cb(const mbentry_t *mbentry, void *rockp)
     // This function is called for every entry in the database,
     // and stores all mailboxes in &mboxes.
 
-    struct found_list *mboxes = (struct found_list *) rockp;
+    ptrarray_t *mboxes = (ptrarray_t *) rockp;
 
     /* skip deleted mailboxes and mailboxes without partition
        as they cannot have a path in the filesystem */
@@ -1068,50 +1061,56 @@ static int add_mbox_cb(const mbentry_t *mbentry, void *rockp)
     return 0;
 }
 
-static void verify_mboxes(struct found_list* mboxes, struct found_list* found)
+static void verify_mboxes(ptrarray_t *mboxes, ptrarray_t *found, int *idx)
 {
     int i;
     int r;
     char *mbname;
+    struct found_data *found_mailbox_entry;
+    struct found_data *found_path_entry;
 
-    for (i = 0; i < mboxes->size; i++) {
+    for (i = 0; i < ptrarray_size(mboxes); i++) {
 
-        if (mboxes->data[i].type & UUID)
-            mbname = mboxes->data[i].path;
+        found_mailbox_entry = ptrarray_nth(mboxes, i);
+
+        if (found_mailbox_entry->type & UUID)
+            mbname = found_mailbox_entry->path;
         else
-            mbname = mboxes->data[i].mboxname;
+            mbname = found_mailbox_entry->mboxname;
 
         // Walk the directories to see if the mailbox does have
         // paths on the filesystem.
         do {
             r = -1;
+	    found_path_entry = ptrarray_nth(found, *idx);
             if (
-                    !(found->data[found->idx].type & MBOX) ||   /* end of mailboxes */
-                    (r = strcmp(mboxes->data[i].mboxname, found->data[found->idx].mboxname)) < 0
+                    !(found_path_entry->type & MBOX) ||   /* end of mailboxes */
+                    (r = strcmp(found_mailbox_entry->mboxname, found_path_entry->mboxname)) < 0
             ) {
                 printf("'%s' has a DB entry but no directory on partition '%s'\n",
-                        mbname, mboxes->data[i].partition);
+                        mbname, found_mailbox_entry->partition);
                 break;
             }
             else if (r == 0) {
-                if (found->data[found->idx].type & MATCHED) {
+                if (found_path_entry->type & MATCHED) {
                     printf("'%s' has an additional match to DB entry of mailbox '%s' on partition '%s'\n",
-                            found->data[found->idx].path, mbname, mboxes->data[i].partition);
+                            found_path_entry->path, mbname, found_mailbox_entry->partition);
                 }
                 /* mark filesystem entry as matched */
-                found->data[found->idx].type |= MATCHED;
+                found_path_entry->type |= MATCHED;
             }
-            found->idx++;
+            (*idx)++;
         } while (r > 0);
     }
 
     /* now report all unmatched mailboxes found in filesystem */
-    for (i = 0; i < found->size; i++) {
-        if (!(found->data[i].type & MBOX)) break;
-        if (!(found->data[i].type & MATCHED)) {
+    for (i = 0; i < ptrarray_size(found); i++) {
+	found_path_entry = ptrarray_nth(found, i);
+        if (!(found_path_entry->type & MBOX)) break;
+        if (!(found_path_entry->type & MATCHED)) {
             printf("'%s' has a directory '%s' but no DB entry\n",
-                    found->data[i].mboxname,
-                    found->data[i].path
+                    found_path_entry->mboxname,
+                    found_path_entry->path
                 );
         }
     }
@@ -1119,34 +1118,31 @@ static void verify_mboxes(struct found_list* mboxes, struct found_list* found)
 
 static void do_verify(void)
 {
-    struct found_list found;
-    struct found_list mboxes;
+    ptrarray_t *found;
+    ptrarray_t *mboxes;
     int i;
+    int idx = 0;
 
-    found.idx = 0;
-    found.size = 0;
-    found.alloc = 10;
-    found.data = xmalloc(found.alloc * sizeof(struct found_data));
-
-    mboxes.idx = 0;
-    mboxes.size = 0;
-    mboxes.alloc = 10;
-    mboxes.data = xmalloc(mboxes.alloc * sizeof(struct found_data));
+    found = ptrarray_new();
+    ptrarray_init(found);
+    mboxes = ptrarray_new();
+    ptrarray_init(mboxes);
 
     /* gather a list of partition paths to search */
-    config_foreachoverflowstring(get_partitions, &found);
+    config_foreachoverflowstring(get_partitions, found);
 
     /* scan all paths in our list, tagging valid mailboxes,
        and adding paths as we find them */
-    for (i = 0; i < found.size; i++) {
+    for (i = 0; i < ptrarray_size(found); i++) {
         DIR *dirp;
         struct dirent *dirent;
         char name[MAX_MAILBOX_BUFFER];
         char part[MAX_MAILBOX_BUFFER];
         char path[MAX_MAILBOX_PATH+1];
         int type;
+        struct found_data *entry = ptrarray_nth(found, i);
 
-        if (config_hashimapspool && (found.data[i].type & ROOT)) {
+        if (config_hashimapspool && (entry->type & ROOT)) {
             /* need to add hashed directories */
             int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
             char *tail;
@@ -1154,97 +1150,97 @@ static void do_verify(void)
 
             /* make the toplevel partition /a */
             if (config_fulldirhash) {
-                strcat(found.data[i].path, "/A");
+                strcat(entry->path, "/A");
                 c = 'B';
             } else {
-                strcat(found.data[i].path, "/a");
+                strcat(entry->path, "/a");
                 c = 'b';
             }
-            type = (found.data[i].type &= ~ROOT);
+            type = (entry->type &= ~ROOT);
 
             /* make a template path for /b - /z */
-            strcpy(name, found.data[i].mboxname);
-            strcpy(part, found.data[i].partition);
-            strcpy(path, found.data[i].path);
+            strcpy(name, entry->mboxname);
+            strcpy(part, entry->partition);
+            strcpy(path, entry->path);
             tail = path + strlen(path) - 1;
 
             for (j = 1; j < 26; j++, c++) {
                 *tail = c;
-                add_path(&found, type, name, part, path);
+                add_path(found, type, name, part, path);
             }
 
             if (config_virtdomains && !type) {
                 /* need to add root domain directory */
                 strcpy(tail, "domain");
-                add_path(&found, DOMAIN | ROOT, name, part, path);
+                add_path(found, DOMAIN | ROOT, name, part, path);
             }
 
             /* need to add uuid directory */
             strcpy(tail, "uuid");
-            add_path(&found, type | UUID, name, part, path);
+            add_path(found, type | UUID, name, part, path);
         }
 
-        if (!(dirp = opendir(found.data[i].path))) continue;
+        if (!(dirp = opendir(entry->path))) continue;
         while ((dirent = readdir(dirp))) {
             const char *fname = FNAME_HEADER;
             if (dirent->d_name[0] == '.') continue;
             else if (!strcmp(dirent->d_name, fname+1)) {
                 /* XXX - check that it can be opened */
-                found.data[i].type |= MBOX;
-                strcpy(name, found.data[i].mboxname);
+                entry->type |= MBOX;
+                strcpy(name, entry->mboxname);
             }
             else if (!strchr(dirent->d_name, '.') ||
-                     (found.data[i].type & DOMAIN)) {
+                     (entry->type & DOMAIN)) {
                 /* probably a directory, add it to the array */
                 type = 0;
-                strcpy(name, found.data[i].mboxname);
+                strcpy(name, entry->mboxname);
 
                 if (config_virtdomains &&
-                    (found.data[i].type == ROOT) &&
+                    (entry->type == ROOT) &&
                     !strcmp(dirent->d_name, "domain")) {
                     /* root domain directory */
                     type = DOMAIN | ROOT;
                 }
-                else if (!name[0] && found.data[i].type & DOMAIN) {
+                else if (!name[0] && entry->type & DOMAIN) {
                     /* toplevel domain directory */
                     strcat(name, dirent->d_name);
                     strcat(name, "!");
                     type = DOMAIN | ROOT;
                 }
-                else if (found.data[i].type & UUID) {
+                else if (entry->type & UUID) {
                     /* possibly a mailbox directory, use directory name without ancestor information */
                     strcpy(name, dirent->d_name);
                 }
                 else {
                     /* possibly a mailbox directory */
-                    if (name[0] && !(found.data[i].type & DOMAIN)) strcat(name, ".");
+                    if (name[0] && !(entry->type & DOMAIN)) strcat(name, ".");
                     strcat(name, dirent->d_name);
                 }
 
-                strcpy(part, found.data[i].partition);
-                strcpy(path, found.data[i].path);
+                strcpy(part, entry->partition);
+                strcpy(path, entry->path);
                 strcat(path, "/");
                 strcat(path, dirent->d_name);
                 /* inherit UUID flag from parent entry */
-                type = found.data[i].type & UUID;
-                add_path(&found, type, name, part, path);
+                type = entry->type & UUID;
+                add_path(found, type, name, part, path);
             }
         }
 
         closedir(dirp);
     }
 
-    qsort(found.data, found.size, sizeof(struct found_data), compar_mbox);
+    ptrarray_sort(found, compar_mbox);
 
     /* gather all mailboxes and sort them, so that UUID and non-UUID
        mailboxes are sorted in the way we need them to be to avoid
        full nested looping */
 
-    mboxlist_allmbox("", &add_mbox_cb, &mboxes, MBOXTREE_TOMBSTONES);
+    mboxlist_allmbox("", &add_mbox_cb, mboxes, MBOXTREE_TOMBSTONES);
 
-    qsort(mboxes.data, mboxes.size, sizeof(struct found_data), compar_mbox);
+    ptrarray_sort(mboxes, compar_mbox);
 
-    verify_mboxes(&mboxes, &found);
+    verify_mboxes(mboxes, found, &idx);
 }
 
 static void usage(void)
