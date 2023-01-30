@@ -950,7 +950,9 @@ skip:
 enum {
     ROOT =      (1<<0),
     DOMAIN =    (1<<1),
-    MBOX =      (1<<2)
+    MBOX =      (1<<2),
+    UUID =      (1<<3),
+    MATCHED =   (1<<4)
 };
 
 struct found_data {
@@ -1045,59 +1047,91 @@ static int compar_mbox(const void *v1, const void *v2)
     else return 0;
 }
 
-static int verify_cb(const mbentry_t *mbentry, void *rockp)
+static int add_mbox_cb(const mbentry_t *mbentry, void *rockp)
 {
     // This function is called for every entry in the database,
-    // and supplied an inventory in &found. *data however does
-    // not pass dlist_parsemap() unlike is the case with dump_db().
+    // and stores all mailboxes in &mboxes.
 
-    struct found_list *found = (struct found_list *) rockp;
-    int r = 0;
+    struct found_list *mboxes = (struct found_list *) rockp;
 
-    if (r) {
-        printf("'%s' has a directory '%s' but no DB entry\n",
-                found->data[found->idx].mboxname,
-                found->data[found->idx].path
-            );
-    } else {
-        // Walk the directories to see if the mailbox from data does have
+    /* skip deleted mailboxes and mailboxes without partition
+       as they cannot have a path in the filesystem */
+    if (mbentry->partition == NULL ||
+        mbentry->mbtype & MBTYPE_DELETED)
+        return 0;
+
+    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS)
+        add_path(mboxes, MBOX, mbentry->name, mbentry->partition, mbentry->uniqueid);
+    else
+        add_path(mboxes, MBOX | UUID, mbentry->uniqueid, mbentry->partition, mbentry->name);
+
+    return 0;
+}
+
+static void verify_mboxes(struct found_list* mboxes, struct found_list* found)
+{
+    int i;
+    int r;
+    char *mbname;
+
+    for (i = 0; i < mboxes->size; i++) {
+
+        if (mboxes->data[i].type & UUID)
+            mbname = mboxes->data[i].path;
+        else
+            mbname = mboxes->data[i].mboxname;
+
+        // Walk the directories to see if the mailbox does have
         // paths on the filesystem.
         do {
             r = -1;
             if (
-                    (found->idx >= found->size) ||              /* end of array */
                     !(found->data[found->idx].type & MBOX) ||   /* end of mailboxes */
-                    (r = strcmp(mbentry->name, found->data[found->idx].mboxname)) < 0
+                    (r = strcmp(mboxes->data[i].mboxname, found->data[found->idx].mboxname)) < 0
             ) {
                 printf("'%s' has a DB entry but no directory on partition '%s'\n",
-                        mbentry->name, mbentry->partition);
-
+                        mbname, mboxes->data[i].partition);
+                break;
             }
-            else if (r > 0) {
-                printf("'%s' has a directory '%s' but no DB entry\n",
-                        found->data[found->idx].mboxname,
-                        found->data[found->idx].path
-                    );
-
-                found->idx++;
+            else if (r == 0) {
+                if (found->data[found->idx].type & MATCHED) {
+                    printf("'%s' has an additional match to DB entry of mailbox '%s' on partition '%s'\n",
+                            found->data[found->idx].path, mbname, mboxes->data[i].partition);
+                }
+                /* mark filesystem entry as matched */
+                found->data[found->idx].type |= MATCHED;
             }
-            else found->idx++;
+            found->idx++;
         } while (r > 0);
-
     }
 
-    return 0;
+    /* now report all unmatched mailboxes found in filesystem */
+    for (i = 0; i < found->size; i++) {
+        if (!(found->data[i].type & MBOX)) break;
+        if (!(found->data[i].type & MATCHED)) {
+            printf("'%s' has a directory '%s' but no DB entry\n",
+                    found->data[i].mboxname,
+                    found->data[i].path
+                );
+        }
+    }
 }
 
 static void do_verify(void)
 {
     struct found_list found;
+    struct found_list mboxes;
     int i;
 
     found.idx = 0;
     found.size = 0;
     found.alloc = 10;
     found.data = xmalloc(found.alloc * sizeof(struct found_data));
+
+    mboxes.idx = 0;
+    mboxes.size = 0;
+    mboxes.alloc = 10;
+    mboxes.data = xmalloc(mboxes.alloc * sizeof(struct found_data));
 
     /* gather a list of partition paths to search */
     config_foreachoverflowstring(get_partitions, &found);
@@ -1144,6 +1178,10 @@ static void do_verify(void)
                 strcpy(tail, "domain");
                 add_path(&found, DOMAIN | ROOT, name, part, path);
             }
+
+            /* need to add uuid directory */
+            strcpy(tail, "uuid");
+            add_path(&found, type | UUID, name, part, path);
         }
 
         if (!(dirp = opendir(found.data[i].path))) continue;
@@ -1153,6 +1191,7 @@ static void do_verify(void)
             else if (!strcmp(dirent->d_name, fname+1)) {
                 /* XXX - check that it can be opened */
                 found.data[i].type |= MBOX;
+                strcpy(name, found.data[i].mboxname);
             }
             else if (!strchr(dirent->d_name, '.') ||
                      (found.data[i].type & DOMAIN)) {
@@ -1172,6 +1211,10 @@ static void do_verify(void)
                     strcat(name, "!");
                     type = DOMAIN | ROOT;
                 }
+                else if (found.data[i].type & UUID) {
+                    /* possibly a mailbox directory, use directory name without ancestor information */
+                    strcpy(name, dirent->d_name);
+                }
                 else {
                     /* possibly a mailbox directory */
                     if (name[0] && !(found.data[i].type & DOMAIN)) strcat(name, ".");
@@ -1182,6 +1225,8 @@ static void do_verify(void)
                 strcpy(path, found.data[i].path);
                 strcat(path, "/");
                 strcat(path, dirent->d_name);
+                /* inherit UUID flag from parent entry */
+                type = found.data[i].type & UUID;
                 add_path(&found, type, name, part, path);
             }
         }
@@ -1191,7 +1236,15 @@ static void do_verify(void)
 
     qsort(found.data, found.size, sizeof(struct found_data), compar_mbox);
 
-    mboxlist_allmbox("", &verify_cb, &found, MBOXTREE_TOMBSTONES);
+    /* gather all mailboxes and sort them, so that UUID and non-UUID
+       mailboxes are sorted in the way we need them to be to avoid
+       full nested looping */
+
+    mboxlist_allmbox("", &add_mbox_cb, &mboxes, MBOXTREE_TOMBSTONES);
+
+    qsort(mboxes.data, mboxes.size, sizeof(struct found_data), compar_mbox);
+
+    verify_mboxes(&mboxes, &found);
 }
 
 static void usage(void)
