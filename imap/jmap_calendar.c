@@ -1017,7 +1017,7 @@ static int jmap_calendar_get(struct jmap_req *req)
     }
 
     /* Build response */
-    get.state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
+    get.state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, 0));
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -1131,7 +1131,7 @@ static int jmap_calendar_changes(struct jmap_req *req)
 
     /* Determine new state.  XXX  what about max_changes? */
     changes.new_modseq = /*changes.has_more_changes ? rock.highestmodseq :*/
-        jmap_highestmodseq(req, MBTYPE_CALENDAR);
+        jmap_modseq(req, MBTYPE_CALENDAR, 0);
 
     /* Build response */
     jmap_ok(req, jmap_changes_reply(&changes));
@@ -2198,18 +2198,14 @@ static int jmap_calendar_set(struct jmap_req *req)
     }
 
     if (set.if_in_state) {
-        /* TODO rewrite state function to use char* not json_t* */
-        json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_CALENDAR)) {
+        if (atomodseq_t(set.if_in_state) != jmap_modseq(req, MBTYPE_CALENDAR, 0)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-            json_decref(jstate);
             goto done;
         }
-        json_decref(jstate);
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        set.old_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
+        set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, 0));
     }
 
     r = caldav_create_defaultcalendars(req->accountid,
@@ -2301,7 +2297,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         else json_object_set_new(set.not_destroyed, id, err);
     }
 
-    set.new_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1);
+    set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, JMAP_MODSEQ_RELOAD));
 
     jmap_ok(req, jmap_set_reply(&set));
 
@@ -4034,7 +4030,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     }
 
     /* Build response */
-    get.state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
+    get.state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, 0));
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -6063,17 +6059,14 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     }
 
     if (set.if_in_state) {
-        /* TODO rewrite state function to use char* not json_t* */
-        json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_CALENDAR)) {
+        if (atomodseq_t(set.if_in_state) != jmap_modseq(req, MBTYPE_CALENDAR, 0)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-        json_decref(jstate);
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        set.old_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
+        set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, 0));
     }
 
     r = caldav_create_defaultcalendars(req->accountid,
@@ -6226,7 +6219,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     jmap_caleventid_free(&eid);
 
 
-    set.new_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1);
+    set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, JMAP_MODSEQ_RELOAD));
 
     jmap_ok(req, jmap_set_reply(&set));
 
@@ -6389,7 +6382,7 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
 
     /* Determine new state. */
     changes.new_modseq = changes.has_more_changes ?
-        rock.highestmodseq : jmap_highestmodseq(req, MBTYPE_CALENDAR);
+        rock.highestmodseq : jmap_modseq(req, MBTYPE_CALENDAR, 0);
 
     /* Build response */
     jmap_ok(req, jmap_changes_reply(&changes));
@@ -7350,7 +7343,7 @@ static int jmap_calendarevent_query(struct jmap_req *req)
     }
 
     /* Build response */
-    query.query_state = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
+    query.query_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, 0));
 
     json_t *res = jmap_query_reply(&query);
     if (debug) {
@@ -11090,7 +11083,7 @@ static int jmap_participantidentity_get(struct jmap_req *req)
     strarray_fini(&addrs);
 
     /* Build response */
-    get.state = jmap_getstate(req, MBTYPE_CALENDAR, 0);
+    get.state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, 0));
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -11132,7 +11125,7 @@ static int jmap_participantidentity_set(struct jmap_req *req)
                 json_pack("{s:s}", "type", "forbidden"));
     }
 
-    set.new_state = jmap_getstate(req, MBTYPE_CALENDAR, 1);
+    set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, JMAP_MODSEQ_RELOAD));
 
     jmap_ok(req, jmap_set_reply(&set));
 
