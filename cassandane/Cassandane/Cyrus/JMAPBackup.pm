@@ -1709,13 +1709,13 @@ sub test_restore_mail_full
          }, "R5.5"],
     ]);
     $self->assert_num_equals(4, scalar(@{$res->[0][1]{destroyed}}));
-    $self->assert_str_equals($emailId2, $res->[0][1]{destroyed}[0]);
-    $self->assert_str_equals($draftId1, $res->[0][1]{destroyed}[1]);
-    $self->assert_str_equals($draftId2, $res->[0][1]{destroyed}[2]);
-    $self->assert_str_equals($draftId3, $res->[0][1]{destroyed}[3]);
+    my @expect = sort ($emailId2, $draftId1, $draftId2, $draftId3);
+    my @got = sort @{$res->[0][1]{destroyed}};
+    $self->assert_deep_equals(\@expect, \@got);
+
     $self->assert_num_equals(2, scalar @{$res->[1][1]{destroyed}});
-    my @expect = sort ($fooId, $barId);
-    my @got = sort @{$res->[1][1]{destroyed}};
+    @expect = sort ($fooId, $barId);
+    @got = sort @{$res->[1][1]{destroyed}};
     $self->assert_deep_equals(\@expect, \@got);
 
     xlog "create a new 'bar' mailbox";
