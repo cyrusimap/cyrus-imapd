@@ -75,4 +75,13 @@ sub test_email_set_destroy
     xlog $self, "Get emails";
     $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min >= 9)) {
+        xlog $self, "Attempt to destroy draft $id again";
+        $res = $jmap->CallMethods(
+            [ [ 'Email/set', { destroy => [ $id ] }, "R1" ] ],
+            );
+        $self->assert_not_null($id, $res->[0][1]{notDestroyed}{$id});
+    }
 }
