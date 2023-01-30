@@ -678,29 +678,6 @@ static int update_alarmdb(const char *mboxname,
     return -1;
 }
 
-static icaltimezone *get_floatingtz(const char *mailbox, const char *userid)
-{
-    icaltimezone *floatingtz = NULL;
-
-    struct buf buf = BUF_INITIALIZER;
-    const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
-    if (!annotatemore_lookupmask(mailbox, annotname, userid, &buf)) {
-        icalcomponent *comp = NULL;
-        comp = icalparser_parse_string(buf_cstring(&buf));
-        icalcomponent *subcomp =
-            icalcomponent_get_first_component(comp, ICAL_VTIMEZONE_COMPONENT);
-        if (subcomp) {
-            floatingtz = icaltimezone_new();
-            icalcomponent_remove_component(comp, subcomp);
-            icaltimezone_set_component(floatingtz, subcomp);
-        }
-        icalcomponent_free(comp);
-    }
-    buf_free(&buf);
-
-    return floatingtz;
-}
-
 static icalcomponent *vpatch_from_peruserdata(struct dlist *dl)
 {
     const char *icalstr;
@@ -1278,7 +1255,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     icalcomponent_free(vpatch);
 
     /* Fetch per-user timezone for floating events */
-    floatingtz = get_floatingtz(mailbox, userid);
+    floatingtz = caldav_get_calendar_tz(mailbox, userid);
 
     /* Process any VALARMs in the patched iCalendar resource */
     check = process_alarms(mailbox, uid, userid, floatingtz, myical,
@@ -2053,7 +2030,7 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
 
     switch (data->type) {
     case ALARM_CALENDAR: {
-        icaltimezone *floatingtz = get_floatingtz(mailbox_name(mailbox), "");
+        icaltimezone *floatingtz = caldav_get_calendar_tz(mailbox_name(mailbox), "");
         r = process_valarms(mailbox, &record, floatingtz, runtime, dryrun);
         if (floatingtz) icaltimezone_free(floatingtz, 1);
         break;
@@ -2230,7 +2207,7 @@ EXPORTED int caldav_alarm_upgrade()
         caldav_alarm_close(alarmdb);
         if (rc) continue;
 
-        icaltimezone *floatingtz = get_floatingtz(mailbox_name(mailbox), "");
+        icaltimezone *floatingtz = caldav_get_calendar_tz(mailbox_name(mailbox), "");
 
         /* add alarms for all records */
         struct mailbox_iter *iter =
@@ -2342,4 +2319,80 @@ static int upgradev4(sqldb_t *db)
     buf_free(&subpat);
 
     return r;
+}
+
+struct floating_rock {
+    struct caldav_db *caldavdb;
+    struct mailbox *mailbox;
+    const char *userid;
+};
+
+static int floating_cb(void *rock, struct caldav_data *cdata)
+{
+    struct floating_rock *frock = (struct floating_rock *) rock;
+
+    return update_alarmdb(mailbox_name(frock->mailbox), cdata->dav.imap_uid,
+                          time(0), ALARM_CALENDAR, 0, 0, 0, NULL);
+}
+
+static int calendar_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct floating_rock *frock = (struct floating_rock *) rock;
+    const char *tzid_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+    const char *tz_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+    struct buf attrib = BUF_INITIALIZER;
+
+    if ((annotatemore_lookupmask(mbentry->name,
+                                 tzid_annot, frock->userid, &attrib) == 0 &&
+         buf_len(&attrib)) ||
+        (annotatemore_lookupmask(mbentry->name,
+                                 tz_annot, frock->userid, &attrib) == 0 &&
+         buf_len(&attrib))) {
+        /* calendar has its own time zone for floating events -- skip it */
+        return 0;
+    }
+
+    int r = mailbox_open_irl(mbentry->name, &frock->mailbox);
+    if (!r) {
+        r = caldav_get_floating_events(frock->caldavdb, mbentry,
+                                       &floating_cb, &frock);
+    }
+
+    mailbox_close(&frock->mailbox);
+
+    return r;
+}
+
+EXPORTED int caldav_alarm_update_floating(struct mailbox *mailbox,
+                                          const char *userid)
+{
+    struct floating_rock frock = { NULL, NULL, userid };
+    struct caldav_db *caldavdb = NULL;
+    int r;
+
+    if (!mailbox) return 0;
+
+    caldavdb = frock.caldavdb = caldav_open_mailbox(mailbox);
+    if (!caldavdb) return -1;
+
+    const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    const char *mboxname = mailbox_name(mailbox);
+    const char *homeset = strstr(mboxname, prefix);
+
+    if (strlen(homeset) == strlen(prefix)) {
+        /* update all contained calendars without a time zone on them */
+        r = mboxlist_mboxtree(mboxname, calendar_cb, &frock, MBOXTREE_SKIP_ROOT);
+    }
+    else {
+        /* update the specified calendar */
+        frock.mailbox = mailbox;
+        r = caldav_get_floating_events(caldavdb, mailbox->mbentry,
+                                       &floating_cb, &frock);
+    }
+
+    caldav_close(caldavdb);
+
+    return (r == SQLITE_OK ? 0 : -1);
 }

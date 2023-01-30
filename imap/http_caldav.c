@@ -6466,6 +6466,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
         pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
         xmlChar *freeme = NULL;
         const char *tzid = NULL;
+        const icaltimezone *tz = NULL;
         unsigned valid = 1;
         int r;
 
@@ -6473,20 +6474,13 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
             freeme = xmlNodeGetContent(prop);
             tzid = (const char *) freeme;
 
-            /* Verify we have tzid record in the database */
-            r = zoneinfo_lookup(tzid, NULL);
-            if (r) {
-                if (r == CYRUSDB_NOTFOUND) {
-                    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
-                                 &propstat[PROPSTAT_FORBID],
-                                 prop->name, prop->ns, NULL,
-                                 CALDAV_VALID_TIMEZONE);
-                }
-                else {
-                    xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
-                                 &propstat[PROPSTAT_ERROR],
-                                 prop->name, prop->ns, NULL, 0);
-                }
+           /* Verify that we have the tz */
+            tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+            if (!tz) {
+                xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                             &propstat[PROPSTAT_FORBID],
+                             prop->name, prop->ns, NULL,
+                             CALDAV_VALID_TIMEZONE);
                 *pctx->ret = HTTP_FORBIDDEN;
                 valid = 0;
             }
@@ -6799,6 +6793,7 @@ static int calquery_by_collection(const mbentry_t *mbentry, void *rock)
     if (!calfilter->tz && (calfilter->flags & NEED_TZ)) {
         /* Determine which time zone to use for floating time */
         calfilter->tz = cal_tz = caldav_get_calendar_tz(mboxname, httpd_userid);
+        if (!calfilter->tz) calfilter->tz = cal_tz = icaltimezone_copy(utc_zone);
     }
 
     int r = propfind_by_collection(mbentry, rock);
@@ -7217,45 +7212,6 @@ static int busytime_by_resource(void *rock, void *data)
     return busytime_add_resource(fctx->mailbox, fbfilter, cdata);
 }
 
-
-HIDDEN icaltimezone *caldav_get_calendar_tz(const char *mboxname, const char *userid)
-{
-    struct buf attrib = BUF_INITIALIZER;
-    icaltimezone *tz = NULL;
-
-    /*  Check for CALDAV:calendar-timezone-id */
-    const char *prop_annot =
-        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
-
-    int r = annotatemore_lookupmask(mboxname, prop_annot, userid, &attrib);
-    if (!r && buf_len(&attrib)) {
-        tz = icaltimezone_get_builtin_timezone(buf_cstring(&attrib));
-        buf_free(&attrib);
-        if (tz) return icaltimezone_copy(tz);
-    }
-
-    /*  Check for CALDAV:calendar-timezone */
-    prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
-
-    r = annotatemore_lookupmask(mboxname, prop_annot, httpd_userid, &attrib);
-    if (!r && buf_len(&attrib)) {
-        icalcomponent *ical, *vtz;
-
-        ical = icalparser_parse_string(buf_cstring(&attrib));
-        vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-        icalcomponent_remove_component(ical, vtz);
-        icalcomponent_free(ical);
-        buf_free(&attrib);
-
-        tz = icaltimezone_new();
-        icaltimezone_set_component(tz, vtz);
-        return tz;
-    }
-
-    /* Default to UTC */
-    return icaltimezone_copy(icaltimezone_get_utc_timezone());
-}
-
 /* mboxlist_findall() callback to find busytime of a collection */
 static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
 {
@@ -7282,6 +7238,7 @@ static int busytime_by_collection(const mbentry_t *mbentry, void *rock)
 
     /* Determine which time zone to use for floating time */
     fbfilter->tz = caldav_get_calendar_tz(mboxname, httpd_userid);
+    if (!fbfilter->tz) fbfilter->tz = icaltimezone_copy(utc_zone);
 
     int r = propfind_by_collection(mbentry, rock);
 

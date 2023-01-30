@@ -1468,3 +1468,79 @@ EXPORTED const char *caldav_comp_type_as_string(unsigned comp_type)
     }
 }
 
+static icaltimezone *_get_calendar_tz(const char *mboxname, const char *userid)
+{
+    struct buf attrib = BUF_INITIALIZER;
+    icaltimezone *tz = NULL;
+
+    /*  Check for CALDAV:calendar-timezone-id */
+    const char *prop_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+
+    int r = annotatemore_lookupmask(mboxname, prop_annot, userid, &attrib);
+    if (!r && buf_len(&attrib)) {
+        tz = icaltimezone_get_builtin_timezone(buf_cstring(&attrib));
+        buf_free(&attrib);
+        if (tz) return icaltimezone_copy(tz);
+    }
+
+    /*  Check for CALDAV:calendar-timezone */
+    prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+
+    r = annotatemore_lookupmask(mboxname, prop_annot, userid, &attrib);
+    if (!r && buf_len(&attrib)) {
+        icalcomponent *ical, *vtz;
+
+        ical = icalparser_parse_string(buf_cstring(&attrib));
+        vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+        icalcomponent_remove_component(ical, vtz);
+        icalcomponent_free(ical);
+        buf_free(&attrib);
+
+        tz = icaltimezone_new();
+        icaltimezone_set_component(tz, vtz);
+        return tz;
+    }
+
+    return NULL;
+}
+
+EXPORTED icaltimezone *caldav_get_calendar_tz(const char *mboxname,
+                                              const char *userid)
+{
+    icaltimezone *tz = _get_calendar_tz(mboxname, userid);
+
+    if (!tz) {
+        /* Try principal (calendar-home-set) */
+        char *homeset = caldav_mboxname(userid, NULL);
+        tz = _get_calendar_tz(homeset, userid);
+        free(homeset);
+    }
+
+    return tz;
+}
+
+#define CMD_SELFLOATING CMD_READFIELDS \
+    " WHERE mailbox = :mailbox AND dtstart NOT LIKE '%T%' ORDER BY imap_uid;"
+
+EXPORTED int caldav_get_floating_events(struct caldav_db *caldavdb,
+                                        const mbentry_t *mbentry,
+                                        caldav_cb_t *cb, void *rock)
+{
+    const char *mailbox = (caldavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",      SQLITE_TEXT,    { .s = mailbox   } },
+        { NULL,            SQLITE_NULL,    { .s = NULL      } }
+    };
+    struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, 0, cb, rock };
+    int r;
+
+    r = sqldb_exec(caldavdb->db, CMD_SELFLOATING, bval, &read_cb, &rrock);
+    if (r) {
+        syslog(LOG_ERR, "caldav error %s", error_message(r));
+    }
+
+    return r;
+}

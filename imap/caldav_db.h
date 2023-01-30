@@ -239,4 +239,13 @@ int caldav_write_jscalcache(struct caldav_db *caldavdb, int rowid,
                             const char *recurid, const char *userid,
                             int version, const char *data);
 
+/* fetch time zone using for floating time events from calendar or principal */
+extern icaltimezone *caldav_get_calendar_tz(const char *mboxname,
+                                            const char *userid);
+
+/* fetch IMAP UIDs of all floating time events in calendar */
+int caldav_get_floating_events(struct caldav_db *caldavdb,
+                               const mbentry_t *mbentry,
+                               caldav_cb_t *cb, void *rock);
+
 #endif /* CALDAV_DB_H */
