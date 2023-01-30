@@ -487,7 +487,7 @@ int scan_me(struct findall_data *data, void *rock)
     srock->i_mbox = i_mbox;
 
     if (verbose) printf("Scanning %s...\n", name);
-    mailbox_expunge(mailbox, virus_check, srock, NULL, EVENT_MESSAGE_EXPUNGE);
+    mailbox_expunge(mailbox, NULL, virus_check, srock, NULL, EVENT_MESSAGE_EXPUNGE);
     if (srock->idx_state) index_close(&srock->idx_state);  /* closes mailbox */
     else mailbox_close(&mailbox);
 

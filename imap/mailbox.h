@@ -633,16 +633,14 @@ extern unsigned mailbox_count_unseen(struct mailbox *mailbox);
 extern int mailbox_lock_index(struct mailbox *mailbox, int locktype);
 extern int mailbox_index_islocked(struct mailbox *mailbox, int write);
 
-extern int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
-                                   unsigned *ndeleted);
-extern int mailbox_expunge(struct mailbox *mailbox,
+extern int mailbox_expunge_cleanup(struct mailbox *mailbox, struct mailbox_iter *iter,
+                                   time_t expunge_mark, unsigned *ndeleted);
+extern int mailbox_expunge(struct mailbox *mailbox, struct mailbox_iter *iter,
                            mailbox_decideproc_t *decideproc, void *deciderock,
                            unsigned *nexpunged, int event_type);
-extern void mailbox_archive(struct mailbox *mailbox,
-                            mailbox_decideproc_t *decideproc, void *deciderock, unsigned flags);
+extern void mailbox_archive(struct mailbox *mailbox, struct mailbox_iter *iter,
+                            mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_remove_files_from_object_storage(struct mailbox *mailbox, unsigned flags);
-extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
-                           mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
 
 extern int mailbox_create(const char *name, uint32_t mbtype, const char *part, const char *acl,
@@ -719,6 +717,12 @@ extern int mailbox_annotation_lookupmask(struct mailbox *mailbox, uint32_t uid,
 extern struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
                                               modseq_t changedsince,
                                               unsigned flags);
+/* Set a timer on the iterator, after which it returns no more messages.
+ * The time is measured in CLOCK_MONOTONIC time as returned by
+ * clock_gettime. The nchecktime argument defines how many records are
+ * processed before the clock is checked again. */
+extern void mailbox_iter_timer(struct mailbox_iter *iter,
+                               struct timespec until, unsigned nchecktime);
 extern void mailbox_iter_startuid(struct mailbox_iter *iter, uint32_t uid);
 extern void mailbox_iter_uidset(struct mailbox_iter *iter, seqset_t *seq);
 extern const message_t *mailbox_iter_step(struct mailbox_iter *iter);
