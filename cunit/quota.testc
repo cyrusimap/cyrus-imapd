@@ -32,12 +32,12 @@ static void test_names(void)
     CU_ASSERT_EQUAL(r, QUOTA_STORAGE);
 
     CU_ASSERT_STRING_EQUAL(quota_names[QUOTA_ANNOTSTORAGE],
-                           "X-ANNOTATION-STORAGE");
-    r = quota_name_to_resource("X-ANNOTATION-STORAGE");
+                           "ANNOTATION-STORAGE");
+    r = quota_name_to_resource("ANNOTATION-STORAGE");
     CU_ASSERT_EQUAL(r, QUOTA_ANNOTSTORAGE);
-    r = quota_name_to_resource("x-annotation-storage");
+    r = quota_name_to_resource("annotation-storage");
     CU_ASSERT_EQUAL(r, QUOTA_ANNOTSTORAGE);
-    r = quota_name_to_resource("X-AnNotAtiOn-StOragE");
+    r = quota_name_to_resource("AnNotAtiOn-StOragE");
     CU_ASSERT_EQUAL(r, QUOTA_ANNOTSTORAGE);
 
     r = quota_name_to_resource("nonesuch");

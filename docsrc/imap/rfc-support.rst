@@ -95,7 +95,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`2087`
 
-    IMAP4 QUOTA extension
+    IMAP4 QUOTA extension, obsoleted by :rfc:`9208`.
 
 :rfc:`2088`
 
@@ -905,6 +905,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`8970`
 
     IMAP4 Extension: Message Preview Generation
+
+:rfc:`9208`
+
+    IMAP QUOTA Extension
 
 IETF RFC Drafts
 ===============
