@@ -1073,6 +1073,12 @@ sub test_copy_across_backends
 sub test_replace_same_backend
     :needs_component_murder :NoAltNamespace :min_version_3_9
 {
+    # :min_version_3_9 checks backend1 version.  The test below checks frontend
+    my ($maj, $min) = Cassandane::Instance->get_version('murder');
+    if ($maj < 3 || ($maj == 3 && $min < 9)) {
+        return;
+    }
+
     my ($self) = @_;
 
     my $talk = $self->{frontend_store}->get_client();
@@ -1094,6 +1100,12 @@ sub test_replace_same_backend
 sub test_replace_across_backends
     :needs_component_murder :NoAltNamespace :min_version_3_9
 {
+    # :min_version_3_9 checks backend1 version.  The test below checks frontend
+    my ($maj, $min) = Cassandane::Instance->get_version('murder');
+    if ($maj < 3 || ($maj == 3 && $min < 9)) {
+        return;
+    }
+
     my ($self) = @_;
 
     my $shared = 'shared';
