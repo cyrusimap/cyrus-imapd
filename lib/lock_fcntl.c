@@ -46,11 +46,134 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <string.h>
 
 #include "cyr_lock.h"
+#include "ptrarray.h"
+#include "util.h"
 
+#include <dlfcn.h>
 #include <syslog.h>
 #include <time.h>
+
+struct lockitem_struct {
+    char *filename;
+    int fd;
+    char ex;
+};
+
+static ptrarray_t heldlocks = PTRARRAY_INITIALIZER;
+
+static void printlocks(void)
+{
+    if (ptrarray_size(&heldlocks) < 2) return;
+    struct buf buf = BUF_INITIALIZER;
+    int i;
+    int haveindex = 0;
+    int haveuser = 0;
+    int haveconv = 0;
+    int havemb = 0;
+    for (i = 0; i < ptrarray_size(&heldlocks); i++) {
+        struct lockitem_struct *item = ptrarray_nth(&heldlocks, i);
+        if (i) buf_putc(&buf, ' ');
+        buf_printf(&buf, "%d=<%c:%d:%s>",
+                   i, item->ex, item->fd, item->filename);
+        if (strstr(item->filename, "*U*")) {
+            haveuser = 1;
+        }
+        if (strstr(item->filename, "cyrus.index") && ! strstr(item->filename, "cyrus.indexed.db")) {
+            haveindex = 1;
+            if (!haveuser) syslog(LOG_ERR, "LOCKERROR: INDEX WITHOUT USER");
+            if (havemb) syslog(LOG_ERR, "LOCKERROR: INDEX INSIDE MB");
+        }
+        if (strstr(item->filename, "conversations.db")) {
+            haveconv = 1;
+            if (!haveuser) syslog(LOG_ERR, "LOCKERROR: CONV WITHOUT USER");
+            if (havemb) syslog(LOG_ERR, "LOCKERROR: CONV INSIDE MB");
+        }
+        if (strstr(item->filename, "mailboxes.db")) {
+            havemb = 1;
+        }
+        if (haveconv && havemb && haveindex && haveuser) {
+            syslog(LOG_NOTICE, "megalocked");
+        }
+    }
+    syslog(LOG_NOTICE, "LOCKORDER: %s", buf_cstring(&buf));
+    buf_free(&buf);
+}
+
+static void addlock(const char *filename, int fd, int exclusive)
+{
+    int i;
+    for (i = 0; i < ptrarray_size(&heldlocks); i++) {
+        struct lockitem_struct *item = ptrarray_nth(&heldlocks, i);
+        if (item->fd != fd) continue;
+        syslog(LOG_NOTICE, "LOCKNOTICE: double add %s (%d) - ignoring", filename, fd);
+        return; // don't double-lock
+    }
+    struct lockitem_struct *item = xzmalloc(sizeof(struct lockitem_struct));
+    item->filename = xstrdupnull(filename);
+    item->fd = fd;
+    item->ex = exclusive ? 'E' : 'S';
+    ptrarray_append(&heldlocks, item);
+    printlocks();
+}
+
+static void rmlock(const char *filename, int fd)
+{
+    int i;
+    for (i = 0; i < ptrarray_size(&heldlocks); i++) {
+        struct lockitem_struct *item = ptrarray_nth(&heldlocks, i);
+        if (item->fd != fd) continue;
+        ptrarray_remove(&heldlocks, i);
+        if (i < ptrarray_size(&heldlocks))
+            syslog(LOG_ERR, "LOCKNOTICE: remove out of order %d=<%c:%d:%s>",
+                   i, item->ex, item->fd, item->filename);
+        free(item->filename);
+        free(item);
+        printlocks();
+        return;
+    }
+    syslog(LOG_ERR, "LOCKNOTICE: missing %d:%s", fd, filename);
+
+}
+
+EXPORTED int close(int fd)
+{
+    int i;
+    static int (* fptr)() = 0;
+    if (!fptr) {
+        fptr = (int (*)())dlsym(RTLD_NEXT, "close");
+    }
+
+    for (i = 0; i < ptrarray_size(&heldlocks); i++) {
+        struct lockitem_struct *item = ptrarray_nth(&heldlocks, i);
+        if (item->fd != fd) continue;
+        syslog(LOG_NOTICE, "LOCKNOTICE: removed by close %d", fd);
+        ptrarray_remove(&heldlocks, i);
+        if (i < ptrarray_size(&heldlocks))
+            syslog(LOG_ERR, "LOCKNOTICE: remove out of order %d=<%c:%d:%s>",
+                   i, item->ex, item->fd, item->filename);
+        free(item->filename);
+        free(item);
+    }
+
+    return ((*fptr)(fd));
+}
+
+
+EXPORTED void clearlocks(void)
+{
+    int i;
+    for (i = 0; i < ptrarray_size(&heldlocks); i++) {
+        struct lockitem_struct *item = ptrarray_nth(&heldlocks, i);
+        syslog(LOG_ERR, "LOCKCLEAR: forgetting %d=<%c:%d:%s>",
+               i, item->ex, item->fd, item->filename);
+        free(item->filename);
+        free(item);
+    }
+    ptrarray_truncate(&heldlocks, 0);
+}
 
 EXPORTED const char lock_method_desc[] = "fcntl";
 
@@ -96,6 +219,7 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
             if (failaction) *failaction = "locking";
             return -1;
         }
+        addlock(filename, fd, /*exclusive*/1);
 
         r = fstat(fd, sbuf);
         if (!r) r = stat(filename, &sbuffile);
@@ -157,6 +281,7 @@ EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
         fl.l_len = 0;
         r = fcntl(fd, cmd, &fl);
         if (r != -1) {
+            addlock(filename, fd, exclusive);
             if (debug_locks_longer_than) {
                 struct timeval endtime;
                 gettimeofday(&endtime, 0);
@@ -168,6 +293,11 @@ EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
             return 0;
         }
         if (errno == EINTR) continue;
+        if (nonblock) {
+            syslog(LOG_NOTICE, "LOCKNOTICE: nonblocking attempt <%c:%d:%s>",
+                   exclusive ? 'E' : 'S', fd, filename);
+            printlocks();
+        }
         return -1;
     }
 }
@@ -175,7 +305,7 @@ EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
 /*
  * Release any lock on 'fd'.  Always returns success.
  */
-EXPORTED int lock_unlock(int fd, const char *filename __attribute__((unused)))
+EXPORTED int lock_unlock(int fd, const char *filename)
 {
     struct flock fl;
     int r;
@@ -187,7 +317,10 @@ EXPORTED int lock_unlock(int fd, const char *filename __attribute__((unused)))
 
     for (;;) {
         r = fcntl(fd, F_SETLKW, &fl);
-        if (r != -1) return 0;
+        if (r != -1) {
+            rmlock(filename, fd);
+            return 0;
+        }
         if (errno == EINTR) continue;
         /* xxx help! */
         return -1;

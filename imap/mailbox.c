@@ -1025,9 +1025,9 @@ static int mailbox_open_advanced(const char *name,
     /* already open?  just use this one */
     if (listitem) {
         /* can't reuse an exclusive locked mailbox */
-        if (listitem->l->locktype == LOCK_EXCLUSIVE)
+        if (listitem->l->locktype & LOCK_EXCLUSIVE)
             return IMAP_MAILBOX_LOCKED;
-        if (locktype == LOCK_EXCLUSIVE)
+        if (locktype & LOCK_EXCLUSIVE)
             return IMAP_MAILBOX_LOCKED;
         /* can't reuse an already locked index */
         if (listitem->m.index_locktype)
@@ -1044,22 +1044,30 @@ static int mailbox_open_advanced(const char *name,
 
     // lock the user namespace FIRST before the mailbox namespace
     char *userid = mboxname_to_userid(name);
-    if (userid) {
-        int haslock = user_isnamespacelocked(userid);
-        if (haslock) {
-            if (index_locktype != LOCK_SHARED) assert(haslock != LOCK_SHARED);
-        }
-        else {
-            int locktype = index_locktype;
-            mailbox->local_namespacelock = user_namespacelock_full(userid, locktype);
-        }
-        free(userid);
+    int haslock = user_isnamespacelocked(userid);
+    if (haslock) {
+        if (index_locktype & LOCK_EXCLUSIVE) assert(haslock & LOCK_EXCLUSIVE);
     }
+    else {
+        mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
+    }
+    free(userid);
 
     if (mbe) mbentry = mboxlist_entry_copy(mbe);
     else r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
 
+    /* pre-check for some conditions which mean that we don't want
+       to go ahead and open this mailbox */
     if (!r && mbentry->mbtype & MBTYPE_DELETED)
+        r = IMAP_MAILBOX_NONEXISTENT;
+
+    if (!r && mbentry->mbtype & MBTYPE_MOVING)
+        r = IMAP_MAILBOX_MOVED;
+
+    if (!r && mbentry->mbtype & MBTYPE_INTERMEDIATE)
+        r = IMAP_MAILBOX_NONEXISTENT;
+
+    if (!r && !mbentry->partition)
         r = IMAP_MAILBOX_NONEXISTENT;
 
     if (r) {
@@ -1096,21 +1104,6 @@ static int mailbox_open_advanced(const char *name,
 
     if (!mbentry->name) mbentry->name = xstrdup(name);
     mailbox->mbentry = mbentry;
-
-    if (mbentry->mbtype & MBTYPE_MOVING) {
-        r = IMAP_MAILBOX_MOVED;
-        goto done;
-    }
-
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-        r = IMAP_MAILBOX_NONEXISTENT;
-        goto done;
-    }
-
-    if (!mbentry->partition) {
-        r = IMAP_MAILBOX_NONEXISTENT;
-        goto done;
-    }
 
     if (index_locktype == LOCK_SHARED)
         mailbox->is_readonly = 1;
@@ -1290,7 +1283,8 @@ static void _delayed_cleanup(void *rock)
      * if we are in the middle of a shutdown */
     if (in_shutdown) goto done;
 
-    int r = mailbox_open_exclusive(mboxname, &mailbox);
+    int r = mailbox_open_advanced(mboxname, LOCK_EXCLUSIVE|LOCK_NONBLOCK,
+                                  LOCK_EXCLUSIVE, NULL, &mailbox);
     if (r) goto done;
 
     if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK) {

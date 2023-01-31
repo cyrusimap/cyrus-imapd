@@ -6303,6 +6303,9 @@ static void cmd_search(char *tag, char *cmd)
         goto done;
     }
 
+    // this refreshes the index, we may be looking at it in our search
+    imapd_check(NULL, 0);
+
     if (searchargs->filter) {
         /* Multisearch */
         if ((searchargs->filter & SEARCH_SOURCE_SELECTED) && !imapd_index) {
@@ -6417,7 +6420,7 @@ static void cmd_search(char *tag, char *cmd)
         search_expr_free(mrock.expr);
         free_hash_table(&mrock.mailboxes, NULL);
     }
-    else if (!index_check(imapd_index, 0, 0)) {  /* update the index */
+    else {
         n = index_search(imapd_index, searchargs, usinguid);
     }
 
@@ -7581,8 +7584,8 @@ localcreate:
     imapd_check(NULL, 0);
 
 done:
-    mboxname_release(&namespacelock);
     mailbox_close(&mailbox);
+    mboxname_release(&namespacelock);
     mboxlist_entry_free(&parent);
     buf_free(&specialuse);
     mbname_free(&mbname);
@@ -7737,12 +7740,12 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     }
     mboxlist_entry_free(&mbentry);
 
-    mboxname_release(&namespacelock);
-
     if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
         mboxlist_changesub(mbname_intname(mbname), imapd_userid, imapd_authstate,
                            /* add */ 0, /* force */ 0, /* notify? */ 1);
     }
+
+    mboxname_release(&namespacelock);
 
     imapd_check(NULL, 0);
 
@@ -8946,6 +8949,7 @@ static void cmd_setacl(char *tag, const char *name,
     mbentry_t *mbentry = NULL;
 
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(intname);
 
     /* is it remote? */
     r = mlookup(tag, name, intname, &mbentry);
@@ -8958,6 +8962,9 @@ static void cmd_setacl(char *tag, const char *name,
         /* remote mailbox */
         struct backend *s = NULL;
         int res;
+
+        // don't hold the lock locally, we're calling remote
+        mboxname_release(&namespacelock);
 
         s = proxy_findserver(mbentry->server, &imap_protocol,
                              proxy_userid, &backend_cached,
@@ -9022,11 +9029,9 @@ static void cmd_setacl(char *tag, const char *name,
             }
         }
 
-        struct mboxlock *namespacelock = mboxname_usernamespacelock(intname);
         r = mboxlist_setacl(&imapd_namespace, intname, identifier, rights,
                             imapd_userisadmin || imapd_userisproxyadmin,
                             proxy_userid, imapd_authstate);
-        mboxname_release(&namespacelock);
     }
 
     imapd_check(NULL, 0);
@@ -9045,6 +9050,7 @@ static void cmd_setacl(char *tag, const char *name,
     }
 
 done:
+    mboxname_release(&namespacelock);
     free(intname);
     mboxlist_entry_free(&mbentry);
 }
@@ -9731,7 +9737,7 @@ static void cmd_status(char *tag, char *name)
                                  &backend_current, &backend_inbox, imapd_in);
             if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
-            imapd_check(s, 0);
+            imapd_check(s, 1);
 
             if (!r) {
                 prot_printf(s->out, "%s Status {" SIZE_T_FMT "+}\r\n%s ", tag,
@@ -9776,7 +9782,7 @@ static void cmd_status(char *tag, char *name)
 
     // status of selected mailbox, we need to refresh
     if (!r && !strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
-        imapd_check(NULL, 0);
+        imapd_check(NULL, 1);
 
     if (statusitems & STATUS_HIGHESTMODSEQ)
         condstore_enabled("STATUS (HIGHESTMODSEQ)");
@@ -11332,18 +11338,15 @@ static void cmd_undump(char *tag, char *name)
 {
     int r = 0;
     mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
 
     /* administrators only please */
     if (!imapd_userisadmin)
         r = IMAP_PERMISSION_DENIED;
 
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
-
     if (!r) r = mlookup(tag, name, mbname_intname(mbname), NULL);
 
     if (!r) r = undump_mailbox(mbname_intname(mbname), imapd_in, imapd_out, imapd_authstate);
-
-    mboxname_release(&namespacelock);
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s%s\r\n",
@@ -11354,10 +11357,13 @@ static void cmd_undump(char *tag, char *name)
                                                  imapd_userid, imapd_authstate,
                                                  NULL, NULL, 0) == 0)
                     ? "[TRYCREATE] " : "", error_message(r));
-    } else {
+    }
+    else {
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
+
+    mboxname_release(&namespacelock);
     mbname_free(&mbname);
 }
 
@@ -12574,26 +12580,36 @@ static void cmd_xfer(const char *tag, const char *name,
             if (!xfer->use_replication) {
                 /* set the quotaroot if needed */
                 r = xfer_setquotaroot(xfer, mbentry->name);
-                if (r) goto next;
+                if (r) {
+                    mboxname_release(&namespacelock);
+                    goto next;
+                }
 
                 /* backport the seen file if needed */
                 if (xfer->remoteversion < 12) {
                     r = seen_open(xfer->userid, SEEN_CREATE, &xfer->seendb);
-                    if (r) goto next;
+                    if (r) {
+                        mboxname_release(&namespacelock);
+                        goto next;
+                    }
                 }
             }
             mbentry_t *inbox_mbentry = NULL;
             char *inbox = mboxname_user_mbox(xfer->userid, 0);
             r = mboxlist_lookup_allow_all(inbox, &inbox_mbentry, NULL);
             free(inbox);
-            if (r) goto next;
+            if (r) {
+                mboxname_release(&namespacelock);
+                mboxlist_entry_free(&inbox_mbentry);
+                goto next;
+            }
 
             r = mboxlist_usermboxtree(xfer->userid, NULL, xfer_addusermbox,
                                       xfer, MBOXTREE_DELETED);
 
             /* NOTE: mailboxes were added in reverse, so the inbox is
              * done last */
-            r = do_xfer(xfer);
+            if (!r) r = do_xfer(xfer);
 
             if (!r) {
                 /* this was a successful user move, and we need to delete
