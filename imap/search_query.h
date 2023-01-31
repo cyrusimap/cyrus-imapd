@@ -110,7 +110,6 @@ struct search_query {
     const struct sortcrit *sortcrit;
     int multiple;
     int need_ids;
-    int need_expunge;
     int want_expunged;
     uint32_t want_mbtype;
     int verbose;

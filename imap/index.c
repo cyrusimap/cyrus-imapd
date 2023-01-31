@@ -1179,9 +1179,10 @@ EXPORTED int index_fetch(struct index_state *state,
     struct index_map *im;
     uint32_t msgno;
     int r;
-    struct mboxevent *mboxevent = NULL;
+    // if FETCH_SETSEEN and ACLs permit, we need a writelock
+    int readonly = !(fetchargs->fetchitems & FETCH_SETSEEN && !state->examining && state->myrights & ACL_SETSEEN);
 
-    r = index_lock(state, /*readonly*/0);  // can't be readonly because of FETCH_SETSEEN
+    r = index_lock(state, readonly);
     if (r) return r;
 
     if (!strcmp("$", sequence)) {
@@ -1205,8 +1206,8 @@ EXPORTED int index_fetch(struct index_state *state,
     }
 
     /* set the \Seen flag if necessary - while we still have the lock */
-    if (fetchargs->fetchitems & FETCH_SETSEEN && !state->examining && state->myrights & ACL_SETSEEN) {
-        mboxevent = mboxevent_new(EVENT_MESSAGE_READ);
+    if (!readonly) {
+        struct mboxevent *mboxevent = mboxevent_new(EVENT_MESSAGE_READ);
 
         for (msgno = 1; msgno <= state->exists; msgno++) {
             im = &state->map[msgno-1];
@@ -1220,6 +1221,10 @@ EXPORTED int index_fetch(struct index_state *state,
         mboxevent_set_access(mboxevent, NULL, NULL, state->userid, mailbox_name(state->mailbox), 1);
         mboxevent_set_numunseen(mboxevent, state->mailbox,
                                 state->numunseen);
+
+        /* send MessageRead event notification for successfully rewritten records */
+        mboxevent_notify(&mboxevent);
+        mboxevent_free(&mboxevent);
     }
 
     if (fetchargs->vanished) {
@@ -1234,10 +1239,6 @@ EXPORTED int index_fetch(struct index_state *state,
     }
 
     index_unlock(state);
-
-    /* send MessageRead event notification for successfully rewritten records */
-    mboxevent_notify(&mboxevent);
-    mboxevent_free(&mboxevent);
 
     index_checkflags(state, 1, 0);
 
@@ -1879,13 +1880,8 @@ static int index_lock(struct index_state *state, int readonly)
 
 EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 {
-    int r = index_lock(state, /*readonly*/1);
-    if (r) return r;
-
     status_fill_mailbox(state->mailbox, sdata);
     status_fill_seen(state->userid, sdata, state->numrecent, state->numunseen);
-
-    index_unlock(state);
     return 0;
 }
 
@@ -2539,7 +2535,6 @@ EXPORTED int index_convmultisort(struct index_state *state,
     query = search_query_new(state, searchargs);
     query->multiple = 1;
     query->need_ids = 1;
-    query->need_expunge = 1;
     query->sortcrit = sortcrit;
 
     r = search_query_run(query);

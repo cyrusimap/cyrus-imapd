@@ -898,16 +898,7 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
         r = mboxlist_lookup(mboxname, NULL, NULL);
     }
 
-    if (!r && mailboxptr) {
-        r = mailbox_open_iwl(mboxname, mailboxptr);
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
-                   mboxname, error_message(r));
-            goto done;
-        }
-    }
-
-    else if (r == IMAP_MAILBOX_NONEXISTENT) {
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Create locally */
         struct mailbox *mailbox = NULL;
         mbentry_t mbentry = MBENTRY_INITIALIZER;
@@ -931,8 +922,19 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
 
         free(mrock.active);
 
-        if (mailboxptr) *mailboxptr = mailbox;
-        else mailbox_close(&mailbox);
+        // close the mailbox here, we'll re-open once we've released the namespace lock
+        mailbox_close(&mailbox);
+    }
+
+    mboxname_release(&namespacelock);
+
+    if (!r && mailboxptr) {
+        r = mailbox_open_iwl(mboxname, mailboxptr);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
+                   mboxname, error_message(r));
+            goto done;
+        }
     }
 
   done:
