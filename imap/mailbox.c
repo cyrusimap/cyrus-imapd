@@ -2451,6 +2451,8 @@ static uint32_t mailbox_getuid(struct mailbox *mailbox, uint32_t recno)
  * Returns the recno of the message with UID 'uid'.
  * If no message with UID 'uid', returns the message with
  * the highest UID not greater than 'uid'.
+ * NOTE: this function can return 0 if 'uid' is less than
+ * the UID of the first record in the mailbox
  */
 static uint32_t mailbox_finduid(struct mailbox *mailbox, uint32_t uid)
 {
