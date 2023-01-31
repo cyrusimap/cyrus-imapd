@@ -1453,6 +1453,39 @@ sub test_striphtml_alternative
     $self->assert_deep_equals([], $uids);
 }
 
+sub test_html_only
+    :min_version_3_3 :needs_search_xapian
+{
+    my ($self) = @_;
+    my $talk = $self->{store}->get_client();
+
+    xlog "Index message with both html and plain text part";
+    $self->make_message("test",
+        mime_type => "text/html",
+        body => ""
+          . "<html xmlns:o=\"urn:schemas-microsoft-com:office:office\">\r\n"
+          . "<div>This is an html <o:p>LL123</o:p> body.</div>\r\n"
+          . "</html"
+
+    ) || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Assert that HTML in plain text is stripped";
+    my $uids = $talk->search('fuzzy', 'body', 'html') || die;
+    $self->assert_deep_equals([1], $uids);
+
+    $uids = $talk->search('fuzzy', 'body', 'div') || die;
+    $self->assert_deep_equals([], $uids);
+
+    # make sure the "p" doesn't leak into a token
+    $uids = $talk->search('fuzzy', 'body', 'LL123p') || die;
+    $self->assert_deep_equals([], $uids);
+
+    # make sure the real token gets indexed
+    $uids = $talk->search('fuzzy', 'body', 'LL123') || die;
+    $self->assert_deep_equals([1], $uids);
+}
+
 sub test_striphtml_plain
     :min_version_3_3 :needs_search_xapian
 {
