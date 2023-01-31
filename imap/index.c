@@ -3367,8 +3367,10 @@ EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
 /*
  * Returns the msgno of the message with UID corresponding to 'uid', based on 'mode'
  * If mode is EQ, msgno with             UID == 'uid', otherwise 0
- * If mode is GE, msgno with the lowest  UID >= 'uid'
- * If mode is LE, msgno with the highest UID <= 'uid'
+ * If mode is GE, msgno with the lowest  UID >= 'uid', which is never zero,
+ *                                                     but may be past the end
+ * If mode is LE, msgno with the highest UID <= 'uid', which may be zero,
+ *                                                     but never past the end
  */
 EXPORTED uint32_t index_finduid(struct index_state *state, uint32_t uid, int mode)
 {

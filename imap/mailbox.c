@@ -2451,6 +2451,8 @@ static uint32_t mailbox_getuid(struct mailbox *mailbox, uint32_t recno)
  * Returns the recno of the message with UID 'uid'.
  * If no message with UID 'uid', returns the message with
  * the highest UID not greater than 'uid'.
+ * NOTE: this function can return 0 if 'uid' is less than
+ * the UID of the first record in the mailbox
  */
 static uint32_t mailbox_finduid(struct mailbox *mailbox, uint32_t uid)
 {
@@ -7994,8 +7996,22 @@ EXPORTED struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
 
 EXPORTED void mailbox_iter_startuid(struct mailbox_iter *iter, uint32_t uid)
 {
-    struct mailbox *mailbox = iter->mailbox;
-    iter->recno = uid ? mailbox_finduid(mailbox, uid) : 1;
+    if (!uid) {
+        iter->recno = 1;
+        return;
+    }
+
+    iter->recno = mailbox_finduid(iter->mailbox, uid);
+    if (iter->recno) {
+        // check we're not looking at an earlier message again
+        message_set_from_mailbox(iter->mailbox, iter->recno, iter->msg);
+        const struct index_record *record = msg_record(iter->msg);
+        if (record->uid < uid) iter->recno++;
+    }
+    else {
+        // uid was before the UID of the first message, so begin there
+        iter->recno = 1;
+    }
 }
 
 EXPORTED void mailbox_iter_uidset(struct mailbox_iter *iter, seqset_t *seq)
