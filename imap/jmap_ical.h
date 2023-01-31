@@ -95,6 +95,9 @@ extern "C" {
 #define JMAPICAL_XPARAM_COMMENT       "X-COMMENT" /*used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
 
+/* Custom JSCalendar properties */
+#define JMAPICAL_JSPROP_TIMEZONES     "cyrusimap.org:timeZones"
+
 typedef struct jstimezones jstimezones_t;
 
 struct jmapical_ctx {
@@ -184,7 +187,9 @@ typedef struct jstimezones jstimezones_t;
 
 /* Create a resolver for VTIMEZONEs embedded in VCALENDAR ical.
  * If no_guess is true, then the resolver does not attempt to
- * guess IANA timezone identifiers for non-IANA timezones. */
+ * guess IANA timezone identifiers for non-IANA timezones
+ * and preserves them in the custom "cyrusimap.org:timeZones"
+ * property in the CalendarEvent */
 extern jstimezones_t *jstimezones_new(icalcomponent *ical, int no_guess);
 
 /* Resolve tzid to a timezone.

@@ -3823,10 +3823,11 @@ calendarevent_from_ical(icalcomponent *comp,
         }
 
         /* timeZones - requires overrides set in the event already */
-        if (jmap_wantprop(props, "timeZones")) {
+        if ((jstzones && jstzones->no_guess) ||
+                (props && jmap_wantprop(props, JMAPICAL_JSPROP_TIMEZONES))) {
             json_t *jtimezones = timezones_from_ical(event, jstzones);
             if (JNOTNULL(jtimezones)) {
-                json_object_set_new(event, "timeZones", jtimezones);
+                json_object_set_new(event, JMAPICAL_JSPROP_TIMEZONES, jtimezones);
             }
         }
     }
@@ -6728,7 +6729,7 @@ static void timezones_to_ical(icalcomponent *ical,
 {
     icaltimezone *utc = icaltimezone_get_utc_timezone();
 
-    jmap_parser_push(parser, "timeZones");
+    jmap_parser_push(parser, JMAPICAL_JSPROP_TIMEZONES);
 
     /* Check for orphaned timezones */
     strarray_t custom_jstzids = STRARRAY_INITIALIZER;
@@ -6955,7 +6956,7 @@ static void overrides_to_ical(icalcomponent *comp,
                     !strcmp(key, "relatedTo") ||
                     !strcmp(key, "replyTo") ||
                     !strcmp(key, "sentBy") ||
-                    !strcmp(key, "timeZones") ||
+                    !strcmp(key, JMAPICAL_JSPROP_TIMEZONES) ||
                     !strcmp(key, "uid")) {
 
                     json_object_del(myoverride, key);
@@ -7179,11 +7180,11 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
     /* timeZones */
     icalcomponent *ical = icalcomponent_get_parent(comp);
-    jprop = json_object_get(event, "timeZones");
+    jprop = json_object_get(event, JMAPICAL_JSPROP_TIMEZONES);
     if (json_is_object(jprop)) {
         timezones_to_ical(ical, parser, event, jprop, jmapctx);
     } else if (JNOTNULL(jprop)) {
-        jmap_parser_invalid(parser, "timeZones");
+        jmap_parser_invalid(parser, JMAPICAL_JSPROP_TIMEZONES);
     }
     if (!jstzonesp || !*jstzonesp) {
         if (!jstzonesp) {

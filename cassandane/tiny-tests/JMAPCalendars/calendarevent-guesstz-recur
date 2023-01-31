@@ -44,7 +44,6 @@ END:VCALENDAR
 EOF
 
     my $event = $self->putandget_vevent($eventId,
-        $ical, ['timeZone', 'timeZones']);
+        $ical, ['timeZone');
     $self->assert_str_equals('Europe/Berlin', $event->{timeZone});
-    $self->assert_null($event->{timeZones});
 }
