@@ -1505,7 +1505,8 @@ restart:
             html_pop(s);
             html_saw_tag(rock);
         }
-        else if (html_isalpha(c)) {
+        // might be a namespaced tag
+        else if (html_isalpha(c) || c == ':') {
             buf_putc(&s->name, c);
         }
         else {
