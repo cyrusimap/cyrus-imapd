@@ -1505,8 +1505,9 @@ restart:
             html_pop(s);
             html_saw_tag(rock);
         }
-        // might be a namespaced tag
-        else if (html_isalpha(c) || c == ':') {
+        // HTML only allows alpha and digit, but XML allows namespaces and at least
+        // outlook creates those, and we may as well handle - and _ as well.
+        else if (html_isalpha(c) || html_isdigit(c) || c == ':' || c == '-' || c == '_') {
             buf_putc(&s->name, c);
         }
         else {
