@@ -1464,7 +1464,7 @@ sub test_html_only
         mime_type => "text/html",
         body => ""
           . "<html xmlns:o=\"urn:schemas-microsoft-com:office:office\">\r\n"
-          . "<div>This is an html <o:p>LL123</o:p> body.</div>\r\n"
+          . "<div>This is an html <o:p>LL123</o:p> <h11>xyzzy</h11> body.</div>\r\n"
           . "</html"
 
     ) || die;
@@ -1483,6 +1483,12 @@ sub test_html_only
 
     # make sure the real token gets indexed
     $uids = $talk->search('fuzzy', 'body', 'LL123') || die;
+    $self->assert_deep_equals([1], $uids);
+
+    # make sure the h11 doesn't leak
+    $uids = $talk->search('fuzzy', 'body', 'xyzzy1') || die;
+    $self->assert_deep_equals([], $uids);
+    $uids = $talk->search('fuzzy', 'body', 'xyzzy') || die;
     $self->assert_deep_equals([1], $uids);
 }
 
