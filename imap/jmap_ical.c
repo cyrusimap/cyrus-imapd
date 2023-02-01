@@ -711,6 +711,23 @@ static void remove_icalxprop(icalcomponent *comp, const char *name)
     }
 }
 
+
+static void remove_xjmapid(icalcomponent *comp)
+{
+    if (!comp) return;
+
+    icalproperty *prop, *nextprop;
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+            prop; prop = nextprop) {
+        nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+        if (!strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID)) {
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+        }
+    }
+}
+
 static void xjmapid_from_icalm(struct buf *dst, icalproperty *prop)
 {
     buf_reset(dst);
@@ -991,25 +1008,31 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
         icalproperty_set_x_name(prop, "X-LIC-LOCATION");
         icalcomponent_add_property(myvtz, prop);
 
-        /* Determine timezone name */
-        const char *jstzid = get_icalxprop_value(myvtz, JMAPICAL_XPROP_ID);
-        if (!jstzid) {
+        /* Remove any JMAP timezone identifier -- we set these for RFC8984 */
+        remove_xjmapid(myvtz);
+
+        /* Guess IANA timezone name */
 #ifdef HAVE_GUESSTZ
-            if (gtz) {
-                char *ianaid = guesstz_guess(gtz, myvtz, guess_span.start, guess_span.end);
-                if (ianaid) buf_setcstr(&idbuf, ianaid);
-                free(ianaid);
-            }
-#endif
-            if (!buf_len(&idbuf)) {
-                buf_putc(&idbuf, '/');
-                buf_appendcstr(&idbuf, tzid);
-            }
-            jstzid = buf_cstring(&idbuf);
-            prop = icalproperty_new_x(jstzid);
-            icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
-            icalcomponent_add_property(myvtz, prop);
+        if (!jstzones->no_guess && gtz) {
+            char *ianaid = guesstz_guess(gtz, myvtz, guess_span.start, guess_span.end);
+            if (ianaid) buf_setcstr(&idbuf, ianaid);
+            free(ianaid);
         }
+#endif
+        if (!buf_len(&idbuf)) {
+            buf_putc(&idbuf, '/');
+            buf_appendcstr(&idbuf, tzid);
+        }
+
+        /* Set the guessed timezone id in the in-memory VTIMEZONE.
+         * This timezone id is what we'll be using within JSCalendar
+         * events as IANA timezone id. The iCalendar time properties
+         * keep referring to the non-IANA iCalendar TZID */
+        const char *jstzid = buf_cstring(&idbuf);
+        prop = icalproperty_new_x(jstzid);
+        icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
+        icalcomponent_add_property(myvtz, prop);
+
         icaltimezone *tz = icaltimezone_new();
         icaltimezone_set_component(tz, myvtz);
 
@@ -6745,15 +6768,16 @@ static void timezones_to_ical(icalcomponent *ical,
 
         validate_type(parser, jtimezone, "TimeZone");
 
+        // Note: an earlier implementation stored the jstzid in
+        // the VTIMEZONE by use of the X-JMAP-ID property. We do not
+        // do that anymore, at least until jscalendarbis is final
+        // and a iCalendar standard property to store jstzid got defined.
+
         const char *tzid = json_string_value(json_object_get(jtimezone, "tzId"));
         if (tzid) {
             icalcomponent_add_property(tzcomp, icalproperty_new_tzid(tzid));
         }
         else jmap_parser_invalid(parser, "tzId");
-
-        icalproperty *prop = icalproperty_new_x(jstzid);
-        icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
-        icalcomponent_add_property(tzcomp, prop);
 
         json_t *jprop = json_object_get(jtimezone, "updated");
         if (json_is_string(jprop)) {
