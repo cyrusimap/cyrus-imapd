@@ -349,7 +349,8 @@ enum {
     PRIV_IMPLICIT =             (1<<0),
     PRIV_INBOX =                (1<<1),
     PRIV_OUTBOX =               (1<<2),
-    PRIV_CONTAINED =            (1<<3)
+    PRIV_CONTAINED =            (1<<3),
+    PRIV_NOSUBCOL =             (1<<4),
 };
 
 
@@ -2568,7 +2569,8 @@ static void add_privs(int rights, unsigned flags,
             }
 
             /* DAV:bind */
-            if ((rights & DACL_BIND) == DACL_BIND) {
+            if ((rights & DACL_BIND) == DACL_BIND ||
+                ((flags & PRIV_NOSUBCOL) && (rights & DACL_ADDRSRC))) {
                 priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
                 xmlNewChild(priv, NULL, BAD_CAST "bind", NULL);
 
@@ -2592,7 +2594,8 @@ static void add_privs(int rights, unsigned flags,
             }
 
             /* DAV:unbind */
-            if ((rights & DACL_UNBIND) == DACL_UNBIND) {
+            if ((rights & DACL_UNBIND) == DACL_UNBIND ||
+                ((flags & PRIV_NOSUBCOL) && (rights & DACL_RMRSRC))) {
                 priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
                 xmlNewChild(priv, NULL, BAD_CAST "unbind", NULL);
 
@@ -2724,10 +2727,16 @@ int propfind_curprivset(const xmlChar *name, xmlNsPtr ns,
                     flags = PRIV_INBOX;
                 else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
                     flags = PRIV_OUTBOX;
+
+                flags |= PRIV_NOSUBCOL;
             }
         }
+        else if (fctx->req_tgt->collection &&
+                 fctx->req_tgt->namespace->id == URL_NS_ADDRESSBOOK) {
+            flags |= PRIV_NOSUBCOL;
+        }
 
-        flags += PRIV_CONTAINED;
+        flags |= PRIV_CONTAINED;
 
         add_privs(rights, flags, set, resp->parent, fctx->ns);
     }
