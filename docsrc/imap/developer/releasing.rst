@@ -10,6 +10,9 @@ These instructions are specifically for doing point releases (x.y.z) from
 branches that contain RST-based documentation and infrastructure.  This
 includes 2.5 and later versions.
 
+For snapshot releases from the master branch, see
+:ref:`imap-developer-snapshot-releasing`
+
 For new releases from ancient branches, see :ref:`imap-developer-ancient-releasing`
 
 For major (x.y) releases, you will follow this process for publishing the
