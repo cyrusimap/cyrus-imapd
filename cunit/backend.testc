@@ -46,7 +46,7 @@ struct server_state {
 
     /* global state */
     int rend_sock;
-    char banner[32];
+    char banner[64];
 
     /* per-connection state */
     int is_connected;
@@ -197,11 +197,11 @@ static void test_badservice(void)
  * Test that backend_version detects the remote version correctly.
  */
 struct backend_version_data {
-    char banner[32];
+    char banner[64];
     int version;
 };
 
-static void test_backend_version(void)
+static void backend_version_common(void)
 {
     size_t i, n_tests;
     struct backend_version_data data[] = {
@@ -399,9 +399,15 @@ static void test_backend_version(void)
         { "Cyrus IMAP 3.9.7", 17 },
         { "Cyrus IMAP 3.9.8", 17 },
         { "Cyrus IMAP 3.9.9", 17 },
-    };
 
-    default_conditions();
+        /* better test some pre-release version strings too, would be bad if
+         * the parser chokes on them!
+         */
+        { "Cyrus IMAP 3.0.0-rc1", 13 },
+        { "Cyrus IMAP 3.2.0-beta4", 16 },
+        { "Cyrus IMAP 3.6.0-beta2", 17 },
+        { "Cyrus IMAP 3.7.0-alpha0-1155-gf86d12f44a", 17 },
+    };
 
     /* XXX there's something wrong with the toy test server that results in
      * XXX the banner not being set with auto_capa enabled???
@@ -434,15 +440,32 @@ static void test_backend_version(void)
     }
 }
 
-static void test_unrecognised_backend_version(void)
+static void test_backend_version_multiline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 1;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    backend_version_common();
+}
+
+static void test_backend_version_oneline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 0;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
+    backend_version_common();
+}
+
+static void unrecognised_backend_version_common(void)
 {
     size_t i, n_tests;
     struct backend_version_data data[] = {
         { "BOGUS", 6 }, /* completely unrecognised */
         { "Cyrus IMAP v2.3.B (OGUS)", 6 }, /* junk 2.3 revision */
+        { "Cyrus IMAP 10.0.0", MAILBOX_MINOR_VERSION }, /* unknown future version */
+        { "Cyrus IMAP 10.0.0-rc1", MAILBOX_MINOR_VERSION },
+        { "Cyrus IMAP 10.0.0-alpha0-57-g1f6140ee54", MAILBOX_MINOR_VERSION },
     };
-
-    default_conditions();
 
     /* XXX there's something wrong with the toy test server that results in
      * XXX the banner not being set with auto_capa enabled???
@@ -467,7 +490,7 @@ static void test_unrecognised_backend_version(void)
         CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
         CU_ASSERT_EQUAL(server_state->is_tls, 0);
 
-        CU_SYSLOG_MATCH("Assuming index version 6!");
+        CU_SYSLOG_MATCH("Assuming index version [0-9]+!");
         got_version = backend_version(be);
         CU_ASSERT_EQUAL(got_version, data[i].version);
         CU_ASSERT_SYSLOG(/*all*/0, 1);
@@ -475,6 +498,22 @@ static void test_unrecognised_backend_version(void)
         backend_disconnect(be);
         free(be);
     }
+}
+
+static void test_unrecognised_backend_version_multiline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 1;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    unrecognised_backend_version_common();
+}
+
+static void test_unrecognised_backend_version_oneline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 0;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
+    unrecognised_backend_version_common();
 }
 
 /*
