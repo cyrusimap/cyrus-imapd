@@ -4246,7 +4246,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser,
         icalcomponent_add_property(comp, prop);
     }
 
-    if (json_object_get(event, "recurrenceId")) {
+    if (!jmapical_datetime_has_zero_time(&recurid)) {
         /* Add RECURRENCE-ID */
         struct icaltimetype icalrecurid = is_date ?
             jmapical_datetime_to_icaldate(&recurid) :
