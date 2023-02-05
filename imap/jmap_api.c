@@ -3224,6 +3224,7 @@ static const mbentry_t *_mbentry_by_uniqueid(jmap_req_t *req,
     if (!mbentry) {
         int r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
         if (r || !mbentry || (mbentry->mbtype & MBTYPE_DELETED) ||
+            mboxname_isdeletedmailbox(mbentry->name, NULL) ||
             /* make sure the user can "see" the mailbox */
             !(jmap_myrights_mbentry(req, mbentry) & JACL_LOOKUP) ||
             /* keep the lookup scoped to accountid */
