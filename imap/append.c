@@ -94,6 +94,8 @@ struct stagemsg {
     struct message_guid guid;
 };
 
+uint64_t append_counter;
+
 static int append_addseen(struct mailbox *mailbox, const char *userid,
                           seqset_t *newseen);
 static int append_setseen(struct appendstate *as, msgrecord_t *mr);
@@ -315,8 +317,8 @@ EXPORTED int append_abort(struct appendstate *as)
  * with the file for the given mailboxname and returns the open file
  * so it can double as the spool file
  */
-EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate,
-                      int msgnum, struct stagemsg **stagep, const char *sourcefile)
+EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate __attribute__((unused)),
+                      int msgnum __attribute__((unused)), struct stagemsg **stagep, const char *sourcefile)
 {
     struct stagemsg *stage;
     char stagedir[MAX_MAILBOX_PATH+1], stagefile[MAX_MAILBOX_PATH+1];
@@ -331,8 +333,8 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     stage = xmalloc(sizeof(struct stagemsg));
     strarray_init(&stage->parts);
 
-    snprintf(stage->fname, sizeof(stage->fname), "%d-%d-%d",
-             (int) getpid(), (int) internaldate, msgnum);
+    snprintf(stage->fname, sizeof(stage->fname), "%d-%llu",
+             (int) getpid(), (long long unsigned)append_counter++);
 
     r = mboxlist_findstage(mailboxname, stagedir, sizeof(stagedir));
     if (r) {
