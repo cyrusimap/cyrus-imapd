@@ -78,7 +78,15 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
     /* Already mapped in */
     if (*len >= newlen) return;
 
-    if (*len) munmap((char *)*base, *len);
+    if (*len) {
+        int r = munmap((char *)*base, *len);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: unmapping %s file%s%s: %m", name,
+                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            snprintf(buf, sizeof(buf), "failed to munmap %s file", name);
+            fatal(buf, EX_IOERR);
+        }
+    }
 
     if (!onceonly) {
         newlen = (newlen + 2*SLOP - 1) & ~(SLOP-1);
@@ -106,7 +114,13 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
  */
 EXPORTED void map_free(const char **base, size_t *len)
 {
-    if (*len) munmap((char *)*base, *len);
+    if (*len) {
+        int r = munmap((char *)*base, *len);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: map_free");
+            fatal("Failed to map_free", EX_IOERR);
+        }
+    }
     *base = 0;
     *len = 0;
 }
