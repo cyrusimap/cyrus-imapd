@@ -8456,7 +8456,8 @@ static void xfer_done(struct xfer_header **xferptr)
 
 static int backend_version(struct backend *be)
 {
-    const char *minor;
+    const char *two_three_minor;
+    int major, minor;
 
     /* IMPORTANT:
      *
@@ -8475,59 +8476,34 @@ static int backend_version(struct backend *be)
 	return MAILBOX_MINOR_VERSION;
     }
 
-    /* unstable 3.9 series ranges from 17..?? */
-    if (strstr(be->banner, "Cyrus IMAP 3.9")) {
-        /* all versions of 3.9 support at least this version */
-        return 17;
-    }
-
-    /* version 3.8 is 17 */
-    if (strstr(be->banner, "Cyrus IMAP 3.8")) {
-        return 17;
-    }
-
-    /* unstable 3.7 series is 17 */
-    if (strstr(be->banner, "Cyrus IMAP 3.7")) {
-        /* all versions of 3.7 support at least this version */
-        return 17;
-    }
-
-    /* version 3.6 is 17 */
-    if (strstr(be->banner, "Cyrus IMAP 3.6")) {
-        return 17;
-    }
-
-    /* unstable 3.5 series is 17 */
-    if (strstr(be->banner, "Cyrus IMAP 3.5")) {
-        /* all versions of 3.5 support at least this version */
-        return 17;
-    }
-
-    /* version 3.4 is 17 */
-    if (strstr(be->banner, "Cyrus IMAP 3.4")) {
-        return 17;
-    }
-
-    /* unstable 3.3 series is 17 */
-    if (strstr(be->banner, "Cyrus IMAP 3.3")) {
-        /* all versions of 3.3 support at least this version */
-        return 17;
-    }
-
-    /* version 3.2 is 16 */
-    if (strstr(be->banner, "Cyrus IMAP 3.2")) {
-        return 16;
-    }
-
-    /* unstable 3.1 series ranges from 13..16 */
-    if (strstr(be->banner, "Cyrus IMAP 3.1")) {
-        /* all versions of 3.1 support at least this version */
-        return 13;
-    }
-
-    /* version 3.0 is 13 */
-    if (strstr(be->banner, "Cyrus IMAP 3.0")) {
-	return 13;
+    /* contemporary numbering */
+    if (2 == sscanf(be->banner, "OK Cyrus IMAP %d.%d.%*d server ready",
+                                &major, &minor))
+    {
+        if (major > 3) {
+            /* unrecognised future version surely supports at least whatever
+             * this version supports, which is a much better assumption than 6
+             */
+            syslog(LOG_INFO, "%s: did not recognise remote Cyrus version from "
+                             "banner \"%s\". Assuming index version %d!",
+                             __func__, be->banner, MAILBOX_MINOR_VERSION);
+            return MAILBOX_MINOR_VERSION;
+        }
+        else if (major == 3) {
+            if (minor >= 3) {
+                /* all versions since 3.3 have been 17 so far */
+                return 17;
+            }
+            else if (minor == 2) {
+            /* version 3.2 is 16 */
+                return 16;
+            }
+            else {
+                /* version 3.0 and 3.1 are 13 */
+                return 13;
+            }
+        }
+        /* didn't recognise it? fall through to specific checks */
     }
 
     /* version 2.5 is 13 */
@@ -8542,16 +8518,16 @@ static int backend_version(struct backend *be)
 	return 12;
     }
 
-    minor = strstr(be->banner, "v2.3.");
-    if (!minor) goto unrecognised;
-    minor += strlen("v2.3.");
+    two_three_minor = strstr(be->banner, "v2.3.");
+    if (!two_three_minor) goto unrecognised;
+    two_three_minor += strlen("v2.3.");
 
     /* at least version 2.3.10 */
-    if (minor[1] != ' ') {
+    if (two_three_minor[1] != ' ') {
 	return 10;
     }
     /* single digit version, figure out which */
-    switch (minor[0]) {
+    switch (two_three_minor[0]) {
     case '0':
     case '1':
     case '2':
