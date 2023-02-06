@@ -667,7 +667,8 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
     const char *imip_method = icalproperty_method_to_string(
                                   icalcomponent_get_method(sched_data->itip));
 
-    json_t *val = json_pack("{s:s s:s s:s s:o s:s s:o s:o s:b}",
+    json_t *val = json_pack("{s:s s:s s:s s:s s:o s:s s:o s:o s:b}",
+                            "calendarOwner", userid,
                             "recipient", buf_cstring(&recipient),
                             "sender", sender,
                             "method", imip_method,
