@@ -1360,7 +1360,7 @@ sub test_mailbox_set_order
 }
 
 sub test_mailbox_move_to_deleted_parent
-    :min_version_3_8 :needs_component_jmap
+    :min_version_3_6 :needs_component_jmap
 {
     my ($self) = @_;
 
