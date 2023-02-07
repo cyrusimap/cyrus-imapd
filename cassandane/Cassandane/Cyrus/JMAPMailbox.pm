@@ -1375,6 +1375,79 @@ sub test_mailbox_set_order
     $self->assert_null($res->[0][1]{notDestroyed});
 }
 
+sub test_mailbox_move_to_deleted_parent
+    :min_version_3_6 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Assert mailboxes are created in the right order.
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        },
+        content => '{
+            "using" : ["urn:ietf:params:jmap:mail"],
+            "methodCalls" : [["Mailbox/set", {
+                "create" : {
+                    "C" : {
+                        "name" : "C", "parentId" : "#B", "role" : null
+                    },
+                    "B" : {
+                        "name" : "B", "parentId" : null, "role" : null
+                    },
+                    "A" : {
+                        "name" : "A", "parentId" : null, "role" : null
+                    }
+                }
+            }, "R1"]]
+        }',
+    };
+    my $RawResponse = $jmap->ua->post($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert($RawResponse->{success});
+
+    my $res = eval { decode_json($RawResponse->{content}) };
+    $res = $res->{methodResponses};
+    $self->assert_not_null($res->[0][1]{created}{A});
+    $self->assert_not_null($res->[0][1]{created}{B});
+    $self->assert_not_null($res->[0][1]{created}{C});
+    my $idA = $res->[0][1]{created}{A}{id};
+    my $idB = $res->[0][1]{created}{B}{id};
+    my $idC = $res->[0][1]{created}{C}{id};
+
+    # Destroy "A"
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        destroy => [ $idA ],
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_null($res->[0][1]{notDestroyed});
+
+    # Try to move "B" under a non-existant mailbox
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $idB => { parentId => "nosuchid" },
+        }
+    }, "R1"]]);
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_not_null($res->[0][1]{notUpdated});
+
+    # Try to move "B" under "A"
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $idB => { parentId => $idA },
+        }
+    }, "R1"]]);
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_not_null($res->[0][1]{notUpdated});
+
+}
+
 sub test_mailbox_set_inbox_children
     :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
