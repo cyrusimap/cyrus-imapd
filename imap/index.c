@@ -292,6 +292,7 @@ EXPORTED void index_close(struct index_state **stateptr)
 
     free(state->map);
     free(state->mboxname);
+    free(state->mboxid);
     free(state->userid);
     seqset_free(&state->searchres);
     for (i = 0; i < MAX_USER_FLAGS; i++)
@@ -313,6 +314,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
 
     state->mailbox = mailbox;
     state->mboxname = xstrdup(mailbox_name(mailbox));
+    state->mboxid = xstrdup(mailbox_uniqueid(mailbox));
 
     if (init) {
         state->authstate = init->authstate;
@@ -368,6 +370,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
 
 fail:
     free(state->mboxname);
+    free(state->mboxid);
     free(state->userid);
     free(state);
     return r;
@@ -8324,6 +8327,12 @@ EXPORTED const char *index_mboxname(const struct index_state *state)
 {
     if (!state) return NULL;
     return state->mboxname;
+}
+
+EXPORTED const char *index_mboxid(const struct index_state *state)
+{
+    if (!state) return NULL;
+    return state->mboxid;
 }
 
 EXPORTED int index_hasrights(const struct index_state *state, int rights)
