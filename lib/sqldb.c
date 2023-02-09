@@ -129,9 +129,11 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
     open = xzmalloc(sizeof(sqldb_t));
     open->fname = xstrdup(fname);
 
-    rc = stat(open->fname, &sbuf);
-    if (rc == -1 && errno == ENOENT) {
-        rc = cyrus_mkdir(open->fname, 0755);
+    if (*fname && strcmp(fname, ":memory:")) {
+        rc = stat(open->fname, &sbuf);
+        if (rc == -1 && errno == ENOENT) {
+            rc = cyrus_mkdir(open->fname, 0755);
+        }
     }
 
     rc = sqlite3_open_v2(open->fname, &open->db,
