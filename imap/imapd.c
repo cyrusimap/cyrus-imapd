@@ -1398,7 +1398,7 @@ static void cmdloop(void)
 
         if (!proxy_check_input(protin, imapd_in, imapd_out,
                                backend_current ? backend_current->in : NULL,
-                               NULL, 0)) {
+                               NULL, PROT_NO_FD, NULL, 0)) {
             /* No input from client */
             continue;
         }
@@ -3508,7 +3508,8 @@ static void cmd_idle(char *tag)
             }
 
             done = proxy_check_input(protin, imapd_in, imapd_out,
-                                     backend_current->in, NULL, idle_period);
+                                     backend_current->in, NULL,
+                                     PROT_NO_FD, NULL, idle_period);
 
             /* If not running IDLE on backend, poll the mailbox for updates */
             if (!CAPA(backend_current, CAPA_IDLE)) {

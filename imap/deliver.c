@@ -147,7 +147,7 @@ void pipe_through(struct backend *conn)
         prot_flush(conn->out);
 
     } while (!proxy_check_input(protin, deliver_in, deliver_out,
-                                conn->in, conn->out, 0));
+                                conn->in, conn->out, PROT_NO_FD, NULL, 0));
 
     /* ok, we're done. */
     protgroup_free(protin);
