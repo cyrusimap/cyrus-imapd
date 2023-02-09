@@ -268,17 +268,9 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         supported = parse_script->support & SIEVE_CAPA_IMAP4FLAGS;
         break;
 
-    case B_DENOTIFY:
-        capability = "notify";
-        supported = parse_script->support & SIEVE_CAPA_NOTIFY;
-        init_comptags(&p->u.d.comp);
-        p->u.d.comp.collation = B_ASCIICASEMAP;
-        p->u.d.priority = -1;
-        break;
-
-    case B_NOTIFY:
     case B_ENOTIFY:
-        /* actual type and availability will be determined by parser */
+        capability = "enotify";
+        supported = parse_script->support & SIEVE_CAPA_ENOTIFY;
         p->u.n.priority = -1;
         break;
 

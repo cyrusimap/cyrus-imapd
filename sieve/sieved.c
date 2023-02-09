@@ -1492,6 +1492,13 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_DENOTIFY:
+            generate_token("/*\n", indent, buf);
+            generate_token(" * NOTE: The DENOTIFY action has been deprecated since Cyrus v3.9.\n",
+                           indent, buf);
+            generate_token(" *       This script will no longer compile.\n",
+                           indent, buf);
+            generate_token(" */\n", indent, buf);
+
             *requires |= SIEVE_CAPA_NOTIFY;
             generate_token("denotify", indent, buf);
             if (cmd.u.d.pattern) {
@@ -1518,6 +1525,15 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_NOTIFY:
+            generate_token("/*\n", indent, buf);
+            generate_token(" * NOTE: This form of the NOTIFY action has been deprecated since Cyrus v3.9.\n",
+                           indent, buf);
+            generate_token(" *       This script will no longer compile.\n",
+                           indent, buf);
+            generate_token(" *       Update this action to use the syntax in RFC 5435. */\n",
+                           indent, buf);
+            generate_token(" */\n", indent, buf);
+
             *requires |= SIEVE_CAPA_NOTIFY;
             generate_token("notify", indent, buf);
             generate_string(":method", cmd.u.n.method, buf);

@@ -311,14 +311,6 @@ ws              [ \t]+
                                                "invalid importance %s", yytext);
                               }
 
-    /* notify - draft-martin-sieve-notify-01 */
-<INITIAL>denotify             return DENOTIFY;
-<INITIAL>:method              return METHOD;
-<INITIAL>:id                  return NID;
-<INITIAL>:low                 return yylval->nval = LOW;
-<INITIAL>:normal              return yylval->nval = NORMAL;
-<INITIAL>:high                return yylval->nval = HIGH;
-
     /* ihave - RFC 5463 */
 <INITIAL>ihave                return IHAVE;
 <INITIAL>error                return ERROR;

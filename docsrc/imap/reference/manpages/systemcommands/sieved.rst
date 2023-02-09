@@ -31,6 +31,8 @@ Options
 .. option:: -s, --as-sieve
 
    Produce a sieve script rather than describing the bytecode.
+   Note that if the bytecode contains deprecated features,
+   the resulting script will not be compilable without changes.
 
 See Also
 ========

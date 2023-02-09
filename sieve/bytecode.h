@@ -212,13 +212,13 @@ enum bytecode {
 
                                    <flag-list: string-list>                    */
 
-    B_NOTIFY,                   /* require "notify"
+    B_NOTIFY,                   /* require "notify" (deprecated - eval only)
 
                                    <method: string> <id: string>
                                    <options: string-list> <priority: int>
                                    <message: string>                           */
 
-    B_DENOTIFY,                 /* require "notify"
+    B_DENOTIFY,                 /* require "notify" (deprecated - eval only)
                                    <priority: int>
                                    <match-type: int> <relational-match: int>
                                    <pattern: string>                           */

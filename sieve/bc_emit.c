@@ -512,8 +512,6 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         case B_ADDFLAG:
         case B_REMOVEFLAG:
         case B_ENOTIFY:
-        case B_NOTIFY:
-        case B_DENOTIFY:
         case B_VACATION:
         case B_INCLUDE:
         case B_SET:
