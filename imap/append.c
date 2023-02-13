@@ -1184,6 +1184,7 @@ out:
     if (newflags)
         strarray_free(newflags);
     freeentryatts(system_annots);
+    free(linkfile);
     if (r) {
         append_abort(as);
         msgrecord_unref(&msgrec);
