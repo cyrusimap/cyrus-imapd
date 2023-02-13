@@ -137,7 +137,6 @@ EXPORTED void strip_vtimezones(icalcomponent *ical)
 }
 
 static void add_defaultalarm_etagdata(const char *mboxname,
-                                      const struct index_record *record,
                                       const char *userid,
                                       struct buf *etagdata)
 {
@@ -151,8 +150,6 @@ static void add_defaultalarm_etagdata(const char *mboxname,
             buf_appendcstr(etagdata,
                     message_guid_encode(&defalarms.with_date.guid));
         }
-        // XXX not strictly necessary if default alarms are sane
-        buf_appendbit64(etagdata, record->modseq);
         defaultalarms_fini(&defalarms);
     }
 }
@@ -190,7 +187,7 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
             /* Mix in default alarm data, if any */
             icalcomponent *ical = NULL;
             if (caldav_get_usedefaultalerts(dl, mailbox, record, &ical)) {
-                add_defaultalarm_etagdata(mailbox_name(mailbox), record, userid, &etagdata);
+                add_defaultalarm_etagdata(mailbox_name(mailbox), userid, &etagdata);
             }
             icalcomponent_free(ical);
 
@@ -210,7 +207,7 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
     else if (cdata->comp_flags.defaultalerts) {
         if (etag) {
             buf_appendcstr(&etagdata, message_guid_encode(&record->guid));
-            add_defaultalarm_etagdata(mailbox_name(mailbox), record, userid, &etagdata);
+            add_defaultalarm_etagdata(mailbox_name(mailbox), userid, &etagdata);
         }
         if (lastmod) {
             /* XXX  What, if anything do we do here? */
