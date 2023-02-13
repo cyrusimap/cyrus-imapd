@@ -295,46 +295,6 @@ to know about the new series.
    https://github.com/cyrusimap/cyrusimap.github.io -- that's the result of
    the run-gp.sh script having run.
 
-Update XFER version awareness
-=============================
-
-In `imap/backend.c` is a function called `backend_version()`.  This function
-translates Cyrus IMAP version strings into `MAILBOX_MINOR_VERSION` numbers.
-
-It is critical that this function be updated to recognise both the new series,
-and the new dev series.  And it is critical that this change be made to all
-Cyrus versions in common use.  If this is neglected, XFER from an older server
-version will **lose data** when moving mailboxes to the new versions.
-
-The updates should be self-explanatory -- look at what's already there, read
-the comments, add mappings for both new versions to whatever their current
-`MAILBOX_MINOR_VERSION` is.  Don't forget to extend the test too, in
-`cunit/backend.testc`.  If in doubt, look at what changed last time, and do
-something similar.
-
-Do this for the master branch; once reviewed and merged to the master branch,
-backport the change to the new branch, as well as to the prior release
-branches.  You will be able to do this using cherry-pick as far back as 3.4.
-
-In 3.2 and earlier, this function instead lived in `imap/imapd.c`.  On the 3.2
-branch, make the equivalent changes there, test, commit, push.  Then you can
-cherry-pick that commit back to 3.0, 2.5, and 2.4.
-
-Publish new point releases with the XFER update
-===============================================
-
-Now, publish new point releases for each of the older branches (except 2.x and
-earlier).  You will follow the :ref:`imap-developer-releasing` instructions for
-this.
-
-The release notes and announcement email for these releases should stress that
-upgrading to one of these releases is crucial for XFER users who will
-eventually run servers on the new version.  The announcement email should also
-advise 2.4/2.5 XFER users to get the relevant patches from git.
-
-In practice, you'll probably look through the cyrus-announce history for
-last time this happened, and plagiarise that email, just changing numbers. :)
-
 First beta
 ==========
 
