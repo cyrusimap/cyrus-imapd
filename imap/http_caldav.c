@@ -6743,6 +6743,7 @@ static int propfind_caldav_alarms(const xmlChar *name, xmlNsPtr ns,
     if (r) return HTTP_SERVER_ERROR;
     buf_trim(&attrib);
     if (!buf_len(&attrib)) return HTTP_NOT_FOUND;
+    buf_appendcstr(&attrib, "\r\n");
 
     const char *val = buf_cstring(&attrib);
     size_t len = buf_len(&attrib);
