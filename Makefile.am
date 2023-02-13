@@ -635,6 +635,7 @@ cunit_TESTS = \
 	cunit/imapurl.testc \
 	cunit/imparse.testc \
 	cunit/libconfig.testc \
+	cunit/mailbox.testc \
 	cunit/mboxname.testc \
 	cunit/md5.testc \
 	cunit/message.testc \
