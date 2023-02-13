@@ -4,9 +4,9 @@
 
 .. _imap-reference-manpages-systemcommands-jmap_expire:
 
-==============
+===============
 **jmap_expire**
-==============
+===============
 
 Expire stale JMAP data such as calendar event notifications.
 
