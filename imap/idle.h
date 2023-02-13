@@ -61,7 +61,7 @@ typedef enum {
 typedef void idle_updateproc_t(idle_flags_t flags);
 
 /* set up the link to the idled for notifications */
-void idle_init(void);
+int idle_init(void);
 
 /* Is IDLE enabled? */
 int idle_enabled(void);
@@ -69,15 +69,11 @@ int idle_enabled(void);
 /* Start IDLEing on 'mailbox'. */
 void idle_start(const char *mboxname);
 
-/* Wait for something to happen while IDLEing.  @otherfd is a file
- * descriptor on which to wait for input; presumably this will be the
- * fd of the main protstream from the IMAP client.  Returns a mask of
- * flags indicating what if anything happened, see idle_flags_t, or 0
- * on error.  If idled is disabled or was not contacted, we fall back
- * to polling mode and return the flags IDLE_MAILBOX and IDLE_INPUT
- * periodically.
+/* Reads and parses a message from idled.
+ * Returns a mask of flags indicating what if anything happened, see idle_flags_t,
+ * or 0 on error.
  */
-int idle_wait(int otherfd);
+int idle_get_message(void);
 
 /* Stop IDLEing on 'mailbox'. */
 void idle_stop(const char *mboxname);

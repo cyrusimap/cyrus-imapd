@@ -113,14 +113,14 @@ static void idle_notify(const char *mboxname)
 /*
  * Create connection to idled for sending notifications
  */
-EXPORTED void idle_init(void)
+EXPORTED int idle_init(void)
 {
     struct sockaddr_un local;
     int fdflags;
     int s;
     int r;
 
-    if (!idle_enabled()) return;
+    if (!idle_enabled()) return -1;
 
     r = idle_make_client_address(&local);
     assert(r);
@@ -133,7 +133,7 @@ EXPORTED void idle_init(void)
     mailbox_set_updatenotifier(idle_notify);
 
     if (!idle_init_sock(&local))
-        return;
+        return -1;
 
     s = idle_get_sock();
 
@@ -143,10 +143,12 @@ EXPORTED void idle_init(void)
         fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
     if (fdflags == -1) {
         idle_done_sock();
-        return;
+        return -1;
     }
 
     idle_method_desc = "idled";
+
+    return s;
 }
 
 EXPORTED int idle_enabled(void)
@@ -178,73 +180,22 @@ EXPORTED void idle_start(const char *mboxname)
     idle_started = 1;
 }
 
-EXPORTED int idle_wait(int otherfd)
+EXPORTED int idle_get_message(void)
 {
-    fd_set rfds;
-    int maxfd = -1;
-    int s = -1;
-    struct timeval timeout;
-    int r;
+    struct sockaddr_un from;
+    idle_message_t msg;
     int flags = 0;
-    int idle_timeout = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
 
-    if (!idle_enabled()) return 0;
-
-    /* If idled was not contacted, we still listen on the socket,
-     * because we might get ALERTs, but we won't get mailbox
-     * notifications.  The poll timeout controls how quickly
-     * we will notice new mail arriving. */
-
-    FD_ZERO(&rfds);
-    s = idle_get_sock();
-    if (s >= 0) {
-        FD_SET(s, &rfds);
-        maxfd = MAX(maxfd, s);
+    if (idle_recv(&from, &msg)) {
+        switch (msg.which) {
+        case IDLE_MSG_NOTIFY:
+            flags |= IDLE_MAILBOX;
+            break;
+        case IDLE_MSG_ALERT:
+            flags |= IDLE_ALERT;
+            break;
+        }
     }
-    if (otherfd >= 0) {
-        FD_SET(otherfd, &rfds);
-        maxfd = MAX(maxfd, otherfd);
-    }
-
-    /* Note: it's technically valid for there to be no fds to listen
-     * to, in the case where @otherfd is passed as -1 and we failed
-     * to talk to idled.  It shouldn't happen though as we're always
-     * called with a valid otherfd.  */
-
-    /* maximum possible timeout before we double-check anyway */
-    timeout.tv_sec = idle_timeout;
-    timeout.tv_usec = 0;
-
-    do {
-        r = signals_select(maxfd+1, &rfds, NULL, NULL, &timeout);
-
-        if (r < 0) {
-            if (errno == EAGAIN || errno == EINTR) continue;
-            syslog(LOG_ERR, "IDLE: select failed: %m");
-            return 0;
-        }
-        if (r == 0) {
-            /* timeout */
-            flags |= IDLE_MAILBOX|IDLE_ALERT;
-        }
-        if (r > 0 && s >= 0 && FD_ISSET(s, &rfds)) {
-            struct sockaddr_un from;
-            idle_message_t msg;
-
-            if (idle_recv(&from, &msg)) {
-                switch (msg.which) {
-                case IDLE_MSG_NOTIFY:
-                    flags |= IDLE_MAILBOX;
-                    break;
-                case IDLE_MSG_ALERT:
-                    flags |= IDLE_ALERT;
-                    break;
-                }
-            }
-        }
-        if (r > 0 && otherfd >= 0 && FD_ISSET(otherfd, &rfds))
-            flags |= IDLE_INPUT;
-    } while (!flags);
 
     return flags;
 }
