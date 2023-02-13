@@ -3176,7 +3176,6 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
         json_object_set_new(publicprops, "showWithoutTime", json_true());
         json_object_set_new(publicprops, "start", json_true());
         json_object_set_new(publicprops, "timeZone", json_true());
-        json_object_set_new(publicprops, "timeZones", json_true());
         json_object_set_new(publicprops, "uid", json_true());
         json_object_set_new(publicprops, "updated", json_true());
         json_object_set_new(publicprops, "utcStart", json_true());
@@ -3756,11 +3755,6 @@ static const jmap_property_t event_props[] = {
     },
     {
         "localizations",
-        NULL,
-        0
-    },
-    {
-        "timeZones",
         NULL,
         0
     },

@@ -711,6 +711,23 @@ static void remove_icalxprop(icalcomponent *comp, const char *name)
     }
 }
 
+
+static void remove_xjmapid(icalcomponent *comp)
+{
+    if (!comp) return;
+
+    icalproperty *prop, *nextprop;
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+            prop; prop = nextprop) {
+        nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+        if (!strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID)) {
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+        }
+    }
+}
+
 static void xjmapid_from_icalm(struct buf *dst, icalproperty *prop)
 {
     buf_reset(dst);
@@ -936,13 +953,11 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
     }
     if (!count) return;
 
-#ifdef HAVE_GUESSTZ
-    guesstz_t *gtz = NULL;
-    struct icalperiodtype guess_span;
+    /* Determine the timespan of the event to guess its IANA timezone */
+    const icaltimezone *utc = icaltimezone_get_utc_timezone();
+    struct icalperiodtype guess_span = { 0 };
 
     if (!jstzones->no_guess) {
-        /* Determine the timespan of the event */
-        const icaltimezone *utc = icaltimezone_get_utc_timezone();
         unsigned is_recurring = 0;
         icalcomponent *comp = icalcomponent_get_first_real_component(ical);
         if (!comp) return;
@@ -951,7 +966,12 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
         if (icaltime_as_timet_with_zone(guess_span.end, utc) == caldav_epoch) {
             guess_span.end = icaltime_null_time();
         }
+    }
 
+#ifdef HAVE_GUESSTZ
+    guesstz_t *gtz = NULL;
+
+    if (!jstzones->no_guess) {
         /* Open database to guess IANA timezones */
         if (config_getstring(IMAPOPT_ZONEINFO_DIR)) {
             char *fname = strconcat(config_getstring(IMAPOPT_ZONEINFO_DIR),
@@ -968,7 +988,6 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
 #endif
 
     /* Process custom timezones */
-
     struct buf idbuf = BUF_INITIALIZER;
 
     for (vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
@@ -983,17 +1002,19 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
             continue;
         }
 
-        /* Need to keep track of this timezone */
+        /* Handle custom timezone */
 
-        /* Make sure it returns tzid for timezone_get_location */
+        /* Make sure it returns its tzid for timezone_get_location */
         icalcomponent *myvtz = icalcomponent_clone(vtz);
         prop = icalproperty_new_x(tzid);
         icalproperty_set_x_name(prop, "X-LIC-LOCATION");
         icalcomponent_add_property(myvtz, prop);
 
-        /* Determine timezone name */
-        const char *jstzid = get_icalxprop_value(myvtz, JMAPICAL_XPROP_ID);
-        if (!jstzid) {
+        /* Remove any JMAP timezone identifier -- we set these for RFC8984 */
+        remove_xjmapid(myvtz);
+
+        /* Guess IANA timezone name */
+        if (!jstzones->no_guess) {
 #ifdef HAVE_GUESSTZ
             if (gtz) {
                 char *ianaid = guesstz_guess(gtz, myvtz, guess_span.start, guess_span.end);
@@ -1002,14 +1023,52 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
             }
 #endif
             if (!buf_len(&idbuf)) {
-                buf_putc(&idbuf, '/');
-                buf_appendcstr(&idbuf, tzid);
+                /* Could not guess IANA timezone name by comparing timezone
+                 * rules. Let's determine the closest "Etc/GMT+X" timezone. */
+                icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+                if (comp) {
+                    icalcomponent *tmpvtz = icalcomponent_clone(myvtz);
+                    icaltimezone *tmptz = icaltimezone_new();
+                    icaltimezone_set_component(tmptz, tmpvtz);
+
+                    icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+                    int is_daylight = 0;
+                    int offset = icaltimezone_get_utc_offset(tmptz, &dtstart, &is_daylight);
+
+                    if (offset) {
+                        // round to previous hour
+                        int h = offset / 3600;
+                        if ((offset % 3600) && h < 0)
+                            h--;
+
+                        // Lookup "Etc/GMT+X" timezone
+                        buf_printf(&idbuf, "Etc/GMT%+d", h);
+                        if (!get_cyrus_timezone_from_tzid(buf_cstring(&idbuf), 0))
+                            buf_reset(&idbuf);
+                    }
+                    else {
+                        buf_setcstr(&idbuf, "Etc/UTC");
+                    }
+
+                    icaltimezone_free(tmptz, 1);
+                }
             }
-            jstzid = buf_cstring(&idbuf);
-            prop = icalproperty_new_x(jstzid);
-            icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
-            icalcomponent_add_property(myvtz, prop);
         }
+
+        if (!buf_len(&idbuf)) {
+            buf_putc(&idbuf, '/');
+            buf_appendcstr(&idbuf, tzid);
+        }
+
+        /* Set the JSCalendar timezone id in the in-memory VTIMEZONE.
+         * This timezone id is what we'll be using within JSCalendar
+         * events as IANA timezone id. The iCalendar time properties
+         * keep referring to the non-IANA iCalendar TZID */
+        const char *jstzid = buf_cstring(&idbuf);
+        prop = icalproperty_new_x(jstzid);
+        icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
+        icalcomponent_add_property(myvtz, prop);
+
         icaltimezone *tz = icaltimezone_new();
         icaltimezone_set_component(tz, myvtz);
 
@@ -3823,10 +3882,11 @@ calendarevent_from_ical(icalcomponent *comp,
         }
 
         /* timeZones - requires overrides set in the event already */
-        if (jmap_wantprop(props, "timeZones")) {
+        if ((jstzones && jstzones->no_guess) ||
+                (props && jmap_wantprop(props, JMAPICAL_JSPROP_TIMEZONES))) {
             json_t *jtimezones = timezones_from_ical(event, jstzones);
             if (JNOTNULL(jtimezones)) {
-                json_object_set_new(event, "timeZones", jtimezones);
+                json_object_set_new(event, JMAPICAL_JSPROP_TIMEZONES, jtimezones);
             }
         }
     }
@@ -6728,7 +6788,7 @@ static void timezones_to_ical(icalcomponent *ical,
 {
     icaltimezone *utc = icaltimezone_get_utc_timezone();
 
-    jmap_parser_push(parser, "timeZones");
+    jmap_parser_push(parser, JMAPICAL_JSPROP_TIMEZONES);
 
     /* Check for orphaned timezones */
     strarray_t custom_jstzids = STRARRAY_INITIALIZER;
@@ -6744,15 +6804,16 @@ static void timezones_to_ical(icalcomponent *ical,
 
         validate_type(parser, jtimezone, "TimeZone");
 
+        // Note: an earlier implementation stored the jstzid in
+        // the VTIMEZONE by use of the X-JMAP-ID property. We do not
+        // do that anymore, at least until jscalendarbis is final
+        // and a iCalendar standard property to store jstzid got defined.
+
         const char *tzid = json_string_value(json_object_get(jtimezone, "tzId"));
         if (tzid) {
             icalcomponent_add_property(tzcomp, icalproperty_new_tzid(tzid));
         }
         else jmap_parser_invalid(parser, "tzId");
-
-        icalproperty *prop = icalproperty_new_x(jstzid);
-        icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
-        icalcomponent_add_property(tzcomp, prop);
 
         json_t *jprop = json_object_get(jtimezone, "updated");
         if (json_is_string(jprop)) {
@@ -6955,7 +7016,7 @@ static void overrides_to_ical(icalcomponent *comp,
                     !strcmp(key, "relatedTo") ||
                     !strcmp(key, "replyTo") ||
                     !strcmp(key, "sentBy") ||
-                    !strcmp(key, "timeZones") ||
+                    !strcmp(key, JMAPICAL_JSPROP_TIMEZONES) ||
                     !strcmp(key, "uid")) {
 
                     json_object_del(myoverride, key);
@@ -7179,11 +7240,11 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
     /* timeZones */
     icalcomponent *ical = icalcomponent_get_parent(comp);
-    jprop = json_object_get(event, "timeZones");
+    jprop = json_object_get(event, JMAPICAL_JSPROP_TIMEZONES);
     if (json_is_object(jprop)) {
         timezones_to_ical(ical, parser, event, jprop, jmapctx);
     } else if (JNOTNULL(jprop)) {
-        jmap_parser_invalid(parser, "timeZones");
+        jmap_parser_invalid(parser, JMAPICAL_JSPROP_TIMEZONES);
     }
     if (!jstzonesp || !*jstzonesp) {
         if (!jstzonesp) {
