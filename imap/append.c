@@ -54,6 +54,7 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <sys/poll.h>
+#include <inttypes.h>
 
 #include "acl.h"
 #include "assert.h"
@@ -94,7 +95,7 @@ struct stagemsg {
     struct message_guid guid;
 };
 
-uint64_t append_counter;
+static uint64_t append_counter;
 
 static int append_addseen(struct mailbox *mailbox, const char *userid,
                           seqset_t *newseen);
@@ -333,8 +334,8 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     stage = xmalloc(sizeof(struct stagemsg));
     strarray_init(&stage->parts);
 
-    snprintf(stage->fname, sizeof(stage->fname), "%d-%llu",
-             (int) getpid(), (long long unsigned)append_counter++);
+    snprintf(stage->fname, sizeof(stage->fname), "%d-%" PRIu64,
+             (int) getpid(), append_counter++);
 
     r = mboxlist_findstage(mailboxname, stagedir, sizeof(stagedir));
     if (r) {
