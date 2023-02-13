@@ -374,7 +374,7 @@ The TZID property can have a vendor prefix, that is fixed when compiling vzic by
 ``TZID_PREFIX`` Makefile variable, which defaults to `/citadel.org/%D_1/`.  Cyrus
 IMAP requires that the vendor prefix is the empty string.
 
-The `cyrus-timezones package<https://github.com/cyrusimap/cyrus-timezones>`_ provides
+The `cyrus-timezones package <https://github.com/cyrusimap/cyrus-timezones>`_ provides
 a vzic, which sets TZID_PREFIX to the emtpy string.
 
 The steps to populate the ``zoneinfo_dir`` directory are:
