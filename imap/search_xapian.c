@@ -2086,6 +2086,8 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     int r = check_config(NULL);
     if (r) return NULL;
 
+    if (!mailbox) return NULL;
+
     xapian_builder_t *bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
     bb->super.end_boolean = end_boolean;
