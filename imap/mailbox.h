@@ -327,7 +327,7 @@ struct mailbox_iter;
  * NOTE: Since we might be using a 64-bit MODSEQ in the index record,
  *       the size of the index header MUST be a multiple of 8 bytes.
  *
- * There's alignment tests for these offsets in mailbox.testc.  If you
+ * There's sanity tests for these offsets in mailbox.testc.  If you
  * add new fields to the header, don't forget to add them to the tests
  * too!
  */
@@ -385,7 +385,7 @@ struct mailbox_iter;
  *       OFFSET_MODSEQ_64 and the size of the index record MUST be
  *       multiples of 8 bytes.
  *
- * There's alignment tests for these offsets in mailbox.testc.  If you
+ * There's sanity tests for these offsets in mailbox.testc.  If you
  * add new fields to the record, don't forget to add them to the tests
  * too!
  */
