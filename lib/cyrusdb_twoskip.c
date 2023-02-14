@@ -1924,7 +1924,7 @@ static int copy_cb(void *rock,
 {
     struct copy_rock *cr = (struct copy_rock *)rock;
 
-    return mystore(cr->db, key, keylen, val, vallen, &cr->tid, 0);
+    return skipwrite(cr->db, key, keylen, val, vallen, 0);
 }
 
 static int mycheckpoint(struct dbengine *db)
