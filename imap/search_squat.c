@@ -356,6 +356,8 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     const char *fname;
     int fd;
 
+    if (!mailbox) return NULL;
+
     if ((opts & SEARCH_MULTIPLE)) {
         syslog(LOG_ERR, "Squat does not support multiple-folder searches, sorry");
         /* although it could with some extra work, but why bother */
