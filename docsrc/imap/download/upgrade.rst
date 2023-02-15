@@ -3,7 +3,7 @@
 .. _upgrade:
 
 ================
-Upgrading to 3.6
+Upgrading to 3.8
 ================
 
 .. note::
@@ -25,47 +25,48 @@ Things to consider **before** you begin:
 Versions to upgrade from
 ########################
 
-Before upgrading to 3.6, your deployment should be running either:
+Before upgrading to 3.8, your deployment should be running one of:
 
-* 3.2.10 (or later), or
-* 3.4.4 (or later)
+* 3.2.10 (or later),
+* 3.4.4 (or later), or
+* 3.6.0 (or later)
 
 If your existing deployment predates these releases, you should first upgrade
 to one of these versions, let it run for a while, resolve any issues that
-come up, and only then upgrade to 3.6.
+come up, and only then upgrade to 3.8.
 
 3.2.x prior to 3.2.10, 3.4.x prior to 3.4.4, and all 3.0.x and 2.x releases
 have inconsistencies in their storage of an optional metadata field (mailbox
 uniqueids).  This was not previously a problem due to the field being optional.
 
-Architectural changes in 3.6 make mailbox uniqueids required for almost all
-operations.  If these are inconsistent or missing, the upgrade may not succeed,
-and the failure may be difficult to recover from.
+Architectural changes in 3.6 and later make mailbox uniqueids required for
+almost all operations.  If these are inconsistent or missing, the upgrade may
+not succeed, and the failure may be difficult to recover from.
 
 3.2.10 and 3.4.4 contain changes that detect, report, and fix up missing or
-inconsistent mailbox uniqueids, allowing for a safer upgrade to 3.6.
+inconsistent mailbox uniqueids, allowing for a safer upgrade to 3.6 and later.
 
 Installation from tarball
 #########################
 
 You will need to install from our packaged tarball. We provide a full list of
 libraries that Debian requires, but we aren't able to test all platforms: you
-may find you need to install additional or different libraries to support v3.6.
+may find you need to install additional or different libraries to support v3.8.
 
 Storage changes
 ###############
 
-In 3.6, mailboxes and user metadata directories are organised on disk by UUID
-rather than by mailbox name.
+In 3.6 and later, mailboxes and user metadata directories are organised on
+disk by UUID rather than by mailbox name.
 
 At startup (or when you first run the updated `ctl_cyrusdb -r` manually),
 :cyrusman:`ctl_cyrusdb(8)` will upgrade mailboxes.db to accommodate both
-old-style and new-style storage.
+old-style and new-style storage, if it didn't already.
 
 By default, new top-level mailboxes will be created in the new style.
-Mailboxes that already exist will remain in the old style until you convert
-them with :cyrusman:`relocate_by_id(8)`.  New mailboxes below the top level
-will be created in the same style as their parent mailbox.
+Mailboxes that already exist in the old style will remain in the old style
+until you convert them with :cyrusman:`relocate_by_id(8)`.  New mailboxes
+below the top level will be created in the same style as their parent mailbox.
 
 The new :cyrusman:`cyr_ls(8)` tool can be used to examine the on-disk
 contents of a given mailbox name.  :cyrusman:`mbpath(8)` can be used to find
@@ -76,29 +77,69 @@ can enable the `mailbox_legacy_dirs` :cyrusman:`imapd.conf(5)` option, which
 defaults to **off**.  With this turned on, you may still use `relocate_by_id`
 to convert them to the new style.
 
-Sieve scripts are now stored in the '#sieve' mailbox (configurable with the
-`sieve_folder` :cyrusman:`imapd.conf(5)` option).  No manual steps are
+Since 3.6, sieve scripts are stored in the '#sieve' mailbox (configurable with
+the `sieve_folder` :cyrusman:`imapd.conf(5)` option).  No manual steps are
 necessary for upgrade: Cyrus recognises the old style storage and will
 convert to the new style automatically as necessary.
+
+.. _upgrade_3.8.0-beta1_jmap_caldav_changes:
+
+JMAP/CalDAV changes
+###################
+
+Previous versions of Cyrus determined the JMAP CalendarEvent privacy of
+an iCalendar VEVENT by the CLASS property. As of 3.8, this now gets determined
+by the newly introduced X-JMAP-PRIVACY property, but the CalDAV indexes may
+already have entries for the old mapping and need to be upgraded.
+
+Sites that use JMAP should upgrade their CalDAV database index by calling
+the newly introduced JMAP method `Admin/rewriteCalendarEventPrivacy`.
+This method:
+
+- requires the `https://cyrusimap.org/ns/jmap/admin` request capability
+- must be called as an admin user (regular user calls are rejected)
+- takes the optional `userIds` argument, whis is a JSON array of
+  userids to migrate. In absence of this argument, all users are migrated
+
+Site that do not use JMAP should upgrade their CalDAV database by
+
+- calling ``DELETE FROM ical_objs WHERE comp_flags >= 1024;`` on a user's
+  dav.db
+- followed by calling `dav_reconstruct` for that user
+
+.. _upgrade_3.8.0-beta1_sieve_changes:
+
+Sieve changes
+#############
+
+Cyrus 3.8 no longer supports creating scripts with the deprecated
+`imapflags` capability and `mark` / `unmark` actions.
+
+Existing Sieve bytecode compiled with `mark` and `unmark` will continue
+to execute (they will be translated to `addflag` / `removeflag "\\Flagged"`).
+
+Any software which generates Sieve scripts will no longer be able to
+`require "imapflags"` or use `mark` or `unmark`, and should instead
+`require "imap4flags"` and use `addflag` / `removeflag "\\Flagged"`.
 
 How are you planning on upgrading?
 ##################################
 
-Ideally, you will do a sandboxed test installation of 3.6 using a snapshot of
+Ideally, you will do a sandboxed test installation of 3.8 using a snapshot of
 your existing data before you switch off your existing installation. The rest
-of the instructions are assuming a sandboxed 3.6 installation.
+of the instructions are assuming a sandboxed 3.8 installation.
 
 Upgrade by replicating
 ~~~~~~~~~~~~~~~~~~~~~~
 
 If you're familiar with replication, and your current installation is 2.4 or
 newer, you can set up your existing installation to replicate data to a new
-3.6 installation and failover to the new installation when you're ready. The
+3.8 installation and failover to the new installation when you're ready. The
 replication protocol has been kept backwards compatible.
 
 If your old installation contains mailboxes or messages that are older than
 2.4, they may not have GUID fields in their indexes (index version too old),
-or they may have their GUID field set to zero.  3.6 will not accept message
+or they may have their GUID field set to zero.  3.8 will not accept message
 replications without valid matching GUIDs, so you need to fix this on your
 old installation first.
 
@@ -123,7 +164,7 @@ Upgrade in place
 If you are upgrading in place, you will need to shut down Cyrus
 entirely while you install the new package.  If your old installation
 was using Berkeley DB format databases, you will need to convert or
-upgrade the databases **before** you upgrade.  Cyrus v3.6 does not
+upgrade the databases **before** you upgrade.  Cyrus v3.8 does not
 support Berkeley DB at all.
 
 .. note::
@@ -168,25 +209,33 @@ commands, such as ``rsync`` or ``scp``.
 
 We strongly recommend that you read this entire document before upgrading.
 
-2. Install new 3.6 Cyrus
+2. Install new 3.8 Cyrus
 ------------------------
 
-Download the release :ref:`3.6 package tarball <getcyrus>`.
+Download the release :ref:`3.8 package tarball <getcyrus>`.
 
-Fetch the libraries for your platform. The full list (including all optional packages) for Debian is::
+Fetch the libraries for your platform. The full list (including all optional
+packages) for Debian is::
 
-    sudo apt-get install -y autoconf automake autotools-dev bash-completion bison build-essential comerr-dev \
-    debhelper flex g++ git gperf groff heimdal-dev libbsd-resource-perl libclone-perl libconfig-inifiles-perl \
-    libcunit1-dev libdatetime-perl libdigest-sha-perl libencode-imaputf7-perl libfile-chdir-perl \
-    libglib2.0-dev libical-dev libio-socket-inet6-perl libio-stringy-perl libjansson-dev libldap2-dev \
-    libmysqlclient-dev libnet-server-perl libnews-nntpclient-perl libpam0g-dev libpcre3-dev libsasl2-dev \
-    libsqlite3-dev libssl-dev libtest-unit-perl libtool libunix-syslog-perl liburi-perl \
-    libxapian-dev libxml-generator-perl libxml-xpath-perl libxml2-dev libwrap0-dev libzephyr-dev lsb-base \
-    net-tools perl php-cli php-curl pkg-config po-debconf tcl-dev \
-    transfig uuid-dev vim wamerican wget xutils-dev zlib1g-dev sasl2-bin rsyslog sudo acl telnet
+    sudo apt-get install -y autoconf automake autotools-dev bash-completion \
+    bison build-essential comerr-dev debhelper flex g++ git gperf groff \
+    heimdal-dev libbsd-resource-perl libclone-perl libconfig-inifiles-perl \
+    libcunit1-dev libdatetime-perl libdigest-sha-perl libencode-imaputf7-perl \
+    libfile-chdir-perl libglib2.0-dev libical-dev libio-socket-inet6-perl \
+    libio-stringy-perl libjansson-dev libldap2-dev libmysqlclient-dev \
+    libnet-server-perl libnews-nntpclient-perl libpam0g-dev libpcre3-dev \
+    libsasl2-dev libsqlite3-dev libssl-dev libtest-unit-perl libtool \
+    libunix-syslog-perl liburi-perl libxapian-dev libxml-generator-perl \
+    libxml-xpath-perl libxml2-dev libwrap0-dev libzephyr-dev lsb-base \
+    net-tools perl php-cli php-curl pkg-config po-debconf tcl-dev transfig \
+    uuid-dev vim wamerican wget xutils-dev zlib1g-dev sasl2-bin rsyslog sudo \
+    acl telnet
 
 If you're on another platform and can provide the list of dependencies, please
-let us know via a `GitHub issue <https://github.com/cyrusimap/cyrus-imapd/issues>`_ or documentation pull request or send mail to the :ref:`developer list<feedback-mailing-lists>`.
+let us know via a
+`GitHub issue <https://github.com/cyrusimap/cyrus-imapd/issues>`_
+or documentation pull request, or send mail to the
+:ref:`developer list<feedback-mailing-lists>`.
 
 Follow the :ref:`general install instructions <installing>`.
 
@@ -195,8 +244,9 @@ Follow the :ref:`general install instructions <installing>`.
     It's best to ensure your new Cyrus *will not* start up automatically
     if your server restarts in the middle of the upgrade.
 
-    How this is best achieved will depend upon your OS and distro, but may involve
-    something like ``systemctl disable cyrus-imapd`` or ``update-rc.d cyrus-imapd disable``
+    How this is best achieved will depend upon your OS and distro, but may
+    involve something like ``systemctl disable cyrus-imapd`` or
+    ``update-rc.d cyrus-imapd disable``
 
 3. Shut down existing Cyrus
 ---------------------------
@@ -233,7 +283,7 @@ server)::
     rsync -aHv oldimap:/var/lib/cyrus/. /var/lib/cyrus/.
     rsync -aHv oldimap:/var/spool/cyrus/. /var/spool/cyrus/.
 
-You don't need to copy the following databases as Cyrus 3.6 will
+You don't need to copy the following databases as Cyrus 3.8 will
 recreate these for you automatically:
 
 * duplicate delivery (deliver.db),
@@ -274,7 +324,7 @@ you have provided overrides for in your config files::
 
 **Important config** options: ``unixhierarchysep:`` and ``altnamespace:``
 defaults in :cyrusman:`imapd.conf(5)` changed in 3.0, which will affect you
-if you are upgrading to 3.6 from something earlier than 3.0. Implications
+if you are upgrading to 3.8 from something earlier than 3.0. Implications
 are outlined in the Note in :ref:`imap-admin-namespaces-mode` and
 :ref:`imap-switching-alt-namespace-mode`.  Please also see "Sieve Scripts,"
 below.
@@ -301,9 +351,10 @@ DAEMON section.
     If you have any databases using Berkeley db, they'll need to be
     converted to skiplist or flat *in your existing installation*. And
     then optionally converted to whatever final format you'd like in
-    your 3.6 installation.
+    your 3.8 installation.
 
-    Databases potentially affected: mailboxes, annotations, conversations, quotas.
+    Databases potentially affected: mailboxes, annotations, conversations,
+    quotas.
 
     On old install, prior to migration::
 
@@ -317,25 +368,27 @@ DAEMON section.
 .. note::
     The :cyrusman:`cvt_cyrusdb(8)` command does not accept relative paths.
 
-7. Start new 3.6 Cyrus and verify
+7. Start new 3.8 Cyrus and verify
 ---------------------------------
 
 ::
 
     sudo ./master/master -d
 
-Check ``/var/log/syslog`` for errors so you can quickly understand potential problems.
+Check ``/var/log/syslog`` for errors so you can quickly understand potential
+problems.
 
-When you're satisfied version 3.6 is running and can see all its data correctly,
-start the new Cyrus up with your regular init script.
+When you're satisfied version 3.8 is running and can see all its data
+correctly, start the new Cyrus up with your regular init script.
 
-If something has gone wrong, contact us on the :ref:`mailing list <feedback-mailing-lists>`.
+If something has gone wrong, contact us on the
+:ref:`mailing list <feedback-mailing-lists>`.
 You can revert to backups and keep processing mail using your old version
-until you're able to finish your 3.6 installation.
+until you're able to finish your 3.8 installation.
 
 .. note::
 
-    If you've disable your system startup scripts, as recommended in
+    If you've disabled your system startup scripts, as recommended in
     step 2, remember to re-enable them.  Use something like ``systemctl
     enable cyrus-imapd`` or ``update-rc.d cyrus-imapd enable``
 
@@ -345,14 +398,15 @@ until you're able to finish your 3.6 installation.
 The following steps can each take a long time, so we recommend
 running them one at a time (to reduce locking contention and high I/O load).
 
-To upgrade all the mailboxes to the latest version. This will take hours, possibly days.
+To upgrade all the mailboxes to the latest version. This will take hours,
+possibly days.
 
 ::
 
     reconstruct -V max
 
-New configuration: if turning on conversations, you need to create conversations.db for each user.
-(This is required for jmap).::
+New configuration: if turning on conversations, you need to create
+conversations.db for each user.  (This is required for JMAP).::
 
      ctl_conversationsdb -b -r
 
@@ -360,8 +414,8 @@ To check (and correct) quota usage::
 
     quota -f
 
-If you've been using CalDAV/CardDAV/all of the DAV from earlier releases, then the user.dav
-databases need to be reconstructed due to format changes.::
+If you've been using CalDAV/CardDAV/all of the DAV from earlier releases, then
+the user.dav databases need to be reconstructed due to format changes.::
 
     dav_reconstruct -a
 
@@ -382,19 +436,21 @@ to force a regeneration:
     6. Start up Cyrus (or run `ctl_cyrusdb -r`).  The RACL entries will
        be rebuilt
 
-There are fixes and improvements to caching and search indexing in 3.6.  You
-should consider running :cyrusman:`reconstruct(8)` across all mailboxes to
-rebuild caches, and :cyrusman:`squatter(8)` to rebuild search indexes.  This
-will probably take a long time, so you may wish to only do it per-mailbox as
-inconsistencies are discovered.  However, if you have been running a 3.5
-development version, you should make sure to do this for all mailboxes, due to
-bugs that were introduced and then fixed during 3.5 development.
+There were fixes and improvements to caching and search indexing in 3.6.  If
+you are upgrading to 3.8 from something earlier than 3.6, you should consider
+running :cyrusman:`reconstruct(8)` across all mailboxes to rebuild caches, and
+:cyrusman:`squatter(8)` to rebuild search indexes.  This will probably take a
+long time, so you may wish to only do it per-mailbox as inconsistencies are
+discovered.  However, if you have been running a 3.5 development version, you
+should make sure to do this for all mailboxes, due to bugs that were introduced
+and then fixed during 3.5 development.
 
 9. Do you want any new features?
 --------------------------------
 
-3.6 comes with many lovely new features. Consider which ones you want to enable.
-Check the :ref:`3.6 release notes <imap-release-notes-3.6>` for the full list.
+3.8 comes with many lovely new features. Consider which ones you want to
+enable.  Check the :ref:`3.8 release notes <imap-release-notes-3.8>` for the
+full list.
 
 10. Upgrade complete
 --------------------
@@ -403,9 +459,9 @@ Your upgrade is complete! We have a super-quick survey (3 questions only,
 anonymous responses) we would love for you to fill out, so we can get a feel for
 how many Cyrus installations are out there, and how the upgrade process went.
 
-|3.6 survey link|
+|3.8 survey link|
 
-.. |3.6 survey link| raw:: html
+.. |3.8 survey link| raw:: html
 
     <a href="https://cyrusimap.typeform.com/to/YI9P0f" target="_blank">
     I'll fill in the survey right now</a> (opens in a new window)
@@ -424,12 +480,12 @@ upgrade all your back end servers first. This can be done one at a time.
 Upgrade your mupdate master and front ends last.
 
 If you wish to use XFER to transfer mailboxes from an existing backend to your
-new 3.6 backend, you should first upgrade your existing backends to 3.4.3,
-3.2.9, or 3.0.17.  These releases contain a patch such that XFER will
-correctly recognise 3.6 destinations.  Without this patch, XFER will not
-recognise 3.6, and will downgrade mailboxes to the oldest supported format
+new 3.8 backend, you should first upgrade your existing backends to 3.6.1,
+3.4.5, 3.2.11, or 3.0.18.  These releases contain a patch such that XFER will
+correctly recognise 3.8 and later destinations.  Without this patch, XFER will
+not recognise 3.8, and will downgrade mailboxes to the oldest supported format
 (losing metadata) in transit.
 
 If your existing backends are 2.4 or 2.5, there are equivalent patches for
-recognising 3.6 on the cyrus-imapd-2.4 and cyrus-imapd-2.5 git branches, but
+recognising 3.8+ on the cyrus-imapd-2.4 and cyrus-imapd-2.5 git branches, but
 these are not in any released version.

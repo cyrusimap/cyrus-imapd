@@ -1,22 +1,22 @@
 :tocdepth: 3
 
-==============================
-Cyrus IMAP 3.8.0 Release Notes
-==============================
+=====================================
+Cyrus IMAP 3.8.0-alpha0 Release Notes
+=====================================
 
 Download from GitHub:
 
-    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.0/cyrus-imapd-3.8.0.tar.gz
-    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.0/cyrus-imapd-3.8.0.tar.gz.sig
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.0-alpha0/cyrus-imapd-3.8.0-alpha0.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.0-alpha0/cyrus-imapd-3.8.0-alpha0.tar.gz.sig
 
-.. _relnotes-3.8.0-changes:
+.. _relnotes-3.8.0-alpha0_changes:
 
 Major changes since the 3.6 series
 ==================================
 
 * None so far
 
-.. _relnotes_3.8.0_storage_changes:
+.. _relnotes_3.8.0-alpha0_storage_changes:
 
 Storage changes
 ===============
