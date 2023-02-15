@@ -333,7 +333,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    assumed.  */
 */
 
-{ "archive_maxsize", "1024 K", BYTESIZE, "UNRELEASED" }
+{ "archive_maxsize", "1024 K", BYTESIZE, "3.8.0" }
 /* The size of the largest message that won't be archived immediately.
 .PP
    For backward compatibility, if no unit is specified, kibibytes is
@@ -365,7 +365,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "autocreateinboxfolders", NULL, STRING, "2.5.0", "2.5.0", "autocreate_inbox_folders" }
 /* Deprecated in favor of \fIautocreate_inbox_folders\fR. */
 
-{ "autocreatequota", NULL, BYTESIZE, "UNRELEASED", "2.5.0", "autocreate_quota" }
+{ "autocreatequota", NULL, BYTESIZE, "3.8.0", "2.5.0", "autocreate_quota" }
 /* Deprecated in favor of \fIautocreate_quota\fR. */
 
 { "autocreatequotamsg", -1, INT, "2.5.0", "2.5.0", "autocreate_quota_messages" }
@@ -433,7 +433,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    INBOX that does not exist, then the INBOX is automatically created
    by \fIlmtpd(8)\fR and delivery of the message continues. */
 
-{ "autocreate_quota", "-1", BYTESIZE, "UNRELEASED" }
+{ "autocreate_quota", "-1", BYTESIZE, "3.8.0" }
 /* If set to a value of zero or higher, users have their INBOX folders
    created upon a successful login event or upon \fIlmtpd(8)\fR
    message delivery if \fIautocreate_post\fR is enabled, provided their
@@ -520,7 +520,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    partition pathname MUST be specified if backups are in use.  Note that
    there is no relationship between spool partitions and backup partitions. */
 
-{ "backup_compact_minsize", "0", BYTESIZE, "UNRELEASED" }
+{ "backup_compact_minsize", "0", BYTESIZE, "3.8.0" }
 /* The minimum size of chunks in each backup.  The compact tool
    will try to combine adjacent chunks that are smaller than this.
 .PP
@@ -529,7 +529,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, kibibytes is
    assumed. */
 
-{ "backup_compact_maxsize", "0", BYTESIZE, "UNRELEASED" }
+{ "backup_compact_maxsize", "0", BYTESIZE, "3.8.0" }
 /* The maximum size of chunks in each backup.  The compact tool
    will try to split chunks larger than this into smaller chunks.
 .PP
@@ -654,7 +654,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    if the CalDAV client hasn't specified a restriction in the creation
    request. */
 
-{ "calendar_minimum_alarm_interval", "5m", DURATION, "UNRELEASED" }
+{ "calendar_minimum_alarm_interval", "5m", DURATION, "3.8.0" }
 /* The minimum allowed interval between alarms for a recurring event.
    Primarily used to suppress alarms for MINUTELY and SECONDLY recurrences.
    The default is 5 minutes.  The minimum value is 0, which will
@@ -809,7 +809,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    is the pid (integer) and the third is the service ID.
    Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d */
 
-{ "debug_log_sync_partition_choice", 0, SWITCH, "UNRELEASED" }
+{ "debug_log_sync_partition_choice", 0, SWITCH, "3.8.0" }
 /* If enabled, replication will log which partition it chose for staging.
    This is mainly useful for regression testing the sync_client -a switch. */
 
@@ -932,7 +932,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    to a size. In "headerbody" mode, it includes full headers and body truncated
    to a size */
 
-{ "event_content_size", "0", BYTESIZE, "UNRELEASED" }
+{ "event_content_size", "0", BYTESIZE, "3.8.0" }
 /* Truncate the message content that may be included with MessageAppend and
    MessageNew. Set 0 to include the entire message itself.
 .PP
@@ -948,7 +948,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.unseenMessages", "vnd.cmu.envelope", "vnd.cmu.sessionId", "vnd.cmu.mailboxACL", "vnd.cmu.mbtype", "vnd.cmu.davFilename", "vnd.cmu.davUid", "vnd.fastmail.clientId", "vnd.fastmail.sessionId", "vnd.fastmail.convExists", "vnd.fastmail.convUnseen", "vnd.fastmail.cid", "vnd.fastmail.counters", "vnd.fastmail.jmapEmail", "vnd.fastmail.jmapStates", "vnd.cmu.emailid", "vnd.cmu.threadid"), "3.6.0" }
 /* Space-separated list of extra parameters to add to any appropriated event. */
 
-{ "event_groups", "message mailbox", BITFIELD("message", "quota", "flags", "access", "mailbox", "subscription", "calendar", "applepushservice", "jmap" ), "UNRELEASED" }
+{ "event_groups", "message mailbox", BITFIELD("message", "quota", "flags", "access", "mailbox", "subscription", "calendar", "applepushservice", "jmap" ), "3.8.0" }
 /* Space-separated list of groups of related events to turn on notification */
 
 { "event_notifier", NULL, STRING, "2.5.0" }
@@ -1096,7 +1096,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that enabling this option will increase the amount of data
    sent across the wire. */
 
-{ "httppts_uri", NULL, STRING, "UNRELEASED" }
+{ "httppts_uri", NULL, STRING, "3.8.0" }
 /* The URL endpoint to use when for querying group membership, in URI Template
    (level 1) format [RFC6570].  The URL MUST contain a variable called "groupId" */
 
@@ -1148,7 +1148,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    The zero value disables validation of the "iat" JWS claim.
 */
 
-{ "icalendar_max_size", "0", BYTESIZE, "UNRELEASED" }
+{ "icalendar_max_size", "0", BYTESIZE, "3.8.0" }
 /* Maximum allowed iCalendar size. CalDAV and JMAP will reject storage of
    resources whose iCalendar representation is larger than this.
 .PP
@@ -1257,7 +1257,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that the Content-ID key must be URL-unescaped and enclosed in
    angular brackets, as defined in RFC 2392. */
 
-{ "jmap_preview_length", "64B", BYTESIZE, "UNRELEASED" }
+{ "jmap_preview_length", "64B", BYTESIZE, "3.8.0" }
 /* The maximum length of dynamically generated message previews. Previews
    stored in jmap_preview_annot take precedence.
 .PP
@@ -1269,7 +1269,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    value of the JMAP \"urn:ietf:params:jmap:blob\" capabilities object.
    Default value is 100. */
 
-{ "jmap_max_size_upload", "1G", BYTESIZE, "UNRELEASED" }
+{ "jmap_max_size_upload", "1G", BYTESIZE, "3.8.0" }
 /* The maximum size that the JMAP API accepts for blob uploads. Returned as
    the maxSizeUpload property value of the JMAP \"urn:ietf:params:jmap:core\"
    capabilities object.
@@ -1277,7 +1277,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, kibibytes is assumed.
    */
 
-{ "jmap_max_size_blob_set", "4M", BYTESIZE, "UNRELEASED" }
+{ "jmap_max_size_blob_set", "4M", BYTESIZE, "3.8.0" }
 /* The maximum size that the JMAP API accepts for Blob/set. Returned as the
    maxSizeBlobSet property value of the JMAP
    \"https://cyrusimap.org/ns/jmap/blob\" capabilities object.
@@ -1290,7 +1290,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    the JMAP \"urn:ietf:params:jmap:core\" capabilities object. The Cyrus JMAP
    implementation does not enforce this rate-limit. */
 
-{ "jmap_max_size_request", "10M", BYTESIZE, "UNRELEASED" }
+{ "jmap_max_size_request", "10M", BYTESIZE, "3.8.0" }
 /* The maximum size that the JMAP API accepts for requests at the API endpoint.
    Returned as the maxSizeRequest property value of the JMAP
    \"urn:ietf:params:jmap:core\" capabilities object.
@@ -1330,7 +1330,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    Returned as the maxObjectsInSet property value of the
    JMAP \"urn:ietf:params:jmap:core\" capabilities object. */
 
-{ "jmap_mail_max_size_attachments_per_email", "10M", BYTESIZE, "UNRELEASED" }
+{ "jmap_mail_max_size_attachments_per_email", "10M", BYTESIZE, "3.8.0" }
 /* The value to return for the maxSizeAttachmentsPerEmail property of the JMAP
    \"urn:ietf:params:jmap:mail\" capabilities object. The Cyrus JMAP
    implementation does not enforce this size limit.
@@ -1708,7 +1708,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Maximum number of logged in sessions allowed per user,
    zero means no limit */
 
-{ "maxmessagesize", "0", BYTESIZE, "UNRELEASED" }
+{ "maxmessagesize", "0", BYTESIZE, "3.8.0" }
 /* Maximum size of messages that will be accepted by Cyrus.  This affects LMTP
    deliveries, IMAP appends, DAV uploads, etc.  Messages larger than this will
    be rejected.
@@ -1717,12 +1717,12 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    If no unit is specified, bytes is assumed. */
 
-{ "maxquoted", "128K", BYTESIZE, "UNRELEASED" }
+{ "maxquoted", "128K", BYTESIZE, "3.8.0" }
 /* Maximum size of a single quoted string for the parser.
 .PP
    If no unit is specified, bytes is assumed. */
 
-{ "maxword", "128K", BYTESIZE, "UNRELEASED" }
+{ "maxword", "128K", BYTESIZE, "3.8.0" }
 /* Maximum size of a single word for the parser.
 .PP
    If no unit is specified, bytes is assumed. */
@@ -2131,7 +2131,7 @@ If all partitions are over that limit, this feature is not used anymore.
    In a standard murder this option should ONLY be set on backends.
    DO NOT SET on frontends or things won't work properly. */
 
-{ "pts_module", "afskrb", STRINGLIST("afskrb", "ldap", "http"), "UNRELEASED" }
+{ "pts_module", "afskrb", STRINGLIST("afskrb", "ldap", "http"), "3.8.0" }
 /* The PTS module to use. */
 
 { "ptloader_sock", NULL, STRING, "2.3.17" }
@@ -2179,17 +2179,17 @@ If all partitions are over that limit, this feature is not used anymore.
    conversations quota counts, which count multiple copies of exactly the
    same message (by GUID) as only one */
 
-{ "quotawarn", 90, INT, "UNRELEASED", "UNRELEASED", "quotawarnpercent" }
+{ "quotawarn", 90, INT, "3.8.0", "3.8.0", "quotawarnpercent" }
 /* Deprecated in favour of \fIquotawarnpercent\fR. */
 
-{ "quotawarnpercent", 90, INT, "UNRELEASED" }
+{ "quotawarnpercent", 90, INT, "3.8.0" }
 /* The percent of quota utilization over which the server generates
    warnings. */
 
-{ "quotawarnkb", NULL, BYTESIZE, "UNRELEASED", "UNRELEASED", "quotawarnsize" }
+{ "quotawarnkb", NULL, BYTESIZE, "3.8.0", "3.8.0", "quotawarnsize" }
 /* Deprecated in favour of \fIquotawarnsize\fR. */
 
-{ "quotawarnsize", "0", BYTESIZE, "UNRELEASED" }
+{ "quotawarnsize", "0", BYTESIZE, "3.8.0" }
 /* The maximum amount of free space at which to give a quota warning
    (if this value is 0, or if the quota is smaller than this
    amount, then warnings are always given).
@@ -2416,7 +2416,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The maximum number of seconds to run a search for before aborting.  Default
    of no value means search "forever" until other timeouts. */
 
-{ "search_maxsize", "4M", BYTESIZE, "UNRELEASED" }
+{ "search_maxsize", "4M", BYTESIZE, "3.8.0" }
 /* The maximum size to index for each message part. Message contents that
    occur after this byte offset will not be indexed nor used to generate
    search snippets. Xapian-only.
@@ -2577,7 +2577,7 @@ product version in the capabilities
 { "sieve_folder", "#sieve", STRING, "3.6.0" }
 /* The name of the folder for storing Sieve scripts (#sieve) */
 
-{ "sieve_maxscriptsize", "32K", BYTESIZE, "UNRELEASED" }
+{ "sieve_maxscriptsize", "32K", BYTESIZE, "3.8.0" }
 /* Maximum size any sieve script can be, enforced at submission by
    timsieved(8) and JMAP.
 .PP
@@ -3109,7 +3109,7 @@ product version in the capabilities
    character '.'. Note that with the newnews separator, no dots may
    occur in mailbox names.  The default switched in 3.0 from off to on. */
 
-{ "vcard_max_size", "0", BYTESIZE, "UNRELEASED" }
+{ "vcard_max_size", "0", BYTESIZE, "3.8.0" }
 /* Maximum allowed vCard size.
    If non-zero, CardDAV and JMAP will reject storage of contacts whose
    vCard representation is larger than \fIvcard_max_size\fR.
@@ -3168,7 +3168,7 @@ of the incoming network interface, or if no record is found, the
    the attachment will be used. For JMAP, the Link.blobId property of
    JSCalendar objects will be disabled. */
 
-{ "webdav_attachments_max_binary_attach_size", "1024K", BYTESIZE, "UNRELEASED" }
+{ "webdav_attachments_max_binary_attach_size", "1024K", BYTESIZE, "3.8.0" }
 /* The maximum byte length of an ATTACH property value when managed attachment
    URIs get rewritten to BINARY during iTIP processing.  Any attachment that
    exceeds this byte size keeps its managed attachment URI as ATTACH value. A
