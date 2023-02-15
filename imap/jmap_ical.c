@@ -6119,20 +6119,20 @@ relatedto_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *relat
     jmap_parser_pop(parser);
 }
 
-struct geouri_parts {
+struct geouri {
     char *coords[3];
     int has_p;
 };
 
-static void geouri_parts_reset(struct geouri_parts *parts)
+static void geouri_reset(struct geouri *geouri)
 {
     int i;
     for (i = 0; i < 3; i++)
-        xzfree(parts->coords[i]);
-    parts->has_p = 0;
+        xzfree(geouri->coords[i]);
+    geouri->has_p = 0;
 }
 
-static int geouri_parts_parse(const char *uri, struct geouri_parts *parts)
+static int geouri_parse(const char *uri, struct geouri *geouri)
 {
     const char *str = uri;
 
@@ -6143,7 +6143,7 @@ static int geouri_parts_parse(const char *uri, struct geouri_parts *parts)
     // coord-a "," coord-b [ "," coord-c ]
     int i;
     for (i = 0; i < 3; i++) {
-        if ((parts->coords[0] || parts->coords[1])) {
+        if ((geouri->coords[0] || geouri->coords[1])) {
             if (*str != ',')
                 break;
             str++;
@@ -6168,15 +6168,15 @@ static int geouri_parts_parse(const char *uri, struct geouri_parts *parts)
             num = frac;
         }
 
-        parts->coords[i] = xstrndup(str, num - str);
+        geouri->coords[i] = xstrndup(str, num - str);
         str = num;
     }
 
-    if (!parts->coords[0] || !parts->coords[1])
+    if (!geouri->coords[0] || !geouri->coords[1])
         return -1;
 
     // p
-    parts->has_p = !!str[0];
+    geouri->has_p = !!str[0];
 
     return 0;
 }
@@ -6216,11 +6216,11 @@ validate_location(json_t *loc, struct jmap_parser *parser,
 
     jprop = json_object_get(loc, "coordinates");
     if (json_is_string(jprop)) {
-        struct geouri_parts geo = { 0 };
-        if (geouri_parts_parse(json_string_value(jprop), &geo) < 0) {
+        struct geouri geouri = { 0 };
+        if (geouri_parse(json_string_value(jprop), &geouri) < 0) {
             jmap_parser_invalid(parser, "coordinates");
         }
-        geouri_parts_reset(&geo);
+        geouri_reset(&geouri);
     }
     if (JNOTNULL(jprop) && !json_is_string(jprop))
         jmap_parser_invalid(parser, "coordinates");
@@ -6410,10 +6410,10 @@ const char *locations_to_ical_keep_old_main(json_t *locations,
     const char *s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE);
     if (s) unescape_ical_text(&title, s);
 
-    const char *geouri = icalproperty_get_value_as_string(prop);
+    const char *uri = icalproperty_get_value_as_string(prop);
 
     if (!strcmpsafe(mainloc_name, buf_cstring(&title)) &&
-        !strcmpsafe(mainloc_coords, geouri)) {
+        !strcmpsafe(mainloc_coords, uri)) {
         // Previous X-APPLE-STRUCTURED-LOCATION still matches
         icalcomponent_add_property(comp, icalproperty_clone(prop));
     }
