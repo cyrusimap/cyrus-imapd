@@ -35,16 +35,33 @@ uint32_t csum(const char *base, size_t len)
 	uint32_t sum = crc32_map(base, len);
 }
 
-void mf_lock(struct mf *mf, int type)
+void mf_openlock(struct mf *mf, int type)
 {
 	struct flock fl;
 	fl.l_type = type;
 	fl.l_whence = SEEK_SET;
 	fl.l_start = 0;
 	fl.l_len = 0;
+
+ reopen:
+	mf->fd = open(mf->fname, O_RDWR | O_CREAT, 0644);
+	if (mf->fd == -1) {
+		printf("failed to open %s\n", mf->fname);
+		abort();
+	}
+
 	for (;;) {
 		int r = fcntl(mf->fd, F_SETLKW, &fl);
-		if (r != -1) return;
+		if (r != -1) {
+			struct stat sbuf;
+			struct stat sbuffile;
+			r = fstat(fd, &sbuf);
+			if (!r) r = stat(filename, &sbuffile);
+			if (!r && sbuf.st_ino == sbuffile.st_ino) return;
+			// file has changed under us, re-open
+			close(mf->fd);
+			goto reopen;
+		}
 		if (errno == EINTR) continue;
 		abort();
 	}
@@ -203,19 +220,13 @@ struct mf *mf_open(const char *fname)
 	struct stat sbuf;
 	struct mf *mf = malloc(sizeof(struct mf));
 
-	mf->fd = open(fname, O_RDWR | O_CREAT, 0644);
-	if (mf->fd == -1) {
-		printf("failed to open %s\n", fname);
-		abort();
-	}
-
-	mf_lock(mf, F_WRLCK);
-
 	mf->fname = strdup(fname);
 	mf->map_base = NULL;
 	mf->map_size = 0;
 	mf->len = 0;
 	mf->seq = 0;
+
+	mf_openlock(mf, F_WRLCK);
 
 	// map in the file
 	if (!fstat(mf->fd, &sbuf))
