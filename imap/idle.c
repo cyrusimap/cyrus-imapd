@@ -69,42 +69,24 @@ static struct sockaddr_un idle_remote;
  * that we want to be notified of changes */
 static int idle_started;
 
-/* Send the message 'which' about the mailbox 'mboxname' to the idled.
- * Returns 0 on success or an IMAP error code on failure */
-static int idle_send_msg(int which, const char *mboxname)
-{
-    idle_message_t msg;
-
-    /* maybe the idled came along, so we always send anyway, because
-     * polled idle is too awful to contemplate */
-
-    /* fill the structure */
-    msg.which = which;
-    xstrncpy(msg.mboxname, mboxname ? mboxname : ".", sizeof(msg.mboxname));
-
-    /* send */
-    return idle_send(&idle_remote, &msg);
-}
-
 /*
  * Notify idled of a mailbox change
  */
-static void idle_notify(const char *mboxname)
+static void idle_notify(json_t *msg)
 {
     int r;
 
-    /* We should try to determine if we need to send this
-     * (ie, is an imapd is IDLE on 'mailbox'?).
-     */
-    r = idle_send_msg(IDLE_MSG_NOTIFY, mboxname);
+    r = idle_send(&idle_remote, msg);
     if (r && (r != ENOENT)) {
         /* ENOENT can happen as result of a race between delivering
          * messages and restarting idled.  It indicates that the
          * idled's socket was unlinked, which means that idled went
          * through it's graceful shutdown path, so don't syslog. */
+        pid_t pid = json_integer_value(json_object_get(msg, "pid"));
+
         syslog(LOG_ERR, "IDLE: error sending message "
-                        "NOTIFY to idled for mailbox %s: %s.",
-                        mboxname, error_message(r));
+                        "NOTIFY to idled for pid %d: %s.",
+                        pid, error_message(r));
     }
     if (errno == ENOENT)
         errno = 0;
@@ -129,9 +111,6 @@ EXPORTED int idle_init(void)
 
     idle_method_desc = "poll";
 
-    /* set the mailbox update notifier */
-    mailbox_set_updatenotifier(idle_notify);
-
     if (!idle_init_sock(&local))
         return -1;
 
@@ -146,6 +125,9 @@ EXPORTED int idle_init(void)
         return -1;
     }
 
+    /* set the mboxvent idle notifier */
+    mboxevent_set_idlenotifier(idle_notify);
+
     idle_method_desc = "idled";
 
     return s;
@@ -159,60 +141,71 @@ EXPORTED int idle_enabled(void)
     return (idle_period > 0);
 }
 
-EXPORTED void idle_start(const char *mboxname)
+EXPORTED int idle_start(unsigned long events, time_t timeout,
+                        mailbox_filter_t filter, strarray_t *keys)
 {
     int r;
 
-    if (!idle_enabled()) return;
+    if (!idle_enabled()) return 0;
+
+    json_t *array = json_array();
+    int i;
+
+    for (i = 0; i < strarray_size(keys); i++) {
+        json_array_append_new(array, json_string(strarray_nth(keys, i)));
+    }
+
+    pid_t pid = getpid();
+    json_t *msg = json_pack("{ s:s s:i s:i s:i s:i s:o }",
+                           "@type", "start", "pid", getpid(),
+                            "events", events, "timeout", timeout,
+                            "filter", filter, "keys", array);
 
     /* Tell idled that we're idling.  It doesn't
      * matter if it fails, we'll still poll */
-    r = idle_send_msg(IDLE_MSG_INIT, mboxname);
+    r = idle_send(&idle_remote, msg);
+    json_decref(msg);
+
     if (r) {
         int idle_timeout = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
         syslog(LOG_ERR, "IDLE: error sending message "
-                        "INIT to idled for mailbox %s: %s. "
+                        "INIT to idled for pid %d: %s. "
                         "Falling back to polling every %d seconds.",
-                        mboxname, error_message(r), idle_timeout);
-        return;
+                        pid, error_message(r), idle_timeout);
+        return 0;
     }
 
     idle_started = 1;
+
+    return 1;
 }
 
-EXPORTED int idle_get_message(void)
+EXPORTED json_t *idle_get_message(void)
 {
     struct sockaddr_un from;
-    idle_message_t msg;
-    int flags = 0;
 
-    if (idle_recv(&from, &msg)) {
-        switch (msg.which) {
-        case IDLE_MSG_NOTIFY:
-            flags |= IDLE_MAILBOX;
-            break;
-        case IDLE_MSG_ALERT:
-            flags |= IDLE_ALERT;
-            break;
-        }
-    }
-
-    return flags;
+    return idle_recv(&from);
 }
 
-EXPORTED void idle_stop(const char *mboxname)
+EXPORTED void idle_stop(mailbox_filter_t filter)
 {
     int r;
 
     if (!idle_started) return;
 
+    pid_t pid = getpid();
+    json_t *msg = json_pack("{ s:s s:i s:i }",
+                           "@type", "stop", "pid", pid, "filter", filter);
+
     /* Tell idled that we're done idling */
-    r = idle_send_msg(IDLE_MSG_DONE, mboxname);
+    r = idle_send(&idle_remote, msg);
+    json_decref(msg);
+
     if (r && (r != ENOENT)) {
         /* See comment in idle_notify() about ENOENT */
         syslog(LOG_ERR, "IDLE: error sending message "
-                        "DONE to idled for mailbox %s: %s.",
-                        mboxname, error_message(r));
+                        "DONE to idled for pid %d: %s.",
+                        pid, error_message(r));
     }
 
     idle_started = 0;

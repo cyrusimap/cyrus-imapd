@@ -1199,8 +1199,8 @@ void shut_down(int code)
 
     index_text_extractor_destroy();
 
-    if (idling)
-        idle_stop(index_mboxname(imapd_index));
+    if (idling && (idle_sock != PROT_NO_FD))
+        idle_stop(FILTER_NONE);
 
     if (imapd_index) {
         if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
@@ -3401,7 +3401,11 @@ static void cmd_idle(char *tag)
     }
     else if (imapd_index && idle_sock != PROT_NO_FD) {
         /* Tell idled to start sending mailbox updates */
-        idle_start(index_mboxname(imapd_index));
+        const char *mboxid = index_mboxid(imapd_index);
+        strarray_t key = { 1, 0, (char **) &mboxid }; // avoid memory alloc
+
+        idle_start(IMAP_NOTIFY_MESSAGE, time(NULL) + idle_timeout,
+                   FILTER_SELECTED, &key);
 
         /* Use this flag so if getc causes a shutdown due to
            connection abort we tell idled about it */
@@ -3440,17 +3444,17 @@ static void cmd_idle(char *tag)
                                      &idle_sock_flag, idle_period);
 
             if (idle_sock_flag) {
-                int flags = idle_get_message();
+                json_t *msg = idle_get_message();
 
-                switch (flags) {
-                case IDLE_ALERT:
-                    idle_sock = PROT_NO_FD;
+                if (msg) {
+                    const char *type =
+                        json_string_value(json_object_get(msg, "@type"));
 
-                    GCC_FALLTHROUGH
-
-                case IDLE_MAILBOX:
                     index_check(imapd_index, 1, 0);
-                    break;
+
+                    if (!strcmp(type, "alert")) idle_sock = PROT_NO_FD;
+
+                    json_decref(msg);
                 }
             }
 
@@ -3469,7 +3473,7 @@ static void cmd_idle(char *tag)
     }
     else if (idle_sock != PROT_NO_FD) {
         /* Stop updates */
-        idle_stop(index_mboxname(imapd_index));
+        idle_stop(FILTER_SELECTED);
         idling = 0;
     }
 

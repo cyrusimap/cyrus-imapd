@@ -42,23 +42,40 @@
 #ifndef IDLE_H
 #define IDLE_H
 
+#include "json_support.h"
 #include "mailbox.h"
+#include "strarray.h"
 
 extern const char *idle_method_desc;
 
+/* Mailbox filter selectors from RFC 5465 */
 typedef enum {
-    /* something noteworthy may have happened to the mailbox,
-     * e.g. a delivery, so it needs to be checked */
-    IDLE_MAILBOX =      0x1,
-    /* the shutdownfile may have been written, needing an ALERT response
-     * to be sent to any IMAP clients */
-    IDLE_ALERT =        0x2,
-    /* input was detected on the @otherfd, probably because the IMAP
-     * client cancelled the IDLE */
-    IDLE_INPUT =        0x4
-} idle_flags_t;
+    FILTER_NONE             = 0,       // key is NULL
+    FILTER_SELECTED         = (1<<0),  // key is mailbox uniqueid
+    FILTER_INBOXES          = (1<<1),  // key is userid
+    FILTER_PERSONAL         = (1<<2),  // key is userid
+    FILTER_SUBSCRIBED       = (1<<3),  // key is userid
+    FILTER_SUBTREE          = (1<<4),  // key list of mailboxes
+    FILTER_MAILBOXES        = (1<<5)   // key list of mailboxes
+} mailbox_filter_t;
 
-typedef void idle_updateproc_t(idle_flags_t flags);
+#define IMAP_NOTIFY_MESSAGE_NEW                                         \
+    ( EVENT_MESSAGE_NEW        | EVENT_MESSAGE_APPEND          |        \
+      EVENT_MESSAGE_COPY       | EVENT_MESSAGE_MOVE              )
+
+#define IMAP_NOTIFY_MESSAGE_EXPUNGE                                     \
+    ( EVENT_MESSAGE_EXPUNGE    | EVENT_MESSAGE_EXPIRE            )
+
+#define IMAP_NOTIFY_FLAG_CHANGE                                         \
+    ( EVENT_MESSAGE_READ       | EVENT_MESSAGE_TRASH           |        \
+      EVENT_FLAGS_SET          | EVENT_FLAGS_CLEAR               )
+
+#define IMAP_NOTIFY_ANNOTATION_CHANGE                                   \
+    ( 0 ) // We don't currently have an EVENT for this
+
+#define IMAP_NOTIFY_MESSAGE                                             \
+    ( IMAP_NOTIFY_MESSAGE_NEW  | IMAP_NOTIFY_MESSAGE_EXPUNGE   |        \
+      IMAP_NOTIFY_FLAG_CHANGE  | IMAP_NOTIFY_ANNOTATION_CHANGE   )
 
 /* set up the link to the idled for notifications */
 int idle_init(void);
@@ -66,19 +83,17 @@ int idle_init(void);
 /* Is IDLE enabled? */
 int idle_enabled(void);
 
-/* Start IDLEing on 'mailbox'. */
-void idle_start(const char *mboxname);
+/* Start IDLEing on 'filter' mailboxes for 'events'. */
+int idle_start(unsigned long events, time_t timeout,
+               mailbox_filter_t filter, strarray_t *keys);
 
-/* Reads and parses a message from idled.
- * Returns a mask of flags indicating what if anything happened, see idle_flags_t,
- * or 0 on error.
- */
-int idle_get_message(void);
+/* Reads and returns a message from idled, or NULL on error */
+json_t *idle_get_message(void);
 
-/* Stop IDLEing on 'mailbox'. */
-void idle_stop(const char *mboxname);
+/* Stop IDLEing on 'filter' mailboxes. */
+void idle_stop(mailbox_filter_t filter);
 
 /* Clean up when IDLE is completed. */
 void idle_done(void);
 
-#endif
+#endif /* IDLE_H */
