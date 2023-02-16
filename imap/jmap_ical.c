@@ -610,7 +610,6 @@ static char *normalized_uri(const char *uri)
     return buf_release(&buf);
 }
 
-
 static const char*
 get_icalxparam_value(icalproperty *prop, const char *name)
 {
@@ -650,6 +649,86 @@ static void unescape_ical_text(struct buf *buf, const char *s)
         }
         else buf_putc(buf, *s);
     }
+}
+
+struct geouri {
+    char *coords[3];
+    int has_p;
+};
+
+static void geouri_reset(struct geouri *geouri)
+{
+    int i;
+    for (i = 0; i < 3; i++)
+        xzfree(geouri->coords[i]);
+    geouri->has_p = 0;
+}
+
+static int geouri_parse(const char *uri, struct geouri *geouri)
+{
+    const char *str = uri;
+
+    // geo:
+    if (strncmpsafe("geo:", str, 4)) return -1;
+    str += 4;
+
+    // coord-a "," coord-b [ "," coord-c ]
+    int i;
+    for (i = 0; i < 3; i++) {
+        if ((geouri->coords[0] || geouri->coords[1])) {
+            if (*str != ',')
+                break;
+            str++;
+        }
+
+        const char *num = str;
+
+        if (*str == '-')
+            num++;
+
+        for ( ; isdigit(*num); num++) { }
+        if (num == str)
+            break;
+
+        if (*num == '.') {
+            const char *frac = ++num;
+
+            for ( ; isdigit(*frac); frac++) { }
+            if (frac == num)
+                break;
+
+            num = frac;
+        }
+
+        geouri->coords[i] = xstrndup(str, num - str);
+        str = num;
+    }
+
+    if (!geouri->coords[0] || !geouri->coords[1])
+        return -1;
+
+    // p
+    geouri->has_p = !!str[0];
+
+    return 0;
+}
+
+static int geouri_sanitize(const char *uri, struct buf *buf)
+{
+    struct geouri geouri = {0};
+    buf_reset(buf);
+
+    if (geouri_parse(uri, &geouri)) {
+        // Seen in the wild: TEXT-escaped geo: URI values
+        unescape_ical_text(buf, uri);
+        geouri_reset(&geouri);
+        if (geouri_parse(buf_cstring(buf), &geouri))
+            buf_reset(buf);
+    }
+    else buf_setcstr(buf, uri);
+
+    geouri_reset(&geouri);
+    return buf_len(buf) ? 0 : -1;
 }
 
 /* Compare the value of the first occurences of property kind in components
@@ -2930,7 +3009,16 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links,
 
     /* coordinates */
     const char *coord = get_icalxparam_value(prop, JMAPICAL_XPARAM_GEO);
-    if (coord) json_object_set_new(loc, "coordinates", json_string(coord));
+    if (coord) {
+        // Sanitize our own X-param value, just in case
+        struct buf sanitized_geouri = BUF_INITIALIZER;
+
+        if (geouri_sanitize(coord, &sanitized_geouri) == 0) {
+            json_object_set_new(loc, "coordinates",
+                    json_string(buf_cstring(&sanitized_geouri)));
+        }
+        buf_free(&sanitized_geouri);
+    }
 
     /* locationTypes */
     json_t *loctypes = NULL;
@@ -3046,23 +3134,28 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
         /* X-APPLE-STRUCTURED-LOCATION */
         if (!strcmp(name, "X-APPLE-STRUCTURED-LOCATION")) {
             const char *uri = icalvalue_as_ical_string(icalproperty_get_value(prop));
-            if (strncmpsafe(uri, "geo:", 4)) continue;
+            struct buf sanitized_geouri = BUF_INITIALIZER;
 
-            struct buf title = BUF_INITIALIZER;
-            const char *s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE);
-            if (s) unescape_ical_text(&title, s);
+            if (geouri_sanitize(uri, &sanitized_geouri) == 0) {
+                uri = buf_cstring(&sanitized_geouri);
+                struct buf title = BUF_INITIALIZER;
+                const char *s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE);
+                if (s) unescape_ical_text(&title, s);
 
-            if (mainlocid) {
-                // Do what Apple is doing: if the X-TITLE and LOCATION value
-                // match, it's the same location. Otherwise ignore it.
-                json_t *mainloc = json_object_get(locations, mainlocid);
-                const char *maintitle = json_string_value(json_object_get(mainloc, "name"));
-                if (maintitle && !strcmpsafe(maintitle, buf_cstring(&title))) {
-                    json_object_set_new(mainloc, "coordinates", json_string(uri));
+                if (mainlocid) {
+                    // Do what Apple is doing: if the X-TITLE and LOCATION value
+                    // match, it's the same location. Otherwise ignore it.
+                    json_t *mainloc = json_object_get(locations, mainlocid);
+                    const char *maintitle = json_string_value(json_object_get(mainloc, "name"));
+                    if (maintitle && !strcmpsafe(maintitle, buf_cstring(&title))) {
+                        json_object_set_new(mainloc, "coordinates",json_string(uri));
+                    }
                 }
+
+                buf_free(&title);
             }
 
-            buf_free(&title);
+            buf_free(&sanitized_geouri);
             continue;
         }
 
@@ -6119,69 +6212,6 @@ relatedto_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *relat
     jmap_parser_pop(parser);
 }
 
-struct geouri_parts {
-    char *coords[3];
-    int has_p;
-};
-
-static void geouri_parts_reset(struct geouri_parts *parts)
-{
-    int i;
-    for (i = 0; i < 3; i++)
-        xzfree(parts->coords[i]);
-    parts->has_p = 0;
-}
-
-static int geouri_parts_parse(const char *uri, struct geouri_parts *parts)
-{
-    const char *str = uri;
-
-    // geo:
-    if (strncmpsafe("geo:", str, 4)) return -1;
-    str += 4;
-
-    // coord-a "," coord-b [ "," coord-c ]
-    int i;
-    for (i = 0; i < 3; i++) {
-        if ((parts->coords[0] || parts->coords[1])) {
-            if (*str != ',')
-                break;
-            str++;
-        }
-
-        const char *num = str;
-
-        if (*str == '-')
-            num++;
-
-        for ( ; isdigit(*num); num++) { }
-        if (num == str)
-            break;
-
-        if (*num == '.') {
-            const char *frac = ++num;
-
-            for ( ; isdigit(*frac); frac++) { }
-            if (frac == num)
-                break;
-
-            num = frac;
-        }
-
-        parts->coords[i] = xstrndup(str, num - str);
-        str = num;
-    }
-
-    if (!parts->coords[0] || !parts->coords[1])
-        return -1;
-
-    // p
-    parts->has_p = !!str[0];
-
-    return 0;
-}
-
-
 static int
 validate_location(json_t *loc, struct jmap_parser *parser,
                   jstimezones_t *jstzones)
@@ -6216,11 +6246,11 @@ validate_location(json_t *loc, struct jmap_parser *parser,
 
     jprop = json_object_get(loc, "coordinates");
     if (json_is_string(jprop)) {
-        struct geouri_parts geo = { 0 };
-        if (geouri_parts_parse(json_string_value(jprop), &geo) < 0) {
+        struct geouri geouri = { 0 };
+        if (geouri_parse(json_string_value(jprop), &geouri) < 0) {
             jmap_parser_invalid(parser, "coordinates");
         }
-        geouri_parts_reset(&geo);
+        geouri_reset(&geouri);
     }
     if (JNOTNULL(jprop) && !json_is_string(jprop))
         jmap_parser_invalid(parser, "coordinates");
@@ -6410,14 +6440,17 @@ const char *locations_to_ical_keep_old_main(json_t *locations,
     const char *s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE);
     if (s) unescape_ical_text(&title, s);
 
-    const char *geouri = icalproperty_get_value_as_string(prop);
-
-    if (!strcmpsafe(mainloc_name, buf_cstring(&title)) &&
-        !strcmpsafe(mainloc_coords, geouri)) {
-        // Previous X-APPLE-STRUCTURED-LOCATION still matches
-        icalcomponent_add_property(comp, icalproperty_clone(prop));
+    const char *uri = icalproperty_get_value_as_string(prop);
+    struct buf sanitized_geouri = BUF_INITIALIZER;
+    if (geouri_sanitize(uri, &sanitized_geouri) == 0) {
+        if (!strcmpsafe(mainloc_name, buf_cstring(&title)) &&
+                !strcmpsafe(mainloc_coords, buf_cstring(&sanitized_geouri))) {
+            // Previous X-APPLE-STRUCTURED-LOCATION still matches
+            icalcomponent_add_property(comp, icalproperty_clone(prop));
+        }
     }
 
+    buf_free(&sanitized_geouri);
     buf_free(&title);
 
 done:
