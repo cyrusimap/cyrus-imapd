@@ -55,8 +55,8 @@ void mf_openlock(struct mf *mf, int type)
 		if (r != -1) {
 			struct stat sbuf;
 			struct stat sbuffile;
-			r = fstat(fd, &sbuf);
-			if (!r) r = stat(filename, &sbuffile);
+			r = fstat(mf->fd, &sbuf);
+			if (!r) r = stat(mf->fname, &sbuffile);
 			if (!r && sbuf.st_ino == sbuffile.st_ino) return;
 			// file has changed under us, re-open
 			close(mf->fd);
