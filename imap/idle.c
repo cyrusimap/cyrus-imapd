@@ -67,7 +67,7 @@ static struct sockaddr_un idle_remote;
 
 /* true if we've successfully told the idled
  * that we want to be notified of changes */
-static int idle_started;
+static int idle_started = 0;
 
 /*
  * Notify idled of a mailbox change
@@ -175,7 +175,7 @@ EXPORTED int idle_start(unsigned long events, time_t timeout,
         return 0;
     }
 
-    idle_started = 1;
+    idle_started |= filter;
 
     return 1;
 }
@@ -195,7 +195,7 @@ EXPORTED void idle_stop(mailbox_filter_t filter)
 
     pid_t pid = getpid();
     json_t *msg = json_pack("{ s:s s:i s:i }",
-                           "@type", "stop", "pid", pid, "filter", filter);
+                            "@type", "stop", "pid", pid, "filter", filter);
 
     /* Tell idled that we're done idling */
     r = idle_send(&idle_remote, msg);
@@ -208,7 +208,10 @@ EXPORTED void idle_stop(mailbox_filter_t filter)
                         pid, error_message(r));
     }
 
-    idle_started = 0;
+    if (filter == FILTER_NONE)
+        idle_started = 0;
+    else
+        idle_started &= ~filter;
 }
 
 EXPORTED void idle_done(void)

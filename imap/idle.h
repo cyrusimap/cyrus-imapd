@@ -77,6 +77,16 @@ typedef enum {
     ( IMAP_NOTIFY_MESSAGE_NEW  | IMAP_NOTIFY_MESSAGE_EXPUNGE   |        \
       IMAP_NOTIFY_FLAG_CHANGE  | IMAP_NOTIFY_ANNOTATION_CHANGE   )
 
+#define IMAP_NOTIFY_MAILBOX_NAME                                        \
+    ( EVENT_MAILBOX_CREATE     | EVENT_MAILBOX_DELETE          |        \
+      EVENT_MAILBOX_RENAME     | EVENT_ACL_CHANGE                )
+
+#define IMAP_NOTIFY_SUBSCRIPTION_CHANGE                                 \
+    ( EVENT_MAILBOX_SUBSCRIBE  | EVENT_MAILBOX_UNSUBSCRIBE       )
+
+#define IMAP_NOTIFY_MAILBOX                                             \
+    ( IMAP_NOTIFY_MAILBOX_NAME | IMAP_NOTIFY_SUBSCRIPTION_CHANGE )
+
 /* set up the link to the idled for notifications */
 int idle_init(void);
 

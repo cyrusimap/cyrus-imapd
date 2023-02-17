@@ -56,6 +56,7 @@
 #include <signal.h>
 #include <fcntl.h>
 
+#include "acl.h"
 #include "arrayu64.h"
 #include "idle.h"
 #include "idlemsg.h"
@@ -84,7 +85,8 @@
 
 #define CMD_SELECT                                                      \
     "SELECT pid, events, timeout, filter, keys, client"                 \
-    " FROM event_groups WHERE events & :events;"
+    " FROM event_groups WHERE events & :events"                         \
+    " ORDER BY pid;"
 
 #define CMD_SELECT_ALL                          \
     "SELECT DISTINCT client FROM event_groups;"
@@ -126,6 +128,7 @@ static int alert_cb(sqlite3_stmt *stmt, void *rock)
 
 struct notify_rock {
     json_t *msg;
+    pid_t last_pid;
     arrayu64_t *failed_pids;
 };
 
@@ -156,20 +159,39 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
 
     /* XXX  Should we check /proc/pid to make sure the client is still active? */
 
+    /* Don't notify the same client more than once */
+    if (pid == nrock->last_pid) return 0;
+
     json_error_t jerr;
     json_t *keys =
         json_loads((const char *) sqlite3_column_text(stmt, 4), 0, &jerr);
+    json_t *key = json_array_get(keys, 0);
+    const char *keyval = json_string_value(key);
+    mbentry_t *mbentry = NULL;
+    int notify = 0;
 
-    /* Skip events for a mailbox in which the client has no interest */
-    switch (filter) {
-    case FILTER_SELECTED:  // key[0] is id of selected mailbox
-        if (strcmp(mboxid, json_string_value(json_array_get(keys, 0))))
-            goto done;
-        break;
-
-    default:
-        goto done;
+    /* Is it a mailbox in which the client has interest? */
+    if (filter == FILTER_SELECTED) {
+        /* keyval is currently selected mailbox id */
+        if (!strcmp(mboxid, keyval))
+            notify = 1;
     }
+    else if (!mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL)) {
+        switch (filter) {
+        case FILTER_PERSONAL:
+            /* keyval is userid */
+            if (mboxname_userownsmailbox(keyval, mbentry->name))
+                notify = 1;
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    if (!notify) goto done;
+
+    nrock->last_pid = pid;
 
     if (verbose || debugmode)
         syslog(LOG_DEBUG, "    fwd NOTIFY %s", idle_id_from_addr(client));
@@ -194,6 +216,7 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     }
 
   done:
+    mboxlist_entry_free(&mbentry);
     json_decref(keys);
 
     return 0;
@@ -266,7 +289,7 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
         const char *jevent = json_string_value(json_object_get(msg, "event"));
         enum event_type event = name_to_mboxevent(jevent);
         arrayu64_t failed_pids = ARRAYU64_INITIALIZER;
-        struct notify_rock nrock = { msg, &failed_pids };
+        struct notify_rock nrock = { msg, 0, &failed_pids };
 
         if (verbose || debugmode) {
             syslog(LOG_DEBUG, "idle notify '%s'", jevent);
