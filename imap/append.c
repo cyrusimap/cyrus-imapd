@@ -54,6 +54,7 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <sys/poll.h>
+#include <inttypes.h>
 
 #include "acl.h"
 #include "assert.h"
@@ -93,6 +94,8 @@ struct stagemsg {
     strarray_t parts; /* buffer of current stage parts */
     struct message_guid guid;
 };
+
+static uint64_t append_counter;
 
 static int append_addseen(struct mailbox *mailbox, const char *userid,
                           seqset_t *newseen);
@@ -315,8 +318,8 @@ EXPORTED int append_abort(struct appendstate *as)
  * with the file for the given mailboxname and returns the open file
  * so it can double as the spool file
  */
-EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate,
-                      int msgnum, struct stagemsg **stagep, const char *sourcefile)
+EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate __attribute__((unused)),
+                      int msgnum __attribute__((unused)), struct stagemsg **stagep, const char *sourcefile)
 {
     struct stagemsg *stage;
     char stagedir[MAX_MAILBOX_PATH+1], stagefile[MAX_MAILBOX_PATH+1];
@@ -331,8 +334,8 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     stage = xmalloc(sizeof(struct stagemsg));
     strarray_init(&stage->parts);
 
-    snprintf(stage->fname, sizeof(stage->fname), "%d-%d-%d",
-             (int) getpid(), (int) internaldate, msgnum);
+    snprintf(stage->fname, sizeof(stage->fname), "%d-%" PRIu64,
+             (int) getpid(), append_counter++);
 
     r = mboxlist_findstage(mailboxname, stagedir, sizeof(stagedir));
     if (r) {
@@ -870,7 +873,8 @@ out:
 
 struct findstage_cb_rock {
     const char *partition;
-    const char *stagefile;
+    const char *guid;
+    char *fname;
 };
 
 static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
@@ -889,19 +893,25 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
         struct stat sbuf;
         const char *msgpath = mbentry_datapath(mbentry, rec->uid);
         if (msgpath && !stat(msgpath, &sbuf)) {
-            /* link the first stage part to the existing message file */
-            r = cyrus_copyfile(msgpath, rock->stagefile, 0/*flags*/);
-            if (r) {
-                /* don't fail - worst case, we will use existing stage */
-                r = 0;
+            FILE *file = fopen(msgpath, "r");
+            // errors just mean "skip this file"
+            if (file) {
+                struct body *body = NULL;
+                r = message_parse_file(file, NULL, NULL, &body, msgpath);
+                if (!r && !strcmp(rock->guid, message_guid_encode(&body->guid)))
+                    rock->fname = xstrdup(msgpath);
+                if (body) {
+                    message_free_body(body);
+                    free(body);
+                }
+                fclose(file);
             }
-            else r = CYRUSDB_DONE;
         }
     }
 
     mboxlist_entry_free(&mbentry);
 
-    return r;
+    return rock->fname ? CYRUSDB_DONE : 0;
 }
 
 /*
@@ -932,6 +942,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1] = "";
+    char *linkfile = NULL;
 
     assert(stage != NULL && stage->parts.count);
 
@@ -957,17 +968,23 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
         if (cstate) {
-            struct findstage_cb_rock rock = { mailbox_partition(mailbox), stagefile };
+            char *guid = xstrdup(message_guid_encode(&(*body)->guid));
+            struct findstage_cb_rock rock = { mailbox_partition(mailbox), guid, NULL };
 
-            r = conversations_guid_foreach(cstate,
-                                           message_guid_encode(&(*body)->guid),
-                                           findstage_cb, &rock);
-            if (r && r != CYRUSDB_DONE) {
-                r = IMAP_IOERROR;
-                goto out;
+            // ignore errors, it's OK for this to fail
+            conversations_guid_foreach(cstate, guid, findstage_cb, &rock);
+
+            // if we found a file, remember it
+            if (rock.fname) {
+                syslog(LOG_NOTICE, "found existing file %s for %s; linking", guid, rock.fname);
+                linkfile = rock.fname;
             }
+
+            free(guid);
         }
     }
+
+    if (linkfile) goto havefile;
 
     for (i = 0 ; i < stage->parts.count ; i++) {
         /* ok, we've successfully created the file */
@@ -1009,7 +1026,9 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         strarray_append(&stage->parts, stagefile);
     }
 
-    /* 'stagefile' contains the message and is on the same partition
+havefile:
+
+    /* 'linkfile' or 'stagefile' contains the message and is on the same partition
        as the mailbox we're looking at */
 
     /* Setup */
@@ -1061,7 +1080,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     r = msgrecord_get_fname(msgrec, &fname);
     if (r) goto out;
 
-    r = mailbox_copyfile(stagefile, fname, nolink);
+    r = mailbox_copyfile(linkfile ? linkfile : stagefile, fname, nolink);
     if (r) goto out;
 
     FILE *destfile = fopen(fname, "r");
@@ -1165,6 +1184,7 @@ out:
     if (newflags)
         strarray_free(newflags);
     freeentryatts(system_annots);
+    free(linkfile);
     if (r) {
         append_abort(as);
         msgrecord_unref(&msgrec);
