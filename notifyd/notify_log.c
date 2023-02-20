@@ -48,31 +48,29 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "lib/util.h"
+
 char* notify_log(const char *class, const char *priority,
                  const char *user, const char *mailbox,
                  int nopt, char **options,
                  const char *message,
                  const char *fname __attribute__((unused)))
 {
-    char opt_str[1024] = "";
+    struct buf opt_str = BUF_INITIALIZER;
     char *sep = "";
     int i;
 
     if (nopt) {
-        strcpy(opt_str, "(");
+        buf_putc(&opt_str, '(');
         for (i = 0; i < nopt; i++, sep = ", ") {
-            snprintf(opt_str+strlen(opt_str), sizeof(opt_str) - 2, "%s%s",
-                     sep, options[i]);
+            buf_printf(&opt_str, "%s%s", sep, options[i]);
         }
-        strcat(opt_str, ")");
+        buf_putc(&opt_str, ')');
     }
 
-/*  Not needed, we opened the log file in cyrus_init */
-/*    openlog("notifyd", LOG_PID, SYSLOG_FACILITY); */
-
     syslog(LOG_INFO, "%s, %s, %s, %s, %s \"%s\"",
-           class, priority, user, mailbox, opt_str, message);
-    closelog();
+           class, priority, user, mailbox, buf_cstring(&opt_str), message);
 
+    buf_free(&opt_str);
     return strdup("OK log notification successful");
 }
