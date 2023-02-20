@@ -1256,6 +1256,16 @@ EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)
     buf[JMAP_THREADID_SIZE-1] = 0;
 }
 
+EXPORTED char *jmap_role_to_specialuse(const char *role)
+{
+    if (!role) return NULL;
+    if (!role[0]) return NULL;
+    char *specialuse = strconcat("\\", role, (char *)NULL);
+    specialuse[1] = toupper(specialuse[1]);
+    return specialuse;
+}
+
+#ifdef HAVE_ICAL
 EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
 {
     struct jmap_caleventid *eid = xzmalloc(sizeof(struct jmap_caleventid));
@@ -1366,15 +1376,6 @@ EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, s
     return buf_cstring(buf);
 }
 
-EXPORTED char *jmap_role_to_specialuse(const char *role)
-{
-    if (!role) return NULL;
-    if (!role[0]) return NULL;
-    char *specialuse = strconcat("\\", role, (char *)NULL);
-    specialuse[1] = toupper(specialuse[1]);
-    return specialuse;
-}
-
 EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
 {
     buf_reset(idbuf);
@@ -1390,3 +1391,4 @@ EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
     }
     buf_setcstr(idbuf, id);
 }
+#endif /* HAVE_ICAL */

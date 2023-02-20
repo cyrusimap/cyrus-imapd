@@ -53,6 +53,7 @@
 #include "httpd.h"
 #include "ical_support.h"
 #include "jmap_ical.h"
+#include "jmap_notif.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

@@ -48,7 +48,6 @@
 
 #include "caldav_db.h"
 #include "hash.h"
-#include "httpd.h"
 #include "mailbox.h"
 #include "strarray.h"
 
@@ -84,6 +83,7 @@ extern int caldav_get_validators(struct mailbox *mailbox, void *data,
                                  const char *userid, struct index_record *record,
                                  const char **etag, time_t *lastmod);
 
+typedef struct transaction_t txn_t; // defined in httpd.h
 extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                                  struct mailbox *mailbox, const char *resource,
                                  modseq_t createdmodseq, struct caldav_db *caldavdb,
