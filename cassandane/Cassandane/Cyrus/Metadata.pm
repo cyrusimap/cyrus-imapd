@@ -603,7 +603,7 @@ sub test_comment
 }
 
 sub test_comment_repl
-    :Replication :SyncLog
+    :Replication :SyncLog :needs_component_replication
 {
     my ($self) = @_;
 
@@ -771,6 +771,7 @@ sub test_motd
 #
 sub test_shared_global_annot_replication
     :Replication :SyncLog :AnnotationAllowUndefined
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -879,6 +880,7 @@ sub test_shared_global_annot_replication
 #
 sub test_private_global_annot_replication
     :Replication :SyncLog :AnnotationAllowUndefined
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1411,6 +1413,7 @@ sub set_msg_annotation
 }
 
 sub test_msg_replication_new_mas
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1456,6 +1459,7 @@ sub test_msg_replication_new_mas
 }
 
 sub test_msg_replication_new_rep
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1501,6 +1505,7 @@ sub test_msg_replication_new_rep
 }
 
 sub test_msg_replication_new_bot_mse_gul
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1570,6 +1575,7 @@ sub test_msg_replication_new_bot_mse_gul
 }
 
 sub test_msg_replication_new_bot_mse_guh
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1640,6 +1646,7 @@ sub test_msg_replication_new_bot_mse_guh
 
 
 sub test_msg_replication_mod_mas
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1703,6 +1710,7 @@ sub test_msg_replication_mod_mas
 
 
 sub test_msg_replication_mod_rep
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1765,6 +1773,7 @@ sub test_msg_replication_mod_rep
 }
 
 sub test_msg_replication_mod_bot_msl
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1834,6 +1843,7 @@ sub test_msg_replication_mod_bot_msl
 }
 
 sub test_msg_replication_mod_bot_msh
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1903,6 +1913,7 @@ sub test_msg_replication_mod_bot_msh
 }
 
 sub test_msg_replication_exp_mas
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1971,6 +1982,7 @@ sub test_msg_replication_exp_mas
 }
 
 sub test_msg_replication_exp_rep
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2039,6 +2051,7 @@ sub test_msg_replication_exp_rep
 }
 
 sub test_msg_replication_exp_bot
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2113,6 +2126,7 @@ sub test_msg_replication_exp_bot
 }
 
 sub test_msg_replication_new_mas_partial_wwsw
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2151,6 +2165,7 @@ sub test_msg_replication_new_mas_partial_wwsw
 }
 
 sub test_msg_replication_new_mas_partial_wwd
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2595,6 +2610,7 @@ sub test_unchangedsince
 
 
 sub test_mbox_replication_new_mas
+    :needs_component_replication
 {
     my ($self) = @_;
 

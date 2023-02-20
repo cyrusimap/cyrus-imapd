@@ -1331,6 +1331,7 @@ sub test_rename_deepfolder_intermediates_rightnow
 
 sub test_imap_list_notes
     :min_version_3_1 :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1413,6 +1414,7 @@ sub test_imap_list_notes
 
 sub test_cyr_expire_delete_findpaths_legacy
     :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1482,6 +1484,7 @@ sub test_cyr_expire_delete_findpaths_legacy
 
 sub test_cyr_expire_delete_findpaths_nolegacy
     :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1555,6 +1558,7 @@ sub test_cyr_expire_delete_findpaths_nolegacy
 
 sub test_sync_reset_legacy
     :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1596,6 +1600,7 @@ sub test_sync_reset_legacy
 
 sub test_sync_reset_nolegacy
     :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1644,6 +1649,7 @@ sub test_sync_reset_nolegacy
 
 sub test_relocate_legacy_nodomain
     :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1685,6 +1691,7 @@ sub test_relocate_legacy_nodomain
 
 sub test_relocate_legacy_domain
     :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1726,6 +1733,7 @@ sub test_relocate_legacy_domain
 
 sub test_relocate_legacy_nosearchdb
     :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1770,6 +1778,7 @@ sub test_relocate_legacy_nosearchdb
 
 sub test_relocate_messages_still_exist
     :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+    :needs_component_httpd
 {
     my ($self) = @_;
 

@@ -71,6 +71,7 @@ sub tear_down
 # Test replication of messages APPENDed to the master
 #
 sub test_append
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -102,7 +103,7 @@ sub test_append
 # Test handling of replication when append fails due to disk error
 #
 sub test_appendone_diskfull
-    :NoStartInstances :min_version_3_5
+    :NoStartInstances :min_version_3_5 :needs_component_replication
 {
     my ($self) = @_;
 
@@ -177,6 +178,7 @@ EOF
 #
 sub test_appendmulti_diskfull
     :CSyncReplication :NoStartInstances :min_version_3_5
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -261,7 +263,7 @@ EOF
 # Test handling of replication when append fails due to disk error
 #
 sub test_syncall_failinguser
-    :NoStartInstances :min_version_3_6
+    :NoStartInstances :min_version_3_6 :needs_component_replication
 {
     my ($self) = @_;
 
@@ -376,6 +378,7 @@ EOF
 # Test replication of messages APPENDed to the master
 #
 sub test_splitbrain
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -448,6 +451,7 @@ sub test_splitbrain
 #
 sub test_splitbrain_mailbox
     :min_version_3_1 :max_version_3_4 :NoAltNameSpace
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -545,6 +549,7 @@ sub test_splitbrain_mailbox
 # Test replication of messages APPENDed to the master
 #
 sub test_splitbrain_masterexpunge
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -621,6 +626,7 @@ sub test_splitbrain_masterexpunge
 # Test replication of messages APPENDed to the master
 #
 sub test_splitbrain_replicaexpunge
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -693,6 +699,7 @@ sub test_splitbrain_replicaexpunge
 # Test replication of messages APPENDed to the master
 #
 sub test_splitbrain_bothexpunge
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -758,7 +765,7 @@ sub test_splitbrain_bothexpunge
 
 # trying to reproduce error reported in https://git.cyrus.foundation/T228
 sub test_alternate_globalannots
-    :NoStartInstances
+    :NoStartInstances :needs_component_replication
 {
     my ($self) = @_;
 
@@ -779,7 +786,7 @@ sub test_alternate_globalannots
 }
 
 sub test_sieve_replication
-    :needs_component_sieve
+    :needs_component_sieve :needs_component_replication
 {
     my ($self) = @_;
 
@@ -823,7 +830,7 @@ EOF
 }
 
 sub test_sieve_replication_exists
-    :needs_component_sieve
+    :needs_component_sieve :needs_component_replication
 {
     my ($self) = @_;
 
@@ -868,7 +875,7 @@ EOF
 }
 
 sub test_sieve_replication_different
-    :needs_component_sieve
+    :needs_component_sieve :needs_component_replication
 {
     my ($self) = @_;
 
@@ -930,7 +937,7 @@ EOF
 }
 
 sub test_sieve_replication_stale
-    :needs_component_sieve
+    :needs_component_sieve :needs_component_replication
 {
     my ($self) = @_;
 
@@ -996,7 +1003,7 @@ EOF
 }
 
 sub test_sieve_replication_delete_unactivate
-    :needs_component_sieve
+    :needs_component_sieve :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1041,6 +1048,7 @@ EOF
 
 sub test_sieve_replication_unixhs
     :needs_component_sieve :UnixHierarchySep
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1088,6 +1096,7 @@ EOF
 
 sub test_sieve_replication_exists_unixhs
     :needs_component_sieve :UnixHierarchySep
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1138,6 +1147,7 @@ EOF
 
 sub test_sieve_replication_different_unixhs
     :needs_component_sieve :UnixHierarchySep
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1205,6 +1215,7 @@ EOF
 
 sub test_sieve_replication_stale_unixhs
     :needs_component_sieve :UnixHierarchySep
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1276,6 +1287,7 @@ EOF
 
 sub test_sieve_replication_delete_unactivate_unixhs
     :needs_component_sieve :UnixHierarchySep
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1336,7 +1348,7 @@ sub slurp_file
 
 # this test is too tricky to get working on uuid mailboxes
 sub test_replication_mailbox_too_old
-    :max_version_3_4
+    :max_version_3_4 :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1418,7 +1430,7 @@ sub test_replication_mailbox_too_old
 
 # this test is too tricky to get working on uuid mailboxes
 sub test_replication_mailbox_new_enough
-    :max_version_3_4
+    :max_version_3_4 :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1441,6 +1453,7 @@ sub test_replication_mailbox_new_enough
 #* run sync_client on the master again and make sure it successfully syncs up
 
 sub test_replication_repair_zero_msgs
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1462,6 +1475,7 @@ sub test_replication_repair_zero_msgs
 }
 
 sub test_replication_with_modified_seen_flag
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1566,6 +1580,7 @@ sub assert_user_sub_not_exists
 }
 
 sub test_subscriptions
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1662,7 +1677,7 @@ sub test_subscriptions
 }
 
 sub test_subscriptions_unixhs
-    :UnixHierarchySep
+    :UnixHierarchySep :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1762,7 +1777,7 @@ sub test_subscriptions_unixhs
 # wasn't correctly looking only for children of that name, so it would try
 # to delete the wrong user's mailbox.
 sub test_userprefix
-    :DelayedDelete
+    :DelayedDelete :needs_component_replication
 {
     my ($self) = @_;
     $self->{instance}->create_user("ua");
@@ -1804,7 +1819,7 @@ sub test_userprefix
 # wasn't correctly looking only for children of that name, so it would try
 # to delete the wrong user's mailbox.
 sub test_reset_on_master
-    :DelayedDelete :min_version_3_3
+    :DelayedDelete :min_version_3_3 :needs_component_replication
 {
     my ($self) = @_;
     $self->{instance}->create_user("user2");
@@ -1854,7 +1869,7 @@ sub test_reset_on_master
 
 # this is testing a bug where sync_client would abort on zero-length file
 sub test_sync_empty_file
-    :DelayedDelete :min_version_3_3
+    :DelayedDelete :min_version_3_3 :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1869,7 +1884,7 @@ sub test_sync_empty_file
 }
 
 sub test_sync_log_mailbox_with_spaces
-    :DelayedDelete :NoStartInstances
+    :DelayedDelete :NoStartInstances :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1936,6 +1951,7 @@ sub test_sync_log_mailbox_with_spaces
 
 sub test_intermediate_rename
     :AllowMoves :Replication :SyncLog :DelayedDelete :min_version_3_3
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1962,6 +1978,7 @@ sub test_intermediate_rename
 
 sub test_intermediate_upgrade
     :AllowMoves :Replication :SyncLog :DelayedDelete :min_version_3_3
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1986,6 +2003,7 @@ sub test_intermediate_upgrade
 
 sub test_clean_remote_shutdown_while_rolling
     :CSyncReplication :SyncLog :min_version_3_5
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2040,6 +2058,7 @@ sub test_clean_remote_shutdown_while_rolling
 
 sub test_rolling_retry_wait_limit
     :CSyncReplication :NoStartInstances :min_version_3_5
+    :needs_component_replication
 {
     my ($self) = @_;
     my $maxwait = 20;
@@ -2097,7 +2116,7 @@ sub test_rolling_retry_wait_limit
 # Test empty mailbox gets overwritten
 #
 sub test_splitbrain_different_uniqueid_unused
-    :min_version_3_5
+    :min_version_3_5 :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2136,7 +2155,7 @@ sub test_splitbrain_different_uniqueid_unused
 # Test non-empty mailbox causes replication to abort
 #
 sub test_splitbrain_different_uniqueid_nonempty
-    :min_version_3_5
+    :min_version_3_5 :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2190,7 +2209,7 @@ sub test_splitbrain_different_uniqueid_nonempty
 # Test mailbox that's had email but is now empty again
 #
 sub test_splitbrain_different_uniqueid_used
-    :min_version_3_5
+    :min_version_3_5 :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2256,6 +2275,7 @@ sub test_splitbrain_different_uniqueid_used
 
 sub test_delete_longname
     :AllowMoves :Replication :SyncLog :DelayedDelete :min_version_3_3
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2283,6 +2303,7 @@ sub test_delete_longname
 
 sub test_toarchive
     :NoStartInstances :ArchivePartition :min_version_3_7
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2382,7 +2403,7 @@ sub test_toarchive
 }
 
 sub test_toarchive_noarchive
-    :NoStartInstances :min_version_3_7
+    :NoStartInstances :min_version_3_7 :needs_component_replication
 {
     my ($self) = @_;
 
