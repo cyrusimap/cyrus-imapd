@@ -1733,6 +1733,7 @@ sub test_bz3529
 
 # Magic: the word 'replication' in the name enables a replica
 sub test_replication_storage
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1809,6 +1810,7 @@ sub test_replication_storage
 
 # Magic: the word 'replication' in the name enables a replica
 sub test_replication_message
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -1885,6 +1887,7 @@ sub test_replication_message
 
 # Magic: the word 'replication' in the name enables a replica
 sub test_replication_annotstorage
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -2048,6 +2051,7 @@ sub XXtest_getset_multiple
 
 # Magic: the word 'replication' in the name enables a replica
 sub XXtest_replication_multiple
+    :needs_component_replication
 {
     my ($self) = @_;
 

@@ -255,6 +255,7 @@ sub compile_sieve_script
 
 sub test_vacation_with_following_rules
     :needs_component_sieve :min_version_3_0
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -296,7 +297,7 @@ EOF
 }
 
 sub test_deliver
-    :needs_component_sieve
+    :needs_component_sieve :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -338,6 +339,7 @@ sub test_deliver_specialuse
     :min_version_3_0
     :needs_component_sieve
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -374,6 +376,7 @@ EOF
 sub test_deliver_compile
     :min_version_3_0
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -484,6 +487,7 @@ sub badscript_common
 
 sub test_badscript_sievec
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -494,6 +498,7 @@ sub test_badscript_sievec
 
 sub test_badscript_timsieved
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -504,6 +509,7 @@ sub test_badscript_timsieved
 
 sub test_dup_keep_keep
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -532,6 +538,7 @@ EOF
 
 sub test_dup_keep_fileinto
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -555,6 +562,7 @@ EOF
 
 sub test_dup_fileinto_implicit_keep_flags
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -580,6 +588,7 @@ EOF
 
 sub test_deliver_fileinto_autocreate_globalshared
     :needs_component_sieve :NoStartInstances :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -614,6 +623,7 @@ EOF
 
 sub test_deliver_fileinto_autocreate_otheruser
     :needs_component_sieve :NoStartInstances :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -651,6 +661,7 @@ EOF
 
 sub test_deliver_fileinto_autocreate_newuser
     :needs_component_sieve :NoStartInstances :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -684,6 +695,7 @@ EOF
 
 sub test_deliver_fileinto_create_globalshared
     :needs_component_sieve :min_version_3_0 :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -715,6 +727,7 @@ EOF
 
 sub test_deliver_fileinto_create_otheruser
     :needs_component_sieve :min_version_3_0 :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -749,6 +762,7 @@ EOF
 
 sub test_deliver_fileinto_create_newuser
     :needs_component_sieve :min_version_3_0 :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -779,6 +793,7 @@ EOF
 
 sub test_deliver_fileinto_create_nonimap
     :needs_component_sieve :min_version_3_0 :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -810,6 +825,7 @@ EOF
 sub test_deliver_fileinto_dot
     :UnixHierarchySep
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -858,6 +874,7 @@ EOF
 sub XXXtest_shared_delivery_addflag
     :Admin
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -910,6 +927,7 @@ EOF
 sub test_rfc5490_create
     :min_version_3_0
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -962,6 +980,7 @@ EOF
 sub test_rfc5490_mailboxexists
     :min_version_3_0
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1019,6 +1038,7 @@ EOF
 sub test_rfc5490_mailboxexists_variables
     :min_version_3_0
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1078,6 +1098,7 @@ EOF
 sub test_rfc5490_metadata
     :min_version_3_0
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1133,6 +1154,7 @@ EOF
 sub test_rfc5490_metadata_matches
     :min_version_3_0
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1191,6 +1213,7 @@ EOF
 sub test_rfc5490_metadataexists
     :min_version_3_0 :AnnotationAllowUndefined
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1246,6 +1269,7 @@ EOF
 sub test_rfc5490_servermetadata
     :min_version_3_0 :AnnotationAllowUndefined
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1305,6 +1329,7 @@ EOF
 sub test_rfc5490_servermetadataexists
     :min_version_3_0 :AnnotationAllowUndefined
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1362,6 +1387,7 @@ EOF
 sub test_variables_basic
     :min_version_3_0
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1418,6 +1444,7 @@ EOF
 sub test_sieve_setflag
     :min_version_3_0
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1459,6 +1486,7 @@ EOF
 sub test_variables_regex
     :min_version_3_0
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1514,6 +1542,7 @@ EOF
 
 sub test_nested_tests_and_discard
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1542,6 +1571,7 @@ EOF
 sub test_editheader_basic
     :min_version_3_1
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1597,6 +1627,7 @@ EOF
 sub test_editheader_complex
     :min_version_3_3
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1666,6 +1697,7 @@ EOF
 sub test_editheader_encoded_address_list
     :min_version_3_3
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1710,6 +1742,7 @@ EOF
 sub test_duplicate
     :min_version_3_1
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1758,6 +1791,7 @@ EOF
 sub test_ereject
     :min_version_3_1
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1785,6 +1819,7 @@ sub test_specialuse_exists
     :min_version_3_1
     :needs_component_sieve
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1843,6 +1878,7 @@ sub test_specialuse
     :min_version_3_1
     :needs_component_sieve
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1875,6 +1911,7 @@ EOF
 sub test_specialuse_create
     :min_version_3_1
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1904,6 +1941,7 @@ sub test_vacation_with_fcc
     :min_version_3_1
     :needs_component_sieve
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1946,6 +1984,7 @@ sub test_vacation_with_fcc_specialuse
     :min_version_3_1
     :needs_component_sieve
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1988,6 +2027,7 @@ sub test_vacation_with_explicit_subject
     :min_version_3_1
     :needs_component_sieve
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2033,6 +2073,7 @@ sub test_vacation_with_long_origsubject
     :min_version_3_1
     :needs_component_sieve
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2100,6 +2141,7 @@ sub test_vacation_with_long_encoded_origsubject
     :min_version_3_1
     :needs_component_sieve
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2178,6 +2220,7 @@ sub test_vacation_with_nonfoldable_origsubject
     :min_version_3_5
     :needs_component_sieve
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2256,6 +2299,7 @@ EOF
 sub test_github_issue_complex_variables
     :min_version_3_1
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2359,6 +2403,7 @@ EOF
 
 sub test_discard_match_on_body_raw
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2500,6 +2545,7 @@ EOF
 
 sub test_discard_match_on_body_text
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2642,6 +2688,7 @@ EOF
 sub test_fileinto_mailboxidexists
     :min_version_3_1
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2722,6 +2769,7 @@ EOF
 sub test_fileinto_mailboxid
     :min_version_3_1
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2800,6 +2848,7 @@ EOF
 sub test_fileinto_mailboxid_variable
     :min_version_3_5
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2878,6 +2927,7 @@ EOF
 
 sub test_encoded_char_variable_in_mboxname
     :needs_component_sieve :min_version_3_1 :SieveUTF8Fileinto
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2911,6 +2961,7 @@ EOF
 
 sub test_utf8_mboxname
     :needs_component_sieve :min_version_3_1 :SieveUTF8Fileinto
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2946,6 +2997,7 @@ sub test_snooze
     :needs_component_jmap
     :min_version_3_1
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3005,6 +3057,7 @@ sub test_snooze_mailboxid
     :needs_component_jmap
     :min_version_3_1
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3067,6 +3120,7 @@ sub test_snooze_specialuse
     :needs_component_jmap
     :min_version_3_3
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3127,6 +3181,7 @@ sub test_snooze_specialuse_create
     :needs_component_jmap
     :min_version_3_3
     :NoAltNameSpace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3183,6 +3238,7 @@ sub test_snooze_tzid
     :needs_component_jmap
     :min_version_3_3
     :NoAltNamespace
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3234,6 +3290,7 @@ EOF
 sub test_utf8_subject_encoded
     :min_version_3_0
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3274,6 +3331,7 @@ EOF
 sub test_utf8_subject_raw
     :min_version_3_0
     :needs_component_sieve :NoMunge8bit
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3313,6 +3371,7 @@ EOF
 
 sub test_error_flag
     :needs_component_sieve :min_version_3_3
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3360,6 +3419,7 @@ EOF
 
 sub test_double_require
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3401,6 +3461,7 @@ EOF
 
 sub test_jmapquery
     :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3473,6 +3534,7 @@ EOF
 
 sub test_jmapquery_multiple_to_cross_domain
     :min_version_3_3 :needs_component_sieve :needs_component_jmap
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3529,6 +3591,7 @@ EOF
 sub test_jmapquery_attachmentindexing
     :min_version_3_3 :needs_component_sieve :needs_component_jmap
     :needs_search_xapian :SearchAttachmentExtractor :JMAPExtensions
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3607,6 +3670,7 @@ EOF
 
 sub test_notify
     :needs_component_sieve :min_version_3_2
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3635,6 +3699,7 @@ EOF
 
 sub test_variable_modifiers
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3707,6 +3772,7 @@ EOF
 
 sub test_date
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3756,6 +3822,7 @@ EOF
 
 sub test_imip_publish
     :needs_component_sieve :needs_component_httpd :min_version_3_7
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3824,6 +3891,7 @@ EOF
 
 sub test_imip_invite
     :needs_component_sieve :needs_component_httpd :min_version_3_5
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3894,6 +3962,7 @@ EOF
 
 sub test_imip_invite_base64
     :needs_component_sieve :needs_component_httpd :min_version_3_5
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3971,6 +4040,7 @@ EOF
 
 sub test_imip_invite_multipart
     :needs_component_sieve :needs_component_httpd :min_version_3_5
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -4054,6 +4124,7 @@ EOF
 
 sub test_imip_invite_calendarid
     :needs_component_sieve :needs_component_httpd :min_version_3_5
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -4126,6 +4197,7 @@ EOF
 
 sub test_imip_invite_updatesonly
     :needs_component_sieve :needs_component_httpd :min_version_3_5
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -4195,6 +4267,7 @@ EOF
 
 sub test_imip_update
     :needs_component_sieve :needs_component_httpd :min_version_3_5
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -6760,6 +6833,7 @@ EOF
 
 sub test_include_cancel_implicit_keep
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -6788,6 +6862,7 @@ EOF
 
 sub test_include_fileinto_implicit_keep_flags
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
