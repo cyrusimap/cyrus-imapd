@@ -212,6 +212,11 @@ extern int ical_categories_is_color(icalproperty *cprop);
 /* Normalizes both standard and cyrus-extensions */
 extern void icalcomponent_normalize_x(icalcomponent *ical);
 
+#ifdef WITH_JMAP
+extern const char *icalcomponent_get_jmapid(icalcomponent *comp);
+extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
+#endif
+
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory
 

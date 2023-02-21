@@ -2997,4 +2997,39 @@ EXPORTED void icalcomponent_normalize_x(icalcomponent *ical)
 #endif
 }
 
+
+#ifdef WITH_JMAP
+EXPORTED const char *icalcomponent_get_jmapid(icalcomponent *comp)
+{
+    icalproperty *prop =
+        icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_ID);
+    if (!prop) return NULL;
+
+    return icalproperty_get_value_as_string(prop);
+}
+
+EXPORTED void icalcomponent_set_jmapid(icalcomponent *comp, const char *id)
+{
+    icalproperty *prop, *next;
+    icalproperty_kind kind = ICAL_X_PROPERTY;
+
+    for (prop = icalcomponent_get_first_property(comp, kind);
+         prop;
+         prop = next) {
+
+        next = icalcomponent_get_next_property(comp, kind);
+
+        if (strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID))
+            continue;
+
+        icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
+    }
+
+    prop = icalproperty_new_x(id);
+    icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
+    icalcomponent_add_property(comp, prop);
+}
+#endif
+
 #endif /* HAVE_ICAL */
