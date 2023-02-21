@@ -15,12 +15,6 @@
 #define JMAP_ANNOT_DEFAULTALERTS \
     DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">defaultalerts"
 
-#define JMAP_ANNOT_DEFAULTALERTS_PREFS \
-    DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">defaultalerts-prefs"
-
-static const struct defaultalarms_prefs default_prefs =
-                            DEFAULTALARMS_PREFS_INITIALIZER;
-
 EXPORTED void defaultalarms_fini(struct defaultalarms *defalarms)
 {
     if (defalarms) {
@@ -36,9 +30,6 @@ EXPORTED void defaultalarms_fini(struct defaultalarms *defalarms)
 
         message_guid_set_null(&defalarms->with_time.guid);
         message_guid_set_null(&defalarms->with_date.guid);
-
-        memcpy(&defalarms->prefs, &default_prefs,
-                sizeof(struct defaultalarms_prefs));
     }
 }
 
@@ -140,16 +131,8 @@ EXPORTED int defaultalarms_load(const char *mboxname,
     defaultalarms_fini(defalarms);
     char *calhomename = caldav_mboxname(userid, NULL);
 
-    int r = defaultalarms_prefs_load(calhomename, &defalarms->prefs);
-    if (r && r != CYRUSDB_NOTFOUND) {
-        xsyslog(LOG_ERR, "failed to read defaultalarm preferences",
-                "calhome=<%s> userid=<%s> err=<%s>",
-                calhomename, userid, cyrusdb_strerror(r));
-        goto done;
-    }
-
     const char *annot = JMAP_ANNOT_DEFAULTALERTS;
-    r = annotatemore_lookup(mboxname, annot, userid, &buf);
+    int r = annotatemore_lookup(mboxname, annot, userid, &buf);
     if (!r && buf_len(&buf)) {
         struct dlist *root;
         if (!dlist_parsemap(&root, 1, 0, buf_base(&buf), buf_len(&buf))) {
@@ -188,7 +171,6 @@ EXPORTED int defaultalarms_load(const char *mboxname,
             defaultalarms_fini(defalarms);
     }
 
-done:
     free(calhomename);
     buf_free(&buf);
     return r;
@@ -260,75 +242,6 @@ done:
     buf_free(&buf);
     return r;
 }
-
-EXPORTED int defaultalarms_prefs_load(const char *calhomename,
-                                      struct defaultalarms_prefs *prefs)
-{
-    struct buf buf = BUF_INITIALIZER;
-
-    const char *annot = JMAP_ANNOT_DEFAULTALERTS_PREFS;
-    int r = annotatemore_lookupmask(calhomename, annot, "", &buf);
-
-    if (!r && buf_len(&buf)) {
-        struct dlist *dl;
-        if (!dlist_parsemap(&dl, 1, 0, buf_base(&buf), buf_len(&buf))) {
-
-            uint32_t bval = 0;
-            dlist_getnum32(dl, "KEEP_USER", &bval);
-            prefs->keep_user_alarms = bval;
-
-            bval = 0;
-            dlist_getnum32(dl, "KEEP_APPLE", &bval);
-            prefs->keep_apple_alarms = bval;
-
-            bval = 0;
-            dlist_getnum32(dl, "FAKE_APPLE", &bval);
-            prefs->fake_apple_alarms = bval;
-        }
-        dlist_free(&dl);
-    }
-
-    buf_free(&buf);
-    return r;
-}
-
-EXPORTED int defaultalarms_prefs_save(struct mailbox *calhome,
-                                      const struct defaultalarms_prefs *prefs)
-{
-    struct buf buf = BUF_INITIALIZER;
-
-    annotate_state_t *astate;
-    int r = mailbox_get_annotate_state(calhome, 0, &astate);
-    if (r) {
-        xsyslog(LOG_ERR, "failed to get annotation state",
-                "mboxname=<%s> err=<%s>",
-                mailbox_name(calhome), error_message(r));
-        r = CYRUSDB_INTERNAL;
-        goto done;
-    }
-
-    if (memcmp(prefs, &default_prefs, sizeof(struct defaultalarms_prefs))) {
-        struct dlist *dl = dlist_newkvlist(NULL, "PREFS");
-        dlist_setnum32(dl, "KEEP_USER", prefs->keep_user_alarms);
-        dlist_setnum32(dl, "KEEP_APPLE", prefs->keep_apple_alarms);
-        dlist_setnum32(dl, "FAKE_APPLE", prefs->fake_apple_alarms);
-        dlist_printbuf(dl, 1, &buf);
-        dlist_free(&dl);
-    }
-
-    static const char *annot = JMAP_ANNOT_DEFAULTALERTS_PREFS;
-    r = annotate_state_writemask(astate, annot, "", &buf);
-    if (r) {
-        xsyslog(LOG_ERR, "failed to write annotation",
-                "annot=<%s> err=<%s>", annot, cyrusdb_strerror(r));
-        goto done;
-    }
-
-done:
-    buf_free(&buf);
-    return r;
-}
-
 
 HIDDEN int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
                                  int *did_migratep)
@@ -437,8 +350,7 @@ static int compare_valarm(const void **va, const void **vb)
     return strcmp(icalcomponent_get_uid(a), icalcomponent_get_uid(b));
 }
 
-static void merge_alarms(icalcomponent *comp, icalcomponent *alarms,
-                         const struct defaultalarms_prefs *prefs)
+static void merge_alarms(icalcomponent *comp, icalcomponent *alarms, int flags)
 {
     // Remove existing alarms
     ptrarray_t old_alarms = PTRARRAY_INITIALIZER;
@@ -471,15 +383,6 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms,
 
             icalcomponent *myalarm = icalcomponent_clone(valarm);
             ptrarray_append(&new_alarms, myalarm);
-
-            if (prefs->fake_apple_alarms) {
-                if (!icalcomponent_get_x_property_by_name(myalarm, "X-APPLE-DEFAULT-ALARM")) {
-                    icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-                    icalproperty_set_x_name(prop, "X-APPLE-DEFAULT-ALARM");
-                    icalproperty_set_value(prop, icalvalue_new_boolean(1));
-                    icalcomponent_add_property(myalarm, prop);
-                }
-            }
 
             /* Replace default description with component summary */
             const char *desc = icalcomponent_get_summary(comp);
@@ -594,10 +497,10 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms,
             else if (is_snoozed || is_snooze) {
                 icalcomponent_add_component(comp, old);
             }
-            else if (is_apple && prefs->keep_apple_alarms) {
+            else if (is_apple) {
                 icalcomponent_add_component(comp, old);
             }
-            else if (!is_apple && prefs->keep_user_alarms) {
+            else if (flags & DEFAULTALARMS_KEEP_USER) {
                 icalcomponent_add_component(comp, old);
             }
             else icalcomponent_free(old);
@@ -610,7 +513,7 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms,
 }
 
 EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
-                                   icalcomponent *ical, int force)
+                                   icalcomponent *ical, int flags)
 {
     if (!defalarms || (!defalarms->with_time.ical && !defalarms->with_date.ical))
         return;
@@ -628,7 +531,8 @@ EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
 
     for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
 
-        if (!force && icalcomponent_get_usedefaultalerts(comp) <= 0)
+        if (icalcomponent_get_usedefaultalerts(comp) <= 0 &&
+                !(flags & DEFAULTALARMS_FORCE))
             continue;
 
         // Determine which default alarms to add
@@ -645,6 +549,6 @@ EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
 
         merge_alarms(comp, is_date ?
                 defalarms->with_date.ical : defalarms->with_time.ical,
-                &defalarms->prefs);
+                flags);
     }
 }

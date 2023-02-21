@@ -11616,11 +11616,6 @@ static const jmap_property_t calendarpreferences_props[] = {
         NULL,
         0
     },
-    {
-        "defaultAlertsPreferences",
-        JMAP_DEBUG_EXTENSION,
-        JMAP_PROP_SKIP_GET
-    },
     { NULL, NULL, 0 }
 };
 
@@ -11706,23 +11701,6 @@ static int jmap_calendarpreferences_get(struct jmap_req *req)
             json_object_set_new(jprefs, "defaultParticipantIdentityId", jpartid);
         }
 
-        if (jmap_is_using(req, JMAP_DEBUG_EXTENSION) &&
-                jmap_wantprop(get.props, "defaultAlertsPreferences")) {
-
-            json_t *jalertsprefs = json_null();
-            struct defaultalarms_prefs prefs = DEFAULTALARMS_PREFS_INITIALIZER;
-            if (!defaultalarms_prefs_load(mbcalhome->name, &prefs)) {
-                jalertsprefs = json_object();
-                json_object_set_new(jalertsprefs, "keepUserAlarms",
-                        json_boolean(prefs.keep_user_alarms));
-                json_object_set_new(jalertsprefs, "keepAppleAlarms",
-                        json_boolean(prefs.keep_apple_alarms));
-                json_object_set_new(jalertsprefs, "fakeAppleAlarms",
-                        json_boolean(prefs.fake_apple_alarms));
-            }
-            json_object_set_new(jprefs, "defaultAlertsPreferences", jalertsprefs);
-        }
-
         json_array_append_new(get.list, jprefs);
     }
 
@@ -11782,43 +11760,9 @@ static void calendarpreferences_set(struct jmap_req *req,
                 jmap_parser_invalid(parser, "defaultParticipantIdentityId");
             }
         }
-        else if (!strncmp(prop, "defaultAlertsPreferences", 24))  {
-
-            if (!jalertsprefs)
-                jalertsprefs = json_object();
-
-            switch (prop[24]) {
-                case '/':
-                    json_object_set_new(jalertsprefs, prop+24, jval);
-                    break;
-                case '\0':
-                    json_decref(jalertsprefs);
-                    jalertsprefs = json_deep_copy(jval);
-                    break;
-                default:
-                    jmap_parser_invalid(parser, prop);
-            }
-        }
         else {
             jmap_parser_invalid(parser, prop);
         }
-    }
-
-    // Validate default alerts preferences
-    if (json_object_size(jalertsprefs)) {
-        jmap_parser_push(parser, "defaultAlertsPreferences");
-        json_object_foreach(jalertsprefs, prop, jval) {
-            if ((strcmp(prop, "keepUserAlarms") &&
-                 strcmp(prop, "keepAppleAlarms") &&
-                 strcmp(prop, "fakeAppleAlamrs")) ||
-                !json_is_boolean(jval)) {
-                jmap_parser_invalid(parser, prop);
-            }
-        }
-        jmap_parser_pop(parser);
-    }
-    else if (JNOTNULL(jalertsprefs)) {
-        jmap_parser_invalid(parser, "defaultAlertsPreferences");
     }
 
     if (json_array_size(parser->invalid)) {
@@ -11912,33 +11856,6 @@ static void calendarpreferences_set(struct jmap_req *req,
 
         if (r) {
             xsyslog(LOG_ERR, "can not set schedule addresses",
-                    "err=<%s>", error_message(r));
-            goto done;
-        }
-    }
-
-    /* Set default alerts preferences */
-    if (jalertsprefs) {
-        struct defaultalarms_prefs prefs = DEFAULTALARMS_PREFS_INITIALIZER;
-        if (json_is_object(jalertsprefs)) {
-            r = defaultalarms_prefs_load(mbcalhome->name, &prefs);
-            if (r) {
-                xsyslog(LOG_ERR, "can not load default alarms preferences",
-                        "err=<%s>", error_message(r));
-                goto done;
-            }
-
-            prefs.keep_user_alarms = json_boolean_value(
-                    json_object_get(jalertsprefs, "keepUserAlarms"));
-            prefs.keep_apple_alarms = json_boolean_value(
-                    json_object_get(jalertsprefs, "keepAppleAlarms"));
-            prefs.fake_apple_alarms = json_boolean_value(
-                    json_object_get(jalertsprefs, "fakeAppleAlarms"));
-        }
-
-        r = defaultalarms_prefs_save(calhomembox, &prefs);
-        if (r) {
-            xsyslog(LOG_ERR, "can not save default alarms preferences",
                     "err=<%s>", error_message(r));
             goto done;
         }
