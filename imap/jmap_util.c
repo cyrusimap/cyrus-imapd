@@ -1408,4 +1408,22 @@ EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
 
     buf_setcstr(idbuf, id);
 }
+
 #endif /* HAVE_ICAL */
+
+EXPORTED int jmap_is_valid_id(const char *id)
+{
+    if (!id || *id == '\0') return 0;
+    const char *p;
+    for (p = id; *p; p++) {
+        if (('0' <= *p && *p <= '9'))
+            continue;
+        if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z'))
+            continue;
+        if ((*p == '-') || (*p == '_'))
+            continue;
+        return 0;
+    }
+    return 1;
+}
+

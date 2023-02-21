@@ -184,6 +184,8 @@ extern json_t *jmap_header_as_groupedaddresses(const char *raw);
 extern json_t *jmap_emailaddresses_from_addr(struct address *addr,
                                              enum header_form form);
 
+extern int jmap_is_valid_id(const char *id);
+
 #define JMAP_BLOBID_SIZE 42
 extern void jmap_set_blobid(const struct message_guid *guid, char *buf);
 
