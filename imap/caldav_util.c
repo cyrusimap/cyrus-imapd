@@ -189,8 +189,6 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
             if (caldav_get_usedefaultalerts(dl, mailbox, record, &ical)) {
                 add_defaultalarm_etagdata(mailbox_name(mailbox), userid, &etagdata);
             }
-            icalcomponent_free(ical);
-
         }
         if (lastmod) {
             time_t user_lastmod;
@@ -1330,7 +1328,7 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
             }
         }
 
-        if (cdata->organizer || usedefaultalerts) {
+        if (cdata->organizer) {
             if (flags & NEW_STAG) txn->resp_body.stag = sched_tag;
 
             if (!(flags & PREFER_REP)) {

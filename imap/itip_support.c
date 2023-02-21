@@ -1451,12 +1451,12 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             }
         }
 
-        icalcomponent_set_usedefaultalerts(ical);
+        icalcomponent_set_usedefaultalerts(ical, 1);
 
         /* Inject default alarms */
         struct defaultalarms defalarms = DEFAULTALARMS_INITIALIZER;
         if (!defaultalarms_load(mailbox_name(mailbox), userid, &defalarms)) {
-            defaultalarms_insert(&defalarms, ical, /*force*/1);
+            defaultalarms_insert(&defalarms, ical, DEFAULTALARMS_FORCE);
         }
         defaultalarms_fini(&defalarms);
     }

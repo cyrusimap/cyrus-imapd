@@ -7735,12 +7735,11 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "useDefaultAlerts");
     if (json_is_boolean(jprop)) {
         remove_icalxprop(comp, "X-APPLE-DEFAULT-ALARM"); // remove legacy property
-        if (json_boolean_value(jprop)) {
-            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, JMAPICAL_XPROP_USEDEFAULTALERTS);
-            icalproperty_set_value(prop, icalvalue_new_boolean(1));
-            icalcomponent_add_property(comp, prop);
-        }
+        icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+        icalproperty_set_x_name(prop, JMAPICAL_XPROP_USEDEFAULTALERTS);
+        icalproperty_set_value(prop,
+                icalvalue_new_boolean(json_boolean_value(jprop)));
+        icalcomponent_add_property(comp, prop);
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "useDefaultAlerts");
     }
