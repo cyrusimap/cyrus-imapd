@@ -49,8 +49,9 @@
 #define DAVSHARING_CONTENT_TYPE "application/davsharing+xml"
 
 /* Privileges assigned via WebDAV Sharing (draft-pot-webdav-resource-sharing) */
-#define DACL_SHARE      (DACL_READ|DACL_WRITEPROPS)
-#define DACL_SHARERW    (DACL_READ|DACL_WRITE)
+#define DACL_SHARE      ( DACL_READ   | DACL_READFB )
+#define DACL_SHARERW    ( DACL_SHARE  | DACL_WRITECONT    | DACL_WRITEPROPS |   \
+                          DACL_RMRSRC | DACL_WRITEOWNRSRC | DACL_UPDATEPRIVATE )
 
 #define SYSTEM_STATUS_NOTIFICATION  "systemstatus"
 #define SHARE_INVITE_NOTIFICATION   "share-invite-notification"
