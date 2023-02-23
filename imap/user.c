@@ -201,8 +201,7 @@ EXPORTED const char *user_sieve_path(const char *inuser)
         int r = mboxlist_lookup(inboxname, &mbentry, NULL);
         free(inboxname);
 
-        if (r) sieve_path = "";
-        else if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+        if (r || (mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
             legacy = 1;
         }
         else {
