@@ -991,8 +991,6 @@ static void add_part(ptrarray_t *found,
             /* found it */
             if (override) {
                 /* replace the path with the one containing cyrus.header */
-                if (entry->path)
-                    free(entry->path);
                 strcpy(entry->path, path);
             }
 
