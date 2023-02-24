@@ -3734,6 +3734,10 @@ if date :regex "date" "std11" "^[a-z]{3}, [0-9]{1,2} [a-z]{3} [0-9]{4}" {
 if date :value "ge" :originalzone "date" "hour" "12" {
   addflag "Test4";
 }
+
+if date :originalzone "date" "zone" "-0700" {
+  addflag "Test5";
+}
 EOF
         );
 
@@ -3755,7 +3759,47 @@ EOF
     $self->{store}->set_fetch_attributes(qw(uid flags));
     $self->{store}->set_folder('INBOX');
     $msg1->set_attribute(uid => 1);
-    $msg1->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2', 'Test3', 'Test4' ]);
+    $msg1->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2', 'Test3', 'Test4', 'Test5' ]);
+    $self->check_messages({ 1 => $msg1 }, keyed_on => 'uid', check_guid => 0);
+}
+
+sub test_date_iana_tzid
+    :needs_component_sieve :min_version_3_7
+{
+    my ($self) = @_;
+
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["date", "variables", "imap4flags", "regex", "relational"];
+
+if date :zone "-1000" "date" "hour" "19" {
+  addflag "Test1";
+}
+
+if date :zone "Pacific/Honolulu" "date" "hour" "19" {
+  addflag "Test2";
+}
+EOF
+        );
+
+    my $raw = << 'EOF';
+Date: Wed, 16 May 2018 22:06:18 -0700
+From: Some Person <notifications@github.com>
+To: foo/bar <bar@noreply.github.com>
+Cc: Subscribed <subscribed@noreply.github.com>
+Message-ID: <foo/bar/pull/1234/abcdef01234@github.com>
+X-Cassandane-Unique: foo
+
+foo bar
+EOF
+    xlog $self, "Deliver a message";
+    my $msg1 = Cassandane::Message->new(raw => $raw);
+    $self->{instance}->deliver($msg1);
+
+    my $imaptalk = $self->{store}->get_client();
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+    $self->{store}->set_folder('INBOX');
+    $msg1->set_attribute(uid => 1);
+    $msg1->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2' ]);
     $self->check_messages({ 1 => $msg1 }, keyed_on => 'uid', check_guid => 0);
 }
 
