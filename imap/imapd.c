@@ -189,6 +189,7 @@ static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 static int imapd_idle_enabled = 0;
+static int imapd_notify_enabled = 0;
 static int imapd_login_disabled = 0;
 static int imapd_compress_allowed = 0;
 static int imapd_tls_allowed = 0;
@@ -201,6 +202,27 @@ static int ignorequota = 0;
 static int sync_sieve_mailbox_enabled = 0;
 static int sync_archive_enabled = 0;
 static int idle_sock = PROT_NO_FD;
+
+static struct event_groups {
+    mailbox_filter_t filters;
+    struct {
+        unsigned long events;
+        unsigned delayed : 1;
+        struct fetchargs fetchargs;
+    } selected;
+    unsigned long inboxes_events;
+    unsigned long personal_events;
+    unsigned long subscribed_events;
+    struct {
+        unsigned long events;
+        strarray_t mboxes;
+    } subtree;
+    struct {
+        unsigned long events;
+        strarray_t mboxes;
+    } mailboxes;
+
+} *notify_event_groups = NULL;
 
 #define QUIRK_SEARCHFUZZY (1<<0)
 static struct id_data {
@@ -252,6 +274,9 @@ const struct mbox_name_attribute mbox_name_attributes[] = {
     { MBOX_ATTRIBUTE_REMOTE,        "\\Remote"        },
     { MBOX_ATTRIBUTE_HASCHILDREN,   "\\HasChildren"   },
     { MBOX_ATTRIBUTE_HASNOCHILDREN, "\\HasNoChildren" },
+
+    /* from RFC 5465 */
+    { MBOX_ATTRIBUTE_NOACCESS,      "\\NoAccess"      },
 
     { 0, NULL }
 };
@@ -407,7 +432,8 @@ static struct capa_struct base_capabilities[] = {
     { "MULTIAPPEND",           CAPA_POSTAUTH,           { 0 } }, /* RFC 3502 */
     { "MULTISEARCH",           CAPA_POSTAUTH,           { 0 } }, /* RFC 7377 */
     { "NAMESPACE",             CAPA_POSTAUTH,           { 0 } }, /* RFC 2342 */
-    /* NOTIFY           RFC 5465 is not implemented */
+    { "NOTIFY",                CAPA_POSTAUTH|CAPA_STATE,         /* RFC 5465 */
+      { .statep = &imapd_notify_enabled }                     },
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
     { "PREVIEW",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8970 */
     { "QRESYNC",               CAPA_POSTAUTH,           { 0 } }, /* RFC 7162 */
@@ -485,8 +511,9 @@ static int  cmd_append(char *tag, char *name, const char *cur_name, int isreplac
 static void cmd_select(char *tag, char *cmd, char *name);
 static void cmd_close(char *tag, char *cmd);
 static int parse_fetch_args(const char *tag, const char *cmd,
-                            int allow_vanished,
+                            unsigned flags,
                             struct fetchargs *fa);
+static void fetchargs_fini (struct fetchargs *fa);
 static void cmd_fetch(char *tag, char *sequence, int usinguid);
 static void cmd_store(char *tag, char *sequence, int usinguid);
 static void cmd_search(char *tag, char *cmd);
@@ -568,6 +595,7 @@ static void cmd_xkillmy(const char *tag, const char *cmdname);
 static void cmd_xforever(const char *tag);
 static void cmd_xmeid(const char *tag, const char *id);
 static void cmd_replace(char *tag, char *seqno, char *name, int usinguid);
+static void cmd_notify(char *tag, int set);
 static void push_updates(void);
 
 static int parsecreateargs(struct dlist **extargs);
@@ -821,6 +849,16 @@ static int mlookup(const char *tag, const char *ext_name,
     return r;
 }
 
+static void event_groups_free(struct event_groups **groups)
+{
+    if (!groups || !*groups) return;
+
+    fetchargs_fini(&(*groups)->selected.fetchargs);
+    strarray_fini(&(*groups)->subtree.mboxes);
+    strarray_fini(&(*groups)->mailboxes.mboxes);
+    xzfree(*groups);
+}
+
 static void imapd_reset(void)
 {
     int i;
@@ -852,6 +890,7 @@ static void imapd_reset(void)
 
     index_text_extractor_destroy();
 
+    event_groups_free(&notify_event_groups);
     if (idle_sock != PROT_NO_FD)
         idle_stop(FILTER_NONE);
 
@@ -961,8 +1000,11 @@ int service_init(int argc, char **argv, char **envp)
     imapd_compress_allowed = 1;
 #endif
 
-    /* setup for sending IMAP IDLE notifications */
-    if ((imapd_idle_enabled = idle_enabled())) idle_sock = idle_init();
+    /* setup for sending IMAP IDLE/NOTIFY notifications */
+    if ((imapd_idle_enabled = idle_enabled())) {
+        idle_sock = idle_init();
+        if (idle_sock != PROT_NO_FD) imapd_notify_enabled = 1;
+    }
 
     /* setup for mailbox event notifications */
     events = mboxevent_init();
@@ -1203,6 +1245,7 @@ void shut_down(int code)
 
     index_text_extractor_destroy();
 
+    event_groups_free(&notify_event_groups);
     if (idle_sock != PROT_NO_FD)
         idle_stop(FILTER_NONE);
 
@@ -1403,7 +1446,8 @@ static void cmdloop(void)
         if (!prot_error(imapd_in)) {
             int r, idle_fd = PROT_NO_FD, idle_fd_flag = 0;
 
-            if (client_capa & CAPA_IMAP4REV2) {
+            if ((notify_event_groups && notify_event_groups->filters) ||
+                (!notify_event_groups && (client_capa & CAPA_IMAP4REV2))) {
                 idle_fd = idle_sock;
             }
 
@@ -1932,6 +1976,30 @@ static void cmdloop(void)
                 cmd_namespace(tag.s);
 
                 /* XXX prometheus_increment(CYRUS_IMAP_NAMESPACE_TOTAL); */
+            }
+            else if (!strcmp(cmd.s, "Notify")) {
+                int set = 0;
+
+                if (c != ' ') goto missingargs;
+                c = getword(imapd_in, &arg1);
+                if (c == EOF) goto missingargs;
+                if (!strcasecmp(arg1.s, "NONE")) {
+                    if (!IS_EOL(c, imapd_in)) goto extraargs;
+                }
+                else if (!strcasecmp(arg1.s, "SET")) {
+                    if (c != ' ') goto missingargs;
+                    set = 1;
+                }
+                else {
+                    prot_printf(imapd_out,
+                                "%s BAD Unrecognized NOTIFY action\r\n", tag.s);
+                    eatline(imapd_in, c);
+                    continue;
+                }
+
+                cmd_notify(tag.s, set);
+
+                /* XXX prometheus_increment(CYRUS_IMAP_NOTIFY_TOTAL); */
             }
             else goto badcmd;
             break;
@@ -3477,8 +3545,8 @@ static void cmd_idle(char *tag)
         prot_printf(backend_current->out, "Done\r\n");
         pipe_until_tag(backend_current, tag, 0);
     }
-    else if (idle_sock != PROT_NO_FD) {
-        /* Stop updates */
+    else if (idle_sock != PROT_NO_FD && !notify_event_groups) {
+        /* Stop message updates */
         idle_stop(FILTER_SELECTED);
         idling = 0;
     }
@@ -4482,6 +4550,11 @@ static void cmd_select(char *tag, char *cmd, char *name)
             index_expunge(imapd_index, NULL, 1);
         index_close(&imapd_index);
         wasopen = 1;
+
+        if (notify_event_groups && notify_event_groups->selected.events) {
+            /* Tell idled to stop sending message updates */
+            idle_stop(FILTER_SELECTED);
+        }
     }
 
     if (backend_current) {
@@ -4644,6 +4717,14 @@ static void cmd_select(char *tag, char *cmd, char *name)
         list_data(&listargs);
     }
 
+    if (notify_event_groups && notify_event_groups->selected.events) {
+        /* Tell idled to start sending message updates */
+        const char *mboxid = index_mboxid(imapd_index);
+        strarray_t key = { 1, 0, (char **) &mboxid }; // avoid memory alloc
+
+        idle_start(notify_event_groups->selected.events, 0, FILTER_SELECTED, &key);
+    }
+
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
                 index_hasrights(imapd_index, ACL_READ_WRITE) ?
                 "WRITE" : "ONLY", error_message(IMAP_OK_COMPLETED));
@@ -4693,6 +4774,11 @@ static void cmd_close(char *tag, char *cmd)
     }
 
     index_close(&imapd_index);
+
+    if (notify_event_groups && notify_event_groups->selected.events) {
+        /* Tell idled to stop sending message updates */
+        idle_stop(FILTER_SELECTED);
+    }
 
     /* RFC 7162, Section 3.2.8 - don't send HIGHESTMODSEQ to a close
      * command, because it can cause client to lose synchronization */
@@ -4777,8 +4863,11 @@ static void section_list_free(struct section *l)
     }                                                                   \
 } while(0)
 
+#define FETCH_ALLOW_VANISHED  (1<<0)
+#define FETCH_ALLOW_MODIFIERS (1<<1)
+
 static int parse_fetch_args(const char *tag, const char *cmd,
-                            int allow_vanished,
+                            unsigned flags,
                             struct fetchargs *fa)
 {
     static struct buf fetchatt, fieldname;
@@ -5226,15 +5315,17 @@ badannotation:
         else break;
     }
 
-    if (inlist && c == ')') {
-        inlist = 0;
-        c = prot_getc(imapd_in);
-    }
     if (inlist) {
-        prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n",
-                    tag, cmd);
-        eatline(imapd_in, c);
-        goto freeargs;
+        if (c != ')') {
+            prot_printf(imapd_out, "%s BAD Missing close parenthesis in %s\r\n",
+                        tag, cmd);
+            eatline(imapd_in, c);
+            goto freeargs;
+        }
+        if (flags & FETCH_ALLOW_MODIFIERS)
+            c = prot_getc(imapd_in);
+        else
+            goto validate;
     }
 
     if (c == ' ') {
@@ -5268,7 +5359,7 @@ badannotation:
                 }
                 fa->fetchitems |= FETCH_MODSEQ;
             }
-            else if (allow_vanished &&
+            else if ((flags & FETCH_ALLOW_VANISHED) &&
                      !strcmp(fetchatt.s, "VANISHED")) {
                 fa->vanished = 1;
             }
@@ -5294,6 +5385,7 @@ badannotation:
         goto freeargs;
     }
 
+  validate:
     if (!fa->fetchitems && !fa->bodysections && !fa->fsections &&
         !fa->binsections && !fa->sizesections &&
         !fa->headers.count && !fa->headers_not.count) {
@@ -5365,6 +5457,7 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     int fetchedsomething, r;
     clock_t start = clock();
     char mytime[100];
+    unsigned flags = FETCH_ALLOW_MODIFIERS;
 
     if (backend_current) {
         /* remote mailbox */
@@ -5378,9 +5471,10 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     /* local mailbox */
     memset(&fetchargs, 0, sizeof(struct fetchargs));
 
-    r = parse_fetch_args(tag, cmd,
-                         (usinguid && (client_capa & CAPA_QRESYNC)),
-                         &fetchargs);
+    if (usinguid && (client_capa & CAPA_QRESYNC))
+        flags |= FETCH_ALLOW_VANISHED;
+
+    r = parse_fetch_args(tag, cmd, flags, &fetchargs);
     if (r)
         goto freeargs;
 
@@ -15502,13 +15596,438 @@ static void cmd_replace(char *tag, char *seqno, char *name, int usinguid)
     free(intname);
 }
 
+struct notify_event {
+    const char *name;
+    unsigned long events;
+    unsigned selected : 1;
+};
+
+static const struct notify_event notify_events[] = {
+    { "MessageNew",            IMAP_NOTIFY_MESSAGE_NEW,             1 },
+    { "MessageExpunge",        IMAP_NOTIFY_MESSAGE_EXPUNGE,         1 },
+    { "FlagChange",            IMAP_NOTIFY_FLAG_CHANGE,             1 },
+//    { "AnnotationChange",      IMAP_NOTIFY_ANNOTATION_CHANGE,       1 },
+    { "MailboxName",           IMAP_NOTIFY_MAILBOX_NAME,            0 },
+    { "SubscriptionChange",    IMAP_NOTIFY_SUBSCRIPTION_CHANGE,     0 },
+//    { "MailboxMetadataChange", IMAP_NOTIFY_MAILBOX_METADATA_CHANGE, 0 },
+//    { "ServerMetadataChange",  IMAP_NOTIFY_SERVER_METADATA_CHANGE,  0 },
+    { NULL,                    0,                                   0 }
+};
+
+struct notify_set_rock {
+    mailbox_filter_t filter;
+    unsigned long events;
+    hash_table *mboxnames;
+};
+
+static int notify_set_status(const mbentry_t *mbentry, void *rock)
+{
+    struct notify_set_rock *srock = (struct notify_set_rock *) rock;
+    struct statusdata sdata = STATUSDATA_INIT;
+    unsigned statusitems = 0;
+    int rights;
+
+    if (hash_lookup(mbentry->name, srock->mboxnames)) return 0;
+
+    if (mboxname_isnonimapmailbox(mbentry->name, mbentry->mbtype)) return 0;
+
+    /* check permissions */
+    switch (srock->filter) {
+    case FILTER_SELECTED:
+        break;
+
+    case FILTER_INBOXES:
+        rights = cyrus_acl_myrights(NULL, mbentry->acl);
+        if (!(rights & ACL_POST)) return 0;
+        break;
+
+    default:
+        rights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
+        if ((rights & (ACL_LOOKUP | ACL_READ)) != (ACL_LOOKUP | ACL_READ)) return 0;
+        break;
+    }
+
+    hash_insert(mbentry->name, (void *) 1, srock->mboxnames);
+        
+    if (srock->events & IMAP_NOTIFY_MESSAGE_NEW)
+        statusitems |= (STATUS_MESSAGES | STATUS_UIDNEXT | STATUS_UIDVALIDITY);
+
+    if (srock->events & IMAP_NOTIFY_MESSAGE_EXPUNGE)
+        statusitems |= STATUS_MESSAGES;
+
+    if (srock->events & (IMAP_NOTIFY_FLAG_CHANGE | IMAP_NOTIFY_ANNOTATION_CHANGE)) {
+        statusitems |= (STATUS_UIDVALIDITY | STATUS_HIGHESTMODSEQ);
+    }
+
+    if (statusitems && !imapd_statusdata(mbentry, statusitems, &sdata)) {
+        char *extname = mboxname_to_external(mbentry->name,
+                                             &imapd_namespace, imapd_userid);
+        print_statusline(extname, statusitems, &sdata);
+        free(extname);
+    }
+
+    return 0;
+}
+
+static void cmd_notify(char *tag, int set)
+{
+    struct event_groups *new_egroups = xzmalloc(sizeof(struct event_groups));
+    static struct buf arg;
+    int c = EOF, do_status = 0;
+
+    if (set) {
+        /* Parse optional status-indicator */
+        c = getword(imapd_in, &arg);
+        if (!arg.s[0]) {
+            prot_ungetc(c, imapd_in);
+        }
+        else if (c != ' ') {
+            goto missingarg;
+        }
+        else if (strcasecmp(arg.s, "STATUS")) {
+            goto badarg;
+        }
+        else {
+            do_status = 1;
+        }
+
+        /* Parse event-groups */
+        do {
+            mailbox_filter_t filter = 0;
+            unsigned long *events = NULL;
+            strarray_t *mboxes = NULL;
+
+            c = prot_getc(imapd_in);
+            if (c != '(') {
+                goto missingopen;
+            }
+
+            /* Parse filter-mailboxes */
+            c = getword(imapd_in, &arg);
+            lcase(arg.s);
+
+            if (!strcmp(arg.s, "selected")) {
+                filter = FILTER_SELECTED;
+                events = &new_egroups->selected.events;
+            }
+            else if (!strcmp(arg.s, "selected-delayed")) {
+                filter = FILTER_SELECTED;
+                events = &new_egroups->selected.events;
+                new_egroups->selected.delayed = 1;
+            }
+            else if (!strcmp(arg.s, "inboxes")) {
+                filter = FILTER_INBOXES;
+                events = &new_egroups->inboxes_events;
+            }
+            else if (!strcmp(arg.s, "personal")) {
+                filter = FILTER_PERSONAL;
+                events = &new_egroups->personal_events;
+            }
+            else if (!strcmp(arg.s, "subscribed")) {
+                filter = FILTER_SUBSCRIBED;
+                events = &new_egroups->subscribed_events;
+            }
+            else if (!strcmp(arg.s, "subtree")) {
+                filter = FILTER_SUBTREE;
+                events = &new_egroups->subtree.events;
+                mboxes = &new_egroups->subtree.mboxes;
+            }
+            else if (!strcmp(arg.s, "mailboxes")) {
+                filter = FILTER_MAILBOXES;
+                events = &new_egroups->mailboxes.events;
+                mboxes = &new_egroups->mailboxes.mboxes;
+            }
+            else {
+                goto badarg;
+            }
+
+            if (new_egroups->filters & filter) {
+                prot_printf(imapd_out,
+                            "%s BAD Duplicate filter in Notify %s\r\n",
+                            tag, arg.s);
+                goto cleanup;
+            }
+
+            new_egroups->filters |= filter;
+
+            if (mboxes) {
+                int inlist = 0;
+
+                /* Parse one-or-more-mailbox */
+                if (prot_peek(imapd_in) == '(') {
+                    prot_getc(imapd_in);
+                    inlist = 1;
+                }
+
+                do {
+                    char *mboxname = NULL;
+                    mbentry_t *mbentry = NULL;
+
+                    c = getastring(imapd_in, imapd_out, &arg);
+                    if (c == EOF) goto missingarg;
+
+                    mboxname = mboxname_from_external(arg.s, &imapd_namespace,
+                                                      imapd_userid);
+
+                    if (!mboxlist_lookup(mboxname, &mbentry, NULL)) {
+                        int myrights =
+                            cyrus_acl_myrights(imapd_authstate, mbentry->acl);
+
+                        if (myrights & ACL_LOOKUP) {
+                            if (myrights & ACL_READ) {
+                                strarray_add(mboxes, mbentry->name);
+                            }
+                            else {
+                                print_listresponse(LIST_CMD_EXTENDED,
+                                                   arg.s, NULL,
+                                                   imapd_namespace.hier_sep,
+                                                   MBOX_ATTRIBUTE_NOACCESS,
+                                                   NULL);
+                            }
+                        }
+                    }
+
+                    mboxlist_entry_free(&mbentry);
+                    free(mboxname);
+
+                } while (inlist && c == ' ');
+
+                if (inlist) {
+                    if (c != ')') {
+                        goto missingclose;
+                    }
+
+                    c = prot_getc(imapd_in);
+                }
+            }
+
+            if (c != ' ') {
+                goto missingarg;
+            }
+
+            /* Parse events */
+            c = getword(imapd_in, &arg);
+
+            if (!arg.s[0]) {
+                if (c != '(') {
+                    goto missingopen;
+                }
+
+                do {
+                    const struct notify_event *nevent;
+
+                    c = getword(imapd_in, &arg);
+
+                    for (nevent = notify_events; nevent->name; nevent++) {
+                        if (strcasecmp(arg.s, nevent->name)) continue;
+
+                        if (filter == FILTER_SELECTED) {
+                            if (!nevent->selected) continue;
+
+                            if (nevent->events == IMAP_NOTIFY_MESSAGE_NEW &&
+                                c == ' ' && prot_peek(imapd_in) == '(') {
+                                struct fetchargs *fetchargs =
+                                    &new_egroups->selected.fetchargs;
+                                unsigned flags = 0;
+
+                                if (client_capa & CAPA_QRESYNC)
+                                    flags |= FETCH_ALLOW_VANISHED;
+
+                                if (parse_fetch_args(tag, "Notify",
+                                                     flags, fetchargs)) {
+                                    goto cleanup;
+                                }
+
+                                c = prot_getc(imapd_in);
+                            }
+                        }
+
+                        *events |= nevent->events;
+
+                        break;
+                    }
+
+                    if (!nevent->name) {
+                        goto badevent;
+                    }
+
+                } while (c == ' ');
+
+                if (c != ')') {
+                    goto missingclose;
+                }
+
+                c = prot_getc(imapd_in);
+            }
+            else if (strcasecmp(arg.s, "NONE")) {
+                goto badarg;
+            }
+
+            if (c != ')') {
+                goto missingclose;
+            }
+
+            c = prot_getc(imapd_in);
+
+        } while (c == ' ');
+
+        /* check for CRLF */
+        if (!IS_EOL(c, imapd_in)) {
+            prot_printf(imapd_out,
+                        "%s BAD Unexpected extra arguments to Notify\r\n", tag);
+            goto cleanup;
+        }
+    }
+
+    /* Stop idled listening for old events */
+    idle_stop(FILTER_NONE);
+
+    /* Cancel all registered notification events */
+    event_groups_free(&notify_event_groups);
+
+    if (new_egroups->filters) {
+        /* Start idled listening for our events and optionally send STATUS */
+        strarray_t key = { 1, 0, NULL };  // avoid memory alloc
+        struct notify_set_rock srock = { FILTER_NONE, 0, NULL };
+        hash_table mboxnames = HASH_TABLE_INITIALIZER;
+        strarray_t *mboxes;
+        int i;
+
+        if (new_egroups->filters & ~FILTER_SELECTED) {
+            srock.mboxnames = construct_hash_table(&mboxnames, 100, 0);
+        }
+
+        if (new_egroups->selected.events && imapd_index) {
+            const char *mboxid = index_mboxid(imapd_index);
+
+            key.data = (char **) &mboxid;
+            idle_start(new_egroups->selected.events, 0, FILTER_SELECTED, &key);
+
+            index_check(imapd_index, 1, 1);
+
+            if (srock.mboxnames) {
+                hash_insert(index_mboxname(imapd_index),
+                            (void *) 1, srock.mboxnames);
+            }
+        }
+        if (new_egroups->inboxes_events) {
+            key.data = &imapd_userid;
+            idle_start(new_egroups->inboxes_events, 0, FILTER_INBOXES, &key);
+
+            if (do_status && (new_egroups->inboxes_events & IMAP_NOTIFY_MESSAGE)) {
+                srock.filter = FILTER_INBOXES;
+                srock.events = new_egroups->inboxes_events;
+                mboxlist_usermboxtree(imapd_userid, imapd_authstate,
+                                      &notify_set_status, &srock, 0);
+            }
+        }
+        if (new_egroups->personal_events) {
+            key.data = &imapd_userid;
+            idle_start(new_egroups->personal_events, 0, FILTER_PERSONAL, &key);
+
+            if (do_status && (new_egroups->personal_events & IMAP_NOTIFY_MESSAGE)) {
+                srock.filter = FILTER_PERSONAL;
+                srock.events = new_egroups->personal_events;
+                mboxlist_usermboxtree(imapd_userid, imapd_authstate,
+                                      &notify_set_status, &srock, 0);
+            }
+        }
+        if (new_egroups->subscribed_events) {
+            key.data = &imapd_userid;
+            idle_start(new_egroups->subscribed_events, 0, FILTER_SUBSCRIBED, &key);
+
+            if (do_status && (new_egroups->subscribed_events & IMAP_NOTIFY_MESSAGE)) {
+                srock.filter = FILTER_SUBSCRIBED;
+                srock.events = new_egroups->subscribed_events;
+                mboxlist_usersubs(imapd_userid, &notify_set_status, &srock, 0);
+            }
+        }
+        if (new_egroups->subtree.events) {
+            idle_start(new_egroups->subtree.events, 0, FILTER_SUBTREE,
+                       &new_egroups->subtree.mboxes);
+
+            if (do_status && (new_egroups->subtree.events & IMAP_NOTIFY_MESSAGE)) {
+
+                srock.filter = FILTER_SUBTREE;
+                srock.events = new_egroups->subtree.events;
+                mboxes = &new_egroups->subtree.mboxes;
+                for (i = 0; i < strarray_size(mboxes); i++) {
+                    mboxlist_mboxtree(strarray_nth(mboxes, i),
+                                      &notify_set_status, &srock, 0);
+                }
+            }
+        }
+        if (new_egroups->mailboxes.events) {
+            idle_start(new_egroups->mailboxes.events, 0, FILTER_MAILBOXES,
+                       &new_egroups->mailboxes.mboxes);
+
+            if (do_status && (new_egroups->mailboxes.events & IMAP_NOTIFY_MESSAGE)) {
+                srock.filter = FILTER_MAILBOXES;
+                srock.events = new_egroups->mailboxes.events;
+                mboxes = &new_egroups->mailboxes.mboxes;
+                for (i = 0; i < strarray_size(mboxes); i++) {
+                    mboxlist_mboxtree(strarray_nth(mboxes, i),
+                                      &notify_set_status, &srock,
+                                      MBOXTREE_SKIP_CHILDREN);
+                }
+            }
+        }
+
+        free_hash_table(&mboxnames, NULL);
+    }
+
+    notify_event_groups = new_egroups;
+
+    prot_printf(imapd_out,
+                "%s OK %s\r\n", tag, error_message(IMAP_OK_COMPLETED));
+    return;
+
+  badarg:
+    prot_printf(imapd_out,
+                "%s BAD Invalid argument in Notify %s\r\n", tag, arg.s);
+    goto cleanup;
+
+  badevent:
+    prot_printf(imapd_out, "%s NO [BADEVENT ", tag);
+    {
+        const struct notify_event *nevent;
+        char sep = '(';
+
+        for (nevent = notify_events; nevent->name; nevent++) {
+            prot_printf(imapd_out, "%c%s", sep, nevent->name);
+            sep = ' ';
+        }
+    }
+    prot_printf(imapd_out, ")] Unsupported event in Notify %s\r\n", arg.s);
+    goto cleanup;
+
+  missingarg:
+    prot_printf(imapd_out,
+                "%s BAD Missing argument in Notify\r\n", tag);
+    goto cleanup;
+
+  missingopen:
+    prot_printf(imapd_out,
+                "%s BAD Missing open parenthesis in Notify\r\n", tag);
+    goto cleanup;
+
+  missingclose:
+    prot_printf(imapd_out,
+                "%s BAD Missing close parenthesis in Notify\r\n", tag);
+    goto cleanup;
+
+  cleanup:
+    event_groups_free(&new_egroups);
+    eatline(imapd_in, c);
+}
+
 static void push_updates(void)
 {
     json_t *msg, *nextmsg = NULL;
     const char *mtype, *mboxid, *event;
     mbentry_t *mbentry = NULL;
     enum event_type etype;
-    int r, is_selected;
+    int r;
 
     msg = idle_get_message();
 
@@ -15516,7 +16035,10 @@ static void push_updates(void)
         mtype = json_string_value(json_object_get(msg, "@type"));
 
         if (!strcmp(mtype, "alert")) {
+            prot_puts(imapd_out,
+                      "* OK [NOTIFICATIONOVERFLOW] Lost connection to idled\r\n");
             idle_sock = PROT_NO_FD;
+            imapd_notify_enabled = 0;
             goto done;
         }
 
@@ -15528,37 +16050,53 @@ static void push_updates(void)
 
         if (!etype || !mboxid) goto done;
 
-        is_selected = imapd_index && !strcmp(mboxid, index_mboxid(imapd_index));
+        if (imapd_index && !strcmp(mboxid, index_mboxid(imapd_index))) {
+            /* Notification for currently selected mailbox */
+            if ((etype & IMAP_NOTIFY_MESSAGE_NEW) &&
+                notify_event_groups &&
+                notify_event_groups->selected.fetchargs.fetchitems) {
+                const char *uidset =
+                    json_string_value(json_object_get(msg, "uidset"));
 
-        if (!is_selected) {
-            int myrights;
+                index_fetch(imapd_index, uidset ? uidset : "*", 1,
+                            &notify_event_groups->selected.fetchargs, NULL);
+            }
+            else {
+                int tell_expunged = 1;
 
-            mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL);
-            if (!mbentry) {
-                /* mailbox doesn't exist */
-                goto done;
+                if ((notify_event_groups && notify_event_groups->selected.delayed) ||
+                    !(etype & (EVENT_MESSAGE_EXPUNGE | EVENT_MESSAGE_EXPIRE)))
+                    tell_expunged = 0;
+
+                index_check(imapd_index, tell_expunged, 1);
             }
 
-            myrights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
-            if ((myrights & (ACL_LOOKUP|ACL_READ)) != (ACL_LOOKUP|ACL_READ)) {
-                /* RFC 5465, Secion 5:
-                 * All event types described in this document require the
-                 * 'l' and 'r' rights (see [RFC4314]) on all observed mailboxes.
-                 */
-                goto done;
-            }
-
-            if (!mbentry->ext_name) {
-                mbentry->ext_name =
-                    mboxname_to_external(mbentry->name,
-                                         &imapd_namespace, imapd_userid);
-            }
+            goto done;
         }
 
-        if (is_selected) {
-            index_check(imapd_index, 1, 1);
+        /* Notification for non-selected mailbox */
+        mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL);
+        if (!mbentry) {
+            /* mailbox doesn't exist */
+            goto done;
         }
-        else if (etype & IMAP_NOTIFY_MESSAGE) {
+
+        int myrights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
+        if ((myrights & (ACL_LOOKUP|ACL_READ)) != (ACL_LOOKUP|ACL_READ)) {
+            /* RFC 5465, Secion 5:
+             * All event types described in this document require the
+             * 'l' and 'r' rights (see [RFC4314]) on all observed mailboxes.
+             */
+            goto done;
+        }
+
+        if (!mbentry->ext_name) {
+            mbentry->ext_name =
+                mboxname_to_external(mbentry->name,
+                                     &imapd_namespace, imapd_userid);
+        }
+
+        if (etype & IMAP_NOTIFY_MESSAGE) {
             struct statusdata sdata = STATUSDATA_INIT;
             unsigned statusitems = STATUS_UIDVALIDITY;
 
@@ -15596,8 +16134,9 @@ static void push_updates(void)
                                                    &imapd_namespace, imapd_userid);
                 }
 
-                /* Wait 1 second for a SubscriptionChange message for this mailbox
-                   and consolidate it with the Create/Rename */
+                /* Thunderbird auto-subscribed on CREATE/RENAME, so
+                 * wait 1 second for a SubscriptionChange message for this mailbox
+                 * and consolidate it with the MailboxCreate/MailboxRename */
                 FD_ZERO(&rset);
                 FD_SET(idle_sock, &rset);
                 r = signals_select(idle_sock+1, &rset, NULL, NULL, &timeout);

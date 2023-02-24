@@ -168,7 +168,7 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     json_t *key = json_array_get(keys, 0);
     const char *keyval = json_string_value(key);
     mbentry_t *mbentry = NULL;
-    int notify = 0;
+    int i, notify = 0;
 
     /* Is it a mailbox in which the client has interest? */
     if (filter == FILTER_SELECTED) {
@@ -178,9 +178,41 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     }
     else if (!mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL)) {
         switch (filter) {
+        case FILTER_INBOXES:
+            /* Is it an INBOX or postable by anonymous? */
+            if (!mboxname_isusermailbox(mbentry->name, /*isinbox*/1) &&
+                !(cyrus_acl_myrights(NULL, mbentry->acl) & ACL_POST))
+                break;
+
+            GCC_FALLTHROUGH
+
         case FILTER_PERSONAL:
             /* keyval is userid */
             if (mboxname_userownsmailbox(keyval, mbentry->name))
+                notify = 1;
+            break;
+
+        case FILTER_SUBSCRIBED: {
+            /* keyval is userid */
+            strarray_t *sublist = mboxlist_sublist(keyval);
+            if (strarray_find(sublist, mbentry->name, 0) >= 0)
+                notify = 1;
+            strarray_free(sublist);
+            break;
+        }
+
+        case FILTER_SUBTREE:
+            json_array_foreach(keys, i, key) {
+                const char *mboxname = json_string_value(key);
+                if (mboxname_is_prefix(mbentry->name, mboxname)) {
+                    notify = 1;
+                    break;
+                }
+            }
+            break;
+
+        case FILTER_MAILBOXES:
+            if (json_array_find(keys, mbentry->name) >= 0)
                 notify = 1;
             break;
 
