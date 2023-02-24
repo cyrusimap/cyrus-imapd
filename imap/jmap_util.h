@@ -206,6 +206,9 @@ extern const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, str
 
 extern void jmap_caleventid_free(struct jmap_caleventid **eidptr);
 
+#ifdef HAVE_ICAL
+#include <libical/ical.h>
+
 extern void jmap_alertid_encode(icalcomponent *valarm, struct buf *buf);
 
 #define JMAP_NOTIF_CALENDAREVENT "jmap-notif-calendarevent"
@@ -236,5 +239,7 @@ extern int jmap_create_caldaveventnotif(struct transaction_t *txn,
                                         int is_draft,
                                         icalcomponent *oldical,
                                         icalcomponent *newical);
+
+#endif /* HAVE_ICAL */
 
 #endif /* JMAP_UTIL_H */

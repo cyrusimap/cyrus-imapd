@@ -1256,6 +1256,8 @@ EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)
     buf[JMAP_THREADID_SIZE-1] = 0;
 }
 
+#ifdef HAVE_ICAL
+
 EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
 {
     struct jmap_caleventid *eid = xzmalloc(sizeof(struct jmap_caleventid));
@@ -1390,3 +1392,5 @@ EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
     }
     buf_setcstr(idbuf, id);
 }
+
+#endif /* HAVE_ICAL */
