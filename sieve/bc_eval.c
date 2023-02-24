@@ -66,6 +66,10 @@
 
 #include <string.h>
 
+#ifdef HAVE_ICAL
+#include <libical/ical.h>
+#endif
+
 /**************************************************************************/
 /**************************************************************************/
 /**************************************************************************/
@@ -383,6 +387,23 @@ static int do_comparisons(strarray_t *needles, const char *hay,
     }
 
     return res;
+}
+
+static int parse_tzoffset(const char *s, int *offset)
+{
+    int hh, mm;
+    char sign;
+
+    /* Parse +/-hhmm and convert to seconds */
+    if ((5 == strlen(s)) &&
+        (3 == sscanf(s, "%c%02d%02d", &sign, &hh, &mm)) &&
+        (sign == '+' || sign == '-') &&
+        (hh >= 0) && (mm >= 0) && (mm < 60)) {
+        *offset = (sign == '-' ? -1 : 1) * 60 * (hh * 60 + mm);
+        return 1;
+    }
+
+    return 0;
 }
 
 /* Evaluate a bytecode test */
@@ -1042,7 +1063,7 @@ envelope_err:
         int index;
         int match;
         int relation;
-        int timezone_offset = 0;
+        int timezone_offset = 0; /* in seconds */
         int zone;
         struct tm tm;
         time_t t;
@@ -1053,37 +1074,6 @@ envelope_err:
 
         /* zone tag */
         zone = test.u.dt.zone.tag;
-
-        /* timezone offset */
-        if (zone == B_TIMEZONE) {
-            const char *offset = test.u.dt.zone.offset;
-
-            if (offset) {
-                char sign;
-                int hours;
-                int minutes;
-
-                if (requires & BFE_VARIABLES) {
-                    offset = parse_string(offset, variables);
-                }
-
-                if (3 != sscanf(offset, "%c%02d%02d",
-                                &sign, &hours, &minutes)) {
-                    res = 0;
-                    goto date_err;
-                }
-
-                timezone_offset =
-                    (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
-            }
-            else {
-                struct tm tm;
-                time_t now = time(NULL);
-
-                localtime_r(&now, &tm);
-                timezone_offset = gmtoff_of(&tm, now) / 60;
-            }
-        }
 
         /* comparator */
         match = test.u.dt.comp.match;
@@ -1172,27 +1162,56 @@ envelope_err:
 
             /* timezone offset */
             if (zone == B_ORIGINALZONE) {
-                char *zone;
-                char sign;
-                int hours;
-                int minutes;
-
-                zone = strrchr(header, ' ');
-                if (!zone ||
-                    3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
+                char *origzone = strrchr(header, ' ');
+                if (!origzone || !parse_tzoffset(origzone + 1, &timezone_offset)) {
                     res = 0;
                     goto date_err;
                 }
-
-                timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
             }
         }
         else { /* CURRENTDATE */
             t = interp->time;
         }
 
+        /* timezone offset */
+        if (zone == B_TIMEZONE) {
+            const char *str = test.u.dt.zone.offset;
+
+            if (str) {
+                if (requires & BFE_VARIABLES) {
+                    str = parse_string(str, variables);
+                }
+
+                if (!parse_tzoffset(str, &timezone_offset)) {
+#ifdef HAVE_ICAL
+                    /* Is this an IANA TZID? rather than an offset? */
+                    icaltimezone *tz = icaltimezone_get_builtin_timezone(str);
+
+                    if (tz) {
+                        icaltimetype tt = icaltime_from_timet_with_zone(t, 0, tz);
+
+                        timezone_offset =
+                            icaltimezone_get_utc_offset(tz, &tt, NULL);
+                    } else
+#endif
+                    {
+                        res = 0;
+                        goto date_err;
+                    }
+                }
+            }
+            else {
+                /* use local time zone */
+                time_t now = interp->time;
+                struct tm tm;
+
+                localtime_r(&now, &tm);
+                timezone_offset = 60 * gmtoff_of(&tm, now);
+            }
+        }
+
         /* apply timezone_offset (if any) */
-        t += timezone_offset * 60;
+        t += timezone_offset;
 
         /* get tm struct */
         gmtime_r(&t, &tm);
@@ -1262,6 +1281,7 @@ envelope_err:
             time_to_rfc5322(t, buffer, sizeof(buffer));
             break;
         case B_ZONE:
+            timezone_offset /= 60;  /* seconds -> minutes */
             snprintf(buffer, sizeof(buffer), "%c%02d%02d",
                      timezone_offset >= 0 ? '+' : '-',
                      abs(timezone_offset) / 60,

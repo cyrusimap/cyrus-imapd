@@ -1,0 +1,14 @@
+Description:
+
+Sieve [current]date :zone parameter now accepts both a UTC offset
+or an IANA time zone ID.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
