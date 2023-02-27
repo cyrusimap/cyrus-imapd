@@ -730,7 +730,6 @@ static int cmd_json_chunks(struct backup *backup,
     struct backup_chunk *chunk = NULL;
     json_t *jchunks = NULL;
     struct stat data_stat_buf;
-    double total_length = 0.0;
     int r;
 
     (void) options;
@@ -758,8 +757,6 @@ static int cmd_json_chunks(struct backup *backup,
         else {
             ratio = 100.0 * (data_stat_buf.st_size - chunk->offset) / chunk->length;
         }
-
-        total_length += chunk->length;
 
         /* XXX which fields do we want? */
         json_object_set_new(jchunk, "id", json_integer(chunk->id));

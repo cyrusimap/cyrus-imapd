@@ -243,7 +243,8 @@ struct findrock {
     const char *find;
     int tzid_only;
     time_t changedsince;
-    int (*proc)();
+    int (*proc)(const char *tzid, int tzidlen,
+                struct zoneinfo *zi, void *rock);
     void *rock;
 };
 
