@@ -84,7 +84,7 @@ sub set_up
 
     $self->SUPER::set_up();
 
-    $self->{ldapport} = Cassandane::PortManager::alloc();
+    $self->{ldapport} = Cassandane::PortManager::alloc("localhost");
 
     $self->{instance}->{config}->set(
         ldap_uri => "ldap://localhost:$self->{ldapport}/",

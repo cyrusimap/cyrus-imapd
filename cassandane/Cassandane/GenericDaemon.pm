@@ -104,7 +104,7 @@ sub set_port
         $port = $self->{config}->substitute($port);
     }
 
-    $port ||= Cassandane::PortManager::alloc();
+    $port ||= Cassandane::PortManager::alloc($self->host);
     $self->{port} = $port;
 }
 

@@ -327,7 +327,7 @@ magic(JMAPExtensions => sub {
     shift->config_set('jmap_nonstandard_extensions' => 'yes');
 });
 magic(SearchAttachmentExtractor => sub {
-    my $port = Cassandane::PortManager::alloc();
+    my $port = Cassandane::PortManager::alloc("localhost");
     shift->config_set('search_attachment_extractor_url' =>
         "http://localhost:$port/extractor");
 });
@@ -478,7 +478,7 @@ sub _create_instances
 
         if ($want->{replica} || $want->{csyncreplica})
         {
-            $sync_port = Cassandane::PortManager::alloc();
+            $sync_port = Cassandane::PortManager::alloc("localhost");
             $conf->set(
                 # sync_client will find the port in the config
                 sync_host => 'localhost',
@@ -491,8 +491,8 @@ sub _create_instances
 
         if ($want->{imapmurder} || $want->{httpmurder})
         {
-            $mupdate_port = Cassandane::PortManager::alloc();
-            $backend1_service_port = Cassandane::PortManager::alloc();
+            $mupdate_port = Cassandane::PortManager::alloc("localhost");
+            $backend1_service_port = Cassandane::PortManager::alloc("localhost");
 
             $conf->set(
                 servername => "localhost:$backend1_service_port",
@@ -513,7 +513,7 @@ sub _create_instances
 
         if ($want->{backups})
         {
-            $backupd_port = Cassandane::PortManager::alloc();
+            $backupd_port = Cassandane::PortManager::alloc("localhost");
             $conf->set(
                 backup_sync_host => "localhost",
                 backup_sync_port => $backupd_port,
@@ -569,8 +569,8 @@ sub _create_instances
 
         if ($want->{imapmurder} || $want->{httpmurder})
         {
-            $frontend_service_port = Cassandane::PortManager::alloc();
-            $backend2_service_port = Cassandane::PortManager::alloc();
+            $frontend_service_port = Cassandane::PortManager::alloc("localhost");
+            $backend2_service_port = Cassandane::PortManager::alloc("localhost");
 
             # set up a front end on which we also run the mupdate master
             my $frontend_conf = $self->{_config}->clone();
