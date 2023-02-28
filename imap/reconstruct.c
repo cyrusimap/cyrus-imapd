@@ -821,7 +821,7 @@ static void reconstruct_mbentry(const char *header_path)
                         mbentry->mbtype &= ~(MBTYPE_LEGACY_DIRS);
 
                         token = tok_next(&tok);
-                        if (strcmpnull(token, FNAME_HEADER+1) || tok_next(&tok)) {
+                        if (strcmpnull(token, &FNAME_HEADER[1]) || tok_next(&tok)) {
                             xzfree(mbentry->uniqueid);
                         }
                     }

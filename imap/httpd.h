@@ -280,7 +280,7 @@ struct range {
 
 struct patch_doc_t {
     const char *format;                 /* MIME format of patch document */
-    int (*proc)();                      /* Function to parse and apply doc */
+    int (*proc)(txn_t *, void *);       /* Function to parse and apply doc */
 };
 
 typedef int (*encode_proc_t)(struct transaction_t *txn,

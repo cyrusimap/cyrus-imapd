@@ -1163,7 +1163,6 @@ static int dump_doc_list_present_bits(SquatIndex *index,
     int start_present = docs->first_valid_entry;
     int end_present = docs->last_valid_entry;
     char *buf;
-    int present_count;
 
     /* If the leaf is empty, we should never get here! */
     assert(start_present <= end_present);
@@ -1175,7 +1174,6 @@ static int dump_doc_list_present_bits(SquatIndex *index,
             return SQUAT_ERR;
         } else {
             *buf++ = (char)end_present;
-            present_count = 1;
         }
     } else {
         int first_byte = start_present >> 3;
@@ -1191,10 +1189,8 @@ static int dump_doc_list_present_bits(SquatIndex *index,
             *buf++ = (char)first_byte;
             *buf++ = (char)byte_count - 1;
             memset(buf, 0, byte_count);
-            present_count = 0;
             for (i = start_present; i <= end_present; i++) {
                 if (docs->docs[i] != NULL) {
-                    present_count++;
                     buf[(i >> 3) - first_byte] |= 1 << (i & 7);
                 }
             }
