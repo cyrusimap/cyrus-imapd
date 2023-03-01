@@ -172,6 +172,7 @@ sub common_basic
 }
 
 sub test_basic_idled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -196,6 +197,7 @@ sub test_basic_noidled
 }
 
 sub test_basic_abortedidled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -253,6 +255,7 @@ sub common_delivery
 }
 
 sub test_delivery_idled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -277,6 +280,7 @@ sub test_delivery_noidled
 }
 
 sub test_delivery_abortedidled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -367,6 +371,7 @@ sub common_shutdownfile
 }
 
 sub test_shutdownfile_idled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -391,6 +396,7 @@ sub test_shutdownfile_noidled
 }
 
 sub test_shutdownfile_abortedidled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -404,6 +410,7 @@ sub test_shutdownfile_abortedidled
 }
 
 sub test_sigterm
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -471,6 +478,7 @@ sub test_sigterm
 }
 
 sub test_sigterm_many
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -543,6 +551,7 @@ sub test_sigterm_many
 }
 
 sub test_idled_default_timeout
+    :needs_component_idled
 {
     my ($self) = @_;
 

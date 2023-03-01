@@ -143,7 +143,16 @@ if test $ac_cv_sys_long_file_names = no; then
         AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
 AC_C_INLINE
+
+dnl check for libm -- sets LIBM
+dnl LT_LIB_M breaks under -Werror, so work around that
+saved_CFLAGS="$CFLAGS"
+saved_CPPFLAGS="$CPPFLAGS"
+CFLAGS="$CFLAGS -Wno-error"
+CPPFLAGS="$CPPFLAGS -Wno-error"
 LT_LIB_M
+CFLAGS="$saved_CFLAGS"
+CPPFLAGS="$saved_CPPFLAGS"
 
 gl_VISIBILITY
 AH_BOTTOM([#if HAVE_VISIBILITY
@@ -1726,11 +1735,6 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                ])
         fi
 
-        dnl httpd needs libmath in a few places
-        dnl XXX really should check for this properly but AC_SEARCH_LIBS/AC_CHECK_LIB
-        dnl XXX break under -Werror(!)
-        LIB_MATH="-lm"
-
         PKG_CHECK_MODULES([SHAPELIB], [shapelib >= 1.3.0],[
                 AC_DEFINE(HAVE_SHAPELIB,[],
                         [Build geographic support into tzdist?])
@@ -1740,7 +1744,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
         HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
-        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
+        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIBM}"
 else
         with_nghttp2="no (httpd is not built)"
         with_wslay="no (httpd is not built)"
@@ -2549,5 +2553,6 @@ Build info:
    cxxflags:           $CXXFLAGS
    libs:               $LIBS
    ldflags:            $LDFLAGS
+   libm:               $LIBM
    unit tests (cunit): $enable_unit_tests
 "
