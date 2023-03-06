@@ -1,0 +1,21 @@
+Submitting a PR?  Create a file in this directory with the same name as your
+branch, and add the following details (you can use this file as a template).
+
+Description:
+
+Accept message ids even if they lack enclosing angle brackets.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

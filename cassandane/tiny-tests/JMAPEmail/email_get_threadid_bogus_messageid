@@ -1,0 +1,143 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_threadid_nobracket_messageid
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "Set message-id without brackets";
+
+    my $raw = <<'EOF';
+From: addr1@local
+To: addr2@local, addr3@local, addr4@local, addr5@local
+Subject: hello
+Message-Id: bogus.addr1@message-id
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+hello
+EOF
+    $raw =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $raw) || die $@;
+
+    xlog $self, "Refer to it In-Reply-To with brackets";
+
+    $raw = <<'EOF';
+From: addr2@local
+To: addr1@local
+Subject: Re: hello
+Message-Id: <valid.addr2@message-id>
+In-Reply-To: <bogus.addr1@message-id>
+Date: Tue, 14 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+world
+EOF
+    $raw =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $raw) || die $@;
+
+    xlog $self, "Refer to it in References with brackets";
+
+    $raw = <<'EOF';
+From: addr3@local
+To: addr1@local
+Subject: Re: hello
+Message-Id: <valid.addr3@message-id>
+References: <bogus.addr1@message-id>
+Date: Tue, 14 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+world
+EOF
+    $raw =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $raw) || die $@;
+
+    xlog $self, "Refer to it in References without brackets";
+
+    $raw = <<'EOF';
+From: addr4@local
+To: addr1@local
+Subject: Re: hello
+Message-Id: <valid.addr4@message-id>
+References: bogus.addr1@message-id
+Date: Tue, 14 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+world
+EOF
+    $raw =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $raw) || die $@;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['threadId', 'subject', 'from']
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(4, scalar @{$res->[1][1]{list}});
+    my $threadId = $res->[1][1]{list}[0]{threadId};
+    $self->assert_not_null($threadId);
+
+    xlog $self, "Assert all messages thread together";
+
+    for my $i (1..3) {
+        $self->assert_str_equals($res->[1][1]{list}[0]{threadId},
+            $res->[1][1]{list}[$i]{threadId});
+        $self->assert_str_not_equals($res->[1][1]{list}[0]{id},
+            $res->[1][1]{list}[$i]{id});
+    }
+
+    xlog $self, "Refer to it In-Reply-To without brackets";
+
+    $raw = <<'EOF';
+From: addr5@local
+To: addr1@local
+Subject: Re: hello
+Message-Id: <valid.addr5@message-id>
+In-Reply-To: bogus.addr1@message-id
+Date: Tue, 14 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+world
+EOF
+    $raw =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $raw) || die $@;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                from => 'addr5@local',
+            },
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['threadId', 'subject', 'from']
+        }, 'R2'],
+    ]);
+
+    xlog $self, "Regression test: Assert malformed In-Reply-To gets own thread";
+
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_str_not_equals($threadId, $res->[1][1]{list}[0]{threadId});
+}

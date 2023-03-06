@@ -922,8 +922,100 @@ EXPORTED int capa_is_disabled(const char *str)
  * This is a poor-man's way of finding the message-id.  We simply look for
  * any string having the format "< ... @ ... >" and assume that the mail
  * client created a properly formatted message-id.
- */
-#define MSGID_SPECIALS "<> @\\"
+ *
+ * In addition, anything that has the format "atom-dot-text @ atom-dot-text"
+ * also is assumed to be a message-id, as some bogus implementations do
+ * not enclose message-ids in the mandatory "<" and ">" brackets. Such
+ * message-ids get returned with proper begin and end brackets.
+ t */
+#define MSGID_SPECIALS "<> \t@\\"
+
+static const uint8_t ATEXT[256] = {
+/* control chars are unsafe */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 16
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 32
+/* Printable US-ASCII characters not including specials. */
+    0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, // 48
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, // 64
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 80
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, // 96
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 112
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, // 128
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+#define is_atext(c) (!!ATEXT[(uint8_t)(c)])
+
+static char *find_msgid_start(char *src)
+{
+    for (char *cp = src; *cp; cp++) {
+        if (*cp == '<' || is_atext(*cp))
+            return cp;
+
+        /* check for fold or end of header
+         *
+         * Per RFC 2822 section 2.2.3, a long header may be folded by
+         * inserting CRLF before any WSP (SP and HTAB, per section 2.2.2).
+         * Any other CRLF is the end of the header.
+         */
+        if (cp[0] == '\r' && cp[1] == '\n') {
+            if (cp[2] == ' ' || cp[2] == '\t') {
+                cp += 2;
+                continue;
+            }
+            else {
+                return NULL;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static char *find_msgid_end(char *src, char start)
+{
+    if (start == '<' || !is_atext(start))
+        return strchr(src, '>');
+
+    /* Find end of bogus message-id without '<' bracket */
+
+    /* local-part */
+    char *cpl = src;
+    while (is_atext(*cpl)) {
+        if (*(++cpl) == '.') {
+            if (is_atext(*(++cpl)))
+                continue;
+            else
+                return NULL;
+        }
+    }
+
+    if (cpl == src || *cpl++ != '@')
+        return NULL;
+
+    /* domain-part */
+    char *cpd = cpl;
+    while (is_atext(*cpd)) {
+        if (*(++cpd) == '.') {
+            if (is_atext(*(++cpd)))
+                continue;
+            else
+                return NULL;
+        }
+    }
+
+    if (cpd == src || (*cpd != ' ' && *cpd != '\t' && *cpd != '\0'))
+        return NULL;
+
+    return --cpd;
+}
 
 EXPORTED char *find_msgid(char *str, char **rem)
 {
@@ -935,24 +1027,9 @@ EXPORTED char *find_msgid(char *str, char **rem)
     src = str;
 
     /* find the start of a msgid (don't go past the end of the header) */
-    while ((cp = src = strpbrk(src, "<\r")) != NULL) {
+    while ((cp = src = find_msgid_start(src)) != NULL) {
 
-        /* check for fold or end of header
-         *
-         * Per RFC 2822 section 2.2.3, a long header may be folded by
-         * inserting CRLF before any WSP (SP and HTAB, per section 2.2.2).
-         * Any other CRLF is the end of the header.
-         */
-        if (*cp++ == '\r') {
-            if (*cp++ == '\n' && !(*cp == ' ' || *cp == '\t')) {
-                /* end of header, we're done */
-                break;
-            }
-
-            /* skip fold (or junk) */
-            src++;
-            continue;
-        }
+        char start = *cp;
 
         /* see if we have (and skip) a quoted localpart */
         if (*cp == '\"') {
@@ -961,19 +1038,22 @@ EXPORTED char *find_msgid(char *str, char **rem)
                 ++cp; cp = strchr(cp, '\"');
             } while (cp && *(cp-1) == '\\');
 
-            /* no endquote, so bail */
-            if (!cp) {
+            /* no endquote or msgid started without '<', so bail */
+            if (!cp || is_atext(start)) {
                 src++;
                 continue;
             }
         }
 
         /* find the end of the msgid */
-        if ((cp = strchr(cp, '>')) == NULL)
+        if ((cp = find_msgid_end(cp, start)) == NULL)
             return NULL;
 
         /* alloc space for the msgid */
-        dst = msgid = (char*) xrealloc(msgid, cp - src + 2);
+        dst = msgid = (char*) xrealloc(msgid, cp - src + 4);
+
+        if (is_atext(start))
+            *dst++ = '<';
 
         *dst++ = *src++;
 
@@ -1001,8 +1081,19 @@ EXPORTED char *find_msgid(char *str, char **rem)
         while (!strchr(MSGID_SPECIALS, *src))
             *dst++ = *src++;
 
-        if (*src != '>' || *(dst-1) == '@') continue;
-        *dst++ = *src++;
+        /* end of msgid */
+        if (*(dst-1) == '@') continue;
+
+        if (*src == '>') {
+            *dst++ = *src++;
+        }
+        else if (is_atext(start) &&
+                (*src == ' ' || *src == '\t' || *src == '\0')) {
+            *dst++ = '>';
+        }
+        else
+            continue;
+
         *dst = '\0';
 
         if (rem) *rem = src;

@@ -3686,6 +3686,12 @@ static int extract_convdata(struct conversations_state *state,
     }
     strarray_append(&want, "references");
     message_pruneheader(c_refs, &want, 0);
+    if (!strncasecmp(c_refs, "references:", 11)) {
+        buf_setcstr(&buf, c_refs + 11);
+        buf_trim(&buf);
+        free(c_refs);
+        c_refs = xstrdup(buf_cstring(&buf));
+    }
     hdrs[0] = c_refs;
 
     /* get In-Reply-To, Message-ID out of the envelope
