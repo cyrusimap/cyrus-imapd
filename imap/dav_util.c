@@ -219,14 +219,16 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
                           0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
-        if (r == IMAP_QUOTA_EXCEEDED) {
+        if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {
             /* DAV:quota-not-exceeded */
             txn->error.precond = DAV_OVER_QUOTA;
+            txn->error.desc =
+                (r == IMAP_NO_OVERQUOTA) ? "num resources" : "storage";
             ret = HTTP_NO_STORAGE;
         } else {
             ret = HTTP_SERVER_ERROR;
+            txn->error.desc = error_message(r);
         }
-        txn->error.desc = "append_setup() failed";
     }
     else {
         struct body *body = NULL;
@@ -255,11 +257,20 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         }
 
         /* Append the message to the mailbox */
-        if ((r = append_fromstage(&as, &body, stage, now, createdmodseq, flaglist, 0, &annots))) {
+        if ((r = append_fromstage(&as, &body, stage, now,
+                                  createdmodseq, flaglist, 0, &annots))) {
             syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
                    mailbox_name(mailbox), error_message(r));
-            ret = HTTP_SERVER_ERROR;
-            txn->error.desc = "append_fromstage() failed";
+            if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {
+                /* DAV:quota-not-exceeded */
+                txn->error.precond = DAV_OVER_QUOTA;
+                txn->error.desc =
+                    (r == IMAP_NO_OVERQUOTA) ? "num resources" : "storage";
+                ret = HTTP_NO_STORAGE;
+            } else {
+                txn->error.desc = error_message(r);
+                ret = HTTP_SERVER_ERROR;
+            }
         }
         if (body) {
             message_free_body(body);
