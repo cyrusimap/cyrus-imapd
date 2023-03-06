@@ -2180,17 +2180,220 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
     return rc;
 }
 
+struct list_one_calendar_icalcomp_rock {
+    struct caldav_alarm_data *data;
+    mbname_t *mbname;
+    list_calendar_proc proc;
+    void *rock;
+};
+
+/* XXX this is analogous to process_alarm_cb */
+static int list_one_calendar_icalcomp_cb(
+    icalcomponent *comp,
+    icaltimetype start,
+    icaltimetype end,
+    icaltimetype recurid __attribute__((unused)),
+    int is_standalone __attribute__((unused)),
+    void *rock)
+{
+    struct list_one_calendar_icalcomp_rock *lrock = rock;
+    strarray_t sched_addrs = STRARRAY_INITIALIZER;
+    icalcomponent *alarm;
+    icalproperty *prop;
+    icalvalue *val;
+    const char *intname, *userid;
+
+    intname = mbname_intname(lrock->mbname);
+    userid = mbname_userid(lrock->mbname);
+
+    /* Skip cancelled events */
+    if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) return 1;
+
+    /* Skip declined events */
+    get_schedule_addresses(intname, userid, &sched_addrs);
+    for (prop = icalcomponent_get_first_invitee(comp);
+         prop;
+         prop = icalcomponent_get_next_invitee(comp))
+    {
+        const char *attendee = icalproperty_get_invitee(prop);
+
+        if (!attendee) continue;
+        if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
+
+        if (strarray_find_case(&sched_addrs, attendee, 0) >= 0) {
+            const char *partstat =
+                icalproperty_get_parameter_as_string(prop, "PARTSTAT");
+
+            if (!strcasecmpsafe(partstat, "DECLINED")) {
+                strarray_fini(&sched_addrs);
+                return 1;
+            }
+        }
+    }
+    strarray_fini(&sched_addrs);
+
+    for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+         alarm;
+         alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT))
+    {
+        prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
+        if (!prop) {
+            /* no action, invalid alarm, skip */
+            continue;
+        }
+
+        val = icalproperty_get_value(prop);
+        enum icalproperty_action action = icalvalue_get_action(val);
+        if (!(action == ICAL_ACTION_DISPLAY || action == ICAL_ACTION_EMAIL)) {
+            /* we only want DISPLAY and EMAIL, skip */
+            continue;
+        }
+
+        prop = icalcomponent_get_first_property(alarm, ICAL_TRIGGER_PROPERTY);
+        if (!prop) {
+            /* no trigger, invalid alarm, skip */
+            continue;
+        }
+
+        val = icalproperty_get_value(prop);
+
+        struct icaltriggertype trigger = icalvalue_get_trigger(val);
+        /* XXX validate trigger */
+
+        icaltimetype alarmtime = icaltime_null_time();
+        /* XXX do we want alarmtime? */ (void) alarmtime;
+        unsigned is_duration = (icalvalue_isa(val) == ICAL_DURATION_VALUE);
+        if (is_duration) {
+            icalparameter *param =
+                icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
+            icaltimetype base = start;
+            if (param && icalparameter_get_related(param) == ICAL_RELATED_END) {
+                base = end;
+            }
+            base.is_date = 0; /* need an actual time for triggers */
+            alarmtime = icaltime_add(base, trigger.duration);
+        }
+        else {
+            /* absolute */
+            alarmtime = trigger.time;
+        }
+        alarmtime.is_date = 0;
+
+//        send_alarm(data, comp, alarm, start, end, recurid, is_standalone, alarmtime);
+//    FILL_STRING_PARAM(event, EVENT_CALENDAR_ALARM_TIME,
+//                      xstrdup(icaltime_as_ical_string(alarmtime)));
+
+        /* XXX what other fields are useful here? alarmtime? */
+        lrock->proc(lrock->data->mboxname, lrock->data->imap_uid,
+                    lrock->data->nextcheck, lrock->data->num_rcpts,
+                    lrock->data->num_retries, lrock->data->last_run,
+                    lrock->data->last_err,
+                    lrock->rock);
+    }
+
+    return 1; /* keep going */
+}
+
+/* XXX this is roughly analoguous to process_valarms() with
+ * XXX process_alarms() directly embedded
+ */
 static void list_one_calendar(struct caldav_alarm_data *data,
                               list_calendar_proc proc,
                               void *rock)
 {
+    icaltimezone *floatingtz = NULL;
+    icalcomponent *ical = NULL;
+    struct mailbox *mailbox = NULL;
+    struct index_record record = {0};
+    struct caldav_db *db = NULL;
+    struct caldav_data *cdata = NULL;
+    struct icalperiodtype null_period = icalperiodtype_null_period();
+    mbname_t *mbname = NULL;
+    int r;
+
     assert(data->type == ALARM_CALENDAR);
 
-    /* XXX what's useful here? */
-    proc(data->mboxname, data->imap_uid,
-         data->nextcheck, data->num_rcpts,
-         data->num_retries, data->last_run,
-         data->last_err, rock);
+    mbname = mbname_from_intname(data->mboxname);
+
+    r = mailbox_open_irl(data->mboxname, &mailbox);
+    if (r) {
+        xsyslog(LOG_DEBUG, "mailbox open failed",
+                           "mboxname=<%s>, error=<%s>",
+                           data->mboxname, error_message(r));
+        return;
+    }
+
+    r = mailbox_find_index_record(mailbox, data->imap_uid, &record);
+    if (r) {
+        xsyslog(LOG_DEBUG, "mailbox find index record failed",
+                           "mboxname=<%s> uid=<%u> error=<%s>",
+                           data->mboxname, data->imap_uid, error_message(r));
+        goto done;
+    }
+
+    /* ignore EXPUNGED/DRAFT */
+    if ((record.internal_flags & (FLAG_INTERNAL_EXPUNGED|FLAG_DRAFT))) {
+        goto done;
+    }
+
+    floatingtz = caldav_get_calendar_tz(data->mboxname, "");
+
+    ical = record_to_ical(mailbox, &record, NULL);
+    if (!ical) {
+        xsyslog(LOG_DEBUG, "error parsing ical string",
+                           "mboxname=<%s> uid=<%u>",
+                           data->mboxname, data->imap_uid);
+        goto done;
+    }
+
+    /* ensure this record corresponds to the current version of the event */
+    db = caldav_open_mailbox(mailbox);
+    if (!db
+        || caldav_lookup_uid(db, icalcomponent_get_uid(ical), &cdata)
+        || record.uid != cdata->dav.imap_uid
+        || strcmp(cdata->dav.mailbox_byname ? data->mboxname
+                                            : mailbox_uniqueid(mailbox),
+                  cdata->dav.mailbox))
+    {
+        xsyslog(LOG_DEBUG, "ignoring stale alarm (not current event)",
+                           "mboxname=<%s> uid=<%u>",
+                           data->mboxname, data->imap_uid);
+        goto done;
+    }
+
+    /* no alarms? nothing to do */
+    if (!has_alarms(ical, mailbox, record.uid, NULL)) {
+        xsyslog(LOG_DEBUG, "ignoring record with no alarms",
+                           "mboxname=<%s> uid=<%u>",
+                           data->mboxname, record.uid);
+        goto done;
+    }
+
+    /* Process VALARMs in iCalendar resource */
+    /* XXX from here, we're roughly analogous to process_alarms() */
+
+    /* XXX add default alarms to ical so they can be handled as part of
+     * XXX the foreach */
+
+    /* loop over valarms and call caller's proc */
+    struct list_one_calendar_icalcomp_rock another_rock = {
+        data, mbname, proc, rock
+    };
+    icalcomponent_myforeach(ical, null_period, floatingtz,
+                            list_one_calendar_icalcomp_cb, &another_rock);
+
+    /* XXX end of process_alarms() analogue */
+
+    /* XXX loop over valarms in per-user-cal-data (annot) -- this will
+     * XXX require a standalone function analogous to process_alarms()
+     * XXX (i.e. split out from here) that can then be called by a callback
+     * XXX from annotatemore_findall_mailbox()...  so many damn layers!
+     */
+
+done:
+    mailbox_close(&mailbox);
+    if (ical) icalcomponent_free(ical);
+    caldav_close(db);
 }
 
 static void list_one_snooze(struct caldav_alarm_data *data,
