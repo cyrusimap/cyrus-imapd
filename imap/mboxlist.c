@@ -1272,7 +1272,7 @@ static int mboxlist_update_entry(const char *name,
         /* Delete the existing N record value */
         mboxlist_dbname_to_key(dbname, strlen(dbname), NULL, &key);
         r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
-        goto done;
+        if (r) goto done;
 
         if (old->uniqueid) {
             /* Get the existing I key if any */
@@ -1285,7 +1285,7 @@ static int mboxlist_update_entry(const char *name,
             if (oldi && !strcmp(oldi->name, name)) {
                 mboxlist_id_to_key(old->uniqueid, &key);
                 r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
-                goto done;
+                if (r) goto done;
             }
         }
     }
