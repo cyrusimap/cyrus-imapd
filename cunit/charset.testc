@@ -1179,6 +1179,17 @@ static void test_extract(void)
     flags |= CHARSET_KEEP_ANGLEURI;
     TESTCASE("<b>x<https://example.com/world>y</b>", "us-ascii", ENCODING_NONE, "HTML", "x<https://example.com/world>y");
 
+    /* HTML: regression tests for '/' and '>' characters '*/
+    flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+    // end of tag after attribute name
+    TESTCASE("X<div><img src/>Y</div>Z", "us-ascii", ENCODING_NONE, "HTML", "X Y Z");
+    TESTCASE("X<div><img src>Y</div>Z", "us-ascii", ENCODING_NONE, "HTML", "X Y Z");
+    // quoted attribute value ends without quote
+    TESTCASE("<a href=\"url.html>x</a>", "us-ascii", ENCODING_NONE, "HTML", "X");
+    // ">" in quoted attribute value is legit, but broken in our parser
+    TESTCASE("<div><img alt=\"x>\" src=\"y\"/></div>", "us-ascii", ENCODING_NONE, "HTML", " \" SRC=\"Y\"/> ");
+    // "/" in quoted attribute value is legit, but broken in our parser
+    TESTCASE("<div><img alt=\"x/\" src=\"y\">X</div>", "us-ascii", ENCODING_NONE, "HTML", " X ");
 }
 #undef TESTCASE
 
