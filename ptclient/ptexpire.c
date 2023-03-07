@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
     const char *fname;
     char *alt_config = NULL, *tofree = NULL;
 
-    openlog("ptexpire", LOG_PID, SYSLOG_FACILITY);
+    openlog("cyrus/ptexpire", LOG_PID, SYSLOG_FACILITY);
 
     while ((opt = getopt(argc, argv, "C:E:")) != EOF) {
         switch (opt) {
