@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #
 # compile_st.pl - compile string table into .h and .c files
 #

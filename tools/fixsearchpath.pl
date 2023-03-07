@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #
 # Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
 #
