@@ -156,7 +156,7 @@ CalDAV, CardDAV, or JMAP (httpd subsystem)
     all \*DAV functionality."
     `nghttp2`_, libnghttp2-dev, libnghttp2-devel, "no", "HTTP/2 support
     for the entire **httpd** subsystem (\*DAV & JMAP)."
-    `shapelib`_, shapelib, shapelib, "yes/no", "It is required for
+    `shapelib`_, libshp-dev, shapelib, "yes/no", "It is required for
     **tzdist** service to have geolocation support. Otherwise it is not needed.
     Version 1.3.0 or higher is required when using it."
     `wslay`_, libwslay-dev, wslay-devel, "no", "It provides WebSockets support
