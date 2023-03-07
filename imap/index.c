@@ -5961,6 +5961,8 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                     strarray_find(&str->striphtml, partid, 0) >= 0) {
                 /* Strip any HTML tags from plain text before indexing */
                 mycharset_flags &= ~(CHARSET_SKIPHTML|CHARSET_KEEPHTML);
+                /* Keep angle-bracketed URIs in text */
+                mycharset_flags |= CHARSET_KEEP_ANGLEURI;
                 mysubtype = "HTML";
             }
 

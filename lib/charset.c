@@ -140,6 +140,8 @@ enum html_state {
     HENDTAGOPEN,
     HTAGNAME,
     HSCTAG,
+    HSCTAGNAME,
+    HSCTAGURI,
     HTAGPARAMS,
     HCHARACTER,
     HCHARACTER2,
@@ -165,6 +167,7 @@ struct striphtml_state {
 #define HBEGIN          (1<<0)
 #define HEND            (1<<1)
     unsigned int ends;
+    int keep_angleuri;
     /* state stack */
     int depth;
     enum html_state stack[2];
@@ -1179,6 +1182,8 @@ static const char *html_state_as_string(enum html_state state)
     case HENDTAGOPEN: return "HENDTAGOPEN";
     case HTAGNAME: return "HTAGNAME";
     case HSCTAG: return "HSCTAG";
+    case HSCTAGNAME: return "HSCTAGNAME";
+    case HSCTAGURI: return "HSCTAGURI";
     case HTAGPARAMS: return "HTAGPARAMS";
     case HCHARACTER: return "HCHARACTER";
     case HCHARACTER2: return "HCHARACTER2";
@@ -1304,6 +1309,27 @@ static void html_saw_tag(struct convert_rock *rock)
     (((c) >= '0' && (c) <= '9'))
 #define html_isspace(c) \
     ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
+
+static int html_maybeuri(struct buf *buf)
+{
+    if (!buf_len(buf))
+        return 0;
+
+    // returns true for string "<scheme>:", see RFC 3986, section 3.1
+
+    const char *s = buf_base(buf);
+    size_t len = buf_len(buf);
+
+    if (s[len-1] == ':' && (html_isalpha(s[0]) || html_isdigit(s[0]))) {
+        for (char c = s[--len - 1]; len; c = s[--len]) {
+            if (!html_isalpha(c) && !html_isdigit(c) && !strchr("+-.", c))
+                return 0;
+        }
+        return 1;
+    }
+
+    return 0;
+}
 
 void striphtml2uni(struct convert_rock *rock, uint32_t c)
 {
@@ -1499,7 +1525,7 @@ restart:
             html_go(s, HTAGPARAMS);
         }
         else if (c == '/') {
-            html_go(s, HSCTAG);
+            html_go(s, HSCTAGNAME);
         }
         else if (c == '>') {
             html_pop(s);
@@ -1517,13 +1543,45 @@ restart:
         break;
 
     case HSCTAG:    /* 8.2.4.43 Self-closing start tag state */
+    case HSCTAGNAME:
         if (c == '>') {
             s->ends = HBEGIN|HEND;
             html_pop(s);
             html_saw_tag(rock);
         }
+        else if (html_top(s) == HSCTAGNAME && c == '/' && s->keep_angleuri) {
+            if (html_maybeuri(&s->name)) {
+                /* this could be an angle-bracketed URI */
+                html_go(s, HSCTAGURI);
+            }
+            else {
+                /* whatever, start stripping tag parameters */
+                html_go(s, HTAGPARAMS);
+            }
+        }
         else {
             /* whatever, keep stripping tag parameters */
+            html_go(s, HTAGPARAMS);
+        }
+        break;
+
+    case HSCTAGURI: /* handles "<scheme://" as URI, not as XML tag */
+        if (c == '>') {
+            s->ends = HBEGIN|HEND;
+            html_pop(s);
+            html_saw_tag(rock);
+        }
+        else if (!html_isspace(c)) {
+            convert_putc(rock->next, '<');
+            convert_catn(rock->next, buf_base(&s->name), buf_len(&s->name));
+            convert_putc(rock->next, '/');
+            convert_putc(rock->next, '/');
+            convert_putc(rock->next, c);
+            html_pop(s);
+            html_go(s, HDATA);
+        }
+        else {
+            /* whatever, start stripping tag parameters */
             html_go(s, HTAGPARAMS);
         }
         break;
@@ -1992,11 +2050,12 @@ static void buffer_setbuf(struct convert_rock *rock, struct buf *dst)
     rock->cleanup = dont_free;
 }
 
-struct convert_rock *striphtml_init(struct convert_rock *next)
+struct convert_rock *striphtml_init(int flags, struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct striphtml_state *s = xzmalloc(sizeof(struct striphtml_state));
     /* gnb:TODO: if a DOCTYPE is present, sniff it to detect XHTML rules */
+    s->keep_angleuri = flags & CHARSET_KEEP_ANGLEURI;
     html_push(s, HDATA);
     rock->state = (void *)s;
     rock->f = striphtml2uni;
@@ -3310,7 +3369,7 @@ EXPORTED int charset_extract(int (*cb)(const struct buf *, void *),
         /* this is text/html data, so we can make ourselves useful by
          * stripping html tags, css and js. */
         if (!(flags & CHARSET_KEEPHTML)) {
-            input = striphtml_init(input);
+            input = striphtml_init(flags, input);
         }
     }
 

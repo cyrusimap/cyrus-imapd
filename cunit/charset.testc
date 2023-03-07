@@ -1170,6 +1170,15 @@ static void test_extract(void)
     /* PLAIN: Generate snippet with escaped HTML */
     flags = CHARSET_KEEPCASE|CHARSET_ESCAPEHTML;
     TESTCASE("<b>Photo</b>", "us-ascii", ENCODING_NONE, "PLAIN", "&lt;b&gt;Photo&lt;/b&gt;");
+
+    /* HTML: strip HTML, including angle-bracketed URIs */
+    flags = CHARSET_KEEPCASE;
+    TESTCASE("<b>x<https://example.com/world>y</b>", "us-ascii", ENCODING_NONE, "HTML", "x y");
+
+    /* HTML: strip HTML, keep angle-bracketed URIs */
+    flags |= CHARSET_KEEP_ANGLEURI;
+    TESTCASE("<b>x<https://example.com/world>y</b>", "us-ascii", ENCODING_NONE, "HTML", "x<https://example.com/world>y");
+
 }
 #undef TESTCASE
 
