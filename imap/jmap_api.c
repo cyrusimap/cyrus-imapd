@@ -330,6 +330,7 @@ static int validate_request(struct transaction_t *txn, const json_t *req,
 HIDDEN int jmap_is_valid_id(const char *id)
 {
     if (!id || *id == '\0') return 0;
+    if (config_getswitch(IMAPOPT_JMAP_RELAXEDIDS)) return 1;
     const char *p;
     for (p = id; *p; p++) {
         if (('0' <= *p && *p <= '9'))
