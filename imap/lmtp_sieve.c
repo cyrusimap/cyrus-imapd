@@ -785,7 +785,22 @@ static int send_forward(sieve_redirect_context_t *rc,
 #endif
     }
     else {
-        smtp_envelope_add_rcpt(&sm_env, rc->addr);
+        struct address *addr = NULL;
+        char *rcpt = NULL;
+
+        parseaddr_list(rc->addr, &addr);
+        if (addr) {
+            rcpt = address_get_all(addr, 1);
+            parseaddr_free(addr);
+        }
+        if (rcpt) {
+            smtp_envelope_add_rcpt(&sm_env, rcpt);
+            free(rcpt);
+        }
+        else {
+            r = SIEVE_FAIL;
+            goto done;
+        }
     }
 
     if (srs_return_path) free(srs_return_path);
