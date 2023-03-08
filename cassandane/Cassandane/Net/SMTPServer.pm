@@ -74,7 +74,7 @@ sub rcpt_to {
     $Self->{_rcpt_to_count}++;
     if ($Self->{_rcpt_to_count} > 10) {
         $Self->send_client_resp(550, "5.5.3 Too many recipients");
-    } elsif ($To =~ /\@fail\.to\.deliver$/i) {
+    } elsif ($To =~ /[<>]/ || $To =~ /\@fail\.to\.deliver$/i) {
         $Self->send_client_resp(553, "5.1.1 Bad destination mailbox address");
         $Self->mylog("SMTP: 553 5.1.1");
     } else {
