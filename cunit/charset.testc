@@ -939,7 +939,7 @@ static void test_extract(void)
     /* HTML: quoted tag parameters */
     TESTCASE("<a href=\"foo.html\">leggings</a> <img src\"beer.jpg\">gastropub",
         "us-ascii", ENCODING_NONE, "HTML",
-        "LEGGINGS GASTROPUB");
+        "LEGGINGS <FOO.HTML> GASTROPUB");
 
     /* HTML: unquoted tag parameters */
     TESTCASE("<a href=foo.html>biodiesel</a> <img srcbeer.jpg>seitan",
@@ -1188,8 +1188,17 @@ static void test_extract(void)
     TESTCASE("<a href=\"url.html>x</a>", "us-ascii", ENCODING_NONE, "HTML", "X");
     // ">" in quoted attribute value is legit, but broken in our parser
     TESTCASE("<div><img alt=\"x>\" src=\"y\"/></div>", "us-ascii", ENCODING_NONE, "HTML", " \" SRC=\"Y\"/> ");
-    // "/" in quoted attribute value is legit, but broken in our parser
-    TESTCASE("<div><img alt=\"x/\" src=\"y\">X</div>", "us-ascii", ENCODING_NONE, "HTML", " X ");
+
+    /* HTML: extract URLs and alt text from href and img */
+    flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+    TESTCASE("<a href=\"https://foo/bar\"/>", "us-ascii", ENCODING_NONE, "HTML",
+        "<HTTPS://FOO/BAR>");
+    TESTCASE("<img src='cat.png', alt=\"A cat\"/>", "us-ascii", ENCODING_NONE, "HTML",
+        "<CAT.PNG> (A CAT)");
+    TESTCASE("<area href=\"https://foo/bar\"/>", "us-ascii", ENCODING_NONE, "HTML",
+        "<HTTPS://FOO/BAR>");
+    // "/" in quoted attribute value is legit
+    TESTCASE("<div><img alt=\"letterpress/\" src=\"polaroid.png\">stumptown</div>", "us-ascii", ENCODING_NONE, "HTML", " STUMPTOWN <POLAROID.PNG> (LETTERPRESS/) ");
 }
 #undef TESTCASE
 

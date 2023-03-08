@@ -49,6 +49,7 @@
 
 #include "assert.h"
 #include "charset.h"
+#include "dynarray.h"
 #include "xmalloc.h"
 #include "chartable.h"
 #include "hash.h"
@@ -159,15 +160,34 @@ enum html_state {
     HCOMM,
     HCOMMENDDASH,
     HCOMMEND,
-    HCOMMENDBANG
+    HCOMMENDBANG,
+    HBEFOREATTRNAME,
+    HATTRNAME,
+    HAFTERATTRNAME,
+    HBEFOREATTVAL,
+    HATTVAL
+};
+
+enum html_attr {
+    HATTR_HREF = 0,
+    HATTR_ALT,
+    HATTR_NONE
 };
 
 struct striphtml_state {
+    /* HTML tag state */
     struct buf name;
 #define HBEGIN          (1<<0)
 #define HEND            (1<<1)
     unsigned int ends;
     int keep_angleuri;
+    /* HTML attribute state */
+    struct {
+        struct buf name;
+        uint32_t quot;
+        enum html_attr typ;
+        dynarray_t vals[HATTR_NONE]; // of uint32_t
+    } attr;
     /* state stack */
     int depth;
     enum html_state stack[2];
@@ -1202,6 +1222,11 @@ static const char *html_state_as_string(enum html_state state)
     case HCOMMENDDASH: return "HCOMMENDDASH";
     case HCOMMEND: return "HCOMMEND";
     case HCOMMENDBANG: return "HCOMMENDBANG";
+    case HBEFOREATTRNAME: return "HBEFOREATTRNAME";
+    case HATTRNAME: return "HATTRNAME";
+    case HAFTERATTRNAME: return "HAFTERATTRNAME";
+    case HBEFOREATTVAL: return "HBEFOREATTVAL";
+    case HATTVAL: return "HATTVAL";
     }
     return "wtf?";
 }
@@ -1243,7 +1268,7 @@ static int is_phrasing(char *tag)
         "mark", "dfn", "abbr", "time", "progress",
         "meter", "code", "var", "samp", "kbd",
         "sub", "sup", "span", "i", "b", "bdo",
-        "ruby", "ins", "del"
+        "ruby", "ins", "del", "img", "area"
     };
     static struct hash_table hash = HASH_TABLE_INITIALIZER;
 
@@ -1255,6 +1280,72 @@ static int is_phrasing(char *tag)
     }
 
     return (hash_lookup(lcase(tag), &hash) == (void *)1);
+}
+
+static void html_attr_init(struct striphtml_state *s)
+{
+    s->attr.typ = HATTR_NONE;
+    s->attr.quot = 0;
+
+    for (size_t i = 0; i < (size_t) HATTR_NONE; i++) {
+        dynarray_init(&s->attr.vals[i], sizeof(uint32_t));
+    }
+}
+
+static void html_attr_start(struct striphtml_state *s)
+{
+    const char *tag = buf_cstring(&s->name);
+    const char *attr = buf_cstring(&s->attr.name);
+
+    s->attr.typ = HATTR_NONE;
+
+    if (!strcasecmp(tag, "a") || !strcasecmp(tag, "area")) {
+        if (!strcasecmp(attr, "href")) {
+            s->attr.typ = HATTR_HREF;
+        }
+    }
+    else if (!strcasecmp(tag, "img")) {
+        if (!strcasecmp(attr, "src")) {
+            s->attr.typ = HATTR_HREF;
+        }
+        else if (!strcasecmp(attr, "alt")) {
+            s->attr.typ = HATTR_ALT;
+        }
+    }
+}
+
+static void html_attr_putc(struct striphtml_state *s, uint32_t c)
+{
+    if (s->attr.typ != HATTR_NONE) {
+        dynarray_append(&s->attr.vals[s->attr.typ], &c);
+    }
+}
+
+static int html_attr_have(struct striphtml_state *s, enum html_attr typ)
+{
+    return typ != HATTR_NONE && dynarray_size(&s->attr.vals[typ]);
+}
+
+static void html_attr_cat(struct striphtml_state *s,
+                           struct convert_rock *next,
+                           enum html_attr typ)
+{
+    if (typ != HATTR_NONE) {
+        dynarray_t *val = &s->attr.vals[typ];
+        for (int i = 0; i < dynarray_size(val); i++) {
+            convert_putc(next, *((uint32_t*)dynarray_nth(val, i)));
+        }
+    }
+}
+
+static void html_attr_stop(struct striphtml_state *s, int valid)
+{
+    s->attr.quot = 0;
+    if (!valid && s->attr.typ != HATTR_NONE) {
+        dynarray_truncate(&s->attr.vals[s->attr.typ], 0);
+    }
+    s->attr.typ = HATTR_NONE;
+    buf_reset(&s->attr.name);
 }
 
 static void html_saw_tag(struct convert_rock *rock)
@@ -1288,8 +1379,28 @@ static void html_saw_tag(struct convert_rock *rock)
             html_go(s, HDATA);
         /* BEGIN,END pair is doesn't affect state */
     }
-    else if (!is_phrasing(tag)) {
-        convert_putc(rock->next, ' ');
+    else {
+        if (s->ends & HEND) {
+            if (html_attr_have(s, HATTR_HREF)) {
+                if (s->ends == HEND)
+                    convert_putc(rock->next, ' ');
+
+                convert_putc(rock->next, '<');
+                html_attr_cat(s, rock->next, HATTR_HREF);
+                convert_putc(rock->next, '>');
+
+                if (html_attr_have(s, HATTR_ALT)) {
+                    convert_putc(rock->next, ' ');
+                    convert_putc(rock->next, '(');
+                    html_attr_cat(s, rock->next, HATTR_ALT);
+                    convert_putc(rock->next, ')');
+                }
+            }
+        }
+
+        if (!is_phrasing(tag)) {
+            convert_putc(rock->next, ' ');
+        }
     }
     /* otherwise, no change */
 }
@@ -1522,7 +1633,7 @@ restart:
     case HTAGNAME:  /* 8.2.4.10 Tag name state */
         /* gnb:TODO handle > embedded in "param" */
         if (html_isspace(c)) {
-            html_go(s, HTAGPARAMS);
+            html_go(s, HBEFOREATTRNAME);
         }
         else if (c == '/') {
             html_go(s, HSCTAGNAME);
@@ -1593,6 +1704,117 @@ restart:
         }
         else if (c == '/') {
             html_go(s, HSCTAG);
+        }
+        else if (html_isspace(c)) {
+            html_go(s, HBEFOREATTRNAME);
+        }
+        break;
+
+    case HBEFOREATTRNAME:    /* 13.2.5.32 Before attribute name state */
+        if (html_isalpha(c)) {
+            buf_putc(&s->attr.name, c);
+            html_go(s, HATTRNAME);
+        }
+        else if (html_isspace(c)) {
+            // stay put
+        }
+        else {
+            html_attr_stop(s, 0);
+
+            if (c == '>') {
+                html_pop(s);
+                html_saw_tag(rock);
+            }
+            else if (c == '/') {
+                html_go(s, HSCTAG);
+            }
+            else {
+                html_go(s, HTAGPARAMS);
+            }
+        }
+        break;
+
+    case HATTRNAME:        /* 13.2.5.33 Attribute name state */
+        if (html_isspace(c)) {
+            html_go(s, HAFTERATTRNAME);
+        }
+        else if (c == '=') {
+            html_go(s, HBEFOREATTVAL);
+        }
+        else if (html_isalpha(c)) {
+            buf_putc(&s->attr.name, c);
+        }
+        else {
+            html_attr_stop(s, 0);
+
+            if (c == '>') {
+                html_pop(s);
+                html_saw_tag(rock);
+            }
+            else if (c == '/') {
+                html_go(s, HSCTAG);
+            }
+            else html_go(s, HTAGPARAMS);
+        }
+        break;
+
+    case HAFTERATTRNAME:    /* 13.2.5.34 After attribute name state */
+        if (html_isspace(c)) {
+            // stay put
+        }
+        else if (c == '=') {
+            html_go(s, HBEFOREATTVAL);
+        }
+        else {
+            html_attr_stop(s, 0);
+
+            if (c == '>') {
+                html_pop(s);
+                html_saw_tag(rock);
+            }
+            else if (c == '/') {
+                html_go(s, HSCTAG);
+            }
+            else html_go(s, HTAGPARAMS);
+        }
+        break;
+
+    case HBEFOREATTVAL:   /* 13.2.5.35 Before attribute value state */
+        if (c == '"' || c == '\'') {
+            s->attr.quot = c;
+            html_attr_start(s);
+            html_go(s, HATTVAL);
+        }
+        else {
+            // unquoted attribute values are unsupported
+            html_attr_stop(s, 0);
+
+            if (c == '>') {
+                html_pop(s);
+                html_saw_tag(rock);
+            }
+            else if (c == '/') {
+                html_go(s, HSCTAG);
+            }
+            else html_go(s, HTAGPARAMS);
+        }
+        break;
+
+    case HATTVAL:      /* 13.2.5.{36,37} Attribute value quoted state */
+        if (c == s->attr.quot) {
+            // end of attribute value
+            html_attr_stop(s, 1);
+            html_go(s, HTAGPARAMS);
+        }
+        else if (c == '>') {
+            // regression: treat '>' as end of tag
+            html_attr_stop(s, 0);
+            html_pop(s);
+            html_saw_tag(rock);
+        }
+        else {
+            // attribute value
+            html_attr_putc(s, c);
         }
         break;
 
@@ -1876,10 +2098,20 @@ static void striphtml_cleanup(struct convert_rock *rock, int is_free)
 {
     if (rock && rock->state) {
         struct striphtml_state *s = (struct striphtml_state *)rock->state;
-        if (is_free)
+        if (is_free) {
             buf_free(&s->name);
-        else
+            buf_free(&s->attr.name);
+            for (size_t i = 0; i < (size_t) HATTR_NONE; i++) {
+                dynarray_fini(&s->attr.vals[i]);
+            }
+        }
+        else {
             buf_reset(&s->name);
+            buf_reset(&s->attr.name);
+            for (size_t i = 0; i < (size_t) HATTR_NONE; i++) {
+                dynarray_truncate(&s->attr.vals[i], 0);
+            }
+        }
     }
     if (is_free) basic_free(rock);
 }
@@ -2056,6 +2288,7 @@ struct convert_rock *striphtml_init(int flags, struct convert_rock *next)
     struct striphtml_state *s = xzmalloc(sizeof(struct striphtml_state));
     /* gnb:TODO: if a DOCTYPE is present, sniff it to detect XHTML rules */
     s->keep_angleuri = flags & CHARSET_KEEP_ANGLEURI;
+    html_attr_init(s);
     html_push(s, HDATA);
     rock->state = (void *)s;
     rock->f = striphtml2uni;
