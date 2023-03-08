@@ -6895,4 +6895,31 @@ EOF
     $self->check_messages({ 1 => $msg }, check_guid => 0);
 }
 
+sub test_redirect_address_with_phrase
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog $self, "Install a script";
+    $self->{instance}->install_sieve_script(<<EOF
+redirect "Foo <foo\@example.com>";
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    # Verify that message was redirected (no RCPT TO error)
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_does_not_match(qr/RCPT TO: code=553 text=5.1.1/, "@lines");
+    }
+
+    xlog $self, "Make sure that message is NOT in INBOX (due to runtime error)";
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+}
+
 1;
