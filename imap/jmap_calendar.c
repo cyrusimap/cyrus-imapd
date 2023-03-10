@@ -5224,6 +5224,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
     jmapctx->to_ical.serverset = update->serverset;
     jmapctx->timezones.no_guess = 1;
     jmapctx->timezones.ignore_orphans = 1;
+    jmapctx->from_ical.want_icalprops = 1;
     context_begin_cdata(jmapctx, update->mbentry, update->cdata);
     old_event = jmapical_tojmap(myoldical, NULL, jmapctx);
     if (!old_event) {

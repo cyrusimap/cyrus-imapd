@@ -1224,7 +1224,7 @@ imap_lmtpd_SOURCES += imap/caldav_util.c imap/itip_support.c
 if JMAP
 imap_lmtpd_SOURCES += \
 	imap/jmap_util.c imap/jmap_mail_query.c imap/jmap_mail_query_parse.c \
-	imap/dav_util.c imap/jmap_notif.c imap/jmap_ical.c
+	imap/dav_util.c imap/jmap_notif.c imap/jmap_ical.c imap/jcal.c imap/xcal.c
 endif # JMAP
 
 endif # HTTPD

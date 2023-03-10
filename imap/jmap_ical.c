@@ -71,6 +71,7 @@
 #include "http_proxy.h"
 #include "ical_support.h"
 #include "icu_wrap.h"
+#include "jcal.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -1627,6 +1628,57 @@ static int identity_int(int i) {
 
 static json_t* relatedto_from_ical(icalcomponent*);
 
+static int is_reserved_jicalprop(icalcomponent_kind kind, const char *name)
+{
+    // all IANA property names are reserved
+    if (strncasecmpsafe(name, "X-", 2))
+        return 1;
+
+    // all JMAP extension property names are reserved
+    if (!strncasecmpsafe(name, "X-JMAP", 6))
+        return 1;
+
+    // we used this for useDefaultAlerts on VEVENTs
+    if (kind == ICAL_VEVENT_COMPONENT &&
+            !strcasecmpsafe(name, "X-APPLE-DEFAULT-ALARM"))
+        return 1;
+
+    // this is converted as a Location object
+    if (kind == ICAL_VEVENT_COMPONENT &&
+            !strcasecmpsafe(name, "X-APPLE-STRUCTURED-LOCATION"))
+        return 1;
+
+    // this is libical-internal
+    if (!strcasecmpsafe(name, "X-LIC-LOCATION"))
+        return 1;
+
+    return 0;
+}
+
+static json_t *jicalprops_from_ical(icalcomponent *comp)
+{
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    json_t *jiprops = json_array();
+
+    json_t *jcal = icalcomponent_as_jcal_array(comp);
+    size_t i;
+    json_t *jprop;
+    json_array_foreach(json_array_get(jcal, 1), i, jprop) {
+        const char *name = json_string_value(json_array_get(jprop, 0));
+        if (name && !is_reserved_jicalprop(kind, name)) {
+            json_array_append(jiprops, jprop);
+        }
+    }
+    json_decref(jcal);
+
+    if (!json_array_size(jiprops)) {
+        json_decref(jiprops);
+        jiprops = NULL;
+    }
+
+    return jiprops;
+}
+
 /* Convert at most nmemb entries in the ical recurrence byDay/Month/etc array
  * named byX using conv. Return a new JSON array, sorted in ascending order. */
 static json_t* recurrence_byX_fromical(short byX[], size_t nmemb, int (*conv)(int)) {
@@ -2869,7 +2921,7 @@ HIDDEN json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *idbuf
  * Adds any ATTACH properties found in VALARM components to the
  * event 'links' property. */
 static json_t*
-alerts_from_ical(icalcomponent *comp)
+alerts_from_ical(icalcomponent *comp, struct jmapical_ctx *jmapctx)
 {
     json_t* alerts = json_object();
     icalcomponent* alarm;
@@ -2880,7 +2932,16 @@ alerts_from_ical(icalcomponent *comp)
          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
 
         json_t *alert = jmapical_alert_from_ical(alarm, &idbuf);
-        if (alert) json_object_set_new(alerts, buf_cstring(&idbuf), alert);
+        if (alert) {
+            /* internal only: iCalProps -- convert x-properties */
+            if (jmapctx && jmapctx->from_ical.want_icalprops) {
+                json_t *jiprops = jicalprops_from_ical(alarm);
+                if (JNOTNULL(jiprops)) {
+                    json_object_set_new(alert, JMAPICAL_JSPROP_ICALPROPS, jiprops);
+                }
+            }
+            json_object_set_new(alerts, buf_cstring(&idbuf), alert);
+        }
     }
 
     if (!json_object_size(alerts)) {
@@ -3902,7 +3963,7 @@ calendarevent_from_ical(icalcomponent *comp,
 
     /* alerts */
     if (jmap_wantprop(props, "alerts")) {
-        json_object_set_new(event, "alerts", alerts_from_ical(comp));
+        json_object_set_new(event, "alerts", alerts_from_ical(comp, jmapctx));
     }
 
     /* mayInviteSelf */
@@ -3931,6 +3992,14 @@ calendarevent_from_ical(icalcomponent *comp,
         const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_SENTBY);
         if (v && *v)
             json_object_set_new(event, "sentBy", json_string(v));
+    }
+
+    /* internal only: iCalProps -- convert x-properties */
+    if (jmapctx && jmapctx->from_ical.want_icalprops) {
+        json_t *jiprops = jicalprops_from_ical(comp);
+        if (JNOTNULL(jiprops)) {
+            json_object_set_new(event, JMAPICAL_JSPROP_ICALPROPS, jiprops);
+        }
     }
 
     if (!is_override) {
@@ -4140,6 +4209,42 @@ static int validate_type(struct jmap_parser *parser, json_t *jobj, const char *w
 }
 
 static void relatedto_to_ical(icalcomponent *, struct jmap_parser *, json_t *);
+
+static void jicalprops_to_ical(icalcomponent *comp,
+                               struct jmap_parser *parser,
+                               json_t *jicalprops)
+{
+    if (JNULL(jicalprops))
+        return;
+
+    jmap_parser_push(parser, JMAPICAL_JSPROP_ICALPROPS);
+
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    json_t *jcal = json_pack("[s,O,[]]", "xroot", jicalprops);
+    icalcomponent *mycomp = jcal_array_as_icalcomponent(jcal);
+
+    if (mycomp) {
+        icalproperty *prop, *nextprop;
+        for (prop = icalcomponent_get_first_property(mycomp, ICAL_ANY_PROPERTY);
+                prop; prop = nextprop) {
+
+            nextprop = icalcomponent_get_next_property(mycomp, ICAL_ANY_PROPERTY);
+
+            const char *name = icalproperty_get_property_name(prop);
+            if (!is_reserved_jicalprop(kind, name)) {
+                icalcomponent_remove_property(mycomp, prop);
+                icalcomponent_add_property(comp, prop);
+            }
+        }
+        icalcomponent_free(mycomp);
+    }
+    else {
+        jmap_parser_invalid(parser, NULL);
+    }
+
+    json_decref(jcal);
+    jmap_parser_pop(parser);
+}
 
 /* Remove and deallocate any properties of kind in comp. */
 static void remove_icalprop(icalcomponent *comp, icalproperty_kind kind)
@@ -5739,6 +5844,12 @@ HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
     if (invalid_prop_count < json_array_size(parser->invalid)) {
         icalcomponent_free(alarm);
         alarm = NULL;
+    }
+
+    /* internal only: iCalProps -- convert x-properties */
+    json_t *jprop = json_object_get(alert, JMAPICAL_JSPROP_ICALPROPS);
+    if (json_array_size(jprop)) {
+        jicalprops_to_ical(alarm, parser, jprop);
     }
 
     return alarm;
@@ -7691,6 +7802,12 @@ static void calendarevent_to_ical(icalcomponent *comp,
     }
     else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "sentBy");
+    }
+
+    /* internal only: iCalProps -- convert x-properties */
+    jprop = json_object_get(event, JMAPICAL_JSPROP_ICALPROPS);
+    if (json_array_size(jprop)) {
+        jicalprops_to_ical(comp, parser, jprop);
     }
 
     /* recurrenceOverrides - must be last to apply patches */
