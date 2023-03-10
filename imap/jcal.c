@@ -372,7 +372,7 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
 /*
  * Construct a JSON array for an iCalendar component.
  */
-static json_t *icalcomponent_as_json_array(icalcomponent *comp)
+EXPORTED json_t *icalcomponent_as_jcal_array(icalcomponent *comp)
 {
     icalcomponent *c;
     icalproperty *p;
@@ -423,7 +423,7 @@ static json_t *icalcomponent_as_json_array(icalcomponent *comp)
          c;
          c = icalcomponent_get_next_component(comp, ICAL_ANY_COMPONENT)) {
 
-        json_array_append_new(jsubs, icalcomponent_as_json_array(c));
+        json_array_append_new(jsubs, icalcomponent_as_jcal_array(c));
     }
     json_array_append_new(jcomp, jsubs);
 
@@ -443,7 +443,7 @@ struct buf *icalcomponent_as_jcal_string(icalcomponent *ical)
 
     if (!ical) return NULL;
 
-    jcal = icalcomponent_as_json_array(ical);
+    jcal = icalcomponent_as_jcal_array(ical);
 
     flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
     buf = json_dumps(jcal, flags);
@@ -763,7 +763,7 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
 /*
  * Construct an iCalendar component from a JSON object.
  */
-static icalcomponent *json_object_to_icalcomponent(json_t *jobj)
+EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
 {
     json_t *jtype, *jprops, *jsubs;
     const char *type;
@@ -815,7 +815,7 @@ static icalcomponent *json_object_to_icalcomponent(json_t *jobj)
     /* Add sub-components */
     for (i = 0; i < json_array_size(jsubs); i++) {
         icalcomponent *sub =
-            json_object_to_icalcomponent(json_array_get(jsubs, i));
+            jcal_array_as_icalcomponent(json_array_get(jsubs, i));
 
         if (!sub) goto error;
 
@@ -848,7 +848,7 @@ EXPORTED icalcomponent *jcal_string_as_icalcomponent(const struct buf *buf)
         return NULL;
     }
 
-    ical = json_object_to_icalcomponent(jcal);
+    ical = jcal_array_as_icalcomponent(jcal);
 
     json_decref(jcal);
 
