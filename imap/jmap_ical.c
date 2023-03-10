@@ -5175,9 +5175,7 @@ participant_to_ical(icalcomponent *comp,
         }
     }
     if (json_object_size((links))) {
-        jmap_parser_push(parser, "links");
         links_to_ical(comp, NULL, parser, links, "participants", partid, jmapctx);
-        jmap_parser_pop(parser);
     }
 
     /* scheduleSequence */
@@ -6380,9 +6378,7 @@ location_to_ical(icalcomponent *comp, struct jmap_parser *parser,
     /* links */
     json_t *links = json_object_get(loc, "links");
     if (JNOTNULL(links)) {
-        jmap_parser_push(parser, "links");
         links_to_ical(comp, NULL, parser, links, parentprop, id, jmapctx);
-        jmap_parser_pop(parser);
     }
 
     icalcomponent_add_property(comp, prop);
