@@ -1055,6 +1055,14 @@ static int _fetch_setseen(struct index_state *state,
     if (!(state->myrights & ACL_SETSEEN))
         return 0;
 
+    if (im->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+        /* Expunged messages don't count towards numunseen
+           and there is no reason to do any additional disk I/O.
+           Simply tell the client that we set the flag and return. */
+        im->isseen = 1;
+        return 0;
+    }
+
     r = index_reload_record(state, msgno, &record);
     if (r) return r;
 
