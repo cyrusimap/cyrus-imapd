@@ -49,7 +49,7 @@
 
 #include <libxml/tree.h>
 
-#include "httpd.h"
+#include "global.h"
 #include "ical_support.h"
 #include "tok.h"
 #include "util.h"

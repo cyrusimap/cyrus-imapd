@@ -47,7 +47,7 @@
 #include <stddef.h> /* for offsetof() macro */
 #include <syslog.h>
 
-#include "httpd.h"
+#include "global.h"
 #include "ical_support.h"
 #include "json_support.h"
 #include "jcal.h"
