@@ -1222,6 +1222,7 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
     while ((msg = mailbox_iter_step(iter))) {
         /* XXX  Look for existing resource with same UID */
         const struct index_record *record = msg_record(msg);
+        const message_t *nextmsg;
 
         if (!(rrock->jrestore->mode & DRY_RUN)) {
             r = recreate_resource((message_t *) msg, newmailbox,
@@ -1230,9 +1231,9 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
         if (!r) rrock->jrestore->num_undone[DESTROYS]++;
 
         if (record->uid < mailbox->i.last_uid &&
-            record->recno % BATCH_SIZE == 0) {
+            record->recno % BATCH_SIZE == 0 &&
+            (nextmsg = mailbox_iter_step(iter))) {
             /* Close and re-open mailbox (to avoid deadlocks) */
-            const message_t *nextmsg = mailbox_iter_step(iter);
             uint32_t nextuid;
 
             message_get_uid((message_t *) nextmsg, &nextuid);
