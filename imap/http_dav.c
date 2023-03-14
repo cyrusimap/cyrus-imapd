@@ -1858,6 +1858,26 @@ int proppatch_principalname(xmlNodePtr prop, unsigned set,
     return 0;
 }
 
+HIDDEN void dav_get_principalname(const char *userid, struct buf *buf)
+{
+    /* XXX  Do LDAP/SQL lookup here */
+    buf_reset(buf);
+
+    if (userid) {
+        const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+        char *mailboxname = caldav_mboxname(userid, NULL);
+        int r = annotatemore_lookupmask(mailboxname, annotname, userid, buf);
+
+        free(mailboxname);
+        if (r || !buf_len(buf)) {
+            buf_setcstr(buf, userid);
+        }
+    }
+    else {
+        buf_setcstr(buf, "no userid");
+    }
+}
+
 /* Callback to fetch DAV:displayname for principals */
 static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
                                   struct propfind_ctx *fctx,
@@ -1866,22 +1886,7 @@ static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
                                   struct propstat propstat[],
                                   void *rock __attribute__((unused)))
 {
-    /* XXX  Do LDAP/SQL lookup here */
-    buf_reset(&fctx->buf);
-
-    if (fctx->req_tgt->userid) {
-        const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-        char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
-        int r = annotatemore_lookupmask(mailboxname, annotname,
-                                        fctx->req_tgt->userid, &fctx->buf);
-        free(mailboxname);
-        if (r || !buf_len(&fctx->buf)) {
-            buf_printf(&fctx->buf, "%s", fctx->req_tgt->userid);
-        }
-    }
-    else {
-        buf_printf(&fctx->buf, "no userid");
-    }
+    dav_get_principalname(fctx->req_tgt->userid, &fctx->buf);
 
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
