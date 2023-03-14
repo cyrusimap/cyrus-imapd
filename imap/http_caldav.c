@@ -3674,6 +3674,26 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
     return 0;
 }
 
+struct override_rock {
+    icalcomponent *ical;
+    uint64_t start;
+    unsigned *stripped;
+};
+
+static void strip_past_override(uint64_t recurid, void *data, void *rock)
+{
+    struct override_rock *orock = (struct override_rock *) rock;
+
+    if (recurid < orock->start) {
+        icalcomponent *comp = (icalcomponent *) data;
+
+        icalcomponent_remove_component(orock->ical, comp);
+        icalcomponent_free(comp);
+
+        (*orock->stripped)++;
+    }
+}
+
 /* Perform a PUT request
  *
  * preconditions:
@@ -3697,9 +3717,13 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent *oldical = NULL;
     icalcomponent *myical = NULL;
     icalcomponent *myoldical = NULL;
-    icalcomponent *comp, *nextcomp;
+    icalcomponent *comp;
     icalcomponent_kind kind;
-    icalproperty *prop, *rrule = NULL;
+    icalproperty *prop;
+    struct icalrecurrencetype rt = ICALRECURRENCETYPE_INITIALIZER;
+    icaltimetype dtstart, recurid;
+    hashu64_table overrides = HASHU64_TABLE_INITIALIZER;
+    unsigned stripped_overrides = 0;
     const char *uid, *organizer = NULL;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
@@ -3730,11 +3754,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
+    construct_hashu64_table(&overrides, 256, 0);
+
     comp = icalcomponent_get_first_real_component(ical);
-    if (rscale_calendars) {
-        /* Grab RRULE to check RSCALE */
-        rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    }
 
     /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     kind = icalcomponent_isa(comp);
@@ -3745,22 +3767,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         ret = HTTP_FORBIDDEN;
         goto done;
     }
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (prop) {
-        organizer = icalproperty_get_organizer(prop);
-        if (organizer) {
-            if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
-            if (!*organizer) organizer = NULL;
-        }
-    }
 
-    /* Make sure DTEND/DURATION are sane */
-    ret = validate_dtend_duration(comp, &txn->error);
-    if (ret) goto done;
-
-    while ((nextcomp =
-            icalcomponent_get_next_component(ical, kind))) {
-        const char *nextuid = icalcomponent_get_uid(nextcomp);
+    for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        const char *nextuid = icalcomponent_get_uid(comp);
+        const char *nextorg = NULL;
 
         if (!nextuid || strcmp(uid, nextuid)) {
             txn->error.desc = "Mismatched UIDs";
@@ -3769,10 +3779,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             goto done;
         }
 
-        const char *nextorg = NULL;
-
-        prop = icalcomponent_get_first_property(nextcomp,
-                                                ICAL_ORGANIZER_PROPERTY);
+        prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         if (prop) {
             nextorg = icalproperty_get_organizer(prop);
             if (nextorg) {
@@ -3789,22 +3796,39 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         }
 
         /* Make sure DTEND/DURATION are sane */
-        ret = validate_dtend_duration(nextcomp, &txn->error);
+        ret = validate_dtend_duration(comp, &txn->error);
         if (ret) goto done;
 
-        if (rscale_calendars && !rrule) {
-            /* Grab RRULE to check RSCALE */
-            rrule = icalcomponent_get_first_property(nextcomp,
-                                                     ICAL_RRULE_PROPERTY);
+        /* Grab RRULE to check RSCALE and overrides */
+        prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+        if (prop) {
+            rt = icalproperty_get_rrule(prop);
+            dtstart = icalcomponent_get_dtstart(comp);
+        }
+        else if ((prop =
+                  icalcomponent_get_first_property(comp,
+                                                   ICAL_RECURRENCEID_PROPERTY))) {
+            recurid = icalproperty_get_datetime_with_component(prop, comp);
+            hashu64_insert(icaltime_as_timet_with_zone(recurid, recurid.zone),
+                           comp, &overrides);
         }
     }
 
-#ifdef HAVE_RSCALE
-    /* Make sure we support the provided RSCALE in an RRULE */
-    if (rrule && rscale_calendars) {
-        struct icalrecurrencetype rt = icalproperty_get_rrule(rrule);
+    if (rt.freq != ICAL_NO_RECURRENCE) {
+        /* Strip overrides that occur before start of RRULE */
+        /* XXX  This is a bugfix for Fantastical when splitting a
+           recurring event with existing overrides prior to the split */
+        struct override_rock orock = {
+            ical,
+            icaltime_as_timet_with_zone(dtstart, dtstart.zone),
+            &stripped_overrides
+        };
 
-        if (rt.rscale && *rt.rscale) {
+        hashu64_enumerate(&overrides, &strip_past_override, &orock);
+
+#ifdef HAVE_RSCALE
+        /* Make sure we support the provided RSCALE in an RRULE */
+        if (rscale_calendars && rt.rscale && *rt.rscale) {
             /* Perform binary search on sorted icalarray */
             unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
 
@@ -3825,8 +3849,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 goto done;
             }
         }
-    }
 #endif /* HAVE_RSCALE */
+    }
 
     /* Check for changed UID */
     caldav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
@@ -4021,6 +4045,13 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                                     cdata->dav.createdmodseq,
                                     db, flags, httpd_userid, NULL, NULL,
                                     &schedule_addresses);
+
+        if (stripped_overrides && !(flags & PREFER_REP)) {
+            /* iCal data has been rewritten - don't return validators */
+            txn->resp_body.lastmod = 0;
+            txn->resp_body.etag = NULL;
+        }
+
 #ifdef WITH_JMAP
         if (kind == ICAL_VEVENT_COMPONENT &&
             calendar_has_sharees(mailbox->mbentry)) {
@@ -4046,6 +4077,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     if (oldical) icalcomponent_free(oldical);
     if (myical) icalcomponent_free(myical);
     strarray_fini(&schedule_addresses);
+    free_hashu64_table(&overrides, NULL);
     free(sched_userid);
     buf_free(&buf);
 
