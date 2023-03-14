@@ -58,6 +58,7 @@ sub new
         config => $config,
         deliver => 1,
         start_instances => 0,
+        adminstore => 1,
     }, @_);
 }
 
@@ -466,6 +467,31 @@ sub test_add_annot_splitconv_rerun
     $exp{C}->set_annotation($entry, $attrib, $value1);
 
     $self->check_messages(\%exp, keyed_on => 'uid', check_guid => 0);
+}
+
+sub test_log_missing_acl
+{
+    my ($self) = @_;
+
+    $self->start_my_instances();
+
+    my $imap = $self->{store}->get_client();
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "share mailbox but sharee does not get 'w' right";
+
+    $self->{instance}->create_user("other");
+    $admin->setacl("user.other", "cassandane", "lrsitne") or die;
+
+    xlog $self, "sharee creates message, expect error log for the missing ACL";
+
+    $self->{instance}->getsyslog();
+    $self->{store}->set_folder('Other Users.other');
+    my $flag = '$Artisanal';
+    $self->make_message("Email", body => "set_flag $flag\r\n",
+        store => $self->{store}) or die;
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert(grep /could not write flag due missing ACL/, @lines);
 }
 
 1;

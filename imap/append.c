@@ -811,6 +811,8 @@ static int append_apply_flags(struct appendstate *as,
 
     for (i = 0; i < flags->count; i++) {
         const char *flag = strarray_nth(flags, i);
+        long need_rights = 0; // keep track of required ACLs
+
         if (!strcasecmp(flag, "\\seen")) {
             r = append_setseen(as, msgrec);
             if (r) goto out;
@@ -818,46 +820,55 @@ static int append_apply_flags(struct appendstate *as,
         }
         else if (!strcasecmp(flag, "\\expunged")) {
             /* NOTE - this is a fake internal name */
-            if (as->myrights & ACL_DELETEMSG) {
+            if (as->myrights & (need_rights = ACL_DELETEMSG)) {
                 internal_flags |= FLAG_INTERNAL_EXPUNGED;
             }
         }
         else if (!strcasecmp(flag, "\\snoozed")) {
             /* NOTE - this is a fake internal name */
-            if (as->myrights & ACL_WRITE) {
+            if (as->myrights & (need_rights = ACL_WRITE)) {
                 internal_flags |= FLAG_INTERNAL_SNOOZED;
             }
         }
         else if (!strcasecmp(flag, "\\deleted")) {
-            if (as->myrights & ACL_DELETEMSG) {
+            if (as->myrights & (need_rights = ACL_DELETEMSG)) {
                 system_flags |= FLAG_DELETED;
                 mboxevent_add_flag(mboxevent, flag);
             }
         }
         else if (!strcasecmp(flag, "\\draft")) {
-            if (as->myrights & ACL_WRITE) {
+            if (as->myrights & (need_rights = ACL_WRITE)) {
                 system_flags |= FLAG_DRAFT;
                 mboxevent_add_flag(mboxevent, flag);
             }
         }
         else if (!strcasecmp(flag, "\\flagged")) {
-            if (as->myrights & ACL_WRITE) {
+            if (as->myrights & (need_rights = ACL_WRITE)) {
                 system_flags |= FLAG_FLAGGED;
                 mboxevent_add_flag(mboxevent, flag);
             }
         }
         else if (!strcasecmp(flag, "\\answered")) {
-            if (as->myrights & ACL_WRITE) {
+            if (as->myrights & (need_rights = ACL_WRITE)) {
                 system_flags |= FLAG_ANSWERED;
                 mboxevent_add_flag(mboxevent, flag);
             }
         }
-        else if (as->myrights & ACL_WRITE) {
+        else if (as->myrights & (need_rights = ACL_WRITE)) {
             r = mailbox_user_flag(as->mailbox, flag, &userflag, 1);
             if (r) goto out;
             r = msgrecord_set_userflag(msgrec, userflag, 1);
             if (r) goto out;
             mboxevent_add_flag(mboxevent, flag);
+        }
+
+        if (!(as->myrights & need_rights)) {
+            // One or more ACLs were missing to set the flag
+            char aclstr[ACL_STRING_MAX];
+            cyrus_acl_masktostr(need_rights, aclstr);
+            xsyslog(LOG_ERR, "could not write flag due missing ACL",
+                    "flag=<%s> need_rights=<%s> mailboxid=<%s>",
+                    flag, aclstr, mailbox_uniqueid(as->mailbox));
         }
     }
 
