@@ -85,6 +85,7 @@
 #include "message.h"
 #include "util.h"
 #include "itip_support.h"
+#include "attachextract.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -921,7 +922,7 @@ static void shut_down(int code)
 
     cyrus_done();
 
-    index_text_extractor_destroy();
+    attachextract_destroy();
 
     exit(code);
 }
@@ -1207,7 +1208,7 @@ int main(int argc, char **argv)
         signals_add_handlers(0);
     }
 
-    index_text_extractor_init(NULL);
+    attachextract_init(NULL);
 
     const char *conf;
     conf = config_getstring(IMAPOPT_SEARCH_INDEX_SKIP_DOMAINS);
