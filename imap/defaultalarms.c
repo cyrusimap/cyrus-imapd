@@ -186,20 +186,30 @@ static void set_alarms_dl(struct dlist *root, const char *name,
     struct dlist *dl = dlist_newkvlist(root, name);
 
     if (alarms) {
-        icalcomponent *myalarms = alarms;
+        icalcomponent *myalarms = icalcomponent_new(ICAL_XROOT_COMPONENT);
         if (icalcomponent_isa(alarms) == ICAL_VALARM_COMPONENT) {
-            myalarms = icalcomponent_new(ICAL_XROOT_COMPONENT);
             icalcomponent_add_component(myalarms,
                     icalcomponent_clone(alarms));
+        }
+        else {
+            icalcomponent *valarm;
+            for (valarm = icalcomponent_get_first_component(alarms,
+                        ICAL_VALARM_COMPONENT);
+                 valarm;
+                 valarm = icalcomponent_get_next_component(alarms,
+                        ICAL_VALARM_COMPONENT)) {
+                icalcomponent_add_component(myalarms,
+                        icalcomponent_clone(valarm));
+            }
         }
 
         if (icalcomponent_get_first_component(myalarms, ICAL_VALARM_COMPONENT)) {
             buf_setcstr(buf, icalcomponent_as_ical_string(myalarms));
+            icalcomponent_normalize_x(myalarms);
             message_guid_generate(&guid, buf_base(buf), buf_len(buf));
         }
 
-        if (myalarms != alarms)
-            icalcomponent_free(myalarms);
+        icalcomponent_free(myalarms);
     }
 
     dlist_setatom(dl, "CONTENT", buf_cstring(buf));
