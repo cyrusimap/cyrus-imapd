@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/param.h>
 
 #include "assert.h"
 #include "times.h"
@@ -562,7 +563,7 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
 
         /* UTC can be written "Z" or "+00:00" */
         if (gmtoff == 0)
-            rlen += snprintf(buf+rlen, len-rlen, "Z");
+            rlen += snprintf(buf+rlen, MIN(len-rlen, 2), "Z");
         else
             rlen += snprintf(buf+rlen, len-rlen, "%c%.2lu:%.2lu",
                              gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
