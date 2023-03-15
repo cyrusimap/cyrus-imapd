@@ -43,6 +43,8 @@ use warnings;
 use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.12;
+use Net::DAVTalk::XMLParser;
+use File::Basename;
 use Data::Dumper;
 use Text::VCardFast;
 
@@ -2321,6 +2323,29 @@ EOF
     xlog $self, "accept invite";
     $CalDAV->Request('POST', $notification, $reply,
                      'Content-Type' => 'application/davsharing+xml');
+
+    xlog $self, "fetch invite reply";
+    ($adds) = $mantalk->SyncEventLinks("/dav/notifications/user/manifold");
+    $self->assert_equals(scalar %$adds, 1);
+    $notification = (keys %$adds)[0];
+
+    my $res = $mantalk->Request('GET', $notification);
+    my $xml = xmlToHash($res->{content});
+    my $CS = 'http://calendarserver.org/ns/';
+    $reply = $xml->{"{$CS}invite-reply"};
+    $self->assert_not_null($reply);
+    $self->assert_not_null($reply->{"{$CS}invite-accepted"});
+    $self->assert_str_equals($mantalk->fullpath($CalendarId) . "/",
+                             $reply->{"{$CS}hosturl"}{'{DAV:}href'}{content});
+    $self->assert_str_equals(basename($notification),
+                             $reply->{"{$CS}in-reply-to"}{content});
+
+    # need to version-gate features that aren't in 3.0...
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min >= 9)) {
+        $self->assert_str_equals('Test User',
+                                 $reply->{"{$CS}common-name"}{content});
+    }
 
     xlog $self, "get calendars as manifold";
     my $ManCal = $mantalk->GetCalendars();

@@ -816,4 +816,7 @@ int proppatch_restype(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
 int principal_parse_path(const char *path, struct request_target_t *tgt,
                          const char **resultstr);
 
+void dav_get_principalname(const char *userid, struct buf *buf);
+
+
 #endif /* HTTP_DAV_H */
