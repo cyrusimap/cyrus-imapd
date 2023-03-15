@@ -24,8 +24,9 @@ copying the style of the surrounding code.
 ## The Tests
 
 You should run the tests.  Submitting a change that breaks existing tests isn't
-good for anybody!  Adding new tests to assert that your changes work is even
-better, and should be the goal.
+good for anybody!  If your pull request changes the code but doesn't add a
+test, you should explain why.  "Code changes add tests" is the default
+assumption.
 
 There are two kinds of tests:
 
