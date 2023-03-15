@@ -682,6 +682,26 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
             xmlNewChild(reply, NULL, BAD_CAST "summary", comment);
             xmlFree(comment);
         }
+
+        if (sharee) {
+            struct request_target_t tgt = { .allow = ALLOW_CAL };
+            xmlChar *princ_path = xmlNodeGetContent(sharee);
+            const char *errstr = NULL;
+
+            if (principal_parse_path((const char *) princ_path,
+                                     &tgt, &errstr) == 0) {
+                struct buf name = BUF_INITIALIZER;
+
+                dav_get_principalname(tgt.userid, &name);
+                request_target_fini(&tgt);
+
+                xmlNewChild(reply, NULL,
+                            BAD_CAST "common-name", BAD_CAST buf_cstring(&name));
+                buf_free(&name);
+            }
+
+            xmlFree(princ_path);
+        }
     }
     else {
         /* Unknown type - return as-is */
