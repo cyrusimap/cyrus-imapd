@@ -2464,7 +2464,7 @@ static void personalize_and_add_defaultalarms(struct mailbox *mailbox,
             defaultalarms_load(mailbox_name(mailbox), httpd_userid, defalarms);
         }
 
-        defaultalarms_insert(defalarms, ical, 0);
+        defaultalarms_insert(defalarms, ical);
 
         /* Pass default alarms to caller or free them */
         if (defalarms) {
@@ -4178,7 +4178,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             int r = defaultalarms_load(mailbox_name(mailbox),
                     httpd_userid, &defalarms);
             if (!r) {
-                defaultalarms_insert(&defalarms, ical, 0);
+                defaultalarms_insert(&defalarms, ical);
                 defaultalarms_fini(&defalarms);
             }
             else {

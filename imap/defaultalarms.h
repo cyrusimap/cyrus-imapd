@@ -69,15 +69,10 @@ extern int defaultalarms_save(struct mailbox *mbox, const char *userid,
                               icalcomponent *with_time,
                               icalcomponent *with_date);
 
-extern void defaultalarms_fini(struct defaultalarms *alarms);
+extern void defaultalarms_fini(struct defaultalarms *defalarms);
 
-// force inseration of default alarms, even if useDefaultAlerts is false
-#define DEFAULTALARMS_FORCE       (1<<0)
-// keep arbitrary alarms
-#define DEFAULTALARMS_KEEP_USER   (1<<3)
-
-extern void defaultalarms_insert(const struct defaultalarms *alarms,
-                                 icalcomponent *ical, int flags);
+extern void defaultalarms_insert(const struct defaultalarms *defalarms,
+                                 icalcomponent *ical);
 
 extern int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
                                  int *did_migratep);

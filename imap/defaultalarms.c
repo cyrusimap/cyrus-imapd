@@ -381,7 +381,7 @@ static int compare_valarm(const void **va, const void **vb)
     return strcmp(icalcomponent_get_uid(a), icalcomponent_get_uid(b));
 }
 
-static void merge_alarms(icalcomponent *comp, icalcomponent *alarms, int flags)
+static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
 {
     // Remove existing alarms
     ptrarray_t old_alarms = PTRARRAY_INITIALIZER;
@@ -531,9 +531,6 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms, int flags)
             else if (is_apple) {
                 icalcomponent_add_component(comp, old);
             }
-            else if (flags & DEFAULTALARMS_KEEP_USER) {
-                icalcomponent_add_component(comp, old);
-            }
             else icalcomponent_free(old);
         }
     } while (old || new);
@@ -544,7 +541,7 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms, int flags)
 }
 
 EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
-                                   icalcomponent *ical, int flags)
+                                   icalcomponent *ical)
 {
     if (!defalarms || (!defalarms->with_time.ical && !defalarms->with_date.ical))
         return;
@@ -562,8 +559,7 @@ EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
 
     for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
 
-        if (icalcomponent_get_usedefaultalerts(comp) <= 0 &&
-                !(flags & DEFAULTALARMS_FORCE))
+        if (icalcomponent_get_usedefaultalerts(comp) <= 0)
             continue;
 
         // Determine which default alarms to add
@@ -579,7 +575,6 @@ EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
         else is_date = icalcomponent_get_dtstart(comp).is_date;
 
         merge_alarms(comp, is_date ?
-                defalarms->with_date.ical : defalarms->with_time.ical,
-                flags);
+                defalarms->with_date.ical : defalarms->with_time.ical);
     }
 }
