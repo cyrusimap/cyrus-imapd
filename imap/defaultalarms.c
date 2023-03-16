@@ -16,27 +16,26 @@
 #define JMAP_ANNOT_DEFAULTALERTS \
     DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">defaultalerts"
 
+static void defaultalarms_record_fini(struct defaultalarms_record *rec)
+{
+    if (rec->ical) {
+        icalcomponent_free(rec->ical);
+        rec->ical = NULL;
+    }
+
+    message_guid_set_null(&rec->guid);
+}
+
 EXPORTED void defaultalarms_fini(struct defaultalarms *defalarms)
 {
     if (defalarms) {
-        if (defalarms->with_time.ical) {
-            icalcomponent_free(defalarms->with_time.ical);
-            defalarms->with_time.ical = NULL;
-        }
-
-        if (defalarms->with_date.ical) {
-            icalcomponent_free(defalarms->with_date.ical);
-            defalarms->with_date.ical = NULL;
-        }
-
-        message_guid_set_null(&defalarms->with_time.guid);
-        message_guid_set_null(&defalarms->with_date.guid);
+        defaultalarms_record_fini(&defalarms->with_time);
+        defaultalarms_record_fini(&defalarms->with_date);
     }
 }
 
 static int get_alarms_dl(struct dlist *root, const char *name,
-                         icalcomponent **icalp,
-                         struct message_guid *guid)
+                         struct defaultalarms_record *rec)
 {
     struct dlist *dl = NULL;
     if (!dlist_getlist(root, name, &dl))
@@ -46,17 +45,16 @@ static int get_alarms_dl(struct dlist *root, const char *name,
     if (!dlist_getatom(dl, "CONTENT", &content))
         return 0;
 
-    if (*content) {
-        *icalp = icalparser_parse_string(content);
-        if (*icalp == NULL)
-            return 0;
-    }
-
     const char *guidrep = NULL;
     if (!dlist_getatom(dl, "GUID", &guidrep))
         return 0;
+    message_guid_decode(&rec->guid, guidrep);
 
-    message_guid_decode(guid, guidrep);
+    if (*content) {
+        rec->ical = icalparser_parse_string(content);
+        if (rec->ical == NULL)
+            return 0;
+    }
 
     return 1;
 }
@@ -64,8 +62,7 @@ static int get_alarms_dl(struct dlist *root, const char *name,
 static int load_legacy_alarms(const char *mboxname,
                               const char *userid,
                               const char *annot,
-                              icalcomponent **icalp,
-                              struct message_guid *guid,
+                              struct defaultalarms_record *rec,
                               struct buf *buf)
 {
     buf_reset(buf);
@@ -109,14 +106,14 @@ static int load_legacy_alarms(const char *mboxname,
                 icalcomponent_add_component(myalarms, alarms);
                 alarms = myalarms;
             }
-            *icalp = alarms;
+            rec->ical = alarms;
         }
 
         if (guidrep) {
-            message_guid_decode(guid, guidrep);
+            message_guid_decode(&rec->guid, guidrep);
         }
         else {
-            message_guid_generate(guid, content, strlen(content));
+            message_guid_generate(&rec->guid, content, strlen(content));
         }
     }
 
@@ -137,10 +134,8 @@ EXPORTED int defaultalarms_load(const char *mboxname,
     if (!r && buf_len(&buf)) {
         struct dlist *root;
         if (!dlist_parsemap(&root, 1, 0, buf_base(&buf), buf_len(&buf))) {
-            if (!get_alarms_dl(root, "WITH_TIME",
-                &defalarms->with_time.ical, &defalarms->with_time.guid) ||
-                !get_alarms_dl(root, "WITH_DATE",
-                &defalarms->with_date.ical, &defalarms->with_date.guid)) {
+            if (!get_alarms_dl(root, "WITH_TIME", &defalarms->with_time) ||
+                !get_alarms_dl(root, "WITH_DATE", &defalarms->with_date)) {
 
                 xsyslog(LOG_ERR, "corrupt default alarm annotation value",
                         "mboxname=<%s> userid=<%s> annot=<%s> value=<%s>",
@@ -159,14 +154,12 @@ EXPORTED int defaultalarms_load(const char *mboxname,
         // alerts. Fall back reading their CalDAV alarms.
         r = load_legacy_alarms(mboxname, userid,
                 CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME,
-                &defalarms->with_time.ical,
-                &defalarms->with_time.guid, &buf);
+                &defalarms->with_time, &buf);
 
         if (!r)
             r = load_legacy_alarms(mboxname, userid,
                     CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE,
-                    &defalarms->with_date.ical,
-                    &defalarms->with_date.guid, &buf);
+                    &defalarms->with_date, &buf);
 
         if (r)
             defaultalarms_fini(defalarms);
@@ -316,14 +309,12 @@ HIDDEN int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
 
     r = load_legacy_alarms(mailbox_name(mbox), userid,
             CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME,
-            &defalarms.with_time.ical,
-            &defalarms.with_time.guid, &buf);
+            &defalarms.with_time, &buf);
     if (r) goto done;
 
     r = load_legacy_alarms(mailbox_name(mbox), userid,
             CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE,
-            &defalarms.with_date.ical,
-            &defalarms.with_date.guid, &buf);
+            &defalarms.with_date, &buf);
     if (r) goto done;
 
     if (!defalarms.with_time.ical && !defalarms.with_date.ical) {

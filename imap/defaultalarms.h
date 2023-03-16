@@ -51,15 +51,14 @@
 
 #define DEFAULTALARMS_INITIALIZER { {0},{0} }
 
+struct defaultalarms_record {
+    icalcomponent *ical;
+    struct message_guid guid;
+};
+
 struct defaultalarms {
-    struct {
-        icalcomponent *ical;
-        struct message_guid guid;
-    } with_time;
-    struct {
-        icalcomponent *ical;
-        struct message_guid guid;
-    } with_date;
+    struct defaultalarms_record with_time;
+    struct defaultalarms_record with_date;
 };
 
 extern int defaultalarms_load(const char *mboxname, const char *userid,
