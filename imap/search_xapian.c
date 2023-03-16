@@ -2679,6 +2679,12 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         goto out;
     }
 
+    if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL)) {
+        syslog(LOG_ERR, "Refusing to index deleted mailbox %s",
+                mailbox_name(mailbox));
+        goto out;
+    }
+
     /* we're using "not incremental" to mean "check that the GUID of every message
      * in the mailbox is present in an index rather than trusting the UID ranges */
 
@@ -2733,7 +2739,10 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     int dostat = tr->mode == XAPIAN_DBW_XAPINDEXED ? 2 : 0;
     tr->activedirs = activefile_resolve(mailbox_name(mailbox), mailbox_partition(mailbox), active, dostat, &tr->activetiers);
     // this should never be able to fail here, because the first item will always exist!
-    assert(tr->activedirs && tr->activedirs->count);
+    if (!tr->activedirs || !tr->activedirs->count) {
+        syslog(LOG_ERR, "Failed to resolve activedir for %s", mailbox_name(mailbox));
+        goto out;
+    }
 
     /* create the directory if needed */
     r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
