@@ -1,0 +1,13 @@
+Description:
+
+Adds support for IMAP Version 4rev2 (RFC 9051).
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None

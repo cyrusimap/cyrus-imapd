@@ -428,7 +428,7 @@ int service_init(int argc __attribute__((unused)),
     idle_init();
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&popd_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&popd_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }

@@ -415,7 +415,8 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "cyr_ls", 0, 0);
 
 
-    r = mboxname_init_namespace(&cyr_ls_namespace, 1);
+    r = mboxname_init_namespace(&cyr_ls_namespace,
+                                NAMESPACE_OPTION_ADMIN | NAMESPACE_OPTION_UTF8);
     if (r) {
         fatal(error_message(r), -1);
     }
@@ -425,12 +426,7 @@ int main(int argc, char **argv)
     r = IMAP_MAILBOX_NONEXISTENT;
     if (!is_path && (optind != argc)) {
         /* Is this an actual mailbox name */
-        if (opts.utf8) {
-            mbname = mbname_from_extnameUTF8(argv[optind], &cyr_ls_namespace, "cyrus");
-        }
-        else {
-            mbname = mbname_from_extname(argv[optind], &cyr_ls_namespace, "cyrus");
-        }
+        mbname = mbname_from_extname(argv[optind], &cyr_ls_namespace, "cyrus");
 
         r = mboxlist_lookup_allow_all(mbname_intname(mbname), NULL, NULL);
     }

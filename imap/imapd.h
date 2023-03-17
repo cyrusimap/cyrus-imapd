@@ -346,6 +346,9 @@ struct listargs {
     unsigned statusitems;       /* for RETURN STATUS */
     struct getmetadata_options metaopts; /* for RETURN METADATA */
     strarray_t metaitems;       /* for RETURN METADATA */
+    const char *denormalized;   /* for IMAP4rev2 OLDNAME -
+                                   Denormalized UTF-8 mailbox name from
+                                   SELECT/EXAMINE/CREATE/DELETE/RENAME/APPEND */
 };
 
 /* Value for List command variant */
@@ -399,17 +402,21 @@ enum {
     MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED=(1<<9),
 };
 
+#define MBOX_ATTRIBUTE_CHILDINFO_MASK   (MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
+
 struct mbox_name_attribute {
     uint32_t flag;   /* MBOX_ATTRIBUTE_* */
     const char *id;  /* string value */
 };
 
 extern const struct mbox_name_attribute mbox_name_attributes[];
+extern const struct mbox_name_attribute mbox_name_childinfo[];
 
 /* Bitmask for client capabilities */
 enum {
     CAPA_CONDSTORE =    (1<<0),  /* RFC 7162 */
-    CAPA_QRESYNC =      (1<<1)   /* RFC 7162 */
+    CAPA_QRESYNC =      (1<<1),  /* RFC 7162 */
+    CAPA_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
 };
 
 /* Bitmask for urlfetch params (RFC 5524) */

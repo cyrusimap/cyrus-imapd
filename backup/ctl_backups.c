@@ -505,7 +505,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_backups", 0, 0);
 
-    if ((r = mboxname_init_namespace(&ctl_backups_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&ctl_backups_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
     mboxevent_setnamespace(&ctl_backups_namespace);

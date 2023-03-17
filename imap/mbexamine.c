@@ -159,7 +159,7 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "mbexamine", 0, 0);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&mbexamine_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&mbexamine_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }

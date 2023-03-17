@@ -4035,7 +4035,16 @@ EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
 
     index_checkflags(state, !(tell_flags & TELL_SILENT), 0);
 
+    /* RFC 7162, 3.1.0:
+     * Once a client issues a CONDSTORE enabling command, it has announced
+     * itself as a "CONDSTORE-aware client".  The server MUST then include
+     * mod-sequence data in all subsequent untagged FETCH responses */
     if (client_capa & CAPA_CONDSTORE) tell_flags |= TELL_MODSEQ;
+
+    /* RFC 9051, 7.5.2:
+     * If the server chooses to send unsolicited FETCH responses,
+     * they MUST include UID FETCH item */
+    if (client_capa & CAPA_IMAP4REV2) tell_flags |= TELL_UID;
 
     /* print any changed message flags */
     for (msgno = 1; msgno <= state->exists; msgno++) {

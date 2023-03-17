@@ -239,7 +239,8 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`3501`
 
-    Internet Message Access Protocol - version 4rev1
+    Internet Message Access Protocol - version 4rev1, obsoleted by
+    :rfc:`9051`.
 
 :rfc:`3502`
 
@@ -905,6 +906,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`8970`
 
     IMAP4 Extension: Message Preview Generation
+
+:rfc:`9051`
+
+    Internet Message Access Protocol (IMAP) - version 4rev2
 
 :rfc:`9208`
 

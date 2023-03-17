@@ -185,7 +185,7 @@ int service_init(int argc, char **argv, char **envp)
     forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&map_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&map_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }

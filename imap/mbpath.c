@@ -445,7 +445,8 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "mbpath", 0, 0);
 
 
-    r = mboxname_init_namespace(&mbpath_namespace, 1);
+    r = mboxname_init_namespace(&mbpath_namespace,
+                                NAMESPACE_OPTION_ADMIN | NAMESPACE_OPTION_UTF8);
     if (r) {
         fatal(error_message(r), EX_SOFTWARE);
     }
@@ -460,9 +461,6 @@ int main(int argc, char **argv)
         }
         else if (opts.mode == MODE_PATH) {
             mbname = mbname_from_path(argv[i]);
-        }
-        else if (opts.utf8) {
-            mbname = mbname_from_extnameUTF8(argv[i], &mbpath_namespace, "cyrus");
         }
         else {
             mbname = mbname_from_extname(argv[i], &mbpath_namespace, "cyrus");

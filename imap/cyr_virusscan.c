@@ -333,7 +333,7 @@ int main (int argc, char *argv[])
     }
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&scan_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&scan_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -700,7 +700,7 @@ static void append_notifications(const struct buf *template)
     int fd = create_tempfile(config_getstring(IMAPOPT_TEMP_PATH));
     struct namespace notification_namespace;
 
-    mboxname_init_namespace(&notification_namespace, 0);
+    mboxname_init_namespace(&notification_namespace, /*options*/0);
 
     while ((i_mbox = user)) {
         if (i_mbox->msgs) {

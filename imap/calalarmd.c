@@ -117,7 +117,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "calalarmd", 0, 0);
 
-    mboxname_init_namespace(&calalarmd_namespace, /*isadmin*/1);
+    mboxname_init_namespace(&calalarmd_namespace, NAMESPACE_OPTION_ADMIN);
     mboxevent_setnamespace(&calalarmd_namespace);
 
     if (upgrade) {

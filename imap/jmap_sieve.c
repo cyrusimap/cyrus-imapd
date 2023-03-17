@@ -1373,7 +1373,7 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
 static int getmailboxexists(void *sc, const char *extname)
 {
     script_data_t *sd = (script_data_t *) sc;
-    char *intname = mboxname_from_externalUTF8(extname, sd->ns, sd->userid);
+    char *intname = mboxname_from_external(extname, sd->ns, sd->userid);
     int r = mboxlist_lookup(intname, NULL, NULL);
 
     free(intname);
@@ -1401,7 +1401,7 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
     int i, r = 1;
 
     if (extname) {
-        char *intname = mboxname_from_externalUTF8(extname, sd->ns, sd->userid);
+        char *intname = mboxname_from_external(extname, sd->ns, sd->userid);
         struct buf attrib = BUF_INITIALIZER;
 
         annotatemore_lookup(intname, "/specialuse", sd->userid, &attrib);
@@ -1448,7 +1448,7 @@ static int getmetadata(void *sc, const char *extname,
     script_data_t *sd = (script_data_t *) sc;
     struct buf attrib = BUF_INITIALIZER;
     char *intname = !extname ? xstrdup("") :
-        mboxname_from_externalUTF8(extname, sd->ns, sd->userid);
+        mboxname_from_external(extname, sd->ns, sd->userid);
     int r;
 
     if (!strncmp(keyname, "/private/", 9)) {
@@ -2125,9 +2125,11 @@ static int jmap_sieve_test(struct jmap_req *req)
             script_data_t sd =
                 { req->accountid, req->authstate, &jmap_namespace, &buf };
 
+            jmap_namespace.isutf8 = config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO);
             err = NULL;
             m.actions = json_array();
             sieve_execute_bytecode(exe, interp, &sd, &m);
+            jmap_namespace.isutf8 = 0;
 
             if (err) {
                 json_object_set_new(not_completed, emailid, err);
