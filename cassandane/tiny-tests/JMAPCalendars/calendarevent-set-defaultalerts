@@ -74,9 +74,9 @@ sub test_calendarevent_set_defaultalerts
 
     my $CaldavResponse = $CalDAV->Request('GET', $event1Href);
     my $icaldata = $CaldavResponse->{content};
-    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT5M/, $icaldata);
+    $self->assert_matches(qr/TRIGGER:-PT5M/, $icaldata);
 
     $CaldavResponse = $CalDAV->Request('GET', $event2Href);
     $icaldata = $CaldavResponse->{content};
-    $self->assert_matches(qr/TRIGGER;RELATED=START:PT0S/, $icaldata);
+    $self->assert_matches(qr/TRIGGER:PT0S/, $icaldata);
 }

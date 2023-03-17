@@ -34,6 +34,82 @@ EXPORTED void defaultalarms_fini(struct defaultalarms *defalarms)
     }
 }
 
+static icalcomponent *internalize_alarms(icalcomponent *alarms, int deterministic_uid)
+{
+    icalcomponent *myalarms = icalcomponent_new(ICAL_XROOT_COMPONENT);
+    struct buf buf = BUF_INITIALIZER;
+
+    if (icalcomponent_isa(alarms) == ICAL_VALARM_COMPONENT) {
+        icalcomponent_add_component(myalarms,
+                icalcomponent_clone(alarms));
+    }
+    else {
+        icalcomponent *valarm;
+        for (valarm = icalcomponent_get_first_component(alarms,
+                    ICAL_VALARM_COMPONENT);
+             valarm;
+             valarm = icalcomponent_get_next_component(alarms,
+                    ICAL_VALARM_COMPONENT)) {
+            icalcomponent_add_component(myalarms,
+                    icalcomponent_clone(valarm));
+        }
+    }
+
+    icalcomponent *valarm;
+    for (valarm = icalcomponent_get_first_component(myalarms, ICAL_VALARM_COMPONENT);
+         valarm;
+         valarm = icalcomponent_get_next_component(myalarms, ICAL_VALARM_COMPONENT)) {
+
+        if (!icalcomponent_get_x_property_by_name(valarm, "X-JMAP-DEFAULT-ALARM")) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, "X-JMAP-DEFAULT-ALARM");
+            icalproperty_set_value(prop, icalvalue_new_boolean(1));
+            icalcomponent_add_property(valarm, prop);
+        }
+
+	if (!icalcomponent_get_uid(valarm)) {
+	    if (deterministic_uid) {
+                // that's just necessary for not-yet migrated legacy alarms
+		icalcomponent *myalarm = icalcomponent_clone(valarm);
+		icalcomponent_normalize(myalarm);
+		buf_setcstr(&buf, icalcomponent_as_ical_string(myalarm));
+		icalcomponent_free(myalarm);
+
+		uint8_t digest[SHA1_DIGEST_LENGTH+1];
+		xsha1(buf_base(&buf), buf_len(&buf), digest);
+		digest[SHA1_DIGEST_LENGTH] = '\0';
+		icalcomponent_set_uid(valarm, (const char*) digest);
+	    }
+	    else {
+		buf_setcstr(&buf, makeuuid());
+		icalcomponent_set_uid(valarm, buf_cstring(&buf));
+	    }
+	}
+
+        const char *jmapid = icalcomponent_get_jmapid(valarm);
+        if (!jmapid) {
+            jmapid = icalcomponent_get_uid(valarm);
+            if (!jmap_is_valid_id(jmapid)) {
+                buf_setcstr(&buf, makeuuid());
+                jmapid = buf_cstring(&buf);
+            }
+            icalcomponent_set_jmapid(valarm, jmapid);
+        }
+    }
+
+    icalcomponent_normalize_x(myalarms);
+
+    if (!icalcomponent_get_first_component(myalarms, ICAL_VALARM_COMPONENT)) {
+        icalcomponent_free(myalarms);
+        myalarms = NULL;
+    }
+
+    buf_free(&buf);
+    return myalarms;
+}
+
+
+
 static int get_alarms_dl(struct dlist *root, const char *name,
                          struct defaultalarms_record *rec)
 {
@@ -100,13 +176,8 @@ static int load_legacy_alarms(const char *mboxname,
     if (*content) {
         icalcomponent *alarms = icalparser_parse_string(content);
         if (alarms) {
-            if (icalcomponent_isa(alarms) == ICAL_VALARM_COMPONENT) {
-                icalcomponent *myalarms = alarms;
-                myalarms = icalcomponent_new(ICAL_XROOT_COMPONENT);
-                icalcomponent_add_component(myalarms, alarms);
-                alarms = myalarms;
-            }
-            rec->ical = alarms;
+            rec->ical = internalize_alarms(alarms, 1);
+            icalcomponent_free(alarms);
         }
 
         if (guidrep) {
@@ -179,30 +250,12 @@ static void set_alarms_dl(struct dlist *root, const char *name,
     struct dlist *dl = dlist_newkvlist(root, name);
 
     if (alarms) {
-        icalcomponent *myalarms = icalcomponent_new(ICAL_XROOT_COMPONENT);
-        if (icalcomponent_isa(alarms) == ICAL_VALARM_COMPONENT) {
-            icalcomponent_add_component(myalarms,
-                    icalcomponent_clone(alarms));
-        }
-        else {
-            icalcomponent *valarm;
-            for (valarm = icalcomponent_get_first_component(alarms,
-                        ICAL_VALARM_COMPONENT);
-                 valarm;
-                 valarm = icalcomponent_get_next_component(alarms,
-                        ICAL_VALARM_COMPONENT)) {
-                icalcomponent_add_component(myalarms,
-                        icalcomponent_clone(valarm));
-            }
-        }
-
-        if (icalcomponent_get_first_component(myalarms, ICAL_VALARM_COMPONENT)) {
+        icalcomponent *myalarms = internalize_alarms(alarms, 0);
+        if (myalarms) {
             buf_setcstr(buf, icalcomponent_as_ical_string(myalarms));
-            icalcomponent_normalize_x(myalarms);
             message_guid_generate(&guid, buf_base(buf), buf_len(buf));
+            icalcomponent_free(myalarms);
         }
-
-        icalcomponent_free(myalarms);
     }
 
     dlist_setatom(dl, "CONTENT", buf_cstring(buf));
@@ -247,54 +300,6 @@ done:
     return r;
 }
 
-static void init_default_alarms(icalcomponent *alarms, int deterministic_uid)
-{
-    struct buf buf = BUF_INITIALIZER;
-
-    icalcomponent *valarm;
-    for (valarm = icalcomponent_get_first_component(alarms, ICAL_VALARM_COMPONENT);
-         valarm;
-         valarm = icalcomponent_get_next_component(alarms, ICAL_VALARM_COMPONENT)) {
-
-        if (!icalcomponent_get_x_property_by_name(valarm, "X-JMAP-DEFAULT-ALARM")) {
-            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, "X-JMAP-DEFAULT-ALARM");
-            icalproperty_set_value(prop, icalvalue_new_boolean(1));
-            icalcomponent_add_property(valarm, prop);
-        }
-
-        if (!icalcomponent_get_uid(valarm)) {
-            if (deterministic_uid) {
-                icalcomponent *myalarm = icalcomponent_clone(valarm);
-                icalcomponent_normalize(myalarm);
-                buf_setcstr(&buf, icalcomponent_as_ical_string(myalarm));
-                icalcomponent_free(myalarm);
-
-                uint8_t digest[SHA1_DIGEST_LENGTH+1];
-                xsha1(buf_base(&buf), buf_len(&buf), digest);
-                digest[SHA1_DIGEST_LENGTH] = '\0';
-                icalcomponent_set_uid(valarm, (const char*) digest);
-            }
-            else {
-                buf_setcstr(&buf, makeuuid());
-                icalcomponent_set_uid(valarm, buf_cstring(&buf));
-            }
-        }
-
-        const char *jmapid = icalcomponent_get_jmapid(valarm);
-        if (!jmapid) {
-            jmapid = icalcomponent_get_uid(valarm);
-            if (!jmap_is_valid_id(jmapid)) {
-                buf_setcstr(&buf, makeuuid());
-                jmapid = buf_cstring(&buf);
-            }
-            icalcomponent_set_jmapid(valarm, jmapid);
-        }
-    }
-
-    buf_free(&buf);
-}
-
 HIDDEN int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
                                  int *did_migratep)
 {
@@ -325,10 +330,6 @@ HIDDEN int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
         mbname_free(&mbname);
         if (!is_owner) goto done;
     }
-
-    // Initialize VALARMs to be proper JMAP default alarms
-    init_default_alarms(defalarms.with_time.ical, 0);
-    init_default_alarms(defalarms.with_date.ical, 0);
 
     r = defaultalarms_save(mbox, userid,
             defalarms.with_time.ical, defalarms.with_date.ical);
@@ -536,12 +537,6 @@ EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
 {
     if (!defalarms || (!defalarms->with_time.ical && !defalarms->with_date.ical))
         return;
-
-    if (defalarms->with_time.ical)
-        init_default_alarms(defalarms->with_time.ical, 1);
-
-    if (defalarms->with_date.ical)
-        init_default_alarms(defalarms->with_date.ical, 1);
 
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind = icalcomponent_isa(comp);

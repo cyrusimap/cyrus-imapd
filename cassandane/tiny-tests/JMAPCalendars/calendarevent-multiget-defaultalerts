@@ -100,7 +100,7 @@ EOF
         'Content-Type' => 'application/xml',
     );
     my $icaldata = $mgRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content};
-    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT5M/, $icaldata);
+    $self->assert_matches(qr/TRIGGER:-PT5M/, $icaldata);
     my $mgEtag = $mgRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}getetag'}{content};
     $self->assert_not_null($mgEtag);
 
@@ -150,7 +150,7 @@ EOF
         'Content-Type' => 'application/xml',
     );
     my $icaldata = $mgRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content};
-    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT15M/, $icaldata);
+    $self->assert_matches(qr/TRIGGER:-PT15M/, $icaldata);
     my $newMgEtag = $mgRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}getetag'}{content};
     $self->assert_str_not_equals($mgEtag, $newMgEtag);
 

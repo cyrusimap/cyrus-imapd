@@ -119,7 +119,7 @@ EOF
     } @{$res->{'{DAV:}response'}};
 
 
-    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT1H/, $icaldataPerHref{$eventA1Href});
-    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT1H/, $icaldataPerHref{$eventA2Href});
-    $self->assert_matches(qr/TRIGGER;RELATED=START:-PT2H/, $icaldataPerHref{$eventB1Href});
+    $self->assert_matches(qr/TRIGGER:-PT1H/, $icaldataPerHref{$eventA1Href});
+    $self->assert_matches(qr/TRIGGER:-PT1H/, $icaldataPerHref{$eventA2Href});
+    $self->assert_matches(qr/TRIGGER:-PT2H/, $icaldataPerHref{$eventB1Href});
 }
