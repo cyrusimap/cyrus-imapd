@@ -409,7 +409,8 @@ extern const struct mbox_name_attribute mbox_name_attributes[];
 /* Bitmask for client capabilities */
 enum {
     CAPA_CONDSTORE =    (1<<0),  /* RFC 7162 */
-    CAPA_QRESYNC =      (1<<1)   /* RFC 7162 */
+    CAPA_QRESYNC =      (1<<1),  /* RFC 7162 */
+    CAPA_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
 };
 
 /* Bitmask for urlfetch params (RFC 5524) */

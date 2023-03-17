@@ -350,6 +350,7 @@ static void capa_auth(void)
 static struct capa_struct base_capabilities[] = {
 /* required capabilities */
     { "IMAP4rev1",             CAPA_OMNIAUTH|CAPA_REQD, { 0 } }, /* RFC 3501 */
+    { "IMAP4rev2",             CAPA_OMNIAUTH|CAPA_REQD, { 0 } }, /* RFC 9051 */
 
 /* this is kept sorted, so that it can be easily compared to
    https://www.iana.org/assignments/imap-capabilities/imap-capabilities.xhtml */
@@ -357,7 +358,7 @@ static struct capa_struct base_capabilities[] = {
     { "ANNOTATE-EXPERIMENT-1", CAPA_POSTAUTH,           { 0 } }, /* RFC 5257 */
     { "APPENDLIMIT=",          CAPA_POSTAUTH|CAPA_VALUE,         /* RFC 7889 */
       { .value = { "%2$" PRIi64, .i64p = &maxsize } }         },
-    { "AUTH=",                 CAPA_OMNIAUTH|CAPA_COMPLEX,       /* RFC 3501 */
+    { "AUTH=",                 CAPA_OMNIAUTH|CAPA_COMPLEX,       /* RFC 9051 */
       { .complex = &capa_auth }                               },
     { "BINARY",                CAPA_POSTAUTH,           { 0 } }, /* RFC 3516 */
     { "CATENATE",              CAPA_POSTAUTH,           { 0 } }, /* RFC 4469 */
@@ -388,7 +389,7 @@ static struct capa_struct base_capabilities[] = {
     { "LITERAL-",              CAPA_OMNIAUTH|CAPA_CONFIG,        /* RFC 7888 */
       { .config = IMAPOPT_LITERALMINUS }                      },
     /* LOGIN-REFERRALS  RFC 2221 is not implemented */
-    { "LOGINDISABLED",         CAPA_OMNIAUTH|CAPA_STATE,    /* RFC 2595/3501 */
+    { "LOGINDISABLED",         CAPA_OMNIAUTH|CAPA_STATE,         /* RFC 9051 */
       { .statep = &imapd_login_disabled }                     },
     { "MAILBOX-REFERRALS",     CAPA_POSTAUTH|CAPA_REVCONFIG,     /* RFC 2193 */
       { .config = IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS }  },
@@ -415,7 +416,7 @@ static struct capa_struct base_capabilities[] = {
     { "SORT",                  CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
     { "SORT=DISPLAY",          CAPA_POSTAUTH,           { 0 } }, /* RFC 5957 */
     { "SPECIAL-USE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 6154 */
-    { "STARTTLS",              CAPA_PREAUTH|CAPA_STATE,     /* RFC 2595/3501 */
+    { "STARTTLS",              CAPA_PREAUTH|CAPA_STATE,          /* RFC 9051 */
       { .statep = &imapd_tls_allowed }                        },
     { "STATUS=SIZE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 8438 */
     { "THREAD=ORDEREDSUBJECT", CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
@@ -4550,6 +4551,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
                 prot_printf(backend_current->out, " Qresync");
             else if (client_capa & CAPA_CONDSTORE)
                 prot_printf(backend_current->out, " Condstore");
+            else if (client_capa & CAPA_IMAP4REV2)
+                prot_printf(backend_current->out, " IMAP4rev2");
             prot_printf(backend_current->out, "\r\n");
             pipe_until_tag(backend_current, mytag, 0);
         }
@@ -14862,7 +14865,7 @@ static void cmd_enable(char *tag)
     int c;
     unsigned new_capa = 0;
 
-    /* RFC 5161 says that enable while selected is actually bogus,
+    /* RFC 5161/9051 say that enable while selected is actually bogus,
      * but it's no skin off our nose to support it, so don't
      * bother checking */
 
@@ -14879,6 +14882,8 @@ static void cmd_enable(char *tag)
             new_capa |= CAPA_CONDSTORE;
         else if (!strcasecmp(arg.s, "qresync"))
             new_capa |= CAPA_QRESYNC | CAPA_CONDSTORE;
+        else if (!strcasecmp(arg.s, "imap4rev2"))
+            new_capa |= CAPA_IMAP4REV2;
     } while (c == ' ');
 
     /* check for CRLF */
@@ -14889,20 +14894,22 @@ static void cmd_enable(char *tag)
         return;
     }
 
-    int started = 0;
-    if (!(client_capa & CAPA_CONDSTORE) &&
-         (new_capa & CAPA_CONDSTORE)) {
-        if (!started) prot_printf(imapd_out, "* ENABLED");
-        started = 1;
+    /* filter out already enabled extensions */
+    new_capa ^= client_capa;
+
+    /* RFC 9051, 6.3.1:
+     * The ENABLED response is sent even if no extensions were enabled. */
+    prot_printf(imapd_out, "* ENABLED");
+    if (new_capa & CAPA_IMAP4REV2) {
+        prot_printf(imapd_out, " IMAP4rev2");
+    }
+    if (new_capa & CAPA_CONDSTORE) {
         prot_printf(imapd_out, " CONDSTORE");
     }
-    if (!(client_capa & CAPA_QRESYNC) &&
-         (new_capa & CAPA_QRESYNC)) {
-        if (!started) prot_printf(imapd_out, "* ENABLED");
-        started = 1;
+    if (new_capa & CAPA_QRESYNC) {
         prot_printf(imapd_out, " QRESYNC");
     }
-    if (started) prot_printf(imapd_out, "\r\n");
+    prot_printf(imapd_out, "\r\n");
 
     /* track the new capabilities */
     client_capa |= new_capa;
