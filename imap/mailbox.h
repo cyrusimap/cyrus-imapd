@@ -78,7 +78,7 @@
  * If you change MAILBOX_MINOR_VERSION you MUST also make corresponding
  * changes to backend_version() in backend.c.
  */
-#define MAILBOX_MINOR_VERSION   18
+#define MAILBOX_MINOR_VERSION   19
 #define MAILBOX_CACHE_MINOR_VERSION 11
 
 #define FNAME_HEADER "/cyrus.header"
@@ -341,30 +341,39 @@ struct mailbox_iter;
 #define OFFSET_DELETED 48      /* added for ACAP */
 #define OFFSET_ANSWERED 52
 #define OFFSET_FLAGGED 56
-#define OFFSET_MAILBOX_OPTIONS 60
-#define OFFSET_LEAKED_CACHE 64     /* Number of leaked records in cache file */
-#define OFFSET_HIGHESTMODSEQ 68    /* CONDSTORE (64-bit modseq) */
-#define OFFSET_DELETEDMODSEQ 76    /* CONDSTORE (64-bit modseq) */
-#define OFFSET_EXISTS 84           /* Non-expunged records */
+#define OFFSET_EXISTS 60           /* Non-expunged records */
+#define OFFSET_MAILBOX_OPTIONS 64
+#define OFFSET_LEAKED_CACHE 68     /* Number of leaked records in cache file */
+#define OFFSET_HIGHESTMODSEQ 72    /* CONDSTORE (64-bit modseq) */
+#define OFFSET_DELETEDMODSEQ 80    /* CONDSTORE (64-bit modseq) */
 #define OFFSET_FIRST_EXPUNGED 88   /* last_updated of oldest expunged message */
 #define OFFSET_LAST_REPACK_TIME 92 /* time of last expunged cleanup  */
 #define OFFSET_HEADER_FILE_CRC 96  /* CRC32 of the index header file */
 #define OFFSET_SYNCCRCS_BASIC 100  /* XOR of SYNC CRCs of unexpunged records */
 #define OFFSET_RECENTUID 104       /* last UID the owner was told about */
 #define OFFSET_RECENTTIME 108      /* last timestamp for seen data */
-#define OFFSET_POP3_SHOW_AFTER 112 /* time after which to show messages
+#define OFFSET_POP3_SHOW_AFTER 112 /* time after which to show messages 
                                     * to POP3 */
 #define OFFSET_QUOTA_ANNOT_USED 116 /* bytes of per-mailbox and per-message
                                      * annotations for this mailbox */
-#define OFFSET_SYNCCRCS_ANNOT 120 /* SYNC_CRC of the annotations */
-#define OFFSET_UNSEEN 124         /* total number of UNSEEN messages (owner) */
+#define OFFSET_SYNCCRCS_ANNOT 120  /* SYNC_CRC of the annotations */
+#define OFFSET_UNSEEN 124          /* total number of UNSEEN messages (owner) */
 #define OFFSET_MAILBOX_CREATEDMODSEQ 128 /* MODSEQ at creation time */
-#define OFFSET_CHANGES_EPOCH 136   /* time from which we can calculate changes */
-#define OFFSET_QUOTA_DELETED_USED 140  /* bytes of \Deleted messages
+#define OFFSET_QUOTA_DELETED_USED 136  /* bytes of \Deleted messages
                                         * for this mailbox (64-bit) */
-#define OFFSET_QUOTA_EXPUNGED_USED 148 /* bytes of \Expunged messages
+#define OFFSET_QUOTA_EXPUNGED_USED 144 /* bytes of \Expunged messages
                                         * for this mailbox (64-bit) */
+#define OFFSET_CHANGES_EPOCH 152   /* time from which we can calculate changes */
 #define OFFSET_HEADER_CRC 156
+
+#define PRE19_OFFSET_MAILBOX_OPTIONS 60
+#define PRE19_OFFSET_LEAKED_CACHE 64
+#define PRE19_OFFSET_HIGHESTMODSEQ 68
+#define PRE19_OFFSET_DELETEDMODSEQ 76
+#define PRE19_OFFSET_EXISTS 84
+#define PRE19_OFFSET_CHANGES_EPOCH 136
+#define PRE19_OFFSET_QUOTA_DELETED_USED 140
+#define PRE19_OFFSET_QUOTA_EXPUNGED_USED 148
 
 /* Offsets of index_record fields in index/expunge file
  *
