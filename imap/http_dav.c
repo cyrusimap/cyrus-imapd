@@ -7133,10 +7133,6 @@ int meth_put(struct transaction_t *txn, void *params)
         if (txn->req_tgt.allow & ALLOW_USERDATA) reqd_rights |= DACL_PROPRSRC;
     }
 
-    /* Make sure mailbox type is correct */
-    if (mbtype_isa(txn->req_tgt.mbentry->mbtype) != txn->req_tgt.namespace->mboxtype)
-        return HTTP_FORBIDDEN;
-
     /* Make sure Content-Range isn't specified */
     if (spool_getheader(txn->req_hdrs, "Content-Range"))
         return HTTP_BAD_REQUEST;
@@ -7176,6 +7172,13 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Local Mailbox */
+
+
+    /* Make sure mailbox type is correct */
+    if (mbtype_isa(txn->req_tgt.mbentry->mbtype) != txn->req_tgt.namespace->mboxtype) {
+        txn->error.precond = CALDAV_LOCATION_OK;
+        return HTTP_FORBIDDEN;
+    }
 
     /* Read body */
     txn->req_body.flags |= BODY_DECODE;
