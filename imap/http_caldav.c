@@ -3677,6 +3677,7 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
 struct override_rock {
     icalcomponent *ical;
     uint64_t start;
+    hashu64_table *rdates;
     unsigned *stripped;
 };
 
@@ -3684,7 +3685,7 @@ static void strip_past_override(uint64_t recurid, void *data, void *rock)
 {
     struct override_rock *orock = (struct override_rock *) rock;
 
-    if (recurid < orock->start) {
+    if (recurid < orock->start && !hashu64_lookup(recurid, orock->rdates)) {
         icalcomponent *comp = (icalcomponent *) data;
 
         icalcomponent_remove_component(orock->ical, comp);
@@ -3721,7 +3722,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent_kind kind;
     icalproperty *prop;
     struct icalrecurrencetype rt = ICALRECURRENCETYPE_INITIALIZER;
-    icaltimetype dtstart, recurid;
+    icaltimetype dtstart;
+    hashu64_table rdates = HASHU64_TABLE_INITIALIZER;
     hashu64_table overrides = HASHU64_TABLE_INITIALIZER;
     unsigned stripped_overrides = 0;
     const char *uid, *organizer = NULL;
@@ -3754,6 +3756,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
+    construct_hashu64_table(&rdates, 256, 0);
     construct_hashu64_table(&overrides, 256, 0);
 
     comp = icalcomponent_get_first_real_component(ical);
@@ -3799,16 +3802,28 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         ret = validate_dtend_duration(comp, &txn->error);
         if (ret) goto done;
 
-        /* Grab RRULE to check RSCALE and overrides */
+        /* Grab RRULE and RDATEs to check RSCALE and overrides */
         prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
         if (prop) {
             rt = icalproperty_get_rrule(prop);
             dtstart = icalcomponent_get_dtstart(comp);
+
+            for (prop = icalcomponent_get_first_property(comp,
+                                                         ICAL_RDATE_PROPERTY);
+                 prop;
+                 prop = icalcomponent_get_next_property(comp,
+                                                        ICAL_RDATE_PROPERTY)) {
+                icaltimetype rdate =
+                    icalproperty_get_datetime_with_component(prop, comp);
+                hashu64_insert(icaltime_as_timet_with_zone(rdate, rdate.zone),
+                               (void*) 1, &rdates);
+            }
         }
         else if ((prop =
                   icalcomponent_get_first_property(comp,
                                                    ICAL_RECURRENCEID_PROPERTY))) {
-            recurid = icalproperty_get_datetime_with_component(prop, comp);
+            icaltimetype recurid =
+                icalproperty_get_datetime_with_component(prop, comp);
             hashu64_insert(icaltime_as_timet_with_zone(recurid, recurid.zone),
                            comp, &overrides);
         }
@@ -3819,9 +3834,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         /* XXX  This is a bugfix for Fantastical when splitting a
            recurring event with existing overrides prior to the split */
         struct override_rock orock = {
-            ical,
-            icaltime_as_timet_with_zone(dtstart, dtstart.zone),
-            &stripped_overrides
+            ical, icaltime_as_timet_with_zone(dtstart, dtstart.zone),
+            &rdates, &stripped_overrides
         };
 
         hashu64_enumerate(&overrides, &strip_past_override, &orock);
@@ -4077,6 +4091,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     if (oldical) icalcomponent_free(oldical);
     if (myical) icalcomponent_free(myical);
     strarray_fini(&schedule_addresses);
+    free_hashu64_table(&rdates, NULL);
     free_hashu64_table(&overrides, NULL);
     free(sched_userid);
     buf_free(&buf);
