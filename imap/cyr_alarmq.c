@@ -67,6 +67,7 @@
 
 static int overdue_threshold = CALDAV_ALARM_LOOKAHEAD;
 static int want_color = -1;
+static struct namespace cyr_alarmq_namespace;
 
 static void usage(void) __attribute__((noreturn));
 static void usage(void)
@@ -147,7 +148,10 @@ static void printone_calendar_json(const mbname_t *mbname,
         json_object_set_new(j, "nextcheck", json_string(timebuf));
     }
 
-    json_object_set_new(j, "mboxname", json_string(mbname_intname(mbname)));
+    json_object_set_new(j, "mboxname",
+                        json_string(mbname_extname(mbname,
+                                                   &cyr_alarmq_namespace,
+                                                   "cyrus")));
     json_object_set_new(j, "imap_uid", json_integer(imap_uid));
     json_object_set_new(j, "num_rcpts", json_integer(num_rcpts));
     json_object_set_new(j, "num_retries", json_integer(num_retries));
@@ -184,7 +188,8 @@ static void printone_calendar_pretty(const mbname_t *mbname,
 
     pretty_nextcheck(&buf, nextcheck);
     buf_append_kv(&buf, sep, want_color, NULL, "CAL");
-    buf_append_kv(&buf, sep, want_color, "mboxname", mbname_intname(mbname));
+    buf_append_kv(&buf, sep, want_color, "mboxname",
+                  mbname_extname(mbname, &cyr_alarmq_namespace, "cyrus"));
     buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
     buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
     pretty_error(&buf, num_retries, last_run, last_err);
@@ -408,7 +413,10 @@ static void printone_unscheduled_json(const mbname_t *mbname,
         json_object_set_new(j, "nextcheck", json_string(timebuf));
     }
 
-    json_object_set_new(j, "mboxname", json_string(mbname_intname(mbname)));
+    json_object_set_new(j, "mboxname",
+                        json_string(mbname_extname(mbname,
+                                                   &cyr_alarmq_namespace,
+                                                   "cyrus")));
     json_object_set_new(j, "imap_uid", json_integer(imap_uid));
     json_object_set_new(j, "num_rcpts", json_integer(num_rcpts));
     json_object_set_new(j, "num_retries", json_integer(num_retries));
@@ -445,7 +453,8 @@ static void printone_unscheduled_pretty(const mbname_t *mbname,
 
     pretty_nextcheck(&buf, nextcheck);
     buf_append_kv(&buf, sep, want_color, NULL, "UNS");
-    buf_append_kv(&buf, sep, want_color, "mboxname", mbname_intname(mbname));
+    buf_append_kv(&buf, sep, want_color, "mboxname",
+                  mbname_extname(mbname, &cyr_alarmq_namespace, "cyrus"));
     buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
     buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
     pretty_error(&buf, num_retries, last_run, last_err);
@@ -514,6 +523,11 @@ int main(int argc, char *argv[])
     }
 
     cyrus_init(alt_config, "cyr_alarmq", 0, 0);
+
+    if ((r = mboxname_init_namespace(&cyr_alarmq_namespace, 1)) != 0) {
+        fatal(error_message(r), EX_CONFIG);
+    }
+    mboxevent_setnamespace(&cyr_alarmq_namespace);
 
     if (want_json) {
         int sep = '[';
