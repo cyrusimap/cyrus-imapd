@@ -7488,34 +7488,25 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 }
 
 
-/* A pair of resource & collection modseqs
-   for tracking and reporting sync collection progress */
-struct modseq_pair_t {
-    modseq_t res;
-    modseq_t col;
-};
-
 struct updates_rock {
     struct propfind_ctx *fctx;
-    struct meth_params *rparams;
+    get_modseq_t get_modseq;
     uint32_t limit;
-    uint32_t nresp;
-    struct modseq_pair_t syncmodseq;
-    struct modseq_pair_t basemodseq;
-    struct modseq_pair_t respmodseq;
+    modseq_t syncmodseq;
+    modseq_t basemodseq;
+    modseq_t *respmodseq;
+    uint32_t *nresp;
 };
 
-/* Callback for reporting resource updates */
 static int updates_cb(void *rock, void *data)
 {
     struct dav_data *ddata = (struct dav_data *) data;
     struct updates_rock *urock = (struct updates_rock *) rock;
     struct propfind_ctx *fctx = urock->fctx;
-    struct meth_params *rparams = urock->rparams;
-    modseq_t modseq = rparams->get_modseq(fctx->mailbox, data, fctx->userid);
+    modseq_t modseq = urock->get_modseq(fctx->mailbox, data, fctx->userid);
 
     if (!ddata->alive) {
-        if (modseq <= urock->basemodseq.res) {
+        if (modseq <= urock->basemodseq) {
             /* Initial sync - ignore unmapped resources */
             return 0;
         }
@@ -7525,23 +7516,23 @@ static int updates_cb(void *rock, void *data)
            propfind_by_resource() will append our resource name */
         ddata->imap_uid = 0;
     }
-    else if (modseq <= urock->syncmodseq.res) {
+    else if (modseq <= urock->syncmodseq) {
         /* Per-user modseq hasn't changed */
         return 0;
     }
 
 
-    if (urock->nresp >= urock->limit) {
+    if (*urock->nresp >= urock->limit) {
         /* Number of responses has reached client-specified limit */
         return HTTP_NO_STORAGE;
     }
     else {
         /* Bump response count */
-        urock->nresp += 1;
+        *urock->nresp += 1;
     }
 
     /* respmodseq will be highest modseq of the resources we return */
-    urock->respmodseq.res = MAX(modseq, urock->respmodseq.res);
+    *(urock->respmodseq) = MAX(modseq, *(urock->respmodseq));
 
     /* Add <response> element for this resource to root */
     fctx->proc_by_resource(fctx, ddata);
@@ -7550,110 +7541,6 @@ static int updates_cb(void *rock, void *data)
     return 0;
 }
 
-/* Callback for reporting collection updates */
-static int sync_col_cb(const mbentry_t *mbentry, void *rock)
-{
-    struct updates_rock *urock = (struct updates_rock *) rock;
-    struct propfind_ctx *fctx = urock->fctx;
-    struct meth_params *rparams = urock->rparams;
-    struct mailbox *mailbox = NULL;
-    int r = 0, code = 0;
-
-    /* Append collection name to URL path */
-    size_t len;
-    char *p;
-
-    if (!fctx->req_tgt->collection) {
-        len = strlen(fctx->req_tgt->path);
-        p = fctx->req_tgt->path + len;
-    }
-    else {
-        p = fctx->req_tgt->collection;
-        len = p - fctx->req_tgt->path;
-    }
-
-    if (p[-1] != '/') {
-        *p++ = '/';
-        len++;
-    }
-
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
-    snprintf(p, MAX_MAILBOX_PATH - len, "%s/",
-             strarray_nth(mbname_boxes(mbname), -1));
-    mbname_free(&mbname);
-
-    fctx->req_tgt->collection = p;
-    fctx->req_tgt->collen = strlen(p) -1;
-    fctx->req_tgt->resource = NULL;
-
-    /* Skip special calendar collections */
-    if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR &&
-        (!strcmp(p, MANAGED_ATTACH) ||
-         !strcmp(p, SCHED_INBOX) || !strcmp(p, SCHED_OUTBOX))) {
-        return 0;
-    }
-
-    if (mbentry->mbtype & MBTYPE_DELETED) {
-        if (mbentry->foldermodseq <= urock->basemodseq.col) {
-            /* Initial sync - ignore unmapped collections */
-            return 0;
-        }
-
-        /* Report collection as NOT FOUND */
-        code = HTTP_NOT_FOUND;
-    }
-
-    if (mbentry->foldermodseq > urock->syncmodseq.col) {
-        if (urock->nresp >= urock->limit) {
-            /* Number of responses has reached client-specified limit */
-            return HTTP_NO_STORAGE;
-        }
-        else {
-            /* Bump response count */
-            urock->nresp += 1;
-        }
-
-        /* Report collection URL */
-        r = xml_add_response(fctx, code, 0, NULL, NULL);
-        if (r) return r;
-
-        /* respmodseq will be highest modseq of the collections we return */
-        urock->respmodseq.col =
-            MAX(mbentry->foldermodseq, urock->respmodseq.col);
-
-        if (code == HTTP_NOT_FOUND) {
-            /* Don't report resources in removed collections */
-            return 0;
-        }
-    }
-
-    if (fctx->depth > 1) {
-        /* Open mailbox for reading */
-        r = mailbox_open_irl(mbentry->name, &mailbox);
-        if (r) {
-            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-                   mbentry->name, error_message(r));
-            return r;
-        }
-
-        fctx->mbentry = mbentry;
-        fctx->mailbox = mailbox;
-
-        /* Report changed/removed resources in the collection */
-        uint32_t limit = urock->limit - urock->nresp + 1;
-
-        if (urock->syncmodseq.res && urock->basemodseq.res) limit = 0;
-
-        r = rparams->davdb.foreach_update(fctx->davdb, urock->syncmodseq.res,
-                                          mbentry,
-                                          -1 /* ALL kinds of resources */,
-                                          limit, &updates_cb, rock);
-
-        mailbox_close(&mailbox);
-    }
-
-    return r;
-}
 
 /* DAV:sync-collection REPORT */
 int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
@@ -7662,16 +7549,16 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     int ret = 0, r;
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
-    struct modseq_pair_t highestmodseq = { 0 };
-    struct modseq_pair_t deletedmodseq = { 0 };
+    modseq_t syncmodseq = 0;
+    modseq_t basemodseq = 0;
+    modseq_t highestmodseq = 0;
+    modseq_t respmodseq = 0;
+    uint32_t limit = UINT32_MAX - 1;
+    uint32_t nresp = 0;
     xmlNodePtr node;
-    xmlChar *tokenstr = NULL;
-    char tokenbuf[MAX_MAILBOX_PATH+1];
-    const char *tokenfmt;
-    struct mboxname_counters counters;
-    struct updates_rock urock =
-        { fctx, rparams, UINT32_MAX - 1, 0, { 0 }, { 0 }, { 0 } };
-    int min_items, max_items;
+    char tokenuri[MAX_MAILBOX_PATH+1];
+
+    /* XXX  Handle Depth (cal-home-set at toplevel) */
 
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
@@ -7683,49 +7570,90 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
         goto done;
     }
 
+    fctx->mbentry = txn->req_tgt.mbentry;
+    fctx->mailbox = mailbox;
+
+    highestmodseq = mailbox->i.highestmodseq;
+
     /* Parse children element of report */
-    for (node = xmlFirstElementChild(inroot); node;
-         node = xmlNextElementSibling(node)) {
+    for (node = inroot->children; node; node = node->next) {
+        xmlNodePtr node2;
         xmlChar *str = NULL;
-        if (!xmlStrcmp(node->name, BAD_CAST "sync-token") &&
-            (tokenstr = xmlNodeListGetString(inroot->doc, node->children, 1))) {
-            /* Add sync-token to our header cache */
-            spool_cache_header(xstrdup(":token"),
-                               xstrdup((const char *) tokenstr), txn->req_hdrs);
-        }
-        else if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
-                 (str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
-            if (!strcmp((char *) str, "infinite")) {
-                if (!rparams->user_modseq_offset.modseq) {
+        if (node->type == XML_ELEMENT_NODE) {
+            if (!xmlStrcmp(node->name, BAD_CAST "sync-token") &&
+                (str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
+                /* Add sync-token to our header cache */
+                spool_cache_header(xstrdup(":token"),
+                                   xstrdup((const char *) str), txn->req_hdrs);
+
+                /* Parse sync-token */
+                r = sscanf((char *) str, SYNC_TOKEN_URL_SCHEME
+                           "%u-" MODSEQ_FMT "-" MODSEQ_FMT "%1s",
+                           &uidvalidity, &syncmodseq, &basemodseq,
+                           tokenuri /* test for trailing junk */);
+
+                syslog(LOG_DEBUG, "scanned token %s to %d %u %llu %llu",
+                       str, r, uidvalidity, syncmodseq, basemodseq);
+                /* Sanity check the token components */
+                if (r < 2 || r > 3 ||
+                    (uidvalidity != mailbox->i.uidvalidity) ||
+                    (syncmodseq > highestmodseq)) {
+                    fctx->txn->error.desc = "Invalid sync-token";
+                }
+                else if (r == 3) {
+                    /* Previous partial read token */
+                    if (basemodseq > highestmodseq) {
+                        fctx->txn->error.desc = "Invalid sync-token";
+                    }
+                    else if (basemodseq < mailbox->i.deletedmodseq) {
+                        fctx->txn->error.desc = "Stale sync-token";
+                    }
+                }
+                else {
+                    /* Regular token */
+                    if (syncmodseq < mailbox->i.deletedmodseq) {
+                        fctx->txn->error.desc = "Stale sync-token";
+                    }
+                }
+
+                if (fctx->txn->error.desc) {
+                    /* DAV:valid-sync-token */
+                    txn->error.precond = DAV_SYNC_TOKEN;
+                    ret = HTTP_FORBIDDEN;
+                }
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
+                (str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
+                if (!strcmp((char *) str, "infinity")) {
                     fctx->txn->error.desc =
                         "This server DOES NOT support infinite depth requests";
                     ret = HTTP_SERVER_ERROR;
                 }
-                else {
-                    fctx->depth = 2;
+                else if ((sscanf((char *) str, "%u", &fctx->depth) != 1) ||
+                         (fctx->depth != 1)) {
+                    fctx->txn->error.desc = "Illegal sync-level";
+                    ret = HTTP_BAD_REQUEST;
                 }
             }
-            else if ((sscanf((char *) str, "%u", &fctx->depth) != 1) ||
-                     (fctx->depth != 1)) {
-                fctx->txn->error.desc = "Illegal sync-level";
-                ret = HTTP_BAD_REQUEST;
-            }
-        }
-        else if (!xmlStrcmp(node->name, BAD_CAST "limit")) {
-            xmlNodePtr node2 = xmlFirstElementChild(node);
+            else if (!xmlStrcmp(node->name, BAD_CAST "limit")) {
+                errno = 0;
 
-            errno = 0;
-            if (!xmlStrcmp(node2->name, BAD_CAST "nresults") &&
-                (!(str = xmlNodeListGetString(inroot->doc, node2->children, 1)) ||
-                 (sscanf((char *) str, "%u", &urock.limit) != 1) ||
-                 (errno != 0) || (urock.limit >= UINT32_MAX))) {
-                txn->error.precond = DAV_OVER_LIMIT;
-                ret = HTTP_FORBIDDEN;
+                for (node2 = node->children; node2; node2 = node2->next) {
+                    if ((node2->type == XML_ELEMENT_NODE) &&
+                        !xmlStrcmp(node2->name, BAD_CAST "nresults") &&
+                        (!(str = xmlNodeListGetString(inroot->doc,
+                                                      node2->children, 1)) ||
+                         (sscanf((char *) str, "%u", &limit) != 1) ||
+                         (errno != 0) || (limit >= UINT32_MAX))) {
+                        txn->error.precond = DAV_OVER_LIMIT;
+                        ret = HTTP_FORBIDDEN;
+                    }
+                }
             }
-        }
 
-        if (str) xmlFree(str);
-        if (ret) goto done;
+            if (str) xmlFree(str);
+            if (ret) goto done;
+        }
     }
 
     /* Check Depth */
@@ -7735,108 +7663,18 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
         goto done;
     }
 
-    if (!txn->req_tgt.collection && rparams->user_modseq_offset.modseq) {
-        /* home-set: read counters for per-user modseqs */
-        r = mboxname_read_counters(txn->req_tgt.mbentry->name, &counters);
-        if (r) {
-            syslog(LOG_ERR, "mboxname_read_counters(%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-
-        highestmodseq.res =
-            *((modseq_t *)((size_t) &counters +
-                           rparams->user_modseq_offset.modseq));
-        highestmodseq.col =
-            *((modseq_t *)((size_t) &counters +
-                           rparams->user_modseq_offset.foldersmodseq));
-        deletedmodseq.res =
-            *((modseq_t *)((size_t) &counters +
-                           rparams->user_modseq_offset.deletedmodseq));
-        deletedmodseq.col =
-            *((modseq_t *)((size_t) &counters +
-                           rparams->user_modseq_offset.foldersdeletedmodseq));
-
-        tokenfmt = SYNC_TOKEN_URL_SCHEME "%u-%llu-%llu-%llu-%llu%1s";
-        min_items = 3;
-        max_items = 5;
-    }
-    else {
-        /* single collection - use mailbox modseqs */
-        highestmodseq.res = mailbox->i.highestmodseq;
-        deletedmodseq.res = mailbox->i.deletedmodseq;
-
-        tokenfmt = SYNC_TOKEN_URL_SCHEME "%1$u-%2$llu-%4$llu%6$1s";
-        min_items = 2;
-        max_items = 3;
-    }
-
-    if (tokenstr) {
-        /* Parse sync-token */
-        r = sscanf((char *) tokenstr, tokenfmt, &uidvalidity,
-                   &urock.syncmodseq.res, &urock.syncmodseq.col,
-                   &urock.basemodseq.res, &urock.basemodseq.col,
-                   tokenbuf /* test for trailing junk */);
-
-        syslog(LOG_DEBUG, "scanned token %s to %d %u %llu %llu %llu %llu",
-               tokenstr, r, uidvalidity,
-               urock.syncmodseq.res, urock.syncmodseq.col,
-               urock.basemodseq.res, urock.basemodseq.col);
-
-        /* Sanity check the token components */
-        if (r < min_items || r > max_items ||
-            (uidvalidity != mailbox->i.uidvalidity) ||
-            (urock.syncmodseq.res > highestmodseq.res) ||
-            (urock.syncmodseq.col > highestmodseq.col)) {
-            fctx->txn->error.desc = "Invalid sync-token";
-        }
-        else if (r == max_items) {
-            /* Previous partial read token */
-            if (urock.basemodseq.res > highestmodseq.res ||
-                urock.basemodseq.col > highestmodseq.col) {
-                fctx->txn->error.desc = "Invalid sync-token";
-            }
-            else if (urock.basemodseq.res < deletedmodseq.res ||
-                     urock.basemodseq.col < deletedmodseq.col) {
-                fctx->txn->error.desc = "Stale sync-token";
-            }
-        }
-        else {
-            /* Regular token */
-            if (urock.syncmodseq.col < deletedmodseq.col ||
-                (!urock.syncmodseq.col &&
-                 urock.syncmodseq.res < deletedmodseq.res)) {
-                fctx->txn->error.desc = "Stale sync-token";
-            }
-        }
-
-        if (fctx->txn->error.desc) {
-            /* DAV:valid-sync-token */
-            txn->error.precond = DAV_SYNC_TOKEN;
-            ret = HTTP_FORBIDDEN;
-            goto done;
-        }
-
-        if (!urock.basemodseq.col) urock.basemodseq.col = highestmodseq.col;
-    }
-    else {
+    if (!syncmodseq) {
         /* Initial sync - set basemodseq in case client limits results */
-        urock.basemodseq.res = highestmodseq.res;
-        urock.basemodseq.col = highestmodseq.col;
+        basemodseq = highestmodseq;
     }
 
     /* Open the DAV DB corresponding to the mailbox */
-    fctx->davdb = rparams->davdb.open_db(mailbox);
+    fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
     if (!fctx->davdb) {
         fctx->txn->error.desc = "Can't open database";
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
-
-    fctx->mbentry = txn->req_tgt.mbentry;
-    fctx->mailbox = mailbox;
 
     /* Setup for chunked response */
     txn->flags.te |= TE_CHUNKED;
@@ -7845,27 +7683,13 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     xml_response(HTTP_MULTI_STATUS, txn, fctx->root->doc);
 
     /* Report the resources within the client requested limit (if any) */
-    if (urock.basemodseq.col) {
-        /* home-set: sync all child collections */
-        int flags = MBOXTREE_SKIP_ROOT;
+    struct updates_rock rock = { fctx, rparams->get_modseq, limit,
+                                 syncmodseq, basemodseq, &respmodseq, &nresp };
 
-        if (urock.syncmodseq.col) flags |= MBOXTREE_TOMBSTONES;
-
-        r = mboxlist_mboxtree(mailbox_name(mailbox),
-                              &sync_col_cb, &urock, flags);
-    }
-    else {
-        /* single collection */
-        uint32_t limit = urock.limit + 1;
-
-        if (urock.syncmodseq.res && urock.basemodseq.res) limit = 0;
-
-        r = rparams->davdb.foreach_update(fctx->davdb, urock.syncmodseq.res,
-                                          fctx->mbentry,
-                                          -1 /* ALL kinds of resources */,
-                                          limit, &updates_cb, &urock);
-    }
-
+    r = rparams->davdb.foreach_update(fctx->davdb, syncmodseq, fctx->mbentry,
+                                      -1 /* ALL kinds of resources */,
+                                      (syncmodseq && basemodseq) ? 0 : limit + 1,
+                                      &updates_cb, &rock);
     if (r) {
         /* Tell client we truncated the responses */
         if (fctx->req_tgt->resource) *(fctx->req_tgt->resource) = '\0';
@@ -7873,32 +7697,25 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     }
     else {
         /* Full response - respmodseq will be highestmodseq of mailbox */
-        urock.respmodseq.res = highestmodseq.res;
-        urock.respmodseq.col = highestmodseq.col;
+        respmodseq = highestmodseq;
     }
 
     if (fctx->davdb) rparams->davdb.close_db(fctx->davdb);
 
     /* Add sync-token element to root */
-    if (urock.respmodseq.res < urock.basemodseq.res ||
-        urock.respmodseq.col < urock.basemodseq.col) {
+    if (respmodseq < basemodseq) {
         /* Client limited results of initial sync - include basemodseq */
-        if (urock.basemodseq.col)
-            tokenfmt = SYNC_TOKEN_URL_SCHEME "%u-%llu-%llu-%llu-%llu";
-        else
-            tokenfmt = SYNC_TOKEN_URL_SCHEME "%1$u-%2$llu-%4$llu";
-    }
-    else if (urock.basemodseq.col) {
-        tokenfmt = SYNC_TOKEN_URL_SCHEME "%u-%llu-%llu";
+        snprintf(tokenuri, MAX_MAILBOX_PATH,
+                 SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT "-" MODSEQ_FMT,
+                 mailbox->i.uidvalidity, respmodseq, basemodseq);
     }
     else {
-        tokenfmt = SYNC_TOKEN_URL_SCHEME "%u-%llu";
+        snprintf(tokenuri, MAX_MAILBOX_PATH,
+                 SYNC_TOKEN_URL_SCHEME "%u-" MODSEQ_FMT,
+                 mailbox->i.uidvalidity, respmodseq);
     }
-    snprintf(tokenbuf, MAX_MAILBOX_PATH, tokenfmt, mailbox->i.uidvalidity,
-             urock.respmodseq.res, urock.respmodseq.col,
-             urock.basemodseq.res, urock.basemodseq.col);
     node =
-        xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenbuf);
+        xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
 
     /* Add sync-token element to output buffer */
     xml_partial_response(NULL /* !output */,
@@ -7913,7 +7730,6 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
 
   done:
     mailbox_close(&mailbox);
-    if (tokenstr) xmlFree(tokenstr);
 
     return ret;
 }
