@@ -262,13 +262,7 @@ static struct meth_params notify_params = {
     { 0, &notify_post, { 0, NULL, NULL } },     /* No generic POST handling */
     { 0, NULL },
     { DAV_FINITE_DEPTH, notify_props},
-    notify_reports,
-    /* Offsets of DAV notification modseqs -- used for report_sync_col() */
-    { offsetof(struct mboxname_counters, davnotificationmodseq),
-      offsetof(struct mboxname_counters, davnotificationfoldersmodseq),
-      offsetof(struct mboxname_counters, davnotificationdeletedmodseq),
-      offsetof(struct mboxname_counters, davnotificationfoldersdeletedmodseq)
-    }
+    notify_reports
 };
 
 
