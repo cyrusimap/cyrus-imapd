@@ -51,6 +51,7 @@
 #include "lib/sqldb.h"
 
 #include "imap/mailbox.h"
+#include "imap/mboxname.h"
 #include "imap/json_support.h"
 
 enum alarm_type {
@@ -101,7 +102,7 @@ int caldav_alarm_delete_user(const char *userid);
 int caldav_alarm_process(time_t runtime, time_t *next, int dryrun);
 
 /* list alarms (via callbacks) before a given time */
-typedef void (*list_calendar_proc)(const char *mboxname,
+typedef void (*list_calendar_proc)(const mbname_t *mbname,
                                    uint32_t imap_uid,
                                    time_t nextcheck,
                                    uint32_t num_rcpts,
@@ -109,21 +110,21 @@ typedef void (*list_calendar_proc)(const char *mboxname,
                                    time_t last_run,
                                    const char *last_err,
                                    void *rock);
-typedef void (*list_snooze_proc)(const char *userid,
+typedef void (*list_snooze_proc)(const mbname_t *mbname,
                                  time_t nextcheck,
                                  uint32_t num_retries,
                                  time_t last_run,
                                  const char *last_err,
                                  json_t *snoozed,
                                  void *rock);
-typedef void (*list_send_proc)(const char *userid,
+typedef void (*list_send_proc)(const mbname_t *mbname,
                                time_t nextcheck,
                                uint32_t num_retries,
                                time_t last_run,
                                const char *last_err,
                                json_t *submission,
                                void *rock);
-typedef void (*list_unscheduled_proc)(const char *mboxname,
+typedef void (*list_unscheduled_proc)(const mbname_t *mbname,
                                       uint32_t imap_uid,
                                       time_t nextcheck,
                                       uint32_t num_rcpts,

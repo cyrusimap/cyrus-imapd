@@ -125,7 +125,7 @@ static void pretty_error(struct buf *dst, uint32_t num_retries,
     }
 }
 
-static void printone_calendar_json(const char *mboxname,
+static void printone_calendar_json(const mbname_t *mbname,
                                    uint32_t imap_uid,
                                    time_t nextcheck,
                                    uint32_t num_rcpts,
@@ -147,7 +147,7 @@ static void printone_calendar_json(const char *mboxname,
         json_object_set_new(j, "nextcheck", json_string(timebuf));
     }
 
-    json_object_set_new(j, "mboxname", json_string(mboxname));
+    json_object_set_new(j, "mboxname", json_string(mbname_intname(mbname)));
     json_object_set_new(j, "imap_uid", json_integer(imap_uid));
     json_object_set_new(j, "num_rcpts", json_integer(num_rcpts));
     json_object_set_new(j, "num_retries", json_integer(num_retries));
@@ -168,7 +168,7 @@ static void printone_calendar_json(const char *mboxname,
     json_decref(j);
 }
 
-static void printone_calendar_pretty(const char *mboxname,
+static void printone_calendar_pretty(const mbname_t *mbname,
                                      uint32_t imap_uid,
                                      time_t nextcheck,
                                      uint32_t num_rcpts,
@@ -184,7 +184,7 @@ static void printone_calendar_pretty(const char *mboxname,
 
     pretty_nextcheck(&buf, nextcheck);
     buf_append_kv(&buf, sep, want_color, NULL, "CAL");
-    buf_append_kv(&buf, sep, want_color, "mboxname", mboxname);
+    buf_append_kv(&buf, sep, want_color, "mboxname", mbname_intname(mbname));
     buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
     buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
     pretty_error(&buf, num_retries, last_run, last_err);
@@ -193,7 +193,7 @@ static void printone_calendar_pretty(const char *mboxname,
     fputs(buf_cstring(&buf), stdout);
 }
 
-static void printone_snooze_json(const char *userid,
+static void printone_snooze_json(const mbname_t *mbname,
                                  time_t nextcheck,
                                  uint32_t num_retries,
                                  time_t last_run,
@@ -208,7 +208,7 @@ static void printone_snooze_json(const char *userid,
     j = json_object();
     json_object_set_new(j, "type", json_string("snooze"));
 
-    json_object_set_new(j, "userid", json_string(userid));
+    json_object_set_new(j, "userid", json_string(mbname_userid(mbname)));
 
     if (nextcheck) {
         memset(timebuf, 0, sizeof(timebuf));
@@ -236,7 +236,7 @@ static void printone_snooze_json(const char *userid,
     json_decref(j);
 }
 
-static void printone_snooze_pretty(const char *userid,
+static void printone_snooze_pretty(const mbname_t *mbname,
                                    time_t nextcheck,
                                    uint32_t num_retries,
                                    time_t last_run,
@@ -252,7 +252,7 @@ static void printone_snooze_pretty(const char *userid,
 
     pretty_nextcheck(&buf, nextcheck);
     buf_append_kv(&buf, sep, want_color, NULL, "SNZ");
-    buf_append_kv(&buf, sep, want_color, "userid", userid);
+    buf_append_kv(&buf, sep, want_color, "userid", mbname_userid(mbname));
 
     until = json_object_get(snoozed, "until");
     moveToMailboxId = json_object_get(snoozed, "moveToMailboxId");
@@ -299,7 +299,7 @@ static void printone_snooze_pretty(const char *userid,
     fputs(buf_cstring(&buf), stdout);
 }
 
-static void printone_send_json(const char *userid,
+static void printone_send_json(const mbname_t *mbname,
                                time_t nextcheck, uint32_t num_retries,
                                time_t last_run, const char *last_err,
                                json_t *submission,
@@ -308,6 +308,7 @@ static void printone_send_json(const char *userid,
     json_t *j;
     int *sep = (int *) rock;
     char timebuf[ISO8601_DATETIME_MAX + 1];
+    const char *userid = mbname_userid(mbname);
 
     j = json_object();
     json_object_set_new(j, "type", json_string("send"));
@@ -342,13 +343,13 @@ static void printone_send_json(const char *userid,
     json_decref(j);
 }
 
-static void printone_send_pretty(const char *userid,
+static void printone_send_pretty(const mbname_t *mbname,
                                  time_t nextcheck, uint32_t num_retries,
                                  time_t last_run, const char *last_err,
                                  json_t *submission,
                                  void *rock __attribute__((unused)))
 {
-    const char *identityId;
+    const char *identityId, *userid;
     json_t *envelope, *mailFrom, *rcptTo, *value;
     static struct buf buf = BUF_INITIALIZER;
     size_t i;
@@ -357,6 +358,7 @@ static void printone_send_pretty(const char *userid,
     buf_reset(&buf);
 
     identityId = json_string_value(json_object_get(submission, "identityId"));
+    userid = mbname_userid(mbname);
 
     envelope = json_object_get(submission, "envelope");
     mailFrom = json_object_get(envelope, "mailFrom");
@@ -384,7 +386,7 @@ static void printone_send_pretty(const char *userid,
     fputs(buf_cstring(&buf), stdout);
 }
 
-static void printone_unscheduled_json(const char *mboxname,
+static void printone_unscheduled_json(const mbname_t *mbname,
                                       uint32_t imap_uid,
                                       time_t nextcheck,
                                       uint32_t num_rcpts,
@@ -406,7 +408,7 @@ static void printone_unscheduled_json(const char *mboxname,
         json_object_set_new(j, "nextcheck", json_string(timebuf));
     }
 
-    json_object_set_new(j, "mboxname", json_string(mboxname));
+    json_object_set_new(j, "mboxname", json_string(mbname_intname(mbname)));
     json_object_set_new(j, "imap_uid", json_integer(imap_uid));
     json_object_set_new(j, "num_rcpts", json_integer(num_rcpts));
     json_object_set_new(j, "num_retries", json_integer(num_retries));
@@ -427,7 +429,7 @@ static void printone_unscheduled_json(const char *mboxname,
     json_decref(j);
 }
 
-static void printone_unscheduled_pretty(const char *mboxname,
+static void printone_unscheduled_pretty(const mbname_t *mbname,
                                         uint32_t imap_uid,
                                         time_t nextcheck,
                                         uint32_t num_rcpts,
@@ -443,7 +445,7 @@ static void printone_unscheduled_pretty(const char *mboxname,
 
     pretty_nextcheck(&buf, nextcheck);
     buf_append_kv(&buf, sep, want_color, NULL, "UNS");
-    buf_append_kv(&buf, sep, want_color, "mboxname", mboxname);
+    buf_append_kv(&buf, sep, want_color, "mboxname", mbname_intname(mbname));
     buf_append_kvf(&buf, sep, 0, "uid", "%" PRIu32, imap_uid);
     buf_append_kvf(&buf, sep, 0, "num_rcpts", "%" PRIu32, num_rcpts);
     pretty_error(&buf, num_retries, last_run, last_err);

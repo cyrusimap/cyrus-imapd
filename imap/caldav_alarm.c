@@ -2182,7 +2182,7 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 
 struct list_one_calendar_icalcomp_rock {
     struct caldav_alarm_data *data;
-    mbname_t *mbname;
+    const mbname_t *mbname;
     list_calendar_proc proc;
     void *rock;
 };
@@ -2284,7 +2284,7 @@ static int list_one_calendar_icalcomp_cb(
 //                      xstrdup(icaltime_as_ical_string(alarmtime)));
 
         /* XXX what other fields are useful here? alarmtime? */
-        lrock->proc(lrock->data->mboxname, lrock->data->imap_uid,
+        lrock->proc(lrock->mbname, lrock->data->imap_uid,
                     lrock->data->nextcheck, lrock->data->num_rcpts,
                     lrock->data->num_retries, lrock->data->last_run,
                     lrock->data->last_err,
@@ -2297,7 +2297,8 @@ static int list_one_calendar_icalcomp_cb(
 /* XXX this is roughly analoguous to process_valarms() with
  * XXX process_alarms() directly embedded
  */
-static void list_one_calendar(struct caldav_alarm_data *data,
+static void list_one_calendar(const mbname_t *mbname,
+                              struct caldav_alarm_data *data,
                               list_calendar_proc proc,
                               void *rock)
 {
@@ -2308,12 +2309,9 @@ static void list_one_calendar(struct caldav_alarm_data *data,
     struct caldav_db *db = NULL;
     struct caldav_data *cdata = NULL;
     struct icalperiodtype null_period = icalperiodtype_null_period();
-    mbname_t *mbname = NULL;
     int r;
 
     assert(data->type == ALARM_CALENDAR);
-
-    mbname = mbname_from_intname(data->mboxname);
 
     r = mailbox_open_irl(data->mboxname, &mailbox);
     if (r) {
@@ -2396,29 +2394,27 @@ done:
     caldav_close(db);
 }
 
-static void list_one_snooze(struct caldav_alarm_data *data,
+static void list_one_snooze(const mbname_t *mbname,
+                            struct caldav_alarm_data *data,
                             list_snooze_proc proc,
                             void *rock)
 {
     json_t *snoozed;
-    char *userid = NULL;
 
     assert(data->type == ALARM_SNOOZE);
 
     snoozed = jmap_fetch_snoozed(data->mboxname, data->imap_uid);
     if (!snoozed) return;
 
-    userid = mboxname_to_userid(data->mboxname);
-
-    proc(userid, data->nextcheck, data->num_retries,
+    proc(mbname, data->nextcheck, data->num_retries,
          data->last_run, data->last_err,
          snoozed, rock);
 
-    free(userid);
     json_decref(snoozed);
 }
 
-static void list_one_send(struct caldav_alarm_data *data,
+static void list_one_send(const mbname_t *mbname,
+                          struct caldav_alarm_data *data,
                           list_send_proc proc,
                           void *rock)
 {
@@ -2427,7 +2423,6 @@ static void list_one_send(struct caldav_alarm_data *data,
     message_t *msg = NULL;
     struct buf buf = BUF_INITIALIZER;
     json_t *submission = NULL;
-    char *userid = NULL;
     int r;
 
     assert(data->type == ALARM_SEND);
@@ -2439,8 +2434,6 @@ static void list_one_send(struct caldav_alarm_data *data,
                            data->mboxname, error_message(r));
         return;
     }
-
-    userid = mboxname_to_userid(mailbox_name(mailbox));
 
     r = mailbox_find_index_record(mailbox, data->imap_uid, &record);
     if (r) {
@@ -2480,28 +2473,27 @@ static void list_one_send(struct caldav_alarm_data *data,
         goto done;
     }
 
-    proc(userid, data->nextcheck, data->num_retries,
+    proc(mbname, data->nextcheck, data->num_retries,
          data->last_run, data->last_err,
          submission, rock);
 
     json_decref(submission);
 
 done:
-    free(userid);
     message_unref(&msg);
     buf_free(&buf);
     if (r) mailbox_abort(mailbox);
     mailbox_close(&mailbox);
 }
 
-static void list_one_unscheduled(struct caldav_alarm_data *data,
+static void list_one_unscheduled(const mbname_t *mbname,
+                                 struct caldav_alarm_data *data,
                                  list_unscheduled_proc proc,
                                  void *rock)
 {
     assert(data->type == ALARM_UNSCHEDULED);
 
-    /* XXX what's useful here? */
-    proc(data->mboxname, data->imap_uid,
+    proc(mbname, data->imap_uid,
          data->nextcheck, data->num_rcpts,
          data->num_retries, data->last_run,
          data->last_err, rock);
@@ -2543,6 +2535,7 @@ EXPORTED int caldav_alarm_list(time_t runtime,
 
     for (i = 0; i < alarm_read_rock.list.count; i++) {
         struct caldav_alarm_data *data = ptrarray_nth(&alarm_read_rock.list, i);
+        mbname_t *mbname = NULL;
 
         /* XXX do we need a namelock around users? in that case,
          * XXX sql results need to be ordered by mailbox to keep
@@ -2550,27 +2543,30 @@ EXPORTED int caldav_alarm_list(time_t runtime,
          * XXX sorted in some more display-friendly order...
          */
 
+        mbname = mbname_from_intname(data->mboxname);
+
         switch (data->type) {
         case ALARM_CALENDAR:
             if (calendar_proc)
-                list_one_calendar(data, calendar_proc, rock);
+                list_one_calendar(mbname, data, calendar_proc, rock);
             break;
         case ALARM_SNOOZE:
             if (snooze_proc)
-                list_one_snooze(data, snooze_proc, rock);
+                list_one_snooze(mbname, data, snooze_proc, rock);
             break;
         case ALARM_SEND:
             if (send_proc)
-                list_one_send(data, send_proc, rock);
+                list_one_send(mbname, data, send_proc, rock);
             break;
         case ALARM_UNSCHEDULED:
             if (unscheduled_proc)
-                list_one_unscheduled(data, unscheduled_proc, rock);
+                list_one_unscheduled(mbname, data, unscheduled_proc, rock);
             break;
         }
 
         caldav_alarm_fini(data);
         free(data);
+        mbname_free(&mbname);
     }
 
 done:
