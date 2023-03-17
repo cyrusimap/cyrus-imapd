@@ -1302,6 +1302,20 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
 
     backdoor->extname = buf_release(&buf);
 
+    if (ns->isutf8) {
+        /* Decode extname from IMAP UTF-7 to UTF-8. */
+        charset_t cs = charset_lookupname("imap-utf-7");
+        char *decoded = charset_to_utf8(backdoor->extname,
+                                        strlen(backdoor->extname),
+                                        cs, ENCODING_NONE);
+        if (decoded) {
+            free(backdoor->extname);
+            backdoor->extname = decoded;
+        }
+
+        charset_free(&cs);
+    }
+
  done:
 
     buf_free(&buf);

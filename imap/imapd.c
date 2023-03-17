@@ -14921,6 +14921,7 @@ static void cmd_enable(char *tag)
     prot_printf(imapd_out, "* ENABLED");
     if (new_capa & CAPA_IMAP4REV2) {
         prot_printf(imapd_out, " IMAP4rev2");
+        imapd_namespace.isutf8 = 1;
     }
     if (new_capa & CAPA_CONDSTORE) {
         prot_printf(imapd_out, " CONDSTORE");
