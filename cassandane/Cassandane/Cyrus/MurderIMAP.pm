@@ -111,10 +111,13 @@ sub test_frontend_commands
     $result = $frontend->getmetadata('INBOX',
                                      '/shared/vendor/cmu/cyrus-imapd/size');
     $self->assert_not_null($result);
+    $self->assert(exists $result->{'INBOX'}{'/shared/vendor/cmu/cyrus-imapd/size'});
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
     $result = $frontend->getmetadata('(INBOX INBOX.newfolder)',
                                      '/shared/vendor/cmu/cyrus-imapd/size');
     $self->assert_not_null($result);
+    $self->assert(exists $result->{'INBOX'}{'/shared/vendor/cmu/cyrus-imapd/size'});
+    $self->assert(exists $result->{'INBOX.newfolder'}{'/shared/vendor/cmu/cyrus-imapd/size'});
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
     # XXX test other commands

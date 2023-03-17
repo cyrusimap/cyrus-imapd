@@ -1421,7 +1421,7 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
 
     /* Send command to remote */
     proxy_gentag(mytag, sizeof(mytag));
-    prot_printf(be->out, "%s GETANNOTATION \"%s\" (", mytag, mbox_pat);
+    prot_printf(be->out, "%s GETMETADATA \"%s\" (", mytag, mbox_pat);
     for (i = 0; i < entry_pat->count; i++) {
         const char *entry = strarray_nth(entry_pat, i);
 
