@@ -406,8 +406,15 @@ sub test_issue_LP52545479
     my $eventId1 = $res->[1][1]{created}{event1}{id};
     $self->assert_not_null($eventId1);
 
+    my $res_annot_storage = 'ANNOTATION-STORAGE';
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj == 3 && $min < 9)) {
+        $res_annot_storage = 'X-ANNOTATION-STORAGE';
+    }
+
     $self->_set_quotaroot('user.cassandane');
-    $self->_set_quotalimits(storage => 1, 'x-annotation-storage' => 1); # that's 1024 bytes
+    $self->_set_quotalimits(storage => 1,
+                            $res_annot_storage => 1); # that's 1024 bytes
 
     $res = $jmap->CallMethods([
         ['Contact/set', {

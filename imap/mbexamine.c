@@ -258,6 +258,8 @@ static int do_examine(struct findall_data *data, void *rock)
            mailbox->i.start_offset, mailbox->i.record_size);
     printf("  Number of Messages: %u  Mailbox Size: " QUOTA_T_FMT " bytes  Annotations Size: " QUOTA_T_FMT " bytes\n",
            mailbox->i.exists, mailbox->i.quota_mailbox_used, mailbox->i.quota_annot_used);
+    printf("    Deleted Size: " QUOTA_T_FMT " bytes  Expunged Size: " QUOTA_T_FMT " bytes\n",
+           mailbox->i.quota_deleted_used, mailbox->i.quota_expunged_used);
     printf("  Last Append Date: (" TIME_T_FMT ") %s",
            mailbox->i.last_appenddate, ctime(&mailbox->i.last_appenddate));
     printf("  UIDValidity: %u  Last UID: %u\n",

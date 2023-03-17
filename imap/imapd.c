@@ -403,8 +403,9 @@ static struct capa_struct base_capabilities[] = {
     { "PREVIEW",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8970 */
     { "QRESYNC",               CAPA_POSTAUTH,           { 0 } }, /* RFC 7162 */
     { "QUOTA",                 CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
-    /* QUOTA=           RFC 9208 is not implemented */
     { "QUOTASET",              CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
+    { "QUOTA=RES-",            CAPA_POSTAUTH|CAPA_MULTI,         /* RFC 9208 */
+      { .multi = { (const char **) quota_names, QUOTA_NUMRESOURCES } } },
     { "REPLACE",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8508 */
     { "RIGHTS=kxten",          CAPA_POSTAUTH,           { 0 } }, /* RFC 4314 */
     { "SASL_IR",               CAPA_PREAUTH,            { 0 } }, /* RFC 4959 */
@@ -445,8 +446,6 @@ static struct capa_struct base_capabilities[] = {
     { "SORT=UID",              CAPA_POSTAUTH,           { 0 } }, /* NS */
     { "THREAD=REFS",           CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-morg-inthread */
     { "X-CREATEDMODSEQ",       CAPA_POSTAUTH,           { 0 } }, /* CY */
-    { "X-QUOTA=",              CAPA_POSTAUTH|CAPA_MULTI,         /* CY */
-      { .multi = { (const char **) quota_names, QUOTA_NUMRESOURCES } } },
     { "X-REPLICATION",         CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "X-REPLICATION-ARCHIVE", CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "X-SIEVE-MAILBOX",       CAPA_POSTAUTH,           { 0 } }, /* CY */
@@ -4026,14 +4025,21 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
     }
     if (r) {
         eatline(imapd_in, ' ');
+
+        const char *respcode = "";
+        if (r == IMAP_QUOTA_EXCEEDED) {
+            respcode = "[OVERQUOTA] ";
+        }
+        else if (r == IMAP_MAILBOX_NONEXISTENT &&
+                 mboxlist_createmailboxcheck(intname, 0, 0,
+                                             imapd_userisadmin,
+                                             imapd_userid, imapd_authstate,
+                                             NULL, NULL, 0) == 0) {
+            respcode = "[TRYCREATE] ";
+        }
+        
         prot_printf(imapd_out, "%s NO %s%s\r\n",
-                    tag,
-                    (r == IMAP_MAILBOX_NONEXISTENT &&
-                     mboxlist_createmailboxcheck(intname, 0, 0,
-                                                 imapd_userisadmin,
-                                                 imapd_userid, imapd_authstate,
-                                                 NULL, NULL, 0) == 0)
-                    ? "[TRYCREATE] " : "", error_message(r));
+                    tag, respcode, error_message(r));
         free(intname);
         return r;
     }
@@ -4251,6 +4257,9 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         else if (r == IMAP_USERFLAG_EXHAUSTED ||
                  r == IMAP_CONVERSATION_GUIDLIMIT) {
             respcode = "[LIMIT] ";
+        }
+        else if (r == IMAP_QUOTA_EXCEEDED) {
+            respcode = "[OVERQUOTA] ";
         }
         else if (r == IMAP_MAILBOX_NONEXISTENT &&
                  mboxlist_createmailboxcheck(intname, 0, 0,
@@ -7086,6 +7095,9 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
         if (r == IMAP_MAILBOX_NOTSUPPORTED) {
             respcode = "[CANNOT] ";
         }
+        else if (r == IMAP_QUOTA_EXCEEDED) {
+            respcode = "[OVERQUOTA] ";
+        }
         else if (r == IMAP_MAILBOX_NONEXISTENT &&
                  mboxlist_createmailboxcheck(intname, 0, 0,
                                              imapd_userisadmin,
@@ -9298,58 +9310,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
         goto out;
     }
 
-    /* are we forcing the creation of a quotaroot by having a leading +? */
-    if (quotaroot[0] == '+') {
-        force = 1;
-        quotaroot++;
-    }
-
-    intname = mboxname_from_external(quotaroot, &imapd_namespace, imapd_userid);
-
-    r = mlookup(NULL, NULL, intname, &mbentry);
-    if (r == IMAP_MAILBOX_NONEXISTENT)
-        r = 0;      /* will create a quotaroot anyway */
-    if (r)
-        goto out;
-
-    if (mbentry && (mbentry->mbtype & MBTYPE_REMOTE)) {
-        /* remote mailbox */
-        struct backend *s;
-        char quotarootbuf[MAX_MAILBOX_BUFFER];
-
-        snprintf(quotarootbuf, sizeof(quotarootbuf), "%s.", intname);
-
-        r = mboxlist_allmbox(quotarootbuf, quota_cb, (void *)mbentry->server, 0);
-        if (r)
-            goto out;
-
-        imapd_check(NULL, 0);
-
-        s = proxy_findserver(mbentry->server, &imap_protocol,
-                             proxy_userid, &backend_cached,
-                             &backend_current, &backend_inbox, imapd_in);
-        if (!s) {
-            r = IMAP_SERVER_UNAVAILABLE;
-            goto out;
-        }
-
-        imapd_check(s, 0);
-
-        prot_printf(s->out, "%s Setquota ", tag);
-        prot_printstring(s->out, quotaroot);
-        prot_putc(' ', s->out);
-        pipe_command(s, 0);
-        pipe_including_tag(s, tag, 0);
-
-        free(intname);
-        return;
-
-    }
-    mboxlist_entry_free(&mbentry);
-
-    /* local mailbox */
-
-    /* Now parse the arguments as a setquota_list */
+    /* Parse the arguments as a setquota_list */
     c = prot_getc(imapd_in);
     if (c != '(') goto badlist;
 
@@ -9370,7 +9331,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
         }
 
         c = getsint32(imapd_in, &limit);
-        /* note: we accept >= 0 according to RFC 2087,
+        /* note: we accept >= 0 according to RFC 9208,
          * and also -1 to fix Bug #3559 */
         if (limit < -1) goto badlist;
         newquotas[res] = limit;
@@ -9384,6 +9345,65 @@ void cmd_setquota(const char *tag, const char *quotaroot)
         return;
     }
 
+    /* are we forcing the creation of a quotaroot by having a leading +? */
+    if (quotaroot[0] == '+') {
+        force = 1;
+        quotaroot++;
+    }
+
+    intname = mboxname_from_external(quotaroot, &imapd_namespace, imapd_userid);
+
+    r = mlookup(NULL, NULL, intname, &mbentry);
+    if (r == IMAP_MAILBOX_NONEXISTENT)
+        r = 0;      /* will create a quotaroot anyway */
+    if (r)
+        goto out;
+
+    if (mbentry && (mbentry->mbtype & MBTYPE_REMOTE)) {
+        /* remote mailbox */
+        struct backend *s;
+        char quotarootbuf[MAX_MAILBOX_BUFFER];
+        const char * const *qnames;
+        char sep = '(';
+
+        snprintf(quotarootbuf, sizeof(quotarootbuf), "%s.", intname);
+
+        r = mboxlist_allmbox(quotarootbuf, quota_cb, (void *)mbentry->server, 0);
+        if (r)
+            goto out;
+
+        imapd_check(NULL, 0);
+
+        s = proxy_findserver(mbentry->server, &imap_protocol,
+                             proxy_userid, &backend_cached,
+                             &backend_current, &backend_inbox, imapd_in);
+        if (!s) {
+            r = IMAP_SERVER_UNAVAILABLE;
+            goto out;
+        }
+
+        imapd_check(s, 0);
+
+        qnames = CAPA(s, CAPA_QUOTASET) ? quota_names : legacy_quota_names;
+
+        prot_printf(s->out, "%s Setquota ", tag);
+        prot_printstring(s->out, quotaroot);
+        prot_putc(' ', s->out);
+        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+            prot_printf(s->out, "%c%s " QUOTA_T_FMT,
+                        sep, qnames[res], newquotas[res]);
+            sep = ' ';
+        }
+        prot_puts(s->out, ")\r\n");
+        pipe_including_tag(s, tag, 0);
+
+        free(intname);
+        return;
+
+    }
+    mboxlist_entry_free(&mbentry);
+
+    /* local mailbox */
     r = mboxlist_setquotas(intname, newquotas, 0, force);
 
     imapd_check(NULL, 0);
@@ -9557,6 +9577,12 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "createdmodseq")) {
             statusitems |= STATUS_CREATEDMODSEQ;
         }
+        else if (!strcmp(arg.s, "deleted")) {
+            statusitems |= STATUS_DELETED;
+        }
+        else if (!strcmp(arg.s, "deleted-storage")) {
+            statusitems |= STATUS_DELETED_STORAGE;
+        }
         else if (hasconv && !strcmp(arg.s, "xconvexists")) {
             statusitems |= STATUS_XCONVEXISTS;
         }
@@ -9627,7 +9653,7 @@ static int print_statusline(const char *extname, unsigned statusitems,
         sepchar = ' ';
     }
     if (statusitems & STATUS_SIZE) {
-        prot_printf(imapd_out, "%cSIZE %llu", sepchar, sd->size);
+        prot_printf(imapd_out, "%cSIZE " QUOTA_T_FMT, sepchar, sd->size);
         sepchar = ' ';
     }
     if (statusitems & STATUS_CREATEDMODSEQ) {
@@ -9638,6 +9664,15 @@ static int print_statusline(const char *extname, unsigned statusitems,
     if (statusitems & STATUS_HIGHESTMODSEQ) {
         prot_printf(imapd_out, "%cHIGHESTMODSEQ " MODSEQ_FMT,
                     sepchar, sd->highestmodseq);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_DELETED) {
+        prot_printf(imapd_out, "%cDELETED %u", sepchar, sd->deleted);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_DELETED_STORAGE) {
+        prot_printf(imapd_out, "%cDELETED-STORAGE " QUOTA_T_FMT,
+                    sepchar, sd->deleted_storage);
         sepchar = ' ';
     }
     if (statusitems & STATUS_XCONVEXISTS) {
@@ -14206,7 +14241,7 @@ static int list_data_remote(struct backend *be, char *tag,
                     /* XXX  MUST be in same order as STATUS_* bitmask */
                     "messages", "recent", "uidnext", "uidvalidity",
                     "unseen", "highestmodseq", "size", "mailboxid",
-                    "", "", "",
+                    "deleted", "deleted-storage", "",
                     "xconvexists", "xconvunseen", "xconvmodseq",
                     "createdmodseq", "sharedseen", NULL
                 };

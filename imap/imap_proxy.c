@@ -101,6 +101,7 @@ struct protocol_t imap_protocol =
           { "RIGHTS=kxte", CAPA_ACLRIGHTS },
           { "LIST-EXTENDED", CAPA_LISTEXTENDED },
           { "SASL-IR", CAPA_SASL_IR },
+          { "QUOTASET", CAPA_QUOTASET },
           { "X-REPLICATION", CAPA_REPLICATION },
           { "X-SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
           { "X-REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },

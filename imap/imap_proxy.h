@@ -67,6 +67,7 @@ enum {
     CAPA_METADATA            = (1 << 10),
     CAPA_SIEVE_MAILBOX       = (1 << 11),
     CAPA_REPLICATION_ARCHIVE = (1 << 12),
+    CAPA_QUOTASET            = (1 << 13),
 };
 
 extern struct protocol_t imap_protocol;
