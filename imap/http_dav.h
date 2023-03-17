@@ -500,6 +500,12 @@ struct meth_params {
     struct put_params put;              /* params for putting a resource */
     struct propfind_params propfind;    /* params for finding properties */
     const struct report_type_t *reports;/* array of reports & proc functions */
+    struct {                            /* offsets into mboxname_counters */
+        size_t modseq;                  /* for modseqs of a particular type */
+        size_t foldersmodseq;
+        size_t deletedmodseq;
+        size_t foldersdeletedmodseq;
+    } user_modseq_offset;
 };
 
 extern struct meth_params webdav_params;

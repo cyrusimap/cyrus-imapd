@@ -357,7 +357,13 @@ static struct meth_params carddav_params = {
       { NS_CARDDAV, "addressbook-data", &carddav_import } },
     { CARDDAV_SUPP_DATA, &carddav_put },
     { DAV_FINITE_DEPTH, carddav_props },        /* Disable infinite depth */
-    carddav_reports
+    carddav_reports,
+    /* Offsets of CardDAV modseqs -- used for report_sync_col() */
+    { offsetof(struct mboxname_counters, carddavmodseq),
+      offsetof(struct mboxname_counters, carddavfoldersmodseq),
+      offsetof(struct mboxname_counters, carddavdeletedmodseq),
+      offsetof(struct mboxname_counters, carddavfoldersdeletedmodseq)
+    }
 };
 
 

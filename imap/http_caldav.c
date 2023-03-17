@@ -610,7 +610,13 @@ static struct meth_params caldav_params = {
       { NS_CALDAV, "calendar-data", &caldav_import } },
     { CALDAV_SUPP_DATA, &caldav_put },
     { 0, caldav_props },                        /* Allow infinite depth */
-    caldav_reports
+    caldav_reports,
+    /* Offsets of CalDAV modseqs -- used for report_sync_col() */
+    { offsetof(struct mboxname_counters, caldavmodseq),
+      offsetof(struct mboxname_counters, caldavfoldersmodseq),
+      offsetof(struct mboxname_counters, caldavdeletedmodseq),
+      offsetof(struct mboxname_counters, caldavfoldersdeletedmodseq)
+    }
 };
 
 
