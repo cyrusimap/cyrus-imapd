@@ -1052,7 +1052,7 @@ static int caldav_check_precond(struct transaction_t *txn,
 
     /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
     precond = dav_check_precond(txn, params, mailbox, data, etag, lastmod);
-    if (precond == HTTP_PRECOND_FAILED &&
+    if (precond == HTTP_PRECOND_FAILED && cdata &&
         cdata->comp_flags.tzbyref && !cdata->organizer && cdata->sched_tag) {
         /* Resource has just had VTIMEZONEs stripped -
            check if conditional matches previous ETag */
