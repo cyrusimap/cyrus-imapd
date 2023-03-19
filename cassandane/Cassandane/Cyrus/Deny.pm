@@ -118,7 +118,7 @@ sub test_basic
         my $store = $svc->create_store(username => $case->{user});
         if ($case->{can_login})
         {
-            xlog $self, "Expecting this to succeeed";
+            xlog $self, "Expecting this to succeed";
             my $talk = $store->get_client();
             my $r = $talk->status('inbox', [ 'messages' ]);
             $self->assert_deep_equals({ messages => 0 }, $r);
