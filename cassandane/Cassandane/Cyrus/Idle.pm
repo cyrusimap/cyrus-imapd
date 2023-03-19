@@ -322,7 +322,7 @@ sub common_shutdownfile
     $self->assert_null($talk->get_response_code('alert'));
 
     xlog $self, "Write some text to the shutdown file";
-    my $admin_store = $svc->create_store(folder => 'user.casssandane',
+    my $admin_store = $svc->create_store(folder => 'user.cassandane',
                                          username => 'admin');
     my $shut_message = "The Mayans were right";
     $admin_store->get_client()->setmetadata("",
