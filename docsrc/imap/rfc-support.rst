@@ -520,6 +520,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     The IMAP METADATA Extension
 
+:rfc:`5465`
+
+    The IMAP NOTIFY Extension
+
 :rfc:`5490`
 
     The Sieve Mail-Filtering Language -- Extensions for Checking Mailbox
@@ -997,10 +1001,6 @@ RFC Wishlist
 
     Sieve Notification Mechanism: Extensible Messaging and Presence
     Protocol (XMPP)
-
-:rfc:`5465`
-
-    The IMAP NOTIFY Extension
 
 :rfc:`5466`
 

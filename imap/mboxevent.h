@@ -428,4 +428,10 @@ void mboxevent_set_applepushservice_dav(struct mboxevent *event,
                                         int mbtype,
                                         unsigned int expiry);
 
+typedef void mboxevent_idlenotifier_t(json_t *msg);
+
+extern void mboxevent_set_idlenotifier(mboxevent_idlenotifier_t *notifyproc);
+
+enum event_type name_to_mboxevent(const char *name);
+
 #endif /* _MBOXEVENT_H */

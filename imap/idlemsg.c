@@ -60,6 +60,7 @@
 #include "idlemsg.h"
 #include "global.h"
 #include "xunlink.h"
+#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -67,6 +68,7 @@
 /* UNIX socket variables */
 static int idle_sock = -1;
 static struct sockaddr_un idle_local;
+static struct buf buf = BUF_INITIALIZER;
 
 EXPORTED int idle_make_server_address(struct sockaddr_un *mysun)
 {
@@ -153,6 +155,7 @@ EXPORTED void idle_done_sock(void)
     }
 
     idle_sock = -1;
+    buf_free(&buf);
 }
 
 EXPORTED int idle_get_sock(void)
@@ -164,10 +167,11 @@ EXPORTED int idle_get_sock(void)
  * Send a message to a peer (idled or imapd).
  * Returns 0 on success or an IMAP error code on failure.
  */
-EXPORTED int idle_send(const struct sockaddr_un *remote,
-                       const idle_message_t *msg)
+EXPORTED int idle_send(const struct sockaddr_un *remote, json_t *msg)
 {
     int flags = 0;
+    size_t size;
+    char *base;
 
 #ifdef MSG_DONTWAIT
     flags |= MSG_DONTWAIT;
@@ -176,8 +180,21 @@ EXPORTED int idle_send(const struct sockaddr_un *remote,
     if (idle_sock < 0)
         return IMAP_SERVER_UNAVAILABLE;
 
-    if (sendto(idle_sock, (void *) msg,
-               IDLE_MESSAGE_BASE_SIZE+strlen(msg->mboxname)+1, /* 1 for NULL */
+    /* Determine size of encoded message */
+    size = json_dumpb(msg, NULL, 0, JSON_COMPACT);
+    if (!size) return IMAP_INTERNAL;
+
+    /* Make sure we have enough space for message and its prepended size*/
+    buf_truncate(&buf, size + SIZEOF_SIZE_T);
+    base = (char *) buf_base(&buf);
+
+    /* Copy size into buffer */
+    memcpy(base, &size, SIZEOF_SIZE_T);
+
+    /* Encode message into buffer */
+    json_dumpb(msg, base + SIZEOF_SIZE_T, size, JSON_COMPACT);
+
+    if (sendto(idle_sock, (void *) base, buf_len(&buf),
                flags, (struct sockaddr *) remote, sizeof(*remote)) == -1) {
         return errno;
     }
@@ -185,31 +202,53 @@ EXPORTED int idle_send(const struct sockaddr_un *remote,
     return 0;
 }
 
-EXPORTED int idle_recv(struct sockaddr_un *remote, idle_message_t *msg)
+EXPORTED json_t *idle_recv(struct sockaddr_un *remote)
 {
     socklen_t remote_len = sizeof(*remote);
-    int n;
+    json_t *msg = NULL;
+    json_error_t jerr;
+    size_t size;
+    char *base;
+    ssize_t n;
 
     if (idle_sock < 0)
-        return 0;
+        return NULL;
 
     memset(remote, 0, remote_len);
-    memset(msg, 0, sizeof(idle_message_t));
 
-    n = recvfrom(idle_sock, (void *) msg, sizeof(idle_message_t), 0,
+    /* Read the size of the message */
+    n = recvfrom(idle_sock, (void *) &size, SIZEOF_SIZE_T, MSG_PEEK,
                  (struct sockaddr *) remote, &remote_len);
 
     if (n < 0) {
         syslog(LOG_ERR, "IDLE: recvfrom failed: %m");
-        return 0;
+        return NULL;
     }
 
-    if (n <= IDLE_MESSAGE_BASE_SIZE ||
-        msg->mboxname[n - 1 - IDLE_MESSAGE_BASE_SIZE] != '\0') {
-        syslog(LOG_ERR, "IDLE: invalid message received: size=%d", n);
-        return 0;
+    if (n < SIZEOF_SIZE_T) {
+        syslog(LOG_ERR, "IDLE: invalid message size received: size=%ld", n);
+        return NULL;
     }
 
-    return 1;
+    /* Make sure we have enough space for message */
+    buf_truncate(&buf, size + SIZEOF_SIZE_T);
+    base = (char *) buf_base(&buf);
+
+    /* Read actual message */
+    n = recvfrom(idle_sock, (void *) base, buf_len(&buf), 0,
+                 (struct sockaddr *) remote, &remote_len);
+
+    if (n < 0) {
+        syslog(LOG_ERR, "IDLE: recvfrom failed: %m");
+        return NULL;
+    }
+
+    /* Make sure we have valid JSON */
+    if (!(msg = json_loadb(base + SIZEOF_SIZE_T, size, 0, &jerr))) {
+        syslog(LOG_ERR, "IDLE: invalid message received: size=%ld", n);
+        return NULL;
+    }
+
+    return msg;
 }
 

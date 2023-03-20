@@ -2120,7 +2120,7 @@ static void bitpipe(void)
             goto done;
         }
     } while (!proxy_check_input(protin, popd_in, popd_out,
-                                backend->in, backend->out, 0));
+                                backend->in, backend->out, PROT_NO_FD, NULL, 0));
 
  done:
     /* ok, we're done. */

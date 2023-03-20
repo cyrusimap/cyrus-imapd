@@ -530,11 +530,6 @@ typedef unsigned mailbox_decideproc_t(struct mailbox *mailbox,
                                       const struct index_record *index,
                                       void *rock);
 
-typedef void mailbox_notifyproc_t(const char *mboxname);
-
-extern void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc);
-extern mailbox_notifyproc_t *mailbox_get_updatenotifier(void);
-
 /* file names on disk */
 #define META_FNAME_NEW 1
 extern const char *mailbox_meta_fname(const struct mailbox *mailbox, int metafile);

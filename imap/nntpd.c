@@ -735,7 +735,7 @@ static void cmdloop(void)
 
         if (!proxy_check_input(protin, nntp_in, nntp_out,
                                backend_current ? backend_current->in : NULL,
-                               NULL, 0)) {
+                               NULL, PROT_NO_FD, NULL, 0)) {
             /* No input from client */
             continue;
         }

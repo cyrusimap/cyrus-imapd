@@ -80,6 +80,8 @@ int proxy_check_input(struct protgroup *protin,
                       struct protstream *clientout,
                       struct protstream *serverin,
                       struct protstream *serverout,
+                      int extra_read_fd,
+                      int *extra_read_flag,
                       unsigned long timeout_sec);
 
 struct mbox_refer {

@@ -1,0 +1,15 @@
+Description:
+
+Adds support for IMAP NOTIFY (RFC 5465).
+
+
+Config changes:
+
+None.
+
+However, idled MUST be running in order for NOTIFY support to be enabled.
+
+
+Upgrade instructions:
+
+None.

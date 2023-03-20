@@ -842,25 +842,6 @@ static int mailbox_commit_cache(struct mailbox *mailbox)
     return 0;
 }
 
-/* function to be used for notification of mailbox changes/updates */
-static mailbox_notifyproc_t *updatenotifier = NULL;
-
-/*
- * Set the updatenotifier function
- */
-HIDDEN void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
-{
-    updatenotifier = notifyproc;
-}
-
-/*
- * Get the updatenotifier function
- */
-mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
-{
-    return updatenotifier;
-}
-
 EXPORTED void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid)
 {
     free(mailbox->h.uniqueid);
@@ -2709,7 +2690,6 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
     }
 
     if (mailbox->has_changed) {
-        if (updatenotifier) updatenotifier(mailbox_name(mailbox));
         sync_log_mailbox(mailbox_name(mailbox));
 
         if (!sdata) {

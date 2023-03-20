@@ -198,11 +198,22 @@ static struct mboxevent event_template =
   STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER, NULL, NULL, NULL
 };
 
-static char *json_formatter(enum event_type type, struct event_parameter params[]);
+static json_t *json_formatter(enum event_type type, struct event_parameter params[]);
 static int filled_params(enum event_type type, struct mboxevent *mboxevent);
 static int mboxevent_expected_param(enum event_type type, enum event_param param);
 
 static int mboxevent_initialized = 0;
+
+/* function to be used for IMAP IDLE/NOTIFY notification of changes/updates */
+static mboxevent_idlenotifier_t *idle_notifier = NULL;
+
+/*
+ * Set the idlenotifier function
+ */
+HIDDEN void mboxevent_set_idlenotifier(mboxevent_idlenotifier_t *notifyproc)
+{
+    idle_notifier = notifyproc;
+}
 
 static void done_cb(void *rock __attribute__((unused))) {
     /* do nothing */
@@ -329,11 +340,7 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
     init_internal();
 
     /* event notification is completely disabled */
-    if (!notifier)
-        return NULL;
-
-    /* the group to which belong the event is not enabled */
-    if (!(enabled_events & type))
+    if (!notifier && !idle_notifier)
         return NULL;
 
     mboxevent = xmalloc(sizeof(struct mboxevent));
@@ -780,14 +787,27 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
                 }
             }
 
-            /* check if expected event parameters are filled */
-            assert(filled_params(type, event));
-
             /* notification is ready to send */
-            formatted_message = json_formatter(type, event->params);
-            notify(notifier, "EVENT", NULL, NULL, NULL, 0, NULL, formatted_message, fname);
+            json_t *jevent = json_formatter(type, event->params);
 
-            free(formatted_message);
+            if (notifier && (type & enabled_events)) {
+                /* check if expected event parameters are filled */
+                assert(filled_params(type, event));
+
+                formatted_message = json_dumps(jevent,
+                                               JSON_PRESERVE_ORDER|JSON_COMPACT);
+                notify(notifier, "EVENT", NULL, NULL, NULL, 0, NULL,
+                       formatted_message, fname);
+                free(formatted_message);
+            }
+
+            if (idle_notifier &&
+                (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS|SUBS_EVENTS))) {
+                /* the group to which the event belongs is for IMAP IDLE/NOTIFY */
+                json_object_set_new(jevent, "@type", json_string("notify"));
+                idle_notifier(jevent);
+            }
+            json_decref(jevent);
         }
         while (strarray_size(&event->flagnames) > 0);
     }
@@ -1820,76 +1840,75 @@ EXPORTED void mboxevent_set_applepushservice_dav(struct mboxevent *event,
 
 }
 
+struct event_t {
+    const char *name;
+    enum event_type type;
+};
+
+static const struct event_t event_list[] = {
+    { "Cancelled",           EVENT_CANCELLED            },
+    { "MessageAppend",       EVENT_MESSAGE_APPEND       },
+    { "MessageExpire",       EVENT_MESSAGE_EXPIRE       },
+    { "MessageExpunge",      EVENT_MESSAGE_EXPUNGE      },
+    { "MessageNew",          EVENT_MESSAGE_NEW          },
+    { "vnd.cmu.MessageCopy", EVENT_MESSAGE_COPY         },
+    { "vnd.cmu.MessageMove", EVENT_MESSAGE_MOVE         },
+    { "QuotaExceed",         EVENT_QUOTA_EXCEED         },
+    { "QuotaWithin",         EVENT_QUOTA_WITHIN         },
+    { "QuotaChange",         EVENT_QUOTA_CHANGE         },
+    { "MessageRead",         EVENT_MESSAGE_READ         },
+    { "MessageTrash",        EVENT_MESSAGE_TRASH        },
+    { "FlagsSet",            EVENT_FLAGS_SET            },
+    { "FlagsClear",          EVENT_FLAGS_CLEAR          },
+    { "Login",               EVENT_LOGIN                },
+    { "Logout",              EVENT_LOGOUT               },
+    { "MailboxCreate",       EVENT_MAILBOX_CREATE       },
+    { "MailboxDelete",       EVENT_MAILBOX_DELETE       },
+    { "MailboxRename",       EVENT_MAILBOX_RENAME       },
+    { "MailboxSubscribe",    EVENT_MAILBOX_SUBSCRIBE    },
+    { "MailboxUnSubscribe",  EVENT_MAILBOX_UNSUBSCRIBE  },
+    { "AclChange",           EVENT_ACL_CHANGE           },
+    { "CalendarEventNew",    EVENT_CALENDAR             },
+    { "CalendarAlarm",       EVENT_CALENDAR_ALARM       },
+    { "ApplePushService",    EVENT_APPLEPUSHSERVICE     },
+    { "ApplePushServiceDAV", EVENT_APPLEPUSHSERVICE_DAV },
+    { "MailboxModseq",       EVENT_MAILBOX_MODSEQ       },
+    { "MessagesUnscheduled", EVENT_MESSAGES_UNSCHEDULED },
+    { NULL,                  0                          }
+};
+
 static const char *event_to_name(enum event_type type)
 {
+    const struct event_t *ev;
+
     if (type == (EVENT_MESSAGE_NEW|EVENT_CALENDAR))
         return "MessageNew";
 
-    switch (type) {
-    case EVENT_MESSAGE_APPEND:
-        return "MessageAppend";
-    case EVENT_MESSAGE_EXPIRE:
-        return "MessageExpire";
-    case EVENT_MESSAGE_EXPUNGE:
-        return "MessageExpunge";
-    case EVENT_MESSAGE_NEW:
-        return "MessageNew";
-    case EVENT_MESSAGE_COPY:
-        return "vnd.cmu.MessageCopy";
-    case EVENT_MESSAGE_MOVE:
-        return "vnd.cmu.MessageMove";
-    case EVENT_QUOTA_EXCEED:
-        return "QuotaExceed";
-    case EVENT_QUOTA_WITHIN:
-        return "QuotaWithin";
-    case EVENT_QUOTA_CHANGE:
-        return "QuotaChange";
-    case EVENT_MESSAGE_READ:
-        return "MessageRead";
-    case EVENT_MESSAGE_TRASH:
-        return "MessageTrash";
-    case EVENT_FLAGS_SET:
-        return "FlagsSet";
-    case EVENT_FLAGS_CLEAR:
-        return "FlagsClear";
-    case EVENT_LOGIN:
-        return "Login";
-    case EVENT_LOGOUT:
-        return "Logout";
-    case EVENT_MAILBOX_CREATE:
-        return "MailboxCreate";
-    case EVENT_MAILBOX_DELETE:
-        return "MailboxDelete";
-    case EVENT_MAILBOX_RENAME:
-        return "MailboxRename";
-    case EVENT_MAILBOX_SUBSCRIBE:
-        return "MailboxSubscribe";
-    case EVENT_MAILBOX_UNSUBSCRIBE:
-        return "MailboxUnSubscribe";
-    case EVENT_ACL_CHANGE:
-        return "AclChange";
-    case EVENT_CALENDAR_ALARM:
-        return "CalendarAlarm";
-    case EVENT_APPLEPUSHSERVICE:
-        return "ApplePushService";
-    case EVENT_APPLEPUSHSERVICE_DAV:
-        return "ApplePushServiceDAV";
-    case EVENT_MAILBOX_MODSEQ:
-        return "MailboxModseq";
-    case EVENT_MESSAGES_UNSCHEDULED:
-        return "MessagesUnscheduled";
-    default:
-        fatal("Unknown message event", EX_SOFTWARE);
+    for (ev = event_list; ev->name; ev++) {
+        if (type == ev->type) return ev->name;
     }
+
+    fatal("Unknown message event", EX_SOFTWARE);
 
     /* never happen */
     return NULL;
 }
 
-static char *json_formatter(enum event_type type, struct event_parameter params[])
+EXPORTED enum event_type name_to_mboxevent(const char *name)
+{
+    const struct event_t *ev;
+
+    for (ev = event_list; ev->name; ev++) {
+        if (!strcasecmp(name, ev->name)) return ev->type;
+    }
+
+    return 0;
+}   
+
+static json_t *json_formatter(enum event_type type, struct event_parameter params[])
 {
     int param, ival;
-    char *val, *ptr, *result;
+    char *val, *ptr;
     json_t *event_json = json_object();
     json_t *jarray;
 
@@ -1956,10 +1975,7 @@ static char *json_formatter(enum event_type type, struct event_parameter params[
         }
     }
 
-    result = json_dumps(event_json, JSON_PRESERVE_ORDER|JSON_COMPACT);
-    json_decref(event_json);
-
-    return result;
+    return event_json;
 
 }
 

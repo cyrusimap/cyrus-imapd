@@ -45,31 +45,12 @@
 
 #include <sys/socket.h>
 #include <sys/un.h>
-#include "mailbox.h"
+
+#include "json_support.h"
 
 /* socket to communicate with the idled */
 #define FNAME_IDLE_SOCK_DIR "/socket"
 #define FNAME_IDLE_SOCK FNAME_IDLE_SOCK_DIR"/idle"
-
-typedef struct idle_message_s idle_message_t;
-
-struct idle_message_s
-{
-    unsigned long which;
-
-    /* 1 for null. leave at end of structure for alignment */
-    char mboxname[MAX_MAILBOX_BUFFER];
-};
-
-#define IDLE_MESSAGE_BASE_SIZE  (1 * (int) sizeof(unsigned long))
-
-enum {
-    IDLE_MSG_INIT,
-    IDLE_MSG_DONE,
-    IDLE_MSG_NOTIFY,
-    IDLE_MSG_NOOP,
-    IDLE_MSG_ALERT
-};
 
 int idle_make_server_address(struct sockaddr_un *);
 int idle_make_client_address(struct sockaddr_un *);
@@ -77,9 +58,7 @@ const char *idle_id_from_addr(const struct sockaddr_un *);
 int idle_init_sock(const struct sockaddr_un *);
 void idle_done_sock(void);
 int idle_get_sock(void);
-int idle_send(const struct sockaddr_un *remote,
-              const idle_message_t *msg);
-int idle_recv(struct sockaddr_un *remote, idle_message_t *msg);
+int idle_send(const struct sockaddr_un *remote, json_t *msg);
+json_t *idle_recv(struct sockaddr_un *remote);
 
-
-#endif
+#endif /* IDLEMSG_H */

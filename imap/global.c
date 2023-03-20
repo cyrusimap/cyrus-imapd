@@ -829,7 +829,7 @@ EXPORTED int shutdown_file(char *buf, int size)
         }
     }
 
-    free(shutdownfilename);
+    xzfree(shutdownfilename);
 
     if (!buf) {
         buf = tmpbuf;
