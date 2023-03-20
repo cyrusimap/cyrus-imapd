@@ -371,6 +371,10 @@ static void buf_replace_bindvals(struct buf *cmd, struct sqldb_bindval bval[])
             else
                 buf_setcstr(&buf, "NULL");
             break;
+
+        case SQLITE_BLOB:
+            buf_printf(&buf, "<" SIZE_T_FMT " bytes>", buf_len(&bval->val.b));
+            break;
         }
 
         /* Replace all instances of the bindval with actual value */
@@ -405,6 +409,11 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
 
         case SQLITE_TEXT:
             sqlite3_bind_text(stmt, cidx, bval->val.s, -1, NULL);
+            break;
+
+        case SQLITE_BLOB:
+            sqlite3_bind_blob(stmt, cidx,
+                              buf_base(&bval->val.b), buf_len(&bval->val.b), NULL);
             break;
         }
     }

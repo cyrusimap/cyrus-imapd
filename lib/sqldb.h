@@ -47,6 +47,7 @@
 #include <sqlite3.h>
 #include "ptrarray.h"
 #include "strarray.h"
+#include "util.h"
 
 struct sqldb_bindval {
     const char *name;
@@ -54,6 +55,7 @@ struct sqldb_bindval {
     union {
         sqlite3_int64 i;
         const char *s;
+        struct buf b;
     } val;
 };
 
