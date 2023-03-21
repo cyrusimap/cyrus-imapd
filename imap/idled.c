@@ -168,7 +168,8 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     json_t *key = json_array_get(keys, 0);
     const char *keyval = json_string_value(key);
     mbentry_t *mbentry = NULL;
-    int i, notify = 0;
+    int notify = 0;
+    size_t i;
 
     /* Is it a mailbox in which the client has interest? */
     if (filter == FILTER_SELECTED) {
