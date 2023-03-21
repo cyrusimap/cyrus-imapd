@@ -45,6 +45,9 @@ use IO::File;
 use version;
 use utf8;
 use File::Temp qw/tempfile/;
+use DateTime;
+use DateTime::TimeZone;
+use DateTime::Format::Mail;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -3867,6 +3870,76 @@ EOF
     $self->{store}->set_folder('INBOX');
     $msg1->set_attribute(uid => 1);
     $msg1->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2' ]);
+    $self->check_messages({ 1 => $msg1 }, keyed_on => 'uid', check_guid => 0);
+}
+
+sub test_date_local_zone
+    :needs_component_sieve :min_version_3_9
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $date = "Wed, 16 May 2018 22:06:18 -0700";
+    my $dt = DateTime::Format::Mail->parse_datetime($date);
+
+    my $tz = DateTime::TimeZone->new(name => 'local');
+    $dt->set_time_zone($tz->name);
+
+    my $date_hour = $dt->strftime("%H");
+
+    my $now = DateTime->now();
+    my $cur_utc_hour = $now->strftime("%H");
+
+    $now->set_time_zone($tz->name);
+
+    my $cur_hour = $now->strftime("%H");
+    my $cur_zone = $now->strftime("%z");
+    my $cur_std11 = $now->strftime("%a, %d %b %Y %T %z");
+
+    $self->{instance}->install_sieve_script(<<EOF
+require ["date", "imap4flags"];
+
+if date "date" "hour" "$date_hour" {
+  addflag "Test1";
+}
+
+if currentdate "hour" "$cur_hour" {
+  addflag "Test2";
+}
+
+if currentdate :zone "+0000" "hour" "$cur_utc_hour" {
+  addflag "Test3";
+}
+
+if currentdate "zone" "$cur_zone" {
+  addflag "Test4";
+}
+
+if currentdate "std11" "$cur_std11" {
+  addflag "Test5";
+}
+EOF
+    );
+
+    my $raw = <<EOF;
+Date: $date
+From: Some Person <notifications\@github.com>
+To: foo/bar <bar\@noreply.github.com>
+Cc: Subscribed <subscribed\@noreply.github.com>
+Message-ID: <foo/bar/pull/1234/abcdef01234\@github.com>
+X-Cassandane-Unique: foo
+
+foo bar
+EOF
+    xlog $self, "Deliver a message";
+    my $msg1 = Cassandane::Message->new(raw => $raw);
+    $self->{instance}->deliver($msg1);
+
+    my $imaptalk = $self->{store}->get_client();
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+    $self->{store}->set_folder('INBOX');
+    $msg1->set_attribute(uid => 1);
+    $msg1->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2', 'Test3', 'Test4', 'Test5' ]);
     $self->check_messages({ 1 => $msg1 }, keyed_on => 'uid', check_guid => 0);
 }
 

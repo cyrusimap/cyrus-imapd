@@ -1063,11 +1063,16 @@ envelope_err:
         int index;
         int match;
         int relation;
-        int timezone_offset = 0; /* in seconds */
+        time_t now = interp->time;
+        int local_tzoffset, tzoffset = 0; /* in seconds */
         int zone;
         struct tm tm;
         time_t t;
         int ctag = 0;
+
+        /* calculate local time zone offset */
+        localtime_r(&now, &tm);
+        local_tzoffset = gmtoff_of(&tm, now);
 
         /* index */
         index = test.u.dt.comp.index;
@@ -1163,7 +1168,7 @@ envelope_err:
             /* timezone offset */
             if (zone == B_ORIGINALZONE) {
                 char *origzone = strrchr(header, ' ');
-                if (!origzone || !parse_tzoffset(origzone + 1, &timezone_offset)) {
+                if (!origzone || !parse_tzoffset(origzone + 1, &tzoffset)) {
                     res = 0;
                     goto date_err;
                 }
@@ -1182,7 +1187,7 @@ envelope_err:
                     str = parse_string(str, variables);
                 }
 
-                if (!parse_tzoffset(str, &timezone_offset)) {
+                if (!parse_tzoffset(str, &tzoffset)) {
 #ifdef HAVE_ICAL
                     /* Is this an IANA TZID? rather than an offset? */
                     icaltimezone *tz = icaltimezone_get_builtin_timezone(str);
@@ -1190,8 +1195,7 @@ envelope_err:
                     if (tz) {
                         icaltimetype tt = icaltime_from_timet_with_zone(t, 0, tz);
 
-                        timezone_offset =
-                            icaltimezone_get_utc_offset(tz, &tt, NULL);
+                        tzoffset = icaltimezone_get_utc_offset(tz, &tt, NULL);
                     } else
 #endif
                     {
@@ -1201,20 +1205,16 @@ envelope_err:
                 }
             }
             else {
-                /* use local time zone */
-                time_t now = interp->time;
-                struct tm tm;
-
-                localtime_r(&now, &tm);
-                timezone_offset = 60 * gmtoff_of(&tm, now);
+                /* use local offset */
+                tzoffset = local_tzoffset;
             }
         }
 
-        /* apply timezone_offset (if any) */
-        t += timezone_offset;
+        /* adjust local time to specified offset */
+        t += -local_tzoffset + tzoffset;
 
         /* get tm struct */
-        gmtime_r(&t, &tm);
+        localtime_r(&t, &tm);
 
 
         /*
@@ -1281,11 +1281,10 @@ envelope_err:
             time_to_rfc5322(t, buffer, sizeof(buffer));
             break;
         case B_ZONE:
-            timezone_offset /= 60;  /* seconds -> minutes */
+            tzoffset /= 60;  /* seconds -> minutes */
             snprintf(buffer, sizeof(buffer), "%c%02d%02d",
-                     timezone_offset >= 0 ? '+' : '-',
-                     abs(timezone_offset) / 60,
-                     abs(timezone_offset) % 60);
+                     tzoffset >= 0 ? '+' : '-',
+                     abs(tzoffset) / 60, abs(tzoffset) % 60);
             break;
         case B_WEEKDAY:
             snprintf(buffer, sizeof(buffer), "%1d", tm.tm_wday);
