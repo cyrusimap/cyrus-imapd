@@ -39,6 +39,7 @@ jobs:
       run: |
         cpanm IO::File::fcntl
         cpanm Digest::CRC
+        cpanm DateTime::Format::Mail
       shell: bash
     - name: run cassandane
       run: |

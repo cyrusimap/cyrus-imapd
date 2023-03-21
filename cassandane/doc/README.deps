@@ -45,6 +45,11 @@ Cassandane needs the following software to work:
     Ubuntu package libdatetime-perl
     RH/CentOS package perl-DateTime
 
+ * DateTime::Format::Mail
+    Convert between DateTime and RFC2822/822 formats
+    CPAN package https://metacpan.org/pod/DateTime::Format::Mail
+    Ubuntu package libdatetime-format-mail-perl
+
  * BSD::Resource
     Allows Cyrus to generate core dumps at all
     CPAN package http://search.cpan.org/dist/BSD-Resource/
@@ -159,7 +164,8 @@ Debian/Ubuntu copypasta:
        libdatetime-format-ical-perl libuniversal-require-perl \
        libtest-nowarnings-perl libtest-longstring-perl \
        libtest-warn-perl libnet-ldap-server-perl \
-       libdbd-sqlite3-perl libdigest-crc-perl
+       libdbd-sqlite3-perl libdigest-crc-perl \
+       libdatetime-format-mail-perl
 
   sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
        Net::CalDAVTalk Net::CardDAVTalk String::CRC32
