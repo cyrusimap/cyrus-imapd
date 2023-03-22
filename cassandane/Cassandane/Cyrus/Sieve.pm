@@ -46,8 +46,7 @@ use version;
 use utf8;
 use File::Temp qw/tempfile/;
 use DateTime;
-use DateTime::TimeZone;
-use DateTime::Format::Mail;
+use Date::Parse;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -3875,22 +3874,18 @@ EOF
 
 sub test_date_local_zone
     :needs_component_sieve :min_version_3_9
-    :needs_component_httpd
 {
     my ($self) = @_;
 
     my $date = "Wed, 16 May 2018 22:06:18 -0700";
-    my $dt = DateTime::Format::Mail->parse_datetime($date);
-
-    my $tz = DateTime::TimeZone->new(name => 'local');
-    $dt->set_time_zone($tz->name);
+    my $dt = DateTime->from_epoch(epoch => str2time($date), time_zone => 'local');
 
     my $date_hour = $dt->strftime("%H");
 
     my $now = DateTime->now();
     my $cur_utc_hour = $now->strftime("%H");
 
-    $now->set_time_zone($tz->name);
+    $now->set_time_zone('local');
 
     my $cur_hour = $now->strftime("%H");
     my $cur_zone = $now->strftime("%z");
