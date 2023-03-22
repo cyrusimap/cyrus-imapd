@@ -3786,7 +3786,7 @@ sub test_date
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["date", "variables", "imap4flags", "regex", "relational"];
 
-if date :originalzone "date" "date" "2018-05-16" {
+if date :originalzone "date" "date" [ "2018-05-16", "2018-12-16" ] {
   addflag "Test1";
 }
 
@@ -3809,7 +3809,7 @@ if date :originalzone "date" "zone" "-0700" {
 EOF
         );
 
-    my $raw = << 'EOF';
+    my $raw1 = << 'EOF';
 Date: Wed, 16 May 2018 22:06:18 -0700
 From: Some Person <notifications@github.com>
 To: foo/bar <bar@noreply.github.com>
@@ -3819,16 +3819,32 @@ X-Cassandane-Unique: foo
 
 foo bar
 EOF
-    xlog $self, "Deliver a message";
-    my $msg1 = Cassandane::Message->new(raw => $raw);
+
+    my $raw2 = << 'EOF';
+Date: Sun, 16 Dec 2018 22:06:18 -0700
+From: Some Person <notifications@github.com>
+To: foo/bar <bar@noreply.github.com>
+Cc: Subscribed <subscribed@noreply.github.com>
+Message-ID: <foo/bar/pull/1234/abcdef01234@github.com>
+X-Cassandane-Unique: foo
+
+foo bar
+EOF
+    xlog $self, "Deliver messages";
+    my $msg1 = Cassandane::Message->new(raw => $raw1);
     $self->{instance}->deliver($msg1);
+
+    my $msg2 = Cassandane::Message->new(raw => $raw2);
+    $self->{instance}->deliver($msg2);
 
     my $imaptalk = $self->{store}->get_client();
     $self->{store}->set_fetch_attributes(qw(uid flags));
     $self->{store}->set_folder('INBOX');
     $msg1->set_attribute(uid => 1);
     $msg1->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2', 'Test3', 'Test4', 'Test5' ]);
-    $self->check_messages({ 1 => $msg1 }, keyed_on => 'uid', check_guid => 0);
+    $msg2->set_attribute(uid => 2);
+    $msg2->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2', 'Test3', 'Test4', 'Test5' ]);
+    $self->check_messages({ 1 => $msg1, 2 => $msg2 }, keyed_on => 'uid', check_guid => 0);
 }
 
 sub test_date_iana_tzid
