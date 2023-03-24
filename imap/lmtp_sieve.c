@@ -2326,6 +2326,7 @@ static int sieve_find_script(const char *user, const char *domain,
 
     const char *userid = buf_cstring(&buf);
     const char *sievedir = user_sieve_path(userid);
+    int r = -1;
 
     if (!script) { /* default script */
         script = sievedir_get_active(sievedir);
@@ -2334,10 +2335,11 @@ static int sieve_find_script(const char *user, const char *domain,
     if (script) {
         snprintf(fname, size, "%s/%s.bc", sievedir, script);
         sieve_script_rebuild(userid, sievedir, script);
+        r = 0;
     }
     buf_free(&buf);
 
-    return 0;
+    return r;
 }
 
 int run_sieve(const mbname_t *mbname, sieve_interp_t *interp, deliver_data_t *msgdata)
