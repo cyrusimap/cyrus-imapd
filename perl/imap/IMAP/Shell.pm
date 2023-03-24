@@ -665,6 +665,7 @@ sub _sc_list {
     $lfh->[2]->print($$cyrref->error, "\n");
     return 1;
   }
+  $w = 0;
   foreach my $mbx (@res) {
     $l = $mbx->[0];
     if ($mbx->[1] ne '') {
