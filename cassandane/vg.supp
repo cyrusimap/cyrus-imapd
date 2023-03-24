@@ -94,3 +94,13 @@
    obj:/usr/lib/aarch64-linux-gnu/libnss_systemd.so.2
    ...
 }
+
+{
+  dl_open_worker-leak
+  Memcheck:Leak
+  match-leak-kinds: possible
+  ...
+  fun:dl_open_worker_begin
+  ...
+}
+
