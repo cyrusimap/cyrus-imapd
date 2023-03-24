@@ -1064,15 +1064,11 @@ envelope_err:
         int match;
         int relation;
         time_t now = interp->time;
-        int local_tzoffset, tzoffset = 0; /* in seconds */
+        int tzoffset = 0; /* in seconds */
         int zone;
         struct tm tm;
         time_t t;
         int ctag = 0;
-
-        /* calculate local time zone offset */
-        localtime_r(&now, &tm);
-        local_tzoffset = gmtoff_of(&tm, now);
 
         /* index */
         index = test.u.dt.comp.index;
@@ -1175,11 +1171,12 @@ envelope_err:
             }
         }
         else { /* CURRENTDATE */
-            t = interp->time;
+            t = now;
         }
 
         /* timezone offset */
-        if (zone == B_TIMEZONE) {
+        switch (zone) {
+        case B_TIMEZONE: {
             const char *str = test.u.dt.zone.offset;
 
             if (str) {
@@ -1205,16 +1202,21 @@ envelope_err:
                 }
             }
             else {
-                /* use local offset */
-                tzoffset = local_tzoffset;
+                /* adjust time to local offset */
+                localtime_r(&t, &tm);
+                tzoffset = gmtoff_of(&tm, t);
+                break;
             }
+
+            GCC_FALLTHROUGH
         }
 
-        /* adjust local time to specified offset */
-        t += -local_tzoffset + tzoffset;
-
-        /* get tm struct */
-        localtime_r(&t, &tm);
+        default:
+            /* adjust time to specified offset */
+            t += tzoffset;
+            gmtime_r(&t, &tm);  // this accounts for the local offset
+            break;
+        }
 
 
         /*
