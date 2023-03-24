@@ -42,6 +42,8 @@
 #ifndef IMAPURL_H
 #define IMAPURL_H
 
+#include "util.h"
+
 struct imapurl {
     char *freeme;               /* copy of original URL + decoded mailbox;
                                    caller must free() */
@@ -76,13 +78,12 @@ extern int URLtoMailbox(char *dst, const char *src);
 #define UTF8_to_mUTF7(dst, src) URLtoMailbox(dst, src)
 
 /* Convert an IMAP mailbox to a URL path
- *  dst needs to have roughly 4 times the storage space of mailbox
  *    Hex encoding can triple the size of the input
  *    UTF-7 can be slightly denser than UTF-8
  *     (worst case: 8 octets UTF-7 becomes 9 octets UTF-8)
  *
  *  it is valid for mechname to be NULL (implies anonymous mech)
  */
-extern void imapurl_toURL(char *dst, const struct imapurl *url);
+extern void imapurl_toURL(struct buf *dst, const struct imapurl *url);
 
 #endif /* IMAPURL_H */

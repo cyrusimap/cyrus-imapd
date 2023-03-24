@@ -852,7 +852,6 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
                                    const char *userid, const char *mailboxname,
                                    const int ext_name __attribute__((unused)))
 {
-    char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
     int r;
 
@@ -876,12 +875,12 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     imapurl.mailbox = extname;
     mbname_free(&mbname);
 
-    imapurl_toURL(url, &imapurl);
-
     // All events want a URI parameter, which in the case of Login/Logout
     // might be useful if it took in to account TLS SNI for example.
     if (!event->params[EVENT_URI].filled) {
-        FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+        struct buf url = BUF_INITIALIZER;
+        imapurl_toURL(&url, &imapurl);
+        FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
     }
 
     // Login and Logout events do not have a mailboxname, so avoid looking that up...
@@ -1517,7 +1516,6 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
                              enum quota_resource res)
 {
     struct imapurl imapurl;
-    char url[MAX_MAILBOX_PATH+1];
 
     if (!event)
         return;
@@ -1557,13 +1555,12 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
         /* translate internal mailbox name to external */
         char *extname = mboxname_to_external(quota->root, &namespace, NULL);
         imapurl.mailbox = extname;
-
-        imapurl_toURL(url, &imapurl);
-
         free(extname);
 
         if (!event->params[EVENT_URI].filled) {
-            FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+            struct buf url = BUF_INITIALIZER;
+            imapurl_toURL(&url, &imapurl);
+            FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
         }
 
         /* Note that userbuf for shared folders is NULL, and xstrdup
@@ -1632,7 +1629,6 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
                                         struct mailbox *mailbox)
 {
     struct imapurl imapurl;
-    char url[MAX_MAILBOX_PATH+1];
 
     if (!event)
         return;
@@ -1665,9 +1661,11 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     }
 
     /* all events needs uri parameter */
-    imapurl_toURL(url, &imapurl);
-    FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+    struct buf url = BUF_INITIALIZER;
+    imapurl_toURL(&url, &imapurl);
+    FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
 
+    buf_free(&url);
     free(extname);
 
     FILL_STRING_PARAM(event, EVENT_MBTYPE,
@@ -1761,7 +1759,6 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
                                    const struct mailbox *mailbox)
 {
     struct imapurl imapurl;
-    char url[MAX_MAILBOX_PATH+1];
 
     if (!event)
         return;
@@ -1774,9 +1771,11 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     char *extname = mboxname_to_external(mailbox_name(mailbox), &namespace, NULL);
     imapurl.mailbox = extname;
 
-    imapurl_toURL(url, &imapurl);
-    FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, xstrdup(url));
+    struct buf url = BUF_INITIALIZER;
+    imapurl_toURL(&url, &imapurl);
+    FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, buf_release(&url));
 
+    buf_free(&url);
     free(extname);
 }
 

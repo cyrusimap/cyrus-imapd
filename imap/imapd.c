@@ -679,19 +679,20 @@ static void imapd_refer(const char *tag,
                         const char *mailbox)
 {
     struct imapurl imapurl;
-    char url[MAX_MAILBOX_PATH+1];
+    struct buf url = BUF_INITIALIZER;
 
     memset(&imapurl, 0, sizeof(struct imapurl));
     imapurl.server = server;
     imapurl.mailbox = mailbox;
     imapurl.auth = !strcmp(imapd_userid, "anonymous") ? "anonymous" : "*";
 
-    imapurl_toURL(url, &imapurl);
+    imapurl_toURL(&url, &imapurl);
 
     prot_printf(imapd_out, "%s NO [REFERRAL %s] Remote mailbox.\r\n",
-                tag, url);
+                tag, buf_cstring(&url));
 
     free(imapurl.freeme);
+    buf_free(&url);
 }
 
 /* wrapper for mboxlist_lookup that will force a referral if we are remote
