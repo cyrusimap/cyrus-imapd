@@ -13310,6 +13310,8 @@ static int jmap_email_import(jmap_req_t *req)
     const char *id;
     json_t *jemail_import;
     int have_snoozed_mboxid = 0;
+    const char *if_in_state = NULL;
+    char *old_state = NULL, *new_state = NULL;
 
     /* Parse request */
     json_object_foreach(req->args, key, arg) {
@@ -13330,6 +13332,15 @@ static int jmap_email_import(jmap_req_t *req)
             }
         }
 
+        else if (!strcmp(key, "ifInState")) {
+            if (json_is_string(arg)) {
+                if_in_state = json_string_value(arg);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(&parser, "ifInState");
+            }
+        }
+
         else {
             jmap_parser_invalid(&parser, key);
         }
@@ -13343,6 +13354,17 @@ static int jmap_email_import(jmap_req_t *req)
                                 "arguments", parser.invalid);
         jmap_error(req, err);
         goto done;
+    }
+
+    if (if_in_state) {
+        if (atomodseq_t(if_in_state) != jmap_modseq(req, MBTYPE_EMAIL, 0)) {
+            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+            goto done;
+        }
+        old_state = xstrdup(if_in_state);
+    }
+    else {
+        old_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
     }
 
     json_object_foreach(emails, id, jemail_import) {
@@ -13426,13 +13448,19 @@ static int jmap_email_import(jmap_req_t *req)
         json_object_set_new(jemail_import, "mailboxIds", orig_mailboxids);
     }
 
+    new_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD));
+
     /* Reply */
-    jmap_ok(req, json_pack("{s:s s:O s:O}",
+    jmap_ok(req, json_pack("{s:s s:s s:s s:O s:O}",
                 "accountId", req->accountid,
+                "oldState", old_state,
+                "newState", new_state,
                 "created", created,
                 "notCreated", not_created));
 
 done:
+    free(old_state);
+    free(new_state);
     json_decref(created);
     json_decref(not_created);
     jmap_parser_fini(&parser);
