@@ -1,17 +1,58 @@
 #include "cunit/cyrunit.h"
 #include "util.h"
 
+#define ASSERT_TO_HEX(BIN, HEX, hex, flags) \
+{ \
+    memset(hex, 0x45, sizeof(hex)); \
+    int r = bin_to_hex(BIN, sizeof(BIN), hex, flags); \
+    CU_ASSERT_EQUAL(r, sizeof(hex)-1); \
+    CU_ASSERT_STRING_EQUAL(hex, HEX); \
+    \
+    if (flags == BH_LOWER) { \
+        r = bin_to_lchex(BIN, sizeof(BIN), hex); \
+        CU_ASSERT_EQUAL(r, sizeof(hex)-1); \
+        CU_ASSERT_STRING_EQUAL(hex, HEX); \
+    } \
+    \
+    struct buf buf = BUF_INITIALIZER; \
+    r = buf_bin_to_hex(&buf, BIN, sizeof(BIN), flags); \
+    CU_ASSERT_EQUAL(r, sizeof(hex)-1); \
+    CU_ASSERT_EQUAL(r, buf_len(&buf)); \
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), HEX); \
+    buf_reset(&buf); \
+    \
+    if (flags == BH_LOWER) { \
+        r = buf_bin_to_lchex(&buf, BIN, sizeof(BIN)); \
+        CU_ASSERT_EQUAL(r, sizeof(hex)-1); \
+        CU_ASSERT_EQUAL(r, buf_len(&buf)); \
+        CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), HEX); \
+        buf_reset(&buf); \
+    } \
+    buf_free(&buf); \
+}
+
+
+#define ASSERT_TO_BIN(HEX, BIN, bin) \
+{ \
+    memset(bin, 0xff, sizeof(bin)); \
+    int r = hex_to_bin(HEX, sizeof(HEX)-1, bin); \
+    CU_ASSERT_EQUAL(r, sizeof(bin)); \
+    CU_ASSERT_EQUAL(memcmp(bin, BIN, sizeof(bin)), 0); \
+    \
+    struct buf buf = BUF_INITIALIZER; \
+    r = buf_hex_to_bin(&buf, HEX, sizeof(HEX)-1); \
+    CU_ASSERT_EQUAL(r, sizeof(bin)); \
+    CU_ASSERT_EQUAL(r, buf_len(&buf)); \
+    CU_ASSERT_EQUAL(memcmp(buf_base(&buf), BIN, buf_len(&buf)), 0); \
+    buf_free(&buf); \
+}
+
 static void test_bin_to_hex(void)
 {
     static const unsigned char BIN[4] = { 0xca, 0xfe, 0xba, 0xbe };
     static const char HEX[9] = "cafebabe";
-    int r;
     char hex[9];
-
-    memset(hex, 0x45, sizeof(hex));
-    r = bin_to_hex(BIN, sizeof(BIN), hex, BH_LOWER);
-    CU_ASSERT_EQUAL(r, sizeof(hex)-1);
-    CU_ASSERT_STRING_EQUAL(hex, HEX);
+    ASSERT_TO_HEX(BIN, HEX, hex, BH_LOWER);
 }
 
 static void test_bin_to_hex_long(void)
@@ -21,71 +62,59 @@ static void test_bin_to_hex_long(void)
         0x6f,0x9f,0xfa,0x77,0xe4,0x04,0x84,0x04,0xa0,0x02
     };
     static const char HEX[41] = "33ac18b6dc746e9ad7bd6f9ffa77e4048404a002";
-    int r;
     char hex[41];
-
-    memset(hex, 0x45, sizeof(hex));
-    r = bin_to_hex(BIN, sizeof(BIN), hex, BH_LOWER);
-    CU_ASSERT_EQUAL(r, sizeof(hex)-1);
-    CU_ASSERT_STRING_EQUAL(hex, HEX);
-    r = bin_to_lchex(BIN, sizeof(BIN), hex);
-    CU_ASSERT_EQUAL(r, sizeof(hex)-1);
-    CU_ASSERT_STRING_EQUAL(hex, HEX);
+    ASSERT_TO_HEX(BIN, HEX, hex, BH_LOWER);
 }
 
 static void test_bin_to_hex_short(void)
 {
     static const unsigned char BIN[1] = { 0x42 };
     static const char HEX[3] = "42";
-    int r;
     char hex[3];
-
-    memset(hex, 0x45, sizeof(hex));
-    r = bin_to_hex(BIN, sizeof(BIN), hex, BH_LOWER);
-    CU_ASSERT_EQUAL(r, sizeof(hex)-1);
-    CU_ASSERT_STRING_EQUAL(hex, HEX);
-    r = bin_to_lchex(BIN, sizeof(BIN), hex);
-    CU_ASSERT_EQUAL(r, sizeof(hex)-1);
-    CU_ASSERT_STRING_EQUAL(hex, HEX);
+    ASSERT_TO_HEX(BIN, HEX, hex, BH_LOWER);
 }
 
 static void test_bin_to_hex_sep(void)
 {
     static const unsigned char BIN[4] = { 0xca, 0xfe, 0xba, 0xbe };
     static const char HEX[12] = "ca:fe:ba:be";
-    int r;
     char hex[12];
+    ASSERT_TO_HEX(BIN, HEX, hex, (BH_LOWER|BH_SEPARATOR(':')));
+}
 
-    memset(hex, 0x45, sizeof(hex));
-    r = bin_to_hex(BIN, sizeof(BIN), hex, BH_LOWER|BH_SEPARATOR(':'));
-    CU_ASSERT_EQUAL(r, sizeof(hex)-1);
-    CU_ASSERT_STRING_EQUAL(hex, HEX);
+static void test_bin_to_hex_realloc(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+    for (int i = 0; i < 30; i++) {
+        buf_putc(&buf, 'x');
+    }
+    CU_ASSERT_EQUAL(30, buf.len);
+    CU_ASSERT_EQUAL(32, buf.alloc);
+    CU_ASSERT_PTR_NOT_NULL(buf.s);
+
+    char c = 0xac;
+    buf_bin_to_hex(&buf, &c, 1, BH_UPPER);
+    CU_ASSERT_EQUAL(32, buf.len);
+    CU_ASSERT_EQUAL(64, buf.alloc);
+    CU_ASSERT_STRING_EQUAL("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxAC", buf_cstring(&buf));
+
+    buf_free(&buf);
 }
 
 static void test_hex_to_bin(void)
 {
     static const char HEX[9] = "cafebabe";
     static const unsigned char BIN[4] = { 0xca, 0xfe, 0xba, 0xbe };
-    int r;
     char bin[4];
-
-    memset(bin, 0xff, sizeof(bin));
-    r = hex_to_bin(HEX, sizeof(HEX)-1, bin);
-    CU_ASSERT_EQUAL(r, sizeof(bin));
-    CU_ASSERT_EQUAL(memcmp(bin, BIN, sizeof(bin)), 0);
+    ASSERT_TO_BIN(HEX, BIN, bin);
 }
 
 static void test_hex_to_bin_short(void)
 {
     static const char HEX[3] = "42";
     static const unsigned char BIN[1] = { 0x42 };
-    int r;
     char bin[1];
-
-    memset(bin, 0xff, sizeof(bin));
-    r = hex_to_bin(HEX, sizeof(HEX)-1, bin);
-    CU_ASSERT_EQUAL(r, sizeof(bin));
-    CU_ASSERT_EQUAL(memcmp(bin, BIN, sizeof(bin)), 0);
+    ASSERT_TO_BIN(HEX, BIN, bin);
 }
 
 static void test_hex_to_bin_long(void)
@@ -95,26 +124,16 @@ static void test_hex_to_bin_long(void)
         0x33,0xac,0x18,0xb6,0xdc,0x74,0x6e,0x9a,0xd7,0xbd,
         0x6f,0x9f,0xfa,0x77,0xe4,0x04,0x84,0x04,0xa0,0x02
     };
-    int r;
     char bin[20];
-
-    memset(bin, 0xff, sizeof(bin));
-    r = hex_to_bin(HEX, sizeof(HEX)-1, bin);
-    CU_ASSERT_EQUAL(r, sizeof(bin));
-    CU_ASSERT_EQUAL(memcmp(bin, BIN, sizeof(bin)), 0);
+    ASSERT_TO_BIN(HEX, BIN, bin);
 }
 
 static void test_hex_to_bin_capitals(void)
 {
     static const char HEX[9] = "CAFEBABE";
     static const unsigned char BIN[4] = { 0xca, 0xfe, 0xba, 0xbe };
-    int r;
     char bin[4];
-
-    memset(bin, 0xff, sizeof(bin));
-    r = hex_to_bin(HEX, sizeof(HEX)-1, bin);
-    CU_ASSERT_EQUAL(r, sizeof(bin));
-    CU_ASSERT_EQUAL(memcmp(bin, BIN, sizeof(bin)), 0);
+    ASSERT_TO_BIN(HEX, BIN, bin);
 }
 
 static void test_hex_to_bin_odd(void)
@@ -130,6 +149,12 @@ static void test_hex_to_bin_odd(void)
     CU_ASSERT_EQUAL(bin[1], 0xff);
     CU_ASSERT_EQUAL(bin[2], 0xff);
     CU_ASSERT_EQUAL(bin[3], 0xff);
+
+    struct buf buf = BUF_INITIALIZER;
+    r = buf_hex_to_bin(&buf, HEX, sizeof(HEX)-1);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(buf_len(&buf), 0);
+    buf_free(&buf);
 }
 
 static void test_hex_to_bin_nonxdigit(void)
@@ -141,6 +166,12 @@ static void test_hex_to_bin_nonxdigit(void)
     memset(bin, 0xff, sizeof(bin));
     r = hex_to_bin(HEX, sizeof(HEX)-1, bin);
     CU_ASSERT_EQUAL(r, -1);
+
+    struct buf buf = BUF_INITIALIZER;
+    r = buf_hex_to_bin(&buf, HEX, sizeof(HEX)-1);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(buf_len(&buf), 0);
+    buf_free(&buf);
 }
 
 static void test_hex_to_bin_whitespace(void)
@@ -152,19 +183,20 @@ static void test_hex_to_bin_whitespace(void)
     memset(bin, 0xff, sizeof(bin));
     r = hex_to_bin(HEX, sizeof(HEX)-1, bin);
     CU_ASSERT_EQUAL(r, -1);
+
+    struct buf buf = BUF_INITIALIZER;
+    r = buf_hex_to_bin(&buf, HEX, sizeof(HEX)-1);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(buf_len(&buf), 0);
+    buf_free(&buf);
 }
 
 static void test_hex_to_bin_nolength(void)
 {
     static const char HEX[9] = "cafebabe";
     static const unsigned char BIN[4] = { 0xca, 0xfe, 0xba, 0xbe };
-    int r;
     char bin[4];
-
-    memset(bin, 0xff, sizeof(bin));
-    r = hex_to_bin(HEX, 0, bin);
-    CU_ASSERT_EQUAL(r, sizeof(bin));
-    CU_ASSERT_EQUAL(memcmp(bin, BIN, sizeof(bin)), 0);
+    ASSERT_TO_BIN(HEX, BIN, bin);
 }
 
 static void test_hex_to_bin_null(void)
@@ -176,6 +208,14 @@ static void test_hex_to_bin_null(void)
     r = hex_to_bin(NULL, 0, bin);
     CU_ASSERT_EQUAL(r, -1);
     CU_ASSERT_EQUAL(bin[0], 0xff);
+
+    struct buf buf = BUF_INITIALIZER;
+    r = buf_hex_to_bin(&buf, NULL, 0);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(buf_len(&buf), 0);
+    buf_free(&buf);
 }
+
+#undef ASSERT_TO_HEX
 
 /* vim: set ft=c: */

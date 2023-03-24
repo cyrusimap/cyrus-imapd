@@ -369,6 +369,10 @@ int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags);
 int bin_to_lchex(const void *bin, size_t binlen, char *hex);
 int hex_to_bin(const char *hex, size_t hexlen, void *bin);
 
+int buf_bin_to_hex(struct buf *hex, const void *bin, size_t binlen, int flags);
+int buf_bin_to_lchex(struct buf *hex, const void *bin, size_t binlen);
+int buf_hex_to_bin(struct buf *bin, const char *hex, size_t hexlen);
+
 /* use getpassphrase on machines which support it */
 #ifdef HAVE_GETPASSPHRASE
 #define cyrus_getpass getpassphrase
