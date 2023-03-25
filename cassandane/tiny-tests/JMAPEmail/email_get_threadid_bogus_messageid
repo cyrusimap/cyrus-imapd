@@ -75,6 +75,40 @@ EOF
     $raw =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $raw) || die $@;
 
+    xlog $self, "Refer to it in X-ME-Message-ID with brackets";
+
+    $raw = <<'EOF';
+From: addr5@local
+To: addr1@local
+Subject: Re: hello
+Message-Id: <valid.addr5@message-id>
+X-ME-Message-ID: <bogus.addr1@message-id>
+Date: Tue, 14 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+world
+EOF
+    $raw =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $raw) || die $@;
+
+    xlog $self, "Refer to it in X-ME-Message-ID without brackets";
+
+    $raw = <<'EOF';
+From: addr6@local
+To: addr1@local
+Subject: Re: hello
+Message-Id: <valid.addr6@message-id>
+X-ME-Message-ID: bogus.addr1@message-id
+Date: Tue, 14 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+world
+EOF
+    $raw =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $raw) || die $@;
+
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     my $res = $jmap->CallMethods([
@@ -88,13 +122,13 @@ EOF
             properties => ['threadId', 'subject', 'from']
         }, 'R2'],
     ]);
-    $self->assert_num_equals(4, scalar @{$res->[1][1]{list}});
+    $self->assert_num_equals(6, scalar @{$res->[1][1]{list}});
     my $threadId = $res->[1][1]{list}[0]{threadId};
     $self->assert_not_null($threadId);
 
     xlog $self, "Assert all messages thread together";
 
-    for my $i (1..3) {
+    for my $i (1..5) {
         $self->assert_str_equals($res->[1][1]{list}[0]{threadId},
             $res->[1][1]{list}[$i]{threadId});
         $self->assert_str_not_equals($res->[1][1]{list}[0]{id},
@@ -104,10 +138,10 @@ EOF
     xlog $self, "Refer to it In-Reply-To without brackets";
 
     $raw = <<'EOF';
-From: addr5@local
+From: addr7@local
 To: addr1@local
 Subject: Re: hello
-Message-Id: <valid.addr5@message-id>
+Message-Id: <valid.addr7@message-id>
 In-Reply-To: bogus.addr1@message-id
 Date: Tue, 14 Apr 2020 15:34:03 +0200
 MIME-Version: 1.0
@@ -123,7 +157,7 @@ EOF
     my $res = $jmap->CallMethods([
         ['Email/query', {
             filter => {
-                from => 'addr5@local',
+                from => 'addr7@local',
             },
         }, 'R1'],
         ['Email/get', {
