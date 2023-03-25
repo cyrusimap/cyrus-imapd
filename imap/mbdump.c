@@ -279,8 +279,12 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
                 continue;
             downgrade_record(record, rbuf, oldversion);
             n = retry_write(oldindex_fd, rbuf, record_size);
-            if (n == -1) goto fail;
+            if (n == -1) {
+                mailbox_iter_done(&iter);
+                goto fail;
+	    }
         }
+        mailbox_iter_done(&iter);
 
         close(oldindex_fd);
         r = dump_file(first, sync, pin, pout, oldname, "cyrus.expunge", NULL, 0);
@@ -1310,6 +1314,7 @@ EXPORTED int undump_mailbox(const char *mbname,
             settime.actime = settime.modtime = record->internaldate;
             if (utime(fname, &settime) == -1) {
                 r = IMAP_IOERROR;
+                mailbox_iter_done(&iter);
                 goto done2;
             }
         }
