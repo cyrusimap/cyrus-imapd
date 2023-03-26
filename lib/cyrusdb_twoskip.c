@@ -1015,14 +1015,14 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
                          loc->keybuf.s, loc->keybuf.len);
         /* same place, and was exact.  Otherwise we're going back,
          * and the reverse pointers are no longer valid... */
-        if (db->loc.is_exactmatch && cmp == 0) {
+        if (loc->is_exactmatch && cmp == 0) {
             return 0;
         }
 
         /* we're looking after this record */
         if (cmp < 0) {
-            for (i = 0; i < db->loc.record.level; i++)
-                loc->backloc[i] = db->loc.record.offset;
+            for (i = 0; i < loc->record.level; i++)
+                loc->backloc[i] = loc->record.offset;
 
             /* read the next record */
             r = read_skipdelete(db, loc->forwardloc[0], &newrecord);
@@ -1030,7 +1030,7 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
 
             /* nothing afterwards? */
             if (!newrecord.offset) {
-                db->loc.is_exactmatch = 0;
+                loc->is_exactmatch = 0;
                 return 0;
             }
 
@@ -1040,8 +1040,8 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
 
             /* exact match? */
             if (cmp == 0) {
-                db->loc.is_exactmatch = 1;
-                db->loc.record = newrecord;
+                loc->is_exactmatch = 1;
+                loc->record = newrecord;
 
                 for (i = 0; i < newrecord.level; i++)
                     loc->forwardloc[i] = _getloc(db, &newrecord, i);
@@ -1052,7 +1052,7 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
 
             /* or in the gap */
             if (cmp > 0) {
-                db->loc.is_exactmatch = 0;
+                loc->is_exactmatch = 0;
                 return 0;
             }
         }
