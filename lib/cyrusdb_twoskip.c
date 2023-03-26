@@ -473,6 +473,7 @@ static uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
 /* given an open, mapped db, read in the header information */
 static int read_header(struct dbengine *db)
 {
+    const char *base = BASE(db);
     uint32_t crc;
 
     assert(db && db->mf && db->is_open);
@@ -483,13 +484,13 @@ static int read_header(struct dbengine *db)
         return CYRUSDB_IOERROR;
     }
 
-    if (memcmp(BASE(db), HEADER_MAGIC, HEADER_MAGIC_SIZE)) {
+    if (memcmp(base, HEADER_MAGIC, HEADER_MAGIC_SIZE)) {
         syslog(LOG_ERR, "twoskip: invalid magic header: %s", FNAME(db));
         return CYRUSDB_IOERROR;
     }
 
     db->header.version
-        = ntohl(*((uint32_t *)(BASE(db) + OFFSET_VERSION)));
+        = ntohl(*((uint32_t *)(base + OFFSET_VERSION)));
 
     if (db->header.version > VERSION) {
         syslog(LOG_ERR, "twoskip: version mismatch: %s has version %d",
@@ -498,28 +499,28 @@ static int read_header(struct dbengine *db)
     }
 
     db->header.generation
-        = ntohll(*((uint64_t *)(BASE(db) + OFFSET_GENERATION)));
+        = ntohll(*((uint64_t *)(base + OFFSET_GENERATION)));
 
     db->header.num_records
-        = ntohll(*((uint64_t *)(BASE(db) + OFFSET_NUM_RECORDS)));
+        = ntohll(*((uint64_t *)(base + OFFSET_NUM_RECORDS)));
 
     db->header.repack_size
-        = ntohll(*((uint64_t *)(BASE(db) + OFFSET_REPACK_SIZE)));
+        = ntohll(*((uint64_t *)(base + OFFSET_REPACK_SIZE)));
 
     db->header.current_size
-        = ntohll(*((uint64_t *)(BASE(db) + OFFSET_CURRENT_SIZE)));
+        = ntohll(*((uint64_t *)(base + OFFSET_CURRENT_SIZE)));
 
     db->header.flags
-        = ntohl(*((uint32_t *)(BASE(db) + OFFSET_FLAGS)));
+        = ntohl(*((uint32_t *)(base + OFFSET_FLAGS)));
 
-    crc = ntohl(*((uint32_t *)(BASE(db) + OFFSET_CRC32)));
+    crc = ntohl(*((uint32_t *)(base + OFFSET_CRC32)));
 
     db->end = db->header.current_size;
 
     if ((db->open_flags & CYRUSDB_NOCRC))
         return 0;
 
-    if (crc32_map(BASE(db), OFFSET_CRC32) != crc) {
+    if (crc32_map(base, OFFSET_CRC32) != crc) {
         xsyslog(LOG_ERR, "DBERROR: twoskip header CRC failure",
                          "filename=<%s>",
                          FNAME(db));
@@ -587,8 +588,8 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 static int read_onerecord(struct dbengine *db, size_t offset,
                           struct skiprecord *record)
 {
-    const char *base;
-    int i;
+    const char *base = BASE(db);
+    size_t size = SIZE(db);
 
     memset(record, 0, sizeof(struct skiprecord));
 
@@ -598,16 +599,17 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     record->len = 24; /* absolute minimum */
 
     /* need space for at least the header plus some details */
-    if (record->offset + record->len > SIZE(db))
+    if (record->offset + record->len > size)
         goto badsize;
 
-    base = BASE(db) + offset;
+    const char *ptr = base + offset;
+    int i;
 
     /* read in the record header */
-    record->type = base[0];
-    record->level = base[1];
-    record->keylen = ntohs(*((uint16_t *)(base + 2)));
-    record->vallen = ntohl(*((uint32_t *)(base + 4)));
+    record->type = ptr[0];
+    record->level = ptr[1];
+    record->keylen = ntohs(*((uint16_t *)(ptr + 2)));
+    record->vallen = ntohl(*((uint32_t *)(ptr + 4)));
     offset += 8;
 
     /* make sure we fit */
@@ -620,15 +622,15 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 
     /* long key */
     if (record->keylen == UINT16_MAX) {
-        base = BASE(db) + offset;
-        record->keylen = ntohll(*((uint64_t *)base));
+        ptr = base + offset;
+        record->keylen = ntohll(*((uint64_t *)ptr));
         offset += 8;
     }
 
     /* long value */
     if (record->vallen == UINT32_MAX) {
-        base = BASE(db) + offset;
-        record->vallen = ntohll(*((uint64_t *)base));
+        ptr = base + offset;
+        record->vallen = ntohll(*((uint64_t *)ptr));
         offset += 8;
     }
 
@@ -638,25 +640,25 @@ static int read_onerecord(struct dbengine *db, size_t offset,
                 + 8                         /* crc32s */
                 + roundup(record->keylen + record->vallen, 8);  /* keyval */
 
-    if (record->offset + record->len > SIZE(db))
+    if (record->offset + record->len > size)
         goto badsize;
 
     for (i = 0; i <= record->level; i++) {
-        base = BASE(db) + offset;
-        record->nextloc[i] = ntohll(*((uint64_t *)base));
+        ptr = base + offset;
+        record->nextloc[i] = ntohll(*((uint64_t *)ptr));
         offset += 8;
     }
 
-    base = BASE(db) + offset;
-    record->crc32_head = ntohl(*((uint32_t *)base));
-    record->crc32_tail = ntohl(*((uint32_t *)(base+4)));
+    ptr = base + offset;
+    record->crc32_head = ntohl(*((uint32_t *)ptr));
+    record->crc32_tail = ntohl(*((uint32_t *)(ptr+4)));
     record->keyoffset = offset + 8;
     record->valoffset = record->keyoffset + record->keylen;
 
     if ((db->open_flags & CYRUSDB_NOCRC))
         return 0;
 
-    uint32_t crc = crc32_map(BASE(db) + record->offset, (offset - record->offset));
+    uint32_t crc = crc32_map(base + record->offset, (offset - record->offset));
     if (crc != record->crc32_head) {
         xsyslog(LOG_ERR, "DBERROR: twoskip checksum head error",
                          "filename=<%s> offset=<%08llX>",
