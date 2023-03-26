@@ -1295,6 +1295,20 @@ static int read_lock(struct dbengine *db)
     return 0;
 }
 
+static void _newtxn_helper(struct dbengine *db, int shared, struct txn **tidptr)
+{
+    db->txn_num++;
+
+    /* create the transaction */
+    struct txn *txn = xzmalloc(sizeof(struct txn));
+    txn->num = db->txn_num;
+    txn->shared = shared;
+    db->current_txn = txn;
+
+    /* pass it back out */
+    *tidptr = txn;
+}
+
 static int newtxn(struct dbengine *db, int shared, struct txn **tidptr)
 {
     int r;
@@ -1306,16 +1320,7 @@ static int newtxn(struct dbengine *db, int shared, struct txn **tidptr)
     r = shared ? read_lock(db) : write_lock(db);
     if (r) return r;
 
-    db->txn_num++;
-
-    /* create the transaction */
-    struct txn *txn = xzmalloc(sizeof(struct txn));
-    txn->num = db->txn_num;
-    txn->shared = shared;
-    db->current_txn = txn;
-
-    /* pass it back out */
-    *tidptr = txn;
+    _newtxn_helper(db, shared, tidptr);
 
     return 0;
 }
@@ -1363,16 +1368,18 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
         goto done;
     }
 
-    db->is_open = 0;
-
-    /* grab a read lock, only reading the header */
-    r = read_lock(db);
-    if (r) goto done;
-
-    /* if there's any issue which requires fixing, get a write lock */
-    if (0) {
-    retry_write:
-        unlock(db);
+    if (mappedfile_size(db->mf) && (!mytid || (flags & CYRUSDB_SHARED))) {
+        /* grab a read lock to read the header */
+        db->is_open = 0;
+        r = read_lock(db);
+        if (r) goto done;
+    }
+    else {
+        /* we either need a write lock anyway, or are fixing */
+        if (0) {
+            retry_write:
+            unlock(db);
+        }
         db->is_open = 0;
         r = write_lock(db);
         if (r) goto done;
@@ -1429,15 +1436,27 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
         if (r) goto done;
     }
 
+    if (mytid) {
+        int shared = flags & CYRUSDB_SHARED;
+        int iswlocked = mappedfile_iswritelocked(db->mf);
+        if ((iswlocked && !shared) || (!iswlocked && shared)) {
+            // already have correct lock!
+            _newtxn_helper(db, shared, mytid);
+            *ret = db;
+            goto done;
+        }
+	/* otherwise fallthrough to unlock and create txn with standard locking path */
+    }
+
     /* unlock the DB */
     unlock(db);
-
-    *ret = db;
 
     if (mytid) {
         r = newtxn(db, flags & CYRUSDB_SHARED, mytid);
         if (r) goto done;
     }
+
+    *ret = db;
 
 done:
     if (r) dispose_db(db);
@@ -1823,7 +1842,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
         // delay the checkpoint until the user isn't waiting
         struct dcrock *drock = xzmalloc(sizeof(struct dcrock));
         drock->fname = xstrdup(FNAME(db));
-        drock->flags = db->open_flags;
+        drock->flags = db->open_flags & ~CYRUSDB_SHARED;
         libcyrus_delayed_action(drock->fname, _delayed_checkpoint,
                                 _delayed_checkpoint_free, drock);
     }
