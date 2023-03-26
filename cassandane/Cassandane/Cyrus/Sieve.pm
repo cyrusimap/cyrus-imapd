@@ -3890,6 +3890,7 @@ EOF
 
 sub test_date_local_zone
     :needs_component_sieve :min_version_3_9
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -7219,6 +7220,7 @@ EOF
 
 sub test_redirect_address_with_phrase
     :needs_component_sieve
+    :needs_component_httpd
 {
     my ($self) = @_;
 
