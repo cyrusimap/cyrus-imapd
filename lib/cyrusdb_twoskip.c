@@ -1941,11 +1941,19 @@ struct copy_rock {
 
 static int copy_cb(void *rock,
                    const char *key, size_t keylen,
-                   const char *val, size_t vallen)
+                   const char *data, size_t datalen)
 {
     struct copy_rock *cr = (struct copy_rock *)rock;
+    int i;
 
-    return skipwrite(cr->db, key, keylen, val, vallen, 0);
+    /* minimal logic from find_loc and stitch knowing that we're
+     * always writing at the end of a file */
+    struct skiploc *loc = &cr->db->loc;
+    for (i = 0; i < loc->record.level; i++)
+         loc->backloc[i] = loc->record.offset;
+    loc->is_exactmatch = 0;
+    buf_setmap(&loc->keybuf, key, keylen);
+    return store_here(cr->db, data, datalen);
 }
 
 static int mycheckpoint(struct dbengine *db)
@@ -1972,6 +1980,9 @@ static int mycheckpoint(struct dbengine *db)
     cr.tid = NULL;
     r = opendb(newfname, db->open_flags | CYRUSDB_CREATE, &cr.db, &cr.tid);
     if (r) return r;
+
+    // set up the pointers so copy_cb logic can work
+    relocate(cr.db);
 
     r = myforeach(db, NULL, 0, NULL, copy_cb, &cr, &db->current_txn);
     if (r) goto err;
