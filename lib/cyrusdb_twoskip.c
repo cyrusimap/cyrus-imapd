@@ -451,7 +451,7 @@ static int recovery2(struct dbengine *db, int *count);
 #define FNAME(db) mappedfile_fname((db)->mf)
 
 /* calculate padding size */
-static size_t roundup(size_t record_size, int howfar)
+static inline size_t roundup(size_t record_size, int howfar)
 {
     if (record_size % howfar)
         record_size += howfar - (record_size % howfar);
@@ -459,7 +459,7 @@ static size_t roundup(size_t record_size, int howfar)
 }
 
 /* choose a level appropriately randomly */
-static uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
+static inline uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
 {
     while (((float) rand() / (float) (RAND_MAX)) < PROB) {
         lvl++;
