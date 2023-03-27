@@ -3906,10 +3906,11 @@ sub test_date_local_zone
 
     my $cur_hour = $now->strftime("%H");
     my $cur_zone = $now->strftime("%z");
-    my $cur_std11 = $now->strftime("%a, %d %b %Y %T %z");
+    my $cur_std11 = $now->strftime("%a, %d %b %Y %H:[0-9]{2}:[0-9]{2} %z");
+    $cur_std11 =~ s/\+/[+]/g;  # escape any '+' from %z
 
     $self->{instance}->install_sieve_script(<<EOF
-require ["date", "imap4flags"];
+require ["date", "imap4flags", "regex"];
 
 if date "date" "hour" "$date_hour" {
   addflag "Test1";
@@ -3927,7 +3928,7 @@ if currentdate "zone" "$cur_zone" {
   addflag "Test4";
 }
 
-if currentdate "std11" "$cur_std11" {
+if currentdate :regex "std11" "$cur_std11" {
   addflag "Test5";
 }
 EOF
