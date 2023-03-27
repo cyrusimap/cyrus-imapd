@@ -13980,6 +13980,11 @@ static void _email_copy_validate_props(json_t *jemail,
                 jmap_parser_invalid(&myparser, "receivedAt");
             }
         }
+        else if (!strcmp(pname, "snoozed")) {
+            if (!json_is_null(prop)) {
+                jmap_parser_invalid(&myparser, "snoozed");
+            }
+        }
         else {
             jmap_parser_invalid(&myparser, pname);
         }
