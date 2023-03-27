@@ -590,6 +590,8 @@ static int read_onerecord(struct dbengine *db, size_t offset,
 {
     const char *base = BASE(db);
     size_t size = SIZE(db);
+    const char *ptr = base + offset;
+    int i;
 
     memset(record, 0, sizeof(struct skiprecord));
 
@@ -601,9 +603,6 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     /* need space for at least the header plus some details */
     if (record->offset + record->len > size)
         goto badsize;
-
-    const char *ptr = base + offset;
-    int i;
 
     /* read in the record header */
     record->type = ptr[0];
