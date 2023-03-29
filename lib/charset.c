@@ -1323,6 +1323,10 @@ static void html_attr_start(struct striphtml_state *s)
             s->attr.typ = HATTR_ALT;
         }
     }
+
+    if (s->attr.typ != HATTR_NONE) {
+        dynarray_truncate(&s->attr.vals[s->attr.typ], 0);
+    }
 }
 
 static void html_attr_putc(struct striphtml_state *s, uint32_t c)
@@ -1400,6 +1404,7 @@ static void html_saw_tag(struct convert_rock *rock)
                 html_attr_cat(s, rock->next, HATTR_HREF);
                 convert_putc(rock->next, '>');
 
+                /* n.b. we only acknowledge img alt when it also has a src */
                 if (html_attr_have(s, HATTR_ALT)) {
                     convert_putc(rock->next, ' ');
                     convert_putc(rock->next, '(');
