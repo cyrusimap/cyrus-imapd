@@ -445,8 +445,9 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "mbpath", 0, 0);
 
 
-    r = mboxname_init_namespace(&mbpath_namespace,
-                                NAMESPACE_OPTION_ADMIN | NAMESPACE_OPTION_UTF8);
+    int nsopts = NAMESPACE_OPTION_ADMIN;
+    if (opts.utf8) nsopts |= NAMESPACE_OPTION_UTF8;
+    r = mboxname_init_namespace(&mbpath_namespace, nsopts);
     if (r) {
         fatal(error_message(r), EX_SOFTWARE);
     }
