@@ -1292,6 +1292,17 @@ static void html_attr_init(struct striphtml_state *s)
     }
 }
 
+static void html_attr_reset(struct striphtml_state *s)
+{
+    s->attr.typ = HATTR_NONE;
+    s->attr.quot = 0;
+
+    for (size_t i = 0; i < (size_t) HATTR_NONE; i++) {
+        dynarray_truncate(&s->attr.vals[i], 0);
+    }
+    buf_reset(&s->attr.name);
+}
+
 static void html_attr_start(struct striphtml_state *s)
 {
     const char *tag = buf_cstring(&s->name);
@@ -1396,6 +1407,9 @@ static void html_saw_tag(struct convert_rock *rock)
                     convert_putc(rock->next, ')');
                 }
             }
+
+            /* finished with the attr details */
+            html_attr_reset(s);
         }
 
         if (!is_phrasing(tag)) {
@@ -2107,10 +2121,7 @@ static void striphtml_cleanup(struct convert_rock *rock, int is_free)
         }
         else {
             buf_reset(&s->name);
-            buf_reset(&s->attr.name);
-            for (size_t i = 0; i < (size_t) HATTR_NONE; i++) {
-                dynarray_truncate(&s->attr.vals[i], 0);
-            }
+            html_attr_reset(s);
         }
     }
     if (is_free) basic_free(rock);

@@ -1193,12 +1193,23 @@ static void test_extract(void)
     flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
     TESTCASE("<a href=\"https://foo/bar\"/>", "us-ascii", ENCODING_NONE, "HTML",
         "<HTTPS://FOO/BAR>");
-    TESTCASE("<img src='cat.png', alt=\"A cat\"/>", "us-ascii", ENCODING_NONE, "HTML",
+    TESTCASE("<img src='cat.png' alt=\"A cat\"/>", "us-ascii", ENCODING_NONE, "HTML",
         "<CAT.PNG> (A CAT)");
     TESTCASE("<area href=\"https://foo/bar\"/>", "us-ascii", ENCODING_NONE, "HTML",
         "<HTTPS://FOO/BAR>");
     // "/" in quoted attribute value is legit
     TESTCASE("<div><img alt=\"letterpress/\" src=\"polaroid.png\">stumptown</div>", "us-ascii", ENCODING_NONE, "HTML", " STUMPTOWN <POLAROID.PNG> (LETTERPRESS/) ");
+    // multiple hrefs in same chunk of text
+    TESTCASE("<a href=\"https://foo/bar\"/><a href=\"https://baz/qum\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<HTTPS://FOO/BAR><HTTPS://BAZ/QUM>");
+    TESTCASE("<area href=\"https://foo/bar\"/><area href=\"https://baz/qum\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<HTTPS://FOO/BAR><HTTPS://BAZ/QUM>");
+    // multiple alt tags in same chunk of text
+    TESTCASE("<img src='cat.png' alt=\"A cat\"/><img src='dog.png' alt=\"A dog\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<CAT.PNG> (A CAT)<DOG.PNG> (A DOG)");
 }
 #undef TESTCASE
 
