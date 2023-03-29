@@ -1,15 +1,15 @@
 :tocdepth: 3
 
 ====================================
-Cyrus IMAP 3.8.0-beta1 Release Notes
+Cyrus IMAP 3.8.0-beta2 Release Notes
 ====================================
 
 Download from GitHub:
 
-    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.0-beta1/cyrus-imapd-3.8.0-beta1.tar.gz
-    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.0-beta1/cyrus-imapd-3.8.0-beta1.tar.gz.sig
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.0-beta2/cyrus-imapd-3.8.0-beta2.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.0-beta2/cyrus-imapd-3.8.0-beta2.tar.gz.sig
 
-.. _relnotes-3.8.0-beta1_changes:
+.. _relnotes-3.8.0-beta2_changes:
 
 Major changes since the 3.6 series
 ==================================
@@ -44,7 +44,7 @@ Major changes since the 3.6 series
 * Lock ordering fixes should result in fewer "resource deadlock avoided"
   errors
 
-.. _relnotes_3.8.0-beta1_storage_changes:
+.. _relnotes_3.8.0-beta2_storage_changes:
 
 Storage changes
 ===============
@@ -111,3 +111,5 @@ Significant bugfixes
   broken UUID mailboxes.  Thanks Matthias Hunstock.
 * Fixed :issue:`4383`: rolling :cyrusman:`squatter(8)` only compacted its index
   databases at shutdown
+* Fixed :issue:`4439`: GETMETADATA wasn't proxied correctly to murder backends.
+  Thanks Stéphane GAUBERT.

@@ -82,7 +82,7 @@ the `sieve_folder` :cyrusman:`imapd.conf(5)` option).  No manual steps are
 necessary for upgrade: Cyrus recognises the old style storage and will
 convert to the new style automatically as necessary.
 
-.. _upgrade_3.8.0-beta1_jmap_caldav_changes:
+.. _upgrade_3.8.0_jmap_caldav_changes:
 
 JMAP/CalDAV changes
 ###################
@@ -107,7 +107,7 @@ Site that do not use JMAP should upgrade their CalDAV database by
   dav.db
 - followed by calling `dav_reconstruct` for that user
 
-.. _upgrade_3.8.0-beta1_sieve_changes:
+.. _upgrade_3.8.0_sieve_changes:
 
 Sieve changes
 #############
