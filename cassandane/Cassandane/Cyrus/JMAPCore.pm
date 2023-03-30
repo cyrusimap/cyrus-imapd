@@ -196,7 +196,12 @@ sub test_get_session
         $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:vacationresponse'});
         if ($maj > 3 || ($maj == 3 && $min >= 3)) {
             # jmap sieve added in 3.3
-            $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/sieve'});
+            if ($maj > 3 || $min >= 9) {
+                $self->assert_not_null($capabilities->{'https://cyrusimap.org/ns/jmap/sieve'}{implementation});
+            }
+            else {
+                $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/sieve'});
+            }
         }
     }
 
