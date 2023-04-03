@@ -138,6 +138,47 @@ sub id
     return $self->{_name}; # XXX something cleverer?
 }
 
+sub filter
+{
+    my ($self) = @_;
+
+    my $filter = $self->SUPER::filter(@_);
+
+    $filter->{enable_wanted_properties} = sub {
+        return if not exists $self->{_name};
+        my $sub = $self->can($self->{_name});
+        return if not defined $sub;
+
+        # n.b. cannot be used to unwant, sorry
+        foreach my $attr (attributes::get($sub)) {
+            next if $attr !~ m/^want(_service)?_(\w+)$/;
+
+            # XXX Since this is a 'filter', it could also check
+            # XXX whether the required components are configured
+            # XXX ala :needs_foo, and skip the test if they're
+            # XXX missing, rather than failing to start them.
+            # XXX That is, :want_service_http could be taken to
+            # XXX imply :needs_component_httpd, and the test
+            # XXX skipped if it's unavailable.  But note that
+            # XXX there isn't a clean mapping between the names!
+            # XXX For now, tests will need to be annotated with
+            # XXX both attributes in these cases.
+
+            $self->{_current_magic} = "Test function attribute ':$attr'";
+            if (defined $1 && $1 eq '_service') {
+                $self->want_services($2);
+            }
+            else {
+                $self->want($2);
+            }
+            $self->{_current_magic} = undef;
+        }
+        return;
+    };
+
+    return $filter;
+}
+
 # will magically cause some special actions to be taken during test
 # setup.  This used to be a horrible hack to enable a replica instance
 # if the test name contained the word "replication", but now it's more
@@ -431,6 +472,8 @@ sub _run_magic
             next if $a =~ m/^(?:min|max)_version_/;
             # ignore feature test attribution here
             next if $a =~ m/^needs_/;
+            # ignore want attribution here
+            next if $a =~ m/^want_/;
             die "Unknown attribute $a"
                 unless defined $magic_handlers{$m};
             next if $seen{$m};

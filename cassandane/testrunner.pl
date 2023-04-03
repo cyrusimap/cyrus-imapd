@@ -143,7 +143,8 @@ my %runners =
         my ($plan, $fh) = @_;
         local *__ANON__ = "runner_tap";
         my $runner = Cassandane::Unit::Runner->new($fh);
-        my @filters = qw(x skip_version skip_missing_features);
+        my @filters = qw(x skip_version skip_missing_features
+                         enable_wanted_properties);
         push @filters, 'skip_slow' if $plan->{skip_slow};
         $runner->filter(@filters);
         return $runner->do_run($plan, 0);
@@ -153,7 +154,8 @@ my %runners =
         my ($plan, $fh) = @_;
         local *__ANON__ = "runner_pretty";
         my $runner = Cassandane::Unit::RunnerPretty->new({}, $fh);
-        my @filters = qw(x skip_version skip_missing_features);
+        my @filters = qw(x skip_version skip_missing_features
+                         enable_wanted_properties);
         push @filters, 'skip_slow' if $plan->{skip_slow};
         $runner->filter(@filters);
         return $runner->do_run($plan, 0);
@@ -163,7 +165,8 @@ my %runners =
         my ($plan, $fh) = @_;
         local *__ANON__ = "runner_prettier";
         my $runner = Cassandane::Unit::RunnerPretty->new({quiet=>1}, $fh);
-        my @filters = qw(x skip_version skip_missing_features);
+        my @filters = qw(x skip_version skip_missing_features
+                         enable_wanted_properties);
         push @filters, 'skip_slow' if $plan->{skip_slow};
         $runner->filter(@filters);
         return $runner->do_run($plan, 0);
