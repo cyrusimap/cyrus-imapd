@@ -1210,6 +1210,18 @@ static void test_extract(void)
     TESTCASE("<img src='cat.png' alt=\"A cat\"/><img src='dog.png' alt=\"A dog\"/>",
              "us-ascii", ENCODING_NONE, "HTML",
              "<CAT.PNG> (A CAT)<DOG.PNG> (A DOG)");
+    // multiple hrefs in same A tag (invalid!)
+    TESTCASE("<a href=\"https://foo/bar\" href=\"https://baz/qum\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<HTTPS://BAZ/QUM>"); /* last value seen is kept */
+    // multiple alt in same IMG tag (invalid!)
+    TESTCASE("<img src='cat.png' alt=\"A cat\" alt='A tabby cat'/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<CAT.PNG> (A TABBY CAT)"); /* last value seen is kept */
+    // multiple src in same IMG tag (invalid!)
+    TESTCASE("<img src='cat.png' src='tabby.png' alt='A tabby cat'/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<TABBY.PNG> (A TABBY CAT)"); /* last value seen is kept */
 }
 #undef TESTCASE
 
