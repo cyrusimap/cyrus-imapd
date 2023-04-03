@@ -427,7 +427,6 @@ static int httpd_tls_required = 0;
 static int httpd_tls_enabled = 0;
 static unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
 unsigned long config_httpmodules;
-int config_httpprettytelemetry;
 
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
@@ -841,8 +840,6 @@ int service_init(int argc __attribute__((unused)),
             usage();
         }
     }
-
-    config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
 
     httpd_log_headers = strarray_split(config_getstring(IMAPOPT_HTTPLOGHEADERS),
                                        " ", STRARRAY_TRIM | STRARRAY_LCASE);

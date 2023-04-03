@@ -116,6 +116,7 @@ EXPORTED const char *config_backup_db;
 EXPORTED int charset_flags;
 EXPORTED int charset_snippet_flags;
 EXPORTED size_t config_search_maxsize;
+EXPORTED int config_httpprettytelemetry;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
@@ -324,6 +325,9 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         /* All search engines other than Xapian require escaped HTML */
         charset_snippet_flags |= CHARSET_ESCAPEHTML;
     }
+
+    /* Configure HTTP */
+    config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
 
     config_search_maxsize = config_getbytesize(IMAPOPT_SEARCH_MAXSIZE, 'K');
 

@@ -97,6 +97,7 @@ extern "C" {
 
 /* Custom JSCalendar properties */
 #define JMAPICAL_JSPROP_TIMEZONES     "cyrusimap.org:timeZones"
+#define JMAPICAL_JSPROP_ICALPROPS     "cyrusimap.org:iCalProps"
 
 typedef struct jstimezones jstimezones_t;
 
@@ -125,6 +126,9 @@ struct jmapical_ctx {
         int allow_method;
         json_t *replyto;
     } to_ical;
+    struct {
+        int want_icalprops;
+    } from_ical;
     struct {
         int no_guess;
         int ignore_orphans;

@@ -578,7 +578,6 @@ extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 extern const char *httpd_localip, *httpd_remoteip;
 extern unsigned long config_httpmodules;
-extern int config_httpprettytelemetry;
 extern strarray_t *httpd_log_headers;
 extern char *httpd_altsvc;
 
