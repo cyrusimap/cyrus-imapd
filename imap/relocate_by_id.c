@@ -298,7 +298,7 @@ int main(int argc, char **argv)
                 /* Add sieve path */
                 path = user_sieve_path(userid);
                 if (*path) {
-                    strarray_append(oldpaths, xstrdup(path));
+                    strarray_append(oldpaths, path);
 
                     buf_setcstr(&buf, config_getstring(IMAPOPT_SIEVEDIR));
                     buf_printf(&buf, "/%s", userpath);
