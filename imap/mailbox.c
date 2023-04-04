@@ -1039,7 +1039,7 @@ static int mailbox_open_advanced(const char *name,
 
     /* pre-check for some conditions which mean that we don't want
        to go ahead and open this mailbox */
-    if (!r && mbentry->mbtype & MBTYPE_DELETED)
+    if (!r && mbentry->mbtype & MBTYPE_DELETED && mbentry->partition == NULL)
         r = IMAP_MAILBOX_NONEXISTENT;
 
     if (!r && mbentry->mbtype & MBTYPE_MOVING)
