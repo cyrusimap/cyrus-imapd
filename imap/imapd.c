@@ -16035,8 +16035,10 @@ static void push_updates(void)
         mtype = json_string_value(json_object_get(msg, "@type"));
 
         if (!strcmp(mtype, "alert")) {
-            prot_puts(imapd_out,
-                      "* OK [NOTIFICATIONOVERFLOW] Lost connection to idled\r\n");
+            if (notify_event_groups) {
+                prot_puts(imapd_out,
+                          "* OK [NOTIFICATIONOVERFLOW] Lost connection to idled\r\n");
+            }
             idle_sock = PROT_NO_FD;
             imapd_notify_enabled = 0;
             goto done;
