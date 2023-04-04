@@ -3678,6 +3678,11 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
         default:
             if (txn->meth == METH_HEAD) return;
+
+            if (!outlen && last_chunk) {
+                /* Zero-length body */
+                return;
+            }
         }
     }
 
