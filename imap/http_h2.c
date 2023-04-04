@@ -728,7 +728,10 @@ static int resp_body_chunk(struct transaction_t *txn,
     syslog(LOG_DEBUG, "http2_resp_data_chunk(datalen=%u, last=%d)",
            datalen, last_chunk);
 
-    if (!datalen && !last_chunk) return 0;
+    if (!(datalen || (txn->flags.te && last_chunk))) {
+        /* Nothing to send */
+        return 0;
+    }
 
     if (txn->conn->logfd != -1) {
         /* telemetry log */
