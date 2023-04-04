@@ -3446,6 +3446,8 @@ static void cmd_idle(char *tag)
     static int idle_period = -1;
     static time_t idle_timeout = -1;
     int done, shutdown = 0;
+    char buf[2048];
+    const char *msg = NULL;
 
     /* get idle timeout */
     if (idle_timeout == -1) {
@@ -3467,8 +3469,6 @@ static void cmd_idle(char *tag)
 
     if (CAPA(backend_current, CAPA_IDLE)) {
         /* Start IDLE on backend */
-        char buf[2048];
-
         prot_printf(backend_current->out, "%s IDLE\r\n", tag);
         if (!prot_fgets(buf, sizeof(buf), backend_current->in)) {
 
@@ -3514,9 +3514,10 @@ static void cmd_idle(char *tag)
 
         /* Check for shutdown file */
         if (!imapd_userisadmin &&
-            (shutdown_file(NULL, 0) ||
-             (imapd_userid &&
-              userdeny(imapd_userid, config_ident, NULL, 0)))) {
+            (shutdown_file(buf, sizeof(buf)) ||
+             userdeny(imapd_userid, config_ident, buf, sizeof(buf)))) {
+            for (msg = buf; *msg == '['; msg++); /* can't have [ be first char */
+
             done = shutdown = 1;
         }
         else {
@@ -3540,8 +3541,8 @@ static void cmd_idle(char *tag)
     } while (!done);
 
     if (CAPA(backend_current, CAPA_IDLE)) {
-        /* Either the client timed out, or ended the command.
-           In either case we're done, so terminate IDLE on backend */
+        /* Either the client timed out, ended the command, or recv shutdown.
+           In any case we're done, so terminate IDLE on backend */
         prot_printf(backend_current->out, "Done\r\n");
         pipe_until_tag(backend_current, tag, 0);
     }
@@ -3551,7 +3552,11 @@ static void cmd_idle(char *tag)
         idling = 0;
     }
 
-    if (shutdown) return;
+    if (shutdown) {
+        prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", msg);
+        telemetry_rusage(imapd_userid);
+        shut_down(0);
+    }
 
     /* Get continuation data */
     c = getword(imapd_in, &arg);
@@ -16035,8 +16040,10 @@ static void push_updates(void)
         mtype = json_string_value(json_object_get(msg, "@type"));
 
         if (!strcmp(mtype, "alert")) {
-            prot_puts(imapd_out,
-                      "* OK [NOTIFICATIONOVERFLOW] Lost connection to idled\r\n");
+            if (notify_event_groups) {
+                prot_puts(imapd_out,
+                          "* OK [NOTIFICATIONOVERFLOW] Lost connection to idled\r\n");
+            }
             idle_sock = PROT_NO_FD;
             imapd_notify_enabled = 0;
             goto done;
