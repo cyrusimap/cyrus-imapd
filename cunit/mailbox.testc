@@ -80,6 +80,8 @@ static void test_aligned_header_offsets(void)
     CU_ASSERT_EQUAL(0, OFFSET_POP3_LAST_LOGIN   % alignof(XXX_TIME32_TYPE));
     CU_ASSERT_EQUAL(0, OFFSET_POP3_SHOW_AFTER   % alignof(XXX_TIME32_TYPE));
     CU_ASSERT_EQUAL(0, OFFSET_QUOTA_ANNOT_USED  % alignof(XXX_QUOTA32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_QUOTA_DELETED_USED % alignof(h.quota_deleted_used));
+    CU_ASSERT_EQUAL(0, OFFSET_QUOTA_EXPUNGED_USED % alignof(h.quota_expunged_used));
     CU_ASSERT_EQUAL(0, OFFSET_QUOTA_MAILBOX_USED % alignof(h.quota_mailbox_used));
     CU_ASSERT_EQUAL(0, OFFSET_RECENTTIME        % alignof(XXX_TIME32_TYPE));
     CU_ASSERT_EQUAL(0, OFFSET_RECENTUID         % alignof(h.recentuid));
@@ -186,14 +188,12 @@ static void test_unique_header_offsets(void)
         OFFSET(OFFSET_POP3_LAST_LOGIN,   sizeof(XXX_TIME32_TYPE)),
         OFFSET(OFFSET_POP3_SHOW_AFTER,   sizeof(XXX_TIME32_TYPE)),
         OFFSET(OFFSET_QUOTA_ANNOT_USED,  sizeof(XXX_QUOTA32_TYPE)),
+        OFFSET(OFFSET_QUOTA_DELETED_USED, sizeof(h.quota_deleted_used)),
+        OFFSET(OFFSET_QUOTA_EXPUNGED_USED, sizeof(h.quota_expunged_used)),
         OFFSET(OFFSET_QUOTA_MAILBOX_USED, sizeof(h.quota_mailbox_used)),
         OFFSET(OFFSET_RECENTTIME,        sizeof(XXX_TIME32_TYPE)),
         OFFSET(OFFSET_RECENTUID,         sizeof(h.recentuid)),
         OFFSET(OFFSET_RECORD_SIZE,       sizeof(h.record_size)),
-        OFFSET(OFFSET_SPARE1,            sizeof(uint32_t)),
-        OFFSET(OFFSET_SPARE2,            sizeof(uint32_t)),
-        OFFSET(OFFSET_SPARE3,            sizeof(uint32_t)),
-        OFFSET(OFFSET_SPARE4,            sizeof(uint32_t)),
         OFFSET(OFFSET_START_OFFSET,      sizeof(h.start_offset)),
         OFFSET(OFFSET_SYNCCRCS_ANNOT,    sizeof(h.synccrcs.annot)),
         OFFSET(OFFSET_SYNCCRCS_BASIC,    sizeof(h.synccrcs.basic)),
