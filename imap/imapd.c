@@ -258,9 +258,6 @@ static struct index_state *imapd_index;
 /* current namespace */
 struct namespace imapd_namespace;
 
-/* track if we're idling */
-static int idling = 0;
-
 const struct mbox_name_attribute mbox_name_attributes[] = {
     /* from RFC 3501 */
     { MBOX_ATTRIBUTE_NOINFERIORS,   "\\Noinferiors"   },
@@ -3492,10 +3489,6 @@ static void cmd_idle(char *tag)
 
         idle_start(IMAP_NOTIFY_MESSAGE, time(NULL) + idle_timeout,
                    FILTER_SELECTED, &key);
-
-        /* Use this flag so if getc causes a shutdown due to
-           connection abort we tell idled about it */
-        idling = 1;
     }
 
     /* Tell client we are idling and waiting for end of command */
@@ -3551,7 +3544,6 @@ static void cmd_idle(char *tag)
         /* If NOTIFY has NOT already been enabled,
            tell idled to stop sending message updates */
         idle_stop(FILTER_SELECTED);
-        idling = 0;
     }
 
     if (shutdown) {
