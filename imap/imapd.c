@@ -3484,8 +3484,9 @@ static void cmd_idle(char *tag)
             return;
         }
     }
-    else if (imapd_index && idle_sock != PROT_NO_FD) {
-        /* Tell idled to start sending message updates */
+    else if (imapd_index && idle_sock != PROT_NO_FD && !notify_event_groups) {
+        /* If NOTIFY has NOT already been enabled,
+           tell idled to start sending message updates */
         const char *mboxid = index_mboxid(imapd_index);
         strarray_t key = { 1, 0, (char **) &mboxid }; // avoid memory alloc
 
@@ -3547,7 +3548,8 @@ static void cmd_idle(char *tag)
         pipe_until_tag(backend_current, tag, 0);
     }
     else if (idle_sock != PROT_NO_FD && !notify_event_groups) {
-        /* Stop message updates */
+        /* If NOTIFY has NOT already been enabled,
+           tell idled to stop sending message updates */
         idle_stop(FILTER_SELECTED);
         idling = 0;
     }
