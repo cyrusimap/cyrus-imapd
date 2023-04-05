@@ -69,6 +69,11 @@ sub new
         # explicitly requested filename: just use it
         $filename = $params{filename};
     }
+    elsif (defined $ENV{CASSINI_FILENAME}) {
+        xlog "Using ini file from environment:"
+             . " filename=\"$ENV{CASSINI_FILENAME}\"";
+        $filename = $ENV{CASSINI_FILENAME};
+    }
     else {
         # check some likely places, in order
         foreach my $dir (q{.},
