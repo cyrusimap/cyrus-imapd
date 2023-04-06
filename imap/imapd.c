@@ -1349,7 +1349,7 @@ EXPORTED void fatal(const char *s, int code)
  *
  * 'be' is the backend (if any) that we just proxied a command to.
  */
-static void imapd_check(struct backend *be, int usinguid)
+static void imapd_check(struct backend *be, unsigned tell_flags)
 {
     if (backend_current && backend_current != be) {
         /* remote mailbox */
@@ -1362,7 +1362,7 @@ static void imapd_check(struct backend *be, int usinguid)
     }
     else {
         /* local mailbox */
-        index_check(imapd_index, usinguid ? TELL_EXPUNGED : 0);
+        index_check(imapd_index, tell_flags);
     }
 }
 
@@ -3496,7 +3496,7 @@ static void cmd_idle(char *tag)
 
     /* If not running IDLE on backend, poll for updates */
     if (!CAPA(backend_current, CAPA_IDLE)) {
-        imapd_check(NULL, 1);
+        imapd_check(NULL, TELL_EXPUNGED);
     }
 
     do {
@@ -3529,7 +3529,7 @@ static void cmd_idle(char *tag)
 
             /* If not using idled or running IDLE on backend, poll for updates */
             else if (idle_sock == PROT_NO_FD || !CAPA(backend_current, CAPA_IDLE)) {
-                imapd_check(NULL, 1);
+                imapd_check(NULL, TELL_EXPUNGED);
             }
         }
     } while (!done);
@@ -4284,7 +4284,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         doappenduid = 0;
     }
 
-    imapd_check(NULL, 1);
+    imapd_check(NULL, TELL_EXPUNGED);
 
     if (!r && strarray_size(&listargs.pat)) {
         /* Emit LIST response with OLDNAME */
@@ -7188,7 +7188,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
         copyuid = NULL;
     }
 
-    imapd_check(NULL, ismove || usinguid);
+    imapd_check(NULL, (ismove || usinguid) ? TELL_EXPUNGED : 0);
 
   done:
 
@@ -9930,7 +9930,7 @@ static void cmd_status(char *tag, char *name)
                                  &backend_current, &backend_inbox, imapd_in);
             if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
-            imapd_check(s, 1);
+            imapd_check(s, TELL_EXPUNGED);
 
             if (!r) {
                 prot_printf(s->out, "%s Status {" SIZE_T_FMT "+}\r\n%s ", tag,
@@ -9975,7 +9975,7 @@ static void cmd_status(char *tag, char *name)
 
     // status of selected mailbox, we need to refresh
     if (!r && !strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
-        imapd_check(NULL, 1);
+        imapd_check(NULL, TELL_EXPUNGED);
 
     if (statusitems & STATUS_HIGHESTMODSEQ)
         condstore_enabled("STATUS (HIGHESTMODSEQ)");
