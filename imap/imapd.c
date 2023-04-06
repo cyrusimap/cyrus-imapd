@@ -1362,7 +1362,7 @@ static void imapd_check(struct backend *be, int usinguid)
     }
     else {
         /* local mailbox */
-        index_check(imapd_index, usinguid, 0);
+        index_check(imapd_index, usinguid ? TELL_EXPUNGED : 0);
     }
 }
 
@@ -3263,7 +3263,7 @@ static void cmd_noop(char *tag, char *cmd)
         return;
     }
 
-    index_check(imapd_index, 1, 0);
+    index_check(imapd_index, TELL_EXPUNGED);
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
                 error_message(IMAP_OK_COMPLETED));
@@ -6463,7 +6463,7 @@ static void cmd_search(char *tag, char *cmd)
 
             switch (mrock.filter) {
             case SEARCH_SOURCE_SELECTED:
-                if (!index_check(imapd_index, 0, 0)) {  /* update the index */
+                if (!index_check(imapd_index, 0)) {  /* update the index */
                     n += index_search(imapd_index, searchargs, /* usinguid */1);
 
                     hash_insert(index_mboxname(imapd_index),
@@ -15929,7 +15929,7 @@ static void cmd_notify(char *tag, int set)
             key.data = (char **) &mboxid;
             idle_start(new_egroups->selected.events, 0, FILTER_SELECTED, &key);
 
-            index_check(imapd_index, 1, 1);
+            index_check(imapd_index, TELL_EXPUNGED | TELL_UID);
 
             if (srock.mboxnames) {
                 hash_insert(index_mboxname(imapd_index),
@@ -16093,13 +16093,13 @@ static void push_updates(void)
                             &notify_event_groups->selected.fetchargs, NULL);
             }
             else {
-                int tell_expunged = 1;
+                unsigned tell_flags = TELL_EXPUNGED | TELL_UID;
 
                 if ((notify_event_groups && notify_event_groups->selected.delayed) ||
                     !(etype & (EVENT_MESSAGE_EXPUNGE | EVENT_MESSAGE_EXPIRE)))
-                    tell_expunged = 0;
+                    tell_flags &= ~TELL_EXPUNGED;
 
-                index_check(imapd_index, tell_expunged, 1);
+                index_check(imapd_index, tell_flags);
             }
 
             goto done;

@@ -313,7 +313,7 @@ extern uint32_t index_finduid(struct index_state *state, uint32_t uid, int mode)
 extern uint32_t index_getuid(struct index_state *state, uint32_t msgno);
 extern void index_tellchanges(struct index_state *state, unsigned tell_flags);
 extern modseq_t index_highestmodseq(struct index_state *state);
-extern int index_check(struct index_state *state, int usinguid, int printuid);
+extern int index_check(struct index_state *state, unsigned tell_flags);
 extern seqset_t *index_vanished(struct index_state *state,
                                     struct vanished_params *params);
 extern int index_urlfetch(struct index_state *state, uint32_t msgno,

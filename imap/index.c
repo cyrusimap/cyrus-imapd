@@ -893,7 +893,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
 /*
  * Check for and report updates
  */
-EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
+EXPORTED int index_check(struct index_state *state, unsigned tell_flags)
 {
     int r;
 
@@ -931,8 +931,7 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 
     if (r) return r;
 
-    index_tellchanges(state,
-                      (usinguid ? TELL_EXPUNGED : 0) | (printuid ? TELL_UID : 0));
+    index_tellchanges(state, tell_flags);
     index_unlock(state);
 
     return r;
@@ -1774,7 +1773,7 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
 
     if (!(contents && contents[0])) return(0);
 
-    if (index_check(state, 0, 0))
+    if (index_check(state, 0))
         return 0;
 
     if (state->exists <= 0) return 0;
@@ -2197,7 +2196,7 @@ EXPORTED int index_sort(struct index_state *state,
     int r;
 
     /* update the index */
-    if (index_check(state, 0, 0))
+    if (index_check(state, 0))
         return 0;
 
     highestmodseq = needs_modseq(searchargs, NULL);
@@ -3052,7 +3051,7 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
     int r;
 
     /* update the index */
-    if (index_check(state, 0, 0))
+    if (index_check(state, 0))
         return 0;
 
     highestmodseq = needs_modseq(searchargs, NULL);
@@ -3143,7 +3142,7 @@ index_copy(struct index_state *state,
     if (is_same_user < 0)
         return is_same_user;
 
-    r = index_check(state, usinguid, usinguid);
+    r = index_check(state, usinguid ? TELL_UID|TELL_EXPUNGED : 0);
     if (r) return r;
 
     srcmailbox = state->mailbox;
@@ -3358,7 +3357,7 @@ EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
     struct index_map *im;
     int r;
 
-    r = index_check(state, usinguid, usinguid);
+    r = index_check(state, usinguid ? TELL_UID|TELL_EXPUNGED : 0);
     if (r) return r;
 
     seq = _parse_sequence(state, sequence, usinguid);
