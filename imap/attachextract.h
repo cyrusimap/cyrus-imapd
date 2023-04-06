@@ -50,10 +50,15 @@ extern void attachextract_destroy(void);
 
 extern int attachextract_supports_type(const char *type, const char *subtype);
 
-extern int attachextract_extract_part(const char *type, const char *subtype,
-                                      const struct param *type_params,
-                                      const struct buf *data, int encoding,
-                                      const struct message_guid *content_guid,
-                                      search_text_receiver_t *receiver, int partnum);
+struct attachextract_record {
+    const char *type;
+    const char *subtype;
+    struct message_guid guid;
+};
+
+extern int attachextract_extract(const struct attachextract_record *record,
+                                 const struct buf *data,
+                                 int encoding, const char *charset,
+                                 struct buf *text);
 
 #endif

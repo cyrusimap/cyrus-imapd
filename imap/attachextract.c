@@ -163,20 +163,23 @@ static int extractor_connect(struct extractor_ctx *ext)
     return 0;
 }
 
-EXPORTED int attachextract_extract_part(const char *type, const char *subtype,
-                                      const struct param *type_params,
-                                      const struct buf *data, int encoding,
-                                      const struct message_guid *content_guid,
-                                      search_text_receiver_t *receiver, int partnum)
+EXPORTED int attachextract_extract(const struct attachextract_record *rec,
+                                   const struct buf *data,
+                                   int encoding,
+                                   const char *charset,
+                                   struct buf *text)
 {
     struct backend *be;
     struct buf decbuf = BUF_INITIALIZER;
-    struct buf buf = BUF_INITIALIZER;
+    struct buf ctypehdr = BUF_INITIALIZER;
     hdrcache_t hdrs = NULL;
     struct body_t body = { 0, 0, 0, 0, 0, BUF_INITIALIZER };
     const char *guidstr, *errstr = NULL;
     size_t hostlen;
     const char **hdr, *p;
+
+    /* Capture HTTP response directly in target buffer */
+    body.payload = *text;
 
     if (!global_extractor) {
         /* This is a legitimate case for sieve and lmtpd (so we don't need
@@ -185,9 +188,17 @@ EXPORTED int attachextract_extract_part(const char *type, const char *subtype,
         return 0;
     }
 
-    if (message_guid_isnull(content_guid)) {
+    if (!rec->type || !rec->subtype) {
+        xsyslog(LOG_DEBUG, "ignoring incomplete MIME type",
+                "type=<%s> subtype<%s>",
+               rec->type ? rec->type : "<null>",
+               rec->subtype ? rec->subtype : "<null>");
+        return 0;
+    }
+
+    if (message_guid_isnull(&rec->guid)) {
         xsyslog(LOG_DEBUG, "ignoring null guid", "mime_type=<%s/%s>",
-               type ? type : "<null>", subtype ? subtype : "<null>");
+               rec->type, rec->subtype);
         return 0;
     }
 
@@ -197,7 +208,7 @@ EXPORTED int attachextract_extract_part(const char *type, const char *subtype,
     be = ext->be;
 
     hostlen = strcspn(ext->hostname, "/");
-    guidstr = message_guid_encode(content_guid);
+    guidstr = message_guid_encode(&rec->guid);
 
     /* try to fetch previously extracted text */
     unsigned statuscode = 0;
@@ -244,19 +255,10 @@ EXPORTED int attachextract_extract_part(const char *type, const char *subtype,
         data = &decbuf;
     }
 
-    /* Build list of Content-Type parameters */
-    const struct param *param;
-    for (param = type_params; param && param->attribute; param = param->next) {
-        /* Ignore all but select parameters */
-        if (strcmp(param->attribute, "charset")) {
-            continue;
-        }
-        buf_putc(&buf, ';');
-        buf_appendcstr(&buf, param->attribute);
-        if (param->value) {
-            buf_putc(&buf, '=');
-            buf_appendcstr(&buf, param->value);
-        }
+    /* Build Content-Type */
+    buf_printf(&ctypehdr, "%s/%s", rec->type, rec->subtype);
+    if (charset) {
+        buf_printf(&ctypehdr, ";charset=%s", charset);
     }
 
     int retry;
@@ -278,14 +280,13 @@ EXPORTED int attachextract_extract_part(const char *type, const char *subtype,
                     "Connection: Keep-Alive\r\n"
                     "Keep-Alive: timeout=%u\r\n"
                     "Accept: text/plain\r\n"
-                    "Content-Type: %s/%s%s\r\n"
+                    "Content-Type: %s\r\n"
                     "Content-Length: " SIZE_T_FMT "\r\n"
                     "X-Truncate-Length: " SIZE_T_FMT "\r\n"
                     "\r\n",
                     ext->path, guidstr, HTTP_VERSION,
                     (int) hostlen, be->hostname, CYRUS_VERSION, IDLE_TIMEOUT,
-                    type, subtype, buf_cstring(&buf), buf_len(data),
-                    config_search_maxsize);
+                    buf_cstring(&ctypehdr), buf_len(data), config_search_maxsize);
         prot_putbuf(be->out, data);
         prot_flush(be->out);
 
@@ -331,17 +332,10 @@ gotdata:
         if (be->timeout) be->timeout->mark = time(NULL) + timeout;
     }
 
-    /* Append extracted text */
-    if (buf_len(&body.payload)) {
-        receiver->begin_part(receiver, partnum);
-        receiver->append_text(receiver, &body.payload);
-        receiver->end_part(receiver, partnum);
-    }
-
 done:
     spool_free_hdrcache(hdrs);
-    buf_free(&body.payload);
-    buf_free(&buf);
+    *text = body.payload;
+    buf_free(&ctypehdr);
     buf_free(&decbuf);
     return r;
 }

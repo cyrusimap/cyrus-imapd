@@ -5662,9 +5662,30 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             goto done;
         }
 
-        r = attachextract_extract_part(type, subtype, type_params, data, encoding,
-                content_guid, str->receiver, SEARCH_PART_ATTACHMENTBODY);
-        if (r) {
+        /* Extract text from attachment */
+        struct attachextract_record axrecord = {
+            .type = type, .subtype = subtype,
+        };
+        message_guid_copy(&axrecord.guid, content_guid);
+
+        const char *charset_param = NULL;
+        const struct param *param;
+        for (param = type_params; param && param->attribute; param = param->next) {
+            if (!strcmp(param->attribute, "charset")) {
+                charset_param = param->value;
+                break;
+            }
+        }
+
+        r = attachextract_extract(&axrecord, data, encoding, charset_param, &text);
+
+        if (!r && buf_len(&text)) {
+            /* Append extracted text */
+            str->receiver->begin_part(str->receiver, SEARCH_PART_ATTACHMENTBODY);
+            str->receiver->append_text(str->receiver, &text);
+            str->receiver->end_part(str->receiver, SEARCH_PART_ATTACHMENTBODY);
+        }
+        else if (r) {
             syslog(LOG_ERR, "IOERROR index: can't extract attachment %s (%s/%s): %s",
                     message_guid_encode(content_guid),
                     type, subtype, error_message(r));
@@ -5675,6 +5696,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                 r = 0;
             }
         }
+        buf_free(&text);
     }
 
 done:
