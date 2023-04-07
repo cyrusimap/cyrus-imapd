@@ -383,7 +383,7 @@ sub test_idle
 {
     my ($self) = @_;
 
-    xlog $self, "Message test of the NOTIFY command (idled required)";
+    xlog $self, "Test of the NOTIFY + IDLE commands (idled required)";
 
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
@@ -455,8 +455,16 @@ sub test_idle
     my $list = $talk->get_response_code('list');
     $self->assert_str_equals('INBOX.foo', $list->[0][2]);
 
-    xlog $self, "MOVE message from INBOX to INBOX.foo in other session";
     $othertalk->select("INBOX");
+
+    xlog $self, "Add \Flagged to message in INBOX in other session";
+    $res = $othertalk->store('1', '+flags', '(\\Flagged)');
+
+    # Should NOT get FETCH response for INBOX
+    $res = $store->idle_response('FETCH', 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    xlog $self, "MOVE message from INBOX to INBOX.foo in other session";
     $res = $othertalk->move('1', "INBOX.foo");
 
     # Should get STATUS response for INBOX.foo and EXPUNGE response for INBOX

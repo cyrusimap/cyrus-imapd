@@ -1362,6 +1362,10 @@ static void imapd_check(struct backend *be, unsigned tell_flags)
     }
     else {
         /* local mailbox */
+        if (notify_event_groups &&
+            !(notify_event_groups->selected.events & IMAP_NOTIFY_FLAG_CHANGE))
+            tell_flags |= TELL_SILENT;
+
         index_check(imapd_index, tell_flags);
     }
 }
@@ -3263,7 +3267,7 @@ static void cmd_noop(char *tag, char *cmd)
         return;
     }
 
-    index_check(imapd_index, TELL_EXPUNGED);
+    imapd_check(NULL, TELL_EXPUNGED);
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
                 error_message(IMAP_OK_COMPLETED));
@@ -15929,7 +15933,7 @@ static void cmd_notify(char *tag, int set)
             key.data = (char **) &mboxid;
             idle_start(new_egroups->selected.events, 0, FILTER_SELECTED, &key);
 
-            index_check(imapd_index, TELL_EXPUNGED | TELL_UID);
+            imapd_check(NULL, TELL_EXPUNGED | TELL_UID);
 
             if (srock.mboxnames) {
                 hash_insert(index_mboxname(imapd_index),
@@ -16099,7 +16103,7 @@ static void push_updates(void)
                     !(etype & (EVENT_MESSAGE_EXPUNGE | EVENT_MESSAGE_EXPIRE)))
                     tell_flags &= ~TELL_EXPUNGED;
 
-                index_check(imapd_index, tell_flags);
+                imapd_check(NULL, tell_flags);
             }
 
             goto done;
