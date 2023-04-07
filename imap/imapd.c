@@ -593,7 +593,7 @@ static void cmd_xforever(const char *tag);
 static void cmd_xmeid(const char *tag, const char *id);
 static void cmd_replace(char *tag, char *seqno, char *name, int usinguid);
 static void cmd_notify(char *tag, int set);
-static void push_updates(void);
+static void push_updates(int idling);
 
 static int parsecreateargs(struct dlist **extargs);
 
@@ -1457,7 +1457,7 @@ static void cmdloop(void)
                                   NULL, idle_fd, &idle_fd_flag, 0);
 
             if (idle_fd_flag) {
-                push_updates();
+                push_updates(0);
             }
 
             if (!r) {
@@ -3528,7 +3528,7 @@ static void cmd_idle(char *tag)
                                      &idle_sock_flag, idle_period);
 
             if (idle_sock_flag) {
-                push_updates();
+                push_updates(1);
             }
 
             /* If not using idled or running IDLE on backend, poll for updates */
@@ -16054,7 +16054,7 @@ static void cmd_notify(char *tag, int set)
     eatline(imapd_in, c);
 }
 
-static void push_updates(void)
+static void push_updates(int idling)
 {
     json_t *msg, *nextmsg = NULL;
     const char *mtype, *mboxid, *event;
@@ -16096,14 +16096,9 @@ static void push_updates(void)
                 index_fetch(imapd_index, uidset ? uidset : "*", 1,
                             &notify_event_groups->selected.fetchargs, NULL);
             }
-            else {
-                unsigned tell_flags = TELL_EXPUNGED | TELL_UID;
-
-                if ((notify_event_groups && notify_event_groups->selected.delayed) ||
-                    !(etype & (EVENT_MESSAGE_EXPUNGE | EVENT_MESSAGE_EXPIRE)))
-                    tell_flags &= ~TELL_EXPUNGED;
-
-                imapd_check(NULL, tell_flags);
+            else if (!(etype & IMAP_NOTIFY_MESSAGE_EXPUNGE) ||
+                     idling || !notify_event_groups->selected.delayed) {
+                imapd_check(NULL, TELL_EXPUNGED | TELL_UID);
             }
 
             goto done;
@@ -16169,7 +16164,7 @@ static void push_updates(void)
                                                    &imapd_namespace, imapd_userid);
                 }
 
-                /* Thunderbird auto-subscribed on CREATE/RENAME, so
+                /* Thunderbird auto-subscribes on CREATE/RENAME, so
                  * wait 1 second for a SubscriptionChange message for this mailbox
                  * and consolidate it with the MailboxCreate/MailboxRename */
                 FD_ZERO(&rset);
