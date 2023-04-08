@@ -3449,6 +3449,8 @@ static void cmd_idle(char *tag)
     int done, shutdown = 0;
     char buf[2048];
     const char *msg = NULL;
+    struct protstream *be_in = NULL;
+    int extra_fd = idle_sock;
 
     /* get idle timeout */
     if (idle_timeout == -1) {
@@ -3456,11 +3458,6 @@ static void cmd_idle(char *tag)
         if (idle_timeout <= 0) {
             idle_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
         }
-    }
-
-    if (idle_timeout > 0) {
-        errno = 0;
-        prot_settimeout(imapd_in, idle_timeout);
     }
 
     /* get polling period */
@@ -3484,8 +3481,11 @@ static void cmd_idle(char *tag)
             prot_write(imapd_out, buf, strlen(buf));
             return;
         }
+
+        be_in = backend_current->in;
+        extra_fd = PROT_NO_FD;
     }
-    else if (imapd_index && idle_sock != PROT_NO_FD && !notify_event_groups) {
+    else if (!notify_event_groups && imapd_index && idle_sock != PROT_NO_FD) {
         /* If NOTIFY has NOT already been enabled,
            tell idled to start sending message updates */
         const char *mboxid = index_mboxid(imapd_index);
@@ -3498,12 +3498,19 @@ static void cmd_idle(char *tag)
     /* Tell client we are idling and waiting for end of command */
     prot_printf(imapd_out, "+ idling\r\n");
 
-    /* If not running IDLE on backend, poll for updates */
-    if (!CAPA(backend_current, CAPA_IDLE)) {
-        imapd_check(NULL, TELL_EXPUNGED);
+    if (idle_timeout > 0) {
+        errno = 0;
+        prot_settimeout(imapd_in, idle_timeout);
     }
 
     do {
+        /* If not using NOTIFY,
+           and not using idled or running IDLE on backend, poll for updates */
+        if (!notify_event_groups &&
+            (idle_sock == PROT_NO_FD || !CAPA(backend_current, CAPA_IDLE))) {
+            imapd_check(NULL, TELL_EXPUNGED);
+        }
+
         /* Release any held index */
         index_release(imapd_index);
 
@@ -3514,38 +3521,31 @@ static void cmd_idle(char *tag)
         if (!imapd_userisadmin &&
             (shutdown_file(buf, sizeof(buf)) ||
              userdeny(imapd_userid, config_ident, buf, sizeof(buf)))) {
-            for (msg = buf; *msg == '['; msg++); /* can't have [ be first char */
+            for (msg = buf; *msg == '['; msg++); // can't have [ be first char
 
             done = shutdown = 1;
         }
         else {
-            int idle_sock_flag = 0;
+            int extra_fd_flag = 0;
 
-            done = proxy_check_input(protin, imapd_in, imapd_out,
-                                     backend_current ? backend_current->in : NULL,
-                                     NULL,
-                                     backend_current ? PROT_NO_FD : idle_sock,
-                                     &idle_sock_flag, idle_period);
+            done = proxy_check_input(protin, imapd_in, imapd_out, be_in, NULL,
+                                     extra_fd, &extra_fd_flag, idle_period);
 
-            if (idle_sock_flag) {
+            if (extra_fd_flag) {
+                /* Message from idled */
                 push_updates(1);
-            }
-
-            /* If not using idled or running IDLE on backend, poll for updates */
-            else if (idle_sock == PROT_NO_FD || !CAPA(backend_current, CAPA_IDLE)) {
-                imapd_check(NULL, TELL_EXPUNGED);
             }
         }
     } while (!done);
 
+    /* Either the client timed out, ended the command, or received shutdown. */
     if (CAPA(backend_current, CAPA_IDLE)) {
-        /* Either the client timed out, ended the command, or recv shutdown.
-           In any case we're done, so terminate IDLE on backend */
+        /* Terminate IDLE on backend */
         prot_printf(backend_current->out, "Done\r\n");
         pipe_until_tag(backend_current, tag, 0);
     }
-    else if (idle_sock != PROT_NO_FD && !notify_event_groups) {
-        /* If NOTIFY has NOT already been enabled,
+    else if (!notify_event_groups && idle_sock != PROT_NO_FD) {
+        /* If NOTIFY had NOT already been enabled,
            tell idled to stop sending message updates */
         idle_stop(FILTER_SELECTED);
     }
