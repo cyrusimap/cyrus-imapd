@@ -939,7 +939,7 @@ static void test_extract(void)
     /* HTML: quoted tag parameters */
     TESTCASE("<a href=\"foo.html\">leggings</a> <img src\"beer.jpg\">gastropub",
         "us-ascii", ENCODING_NONE, "HTML",
-        "LEGGINGS GASTROPUB");
+        "LEGGINGS <FOO.HTML> GASTROPUB");
 
     /* HTML: unquoted tag parameters */
     TESTCASE("<a href=foo.html>biodiesel</a> <img srcbeer.jpg>seitan",
@@ -1179,6 +1179,49 @@ static void test_extract(void)
     flags |= CHARSET_KEEP_ANGLEURI;
     TESTCASE("<b>x<https://example.com/world>y</b>", "us-ascii", ENCODING_NONE, "HTML", "x<https://example.com/world>y");
 
+    /* HTML: regression tests for '/' and '>' characters '*/
+    flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+    // end of tag after attribute name
+    TESTCASE("X<div><img src/>Y</div>Z", "us-ascii", ENCODING_NONE, "HTML", "X Y Z");
+    TESTCASE("X<div><img src>Y</div>Z", "us-ascii", ENCODING_NONE, "HTML", "X Y Z");
+    // quoted attribute value ends without quote
+    TESTCASE("<a href=\"url.html>x</a>", "us-ascii", ENCODING_NONE, "HTML", "X");
+    // ">" in quoted attribute value is legit, but broken in our parser
+    TESTCASE("<div><img alt=\"x>\" src=\"y\"/></div>", "us-ascii", ENCODING_NONE, "HTML", " \" SRC=\"Y\"/> ");
+
+    /* HTML: extract URLs and alt text from href and img */
+    flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+    TESTCASE("<a href=\"https://foo/bar\"/>", "us-ascii", ENCODING_NONE, "HTML",
+        "<HTTPS://FOO/BAR>");
+    TESTCASE("<img src='cat.png' alt=\"A cat\"/>", "us-ascii", ENCODING_NONE, "HTML",
+        "<CAT.PNG> (A CAT)");
+    TESTCASE("<area href=\"https://foo/bar\"/>", "us-ascii", ENCODING_NONE, "HTML",
+        "<HTTPS://FOO/BAR>");
+    // "/" in quoted attribute value is legit
+    TESTCASE("<div><img alt=\"letterpress/\" src=\"polaroid.png\">stumptown</div>", "us-ascii", ENCODING_NONE, "HTML", " STUMPTOWN <POLAROID.PNG> (LETTERPRESS/) ");
+    // multiple hrefs in same chunk of text
+    TESTCASE("<a href=\"https://foo/bar\"/><a href=\"https://baz/qum\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<HTTPS://FOO/BAR><HTTPS://BAZ/QUM>");
+    TESTCASE("<area href=\"https://foo/bar\"/><area href=\"https://baz/qum\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<HTTPS://FOO/BAR><HTTPS://BAZ/QUM>");
+    // multiple alt tags in same chunk of text
+    TESTCASE("<img src='cat.png' alt=\"A cat\"/><img src='dog.png' alt=\"A dog\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<CAT.PNG> (A CAT)<DOG.PNG> (A DOG)");
+    // multiple hrefs in same A tag (invalid!)
+    TESTCASE("<a href=\"https://foo/bar\" href=\"https://baz/qum\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<HTTPS://BAZ/QUM>"); /* last value seen is kept */
+    // multiple alt in same IMG tag (invalid!)
+    TESTCASE("<img src='cat.png' alt=\"A cat\" alt='A tabby cat'/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<CAT.PNG> (A TABBY CAT)"); /* last value seen is kept */
+    // multiple src in same IMG tag (invalid!)
+    TESTCASE("<img src='cat.png' src='tabby.png' alt='A tabby cat'/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<TABBY.PNG> (A TABBY CAT)"); /* last value seen is kept */
 }
 #undef TESTCASE
 
