@@ -1011,8 +1011,10 @@ static int jmap_calendar_get(struct jmap_req *req)
         }
     }
     else {
-        // XXX: replace with a function which only looks inside INBOX.#calendars
-        r = mboxlist_usermboxtree(req->accountid, req->authstate, &getcalendars_cb, &rock, MBOXTREE_INTERMEDIATES);
+        char *calhomename = caldav_mboxname(req->accountid, NULL);
+        r = mboxlist_mboxtree(calhomename,
+                              &getcalendars_cb, &rock, MBOXTREE_SKIP_ROOT);
+        free(calhomename);
         if (r) goto done;
     }
 
