@@ -7705,6 +7705,26 @@ localcreate:
         }
     }
 
+    /* Attempt to inherit the color of parent mailbox,
+       as long as the parent is NOT a top-level user mailbox */
+    if (parent &&
+        !(imapd_namespace.isalt && mboxname_isusermailbox(parent->name, 1))) {
+        static const char *annot = IMAP_ANNOT_NS "color";
+        struct buf buf = BUF_INITIALIZER;
+
+        annotatemore_lookupmask(parent->name, annot, imapd_userid, &buf);
+        if (buf.len) {
+            int r1 = annotatemore_writemask(mbentry.name, annot, imapd_userid, &buf);
+            if (r1) {
+                syslog(LOG_NOTICE,
+                       "failed to write annotation %s on mailbox %s: %s",
+                       annot, mbentry.name, error_message(r1));
+            }
+        }
+
+        buf_free(&buf);
+    }
+
     index_release(imapd_index);
     sync_checkpoint(imapd_in);
 
