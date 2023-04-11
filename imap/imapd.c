@@ -258,9 +258,6 @@ static struct index_state *imapd_index;
 /* current namespace */
 struct namespace imapd_namespace;
 
-/* track if we're idling */
-static int idling = 0;
-
 const struct mbox_name_attribute mbox_name_attributes[] = {
     /* from RFC 3501 */
     { MBOX_ATTRIBUTE_NOINFERIORS,   "\\Noinferiors"   },
@@ -596,7 +593,7 @@ static void cmd_xforever(const char *tag);
 static void cmd_xmeid(const char *tag, const char *id);
 static void cmd_replace(char *tag, char *seqno, char *name, int usinguid);
 static void cmd_notify(char *tag, int set);
-static void push_updates(void);
+static void push_updates(int idling);
 
 static int parsecreateargs(struct dlist **extargs);
 
@@ -1352,7 +1349,7 @@ EXPORTED void fatal(const char *s, int code)
  *
  * 'be' is the backend (if any) that we just proxied a command to.
  */
-static void imapd_check(struct backend *be, int usinguid)
+static void imapd_check(struct backend *be, unsigned tell_flags)
 {
     if (backend_current && backend_current != be) {
         /* remote mailbox */
@@ -1365,7 +1362,11 @@ static void imapd_check(struct backend *be, int usinguid)
     }
     else {
         /* local mailbox */
-        index_check(imapd_index, usinguid, 0);
+        if (notify_event_groups &&
+            !(notify_event_groups->selected.events & IMAP_NOTIFY_FLAG_CHANGE))
+            tell_flags |= TELL_SILENT;
+
+        index_check(imapd_index, tell_flags);
     }
 }
 
@@ -1456,7 +1457,7 @@ static void cmdloop(void)
                                   NULL, idle_fd, &idle_fd_flag, 0);
 
             if (idle_fd_flag) {
-                push_updates();
+                push_updates(0);
             }
 
             if (!r) {
@@ -3266,7 +3267,7 @@ static void cmd_noop(char *tag, char *cmd)
         return;
     }
 
-    index_check(imapd_index, 1, 0);
+    imapd_check(NULL, TELL_EXPUNGED);
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
                 error_message(IMAP_OK_COMPLETED));
@@ -3448,6 +3449,8 @@ static void cmd_idle(char *tag)
     int done, shutdown = 0;
     char buf[2048];
     const char *msg = NULL;
+    struct protstream *be_in = NULL;
+    int extra_fd = idle_sock;
 
     /* get idle timeout */
     if (idle_timeout == -1) {
@@ -3455,11 +3458,6 @@ static void cmd_idle(char *tag)
         if (idle_timeout <= 0) {
             idle_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
         }
-    }
-
-    if (idle_timeout > 0) {
-        errno = 0;
-        prot_settimeout(imapd_in, idle_timeout);
     }
 
     /* get polling period */
@@ -3483,29 +3481,36 @@ static void cmd_idle(char *tag)
             prot_write(imapd_out, buf, strlen(buf));
             return;
         }
+
+        be_in = backend_current->in;
+        extra_fd = PROT_NO_FD;
     }
-    else if (imapd_index && idle_sock != PROT_NO_FD) {
-        /* Tell idled to start sending message updates */
+    else if (!notify_event_groups && imapd_index && idle_sock != PROT_NO_FD) {
+        /* If NOTIFY has NOT already been enabled,
+           tell idled to start sending message updates */
         const char *mboxid = index_mboxid(imapd_index);
         strarray_t key = { 1, 0, (char **) &mboxid }; // avoid memory alloc
 
         idle_start(IMAP_NOTIFY_MESSAGE, time(NULL) + idle_timeout,
                    FILTER_SELECTED, &key);
-
-        /* Use this flag so if getc causes a shutdown due to
-           connection abort we tell idled about it */
-        idling = 1;
     }
 
     /* Tell client we are idling and waiting for end of command */
     prot_printf(imapd_out, "+ idling\r\n");
 
-    /* If not running IDLE on backend, poll for updates */
-    if (!CAPA(backend_current, CAPA_IDLE)) {
-        imapd_check(NULL, 1);
+    if (idle_timeout > 0) {
+        errno = 0;
+        prot_settimeout(imapd_in, idle_timeout);
     }
 
     do {
+        /* If not using NOTIFY,
+           and not using idled or running IDLE on backend, poll for updates */
+        if (!notify_event_groups &&
+            (idle_sock == PROT_NO_FD || !CAPA(backend_current, CAPA_IDLE))) {
+            imapd_check(NULL, TELL_EXPUNGED);
+        }
+
         /* Release any held index */
         index_release(imapd_index);
 
@@ -3516,40 +3521,33 @@ static void cmd_idle(char *tag)
         if (!imapd_userisadmin &&
             (shutdown_file(buf, sizeof(buf)) ||
              userdeny(imapd_userid, config_ident, buf, sizeof(buf)))) {
-            for (msg = buf; *msg == '['; msg++); /* can't have [ be first char */
+            for (msg = buf; *msg == '['; msg++); // can't have [ be first char
 
             done = shutdown = 1;
         }
         else {
-            int idle_sock_flag = 0;
+            int extra_fd_flag = 0;
 
-            done = proxy_check_input(protin, imapd_in, imapd_out,
-                                     backend_current ? backend_current->in : NULL,
-                                     NULL,
-                                     backend_current ? PROT_NO_FD : idle_sock,
-                                     &idle_sock_flag, idle_period);
+            done = proxy_check_input(protin, imapd_in, imapd_out, be_in, NULL,
+                                     extra_fd, &extra_fd_flag, idle_period);
 
-            if (idle_sock_flag) {
-                push_updates();
-            }
-
-            /* If not using idled or running IDLE on backend, poll for updates */
-            else if (idle_sock == PROT_NO_FD || !CAPA(backend_current, CAPA_IDLE)) {
-                imapd_check(NULL, 1);
+            if (extra_fd_flag) {
+                /* Message from idled */
+                push_updates(1);
             }
         }
     } while (!done);
 
+    /* Either the client timed out, ended the command, or received shutdown. */
     if (CAPA(backend_current, CAPA_IDLE)) {
-        /* Either the client timed out, ended the command, or recv shutdown.
-           In any case we're done, so terminate IDLE on backend */
+        /* Terminate IDLE on backend */
         prot_printf(backend_current->out, "Done\r\n");
         pipe_until_tag(backend_current, tag, 0);
     }
-    else if (idle_sock != PROT_NO_FD && !notify_event_groups) {
-        /* Stop message updates */
+    else if (!notify_event_groups && idle_sock != PROT_NO_FD) {
+        /* If NOTIFY had NOT already been enabled,
+           tell idled to stop sending message updates */
         idle_stop(FILTER_SELECTED);
-        idling = 0;
     }
 
     if (shutdown) {
@@ -4290,7 +4288,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         doappenduid = 0;
     }
 
-    imapd_check(NULL, 1);
+    imapd_check(NULL, TELL_EXPUNGED);
 
     if (!r && strarray_size(&listargs.pat)) {
         /* Emit LIST response with OLDNAME */
@@ -6469,7 +6467,7 @@ static void cmd_search(char *tag, char *cmd)
 
             switch (mrock.filter) {
             case SEARCH_SOURCE_SELECTED:
-                if (!index_check(imapd_index, 0, 0)) {  /* update the index */
+                if (!index_check(imapd_index, 0)) {  /* update the index */
                     n += index_search(imapd_index, searchargs, /* usinguid */1);
 
                     hash_insert(index_mboxname(imapd_index),
@@ -7194,7 +7192,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
         copyuid = NULL;
     }
 
-    imapd_check(NULL, ismove || usinguid);
+    imapd_check(NULL, (ismove || usinguid) ? TELL_EXPUNGED : 0);
 
   done:
 
@@ -9936,7 +9934,7 @@ static void cmd_status(char *tag, char *name)
                                  &backend_current, &backend_inbox, imapd_in);
             if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
-            imapd_check(s, 1);
+            imapd_check(s, TELL_EXPUNGED);
 
             if (!r) {
                 prot_printf(s->out, "%s Status {" SIZE_T_FMT "+}\r\n%s ", tag,
@@ -9981,7 +9979,7 @@ static void cmd_status(char *tag, char *name)
 
     // status of selected mailbox, we need to refresh
     if (!r && !strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
-        imapd_check(NULL, 1);
+        imapd_check(NULL, TELL_EXPUNGED);
 
     if (statusitems & STATUS_HIGHESTMODSEQ)
         condstore_enabled("STATUS (HIGHESTMODSEQ)");
@@ -15677,7 +15675,8 @@ static int notify_set_status(const mbentry_t *mbentry, void *rock)
 static void cmd_notify(char *tag, int set)
 {
     struct event_groups *new_egroups = xzmalloc(sizeof(struct event_groups));
-    static struct buf arg;
+    struct buf arg = BUF_INITIALIZER;
+    char *filter_name = NULL;
     int c = EOF, do_status = 0;
 
     if (set) {
@@ -15754,6 +15753,7 @@ static void cmd_notify(char *tag, int set)
             }
 
             new_egroups->filters |= filter;
+            filter_name = buf_release(&arg);
 
             if (mboxes) {
                 int inlist = 0;
@@ -15872,6 +15872,31 @@ static void cmd_notify(char *tag, int set)
                 goto missingclose;
             }
 
+            /* Sanity check events.  Per RFC 5465, Section 5:
+
+               If the FlagChange and/or AnnotationChange events are specified,
+               MessageNew and MessageExpunge MUST also be specified by the client.
+               Otherwise, the server MUST respond with the tagged BAD response.
+
+               If one of MessageNew or MessageExpunge is specified, then both events
+               MUST be specified.  Otherwise, the server MUST respond with the
+               tagged BAD response.
+            */
+            if (((*events & (IMAP_NOTIFY_FLAG_CHANGE|IMAP_NOTIFY_ANNOTATION_CHANGE))
+                 && !(*events & IMAP_NOTIFY_MESSAGE_NEW))
+                || (!!(*events & IMAP_NOTIFY_MESSAGE_NEW) !=
+                    !!(*events & IMAP_NOTIFY_MESSAGE_EXPUNGE))) {
+                prot_printf(imapd_out,
+                            "%s BAD Missing %s event for '%s' filter in Notify\r\n",
+                            tag,
+                            (*events & IMAP_NOTIFY_MESSAGE_NEW) ?
+                            "MessageExpunge" : "MessageNew",
+                            filter_name);
+                goto cleanup;
+            }
+
+            xzfree(filter_name);
+
             c = prot_getc(imapd_in);
 
         } while (c == ' ');
@@ -15908,7 +15933,7 @@ static void cmd_notify(char *tag, int set)
             key.data = (char **) &mboxid;
             idle_start(new_egroups->selected.events, 0, FILTER_SELECTED, &key);
 
-            index_check(imapd_index, 1, 1);
+            imapd_check(NULL, TELL_EXPUNGED | TELL_UID);
 
             if (srock.mboxnames) {
                 hash_insert(index_mboxname(imapd_index),
@@ -15982,6 +16007,7 @@ static void cmd_notify(char *tag, int set)
     }
 
     notify_event_groups = new_egroups;
+    buf_free(&arg);
 
     prot_printf(imapd_out,
                 "%s OK %s\r\n", tag, error_message(IMAP_OK_COMPLETED));
@@ -15989,7 +16015,7 @@ static void cmd_notify(char *tag, int set)
 
   badarg:
     prot_printf(imapd_out,
-                "%s BAD Invalid argument in Notify %s\r\n", tag, arg.s);
+                "%s BAD Invalid argument in Notify '%s'\r\n", tag, arg.s);
     goto cleanup;
 
   badevent:
@@ -16003,7 +16029,7 @@ static void cmd_notify(char *tag, int set)
             sep = ' ';
         }
     }
-    prot_printf(imapd_out, ")] Unsupported event in Notify %s\r\n", arg.s);
+    prot_printf(imapd_out, ")] Unsupported event in Notify '%s'\r\n", arg.s);
     goto cleanup;
 
   missingarg:
@@ -16023,10 +16049,12 @@ static void cmd_notify(char *tag, int set)
 
   cleanup:
     event_groups_free(&new_egroups);
+    free(filter_name);
+    buf_free(&arg);
     eatline(imapd_in, c);
 }
 
-static void push_updates(void)
+static void push_updates(int idling)
 {
     json_t *msg, *nextmsg = NULL;
     const char *mtype, *mboxid, *event;
@@ -16068,14 +16096,9 @@ static void push_updates(void)
                 index_fetch(imapd_index, uidset ? uidset : "*", 1,
                             &notify_event_groups->selected.fetchargs, NULL);
             }
-            else {
-                int tell_expunged = 1;
-
-                if ((notify_event_groups && notify_event_groups->selected.delayed) ||
-                    !(etype & (EVENT_MESSAGE_EXPUNGE | EVENT_MESSAGE_EXPIRE)))
-                    tell_expunged = 0;
-
-                index_check(imapd_index, tell_expunged, 1);
+            else if (!(etype & IMAP_NOTIFY_MESSAGE_EXPUNGE) ||
+                     idling || !notify_event_groups->selected.delayed) {
+                imapd_check(NULL, TELL_EXPUNGED | TELL_UID);
             }
 
             goto done;
@@ -16141,7 +16164,7 @@ static void push_updates(void)
                                                    &imapd_namespace, imapd_userid);
                 }
 
-                /* Thunderbird auto-subscribed on CREATE/RENAME, so
+                /* Thunderbird auto-subscribes on CREATE/RENAME, so
                  * wait 1 second for a SubscriptionChange message for this mailbox
                  * and consolidate it with the MailboxCreate/MailboxRename */
                 FD_ZERO(&rset);

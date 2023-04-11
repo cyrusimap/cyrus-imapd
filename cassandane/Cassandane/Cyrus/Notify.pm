@@ -71,6 +71,76 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub test_bad
+    :needs_component_idled :min_version_3_9
+{
+    my ($self) = @_;
+
+    xlog $self, "Message test of the NOTIFY command (idled required)";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+
+    xlog $self, "The server should report the NOTIFY capability";
+    $self->assert($talk->capability()->{notify});
+
+    xlog $self, "Enable Notify with a missing arg";
+    my $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with an invalid arg";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'FOO');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with a missing filter";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with an invalid filter";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(FOO (MessageNew MessageExpunge))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with a duplicate filter";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(SELECTED (MessageNew MessageExpunge))",
+                            "(SELECTED-DELAYED (MessageNew MessageExpunge))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with another duplicate filter";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(INBOXES (MessageNew MessageExpunge))",
+                            "(INBOXES (MessageNew MessageExpunge FlagChange))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with an invalid event";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(INBOXES (MessageNew MessageExpunge Foo))");
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with an invalid event group";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(SELECTED-DELAYED (MessageNew))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with another invalid event group";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(PERSONAL (MessageExpunge FlagChange))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with an empty mailbox list";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(MAILBOXES () (MessageNew MessageExpunge))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+}
+
 sub test_message
     :needs_component_idled :min_version_3_9
 {
@@ -306,6 +376,312 @@ sub test_mailbox
     # Should get no unsolicited responses
     $res = $store->idle_response({}, 1);
     $self->assert(!$res, "no unsolicited responses");
+}
+
+sub test_idle
+    :needs_component_idled :min_version_3_9
+{
+    my ($self) = @_;
+
+    xlog $self, "Test of the NOTIFY + IDLE commands (idled required)";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+
+    my $otherstore = $svc->create_store();
+    my $othertalk = $otherstore->get_client();
+
+    xlog $self, "The server should report the NOTIFY capability";
+    $self->assert($talk->capability()->{notify});
+
+    xlog $self, "Enable Notify";
+    my $res = $talk->_imap_cmd('NOTIFY', 0, "", 'SET',
+                               "(SELECTED (MessageNew" .
+                               " (UID BODY.PEEK[HEADER.FIELDS (From Subject)])" .
+                               " MessageExpunge))",
+                               "(PERSONAL (MessageNew MessageExpunge MailboxName))");
+
+    # Should NOT get STATUS response for INBOX
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    xlog $self, "Examine INBOX";
+    $talk->examine("INBOX");
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+    $self->assert_num_equals(0, $talk->get_response_code('recent'));
+    $self->assert_num_equals(1, $talk->get_response_code('uidnext'));
+
+    xlog $self, "Sending the IDLE command";
+    $store->idle_begin()
+        or die "IDLE failed: $@";
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    # Should get EXISTS, RECENT, FETCH response
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response('FETCH', 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+    $self->assert_num_equals(1, $talk->get_response_code('recent'));
+
+    my $fetch = $talk->get_response_code('fetch');
+    $self->assert_num_equals(1, $fetch->{1}{uid});
+    $self->assert_str_equals('Message 1', $fetch->{1}{headers}{subject}[0]);
+
+    xlog $self, "Create mailbox in other session";
+    $othertalk->create("INBOX.foo");
+
+    # Should get LIST response
+    $res = $store->idle_response('LIST', 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    my $list = $talk->get_response_code('list');
+    $self->assert_str_equals('INBOX.foo', $list->[0][2]);
+
+    $othertalk->select("INBOX");
+
+    xlog $self, "Add \Flagged to message in INBOX in other session";
+    $res = $othertalk->store('1', '+flags', '(\\Flagged)');
+
+    # Should NOT get FETCH response for INBOX
+    $res = $store->idle_response('FETCH', 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    xlog $self, "MOVE message from INBOX to INBOX.foo in other session";
+    $res = $othertalk->move('1', "INBOX.foo");
+
+    # Should get STATUS response for INBOX.foo and EXPUNGE response for INBOX
+    $res = $store->idle_response('STATUS', 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    my $status = $talk->get_response_code('status');
+    $self->assert_num_equals(1, $status->{'INBOX.foo'}{messages});
+    $self->assert_num_equals(2, $status->{'INBOX.foo'}{uidnext});
+    $self->assert_num_equals(1, $talk->get_response_code('expunge'));
+
+    xlog $self, "Sending DONE continuation";
+    $store->idle_end({});
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Deliver a message";
+    $msg = $self->{gen}->generate(subject => "Message 2");
+    $self->{instance}->deliver($msg);
+
+    # Should get EXISTS, RECENT, FETCH response
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response('FETCH', 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+    $self->assert_num_equals(1, $talk->get_response_code('recent'));
+
+    $fetch = $talk->get_response_code('fetch');
+    $self->assert_num_equals(2, $fetch->{1}{uid});
+    $self->assert_str_equals('Message 2', $fetch->{1}{headers}{subject}[0]);
+
+    xlog $self, "Unselect INBOX";
+    $talk->unselect();
+
+    xlog $self, "Deliver a message";
+    $msg = $self->{gen}->generate(subject => "Message 3");
+    $self->{instance}->deliver($msg);
+
+    # Should get STATUS response for INBOX
+    $res = $store->idle_response('STATUS', 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $status = $talk->get_response_code('status');
+    $self->assert_num_equals(2, $status->{'INBOX'}{messages});
+    $self->assert_num_equals(4, $status->{'INBOX'}{uidnext});
+
+    xlog $self, "Delete mailbox in other session";
+    $othertalk->delete("INBOX.foo");
+
+    # Should get LIST response with \NonExistent
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $list = $talk->get_response_code('list');
+    $self->assert_str_equals('\\NonExistent', $list->[0][0][0]);
+    $self->assert_str_equals('INBOX.foo', $list->[0][2]);
+}
+
+sub test_selected_delayed
+    :needs_component_idled :min_version_3_9
+{
+    my ($self) = @_;
+
+    xlog $self, "Selected-delayed test of the NOTIFY command (idled required)";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+
+    my $otherstore = $svc->create_store();
+    my $othertalk = $otherstore->get_client();
+
+    xlog $self, "The server should report the NOTIFY capability";
+    $self->assert($talk->capability()->{notify});
+
+    xlog $self, "Enable Notify";
+    my $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                               "(SELECTED-DELAYED (MessageNew MessageExpunge FlagChange))");
+
+    xlog $self, "Examine INBOX";
+    $talk->examine("INBOX");
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    # Should get EXISTS, RECENT response
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+    $self->assert_num_equals(1, $talk->get_response_code('recent'));
+
+    xlog $self, "EXPUNGE message from INBOX in other session";
+    $othertalk->select("INBOX");
+    $res = $othertalk->store('1', '+flags', '(\\Deleted)');
+    $res = $othertalk->expunge();
+
+    # Should get FETCH response, but NO EXPUNGE response
+    $res = $store->idle_response('FETCH', 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    my $fetch = $talk->get_response_code('fetch');
+    $self->assert_num_equals(1, $fetch->{1}{uid});
+    $self->assert_str_equals('\\Recent', $fetch->{1}{flags}[0]);
+    $self->assert_str_equals('\\Deleted', $fetch->{1}{flags}[1]);
+
+    xlog $self, "Poll for changes";
+    $talk->noop();
+
+    # Should get EXPUNGE response
+    $self->assert_num_equals(1, $talk->get_response_code('expunge'));
+}
+
+sub test_change_selected
+    :needs_component_idled :min_version_3_9
+{
+    my ($self) = @_;
+
+    xlog $self, "Test of NOTIFY events following SELECTED mailbox";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+
+    my $otherstore = $svc->create_store();
+    my $othertalk = $otherstore->get_client();
+
+    xlog $self, "The server should report the NOTIFY capability";
+    $self->assert($talk->capability()->{notify});
+
+    xlog $self, "Create another mailbox";
+    $talk->create("INBOX.foo");
+
+    xlog $self, "Enable Notify";
+    my $res = $talk->_imap_cmd('NOTIFY', 0, "", 'SET',
+                               "(SELECTED (MessageNew MessageExpunge))",
+                               "(PERSONAL (MessageNew MessageExpunge))");
+
+    xlog $self, "Examine INBOX";
+    $talk->examine("INBOX");
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+    $self->assert_num_equals(0, $talk->get_response_code('recent'));
+    $self->assert_num_equals(1, $talk->get_response_code('uidnext'));
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    # Should get EXISTS, RECENT response
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+    $self->assert_num_equals(1, $talk->get_response_code('recent'));
+
+    xlog $self, "Examine INBOX.foo";
+    $talk->examine("INBOX.foo");
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+    $self->assert_num_equals(0, $talk->get_response_code('recent'));
+    $self->assert_num_equals(1, $talk->get_response_code('uidnext'));
+
+    xlog $self, "MOVE message from INBOX to INBOX.foo in other session";
+    $othertalk->select("INBOX");
+    $res = $othertalk->move('1', "INBOX.foo");
+
+    # Should get EXISTS, RECENT response for INBOX.foo and STATUS response for INBOX
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response('STATUS', 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+    $self->assert_num_equals(1, $talk->get_response_code('recent'));
+
+    my $status = $talk->get_response_code('status');
+    $self->assert_num_equals(0, $status->{'INBOX'}{messages});
+    $self->assert_num_equals(2, $status->{'INBOX'}{uidnext});
 }
 
 1;
