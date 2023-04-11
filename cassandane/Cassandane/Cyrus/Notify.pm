@@ -71,6 +71,76 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub test_bad
+    :needs_component_idled :min_version_3_9
+{
+    my ($self) = @_;
+
+    xlog $self, "Message test of the NOTIFY command (idled required)";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+
+    xlog $self, "The server should report the NOTIFY capability";
+    $self->assert($talk->capability()->{notify});
+
+    xlog $self, "Enable Notify with a missing arg";
+    my $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with an invalid arg";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'FOO');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with a missing filter";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with an invalid filter";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(FOO (MessageNew MessageExpunge))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with a duplicate filter";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(SELECTED (MessageNew MessageExpunge))",
+                            "(SELECTED-DELAYED (MessageNew MessageExpunge))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with another duplicate filter";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(INBOXES (MessageNew MessageExpunge))",
+                            "(INBOXES (MessageNew MessageExpunge FlagChange))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with an invalid event";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(INBOXES (MessageNew MessageExpunge Foo))");
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with an invalid event group";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(SELECTED-DELAYED (MessageNew))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with another invalid event group";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(PERSONAL (MessageExpunge FlagChange))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "Enable Notify with an empty mailbox list";
+    $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                            "(MAILBOXES () (MessageNew MessageExpunge))");
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+}
+
 sub test_message
     :needs_component_idled :min_version_3_9
 {
@@ -332,11 +402,11 @@ sub test_idle
     $self->assert($talk->capability()->{notify});
 
     xlog $self, "Enable Notify";
-    my $res = $talk->_imap_cmd('NOTIFY', 0, "", 'SET',#'STATUS', 'SET', 'STATUS',
+    my $res = $talk->_imap_cmd('NOTIFY', 0, "", 'SET',
                                "(SELECTED (MessageNew" .
                                " (UID BODY.PEEK[HEADER.FIELDS (From Subject)])" .
                                " MessageExpunge))",
-                               "(PERSONAL (MessageNew MailboxName))");
+                               "(PERSONAL (MessageNew MessageExpunge MailboxName))");
 
     # Should NOT get STATUS response for INBOX
     $res = $store->idle_response({}, 1);

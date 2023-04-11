@@ -15671,7 +15671,8 @@ static int notify_set_status(const mbentry_t *mbentry, void *rock)
 static void cmd_notify(char *tag, int set)
 {
     struct event_groups *new_egroups = xzmalloc(sizeof(struct event_groups));
-    static struct buf arg;
+    struct buf arg = BUF_INITIALIZER;
+    char *filter_name = NULL;
     int c = EOF, do_status = 0;
 
     if (set) {
@@ -15748,6 +15749,7 @@ static void cmd_notify(char *tag, int set)
             }
 
             new_egroups->filters |= filter;
+            filter_name = buf_release(&arg);
 
             if (mboxes) {
                 int inlist = 0;
@@ -15866,6 +15868,31 @@ static void cmd_notify(char *tag, int set)
                 goto missingclose;
             }
 
+            /* Sanity check events.  Per RFC 5465, Section 5:
+
+               If the FlagChange and/or AnnotationChange events are specified,
+               MessageNew and MessageExpunge MUST also be specified by the client.
+               Otherwise, the server MUST respond with the tagged BAD response.
+
+               If one of MessageNew or MessageExpunge is specified, then both events
+               MUST be specified.  Otherwise, the server MUST respond with the
+               tagged BAD response.
+            */
+            if (((*events & (IMAP_NOTIFY_FLAG_CHANGE|IMAP_NOTIFY_ANNOTATION_CHANGE))
+                 && !(*events & IMAP_NOTIFY_MESSAGE_NEW))
+                || (!!(*events & IMAP_NOTIFY_MESSAGE_NEW) !=
+                    !!(*events & IMAP_NOTIFY_MESSAGE_EXPUNGE))) {
+                prot_printf(imapd_out,
+                            "%s BAD Missing %s event for '%s' filter in Notify\r\n",
+                            tag,
+                            (*events & IMAP_NOTIFY_MESSAGE_NEW) ?
+                            "MessageExpunge" : "MessageNew",
+                            filter_name);
+                goto cleanup;
+            }
+
+            xzfree(filter_name);
+
             c = prot_getc(imapd_in);
 
         } while (c == ' ');
@@ -15976,6 +16003,7 @@ static void cmd_notify(char *tag, int set)
     }
 
     notify_event_groups = new_egroups;
+    buf_free(&arg);
 
     prot_printf(imapd_out,
                 "%s OK %s\r\n", tag, error_message(IMAP_OK_COMPLETED));
@@ -15983,7 +16011,7 @@ static void cmd_notify(char *tag, int set)
 
   badarg:
     prot_printf(imapd_out,
-                "%s BAD Invalid argument in Notify %s\r\n", tag, arg.s);
+                "%s BAD Invalid argument in Notify '%s'\r\n", tag, arg.s);
     goto cleanup;
 
   badevent:
@@ -15997,7 +16025,7 @@ static void cmd_notify(char *tag, int set)
             sep = ' ';
         }
     }
-    prot_printf(imapd_out, ")] Unsupported event in Notify %s\r\n", arg.s);
+    prot_printf(imapd_out, ")] Unsupported event in Notify '%s'\r\n", arg.s);
     goto cleanup;
 
   missingarg:
@@ -16017,6 +16045,8 @@ static void cmd_notify(char *tag, int set)
 
   cleanup:
     event_groups_free(&new_egroups);
+    free(filter_name);
+    buf_free(&arg);
     eatline(imapd_in, c);
 }
 
