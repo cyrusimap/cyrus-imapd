@@ -451,6 +451,10 @@ magic(AllowCalendarAdmin => sub {
     my $conf = shift;
     $conf->config_set('caldav_allowcalendaradmin' => 'yes');
 });
+magic(NoCheckSyslog => sub {
+    my $self = shift;
+    $self->{no_check_syslog} = 1;
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
@@ -849,6 +853,11 @@ sub set_up
         xlog $self, "HTTP service objects not setup due to :NoStartInstances"
                     . " magic!";
     }
+
+    if ($self->{no_check_syslog}) {
+        xlog $self, "Disabling syslog checks for test instance";
+    }
+
     xlog $self, "Calling test function";
 }
 
@@ -976,31 +985,51 @@ sub tear_down
 
     if (defined $self->{instance})
     {
-        eval { push @stop_errors, $self->{instance}->stop() };
+        eval {
+            push @stop_errors, $self->{instance}->stop(
+                no_check_syslog => defined $self->{no_check_syslog}
+            );
+        };
         push @basedirs, $self->{instance}->get_basedir();
         $self->{instance} = undef;
     }
     if (defined $self->{backups})
     {
-        eval { push @stop_errors, $self->{backups}->stop() };
+        eval {
+            push @stop_errors, $self->{backups}->stop(
+                no_check_syslog => defined $self->{no_check_syslog}
+            );
+        };
         push @basedirs, $self->{backups}->get_basedir();
         $self->{backups} = undef;
     }
     if (defined $self->{backend2})
     {
-        eval { push @stop_errors, $self->{backend2}->stop() };
+        eval {
+            push @stop_errors, $self->{backend2}->stop(
+                no_check_syslog => defined $self->{no_check_syslog}
+            );
+        };
         push @basedirs, $self->{backend2}->get_basedir();
         $self->{backend2} = undef;
     }
     if (defined $self->{replica})
     {
-        eval { push @stop_errors, $self->{replica}->stop() };
+        eval {
+            push @stop_errors, $self->{replica}->stop(
+                no_check_syslog => defined $self->{no_check_syslog}
+            );
+        };
         push @basedirs, $self->{replica}->get_basedir();
         $self->{replica} = undef;
     }
     if (defined $self->{frontend})
     {
-        eval { push @stop_errors, $self->{frontend}->stop() };
+        eval {
+            push @stop_errors, $self->{frontend}->stop(
+                no_check_syslog => defined $self->{no_check_syslog}
+            );
+        };
         push @basedirs, $self->{frontend}->get_basedir();
         $self->{frontend} = undef;
     }

@@ -1562,7 +1562,7 @@ sub test_striphtml_rfc822
 }
 
 sub test_squatter_partials
-    :min_version_3_3 :needs_search_xapian :SearchAttachmentExtractor
+    :min_version_3_3 :needs_search_xapian :SearchAttachmentExtractor :NoCheckSyslog
 {
     my ($self) = @_;
     my $instance = $self->{instance};
@@ -1632,7 +1632,6 @@ sub test_squatter_partials
     ) || die;
 
     xlog "Run squatter and allow partials";
-    $self->{instance}->{ignore_syslog} = 1;
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-p', '-Z');
 
     xlog "Assert text bodies of both messages are indexed";
@@ -1660,13 +1659,10 @@ sub test_squatter_partials
     xlog "Assert attachment of first message is indexed";
     $uids = $imap->search('fuzzy', 'xattachmentbody', 'attach1');
     $self->assert_deep_equals([1], $uids);
-
-    # clear syslog to not fail for expected IOERROR messages
-    $self->{instance}->getsyslog();
 }
 
 sub test_squatter_skip422
-    :min_version_3_3 :needs_search_xapian :SearchAttachmentExtractor
+    :min_version_3_3 :needs_search_xapian :SearchAttachmentExtractor :NoCheckSyslog
 {
     my ($self) = @_;
     my $instance = $self->{instance};
@@ -1719,7 +1715,6 @@ sub test_squatter_skip422
     ) || die;
 
     xlog "Run squatter and allow partials";
-    $self->{instance}->{ignore_syslog} = 1;
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-p', '-Z');
 
     xlog "Assert text bodies of both messages are indexed";
@@ -1733,9 +1728,6 @@ sub test_squatter_skip422
     xlog "Assert attachment of second message is not indexed";
     $uids = $imap->search('fuzzy', 'xattachmentbody', 'attach2');
     $self->assert_deep_equals([], $uids);
-
-    # clear syslog to not fail for expected IOERROR messages
-    $self->{instance}->getsyslog();
 }
 
 sub test_fuzzyalways_annot
