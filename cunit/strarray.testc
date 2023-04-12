@@ -1714,5 +1714,54 @@ static void test_swap(void)
 #undef WORD1
 }
 
+static void test_appendv(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    const char *s;
+
+    s = strarray_appendv(&sa, "lorem");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+
+    s = strarray_appendv(&sa, "ipsum");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 1));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+}
+
+static void test_addv(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    const char *s;
+
+    s = strarray_addv(&sa, "lorem");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+
+    s = strarray_addv(&sa, "ipsum");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 1));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    s = strarray_addv(&sa, "lorem");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+}
+
+static void test_add_casev(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    const char *s;
+
+    s = strarray_add_casev(&sa, "lorem");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+
+    s = strarray_add_casev(&sa, "ipsum");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 1));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    s = strarray_add_casev(&sa, "lOREm");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+}
 
 /* vim: set ft=c: */
