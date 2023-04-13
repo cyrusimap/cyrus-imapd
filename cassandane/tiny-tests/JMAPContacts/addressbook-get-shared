@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_get_shared
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared account";
+    $admintalk->create("user.manifold");
+
+    my $mantalk = Net::CardDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    xlog $self, "create addressbook";
+    my $ABookId = $mantalk->NewAddressBook('Manifold Addressbook');
+    $self->assert_not_null($ABookId);
+
+    xlog $self, "share to user";
+    $admintalk->setacl("user.manifold.#addressbooks.$ABookId", "cassandane" => 'lr') or die;
+
+    xlog $self, "get addressbook";
+    my $res = $jmap->CallMethods([['AddressBook/get', {accountId => 'manifold'}, "R1"]]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    $self->assert_str_equals("Manifold Addressbook", $res->[0][1]{list}[0]->{name});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]->{myRights}->{mayRead});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]->{myRights}{mayWrite});
+    my $id = $res->[0][1]{list}[0]->{id};
+
+    xlog $self, "refetch addressbook";
+    $res = $jmap->CallMethods([['AddressBook/get', {accountId => 'manifold', ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]->{id});
+
+    xlog $self, "create another shared addressbook";
+    my $ABookId2 = $mantalk->NewAddressBook('Manifold Addressbook 2');
+    $self->assert_not_null($ABookId2);
+    $admintalk->setacl("user.manifold.#addressbooks.$ABookId2", "cassandane" => 'lr') or die;
+
+    xlog $self, "remove access rights to addressbook";
+    $admintalk->setacl("user.manifold.#addressbooks.$ABookId", "cassandane" => '') or die;
+
+    xlog $self, "refetch addressbook (should fail)";
+    $res = $jmap->CallMethods([['AddressBook/get', {accountId => 'manifold', ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
+
+    xlog $self, "remove access rights to all shared addressbooks";
+    $admintalk->setacl("user.manifold.#addressbooks.$ABookId2", "cassandane" => '') or die;
+
+    xlog $self, "refetch addressbook (should fail)";
+    $res = $jmap->CallMethods([['AddressBook/get', {accountId => 'manifold', ids => [$id]}, "R1"]]);
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("accountNotFound", $res->[0][1]{type});
+}

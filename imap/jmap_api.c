@@ -587,7 +587,7 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_mail_capabilities(capas, mayCreateTopLevel);
         jmap_emailsubmission_capabilities(capas);
         jmap_mdn_capabilities(capas);
-        jmap_contact_capabilities(capas);
+        jmap_contact_capabilities(capas, authstate, authuserid, accountid);
         jmap_calendar_capabilities(capas, authstate, authuserid, accountid);
         jmap_backup_capabilities(capas);
         jmap_notes_capabilities(capas);
@@ -613,7 +613,7 @@ static json_t *lookup_capabilities(const char *accountid,
                 jmap_mail_capabilities(capas, mayCreateTopLevel);
             }
             if (rock.has_contacts) {
-                jmap_contact_capabilities(capas);
+                jmap_contact_capabilities(capas, authstate, authuserid, accountid);
             }
             if (rock.has_calendars) {
                 jmap_calendar_capabilities(capas, authstate, authuserid, accountid);
@@ -1037,6 +1037,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     json_object_set(primary_accounts, JMAP_URN_MAIL, jprimary);
     json_object_set(primary_accounts, JMAP_URN_SUBMISSION, jprimary);
     json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);
+    json_object_set(primary_accounts, JMAP_URN_CONTACTS, jprimary);
     json_object_set(primary_accounts, JMAP_URN_CALENDARS, jprimary);
     json_object_set(primary_accounts, JMAP_CONTACTS_EXTENSION, jprimary);
     json_object_set(primary_accounts, JMAP_CALENDARS_EXTENSION, jprimary);

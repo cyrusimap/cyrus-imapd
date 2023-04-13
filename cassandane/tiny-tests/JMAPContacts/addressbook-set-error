@@ -1,0 +1,75 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_error
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create addressbook with missing mandatory attributes";
+    my $res = $jmap->CallMethods([
+            ['AddressBook/set', { create => { "1" => {}}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    my $errType = $res->[0][1]{notCreated}{"1"}{type};
+    my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $self->assert_deep_equals([ "name" ], $errProp);
+
+    xlog $self, "create addressbook with invalid optional attributes";
+    $res = $jmap->CallMethods([
+            ['AddressBook/set', { create => { "1" => {
+                            name => "foo",
+                            myRights => {
+                            mayRead => \0, mayWrite => \0,
+                            mayDelete => \0
+                            }
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notCreated}{"1"}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $self->assert_deep_equals(['myRights'], $res->[0][1]{notCreated}{"1"}{properties});
+
+    xlog $self, "update unknown addressbook";
+    $res = $jmap->CallMethods([
+            ['AddressBook/set', { update => { "unknown" => {
+                            name => "foo"
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notUpdated}{"unknown"}{type};
+    $self->assert_str_equals("notFound", $errType);
+
+    xlog $self, "create addressbook";
+    $res = $jmap->CallMethods([
+            ['AddressBook/set', { create => { "1" => {
+                            name => "foo"
+             }}}, "R1"]
+    ]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "update addressbook with immutable optional attributes";
+    $res = $jmap->CallMethods([
+            ['AddressBook/set', { update => { $id => {
+                            myRights => {
+                            mayRead => \0, mayWrite => \0,
+                            mayDelete => \0
+                            }
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notUpdated}{$id}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $self->assert_deep_equals(['myRights'], $res->[0][1]{notUpdated}{$id}{properties});
+
+    xlog $self, "destroy unknown addressbook";
+    $res = $jmap->CallMethods([
+            ['AddressBook/set', {destroy => ["unknown"]}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notDestroyed}{"unknown"}{type};
+    $self->assert_str_equals("notFound", $errType);
+
+    xlog $self, "destroy addressbook $id";
+    $res = $jmap->CallMethods([['AddressBook/set', {destroy => ["$id"]}, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+}

@@ -63,6 +63,7 @@
 #define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
 #define JMAP_URN_MDN        "urn:ietf:params:jmap:mdn"
+#define JMAP_URN_CONTACTS   "urn:ietf:params:jmap:contacts"
 #define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 #define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
@@ -114,6 +115,7 @@ enum {
 /* Cyrus-specific privileges */
 #define JACL_LOOKUP         ACL_LOOKUP
 #define JACL_ADMIN_MAILBOX   (ACL_ADMIN|JACL_DELETE|JACL_CREATECHILD)
+#define JACL_ADMIN_ADDRBOOK ACL_ADMIN
 #define JACL_ADMIN_CALENDAR ACL_ADMIN
 #define JACL_SETPROPERTIES  ACL_ANNOTATEMSG
 #define JACL_UPDATEITEMS    (JACL_ADDITEMS|JACL_REMOVEITEMS)
@@ -257,7 +259,10 @@ extern void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTo
 extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
 extern void jmap_mdn_capabilities(json_t *account_capabilities);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
-extern void jmap_contact_capabilities(json_t *account_capabilities);
+extern void jmap_contact_capabilities(json_t *account_capabilities,
+                                      struct auth_state *authstate,
+                                      const char *authuserid,
+                                      const char *accountid);
 extern void jmap_calendar_capabilities(json_t *account_capabilities,
                                        struct auth_state *authstate,
                                        const char *authuserid,
