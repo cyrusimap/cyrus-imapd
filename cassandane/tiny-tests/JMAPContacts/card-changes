@@ -1,0 +1,133 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_changes
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+# Update to Card/[get|set] once implemented
+    xlog $self, "get contacts";
+    my $res = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
+    my $state = $res->[0][1]{state};
+
+    xlog $self, "get contact updates";
+    $res = $jmap->CallMethods([['Card/changes', {
+                    sinceState => $state,
+                    addressbookId => "Default",
+                }, "R2"]]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+
+    xlog $self, "create contact 1";
+    $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get contact updates";
+    $res = $jmap->CallMethods([['Card/changes', {
+                    sinceState => $state
+                }, "R2"]]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id1, $res->[0][1]{created}[0]);
+
+    my $oldState = $state;
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "create contact 2";
+    $res = $jmap->CallMethods([['Contact/set', {create => {"2" => {firstName => "second", lastName => "prev"}}}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+
+    xlog $self, "get contact updates (since last change)";
+    $res = $jmap->CallMethods([['Card/changes', {
+                    sinceState => $state
+                }, "R2"]]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id2, $res->[0][1]{created}[0]);
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "get contact updates (in bulk)";
+    $res = $jmap->CallMethods([['Card/changes', {
+                    sinceState => $oldState
+                }, "R2"]]);
+    $self->assert_str_equals($oldState, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+
+    xlog $self, "get contact updates from initial state (maxChanges=1)";
+    $res = $jmap->CallMethods([['Card/changes', {
+                    sinceState => $oldState,
+                    maxChanges => 1
+                }, "R2"]]);
+    $self->assert_str_equals($oldState, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id1, $res->[0][1]{created}[0]);
+    my $interimState = $res->[0][1]{newState};
+
+    xlog $self, "get contact updates from interim state (maxChanges=10)";
+    $res = $jmap->CallMethods([['Card/changes', {
+                    sinceState => $interimState,
+                    maxChanges => 10
+                }, "R2"]]);
+    $self->assert_str_equals($interimState, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id2, $res->[0][1]{created}[0]);
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "destroy contact 1, update contact 2";
+    $res = $jmap->CallMethods([['Contact/set', {
+                    destroy => [$id1],
+                    update => {$id2 => {firstName => "foo"}}
+                }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    xlog $self, "get contact updates";
+    $res = $jmap->CallMethods([['Card/changes', {
+                    sinceState => $state
+                }, "R2"]]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($id2, $res->[0][1]{updated}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "destroy contact 2";
+    $res = $jmap->CallMethods([['Contact/set', {destroy => [$id2]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+}
