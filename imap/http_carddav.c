@@ -62,6 +62,7 @@
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
+#include "http_carddav.h"
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "http_proxy.h"
@@ -419,8 +420,6 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
     if (vcard_max_size <= 0) vcard_max_size = BYTESIZE_UNLIMITED;
 }
 
-
-#define DEFAULT_ADDRBOOK "Default"
 
 static int _create_mailbox(const char *userid, const char *mailboxname, int type,
                            const char *displayname, struct mboxlock **namespacelockp)

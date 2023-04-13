@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create addressbook";
+    my $res = $jmap->CallMethods([
+            ['AddressBook/set', { create => { "1" => {
+                            name => "foo"
+             }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('AddressBook/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{created});
+
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get addressbook $id";
+    $res = $jmap->CallMethods([['AddressBook/get', {ids => [$id]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals('foo', $res->[0][1]{list}[0]{name});
+
+    xlog $self, "update addressbook $id";
+    $res = $jmap->CallMethods([
+            ['AddressBook/set', {update => {"$id" => {
+                            name => "bar"
+            }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    xlog $self, "get addressbook $id";
+    $res = $jmap->CallMethods([['AddressBook/get', {ids => [$id]}, "R1"]]);
+    $self->assert_str_equals('bar', $res->[0][1]{list}[0]{name});
+
+    xlog $self, "destroy addressbook $id";
+    $res = $jmap->CallMethods([['AddressBook/set', {destroy => ["$id"]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{destroyed});
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "get addressbook $id";
+    $res = $jmap->CallMethods([['AddressBook/get', {ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
+}

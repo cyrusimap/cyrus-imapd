@@ -969,8 +969,8 @@ EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid)
 
 #define CMD_DELMBOX "DELETE FROM vcard_objs WHERE mailbox = :mailbox;"
 
-HIDDEN int carddav_delmbox(struct carddav_db *carddavdb,
-                           const mbentry_t *mbentry)
+EXPORTED int carddav_delmbox(struct carddav_db *carddavdb,
+                             const mbentry_t *mbentry)
 {
     const char *mailbox = (carddavdb->db->version >= DB_MBOXID_VERSION) ?
         mbentry->uniqueid : mbentry->name;
