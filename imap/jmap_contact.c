@@ -78,6 +78,9 @@
 static int jmap_addressbook_get(struct jmap_req *req);
 static int jmap_addressbook_changes(struct jmap_req *req);
 static int jmap_addressbook_set(struct jmap_req *req);
+static int jmap_card_changes(struct jmap_req *req);
+static int jmap_cardgroup_changes(struct jmap_req *req);
+
 static int jmap_contactgroup_get(struct jmap_req *req);
 static int jmap_contactgroup_changes(struct jmap_req *req);
 static int jmap_contactgroup_set(struct jmap_req *req);
@@ -134,6 +137,18 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         JMAP_URN_CONTACTS,
         &jmap_addressbook_set,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "Card/changes",
+        JMAP_URN_CONTACTS,
+        &jmap_card_changes,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CardGroup/changes",
+        JMAP_URN_CONTACTS,
+        &jmap_cardgroup_changes,
+        JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
 };
@@ -5504,4 +5519,14 @@ done:
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
     return 0;
+}
+
+static int jmap_card_changes(struct jmap_req *req)
+{
+    return _contacts_changes(req, CARDDAV_KIND_CONTACT);
+}
+
+static int jmap_cardgroup_changes(struct jmap_req *req)
+{
+    return _contacts_changes(req, CARDDAV_KIND_GROUP);
 }
