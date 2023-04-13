@@ -61,9 +61,9 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_realm => 'Cassandane',
+    $config->set(carddav_realm => 'Cassandane',
                  conversations => 'yes',
-                 httpmodules => 'carddav caldav jmap',
+                 httpmodules => 'carddav jmap',
                  httpallowcompress => 'no',
                  vcard_max_size => 100000,
                  jmap_nonstandard_extensions => 'yes');
@@ -82,6 +82,7 @@ sub set_up
     $self->SUPER::set_up();
     $self->{jmap}->DefaultUsing([
         'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:contacts',
         'https://cyrusimap.org/ns/jmap/contacts',
     ]);
 }
@@ -4181,5 +4182,7 @@ EOF
         $res->[0][1]{list}[0]{otherAccountContactIds});
 
 }
+
+use Cassandane::Tiny::Loader 'tiny-tests/JMAPContacts';
 
 1;

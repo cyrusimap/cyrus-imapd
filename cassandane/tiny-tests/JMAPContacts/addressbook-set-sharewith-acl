@@ -1,0 +1,84 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_sharewith_acl
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create("user.test1");
+
+    my $res = $jmap->CallMethods([
+        ['AddressBook/set', {
+            create => {
+                '1' => {
+                    name => 'A',
+                }
+            },
+        }, 'R1'],
+    ]);
+    my $addressbookId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($addressbookId);
+
+    my @testCases = ({
+        rights => {
+            mayRead => JSON::true,
+        },
+        acl => 'lrw',
+    }, {
+        rights => {
+            mayWrite => JSON::true,
+        },
+        acl => 'switedn',
+        wantRights => {
+            mayWrite => JSON::true,
+        },
+    }, {
+        rights => {
+            mayAdmin => JSON::true,
+        },
+        acl => 'wa',
+   }, {
+        rights => {
+            mayDelete => JSON::true,
+        },
+        acl => 'wxc',
+    });
+
+    foreach(@testCases) {
+
+        xlog "Run test for acl $_->{acl}";
+
+        $res = $jmap->CallMethods([
+            ['AddressBook/set', {
+                update => {
+                    $addressbookId => {
+                        shareWith => {
+                            test1 => $_->{rights},
+                        },
+                    },
+                },
+            }, 'R1'],
+            ['AddressBook/get', {
+                ids => [$addressbookId],
+                properties => ['shareWith'],
+            }, 'R2'],
+        ]);
+
+        $_->{wantRights} ||= $_->{rights};
+
+        my %mergedrights = ((
+            mayRead => JSON::false,
+            mayWrite => JSON::false,
+            mayAdmin => JSON::false,
+            mayDelete => JSON::false,
+        ), %{$_->{wantRights}});
+
+        $self->assert_deep_equals(\%mergedrights,
+            $res->[1][1]{list}[0]{shareWith}{test1});
+        my %acl = @{$admin->getacl("user.cassandane.#addressbooks.$addressbookId")};
+        $self->assert_str_equals($_->{acl}, $acl{test1});
+    }
+}

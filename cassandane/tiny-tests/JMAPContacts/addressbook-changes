@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_changes
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+
+    xlog $self, "get current state";
+    my $res = $jmap->CallMethods([['AddressBook/get', {ids => undef}, "R1"]]);
+    my $state = $res->[0][1]{state};
+
+    xlog $self, "create addressbooks";
+    my $id1 = $carddav->NewAddressBook("foo");
+    my $id2 = $carddav->NewAddressBook("bar");
+
+    xlog $self, "get addressbook updates";
+    $res = $jmap->CallMethods([['AddressBook/changes', {
+                    "sinceState" => $state
+                }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "get addressbook updates without changes";
+    $res = $jmap->CallMethods([['AddressBook/changes', {
+                    "sinceState" => $state
+                }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_str_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals(0, scalar @{$res->[0][1]{destroyed}});
+
+    my $basepath = $carddav->{basepath};
+    xlog $self, "update name of addressbook $id1, destroy addressbook $id2";
+    $carddav->UpdateAddressBook($basepath . "/" . $id1, name => "foo (upd)");
+    $carddav->DeleteAddressBook($basepath . "/" . $id2);
+
+    xlog $self, "get addressbook updates";
+    $res = $jmap->CallMethods([['AddressBook/changes', {
+                    "sinceState" => $state
+                }, "R1"]]);
+    $self->assert_str_equals("AddressBook/changes", $res->[0][0]);
+    $self->assert_str_equals("R1", $res->[0][2]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($id1, $res->[0][1]{updated}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id2, $res->[0][1]{destroyed}[0]);
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "get empty addressbook updates";
+    $res = $jmap->CallMethods([['AddressBook/changes', {
+                    "sinceState" => $state
+                }, "R1"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+}

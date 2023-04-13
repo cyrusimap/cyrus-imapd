@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_shared
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+    xlog $self, "create shared account";
+    $admintalk->create("user.manifold");
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    # Call CardDAV once to create manifold's addressbook home #addressbooks
+    my $mantalk = Net::CardDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "share addressbook home read-only to user";
+    $admintalk->setacl("user.manifold.#addressbooks", cassandane => 'lr') or die;
+
+    xlog $self, "create addressbook (should fail)";
+    my $res = $jmap->CallMethods([
+            ['AddressBook/set', {
+                    accountId => 'manifold',
+                    create => { "1" => {
+                            name => "foo"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    $self->assert_str_equals("accountReadOnly", $res->[0][1]{notCreated}{1}{type});
+
+    xlog $self, "share addressbook home read-writable to user";
+    $admintalk->setacl("user.manifold.#addressbooks", cassandane => 'lrswipkxtecdn') or die;
+
+    xlog $self, "create addressbook";
+    $res = $jmap->CallMethods([
+            ['AddressBook/set', {
+                    accountId => 'manifold',
+                    create => { "1" => {
+                            name => "foo"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    my $AddressBookId = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($AddressBookId);
+
+    xlog $self, "share addressbook read-only to user";
+    $admintalk->setacl("user.manifold.#addressbooks.$AddressBookId", "cassandane" => 'lr') or die;
+
+    xlog $self, "update addressbook";
+    $res = $jmap->CallMethods([
+            ['AddressBook/set', {
+                    accountId => 'manifold',
+                    update => {$AddressBookId => {
+                            name => "bar"
+            }}}, "R1"]
+    ]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    $self->assert(exists $res->[0][1]{updated}{$AddressBookId});
+
+    xlog $self, "destroy addressbook $AddressBookId (should fail)";
+    $res = $jmap->CallMethods([['AddressBook/set', {accountId => 'manifold', destroy => [$AddressBookId]}, "R1"]]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    $self->assert_str_equals("accountReadOnly", $res->[0][1]{notDestroyed}{$AddressBookId}{type});
+
+    xlog $self, "share read-writable to user";
+    $admintalk->setacl("user.manifold.#addressbooks.$AddressBookId", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "destroy addressbook $AddressBookId";
+    $res = $jmap->CallMethods([['AddressBook/set', {accountId => 'manifold', destroy => [$AddressBookId]}, "R1"]]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    $self->assert_str_equals($AddressBookId, $res->[0][1]{destroyed}[0]);
+}
