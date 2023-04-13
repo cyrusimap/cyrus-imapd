@@ -51,6 +51,8 @@ typedef struct dynarray {
     void *data;
 } dynarray_t;
 
+#define DYNARRAY_INITIALIZER(membsize) { (membsize), 0, 0, NULL }
+
 extern void dynarray_init(struct dynarray *da, size_t membsize);
 extern void dynarray_fini(struct dynarray *da);
 
