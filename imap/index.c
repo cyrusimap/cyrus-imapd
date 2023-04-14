@@ -5526,6 +5526,31 @@ done:
 
 #endif /* USE_HTTPD */
 
+EXPORTED int index_want_attachextract(const char *type, const char *subtype)
+{
+    if (!strcasecmpsafe(type, "APPLICATION")) {
+        if (!strcasecmpsafe(subtype, "ICS")) {
+            // this gets handled like text/calendar
+            return 0;
+        }
+        else if (!strcasecmpsafe(subtype, "PKCS7-MIME") ||
+            !strcasecmpsafe(subtype, "PKCS7-ENCRYPTED") ||
+            !strcasecmpsafe(subtype, "PKCS7-SIGNATURE") ||
+            !strcasecmpsafe(subtype, "PGP-SIGNATURE") ||
+            !strcasecmpsafe(subtype, "PGP-KEYS") ||
+            !strcasecmpsafe(subtype, "PGP-ENCRYPTED")) {
+            // these are encrypted fields which aren't worth indexing
+            return 0;
+        }
+        else return 1;
+    }
+    else return !strcasecmpsafe(type, "TEXT") &&
+        strcasecmpsafe(subtype, "PLAIN") &&
+        strcasecmpsafe(subtype, "HTML") &&
+        strcasecmpsafe(subtype, "CALENDAR") &&
+        strcasecmpsafe(subtype, "VCARD");
+}
+
 static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                             const char *type, const char *subtype,
                             const struct param *type_params __attribute__((unused)),
@@ -5648,7 +5673,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         extract_icalbuf(data, charset, encoding, str);
     }
 #endif /* USE_HTTPD */
-    else if (isbody && attachextract_supports_type(type, subtype)) {
+    else if (isbody && index_want_attachextract(type, subtype)) {
 
         /* Ignore attachments in first snippet generation pass */
         if (str->snippet_iteration == 1) goto done;
@@ -5665,8 +5690,8 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         /* Extract text from attachment */
         struct attachextract_record axrecord = {
             .type = type, .subtype = subtype,
+            .guid = message_guid_clone(content_guid),
         };
-        message_guid_copy(&axrecord.guid, content_guid);
 
         const char *charset_param = NULL;
         const struct param *param;

@@ -45,20 +45,49 @@
 
 #include "prot.h"
 
+/**
+ * Initialize the attachextract backend.
+ *
+ * clientin is an optional protocol stream to wait for timeouts.
+ */
 extern void attachextract_init(struct protstream *clientin);
+
+/**
+ * Destroy the attachextract backend.
+ */
 extern void attachextract_destroy(void);
 
-extern int attachextract_supports_type(const char *type, const char *subtype);
-
+/**
+ * Identifies the content type of attachment data.
+ */
 struct attachextract_record {
-    const char *type;
-    const char *subtype;
-    struct message_guid guid;
+    const char *type;          // MIME content type
+    const char *subtype;       // MIME subtype
+    struct message_guid guid;  // content guid of undecoded data
 };
 
+/**
+ * Extracts text from attachment data.
+ *
+ * Data may be optionally encoded and its charset identifier specified.
+ *
+ * Returns 0 on success or an IMAP error.
+ */
 extern int attachextract_extract(const struct attachextract_record *record,
                                  const struct buf *data,
                                  int encoding, const char *charset,
                                  struct buf *text);
+
+/**
+ * Sets or gets where to read and cache extract in.
+ */
+extern void attachextract_set_cachedir(const char *cachedir);
+extern const char *attachextract_get_cachedir(void);
+
+/**
+ * Sets or gets if extracted text may only read from the cache.
+ */
+extern void attachextract_set_cacheonly(int cacheonly);
+extern int attachextract_get_cacheonly(void);
 
 #endif

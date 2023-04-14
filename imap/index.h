@@ -369,5 +369,6 @@ extern int index_reload_record(struct index_state *state,
 
 extern int insert_into_mailbox_allowed(struct mailbox *mailbox);
 
+extern int index_want_attachextract(const char *type, const char *subtype);
 
 #endif /* INDEX_H */

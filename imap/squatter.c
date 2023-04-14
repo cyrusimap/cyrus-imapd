@@ -159,6 +159,11 @@ __attribute__((noreturn)) static int usage(const char *name)
             "  -U, --only-upgrade           only compact if re-indexing\n"
             " --B, --skip-locked            skip users that are locked by another process\n"
             "\n"
+            "Experimental options:\n"
+            "  --attachextract-cache-dir=DIR  cache extracted attachment text in DIR\n"
+            "  --attachextract-cache-only     only extract attachment text from the cache\n"
+            "\n"
+
             "General options:\n"
             "  -v, --verbose                be verbose\n"
             "  -h, --help                   show usage\n",
@@ -947,11 +952,18 @@ int main(int argc, char **argv)
     char *errstr = NULL;
     enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
            COMPACT, AUDIT, LIST } mode = UNKNOWN;
+    const char *axcachedir = NULL;
+    int axcacheonly = 0;
 
     setbuf(stdout, NULL);
 
     /* Keep these in alphabetic order */
     static const char short_options[] = "ABC:DFL:N:PRS:T:UXZade:f:hilmn:oprs:t:uvz:";
+
+    enum squatter_long_options {
+        SQUATTER_ATTACHEXTRACT_CACHE_DIR = 1024,
+        SQUATTER_ATTACHEXTRACT_CACHE_ONLY,
+    };
 
     /* Keep these ordered by mode */
     static struct option long_options[] = {
@@ -1000,6 +1012,12 @@ int main(int argc, char **argv)
         {"recursive", no_argument, 0, 'r' },
         {"sleep", required_argument, 0, 'S' },
 
+        /* experimental flags */
+        {"attachextract-cache-dir", required_argument, 0,
+            SQUATTER_ATTACHEXTRACT_CACHE_DIR },
+        {"attachextract-cache-only", no_argument, 0,
+            SQUATTER_ATTACHEXTRACT_CACHE_ONLY },
+
         /* misc */
         {"help", no_argument, 0, 'h' },
         {"verbose", no_argument, 0, 'v' },
@@ -1008,7 +1026,9 @@ int main(int argc, char **argv)
         {0, 0, 0, 0 }
     };
 
-    while ((opt = getopt_long(argc, argv, short_options, long_options, NULL)) != EOF) {
+    int opt_index = 0;
+
+    while ((opt = getopt_long(argc, argv, short_options, long_options, &opt_index)) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
@@ -1166,6 +1186,14 @@ int main(int argc, char **argv)
             user_mode = 1;
             break;
 
+        case SQUATTER_ATTACHEXTRACT_CACHE_DIR:
+            axcachedir = optarg;
+            break;
+
+        case SQUATTER_ATTACHEXTRACT_CACHE_ONLY:
+            axcacheonly = 1;
+            break;
+
         case 'h':
         default:
             usage("squatter");
@@ -1209,6 +1237,10 @@ int main(int argc, char **argv)
     }
 
     attachextract_init(NULL);
+    if (axcachedir)
+        attachextract_set_cachedir(axcachedir);
+    if (axcacheonly)
+        attachextract_set_cacheonly(1);
 
     const char *conf;
     conf = config_getstring(IMAPOPT_SEARCH_INDEX_SKIP_DOMAINS);

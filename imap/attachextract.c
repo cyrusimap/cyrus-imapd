@@ -48,7 +48,10 @@
 #include "backend.h"
 #include "global.h"
 #include "http_client.h"
+#include "map.h"
+#include "retry.h"
 #include "util.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -61,6 +64,9 @@ struct extractor_ctx {
     char *path;
     struct backend *be;
 };
+
+static char *attachextract_cachedir = NULL;
+static int attachextract_cacheonly = 0;
 
 static struct extractor_ctx *global_extractor = NULL;
 
@@ -163,23 +169,49 @@ static int extractor_connect(struct extractor_ctx *ext)
     return 0;
 }
 
-EXPORTED int attachextract_extract(const struct attachextract_record *rec,
+static void generate_record_id(struct buf *id, const struct attachextract_record *rec)
+{
+    // encode content guid
+    buf_putc(id, 'G');
+    buf_appendcstr(id, message_guid_encode(&rec->guid));
+
+    // encode media type, make sure it's safe to use as file name
+    buf_putc(id, '-');
+    const char *types[2] = { rec->type, rec->subtype };
+    for (int i = 0; i < 2; i++) {
+
+        if (i) buf_putc(id, '_');
+
+        for (const char *s = types[i]; *s; s++) {
+            if (('a' <= *s && *s <= 'z') ||
+                ('A' <= *s && *s <= 'Z') ||
+                ('0' <= *s && *s <= '9')) {
+                buf_putc(id, TOLOWER(*s));
+            }
+            else {
+                buf_putc(id, '%');
+                buf_printf(id, "%02x", (unsigned char) *s);
+            }
+        }
+    }
+}
+
+EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
                                    const struct buf *data,
                                    int encoding,
                                    const char *charset,
                                    struct buf *text)
 {
     struct backend *be;
-    struct buf decbuf = BUF_INITIALIZER;
     struct buf ctypehdr = BUF_INITIALIZER;
     hdrcache_t hdrs = NULL;
     struct body_t body = { 0, 0, 0, 0, 0, BUF_INITIALIZER };
     const char *guidstr, *errstr = NULL;
     size_t hostlen;
     const char **hdr, *p;
-
-    /* Capture HTTP response directly in target buffer */
-    body.payload = *text;
+    char *cachefname = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    int r = 0;
 
     if (!global_extractor) {
         /* This is a legitimate case for sieve and lmtpd (so we don't need
@@ -188,27 +220,67 @@ EXPORTED int attachextract_extract(const struct attachextract_record *rec,
         return 0;
     }
 
-    if (!rec->type || !rec->subtype) {
+    if (!axrec->type || !axrec->subtype) {
         xsyslog(LOG_DEBUG, "ignoring incomplete MIME type",
                 "type=<%s> subtype<%s>",
-               rec->type ? rec->type : "<null>",
-               rec->subtype ? rec->subtype : "<null>");
-        return 0;
+               axrec->type ? axrec->type : "<null>",
+               axrec->subtype ? axrec->subtype : "<null>");
+        return IMAP_NOTFOUND;
     }
 
-    if (message_guid_isnull(&rec->guid)) {
+    if (message_guid_isnull(&axrec->guid)) {
         xsyslog(LOG_DEBUG, "ignoring null guid", "mime_type=<%s/%s>",
-               rec->type, rec->subtype);
+               axrec->type, axrec->subtype);
         return 0;
     }
 
+    if (attachextract_cachedir) {
+        generate_record_id(&buf, axrec);
+        cachefname = strconcat(attachextract_cachedir, "/", buf_cstring(&buf), NULL);
+        buf_reset(&buf);
+    }
+    else if (attachextract_cacheonly) {
+        xsyslog(LOG_ERR,
+                "cache-only flag is set, but no cache directory is configured", NULL);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+
+    /* Fetch from cache */
+    if (cachefname) {
+        int fd = open(cachefname, O_RDONLY);
+        if (fd != -1) {
+            struct buf cache_data = BUF_INITIALIZER;
+            buf_refresh_mmap(&cache_data, 1, fd, cachefname, MAP_UNKNOWN_LEN, NULL);
+            buf_copy(text, &cache_data);
+            buf_free(&cache_data);
+            close(fd);
+
+            xsyslog(LOG_DEBUG, "read from cache",
+                    "cachefname=<%s>", cachefname);
+            goto done;
+        }
+        else {
+            xsyslog(LOG_DEBUG, "not found in cache",
+                    "cachefname=<%s>", cachefname);
+        }
+    }
+
+    if (attachextract_cacheonly) {
+        xsyslog(LOG_DEBUG,
+                "cache-only flag is set, will not call extractor", NULL);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+
+    /* Fetch from network */
     struct extractor_ctx *ext = global_extractor;
-    int r = extractor_connect(ext);
-    if (r) return r;
+    r = extractor_connect(ext);
+    if (r) goto done;
     be = ext->be;
 
     hostlen = strcspn(ext->hostname, "/");
-    guidstr = message_guid_encode(&rec->guid);
+    guidstr = message_guid_encode(&axrec->guid);
 
     /* try to fetch previously extracted text */
     unsigned statuscode = 0;
@@ -247,16 +319,16 @@ EXPORTED int attachextract_extract(const struct attachextract_record *rec,
 
     /* Decode data */
     if (encoding) {
-        if (charset_decode(&decbuf, buf_base(data), buf_len(data), encoding)) {
+        if (charset_decode(&buf, buf_base(data), buf_len(data), encoding)) {
             syslog(LOG_ERR, "extract_attachment: failed to decode data");
             r = IMAP_IOERROR;
             goto done;
         }
-        data = &decbuf;
+        data = &buf;
     }
 
     /* Build Content-Type */
-    buf_printf(&ctypehdr, "%s/%s", rec->type, rec->subtype);
+    buf_printf(&ctypehdr, "%s/%s", axrec->type, axrec->subtype);
     if (charset) {
         buf_printf(&ctypehdr, ";charset=%s", charset);
     }
@@ -332,11 +404,44 @@ gotdata:
         if (be->timeout) be->timeout->mark = time(NULL) + timeout;
     }
 
+    buf_copy(text, &body.payload);
+
+    if (cachefname) {
+        /* Add to cache */
+        char *tempfname = strconcat(cachefname, ".download.XXXXXX", NULL);
+        int fd = mkstemp(tempfname);
+        if (fd != -1) {
+            int wr = retry_write(fd, buf_base(text), buf_len(text));
+            close(fd);
+
+            if (wr == -1) {
+                xsyslog(LOG_WARNING, "failed to write temp file",
+                        "tempfname=<%s>", tempfname);
+            }
+            else {
+                if (rename(tempfname, cachefname)) {
+                    xsyslog(LOG_WARNING, "failed to rename tempfile to cache file",
+                            "tempfname=<%s> cachefname=<%s>",
+                            tempfname, cachefname);
+                }
+                else xsyslog(LOG_DEBUG, "wrote to cache",
+                            "cachefname=<%s>", cachefname);
+            }
+
+            xunlink(tempfname);
+        }
+        else xsyslog(LOG_WARNING, "could not create temp file",
+                    "tempfname=<%s>", tempfname);
+
+        free(tempfname);
+    }
+
 done:
     spool_free_hdrcache(hdrs);
-    *text = body.payload;
+    free(cachefname);
+    buf_free(&body.payload);
     buf_free(&ctypehdr);
-    buf_free(&decbuf);
+    buf_free(&buf);
     return r;
 }
 
@@ -397,27 +502,29 @@ EXPORTED void attachextract_destroy(void)
     global_extractor = NULL;
 }
 
-
-EXPORTED int attachextract_supports_type(const char *type, const char *subtype)
+EXPORTED void attachextract_set_cachedir(const char *cachedir)
 {
-    if (!strcasecmpsafe(type, "APPLICATION")) {
-        if (!strcasecmpsafe(subtype, "ICS")) {
-            // this gets handled like text/calendar
-            return 0;
-        }
-        else if (!strcasecmpsafe(subtype, "PKCS7-MIME") ||
-            !strcasecmpsafe(subtype, "PKCS7-ENCRYPTED") ||
-            !strcasecmpsafe(subtype, "PKCS7-SIGNATURE") ||
-            !strcasecmpsafe(subtype, "PGP-SIGNATURE") ||
-            !strcasecmpsafe(subtype, "PGP-KEYS") ||
-            !strcasecmpsafe(subtype, "PGP-ENCRYPTED")) {
-            // these are encrypted fields which aren't worth indexing
-            return 0;
-        }
-        else return 1;
-    }
-    else return !strcasecmpsafe(type, "TEXT");
+    char *old_cachedir = attachextract_cachedir;
+    attachextract_cachedir = xstrdupnull(cachedir);
+    xsyslog(LOG_DEBUG, "updated attachextract cache directory",
+            "old_cachedir=<%s> new_cachedir=<%s>", old_cachedir, cachedir);
+    free(old_cachedir);
 }
 
+EXPORTED const char *attachextract_get_cachedir(void)
+{
+    return attachextract_cachedir;
+}
 
+EXPORTED void attachextract_set_cacheonly(int cacheonly)
+{
+    int old_cacheonly = attachextract_cacheonly;
+    attachextract_cacheonly = cacheonly;
+    xsyslog(LOG_DEBUG, "updated attachextract cache-only flag",
+            "old_cacheonly=<%d> new_cacheonly=<%d>", old_cacheonly, cacheonly);
+}
 
+EXPORTED int attachextract_get_cacheonly(void)
+{
+    return attachextract_cacheonly;
+}

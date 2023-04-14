@@ -43,6 +43,7 @@ use warnings;
 use Cwd qw(abs_path);
 use DateTime;
 use Data::Dumper;
+use File::Temp qw(tempdir);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -1916,6 +1917,182 @@ sub test_reindex_mb_uniqueid
     my @mboxrows = grep { /^\*M\*[0-9a-zA-z\-_]+\*/ } <FH>;
     close FH;
     $self->assert_num_equals(1, scalar @mboxrows);
+}
+
+sub start_echo_extractor
+{
+    my ($self, $tracedir, @squatterArgs) = @_;
+    my $instance = $self->{instance};
+
+    xlog "Start extractor server with tracedir $tracedir";
+    my $nrequests = 0;
+    my $handler = sub {
+        my ($conn, $req) = @_;
+
+        # determine guid of attachment
+        my @paths = split(q{/}, URI->new($req->uri)->path);
+        my $guid = pop(@paths);
+
+        # touch trace file
+        $nrequests++;
+        my $fname = join(q{}, $tracedir, "/req", $nrequests, "_", $req->method, "_$guid");
+        open(my $fh, ">", $fname) or die "Can't open > $fname: $!";
+        close $fh;
+
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } elsif ($req->method eq 'GET') {
+            my $res = HTTP::Response->new(404);
+            $res->content("nope");
+            $conn->send_response($res);
+        } else {
+            my $res = HTTP::Response->new(200);
+            $res->content($req->content);
+            $conn->send_response($res);
+        }
+    };
+
+    my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
+    $instance->start_httpd($handler, $uri->port());
+}
+
+sub squatter_attachextract_cache_run
+{
+    my ($self, $cachedir, @squatterArgs) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Append emails with identical attachments";
+    $self->make_message("msg1",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/pdf\r\n"
+        ."\r\n"
+        ."attachterm"
+        ."\r\n--123456789abcdef--\r\n"
+    ) || die;
+    $self->make_message("msg2",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/pdf\r\n"
+        ."\r\n"
+        ."attachterm"
+        ."\r\n--123456789abcdef--\r\n"
+    ) || die;
+
+    xlog "Run squatter with cachedir $cachedir";
+    $self->{instance}->run_command({cyrus => 1},
+        'squatter', "--attachextract-cache-dir=$cachedir", @squatterArgs);
+}
+
+sub test_squatter_attachextract_cache
+    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor
+{
+    my ($self) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    $self->start_echo_extractor($tracedir);
+
+    xlog "Create and index index messages";
+    my $cachedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    $self->squatter_attachextract_cache_run($cachedir);
+
+    xlog "Assert text bodies of both messages are indexed";
+    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1,2], $uids);
+
+    xlog "Assert attachments of both messages are indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+    $self->assert_deep_equals([1,2], $uids);
+
+    xlog "Assert extractor only got called once";
+    my @tracefiles = glob($tracedir."/*_PUT_*");
+    $self->assert_num_equals(1, scalar @tracefiles);
+
+    xlog "Assert cache contains one file";
+    my @files = glob($cachedir."/*");
+    $self->assert_num_equals(1, scalar @files);
+}
+
+sub test_squatter_attachextract_cachedir_noperm
+    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor
+{
+    my ($self) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    $self->start_echo_extractor($tracedir);
+
+    xlog "Run squatter with read-only cache directory";
+    my $cachedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    chmod 0400, $cachedir || die;
+    $self->squatter_attachextract_cache_run($cachedir, "--allow-partials");
+
+    xlog "Assert text bodies of both messages are indexed";
+    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1,2], $uids);
+
+    xlog "Assert attachments of both messages are indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+    $self->assert_deep_equals([1,2], $uids);
+
+    xlog "Assert extractor got called twice with attachment uploads";
+    my @tracefiles = glob($tracedir."/*_PUT_*");
+    $self->assert_num_equals(2, scalar @tracefiles);
+
+    xlog "Assert cache contains no file";
+    chmod 0700, $cachedir || die;
+    my @files = glob($cachedir."/*");
+    $self->assert_num_equals(0, scalar @files);
+}
+
+sub test_squatter_attachextract_cacheonly
+    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor :NoCheckSyslog
+{
+    my ($self) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    $self->start_echo_extractor($tracedir);
+
+    xlog "Instruct squatter to only use attachextract cache";
+    my $cachedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    $self->squatter_attachextract_cache_run($cachedir,
+        "--attachextract-cache-only", "--allow-partials");
+
+    xlog "Assert text bodies of both messages are indexed";
+    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1,2], $uids);
+
+    xlog "Assert attachments of both messages are not indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+    $self->assert_deep_equals([], $uids);
+
+    xlog "Assert extractor did not get got called";
+    my @tracefiles = glob($tracedir."/*");
+    $self->assert_num_equals(0, scalar @tracefiles);
+
+    xlog "Assert cache contains no file";
+    my @files = glob($cachedir."/*");
+    $self->assert_num_equals(0, scalar @files);
 }
 
 1;
