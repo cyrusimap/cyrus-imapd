@@ -67,7 +67,19 @@
 #define REQSTAT_PERMFAIL        "5.2;Invalid calendar service"
 #define REQSTAT_REJECTED        "5.3;No scheduling support for user"
 
+enum sched_mechanism {
+    SCHED_MECH_CALDAV         = 0,
+    SCHED_MECH_ISCHEDULE      = 1,
+    SCHED_MECH_SIEVE          = 2,
+    SCHED_MECH_JMAP_SET       = 3,
+    SCHED_MECH_JMAP_PARTREPLY = 4,
+    SCHED_MECH_JMAP_RESTORE   = 5,
+};
+
+extern const char *sched_mechanisms[];
+
 struct sched_data {
+    enum sched_mechanism mech;
     unsigned flags;
     icalcomponent *itip;
     icalcomponent *oldical;

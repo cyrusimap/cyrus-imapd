@@ -1641,7 +1641,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     }
 
     struct sched_data sched_data =
-        { sched_flags, itip, NULL, NULL,
+        { SCHED_MECH_SIEVE, sched_flags, itip, NULL, NULL,
           ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, imip->calendarid, NULL };
     struct caldav_sched_param sched_param = {
         (char *) ctx->userid, NULL, 0, 0, 1, NULL

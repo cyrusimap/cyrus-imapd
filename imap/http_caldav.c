@@ -1532,13 +1532,15 @@ static int caldav_delete_cal(struct transaction_t *txn,
         if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && !is_draft)
-                sched_request(userid, &schedule_addresses, cdata->organizer, ical, NULL);
+                sched_request(userid, &schedule_addresses, cdata->organizer,
+                              ical, NULL, SCHED_MECH_CALDAV);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
-                sched_reply(userid, &schedule_addresses, ical, NULL);
+                sched_reply(userid, &schedule_addresses,
+                            ical, NULL, SCHED_MECH_CALDAV);
         }
 
         free(userid);
@@ -3095,13 +3097,14 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, calendar))
                 sched_request(userid, &schedule_addresses,
-                              cdata->organizer, oldical, ical);
+                              cdata->organizer, oldical, ical, SCHED_MECH_CALDAV);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, calendar) && strarray_size(&schedule_addresses))
-                sched_reply(userid, &schedule_addresses, oldical, ical);
+                sched_reply(userid, &schedule_addresses,
+                            oldical, ical, SCHED_MECH_CALDAV);
         }
 
         free(userid);
@@ -3985,7 +3988,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
                 else {
                     if (_scheduling_enabled(txn, mailbox) && !is_draft)
-                        sched_request(sched_userid, &schedule_addresses, organizer, oldical, ical);
+                        sched_request(sched_userid, &schedule_addresses,
+                                      organizer, oldical, ical, SCHED_MECH_CALDAV);
                 }
             }
             else {
@@ -4003,7 +4007,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif
                 else {
                     if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
-                        sched_reply(sched_userid, &schedule_addresses, oldical, ical);
+                        sched_reply(sched_userid, &schedule_addresses,
+                                    oldical, ical, SCHED_MECH_CALDAV);
                 }
             }
 

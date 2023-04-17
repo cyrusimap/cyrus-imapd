@@ -1,0 +1,121 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_participantreply_standalone
+    :min_version_3_7 :needs_component_jmap :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $instance = $self->{instance};
+    $instance->{config}->set(defaultdomain => 'internal');
+    $instance->{config}->set(calendar_user_address_set => 'internal');
+
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $jmap = $self->{jmap};
+    $jmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'urn:ietf:params:jmap:calendars:preferences',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ]);
+
+    my $participants = {
+        "org" => {
+            "name" => "Cassandane",
+            roles => {
+                'owner' => JSON::true,
+            },
+            sendTo => {
+                imip => 'cassandane@example.com',
+            },
+        },
+        "att" => {
+            "name" => "Bugs Bunny",
+            roles => {
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'bugs@looneytunes.com',
+            },
+        },
+    };
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "Create scheduled standalone instance";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                    participants => $participants,
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{instance1}{id};
+
+    xlog $self, "verify invitation sent from organizer to attendees";
+    my $data = $self->{instance}->getnotify();
+    my (@imips) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my $imip = $imips[0];
+    $self->assert_not_null($imip);
+
+    my $payload = decode_json($imip->{MESSAGE});
+    my $ical = $payload->{ical};
+
+    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
+
+    xlog $self, "set attendee status";
+    my $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
+        eventId => $id,
+        participantEmail => "bugs\@looneytunes.com",
+        updates => {
+            participationStatus => "accepted"
+        }
+    }, "R2"]]);
+
+    xlog $self, "verify reply sent from attendee to organizer";
+    $data = $self->{instance}->getnotify();
+    (@imips) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $imip = $imips[0];
+    $self->assert_not_null($imip);
+
+    $payload = decode_json($imip->{MESSAGE});
+    $ical = $payload->{ical};
+
+    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{sender});
+    $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REPLY");
+    $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+
+    xlog $self, "verify updated request sent from organizer to attendee";
+    $imip = $imips[1];
+    $self->assert_not_null($imip);
+
+    $payload = decode_json($imip->{MESSAGE});
+    $ical = $payload->{ical};
+
+    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REQUEST");
+    $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+}

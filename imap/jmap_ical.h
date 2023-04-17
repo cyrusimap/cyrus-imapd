@@ -297,6 +297,8 @@ extern void jmapical_remove_peruserprops(json_t *jevent);
 
 extern int jmapical_is_origin(json_t *jsevent, const strarray_t *schedule_addresses);
 
+extern const char *jmap_partid_from_ical(icalproperty *prop);
+
 #ifdef __cplusplus
 }
 #endif

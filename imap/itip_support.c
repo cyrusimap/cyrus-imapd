@@ -60,6 +60,16 @@
 #include "imap/http_err.h"
 
 
+/* This array is indexed by enum sched_mechanism */
+const char *sched_mechanisms[] = {
+    "CalDAV",
+    "iSchedule",
+    "Sieve",
+    "CalendarEvent/set",
+    "CalendarEvent/participantReply",
+    "Backup/restoreCalendars",
+};
+
 HIDDEN void sched_param_fini(struct caldav_sched_param *sparam)
 {
     free(sparam->userid);
