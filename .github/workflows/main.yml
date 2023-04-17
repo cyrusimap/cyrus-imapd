@@ -35,6 +35,14 @@ jobs:
         cpanm --installdeps .
         cd -
       shell: bash
+    - name: update imap test suite
+      run: |
+        cd /srv/imaptest.git
+        git fetch
+        git checkout origin/main
+        git clean -f -x -d
+        cd -
+      shell: bash
     - name: install missing deps
       run: |
         cpanm IO::File::fcntl
