@@ -7147,6 +7147,8 @@ int meth_put(struct transaction_t *txn, void *params)
         if (txn->req_tgt.allow & ALLOW_USERDATA) reqd_rights |= DACL_PROPRSRC;
     }
 
+    assert(txn->req_tgt.resource);
+
     /* Make sure Content-Range isn't specified */
     if (spool_getheader(txn->req_hdrs, "Content-Range"))
         return HTTP_BAD_REQUEST;
