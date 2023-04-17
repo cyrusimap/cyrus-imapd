@@ -2469,6 +2469,29 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     syslog(LOG_DEBUG, "autosievefolder: User %s, folder %s creation succeeded",
            userid, internalname);
 
+    /* Attempt to inherit the color of parent mailbox,
+       as long as the parent is NOT a top-level user mailbox */
+    char *parent = xstrdup(internalname);
+
+    if (mboxname_make_parent(parent) &&
+        !(lmtpd_namespace.isalt && mboxname_isusermailbox(parent, 1))) {
+        static const char *annot = IMAP_ANNOT_NS "color";
+        struct buf buf = BUF_INITIALIZER;
+
+        annotatemore_lookupmask(parent, annot, userid, &buf);
+        if (buf.len) {
+            int r1 = annotatemore_writemask(internalname, annot, userid, &buf);
+            if (r1) {
+                syslog(LOG_NOTICE,
+                       "failed to write annotation %s on mailbox %s: %s",
+                       annot, internalname, error_message(r1));
+            }
+        }
+
+        buf_free(&buf);
+    }
+    free(parent);
+
 done:
     mboxname_release(&namespacelock);
     return r;
