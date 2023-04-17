@@ -1472,6 +1472,8 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     meth = icalcomponent_get_method(itip);
     if (meth == ICAL_METHOD_NONE) {
         buf_setcstr(&imip->errstr, "missing METHOD property");
+        syslog(LOG_NOTICE, "Sieve: message %s contains non-iTIP iCalendar data",
+               mydata->m->id ? mydata->m->id : "<no-msgid>");
         goto done;
     }
 
