@@ -39,6 +39,8 @@ jobs:
       run: |
         cd /srv/imaptest.git
         git fetch
+        git remote -v
+        git status
         git checkout origin/main
         git clean -f -x -d
         cd -
