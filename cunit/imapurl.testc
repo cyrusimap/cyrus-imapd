@@ -188,44 +188,44 @@ static void test_tourl(void)
 {
     static const char URL[] = "imap://jeeves/deverill";
     struct imapurl iurl;
-    char buf[300];
+    struct buf buf = BUF_INITIALIZER;
 
     memset(&iurl, 0, sizeof(iurl));
     iurl.server = "jeeves";
     iurl.mailbox = "deverill";
 
-    memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, &iurl);
-    CU_ASSERT_STRING_EQUAL(buf, URL);
+    imapurl_toURL(&buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
+    buf_free(&buf);
 }
 
 static void test_tourl_server(void)
 {
     static const char URL[] = "imap://jeeves";
     struct imapurl iurl;
-    char buf[300];
+    struct buf buf = BUF_INITIALIZER;
 
     memset(&iurl, 0, sizeof(iurl));
     iurl.server = "jeeves";
 
-    memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, &iurl);
-    CU_ASSERT_STRING_EQUAL(buf, URL);
+    imapurl_toURL(&buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
+    buf_free(&buf);
 }
 
 static void test_tourl_user(void)
 {
     static const char URL[] = "imap://wooster@jeeves/deverill";
     struct imapurl iurl;
-    char buf[300];
+    struct buf buf = BUF_INITIALIZER;
 
     memset(&iurl, 0, sizeof(iurl));
     iurl.user = "wooster";
     iurl.server = "jeeves";
     iurl.mailbox = "deverill";
-    memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, &iurl);
-    CU_ASSERT_STRING_EQUAL(buf, URL);
+    imapurl_toURL(&buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
+    buf_free(&buf);
 }
 
 static void test_tourl_options(void)
@@ -236,7 +236,7 @@ static void test_tourl_options(void)
                               "/;SECTION=1.4"
                               "/;PARTIAL=1.1023";
     struct imapurl iurl;
-    char buf[300];
+    struct buf buf = BUF_INITIALIZER;
 
     memset(&iurl, 0, sizeof(iurl));
     iurl.server = "jeeves";
@@ -247,9 +247,9 @@ static void test_tourl_options(void)
     iurl.start_octet = 1;
     iurl.octet_count = 1023;
 
-    memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, &iurl);
-    CU_ASSERT_STRING_EQUAL(buf, URL);
+    imapurl_toURL(&buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
+    buf_free(&buf);
 }
 
 static void test_tourl_urlauth(void)
@@ -259,7 +259,7 @@ static void test_tourl_urlauth(void)
                               ";EXPIRE=2010-11-24T06:57:26Z"
                               ";URLAUTH=submit+fred:internal:91354a473744909de610943775f92038";
     struct imapurl iurl;
-    char buf[300];
+    struct buf buf = BUF_INITIALIZER;
 
     memset(&iurl, 0, sizeof(iurl));
     iurl.server = "jeeves";
@@ -270,9 +270,9 @@ static void test_tourl_urlauth(void)
     iurl.urlauth.token = "91354a473744909de610943775f92038";
     iurl.urlauth.expire = 1290581846;
 
-    memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, &iurl);
-    CU_ASSERT_STRING_EQUAL(buf, URL);
+    imapurl_toURL(&buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
+    buf_free(&buf);
 }
 
 static void test_tourl_ampersand(void)
@@ -284,15 +284,15 @@ static void test_tourl_ampersand(void)
      */
     static const char URL[] = "imap://goons/Goosey%26Bawks";
     struct imapurl iurl;
-    char buf[300];
+    struct buf buf = BUF_INITIALIZER;
 
     memset(&iurl, 0, sizeof(iurl));
     iurl.server = "goons";
     iurl.mailbox = "Goosey&-Bawks";
 
-    memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, &iurl);
-    CU_ASSERT_STRING_EQUAL(buf, URL);
+    imapurl_toURL(&buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
+    buf_free(&buf);
 }
 
 static void test_tourl_urlunsafe(void)
@@ -303,15 +303,15 @@ static void test_tourl_urlunsafe(void)
      */
     static const char URL[] = "imap://gibberish/%20%22%23%25%2B%3A%3B%3C%3D%3E%3F%40%5B%5C%5D%5E%60%7B%7C%7D";
     struct imapurl iurl;
-    char buf[300];
+    struct buf buf = BUF_INITIALIZER;
 
     memset(&iurl, 0, sizeof(iurl));
     iurl.server = "gibberish";
     iurl.mailbox = " \"#%+:;<=>?@[\\]^`{|}";
 
-    memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, &iurl);
-    CU_ASSERT_STRING_EQUAL(buf, URL);
+    imapurl_toURL(&buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
+    buf_free(&buf);
 }
 
 static void test_tourl_utf7_high(void)
@@ -331,15 +331,15 @@ static void test_tourl_utf7_high(void)
      */
     static const char URL[] = "imap://uruk/%F0%92%81%B3%F0%92%80%A0%F0%92%84%A9";
     struct imapurl iurl;
-    char buf[300];
+    struct buf buf = BUF_INITIALIZER;
 
     memset(&iurl, 0, sizeof(iurl));
     iurl.server = "uruk";
     iurl.mailbox = "&2Ajcc9gI3CDYCN0p-";
 
-    memset(buf, 0x45, sizeof(buf));
-    imapurl_toURL(buf, &iurl);
-    CU_ASSERT_STRING_EQUAL(buf, URL);
+    imapurl_toURL(&buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
+    buf_free(&buf);
 }
 
 static void test_fromurl_utf2_high(void)
@@ -375,7 +375,7 @@ static void test_cycle(void)
     struct imapurl iurl2;
     static const char URL[] = "imap://;AUTH=*@server/%C3%A4%20%C3%84;UIDVALIDITY=1234567890";
     int r;
-    char url[400];
+    struct buf buf = BUF_INITIALIZER;
 
     memset(&iurl, 0, sizeof(struct imapurl));
     iurl.server = "server";
@@ -383,15 +383,16 @@ static void test_cycle(void)
     iurl.mailbox = "&AOQ- &AMQ-";  /* "ä Ä" */
     iurl.uidvalidity = 1234567890;
 
-    memset(url, 0x45, sizeof(url));
-    imapurl_toURL(url, &iurl);
-    CU_ASSERT_STRING_EQUAL(url, URL);
+    imapurl_toURL(&buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
 
-    r = imapurl_fromURL(&iurl2, url);
+    r = imapurl_fromURL(&iurl2, buf_cstring(&buf));
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(iurl2.mailbox, "&AOQ- &AMQ-");
     CU_ASSERT_EQUAL(iurl2.uidvalidity, 1234567890);
     free(iurl2.freeme);
+
+    buf_free(&buf);
 }
 
 /* vim: set ft=c: */

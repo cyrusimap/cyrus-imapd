@@ -1780,6 +1780,17 @@ EXPORTED int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags)
     return p-hex;
 }
 
+EXPORTED int buf_bin_to_hex(struct buf *hex, const void *bin, size_t binlen, int flags)
+{
+    size_t seplen = _BH_GETSEP(flags) && binlen ? binlen - 1 : 0;
+    size_t newlen = hex->len + binlen * 2 + seplen;
+    buf_ensure(hex, newlen - hex->len + 1);
+    int r = bin_to_hex(bin, binlen, hex->s + hex->len, flags);
+    buf_truncate(hex, newlen);
+    buf_cstring(hex);
+    return r;
+}
+
 EXPORTED int bin_to_lchex(const void *bin, size_t binlen, char *hex)
 {
     uint16_t *p = (void *)hex;
@@ -1789,6 +1800,16 @@ EXPORTED int bin_to_lchex(const void *bin, size_t binlen, char *hex)
         *p++ = lchexchars[*v++];
     hex[binlen*2] = '\0';
     return 2 * binlen;
+}
+
+EXPORTED int buf_bin_to_lchex(struct buf *hex, const void *bin, size_t binlen)
+{
+    size_t newlen = hex->len + 2 * binlen;
+    buf_ensure(hex, newlen - hex->len + 1);
+    int r = bin_to_lchex(bin, binlen, hex->s + hex->len);
+    buf_truncate(hex, newlen);
+    buf_cstring(hex);
+    return r;
 }
 
 EXPORTED int hex_to_bin(const char *hex, size_t hexlen, void *bin)
@@ -1816,6 +1837,25 @@ EXPORTED int hex_to_bin(const char *hex, size_t hexlen, void *bin)
     }
 
     return (unsigned char *)v - (unsigned char *)bin;
+}
+
+EXPORTED int buf_hex_to_bin(struct buf *bin, const char *hex, size_t hexlen)
+{
+    if (hex == NULL)
+        return -1;
+    if (hexlen == 0)
+        hexlen = strlen(hex);
+    if (hexlen % 2)
+        return -1;
+
+    size_t newlen = bin->len + hexlen / 2;
+    buf_ensure(bin, newlen - bin->len + 1);
+    int r = hex_to_bin(hex, hexlen, bin->s + bin->len);
+    if (r >= 0) {
+        buf_truncate(bin, newlen);
+        buf_cstring(bin);
+    }
+    return r;
 }
 
 #ifdef HAVE_ZLIB
