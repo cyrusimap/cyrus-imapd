@@ -62,4 +62,7 @@ EXPORTED int json_is_utcdate(json_t *json);
 
 EXPORTED int json_array_find(json_t *array, const char *needle);
 
+EXPORTED json_t *json_object_get_vanew(json_t *obj, const char *key,
+                                       const char *fmt, ...);
+
 #endif /* JSON_SUPPORT_H */
