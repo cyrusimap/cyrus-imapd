@@ -98,3 +98,24 @@ int json_array_find(json_t *array, const char *needle)
 
     return -1;
 }
+
+/* Get the property with the given key, if it exists.
+   Otherwise, create is with the given json_pack() args */
+json_t *json_object_get_vanew(json_t *obj, const char *key,
+                              const char *fmt, ...)
+{
+    json_t *val = json_object_get(obj, key);
+
+    if (!val) {
+        json_error_t jerr;
+        va_list va;
+
+        va_start(va, fmt);
+        val = json_vpack_ex(&jerr, 0, fmt, va);
+        va_end(va);
+
+        json_object_set_new(obj, key, val);
+    }
+
+    return val;
+}
