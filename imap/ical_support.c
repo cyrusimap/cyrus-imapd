@@ -1041,6 +1041,24 @@ EXPORTED icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
     return prop;
 }
 
+
+EXPORTED void icalcomponent_remove_x_property_by_name(icalcomponent *comp,
+                                                      const char *name)
+{
+    icalproperty *prop, *nextprop;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+            prop; prop = nextprop) {
+
+        nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+        if (!strcmpsafe(icalproperty_get_x_name(prop), name)) {
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+        }
+    }
+}
+
 EXPORTED icaltimetype icaltime_convert_to_utc(const struct icaltimetype tt,
                                               icaltimezone *floating_zone)
 {

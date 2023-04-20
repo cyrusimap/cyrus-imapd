@@ -162,6 +162,9 @@ extern icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *c);
 extern icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
                                                           const char *name);
 
+extern void icalcomponent_remove_x_property_by_name(icalcomponent *comp,
+                                                    const char *name);
+
 extern struct icalperiodtype icalcomponent_get_utc_timespan(icalcomponent *comp,
                                                             icalcomponent_kind kind,
                                                             icaltimezone *floating_tz);
