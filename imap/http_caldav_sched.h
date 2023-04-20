@@ -132,14 +132,17 @@ extern int isched_send(struct caldav_sched_param *sparam, const char *recipient,
 
 extern int sched_busytime_query(struct transaction_t *txn,
                                 struct mime_type_t *mime, icalcomponent *comp);
-extern void sched_request(const char *userid, const strarray_t *schedule_addresses,
+extern void sched_request(const char *cal_ownerid, const char *sched_userid,
+                          const strarray_t *schedule_addresses,
                           const char *organizer,
                           icalcomponent *oldical, icalcomponent *newical,
                           enum sched_mechanism mech);
-extern void sched_reply(const char *userid, const strarray_t *schedule_addresses,
+extern void sched_reply(const char *cal_ownerid, const char *sched_userid,
+                        const strarray_t *schedule_addresses,
                         icalcomponent *oldical, icalcomponent *newical,
                         enum sched_mechanism mech);
-extern void sched_deliver(const char *userid, const char *sender, const char *recipient,
+extern void sched_deliver(const char *cal_ownerid, const char *sched_userid,
+                          const char *sender, const char *recipient,
                           void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
                                         xmlChar *recipient, xmlChar *status);

@@ -4090,7 +4090,7 @@ static int setcalendarevents_schedule(const char *sched_userid,
         /* Send scheduling message. */
         if (strarray_find_case(schedule_addresses, organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
-            sched_request(sched_userid, schedule_addresses, organizer,
+            sched_request(sched_userid, sched_userid, schedule_addresses, organizer,
                           oldical, newical, SCHED_MECH_JMAP_SET);
         } else {
             /* Attendee scheduling object resource */
@@ -4111,7 +4111,7 @@ static int setcalendarevents_schedule(const char *sched_userid,
                 }
             }
             if (!omit_reply && strarray_size(schedule_addresses))
-                sched_reply(sched_userid, schedule_addresses,
+                sched_reply(sched_userid, sched_userid, schedule_addresses,
                             oldical, newical, SCHED_MECH_JMAP_SET);
         }
     }
@@ -7941,7 +7941,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
 
     /* Create and send the reply */
-    sched_reply(req->accountid, &schedule_addr,
+    sched_reply(req->accountid, req->accountid, &schedule_addr,
                 update.oldical, update.newical, SCHED_MECH_JMAP_PARTREPLY);
 
     /* Get SCHEDULE-STATUS */
@@ -7979,7 +7979,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         break;
     }
 
-    sched_request(req->accountid, NULL, organizer,
+    sched_request(req->accountid, req->accountid, NULL, organizer,
                   update.oldical, update.newical, SCHED_MECH_JMAP_PARTREPLY);
 
     /* Build response */
