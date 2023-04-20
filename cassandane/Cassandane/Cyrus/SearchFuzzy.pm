@@ -44,6 +44,7 @@ use Cwd qw(abs_path);
 use DateTime;
 use Data::Dumper;
 use File::Temp qw(tempdir);
+use File::stat;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -1921,37 +1922,48 @@ sub test_reindex_mb_uniqueid
 
 sub start_echo_extractor
 {
-    my ($self, $tracedir, @squatterArgs) = @_;
+    my ($self, %params) = @_;
     my $instance = $self->{instance};
 
-    xlog "Start extractor server with tracedir $tracedir";
+    xlog "Start extractor server with tracedir $params{tracedir}";
     my $nrequests = 0;
     my $handler = sub {
         my ($conn, $req) = @_;
 
-        # determine guid of attachment
-        my @paths = split(q{/}, URI->new($req->uri)->path);
-        my $guid = pop(@paths);
-
-        # touch trace file
         $nrequests++;
-        my $fname = join(q{}, $tracedir, "/req", $nrequests, "_", $req->method, "_$guid");
-        open(my $fh, ">", $fname) or die "Can't open > $fname: $!";
-        close $fh;
+
+        if ($params{trace_delay_seconds}) {
+            sleep $params{trace_delay_seconds};
+        }
+
+        if ($params{tracedir}) {
+            # touch trace file in tracedir
+            my @paths = split(q{/}, URI->new($req->uri)->path);
+            my $guid = pop(@paths);
+            my $fname = join(q{},
+                $params{tracedir}, "/req", $nrequests, "_", $req->method, "_$guid");
+            open(my $fh, ">", $fname) or die "Can't open > $fname: $!";
+            close $fh;
+        }
+
+        my $res;
 
         if ($req->method eq 'HEAD') {
-            my $res = HTTP::Response->new(204);
+            $res = HTTP::Response->new(204);
             $res->content("");
-            $conn->send_response($res);
         } elsif ($req->method eq 'GET') {
-            my $res = HTTP::Response->new(404);
+            $res = HTTP::Response->new(404);
             $res->content("nope");
-            $conn->send_response($res);
         } else {
-            my $res = HTTP::Response->new(200);
+            $res = HTTP::Response->new(200);
             $res->content($req->content);
-            $conn->send_response($res);
         }
+
+        if ($params{response_delay_seconds}) {
+            sleep $params{response_delay_seconds};
+        }
+
+        $conn->send_response($res);
     };
 
     my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
@@ -2007,7 +2019,7 @@ sub test_squatter_attachextract_cache
     my $imap = $self->{store}->get_client();
 
     my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
-    $self->start_echo_extractor($tracedir);
+    $self->start_echo_extractor(tracedir => $tracedir);
 
     xlog "Create and index index messages";
     my $cachedir = tempdir(DIR => $instance->{basedir} . "/tmp");
@@ -2031,14 +2043,14 @@ sub test_squatter_attachextract_cache
 }
 
 sub test_squatter_attachextract_cachedir_noperm
-    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor
+    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor :NoCheckSyslog
 {
     my ($self) = @_;
     my $instance = $self->{instance};
     my $imap = $self->{store}->get_client();
 
     my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
-    $self->start_echo_extractor($tracedir);
+    $self->start_echo_extractor(tracedir => $tracedir);
 
     xlog "Run squatter with read-only cache directory";
     my $cachedir = tempdir(DIR => $instance->{basedir} . "/tmp");
@@ -2049,9 +2061,9 @@ sub test_squatter_attachextract_cachedir_noperm
     my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
     $self->assert_deep_equals([1,2], $uids);
 
-    xlog "Assert attachments of both messages are indexed";
+    xlog "Assert attachments of both messages are not indexed";
     $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
-    $self->assert_deep_equals([1,2], $uids);
+    $self->assert_deep_equals([], $uids);
 
     xlog "Assert extractor got called twice with attachment uploads";
     my @tracefiles = glob($tracedir."/*_PUT_*");
@@ -2071,7 +2083,7 @@ sub test_squatter_attachextract_cacheonly
     my $imap = $self->{store}->get_client();
 
     my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
-    $self->start_echo_extractor($tracedir);
+    $self->start_echo_extractor(tracedir => $tracedir);
 
     xlog "Instruct squatter to only use attachextract cache";
     my $cachedir = tempdir(DIR => $instance->{basedir} . "/tmp");
@@ -2093,6 +2105,76 @@ sub test_squatter_attachextract_cacheonly
     xlog "Assert cache contains no file";
     my @files = glob($cachedir."/*");
     $self->assert_num_equals(0, scalar @files);
+}
+
+sub test_squatter_attachextract_nolock
+    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor
+{
+    my ($self) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    $self->start_echo_extractor(
+        tracedir => $tracedir,
+        trace_delay_seconds => 1,
+        response_delay_seconds => 1,
+    );
+
+    xlog $self, "Make plain text message";
+    $self->make_message("msg1",
+        mime_type => "text/plain",
+        body => "bodyterm");
+
+    xlog $self, "Make message with attachment";
+    $self->make_message("msg2",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/pdf\r\n"
+        ."Content-Transfer-Encoding: base64\r\n"
+        ."\r\n"
+        # that's "attachterm"
+        ."YXR0YWNodGVybQo="
+        ."\r\n--123456789abcdef--\r\n");
+
+    xlog $self, "Clear syslog";
+    $self->{instance}->getsyslog();
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v');
+
+    xlog $self, "Inspect syslog and extractor trace files";
+    my @log = grep {
+        /squatter\[\d+\]: (released|reacquired) mailbox lock/
+    } $self->{instance}->getsyslog();
+
+    my ($released_timestamp) = ($log[0] =~ /released.+unixepoch=<(\d+)>/);
+    $self->assert_not_null($released_timestamp);
+
+    my @tracefiles = glob($tracedir."/*_PUT_*");
+    $self->assert_num_equals(1, scalar @tracefiles);
+    my $extractor_timestamp = stat($tracefiles[0])->ctime;
+    $self->assert_not_null($extractor_timestamp);
+
+    my ($reacquired_timestamp) = ($log[1] =~ /reacquired.+unixepoch=<(\d+)>/);
+    $self->assert_not_null($reacquired_timestamp);
+
+    xlog $self, "Assert extractor got called without mailbox lock";
+    $self->assert_num_lt($extractor_timestamp, $released_timestamp);
+    $self->assert_num_lt($reacquired_timestamp, $extractor_timestamp);
+
+    xlog $self, "Assert terms actually got indexed";
+    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1,2], $uids);
+
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+    $self->assert_deep_equals([2], $uids);
 }
 
 1;

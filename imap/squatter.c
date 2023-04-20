@@ -309,6 +309,8 @@ static int index_one(const char *name, int blocking)
         flags |= SEARCH_UPDATE_REINDEX_PARTIALS;
     if (allow_duplicateparts)
         flags |= SEARCH_UPDATE_ALLOW_DUPPARTS;
+    if (verbose)
+        flags |= SEARCH_UPDATE_VERBOSE;
 
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &squat_namespace, NULL);
@@ -396,7 +398,7 @@ again:
         }
     }
 
-    r = search_update_mailbox(rx, mailbox, reindex_minlevel, flags);
+    r = search_update_mailbox(rx, &mailbox, reindex_minlevel, flags);
 
     mailbox_close(&mailbox);
 
