@@ -1451,7 +1451,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             }
         }
 
-        icalcomponent_set_usedefaultalerts(ical, 1);
+        icalcomponent_set_usedefaultalerts(ical, 1, NULL);
 
         /* Inject default alarms */
         struct defaultalarms defalarms = DEFAULTALARMS_INITIALIZER;

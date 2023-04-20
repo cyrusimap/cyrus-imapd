@@ -24,6 +24,8 @@ static void defaultalarms_record_fini(struct defaultalarms_record *rec)
     }
 
     message_guid_set_null(&rec->guid);
+    free(rec->atag);
+    rec->atag = NULL;
 }
 
 EXPORTED void defaultalarms_fini(struct defaultalarms *defalarms)
@@ -67,24 +69,23 @@ static icalcomponent *internalize_alarms(icalcomponent *alarms, int deterministi
             icalcomponent_add_property(valarm, prop);
         }
 
-	if (!icalcomponent_get_uid(valarm)) {
-	    if (deterministic_uid) {
+        if (!icalcomponent_get_uid(valarm)) {
+            if (deterministic_uid) {
                 // that's just necessary for not-yet migrated legacy alarms
-		icalcomponent *myalarm = icalcomponent_clone(valarm);
-		icalcomponent_normalize(myalarm);
-		buf_setcstr(&buf, icalcomponent_as_ical_string(myalarm));
-		icalcomponent_free(myalarm);
+                icalcomponent *myalarm = icalcomponent_clone(valarm);
+                icalcomponent_normalize(myalarm);
+                buf_setcstr(&buf, icalcomponent_as_ical_string(myalarm));
+                icalcomponent_free(myalarm);
 
-		uint8_t digest[SHA1_DIGEST_LENGTH+1];
-		xsha1(buf_base(&buf), buf_len(&buf), digest);
-		digest[SHA1_DIGEST_LENGTH] = '\0';
-		icalcomponent_set_uid(valarm, (const char*) digest);
-	    }
-	    else {
-		buf_setcstr(&buf, makeuuid());
-		icalcomponent_set_uid(valarm, buf_cstring(&buf));
-	    }
-	}
+                struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+                message_guid_generate(&guid, buf_base(&buf), buf_len(&buf));
+                icalcomponent_set_uid(valarm, message_guid_encode(&guid));
+            }
+            else {
+                buf_setcstr(&buf, makeuuid());
+                icalcomponent_set_uid(valarm, buf_cstring(&buf));
+            }
+        }
 
         const char *jmapid = icalcomponent_get_jmapid(valarm);
         if (!jmapid) {
@@ -108,7 +109,42 @@ static icalcomponent *internalize_alarms(icalcomponent *alarms, int deterministi
     return myalarms;
 }
 
+static char *generate_atag(icalcomponent *comp)
+{
+    // requires comp to be normalized already
 
+    struct buf buf = BUF_INITIALIZER;
+    char *atag = NULL;
+
+    icalcomponent *valarm;
+    for (valarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+         valarm;
+         valarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
+
+        if (!icalcomponent_get_x_property_by_name(valarm, "X-JMAP-DEFAULT-ALARM"))
+            continue;
+
+        // UID contributes to the atag
+        const char *uid = icalcomponent_get_uid(valarm);
+        if (uid)
+            buf_appendcstr(&buf, uid);
+
+        // TRIGGER contributes to the atag
+        icalproperty *prop =
+            icalcomponent_get_first_property(valarm, ICAL_TRIGGER_PROPERTY);
+        if (prop)
+            buf_appendcstr(&buf, icalproperty_as_ical_string(prop));
+    }
+
+    if (buf_len(&buf)) {
+        struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+        message_guid_generate(&guid, buf_base(&buf), buf_len(&buf));
+        atag = xstrdup(message_guid_encode_short(&guid, 20));
+    }
+
+    buf_free(&buf);
+    return atag;
+}
 
 static int get_alarms_dl(struct dlist *root, const char *name,
                          struct defaultalarms_record *rec)
@@ -117,20 +153,25 @@ static int get_alarms_dl(struct dlist *root, const char *name,
     if (!dlist_getlist(root, name, &dl))
         return 0;
 
+    const char *guidrep = NULL;
+    if (!dlist_getatom(dl, "GUID", &guidrep))
+        return 0;
+
     const char *content = NULL;
     if (!dlist_getatom(dl, "CONTENT", &content))
         return 0;
 
-    const char *guidrep = NULL;
-    if (!dlist_getatom(dl, "GUID", &guidrep))
+    const char *atag = NULL;
+    if (!dlist_getatom(dl, "ATAG", &atag))
         return 0;
-    message_guid_decode(&rec->guid, guidrep);
 
+    message_guid_decode(&rec->guid, guidrep);
     if (*content) {
         rec->ical = icalparser_parse_string(content);
         if (rec->ical == NULL)
             return 0;
     }
+    rec->atag = xstrdupnull(atag);
 
     return 1;
 }
@@ -185,6 +226,10 @@ static int load_legacy_alarms(const char *mboxname,
         }
         else {
             message_guid_generate(&rec->guid, content, strlen(content));
+        }
+
+        if (rec->ical) {
+            rec->atag = generate_atag(rec->ical);
         }
     }
 
@@ -241,25 +286,30 @@ EXPORTED int defaultalarms_load(const char *mboxname,
     return r;
 }
 
-static void set_alarms_dl(struct dlist *root, const char *name,
-                          icalcomponent *alarms, struct buf *buf)
+static void set_alarms_dl(struct dlist *root, const char *name, icalcomponent *alarms)
 {
     struct message_guid guid = MESSAGE_GUID_INITIALIZER;
-    buf_reset(buf);
+    struct buf content = BUF_INITIALIZER;
+    char *atag = NULL;
 
     struct dlist *dl = dlist_newkvlist(root, name);
 
     if (alarms) {
         icalcomponent *myalarms = internalize_alarms(alarms, 0);
         if (myalarms) {
-            buf_setcstr(buf, icalcomponent_as_ical_string(myalarms));
-            message_guid_generate(&guid, buf_base(buf), buf_len(buf));
+            buf_setcstr(&content, icalcomponent_as_ical_string(myalarms));
+            message_guid_generate(&guid, buf_base(&content), buf_len(&content));
+            atag = generate_atag(myalarms);
             icalcomponent_free(myalarms);
         }
     }
 
-    dlist_setatom(dl, "CONTENT", buf_cstring(buf));
+    dlist_setatom(dl, "CONTENT", buf_cstring(&content));
     dlist_setatom(dl, "GUID", message_guid_encode(&guid));
+    dlist_setatom(dl, "ATAG", atag);
+
+    buf_free(&content);
+    free(atag);
 }
 
 EXPORTED int defaultalarms_save(struct mailbox *mailbox,
@@ -268,12 +318,10 @@ EXPORTED int defaultalarms_save(struct mailbox *mailbox,
                                 icalcomponent *with_date)
 {
     struct dlist *root = dlist_newkvlist(NULL, "DEFAULTALARMS");
+    set_alarms_dl(root, "WITH_TIME", with_time);
+    set_alarms_dl(root, "WITH_DATE", with_date);
+
     struct buf buf = BUF_INITIALIZER;
-
-    set_alarms_dl(root, "WITH_TIME", with_time, &buf);
-    set_alarms_dl(root, "WITH_DATE", with_date, &buf);
-
-    buf_reset(&buf);
     dlist_printbuf(root, 1, &buf);
 
     static const char *annot = JMAP_ANNOT_DEFAULTALERTS;
@@ -532,8 +580,7 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
     strarray_fini(&related_uids);
 }
 
-EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
-                                   icalcomponent *ical)
+static void insert_alarms(struct defaultalarms *defalarms, icalcomponent *ical, int set_atag)
 {
     if (!defalarms || (!defalarms->with_time.ical && !defalarms->with_date.ical))
         return;
@@ -545,8 +592,11 @@ EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
 
     for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
 
-        if (icalcomponent_get_usedefaultalerts(comp) <= 0)
+        if (!icalcomponent_get_usedefaultalerts(comp))
             continue;
+
+        // Remove any atag that was set before
+        icalcomponent_set_usedefaultalerts(comp, 1, NULL);
 
         // Determine which default alarms to add
         int is_date;
@@ -560,7 +610,121 @@ EXPORTED void defaultalarms_insert(const struct defaultalarms *defalarms,
         }
         else is_date = icalcomponent_get_dtstart(comp).is_date;
 
-        merge_alarms(comp, is_date ?
-                defalarms->with_date.ical : defalarms->with_time.ical);
+        struct defaultalarms_record *rec = is_date ?
+            &defalarms->with_date : &defalarms->with_time;
+
+        if (set_atag)
+            icalcomponent_set_usedefaultalerts(comp, 1, rec->atag);
+
+        merge_alarms(comp, rec->ical);
     }
+}
+
+EXPORTED void defaultalarms_insert(struct defaultalarms *defalarms, icalcomponent *ical)
+{
+    insert_alarms(defalarms, ical, 0);
+}
+
+EXPORTED void defaultalarms_caldav_get(struct defaultalarms *defalarms,
+                                       icalcomponent *ical)
+{
+    insert_alarms(defalarms, ical, 1);
+}
+
+
+EXPORTED void defaultalarms_caldav_put(struct defaultalarms *defalarms,
+                                       icalcomponent *ical, int is_update)
+{
+    // Check for sane input
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    if (!comp)
+        return;
+
+    // Do nothing if event doesn't use default alarms
+    if (!icalcomponent_get_usedefaultalerts(ical))
+        return;
+
+    // Insert default alarms in new event
+    if (!is_update) {
+        insert_alarms(defalarms, ical, 0);
+        return;
+    }
+
+    // Handle update
+
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    int has_anyalarm = 0;
+    int has_useralarm = 0;
+
+    for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        icalcomponent *valarm;
+        for (valarm = icalcomponent_get_first_component(comp,
+                    ICAL_VALARM_COMPONENT);
+             valarm;
+             valarm = icalcomponent_get_next_component(comp,
+                 ICAL_VALARM_COMPONENT)) {
+
+            has_anyalarm = 1;
+
+            if (icalcomponent_get_first_property(valarm, ICAL_RELATEDTO_PROPERTY) ||
+                icalcomponent_get_x_property_by_name(valarm, "X-APPLE-DEFAULT-ALARM"))
+                continue;
+
+            if (icalcomponent_get_x_property_by_name(valarm, "X-JMAP-DEFAULT-ALARM"))
+                continue;
+
+            has_useralarm = 1;
+        }
+    }
+
+    // Removing all alarms or adding a user alarm disables default alarms
+    if (!has_anyalarm || has_useralarm) {
+        icalcomponent_set_usedefaultalerts(ical, 0, NULL);
+        return;
+    }
+
+    // Validate if the atag we set on this event still matches
+    // the JMAP default alarms in the event. If it doesn't, then
+    // we the client changed one or more default alarms.
+    int invalid_atag = 0;
+
+    for (comp = icalcomponent_get_first_component(ical, kind);
+         comp && !invalid_atag;
+         comp = icalcomponent_get_next_component(ical, kind)) {
+
+        // Look up the atag parameter for this component
+
+        icalproperty *prop =
+            icalcomponent_get_x_property_by_name(comp, "X-JMAP-USEDEFAULTALERTS");
+        if (!prop) continue;
+
+        const char *atag = NULL;
+        icalparameter *param;
+        for (param = icalproperty_get_first_parameter(prop, ICAL_ANY_PARAMETER);
+             param;
+             param = icalproperty_get_next_parameter(prop, ICAL_ANY_PARAMETER)) {
+
+            if (!strcasecmpsafe(icalparameter_get_xname(param), "X-JMAP-ATAG")) {
+                atag = icalparameter_get_xvalue(param);
+                break;
+            }
+        }
+
+        if (atag) {
+            icalcomponent *mycomp = icalcomponent_clone(comp);
+            icalcomponent_normalize_x(mycomp);
+            char *myatag = generate_atag(mycomp);
+            invalid_atag = !!strcmpsafe(myatag, atag);
+            icalcomponent_free(mycomp);
+            free(myatag);
+        }
+    }
+
+    if (invalid_atag) {
+        icalcomponent_set_usedefaultalerts(ical, 0, NULL);
+        return;
+    }
+
+    // Keep using default alarms
+    insert_alarms(defalarms, ical, 0);
 }

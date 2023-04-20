@@ -2464,7 +2464,7 @@ static void personalize_and_add_defaultalarms(struct mailbox *mailbox,
             defaultalarms_load(mailbox_name(mailbox), httpd_userid, defalarms);
         }
 
-        defaultalarms_insert(defalarms, ical);
+        defaultalarms_caldav_get(defalarms, ical);
 
         /* Pass default alarms to caller or free them */
         if (defalarms) {
@@ -3743,49 +3743,6 @@ static void strip_past_override(uint64_t recurid, void *data, void *rock)
     }
 }
 
-static int has_nondefault_alarms(icalcomponent *comp, int *has_alarmsp)
-{
-    icalcomponent *ical = NULL;
-    icalcomponent_kind kind = ICAL_NO_COMPONENT;
-    *has_alarmsp = 0;
-
-    if (icalcomponent_isa(comp) == ICAL_VCALENDAR_COMPONENT) {
-        ical = comp;
-        comp = icalcomponent_get_first_real_component(ical);
-        kind = icalcomponent_isa(comp);
-    }
-    do {
-        icalcomponent *valarm;
-        for (valarm = icalcomponent_get_first_component(comp,
-                    ICAL_VALARM_COMPONENT);
-             valarm;
-             valarm = icalcomponent_get_next_component(comp,
-                 ICAL_VALARM_COMPONENT)) {
-
-            *has_alarmsp = 1;
-
-            // Ignore snooze alarms
-            if (icalcomponent_get_first_property(valarm, ICAL_RELATEDTO_PROPERTY))
-                continue;
-
-            // Ignore JMAP default alarms
-            if (icalcomponent_get_x_property_by_name(valarm, "X-JMAP-DEFAULT-ALARM"))
-                continue;
-
-            // Ignore Apple default alarms
-            if (icalcomponent_get_x_property_by_name(valarm, "X-APPLE-DEFAULT-ALARM"))
-                continue;
-
-            // Everything else is non-default alarm
-            return 1;
-        }
-
-        if (ical) comp = icalcomponent_get_next_component(ical, kind);
-    } while (ical && comp);
-
-    return 0;
-}
-
 /* Perform a PUT request
  *
  * preconditions:
@@ -4157,35 +4114,21 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             // always force the client to re-read the event
             remove_etag = 1;
 
-            if (cdata->dav.imap_uid) {
-                int has_alarms = 0;
-                int has_nondefault = has_nondefault_alarms(ical, &has_alarms);
-
-                if (has_nondefault || !has_alarms) {
-                    // Setting a non-default alarm on an existing
-                    // event disables default alarms.
-                    // Removing all alarms on an existing event
-                    // disables default alarms.
-                    icalcomponent_set_usedefaultalerts(ical, 0);
-                    use_defaultalerts = 0;
-                }
-            }
-        }
-
-        if (use_defaultalerts) {
-            // Update event alarms with calendar default alarms
             struct defaultalarms defalarms = DEFAULTALARMS_INITIALIZER;
             int r = defaultalarms_load(mailbox_name(mailbox),
                     httpd_userid, &defalarms);
             if (!r) {
-                defaultalarms_insert(&defalarms, ical);
+                defaultalarms_caldav_put(&defalarms, ical, cdata->dav.imap_uid);
                 defaultalarms_fini(&defalarms);
             }
             else {
+                // make sure we remove the defaultalarm atag
+                icalcomponent_set_usedefaultalerts(ical, 1, NULL);
                 xsyslog(LOG_ERR, "could not load default alarms. "
                         "Storing calendar resource as-is",
                         "err=<%s>", cyrusdb_strerror(r));
             }
+
         }
     }
 

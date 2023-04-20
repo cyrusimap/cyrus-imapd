@@ -914,7 +914,7 @@ EXPORTED int icalcomponent_get_usedefaultalerts(icalcomponent *comp)
     return use_defaultalerts;
 }
 
-EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use)
+EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use, const char *atag)
 {
     icalcomponent *ical = NULL;
     icalcomponent_kind kind = ICAL_NO_COMPONENT;
@@ -943,6 +943,7 @@ EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use)
         icalproperty *xprop = icalproperty_new(ICAL_X_PROPERTY);
         icalproperty_set_x_name(xprop, "X-JMAP-USEDEFAULTALERTS");
         icalproperty_set_value(xprop, icalvalue_new_boolean(use));
+        if (atag) icalproperty_set_xparam(xprop, "X-JMAP-ATAG", atag, 0);
         icalcomponent_add_property(comp, xprop);
 
         if (ical) comp = icalcomponent_get_next_component(ical, kind);

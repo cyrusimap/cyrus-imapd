@@ -49,11 +49,15 @@
 #include "dav_util.h"
 #include "mailbox.h"
 
-#define DEFAULTALARMS_INITIALIZER { {0},{0} }
+#define DEFAULTALARMS_INITIALIZER { \
+    {NULL, MESSAGE_GUID_INITIALIZER, NULL}, \
+    {NULL, MESSAGE_GUID_INITIALIZER, NULL}  \
+}
 
 struct defaultalarms_record {
     icalcomponent *ical;
     struct message_guid guid;
+    char *atag; // a ETag-like tag to detect CalDAV client changes
 };
 
 struct defaultalarms {
@@ -70,10 +74,16 @@ extern int defaultalarms_save(struct mailbox *mbox, const char *userid,
 
 extern void defaultalarms_fini(struct defaultalarms *defalarms);
 
-extern void defaultalarms_insert(const struct defaultalarms *defalarms,
+extern void defaultalarms_insert(struct defaultalarms *defalarms,
                                  icalcomponent *ical);
 
 extern int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
                                  int *did_migratep);
+
+extern void defaultalarms_caldav_get(struct defaultalarms *defalarms,
+                                     icalcomponent *ical);
+
+extern void defaultalarms_caldav_put(struct defaultalarms *defalarms,
+                                     icalcomponent *ical, int is_update);
 
 #endif /* DEFAULTALARMS_H */

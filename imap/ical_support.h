@@ -115,7 +115,7 @@ extern void icalcomponent_add_personal_data(icalcomponent *ical, struct buf *use
 extern void icalcomponent_add_personal_data_from_dl(icalcomponent *ical, struct dlist *dl);
 
 extern int icalcomponent_get_usedefaultalerts(icalcomponent *comp);
-extern void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use);
+extern void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use, const char *atag);
 
 
 /* If range is a NULL period, callback() is executed for ALL occurrences,
