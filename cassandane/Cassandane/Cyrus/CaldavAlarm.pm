@@ -2723,7 +2723,14 @@ EOF
 
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $nextweekdt->epoch() + 60 );
 
-    $self->assert_alarms({summary => 'EV2', userId => 'foo', alarmTime => $nextweek, action => 'display', start => $nextweek});
+    # need to version-gate features that aren't in 3.1...
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min >= 9)) {
+        $self->assert_alarms({summary => 'EV2', userId => 'foo', calendarOwner => 'cassandane', alarmTime => $nextweek, action => 'display', start => $nextweek});
+    }
+    else {
+        $self->assert_alarms({summary => 'EV2', userId => 'foo', alarmTime => $nextweek, action => 'display', start => $nextweek});
+    }
 }
 
 sub test_simple_multiuser_sametime
