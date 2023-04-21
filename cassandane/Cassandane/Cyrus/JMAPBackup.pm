@@ -880,7 +880,7 @@ sub test_restore_calendars_all_dryrun
     $self->assert_null($imip);
 }
 
-sub test_restore_calendars_batch_size_bug_slow
+sub test_restore_calendars_batch_size_bug
     :min_version_3_7 :needs_component_jmap
 {
     my ($self) = @_;
@@ -2264,7 +2264,7 @@ sub test_restore_notes_all_dryrun
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
 }
 
-sub test_restore_mail_twice_slow
+sub test_restore_mail_twice
     :min_version_3_3 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
