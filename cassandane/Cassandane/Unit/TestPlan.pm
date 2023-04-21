@@ -650,7 +650,12 @@ sub schedule
         my ($neg, $type, $path, $test) = _parse_test_spec($name);
 
         # slow test explicitly requested by name, so turn off the filter
-        if (defined $test and ! ref $test and $test =~ m/_slow$/ and ! $neg) {
+        if (defined $test
+            and ! ref $test
+            and $test =~ m/_slow$/
+            and ! $neg
+            and $self->{skip_slow})
+        {
             xlog "$name was explicitly requested. Enabling slow tests!";
             $self->{skip_slow} = 0;
         }
