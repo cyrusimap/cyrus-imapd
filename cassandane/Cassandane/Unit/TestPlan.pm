@@ -500,6 +500,7 @@ sub new
         log_directory => delete $opts{log_directory},
         maxworkers => delete $opts{maxworkers} || 1,
         skip_slow => delete $opts{skip_slow} // 1,
+        slow_only => delete $opts{slow_only} // 0,
     };
     die "Unknown options: " . join(' ', keys %opts)
         if scalar %opts;
@@ -658,6 +659,17 @@ sub schedule
         {
             xlog "$name was explicitly requested. Enabling slow tests!";
             $self->{skip_slow} = 0;
+        }
+
+        # non-slow test explicitly requested by name, so turn off slow-only
+        if (defined $test
+            and ! ref $test
+            and $test !~ m/_slow$/
+            and ! $neg
+            and $self->{slow_only})
+        {
+            xlog "$name was explicitly requested. Enabling regular tests!";
+            $self->{slow_only} = 0;
         }
 
         if ($type eq 'd')

@@ -64,6 +64,7 @@ my $do_list = 0;
 # The default really should be --no-keep-going like make
 my $keep_going = 1;
 my $skip_slow = 1;
+my $slow_only = 0;
 my $log_directory;
 my @names;
 
@@ -146,6 +147,7 @@ my %runners =
         my @filters = qw(x skip_version skip_missing_features
                          enable_wanted_properties);
         push @filters, 'skip_slow' if $plan->{skip_slow};
+        push @filters, 'slow_only' if $plan->{slow_only};
         $runner->filter(@filters);
         return $runner->do_run($plan, 0);
     },
@@ -157,6 +159,7 @@ my %runners =
         my @filters = qw(x skip_version skip_missing_features
                          enable_wanted_properties);
         push @filters, 'skip_slow' if $plan->{skip_slow};
+        push @filters, 'slow_only' if $plan->{slow_only};
         $runner->filter(@filters);
         return $runner->do_run($plan, 0);
     },
@@ -168,6 +171,7 @@ my %runners =
         my @filters = qw(x skip_version skip_missing_features
                          enable_wanted_properties);
         push @filters, 'skip_slow' if $plan->{skip_slow};
+        push @filters, 'slow_only' if $plan->{slow_only};
         $runner->filter(@filters);
         return $runner->do_run($plan, 0);
     },
@@ -198,6 +202,7 @@ eval
         my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
         my @filters = qw(x skip_version skip_missing_features);
         push @filters, 'skip_slow' if $plan->{skip_slow};
+        push @filters, 'slow_only' if $plan->{slow_only};
         $runner->filter(@filters);
         $runner->start($plan);
         return $runner->all_tests_passed();
@@ -303,6 +308,11 @@ while (my $a = shift)
     {
         $skip_slow = 0;
     }
+    elsif ($a eq '--slow-only')
+    {
+        $skip_slow = 0;
+        $slow_only = 1;
+    }
     elsif ($a eq '--rerun')
     {
         $want_rerun = 1;
@@ -349,6 +359,7 @@ my $plan = Cassandane::Unit::TestPlan->new(
         maxworkers => $cassini->val('cassandane', 'maxworkers') || undef,
         log_directory => $log_directory,
         skip_slow => $skip_slow,
+        slow_only => $slow_only,
     );
 
 if ($do_list)
