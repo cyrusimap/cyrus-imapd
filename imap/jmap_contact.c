@@ -110,11 +110,6 @@ static int _json_to_card(struct jmap_req *req,
                          ptrarray_t *blobs,
                          jmap_contact_errors_t *errors);
 
-static json_t *jmap_contact_from_vcard(const char *userid,
-                                       struct vparse_card *card,
-                                       struct mailbox *mailbox,
-                                       struct index_record *record);
-
 static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
 #define JMAPCACHE_CONTACTVERSION 1
@@ -1624,7 +1619,8 @@ static int has_addressbooks(jmap_req_t *req)
     return r == CYRUSDB_DONE;
 }
 
-static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
+static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
+                         const jmap_property_t *props)
 {
     if (!has_addressbooks(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
@@ -1646,9 +1642,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
 
     /* Parse request */
     const char *addressbookId = NULL;
-    jmap_get_parse(req, &parser,
-                   kind == CARDDAV_KIND_GROUP ? group_props : contact_props,
-                   /* allow_null_ids */ 1,
+    jmap_get_parse(req, &parser, props, /* allow_null_ids */ 1,
                    &_contact_getargs_parse, &addressbookId, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -1716,7 +1710,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
 
 static int jmap_contactgroup_get(struct jmap_req *req)
 {
-    return _contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP);
+    return _contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP, group_props);
 }
 
 static const char *_json_array_get_string(const json_t *obj, size_t index)
@@ -3131,7 +3125,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 
 static int jmap_contact_get(struct jmap_req *req)
 {
-    return _contacts_get(req, &getcontacts_cb, CARDDAV_KIND_CONTACT);
+    return _contacts_get(req, &getcontacts_cb, CARDDAV_KIND_CONTACT, contact_props);
 }
 
 static int jmap_contact_changes(struct jmap_req *req)
