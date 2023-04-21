@@ -78,7 +78,9 @@
 static int jmap_addressbook_get(struct jmap_req *req);
 static int jmap_addressbook_changes(struct jmap_req *req);
 static int jmap_addressbook_set(struct jmap_req *req);
+static int jmap_card_get(struct jmap_req *req);
 static int jmap_card_changes(struct jmap_req *req);
+static int jmap_cardgroup_get(struct jmap_req *req);
 static int jmap_cardgroup_changes(struct jmap_req *req);
 
 static int jmap_contactgroup_get(struct jmap_req *req);
@@ -134,9 +136,21 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
+        "Card/get",
+        JMAP_URN_CONTACTS,
+        &jmap_card_get,
+        JMAP_NEED_CSTATE
+    },
+    {
         "Card/changes",
         JMAP_URN_CONTACTS,
         &jmap_card_changes,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CardGroup/get",
+        JMAP_URN_CONTACTS,
+        &jmap_cardgroup_get,
         JMAP_NEED_CSTATE
     },
     {
@@ -5515,9 +5529,1360 @@ done:
     return 0;
 }
 
+/*****************************************************************************
+ * JMAP Card[Group] API
+ ****************************************************************************/
+
+static const jmap_property_t card_props[] = {
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "addressbookId",
+        NULL,
+        0
+    },
+    {
+        "@type",
+        NULL,
+        0
+    },
+    {
+        "@version",
+        NULL,
+        0
+    },
+    {
+        "created",
+        NULL,
+        0
+    },
+    {
+        "kind",
+        NULL,
+        0
+    },
+    {
+        "locale",
+        NULL,
+        0
+    },
+    {
+        "members",
+        NULL,
+        0
+    },
+    {
+        "prodId",
+        NULL,
+        0
+    },
+    {
+        "relatedTo",
+        NULL,
+        0
+    },
+    {
+        "uid",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "updated",
+        NULL,
+        0
+    },
+    {
+        "fullName",
+        NULL,
+        0
+    },
+    {
+        "name",
+        NULL,
+        0
+    },
+    {
+        "nickNames",
+        NULL,
+        0
+    },
+    {
+        "organizations",
+        NULL,
+        0
+    },
+    {
+        "speakToAs",
+        NULL,
+        0
+    },
+    {
+        "titles",
+        NULL,
+        0
+    },
+    {
+        "department",
+        NULL,
+        0
+    },
+    {
+        "emails",
+        NULL,
+        0
+    },
+    {
+        "onlineServices",
+        NULL,
+        0
+    },
+    {
+        "phones",
+        NULL,
+        0
+    },
+    {
+        "preferredContactChannels",
+        NULL,
+        0
+    },
+    {
+        "preferredLanguages",
+        NULL,
+        0
+    },
+    {
+        "calendars",
+        NULL,
+        0
+    },
+    {
+        "schedulingAddresses",
+        NULL,
+        0
+    },
+    {
+        "addresses",
+        NULL,
+        0
+    },
+    {
+        "cryptoKeys",
+        NULL,
+        0
+    },
+    {
+        "directories",
+        NULL,
+        0
+    },
+    {
+        "links",
+        NULL,
+        0
+    },
+    {
+        "media",
+        NULL,
+        0
+    },
+    {
+        "localizations",
+        NULL,
+        0
+    },
+    {
+        "anniversaries",
+        NULL,
+        0
+    },
+    {
+        "keywords",
+        NULL,
+        0
+    },
+    {
+        "notes",
+        NULL,
+        0
+    },
+    {
+        "personalInfo",
+        NULL,
+        0
+    },
+    {
+        "vCardProps",
+        NULL,
+        0
+    },
+
+    /* FM extensions */
+    {
+        "x-href",
+        JMAP_CONTACTS_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    }, // AJAXUI only
+    {
+        "x-hasPhoto",
+        JMAP_CONTACTS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    }, // AJAXUI only
+    {
+        "importance",
+        JMAP_CONTACTS_EXTENSION,
+        0
+    },  // JMAPUI only
+    {
+        "blobId",
+        JMAP_CONTACTS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "size",
+        JMAP_CONTACTS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    },
+
+    { NULL, NULL, 0 }
+};
+
+struct comp_kind {
+    const char *name;
+    int idx;
+};
+
+/* vCard N fields: Family; Given; Middle; Prefix; Suffix
+ *
+ * Per draft-ietf-calext-jscontact-vcard, Section 2.6.5:
+ * Name components SHOULD be ordered such that their values
+ * joined by whitespace produce a valid full name of this entity.
+*/
+static const struct comp_kind n_comp_kinds[] = {
+    { "prefix",  3 },
+    { "given",   1 },
+    { "middle",  2 },
+    { "surname", 0 },
+    { "suffix",  4 },
+    { NULL,     -1 }
+};
+
+/* vCard ADR fields:
+   PO Box, Extension, Street, Locality, Region, Postal Code, Country Name */
+static const struct comp_kind adr_comp_kinds[] = {
+    { "locality", 3 },
+    { "region",   4 },
+    { "postcode", 5 },
+    { "country",  6 },
+    { NULL,      -1 }
+};
+
+static const struct comp_kind street_comp_kinds[] = {
+    { "postOfficeBox", 0 },
+    { "name",          2 },
+    { "extension",     1 },
+    { NULL,           -1 }
+};
+
+static json_t *_partialdate_from_date(struct vparse_entry *prop)
+{
+    json_t *date = json_pack("{s:s}", "@type", "PartialDate");
+    unsigned y, m, d;
+
+    if (_parse_date(prop->v.value, &y, &m, &d, 0) ||
+        y < 1604 || m > 12 || d > 31) {
+        y = m = d = 0;
+    }
+    else {
+        const struct vparse_param *param;
+        for (param = prop->params; param; param = param->next) {
+            if (!strcasecmp(param->name, "x-apple-omit-year"))
+                /* XXX compare value with actual year? */
+                y = 0;
+            if (!strcasecmp(param->name, "x-fm-no-month"))
+                m = 0;
+            if (!strcasecmp(param->name, "x-fm-no-day"))
+                d = 0;
+        }
+
+        /* sigh, magic year 1604 has been seen without X-APPLE-OMIT-YEAR, making
+         * me wonder what the bloody point is */
+        if (y == 1604)
+            y = 0;
+    }
+
+    if (y) json_object_set_new(date, "year",  json_integer(y));
+    if (m) json_object_set_new(date, "month", json_integer(m));
+    if (d) json_object_set_new(date, "day",   json_integer(d));
+
+    return date;
+}
+
+enum vcard_version_t {
+    VCARD_VERSION_2_1 = 0,
+    VCARD_VERSION_3_0,
+    VCARD_VERSION_4_0,
+};
+
+#define VCARD_PARAM_ALT           (1<<0)
+#define VCARD_PARAM_AUTHOR        (1<<1)
+#define VCARD_PARAM_CALSCALE      (1<<2)
+#define VCARD_PARAM_CC            (1<<3)
+#define VCARD_PARAM_CREATED       (1<<4)
+#define VCARD_PARAM_GEO           (1<<5)
+#define VCARD_PARAM_INDEX         (1<<6)
+#define VCARD_PARAM_LANGUAGE      (1<<7)
+#define VCARD_PARAM_LABEL         (1<<8)
+#define VCARD_PARAM_LEVEL         (1<<9)
+#define VCARD_PARAM_MEDIATYPE     (1<<10)
+#define VCARD_PARAM_PREF          (1<<11)
+#define VCARD_PARAM_RANKS         (1<<12)
+#define VCARD_PARAM_SERVICE_TYPE  (1<<13)
+#define VCARD_PARAM_SORT_AS       (1<<14)
+#define VCARD_PARAM_TYPE          (1<<15)
+#define VCARD_PARAM_TYPE_ADR      (1<<16)
+#define VCARD_PARAM_TYPE_RELATED  (1<<17)
+#define VCARD_PARAM_TYPE_TEL      (1<<18)
+#define VCARD_PARAM_TZ            (1<<19)
+
+static void _add_vcard_params(struct vparse_entry *prop, unsigned param_flags,
+                              const char *label, const char *cc, json_t *obj)
+{
+    const struct vparse_param *param;
+
+    for (param = prop->params; param; param = param->next) {
+
+        ucase(param->name);
+
+        if ((param_flags && VCARD_PARAM_AUTHOR) &&
+                 !strcmp(param->name, "AUTHOR")) {
+            json_t *author =
+                json_object_get_vanew(obj, "author", "{s:s}", "@type", "Author");
+
+            json_object_set_new(author, "name", jmap_utf8string(param->value));
+        }
+        else if ((param_flags && VCARD_PARAM_AUTHOR) &&
+                 !strcmp(param->name, "AUTHOR-NAME")) {
+            json_t *author =
+                json_object_get_vanew(obj, "author", "{s:s}", "@type", "Author");
+
+            json_object_set_new(author, "uri", json_string(param->value));
+        }
+        else if ((param_flags && VCARD_PARAM_CALSCALE) &&
+                 !strcmp(param->name, "CALSCALE")) {
+            json_object_set_new(obj, "calendarScale",
+                                json_string(lcase(param->value)));
+        }
+        else if ((param_flags && VCARD_PARAM_CC) &&
+            !strcmp(param->name, "CC")) {
+            cc = lcase(param->value);
+        }
+        else if ((param_flags && VCARD_PARAM_CREATED) &&
+                 !strcmp(param->name, "CREATED")) {
+            char datestr[ISO8601_DATETIME_MAX];
+            time_t t;
+
+            time_from_iso8601(param->value, &t);
+            time_to_iso8601(t, datestr, sizeof(datestr), 1);
+            json_object_set_new(obj, "created", json_string(datestr));
+        }
+        else if ((param_flags && VCARD_PARAM_MEDIATYPE) &&
+                 !strcmp(param->name, "ENCODING")) {
+            /* v3 ENCODING is handled by the properties that use it */
+        }
+        else if ((param_flags && VCARD_PARAM_GEO) &&
+                 !strcmp(param->name, "GEO")) {
+            json_object_set_new(obj, "coordinates", json_string(param->value));
+        }
+        else if ((param_flags && VCARD_PARAM_INDEX) &&
+                 !strcmp(param->name, "INDEX")) {
+            json_object_set_new(obj, "listAs", json_integer(atoi(param->value)));
+        }
+        else if ((param_flags && VCARD_PARAM_LABEL) &&
+                 !strcmp(param->name, "LABEL")) {
+            label = param->value;
+        }
+        else if ((param_flags && VCARD_PARAM_LEVEL) &&
+                 !strcmp(param->name, "LEVEL")) {
+            const char *level;
+
+            if (!strcasecmp(param->value, "low") ||
+                !strcasecmp(param->value, "beginner")) {
+                level = "low";
+            }
+            else if (!strcasecmp(param->value, "medium") ||
+                     !strcasecmp(param->value, "average")) {
+                level = "medium";
+            }
+            else if (!strcasecmp(param->value, "high") ||
+                     !strcasecmp(param->value, "expert")) {
+                level = "high";
+            }
+            else {
+                goto unmapped;
+            }
+
+            json_object_set_new(obj, "level", json_string(level));
+        }
+        else if ((param_flags && VCARD_PARAM_MEDIATYPE) &&
+                 !strcmp(param->name, "MEDIATYPE")) {
+            json_object_set_new(obj, "mediaType",
+                                json_string(lcase(param->value)));
+        }
+        else if ((param_flags && VCARD_PARAM_PREF) &&
+                 !strcmp(param->name, "PREF")) {
+            json_object_set_new(obj, "pref", json_integer(atoi(param->value)));
+        }
+        else if (!strcmp(param->name, "PROP-ID")) {
+            /* PROP-ID should be handled by the properties that use it */
+        }
+        else if ((param_flags && VCARD_PARAM_RANKS) &&
+                 !strcmp(param->name, "RANKS")) {
+            /* RANKS should be handled by the properties that use it */
+        }
+        else if ((param_flags && VCARD_PARAM_SERVICE_TYPE) &&
+                 !strcmp(param->name, "SERVICE-TYPE")) {
+            json_object_set_new(obj, "service", json_string(param->value));
+        }
+        else if ((param_flags && VCARD_PARAM_SORT_AS) &&
+                 !strcmp(param->name, "SORT_AS")) {
+            /* SORT-AS should be handled by the properties that use it */
+        }
+        else if (!strcmp(param->name, "TYPE")) {
+            if ((param_flags & VCARD_PARAM_PREF) &&
+                !strcasecmp(param->value, "pref")) {
+                json_object_set_new(obj, "pref", json_integer(1));
+            }
+            else if (param_flags &
+                     (VCARD_PARAM_TYPE         | VCARD_PARAM_TYPE_ADR |
+                      VCARD_PARAM_TYPE_RELATED | VCARD_PARAM_TYPE_TEL)) {
+                const char *type = NULL, *val = NULL;
+
+                if (param_flags & VCARD_PARAM_TYPE) {
+                    if (!strcasecmp(param->value, "work")) {
+                        type = "contexts";
+                    }
+                    else if (!strcasecmp(param->value, "home")) {
+                        type = "contexts";
+                        val = "private";
+                    }
+                }
+                else if ((param_flags & VCARD_PARAM_TYPE_ADR) &&
+                         (!strcasecmp(param->value, "billing") ||
+                          !strcasecmp(param->value, "delivery"))) {
+                    type = "contexts";
+                }
+                else if ((param_flags & VCARD_PARAM_TYPE_RELATED) &&
+                         (!strcasecmp(param->value, "contact")      ||
+                          !strcasecmp(param->value, "acquaintance") ||
+                          !strcasecmp(param->value, "friend")       ||
+                          !strcasecmp(param->value, "met")          ||
+                          !strcasecmp(param->value, "co-worker")    ||
+                          !strcasecmp(param->value, "colleague")    ||
+                          !strcasecmp(param->value, "co-resident")  ||
+                          !strcasecmp(param->value, "neighbor")     ||
+                          !strcasecmp(param->value, "child")        ||
+                          !strcasecmp(param->value, "parent")       ||
+                          !strcasecmp(param->value, "sibling")      ||
+                          !strcasecmp(param->value, "spouse")       ||
+                          !strcasecmp(param->value, "kin")          ||
+                          !strcasecmp(param->value, "muse")         ||
+                          !strcasecmp(param->value, "crush")        ||
+                          !strcasecmp(param->value, "date")         ||
+                          !strcasecmp(param->value, "sweetheart")   ||
+                          !strcasecmp(param->value, "me")           ||
+                          !strcasecmp(param->value, "agent")        ||
+                          !strcasecmp(param->value, "emergency"))) {
+                    type = "relation";
+                }
+                else if ((param_flags & VCARD_PARAM_TYPE_TEL) &&
+                         (!strcasecmp(param->value, "text")      ||
+                          !strcasecmp(param->value, "voice")     ||
+                          !strcasecmp(param->value, "fax")       ||
+                          !strcasecmp(param->value, "cell")      ||
+                          !strcasecmp(param->value, "video")     ||
+                          !strcasecmp(param->value, "pager")     ||
+                          !strcasecmp(param->value, "textphone") ||
+                          !strcasecmp(param->value, "main-number"))) {
+                    type = "features";
+                }
+
+                if (type) {
+                    json_t *jprop = json_object_get_vanew(obj, type, "{}");
+
+                    json_object_set_new(jprop,
+                                        val ? val : lcase(param->value),
+                                        json_true());
+                }
+                else if (param_flags & VCARD_PARAM_MEDIATYPE) {
+                    /* v3 TYPE as MEDIATYPE handled by the props that use it */
+                }
+                else {
+                    /* Unknown TYPE */
+                    goto unmapped;
+                }
+            }
+            else {
+                /* Unexpected TYPE */
+                goto unmapped;
+            }
+        }
+        else if ((param_flags && VCARD_PARAM_TZ) &&
+                 !strcmp(param->name, "TZ")) {
+            /* XXX  TODO: Check for URI or UTC-OFFSET */
+            json_object_set_new(obj, "timeZone", json_string(param->value));
+        }
+        else if (!strcmp(param->name, "VALUE")) {
+            /* VALUE should be handled by the properties that use it */
+        }
+        else {
+ unmapped:
+            /* Unknown/unexpected parameter [value]*/
+            json_t *params = json_object_get_vanew(obj, "vCardParams", "{}");
+
+            json_object_set_new(params, lcase(param->name),
+                                jmap_utf8string(param->value));
+        }
+    }
+
+    if (cc) json_object_set_new(obj, "countryCode", json_string(cc));
+    if (label) json_object_set_new(obj, "label", jmap_utf8string(label));
+}
+
+static const char *_prop_id(struct vparse_entry *prop)
+{
+    static struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+    struct vparse_param *param = vparse_get_param(prop, "PROP-ID");
+    const char *value;
+    char *freeme = NULL;
+
+    /* Use PROP-ID if we have it */
+    if (param && param->value && *param->value) return param->value;
+
+    /* Otherwise, use hash of property value */
+    if (prop->multivaluesep) {
+        char sep[2] = { prop->multivaluesep, '\0' };
+
+        value = freeme = strarray_join(prop->v.values, sep);
+    }
+    else {
+        value = prop->v.value;
+    }
+
+    message_guid_generate(&guid, value, strlen(value));
+
+    free(freeme);
+
+    return message_guid_encode(&guid);
+}
+
+static const char *_value_to_data_uri(struct vparse_entry *prop,
+                                      const char *type, struct buf *buf)
+{
+    const struct vparse_param *param;
+
+    buf_setcstr(buf, "data:");
+
+    param = vparse_get_param(prop, "TYPE");
+    if (param && param->value) {
+        buf_printf(buf, "%s/%s", type, lcase(param->value));
+    }
+
+    param = vparse_get_param(prop, "ENCODING");
+    if (param && !strcasecmpsafe(param->value, "B")) {
+        buf_appendcstr(buf, ";base64");
+    }
+
+    buf_printf(buf, ",%s", prop->v.value);
+
+    return buf_cstring(buf);
+}
+
+/* Convert the vCard to JSContact Card properties */
+static json_t *jmap_card_from_vcard(const char *userid,
+                                    struct vparse_card *card,
+                                    struct mailbox *mailbox,
+                                    struct index_record *record)
+{
+    json_t *obj = json_pack("{s:s s:s}", "@type", "Card", "@version", "1.0");
+    enum vcard_version_t version = VCARD_VERSION_3_0;
+    hash_table countrycodes = HASH_TABLE_INITIALIZER;
+    hash_table labels = HASH_TABLE_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+    struct vparse_entry *prop;
+
+    /* Get version and fetch any Apple-style labels & country codes */
+    construct_hash_table(&labels, 10, 0);
+    construct_hash_table(&countrycodes, 10, 0);
+    for (prop = card->properties; prop; prop = prop->next) {
+        if (!strcasecmp(prop->name, "VERSION")) {
+            if (!strcmp("2.1", prop->v.value)) version = VCARD_VERSION_2_1;
+            else if (!strcmp("3.0", prop->v.value)) version = VCARD_VERSION_3_0;
+            else if (!strcmp("4.0", prop->v.value)) version = VCARD_VERSION_4_0;
+            else goto done;
+        }
+        else if (prop->group) {
+            if (!strcasecmp(prop->name, VCARD_APPLE_ABADR_PROPERTY)) {
+                hash_insert(prop->group, lcase(prop->v.value), &countrycodes);
+            }
+            else if (!strcasecmp(prop->name, VCARD_APPLE_LABEL_PROPERTY)) {
+                const char *label = prop->v.value;
+                size_t label_len = strlen(label);
+
+                /* Check and adjust for weird (localized?) labels */
+                if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
+                    label += 4;      // skip "_$!<" prefix
+                    label_len -= 8;  // and trim ">!$_" suffix
+                }
+
+                hash_insert(prop->group, xstrndup(label, label_len), &labels);
+            }
+        }
+    }
+
+    for (prop = card->properties; prop; prop = prop->next) {
+        const struct vparse_param *param;
+        unsigned param_flags = 0;
+        const char *kind = NULL;
+        json_t *jprop = NULL;
+        struct {
+            const char *key;
+            json_t *val;
+        } subprop = { 0 };
+
+        if ((param = vparse_get_param(prop, "DERIVED")) &&
+            !strcasecmp(param->value, "true")) {
+            /* Don't convert this property */
+            continue;
+        }
+
+        ucase(prop->name);
+
+        /* General Properties */
+        if (!strcmp(prop->name, "KIND") ||
+            !strcmp(prop->name, "X-ADDRESSBOOKSERVER-KIND")) {
+            json_object_set_new(obj, "kind", jmap_utf8string(prop->v.value));
+        }
+        else if (!strcmp(prop->name, "SOURCE")) {
+            kind = "entry";
+
+  directories:
+            json_t *dirs = json_object_get_vanew(obj, "directories", "{}");
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_PREF |
+                VCARD_PARAM_LABEL | VCARD_PARAM_MEDIATYPE;
+
+            jprop = json_pack("{s:s s:s s:o}",
+                              "@type", "DirectoryResource",
+                              "kind", kind,
+                              "uri", jmap_utf8string(prop->v.value));
+
+            json_object_set_new(dirs, _prop_id(prop), jprop);
+        }
+        else if (!strcmp(prop->name, "XML")) {
+            goto unmapped;
+        }
+
+        /* Identification Properties */
+        else if (!strcmp(prop->name, "BDAY") ||
+                 !strcmp(prop->name, "DEATHDATE") ||
+                 !strcmp(prop->name, "ANNIVERSARY")) {
+            subprop.key = "date";
+            subprop.val = _partialdate_from_date(prop);
+
+            param_flags = VCARD_PARAM_CALSCALE;
+
+  anniversaries:
+            json_t *annivs = json_object_get_vanew(obj, "anniversaries", "{}");
+
+            switch (prop->name[0]) {
+            case 'B':
+                kind = "birth";
+                break;
+            case 'D':
+                kind = "death";
+                break;
+            case 'A':
+                kind = "wedding";
+                break;
+            }
+
+            jprop = json_object_get_vanew(annivs, kind,
+                                          "{s:s s:s}",
+                                          "@type", "Anniversary",
+                                          "kind", kind);
+
+            json_object_set_new(jprop, subprop.key, subprop.val);
+        }
+        else if ((!strcmp(prop->name, "BIRTHPLACE") ||
+                  !strcmp(prop->name, "DEATHPLACE"))) {
+            const char *comp = "fullAddress";
+            
+            if ((param = vparse_get_param(prop, "VALUE")) &&
+                !strcasecmp(param->value, "uri")) {
+                if (!strncasecmp(prop->v.value, "GEO", 4)) {
+                    comp = "coordinates";
+                }
+                else {
+                    goto unmapped;
+                }
+            }
+
+            subprop.key = "place";
+            subprop.val = json_pack("{s:s s:o}",
+                                    "@type", "Address",
+                                    comp, jmap_utf8string(prop->v.value));
+
+            goto anniversaries;
+        }
+        else if (!strcmp(prop->name, "GRAMMATICAL-GENDER")) {
+            json_t *speakto = json_object_get_vanew(obj, "speakToAs", "{}");
+
+            json_object_set_new(speakto,
+                                "grammaticalGender", json_string(prop->v.value));
+        }
+        else if (!strcmp(prop->name, "PRONOUNS")) {
+            json_t *speakto = json_object_get_vanew(obj, "speakToAs", "{}");
+            json_t *pronouns = json_object_get_vanew(speakto, "pronouns", "{}");
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_PREF;
+
+            jprop = json_pack("{s:s s:o}",
+                              "@type", "Pronouns",
+                              "pronouns", jmap_utf8string(prop->v.value));
+
+            json_object_set_new(pronouns, _prop_id(prop), jprop);
+        }
+        else if (!strcmp(prop->name, "FN")) {
+            json_object_set_new(obj, "fullName", jmap_utf8string(prop->v.value));
+        }
+        else if (!strcmp(prop->name, "N")) {
+            const struct comp_kind *ckind;
+            json_t *comps = NULL;
+
+            param_flags = VCARD_PARAM_SORT_AS | VCARD_PARAM_RANKS;
+
+            /* XXX  TODO: Handle SORT-AS & RANKS */
+
+            for (ckind = n_comp_kinds; ckind->name; ckind++) {
+                const char *val = strarray_safenth(prop->v.values, ckind->idx);
+
+                if (*val) {
+                    if (!comps) comps = json_array();
+                    json_array_append_new(comps,
+                                          json_pack("{s:s s:s s:o}",
+                                                    "@type", "NameComponent",
+                                                    "kind", ckind->name,
+                                                    "value",
+                                                    jmap_utf8string(val)));
+                }
+            }
+
+            if (comps) {
+                json_object_set_new(obj, "name",
+                                    json_pack("{s:s s:o}",
+                                              "@type", "Name",
+                                              "components", comps));
+            }
+        }
+        else if (!strcmp(prop->name, "NICKNAME")) {
+            json_t *nicks = json_object_get_vanew(obj, "nickNames", "{}");
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_PREF;
+
+            for (int i = 0; i < strarray_size(prop->v.values); i++) {
+                const char *val = strarray_nth(prop->v.values, i);
+
+                jprop = json_pack("{s:s s:o}",
+                                  "@type", "NickName",
+                                  "name", jmap_utf8string(val));
+
+                json_object_set_new(nicks, _prop_id(prop), jprop);
+            }
+        }
+        else if (!strcmp(prop->name, "PHOTO")) {
+            kind = "photo";
+  media:
+            json_t *media = json_object_get_vanew(obj, "media", "{}");
+            const char *uri;
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_PREF |
+                VCARD_PARAM_LABEL | VCARD_PARAM_MEDIATYPE;
+
+            if (version == VCARD_VERSION_4_0 ||
+                ((param = vparse_get_param(prop, "VALUE")) &&
+                 !strcasecmp(param->value, "URI"))) {
+                uri = prop->v.value;
+            }
+            else {
+                /* Rewrite 'b' encoded value as data: URI */
+                uri = _value_to_data_uri(prop,
+                                         *kind == 's' ? "audio" : "image", &buf);
+            }
+
+            jprop = json_pack("{s:s s:s s:s}",
+                              "@type", "mediaResource",
+                              "kind", kind,
+                              "uri", uri);
+
+            json_object_set_new(media, _prop_id(prop), jprop);
+        }
+
+        /* Delivery Addressing Properties */
+        else if (!strcmp(prop->name, "ADR")) {
+            json_t *addrs = json_object_get_vanew(obj, "addresses", "{}");
+            const struct comp_kind *ckind;
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_TYPE_ADR |
+                VCARD_PARAM_PREF | VCARD_PARAM_LABEL | VCARD_PARAM_CC |
+                VCARD_PARAM_GEO | VCARD_PARAM_TZ;
+
+            jprop = json_pack("{s:s}", "@type", "Address");
+
+            for (ckind = street_comp_kinds; ckind->name; ckind++) {
+                const char *val = strarray_safenth(prop->v.values, ckind->idx);
+
+                if (*val) {
+                    json_t *street =
+                        json_object_get_vanew(jprop, "street", "[]");
+
+                    json_array_append_new(street,
+                                          json_pack("{s:s s:s s:o}",
+                                                    "@type", "StreetComponent",
+                                                    "kind", ckind->name,
+                                                    "value",
+                                                    jmap_utf8string(val)));
+                }
+            }
+
+            for (ckind = adr_comp_kinds; ckind->name; ckind++) {
+                const char *val = strarray_safenth(prop->v.values, ckind->idx);
+
+                if (*val) {
+                    json_object_set_new(jprop,
+                                        ckind->name, jmap_utf8string(val));
+                }
+            }
+
+            json_object_set_new(addrs, _prop_id(prop), jprop);
+        }
+
+        /* Communications Properties */
+        else if (!strcmp(prop->name, "CONTACT-CHANNEL-PREF")) {
+            const char *key = NULL;
+
+            if (!strcasecmp(prop->v.value, "ADR"))
+                key = "addresses";
+            else if (!strcasecmp(prop->v.value, "EMAIL"))
+                key = "emails";
+            else if (!strcasecmp(prop->v.value, "IMPP"))
+                key = "onlineServices";
+            else if (!strcasecmp(prop->v.value, "TEL"))
+                key = "phones";
+            else
+                goto unmapped;
+            
+            json_t *channels =
+                json_object_get_vanew(obj, "preferredContactChannels", "{}");
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_PREF;
+
+            jprop = json_pack("{s:s}",
+                              "@type", "ContactChannelPreference");
+
+            json_object_set_new(channels, key, jprop);
+        }
+        else if (!strcmp(prop->name, "EMAIL")) {
+            json_t *emails = json_object_get_vanew(obj, "emails", "{}");
+
+            param_flags = VCARD_PARAM_TYPE |
+                VCARD_PARAM_PREF | VCARD_PARAM_LABEL;
+
+            jprop = json_pack("{s:s s:o}",
+                              "@type", "EmailAddress",
+                              "address", jmap_utf8string(prop->v.value));
+
+            json_object_set_new(emails, _prop_id(prop), jprop);
+        }
+        else if (!strcmp(prop->name, "IMPP") ||
+                 !strcmp(prop->name, "SOCIALPROFILE")) {
+            json_t *services = json_object_get_vanew(obj,
+                                                     "onlineServices", "{}");
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_PREF |
+                VCARD_PARAM_LABEL | VCARD_PARAM_SERVICE_TYPE;
+
+            if (*prop->name == 'I') {
+                kind = "impp";
+            }
+            else if ((param = vparse_get_param(prop, "VALUE")) &&
+                     !strcasecmp(param->value, "TEXT")) {
+                kind = "username";
+            }
+            else {
+                kind = "uri";
+            }
+
+            jprop = json_pack("{s:s s:s s:o}",
+                              "@type", "OnlineService",
+                              "kind", kind,
+                              "user", jmap_utf8string(prop->v.value));
+
+            json_object_set_new(services, _prop_id(prop), jprop);
+        }
+        else if (!strcmp(prop->name, "LANG")) {
+            json_t *langs = json_object_get_vanew(obj,
+                                                  "preferredLanguages", "{}");
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_PREF;
+
+            jprop = json_pack("{s:s}", "@type", "LanguagePreference");
+
+            json_object_set_new(langs, prop->v.value, jprop);
+        }
+        else if (!strcmp(prop->name, "LOCALE")) {
+            json_object_set_new(obj, "locale", jmap_utf8string(prop->v.value));
+        }
+        else if (!strcmp(prop->name, "TEL")) {
+            json_t *phones = json_object_get_vanew(obj, "phones", "{}");
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_TYPE_TEL |
+                          VCARD_PARAM_PREF | VCARD_PARAM_LABEL;
+
+            jprop = json_pack("{s:s s:o}",
+                              "@type", "Phone",
+                              "number", jmap_utf8string(prop->v.value));
+
+            json_object_set_new(phones, _prop_id(prop), jprop);
+        }
+
+        /* Geographical Properties */
+        else if (!strcmp(prop->name, "GEO")) {
+            /* XXX  TODO: Combine with ADR via ALTID? */
+        }
+        else if (!strcmp(prop->name, "TZ")) {
+            /* XXX  TODO: Combine with ADR via ALTID? */
+        }
+
+        /* Organizational Properties */
+        else if (!strcmp(prop->name, "CONTACT-URI")) {
+            kind = "contact";
+  links:
+            json_t *links = json_object_get_vanew(obj, "links", "{}");
+
+            param_flags = VCARD_PARAM_TYPE |
+                VCARD_PARAM_PREF | VCARD_PARAM_LABEL;
+
+            jprop = json_pack("{s:s s:s* s:o}",
+                              "@type", "LinkResource",
+                              "kind", kind,
+                              "uri", jmap_utf8string(prop->v.value));
+
+            json_object_set_new(links, _prop_id(prop), jprop);
+        }
+        else if (!strcmp(prop->name, "LOGO")) {
+            kind = "logo";
+            goto media;
+        }
+        else if (!strcmp(prop->name, "MEMBER") ||
+                 !strcmp(prop->name, "X-ADDRESSBOOKSERVER-MEMBER")) {
+            if (strncmp(prop->v.value, "urn:uuid:", 9)) goto unmapped;
+
+            json_t *members = json_object_get_vanew(obj, "members", "{}");
+
+            json_object_set_new(members, prop->v.value, json_true());
+        }
+        else if (!strcmp(prop->name, "ORG")) {
+            json_t *orgs = json_object_get_vanew(obj, "organizations", "{}");
+            const char *name = strarray_nth(prop->v.values, 0);
+            int num_comp = strarray_size(prop->v.values);
+            json_t *units = num_comp > 1 ? json_array() : NULL;
+
+            param_flags = VCARD_PARAM_SORT_AS;
+
+            /* XXX  TODO: Handle SORT-AS */
+
+            jprop = json_pack("{s:s s:o* s:o*}",
+                              "@type", "Organization",
+                              "name", *name ? jmap_utf8string(name) : NULL,
+                              "units", units);
+
+            for (int i = 1; i < num_comp; i++) {
+                name = strarray_nth(prop->v.values, i);
+                json_array_append_new(units,
+                                      json_pack("{s:s s:s}",
+                                                "@type", "OrgUnit",
+                                                "name", jmap_utf8string(name)));
+            }
+
+            json_object_set_new(orgs, _prop_id(prop), jprop);
+        }
+        else if (!strcmp(prop->name, "RELATED")) {
+            json_t *relatedto = json_object_get_vanew(obj, "relatedTo", "{}");
+
+            param_flags = VCARD_PARAM_TYPE_RELATED;
+
+            jprop = json_object();
+
+            json_object_set_new(relatedto, prop->v.value,
+                                json_pack("{s:s s:o}",
+                                          "@type", "Relation",
+                                          "relation", jprop));
+        }
+        else if (!strcmp(prop->name, "ROLE") ||
+                 !strcmp(prop->name, "TITLE")) {
+            json_t *titles = json_object_get_vanew(obj, "titles", "{}");
+
+            kind = (*prop->name == 'R') ? "role" : "title";
+
+            json_object_set_new(titles, _prop_id(prop),
+                                json_pack("{s:s s:s s:o}",
+                                          "@type", "Title",
+                                          "kind", kind,
+                                          "name",
+                                          jmap_utf8string(prop->v.value)));
+        }
+
+        /* Personal Information Properties */
+        else if (!strcmp(prop->name, "EXPERTISE") ||
+                 !strcmp(prop->name, "HOBBY")     ||
+                 !strcmp(prop->name, "INTEREST")) {
+            json_t *personal = json_object_get_vanew(obj, "personalInfo", "{}");
+
+            param_flags = VCARD_PARAM_INDEX | VCARD_PARAM_LEVEL;
+
+            jprop = json_object_get_vanew(personal, _prop_id(prop),
+                                          "{s:s s:s s:s}",
+                                          "@type", "PersonalInfo",
+                                          "kind", lcase(prop->name),
+                                          "value", prop->v.value);
+        }
+        else if (!strcmp(prop->name, "ORG-DIRECTORY")) {
+            kind = "directory";
+            goto directories;
+        }
+
+        /* Explanatory Properties */
+        else if (!strcmp(prop->name, "CATEGORIES")) {
+            json_t *keywords = json_object_get_vanew(obj, "keywords", "{}");
+            int i;
+
+            for (i = 0; i < strarray_size(prop->v.values); i++) {
+                json_object_set_new(keywords,
+                                    strarray_nth(prop->v.values, i),
+                                    json_true());
+            }
+        }
+        else if (!strcmp(prop->name, "CLIENTPIDMAP")) {
+            goto unmapped;
+        }
+        else if (!strcmp(prop->name, "CREATED")) {
+            kind = "created";
+
+  timestamp:
+            char datestr[ISO8601_DATETIME_MAX];
+            time_t t;
+
+            time_from_iso8601(prop->v.value, &t);
+            time_to_iso8601(t, datestr, sizeof(datestr), 1);
+            json_object_set_new(obj, kind, json_string(datestr));
+        }
+        else if (!strcmp(prop->name, "NOTE")) {
+            json_t *notes = json_object_get_vanew(obj, "notes", "{}");
+
+            param_flags = VCARD_PARAM_CREATED | VCARD_PARAM_AUTHOR;
+
+            jprop = json_pack("{s:s s:o}",
+                              "@type", "Note",
+                              "note", jmap_utf8string(prop->v.value));
+
+            json_object_set_new(notes, _prop_id(prop), jprop);
+        }
+        else if (!strcmp(prop->name, "PRODID")) {
+            json_object_set_new(obj, "prodId", jmap_utf8string(prop->v.value));
+        }
+        else if (!strcmp(prop->name, "REV")) {
+            kind = "updated";
+            goto timestamp;
+        }
+        else if (!strcmp(prop->name, "SOUND")) {
+            kind = "sound";
+            goto media;
+        }
+        else if (!strcmp(prop->name, "UID")) {
+            json_object_set_new(obj, "uid", jmap_utf8string(prop->v.value));
+        }
+        else if (!strcmp(prop->name, "URL")) {
+            goto links;
+        }
+        else if (!strcmp(prop->name, "VERSION")) {
+            goto unmapped;
+        }
+        else if (!strcasecmp(prop->name, VCARD_APPLE_ABADR_PROPERTY) ||
+                 !strcasecmp(prop->name, VCARD_APPLE_LABEL_PROPERTY)) {
+            /* Ignore -- handled elsewhere */
+        }
+
+        /* Security Properties */
+        else if (!strcmp(prop->name, "KEY")) {
+            json_t *keys = json_object_get_vanew(obj, "cryptoKeys", "{}");
+            const char *uri;
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_PREF |
+                VCARD_PARAM_LABEL | VCARD_PARAM_MEDIATYPE;
+
+            if (version == VCARD_VERSION_4_0 ||
+                ((param = vparse_get_param(prop, "VALUE")) &&
+                 !strcasecmp(param->value, "URI"))) {
+                uri = prop->v.value;
+            }
+            else {
+                /* Rewrite 'b' encoded value as data: URI */
+                uri = _value_to_data_uri(prop, "application", &buf);
+            }
+
+            jprop = json_pack("{s:s s:s}",
+                              "@type", "cryptoResource",
+                              "uri", uri);
+
+            json_object_set_new(keys, _prop_id(prop), jprop);
+        }
+
+        /* Calendar Properties */
+        else if (!strcmp(prop->name, "CALADRURI")) {
+            json_t *sched = json_object_get_vanew(obj,
+                                                  "schedulingAddresses", "{}");
+
+            param_flags = VCARD_PARAM_TYPE |
+                VCARD_PARAM_PREF | VCARD_PARAM_LABEL;
+
+            jprop = json_pack("{s:s s:s}",
+                              "@type", "schedulingAddress",
+                              "uri", prop->v.value);
+
+            json_object_set_new(sched, _prop_id(prop), jprop);
+        }
+        else if (!strcmp(prop->name, "CALURI") ||
+                 !strcmp(prop->name, "FBURL")) {
+            json_t *cals = json_object_get_vanew(obj, "calendars", "{}");
+
+            kind = (*prop->name == 'C') ? "calendar" : "freeBusy";
+
+            param_flags = VCARD_PARAM_TYPE | VCARD_PARAM_PREF |
+                VCARD_PARAM_LABEL | VCARD_PARAM_MEDIATYPE;
+
+            jprop = json_pack("{s:s s:s s:s}",
+                              "@type", "calendarResource",
+                              "kind", kind,
+                              "uri", prop->v.value);
+
+            json_object_set_new(cals, _prop_id(prop), jprop);
+        }
+
+        /* Unmapped Properties (jCard-encoded) */
+        else {
+  unmapped:
+            json_t *props = json_object_get_vanew(obj, "vCardProps", "[]");
+            json_t *jparams = json_object();
+            const char *type = "text";
+
+            for (param = prop->params; param; param = param->next) {
+                lcase(param->name);
+
+                if (!strcmp(param->name, "value")) {
+                    type = lcase(param->value);
+                }
+                else {
+                    json_object_set_new(jparams,
+                                        param->name,
+                                        jmap_utf8string(param->value));
+                }
+            }
+
+            if (prop->group) {
+                const char *label;
+
+                json_object_set_new(jparams, "group",
+                                    jmap_utf8string(prop->group));
+
+                if ((label = hash_lookup(prop->group, &labels))) {
+                    /* Apple label */
+                    buf_setcstr(&buf, VCARD_APPLE_LABEL_PROPERTY);
+                    buf_lcase(&buf);
+                    json_array_append_new(props,
+                                          json_pack("[s {s:o} s o]",
+                                                    buf_cstring(&buf),
+                                                    "group",
+                                                    jmap_utf8string(prop->group),
+                                                    "text",
+                                                    jmap_utf8string(label)));
+                }
+            }
+
+            json_array_append_new(props,
+                                  json_pack("[s o s o]",
+                                            lcase(prop->name), jparams, type,
+                                            jmap_utf8string(prop->v.value)));
+            continue;
+        }
+
+        if (jprop) {
+            const char *cc = NULL, *label = NULL;
+
+            if (prop->group) {
+                if (param_flags & VCARD_PARAM_CC) {
+                    /* Apple country code? */
+                    cc = hash_lookup(prop->group, &countrycodes);
+                }
+                if (param_flags & VCARD_PARAM_LABEL) {
+                    /* Apple label? */
+                    label = hash_lookup(prop->group, &labels);
+                }
+            }
+
+            _add_vcard_params(prop, param_flags, label, cc, jprop);
+        }
+    }
+
+    // record properties
+    if (record) {
+        json_object_set_new(obj, "isFlagged",
+                            record->system_flags & FLAG_FLAGGED ? json_true() :
+                            json_false());
+
+        const char *annot = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
+        // NOTE: using buf_free here because annotatemore_msg_lookup uses
+        // buf_init_ro on the buffer, which blats the base pointer.
+        buf_free(&buf);
+        annotatemore_msg_lookupmask(mailbox, record->uid, annot, userid, &buf);
+        double val = 0;
+        if (buf.len) val = strtod(buf_cstring(&buf), NULL);
+
+        // need to keep the x- version while AJAXUI is around
+        json_object_set_new(obj, "importance", json_real(val));
+    }
+
+  done:
+    buf_free(&buf);
+    free_hash_table(&labels, free);
+    free_hash_table(&countrycodes, NULL);
+
+    return obj;
+}
+
+static int getcards_cb(void *rock, struct carddav_data *cdata)
+{
+    struct cards_rock *crock = (struct cards_rock *) rock;
+    struct index_record record;
+    json_t *obj = NULL;
+    int r = 0;
+
+    mbentry_t *mbentry = jmap_mbentry_from_dav(crock->req, &cdata->dav);
+
+    if (!mbentry ||
+        !jmap_hasrights_mbentry(crock->req, mbentry, JACL_READITEMS)) {
+        mboxlist_entry_free(&mbentry);
+        return 0;
+    }
+
+    if (!crock->mailbox || strcmp(mailbox_name(crock->mailbox), mbentry->name)) {
+        mailbox_close(&crock->mailbox);
+        r = mailbox_open_irl(mbentry->name, &crock->mailbox);
+    }
+    if (r) goto done;
+
+    r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
+    if (r) goto done;
+
+    /* Load message containing the resource and parse vcard data */
+    struct vparse_card *vcard = record_to_vcard(crock->mailbox, &record);
+    if (!vcard || !vcard->objects) {
+        syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
+                cdata->dav.imap_uid, mailbox_name(crock->mailbox));
+        vparse_free_card(vcard);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Convert the vCard to a JSContact Card. */
+    obj = jmap_card_from_vcard(crock->req->userid, vcard->objects,
+                                  crock->mailbox, &record);
+    vparse_free_card(vcard);
+
+    jmap_filterprops(obj, crock->get->props);
+
+    if (jmap_wantprop(crock->get->props, "x-href")) {
+        char *xhref = jmap_xhref(mbentry->name, cdata->dav.resource);
+        json_object_set_new(obj, "x-href", json_string(xhref));
+        free(xhref);
+    }
+    if (jmap_wantprop(crock->get->props, "blobId")) {
+        json_t *jblobid = json_null();
+        struct buf blobid = BUF_INITIALIZER;
+        const char *uniqueid = NULL;
+
+        /* Get uniqueid of calendar mailbox */
+        if (!crock->mailbox ||
+            strcmp(mailbox_uniqueid(crock->mailbox), cdata->dav.mailbox)) {
+            if (!crock->mbentry ||
+                strcmp(crock->mbentry->uniqueid, cdata->dav.mailbox)) {
+                mboxlist_entry_free(&crock->mbentry);
+                crock->mbentry = jmap_mbentry_from_dav(crock->req, &cdata->dav);
+            }
+            if (crock->mbentry &&
+                jmap_hasrights_mbentry(crock->req,
+                                       crock->mbentry, JACL_READITEMS)) {
+                uniqueid = crock->mbentry->uniqueid;
+            }
+        }
+        else {
+            uniqueid = mailbox_uniqueid(crock->mailbox);
+        }
+
+        if (uniqueid &&
+            jmap_encode_rawdata_blobid('V', uniqueid, record.uid,
+                                       NULL, NULL, NULL, NULL, &blobid)) {
+            jblobid = json_string(buf_cstring(&blobid));
+        }
+        buf_free(&blobid);
+        json_object_set_new(obj, "blobId", jblobid);
+    }
+    if (jmap_wantprop(crock->get->props, "size")) {
+        json_object_set_new(obj, "size",
+                            json_integer(record.size - record.header_size));
+    }
+
+    json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
+    json_object_set_new(obj, "uid", json_string(cdata->vcard_uid));
+
+    json_object_set_new(obj, "addressbookId",
+                        json_string(strrchr(mbentry->name, '.')+1));
+
+    json_array_append_new(crock->get->list, obj);
+    crock->rows++;
+
+ done:
+    mboxlist_entry_free(&mbentry);
+
+    return 0;
+}
+
+static int jmap_card_get(struct jmap_req *req)
+{
+    return _contacts_get(req, &getcards_cb, CARDDAV_KIND_CONTACT, card_props);
+}
+
 static int jmap_card_changes(struct jmap_req *req)
 {
     return _contacts_changes(req, CARDDAV_KIND_CONTACT);
+}
+
+static int jmap_cardgroup_get(struct jmap_req *req)
+{
+    return _contacts_get(req, &getcards_cb, CARDDAV_KIND_GROUP, card_props);
 }
 
 static int jmap_cardgroup_changes(struct jmap_req *req)
