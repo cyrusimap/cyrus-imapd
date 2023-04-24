@@ -2265,7 +2265,7 @@ sub test_restore_notes_all_dryrun
 }
 
 sub test_restore_mail_twice_slow
-    :min_version_3_3 :needs_component_jmap
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
 
