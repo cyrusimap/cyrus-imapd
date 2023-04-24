@@ -469,7 +469,7 @@ sub test_add_annot_splitconv_rerun
     $self->check_messages(\%exp, keyed_on => 'uid', check_guid => 0);
 }
 
-sub test_log_missing_acl
+sub test_log_missing_acl_userflag
 {
     my ($self) = @_;
 
@@ -492,6 +492,31 @@ sub test_log_missing_acl
         store => $self->{store}) or die;
     my @lines = $self->{instance}->getsyslog();
     $self->assert(grep /could not write flag due missing ACL/, @lines);
+}
+
+sub test_no_log_missing_seen_flag
+{
+    my ($self) = @_;
+
+    $self->start_my_instances();
+
+    my $imap = $self->{store}->get_client();
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "share mailbox but sharee does not get 's' right";
+
+    $self->{instance}->create_user("other");
+    $admin->setacl("user.other", "cassandane", "lritne") or die;
+
+    xlog $self, "sharee creates message, expect no error log for the missing ACL";
+
+    $self->{instance}->getsyslog();
+    $self->{store}->set_folder('Other Users.other');
+    my $flag = '\Seen';
+    $self->make_message("Email", body => "set_flag $flag\r\n",
+        store => $self->{store}) or die;
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert(not grep /could not write flag due missing ACL/, @lines);
 }
 
 1;

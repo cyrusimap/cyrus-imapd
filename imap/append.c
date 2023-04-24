@@ -862,7 +862,7 @@ static int append_apply_flags(struct appendstate *as,
             mboxevent_add_flag(mboxevent, flag);
         }
 
-        if (!(as->myrights & need_rights)) {
+        if (need_rights && !(as->myrights & need_rights)) {
             // One or more ACLs were missing to set the flag
             char aclstr[ACL_STRING_MAX];
             cyrus_acl_masktostr(need_rights, aclstr);
