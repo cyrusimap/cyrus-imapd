@@ -1,7 +1,7 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_query_cached_evict_slow
+sub test_email_query_cached_evict
     :min_version_3_5 :needs_component_sieve :needs_component_jmap
     :JMAPQueryCacheMaxAge1s :JMAPExtensions
 {

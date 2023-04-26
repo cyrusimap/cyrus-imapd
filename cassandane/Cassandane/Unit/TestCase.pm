@@ -166,6 +166,12 @@ sub filter
             return 1 if $method =~ m/_slow$/;
             return;
         },
+        slow_only => sub
+        {
+            my ($method) = @_;
+            return 1 if $method !~ m/_slow$/;
+            return;
+        },
     };
 }
 
