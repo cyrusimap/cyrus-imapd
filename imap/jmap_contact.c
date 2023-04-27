@@ -101,8 +101,7 @@ typedef struct {
     json_t *blobNotFound;
 } jmap_contact_errors_t;
 
-static int _contact_set_create(jmap_req_t *req, unsigned kind,
-                               json_t *jcard, struct carddav_data *cdata,
+static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
                                struct mailbox **mailbox, json_t *item,
                                jmap_contact_errors_t *errors);
 static int required_set_rights(json_t *props);
@@ -2004,8 +2003,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = json_object();
-        r = _contact_set_create(req, kind, arg,
-                                NULL, &mailbox, item, &errors);
+        r = _contact_set_create(req, kind, arg, &mailbox, item, &errors);
         if (r) {
             json_t *err;
             switch (r) {
@@ -5145,8 +5143,7 @@ static int required_set_rights(json_t *props)
     return needrights;
 }
 
-static int _contact_set_create(jmap_req_t *req, unsigned kind,
-                               json_t *jcard, struct carddav_data *cdata,
+static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
                                struct mailbox **mailbox, json_t *item,
                                jmap_contact_errors_t *errors)
 {
@@ -5292,7 +5289,8 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     }
     else {
         flags = strarray_new();
-        r = _json_to_card(req, cdata, mboxname, card, jcard, flags, &annots, &blobs, errors);
+        r = _json_to_card(req, NULL, mboxname, card,
+                          jcard, flags, &annots, &blobs, errors);
 
         logfmt = "jmap: create contact %s/%s (%s)";
     }
@@ -5437,7 +5435,7 @@ static void _contact_copy(jmap_req_t *req,
     jmap_contact_errors_t errors = { invalid, NULL };
     json_t *item = json_object();
     r = _contact_set_create(req, CARDDAV_KIND_CONTACT, dst_card,
-                            NULL, &dst_mbox, item, &errors);
+                            &dst_mbox, item, &errors);
     if (r || json_array_size(invalid) || errors.blobNotFound) {
         if (json_array_size(invalid)) {
             *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
