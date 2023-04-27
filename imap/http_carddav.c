@@ -1808,27 +1808,27 @@ done:
 }
 
 
-typedef enum vcardproperty_kind {
-    VCARD_ANY_PROPERTY = 0,
-    VCARD_FN_PROPERTY = 1,
-    VCARD_N_PROPERTY = 2,
-    VCARD_NICKNAME_PROPERTY = 3,
-    VCARD_UID_PROPERTY = 4,
-    VCARD_NO_PROPERTY = 1000
-} vcardproperty_kind;
+typedef enum my_vcardproperty_kind {
+    MY_VCARD_ANY_PROPERTY = 0,
+    MY_VCARD_FN_PROPERTY = 1,
+    MY_VCARD_N_PROPERTY = 2,
+    MY_VCARD_NICKNAME_PROPERTY = 3,
+    MY_VCARD_UID_PROPERTY = 4,
+    MY_VCARD_NO_PROPERTY = 1000
+} my_vcardproperty_kind;
 
 struct cardquery_filter {
     unsigned allof : 1;
     struct prop_filter *prop;
 };
 
-static unsigned vcardproperty_string_to_kind(const char *str)
+static unsigned my_vcardproperty_string_to_kind(const char *str)
 {
-    if (!strcasecmp(str, "FN")) return VCARD_FN_PROPERTY;
-    else if (!strcasecmp(str, "N")) return VCARD_N_PROPERTY;
-    else if (!strcasecmp(str, "NICKNAME")) return VCARD_NICKNAME_PROPERTY;
-    else if (!strcasecmp(str, "UID")) return VCARD_UID_PROPERTY;
-    else return VCARD_ANY_PROPERTY;
+    if (!strcasecmp(str, "FN")) return MY_VCARD_FN_PROPERTY;
+    else if (!strcasecmp(str, "N")) return MY_VCARD_N_PROPERTY;
+    else if (!strcasecmp(str, "NICKNAME")) return MY_VCARD_NICKNAME_PROPERTY;
+    else if (!strcasecmp(str, "UID")) return MY_VCARD_UID_PROPERTY;
+    else return MY_VCARD_ANY_PROPERTY;
 }
 
 static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
@@ -1839,7 +1839,7 @@ static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
     struct filter_profile_t profile =
         { 0 /* anyof */, COLLATION_UNICODE,
           CARDDAV_SUPP_FILTER, CARDDAV_SUPP_COLLATION,
-          vcardproperty_string_to_kind, VCARD_NO_PROPERTY,
+          my_vcardproperty_string_to_kind, MY_VCARD_NO_PROPERTY,
           NULL /* param_string_to_kind */, 0 /* no_param_value */,
           NULL /* parse_propfilter */ };
 
@@ -1903,15 +1903,15 @@ static int apply_propfilter(struct prop_filter *propfilter,
 
     if (!propfilter->param) {
         switch (propfilter->kind) {
-        case VCARD_FN_PROPERTY:
+        case MY_VCARD_FN_PROPERTY:
             if (cdata->fullname) myprop.v.value = (char *) cdata->fullname;
             break;
 
-        case VCARD_N_PROPERTY:
+        case MY_VCARD_N_PROPERTY:
             if (cdata->name) myprop.v.value = (char *) cdata->name;
             break;
 
-        case VCARD_NICKNAME_PROPERTY:
+        case MY_VCARD_NICKNAME_PROPERTY:
             if (cdata->nickname) {
                 if (propfilter->match) {
                     myprop.multivaluesep = ',';
@@ -1922,7 +1922,7 @@ static int apply_propfilter(struct prop_filter *propfilter,
             }
             break;
 
-        case VCARD_UID_PROPERTY:
+        case MY_VCARD_UID_PROPERTY:
             if (cdata->vcard_uid) myprop.v.value = (char *) cdata->vcard_uid;
             break;
 
@@ -1933,7 +1933,7 @@ static int apply_propfilter(struct prop_filter *propfilter,
         if (myprop.v.value) prop = &myprop;
     }
 
-    if (propfilter->param || (propfilter->kind == VCARD_ANY_PROPERTY)) {
+    if (propfilter->param || (propfilter->kind == MY_VCARD_ANY_PROPERTY)) {
         /* Load message containing the resource and parse vcard data */
         if (!vcard) {
             if (!fctx->msg_buf.len) {
