@@ -269,7 +269,7 @@ HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
         xsyslog(LOG_ERR, "can't lookup addressbook home",
                 "cardhomename=%s error=%s",
                 cardhomename, error_message(r));
-        return;
+        goto done;
     }
     int rights = httpd_myrights(authstate, mbentry);
     int is_main_account = !strcmpsafe(authuserid, accountid);
@@ -281,6 +281,10 @@ HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities, JMAP_CONTACTS_EXTENSION, json_object());
     }
+
+ done:
+    free(cardhomename);
+    mboxlist_entry_free(&mbentry);
 }
 
 struct changes_rock {
