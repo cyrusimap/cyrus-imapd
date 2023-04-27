@@ -2249,7 +2249,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
             }
         }
 
-        if (!r && !json_array_size(invalid) && !errors.blobNotFound) {
+        if (!json_array_size(invalid) && !errors.blobNotFound) {
             struct mailbox *this_mailbox = newmailbox ? newmailbox : mailbox;
 
             syslog(LOG_NOTICE, "jmap: update %s %s/%s",
@@ -5100,7 +5100,7 @@ static int _json_to_card(struct jmap_req *req,
         }
     }
 
-    if (json_array_size(invalid) || errors->blobNotFound) return -1;
+    if (json_array_size(invalid) || errors->blobNotFound) return 0;
 
     if (name_is_dirty) {
         _make_fn(card);
@@ -5295,8 +5295,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
         logfmt = "jmap: create contact %s/%s (%s)";
     }
 
-    if (r || json_array_size(invalid) || errors->blobNotFound) {
-        r = 0;
+    if (json_array_size(invalid) || errors->blobNotFound) {
         goto done;
     }
 
