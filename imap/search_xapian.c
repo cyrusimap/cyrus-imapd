@@ -2101,6 +2101,16 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->mailbox = mailbox;
     bb->opts = opts;
 
+    /* make sure the conversations are open before we start indexing
+     * to avoid deadlocking against the search state */
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (!cstate) {
+        xsyslog(LOG_ERR, "can't open conversations", "mailbox=<%s>",
+                mailbox_name(mailbox));
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+        goto out;
+    }
+
     r = xapiandb_lock_open(mailbox, &bb->lock);
     if (r) goto out;
     if (!bb->lock.activedirs || !bb->lock.activedirs->count) goto out;
@@ -2655,14 +2665,12 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
     /* make sure the conversations are open before we start indexing
      * to avoid deadlocking against the search state */
-    if (tr->mode == XAPIAN_DBW_CONVINDEXED) {
-        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-        if (!cstate) {
-            xsyslog(LOG_INFO, "can't open conversations", "mailbox=<%s>",
-                    mailbox_name(mailbox));
-            r = IMAP_MAILBOX_NOTSUPPORTED;
-            goto out;
-        }
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (!cstate) {
+        xsyslog(LOG_ERR, "can't open conversations", "mailbox=<%s>",
+                mailbox_name(mailbox));
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+        goto out;
     }
 
     /* Do nothing if there is no userid */
