@@ -436,3 +436,37 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
 
     buf_free(&buf);
 }
+
+#ifdef HAVE_LIBICALVCARD
+
+EXPORTED vcardcomponent *vcard_parse_buf_x(const struct buf *buf)
+{
+    return vcardparser_parse_string(buf_cstring(buf));
+}
+
+EXPORTED struct buf *vcard_as_buf_x(vcardcomponent *vcard)
+{
+    char *str = vcardcomponent_as_vcard_string_r(vcard);
+    struct buf *ret = buf_new();
+
+    buf_initm(ret, str, strlen(str));
+
+    return ret;
+}
+
+EXPORTED vcardcomponent *record_to_vcard_x(struct mailbox *mailbox,
+                                           const struct index_record *record)
+{
+    struct buf buf = BUF_INITIALIZER;
+    vcardcomponent *vcard = NULL;
+
+    /* Load message containing the resource and parse vcard data */
+    if (!mailbox_map_record(mailbox, record, &buf)) {
+        vcard = vcardparser_parse_string(buf_cstring(&buf) + record->header_size);
+        buf_free(&buf);
+    }
+
+    return vcard;
+}
+
+#endif /* HAVE_LIBICALVCARD */

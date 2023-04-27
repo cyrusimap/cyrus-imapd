@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cardgroup_get_v3
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $member1 = '03a0e51f-d1aa-4385-8a53-e29025acd8af';
+    my $member2 = 'b8767877-b4a1-4c70-9acc-505d3819e519';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+X-ADDRESSBOOKSERVER-KIND:group
+UID:$id
+FN:The Doe Family
+N:;;;;
+X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:$member1
+X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:$member2
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['CardGroup/get', {
+        }, 'R1']
+    ]);
+
+    $self->assert_str_equals('Card', $res->[0][1]{list}[0]{'@type'});
+    $self->assert_str_equals('1.0', $res->[0][1]{list}[0]{'@version'});
+    $self->assert_str_equals('Default', $res->[0][1]{list}[0]{addressbookId});
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{uid});
+    $self->assert_str_equals('group', $res->[0][1]{list}[0]{kind});
+    $self->assert_deep_equals([
+        [ 'version', {}, 'text', '3.0' ]
+    ], $res->[0][1]{list}[0]{vCardProps});
+    $self->assert_str_equals('The Doe Family', $res->[0][1]{list}[0]{fullName});
+    $self->assert_equals(JSON::true,
+                         $res->[0][1]{list}[0]{members}{"urn:uuid:$member1"});
+    $self->assert_equals(JSON::true,
+                         $res->[0][1]{list}[0]{members}{"urn:uuid:$member2"});
+}

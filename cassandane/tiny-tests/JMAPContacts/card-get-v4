@@ -1,0 +1,142 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_v4
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    # Sample card from RFC 6350
+    # Second N suffix removed due to vparse bug
+    # PROP-IDs added so we can easily compare the results
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+UID:$id
+KIND:individual
+FN:Simon Perreault
+N:Perreault;Simon;;;ing. jr
+BDAY;PROP-ID=A1:--0203
+ANNIVERSARY:20090808T1430-0500
+GENDER:M
+LANG;PREF=1:fr
+LANG;PREF=2:en
+ORG;PROP-ID=O1;TYPE=work:Viagenie
+ADR;PROP-ID=A1;TYPE=work:;Suite D2-630;2875 Laurier;
+ Quebec;QC;G1V 2M2;Canada
+TEL;PROP-ID=P1;VALUE=uri;TYPE="work,voice";PREF=1:tel:+1-418-656-9254;ext=102
+TEL;PROP-ID=P2;VALUE=uri;TYPE="work,cell,voice,video,text":tel:+1-418-262-6501
+EMAIL;PROP-ID=E1;TYPE=work:simon.perreault@viagenie.ca
+GEO;TYPE=work:geo:46.772673,-71.282945
+KEY;PROP-ID=K1;TYPE=work;VALUE=uri:
+ http://www.viagenie.ca/simon.perreault/simon.asc
+TZ:-0500
+URL;PROP-ID=L1;TYPE=home:http://nomis80.org
+REV:20230422T194639Z
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['Card/get', {
+        }, 'R1']
+    ]);
+
+    $self->assert_str_equals('Card', $res->[0][1]{list}[0]{'@type'});
+    $self->assert_str_equals('1.0', $res->[0][1]{list}[0]{'@version'});
+    $self->assert_str_equals('Default', $res->[0][1]{list}[0]{addressbookId});
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{uid});
+    $self->assert_str_equals('individual', $res->[0][1]{list}[0]{kind});
+    $self->assert_str_equals('2023-04-22T19:46:39Z', $res->[0][1]{list}[0]{updated});
+    $self->assert_deep_equals([
+        [ 'version', {}, 'text', '4.0' ],
+        [ 'gender',  {}, 'text', 'M'   ]
+    ], $res->[0][1]{list}[0]{vCardProps});
+    $self->assert_str_equals('Simon Perreault', $res->[0][1]{list}[0]{fullName});
+    $self->assert_deep_equals({
+        '@type' => 'Name',
+        'components' => [
+            { '@type' => 'NameComponent', 'kind' => 'given', 'value' => 'Simon' },
+            { '@type' => 'NameComponent', 'kind' => 'surname', 'value' => 'Perreault' },
+            { '@type' => 'NameComponent', 'kind' => 'suffix', 'value' => 'ing. jr' }
+        ]
+    }, $res->[0][1]{list}[0]{name});
+    $self->assert_deep_equals({
+        '@type' => 'Anniversary',
+        'kind' => 'birth',
+        'date' => { '@type' => 'PartialDate', 'month' => 2, 'day' => 3 }
+
+    }, $res->[0][1]{list}[0]{anniversaries}{birth});
+    $self->assert_deep_equals({
+        '@type' => 'Anniversary',
+        'kind' => 'wedding',
+        'date' => { '@type' => 'Timestamp', 'utc' => '2009-08-08T19:30:00Z' }
+    }, $res->[0][1]{list}[0]{anniversaries}{wedding});
+    $self->assert_deep_equals({
+        '@type' => 'LanguagePreference',
+        'pref' => 1
+    }, $res->[0][1]{list}[0]{preferredLanguages}{fr});
+    $self->assert_deep_equals({
+        '@type' => 'Organization',
+        'name' => 'Viagenie'
+    }, $res->[0][1]{list}[0]{organizations}{O1});
+    $self->assert_deep_equals({
+        '@type' => 'Address',
+        'street' => [
+            { '@type' => 'StreetComponent', 'kind' => 'name',      'value' => '2875 Laurier' },
+            { '@type' => 'StreetComponent', 'kind' => 'extension', 'value' => 'Suite D2-630' }
+        ],
+        'locality' => 'Quebec',
+        'region' => 'QC',
+        'postcode' => 'G1V 2M2',
+        'country' => 'Canada',
+        'contexts' => { 'work' => JSON::true }
+    }, $res->[0][1]{list}[0]{addresses}{A1});
+    $self->assert_deep_equals({
+        '@type' => 'Phone',
+        'number' => 'tel:+1-418-262-6501',
+        'contexts' => { 'work' => JSON::true },
+        'features' => { 'cell'  => JSON::true, 'voice' => JSON::true,
+                        'video' => JSON::true, 'text'  => JSON::true
+        }
+    }, $res->[0][1]{list}[0]{phones}{P2});
+    $self->assert_deep_equals({
+        'E1' => {
+            '@type' => 'EmailAddress',
+            'address' => 'simon.perreault.ca',
+            'contexts' => { 'work' => JSON::true }
+        }
+    }, $res->[0][1]{list}[0]{emails});
+    $self->assert_deep_equals({
+        'K1' => {
+            '@type' => 'CryptoResource',
+            'uri' => 'http://www.viagenie.ca/simon.perreault/simon.asc',
+            'contexts' => { 'work' => JSON::true }
+        }
+    }, $res->[0][1]{list}[0]{cryptoKeys});
+    $self->assert_deep_equals({
+        'L1' => {
+            '@type' => 'LinkResource',
+            'uri' => 'http://nomis80.org',
+            'contexts' => { 'private' => JSON::true }
+        }
+    }, $res->[0][1]{list}[0]{links});
+}
