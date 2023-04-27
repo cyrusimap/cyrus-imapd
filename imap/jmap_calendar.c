@@ -356,16 +356,16 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
                                        const char *accountid)
 {
     char *calhomename = caldav_mboxname(accountid, NULL);
+    struct buf buf = BUF_INITIALIZER;
     mbentry_t *mbentry = NULL;
     int r = mboxlist_lookup(calhomename, &mbentry, NULL);
     if (r) {
         xsyslog(LOG_ERR, "can't lookup calendar home",
                 "calhomename=%s error=%s",
                 calhomename, error_message(r));
-        return;
+        goto done;
     }
     int rights = httpd_myrights(authstate, mbentry);
-    struct buf buf = BUF_INITIALIZER;
 
     json_t *calcapa = json_object();
     int is_main_account = !strcmpsafe(authuserid, accountid);
@@ -453,6 +453,7 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
     json_object_set_new(account_capabilities,
             JMAP_URN_CALENDAR_PREFERENCES, json_object());
 
+ done:
     free(calhomename);
     mboxlist_entry_free(&mbentry);
     buf_free(&buf);
