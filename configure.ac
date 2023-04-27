@@ -1663,6 +1663,11 @@ dnl
                 AC_DEFINE(HAVE_GET_COMPONENT_NAME,[],
                         [Do we have support for fetching X- component names?]))
 
+        dnl Check for libicalvcard
+        AC_CHECK_LIB(icalvcard, vcardcomponent_new,
+                [LIBS="$LIBS -licalvcard"   
+                 AC_DEFINE(HAVE_LIBICALVCARD,[],[Do we have the icalvcard library?])])
+
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
 dnl                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,

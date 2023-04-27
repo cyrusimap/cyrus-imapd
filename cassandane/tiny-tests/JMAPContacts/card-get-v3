@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_v3
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    # PROP-IDs added so we can easily compare the results
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$id
+BDAY:1944-06-07
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG;PROP-ID=O1:Bubba Gump Shrimp Co.
+TITLE;PROP-ID=T1:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['Card/get', {
+        }, 'R1']
+    ]);
+
+    $self->assert_str_equals('Card', $res->[0][1]{list}[0]{'@type'});
+    $self->assert_str_equals('1.0', $res->[0][1]{list}[0]{'@version'});
+    $self->assert_str_equals('Default', $res->[0][1]{list}[0]{addressbookId});
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{uid});
+    $self->assert_str_equals('2008-04-24T19:52:43Z', $res->[0][1]{list}[0]{updated});
+    $self->assert_deep_equals([
+        [ 'version', {}, 'text', '3.0' ]
+    ], $res->[0][1]{list}[0]{vCardProps});
+    $self->assert_str_equals('Forrest Gump', $res->[0][1]{list}[0]{fullName});
+    $self->assert_deep_equals({
+        '@type' => 'Name',
+        'components' => [
+            { '@type' => 'NameComponent', 'kind' => 'prefix',  'value' => 'Mr.' },
+            { '@type' => 'NameComponent', 'kind' => 'given',   'value' => 'Forrest' },
+            { '@type' => 'NameComponent', 'kind' => 'surname', 'value' => 'Gump' }
+        ]
+    }, $res->[0][1]{list}[0]{name});
+    $self->assert_deep_equals({
+        '@type' => 'Anniversary',
+        'kind' => 'birth',
+        'date' => { '@type' => 'PartialDate', 'year' => 1944, 'month' => 6, 'day' => 7 }
+    }, $res->[0][1]{list}[0]{anniversaries}{birth});
+    $self->assert_deep_equals({
+        '@type' => 'Organization',
+        'name' => 'Bubba Gump Shrimp Co.'
+    }, $res->[0][1]{list}[0]{organizations}{O1});
+    $self->assert_deep_equals({
+        '@type' => 'Title',
+        'kind' => 'title',
+        'name' => 'Shrimp Man'
+    }, $res->[0][1]{list}[0]{titles}{T1});
+}
