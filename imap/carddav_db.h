@@ -198,6 +198,18 @@ int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
                   const char *userid, struct auth_state *authstate,
                   int ignorequota, uint32_t oldsize);
 
+#ifdef HAVE_LIBICALVCARD
+
+#include "vcard_support.h"
+
+int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
+                    const char *resource, modseq_t createdmodseq,
+                    strarray_t *flags, struct entryattlist **annots,
+                    const char *userid, struct auth_state *authstate,
+                    int ignorequota, uint32_t oldsize);
+
+#endif /* HAVE_LIBICALVCARD */
+
 /* delete a carddav entry */
 int carddav_remove(struct mailbox *mailbox,
                    uint32_t olduid, int isreplace,
