@@ -45,11 +45,16 @@ static int offset_compar(const void *a, const void *b)
 
 static void test_aligned_header_offsets(void)
 {
-#ifndef HAVE_STDALIGN_H
+#if !defined HAVE_STDALIGN_H
     if (verbose) {
         fputs("no C11 alignment macros, can't do anything useful\n", stderr);
     }
     return; /* can't do anything without C11 alignment macros */
+#elif !defined HAVE_GNU_ALIGNOF_EXPRESSION
+    if (verbose) {
+        fputs("no alignof(expression), can't do anything useful\n", stderr);
+    }
+    return;
 #else
     struct index_header h;
 
@@ -97,11 +102,16 @@ static void test_aligned_header_offsets(void)
 
 static void test_aligned_record_offsets(void)
 {
-#ifndef HAVE_STDALIGN_H
+#if !defined HAVE_STDALIGN_H
     if (verbose) {
         fputs("no C11 alignment macros, can't do anything useful\n", stderr);
     }
     return; /* can't do anything without C11 alignment macros */
+#elif !defined HAVE_GNU_ALIGNOF_EXPRESSION
+    if (verbose) {
+        fputs("no alignof(expression), can't do anything useful\n", stderr);
+    }
+    return;
 #else
     struct index_record r;
 
