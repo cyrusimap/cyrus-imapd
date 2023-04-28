@@ -82,8 +82,10 @@ static int jmap_addressbook_changes(struct jmap_req *req);
 static int jmap_addressbook_set(struct jmap_req *req);
 static int jmap_card_get(struct jmap_req *req);
 static int jmap_card_changes(struct jmap_req *req);
+static int jmap_card_set(struct jmap_req *req);
 static int jmap_cardgroup_get(struct jmap_req *req);
 static int jmap_cardgroup_changes(struct jmap_req *req);
+static int jmap_cardgroup_set(struct jmap_req *req);
 #endif /* HAVE_LIBICALVCARD */
 
 static int jmap_contactgroup_get(struct jmap_req *req);
@@ -155,6 +157,12 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         JMAP_NEED_CSTATE
     },
     {
+        "Card/set",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_card_set,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
         "CardGroup/get",
         JMAP_URN_CONTACTS,
         &jmap_cardgroup_get,
@@ -165,6 +173,12 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         JMAP_URN_CONTACTS,
         &jmap_cardgroup_changes,
         JMAP_NEED_CSTATE
+    },
+    {
+        "CardGroup/set",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_cardgroup_set,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
 #endif /* HAVE_LIBICALVCARD */
     { NULL, NULL, NULL, 0}
@@ -7186,6 +7200,14 @@ static int jmap_card_changes(struct jmap_req *req)
     return _contacts_changes(req, CARDDAV_KIND_CONTACT);
 }
 
+static int jmap_card_set(struct jmap_req *req)
+{
+    _contacts_set(req, CARDDAV_KIND_CONTACT, card_props,
+                  NULL, NULL);
+
+    return 0;
+}
+
 static int jmap_cardgroup_get(struct jmap_req *req)
 {
     return _contacts_get(req, &getcards_cb, CARDDAV_KIND_GROUP, card_props);
@@ -7194,6 +7216,14 @@ static int jmap_cardgroup_get(struct jmap_req *req)
 static int jmap_cardgroup_changes(struct jmap_req *req)
 {
     return _contacts_changes(req, CARDDAV_KIND_GROUP);
+}
+
+static int jmap_cardgroup_set(struct jmap_req *req)
+{
+    _contacts_set(req, CARDDAV_KIND_GROUP, card_props,
+                  NULL, NULL);
+
+    return 0;
 }
 
 #endif /* HAVE_LIBICALVCARD */
