@@ -104,6 +104,10 @@ typedef struct {
 static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
                                struct mailbox **mailbox, json_t *item,
                                jmap_contact_errors_t *errors);
+static int _contact_set_update(jmap_req_t *req, unsigned kind,
+                               const char *uid, json_t *jcard,
+                               struct carddav_db *db, struct mailbox **mailbox,
+                               json_t **item, jmap_contact_errors_t *errors);
 static int required_set_rights(json_t *props);
 static int _json_to_card(struct jmap_req *req,
                          struct carddav_data *cdata,
@@ -1957,7 +1961,22 @@ static void property_blob_free(property_blob_t **blob)
     *blob = NULL;
 }
 
-static void _contacts_set(struct jmap_req *req, unsigned kind)
+static void _contacts_set(struct jmap_req *req, unsigned kind,
+                          const jmap_property_t *props,
+                          int (*_set_create)(jmap_req_t *req,
+                                             unsigned kind,
+                                             json_t *jcard,
+                                             struct mailbox **mailbox,
+                                             json_t *item,
+                                             jmap_contact_errors_t *errors),
+                          int (*_set_update)(jmap_req_t *req,
+                                             unsigned kind,
+                                             const char *uid,
+                                             json_t *jcard,
+                                             struct carddav_db *db,
+                                             struct mailbox **mailbox,
+                                             json_t **item,
+                                             jmap_contact_errors_t *errors))
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -1969,14 +1988,14 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
 
     struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) {
+        xsyslog(LOG_ERR, "can not open carddav db", "accountid=<%s>",
+                req->accountid);
         r = IMAP_INTERNAL;
         goto done;
     }
 
     /* Parse arguments */
-    jmap_set_parse(req, &parser,
-                   kind == CARDDAV_KIND_GROUP ? group_props : contact_props,
-                   NULL, NULL, &set, &err);
+    jmap_set_parse(req, &parser, props, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2003,7 +2022,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = json_object();
-        r = _contact_set_create(req, kind, arg, &mailbox, item, &errors);
+        r = _set_create(req, kind, arg, &mailbox, item, &errors);
         if (r) {
             json_t *err;
             switch (r) {
@@ -2054,293 +2073,67 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
     }
 
     /* update */
-    struct buf buf = BUF_INITIALIZER;
     const char *uid;
     json_object_foreach(set.update, uid, arg) {
-        mbentry_t *mbentry = NULL;
-        struct carddav_data *cdata = NULL;
-        r = carddav_lookup_uid(db, uid, &cdata);
-        uint32_t olduid;
-        char *resource = NULL;
-        int do_move = 0;
-        json_t *jupdated = NULL;
-
-        /* is it a valid contact? */
-        if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != kind) {
-            r = 0;
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_updated, uid, err);
-            continue;
-        }
-
-        mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
-
-        json_t *abookid = json_object_get(arg, "addressbookId");
-        if (abookid && json_string_value(abookid)) {
-            const char *mboxname =
-                mboxname_abook(req->accountid, json_string_value(abookid));
-            if (mbentry && strcmp(mboxname, mbentry->name)) {
-                /* move */
-                if (!jmap_hasrights(req, mboxname, JACL_ADDITEMS)) {
-                    json_t *err = json_pack("{s:s s:[s]}",
-                                            "type", "invalidProperties",
-                                            "properties", "addressbookId");
-                    json_object_set_new(set.not_updated, uid, err);
-                    mboxlist_entry_free(&mbentry);
-                    continue;
-                }
-                r = jmap_openmbox(req, mboxname, &newmailbox, 1);
-                if (r) {
-                    syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
-                    mboxlist_entry_free(&mbentry);
-                    goto done;
-                }
-                do_move = 1;
-            }
-            json_object_del(arg, "addressbookId");
-        }
-
-        int needrights = do_move ? JACL_UPDATEITEMS : required_set_rights(arg);
-
-        if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, needrights)) {
-            int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
-            json_t *err = json_pack("{s:s}", "type",
-                                    rights & JACL_READITEMS ?
-                                    "accountReadOnly" : "notFound");
-            json_object_set_new(set.not_updated, uid, err);
-            mboxlist_entry_free(&mbentry);
-            continue;
-        }
-
-        if (!mailbox || strcmp(mailbox_name(mailbox), mbentry->name)) {
-            jmap_closembox(req, &mailbox);
-            r = jmap_openmbox(req, mbentry->name, &mailbox, 1);
-        }
-        mboxlist_entry_free(&mbentry);
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open %s",
-                   mbentry->name);
-            goto done;
-        }
-
-        struct index_record record;
-
-        r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
-        if (r) goto done;
-
-        olduid = cdata->dav.imap_uid;
-        resource = xstrdup(cdata->dav.resource);
-
-        struct entryattlist *annots = NULL;
-        strarray_t *flags = NULL;
-
-        json_t *item = json_object();
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
-        ptrarray_t blobs = PTRARRAY_INITIALIZER;
-        property_blob_t *blob;
-
-        /* Load message containing the resource and parse vcard data */
-        struct vparse_card *vcard = record_to_vcard(mailbox, &record);
-        if (!vcard || !vcard->objects) {
-            syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
-                   cdata->dav.imap_uid, mailbox_name(mailbox));
-            r = 0;
-            json_t *err = json_pack("{s:s}", "type", "parseError");
+        json_t *item = NULL;
+        r = _set_update(req, kind, uid, arg, db, &mailbox, &item, &errors);
+        if (r) {
+            json_t *err;
+            switch (r) {
+            case HTTP_NOT_FOUND:
+                err = json_pack("{s:s}", "type", "notFound");
+                break;
+            case HTTP_NOT_ALLOWED:
+                err = json_pack("{s:s}", "type", "accountReadOnly");
+                break;
+            case HTTP_UNPROCESSABLE:
+                err = json_pack("{s:s s:s}", "type", "serverFail",
+                                "description", "invalid current card");
+                break;
+            case HTTP_FORBIDDEN:
+            case IMAP_PERMISSION_DENIED:
+                err = json_pack("{s:s}", "type", "forbidden");
+                break;
+            case IMAP_QUOTA_EXCEEDED:
+                err = json_pack("{s:s}", "type", "overQuota");
+                break;
+            case IMAP_MESSAGE_TOO_LARGE:
+                err = json_pack("{s:s}", "type", "tooLarge");
+                break;
+            default:
+                err = jmap_server_error(r);
+            }
             json_object_set_new(set.not_updated, uid, err);
-            goto finish;
+            r = 0;
+            json_decref(item);
+            json_decref(invalid);
+            continue;
         }
-
-        struct vparse_card *card = vcard->objects;
-        if (!vparse_get_entry(card, NULL, "VERSION"))
-            vparse_replace_entry(card, NULL, "VERSION", "3.0");
-        vparse_replace_entry(card, NULL, "PRODID", _prodid);
-
-        if (kind == CARDDAV_KIND_GROUP) {
-            json_t *namep = NULL;
-            json_t *members = NULL;
-            json_t *others = NULL;
-            json_t *jval;
-            const char *key;
-
-            json_object_foreach(arg, key, jval) {
-                if (!strcmp(key, "name")) {
-                    if (json_is_string(jval))
-                        namep = jval;
-                    else json_array_append_new(invalid, json_string("name"));
-                }
-                else if (!strcmp(key, "contactIds")) {
-                    members = jval;
-                }
-                else if (!strcmp(key, "otherAccountContactIds")) {
-                    others = jval;
-                }
-                else if (!strncmp(key, "otherAccountContactIds/", 23)) {
-                    /* Read and apply patch to current card */
-                    json_t *jcurrent = jmap_group_from_vcard(card);
-                    if (!jcurrent) {
-                        syslog(LOG_ERR, "can't read vcard %u:%s for update",
-                                cdata->dav.imap_uid, mailbox_name(mailbox));
-                        r = 0;
-                        json_t *err = json_pack("{s:s s:s}",
-                                "type", "serverError", "description", "invalid current card");
-                        json_object_set_new(set.not_updated, uid, err);
-                        goto finish;
-                    }
-                    jupdated = jmap_patchobject_apply(jcurrent, arg, NULL);
-                    json_decref(jcurrent);
-                    if (JNOTNULL(jupdated)) {
-                        json_object_del(jupdated, "addressbookId");
-                        /* Now read the updated property value */
-                        others = json_object_get(jupdated, "otherAccountContactIds");
-                    }
-                }
-                else if (!strcmp(key, "id") || !strcmp(key, "uid")) {
-                    if (cdata && strcmpnull(cdata->vcard_uid, json_string_value(jval))) {
-                        json_array_append_new(invalid, json_string(key));
-                    }
-                }
-            }
-
-            if (namep) {
-                const char *name = json_string_value(namep);
-                if (name) {
-                    vparse_replace_entry(card, NULL, "FN", name);
-                    vparse_replace_entry(card, NULL, "N", name);
-                }
-            }
-            else if (!vparse_get_entry(card, NULL, "N")) {
-                struct vparse_entry *entry = vparse_get_entry(card, NULL, "FN");
-                if (entry) vparse_replace_entry(card, NULL, "N", entry->v.value);
-            }
-            if (members) {
-                _add_group_entries(req, card, members, invalid);
-            }
-            if (others) {
-                _add_othergroup_entries(req, card, others, invalid);
-            }
-        }
-        else {
-            flags = mailbox_extract_flags(mailbox, &record, req->userid);
-            annots = mailbox_extract_annots(mailbox, &record);
-
-            r = _json_to_card(req, cdata, mailbox_name(mailbox), card, arg, flags,
-                    &annots, &blobs, &errors);
-            if (r == HTTP_NO_CONTENT) {
-                r = 0;
-                if (!newmailbox) {
-                    /* just bump the modseq
-                       if in the same mailbox and no data change */
-                    syslog(LOG_NOTICE, "jmap: touch contact %s/%s",
-                           req->accountid, resource);
-                    if (strarray_find_case(flags, "\\Flagged", 0) >= 0)
-                        record.system_flags |= FLAG_FLAGGED;
-                    else
-                        record.system_flags &= ~FLAG_FLAGGED;
-                    annotate_state_t *state = NULL;
-                    r = mailbox_get_annotate_state(mailbox, record.uid, &state);
-                    annotate_state_set_auth(state, 0,
-                                            req->userid, req->authstate);
-                    if (!r) r = annotate_state_store(state, annots);
-                    if (!r) r = mailbox_rewrite_index_record(mailbox, &record);
-                    if (!r) json_object_set_new(set.updated, uid, json_null());
-                    goto finish;
-                }
-            }
-        }
-
-        if (!json_array_size(invalid) && !errors.blobNotFound) {
-            struct mailbox *this_mailbox = newmailbox ? newmailbox : mailbox;
-
-            syslog(LOG_NOTICE, "jmap: update %s %s/%s",
-                   kind == CARDDAV_KIND_GROUP ? "group" : "contact",
-                   req->accountid, resource);
-            r = carddav_store(this_mailbox, card, resource,
-                              record.createdmodseq, flags, &annots, req->userid,
-                              req->authstate, ignorequota,
-                              (record.size - record.header_size));
-            if (!r) {
-                struct index_record record;
-
-                mailbox_find_index_record(this_mailbox,
-                                          this_mailbox->i.last_uid, &record);
-
-                jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox), record.uid,
-                                           NULL, NULL, NULL, NULL, &buf);
-                json_object_set_new(item, "blobId",
-                                    json_string(buf_cstring(&buf)));
-
-                json_object_set_new(item, "size",
-                                    json_integer(record.size - record.header_size));
-
-                while ((blob = ptrarray_pop(&blobs))) {
-                    jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox), record.uid,
-                                               NULL, NULL, blob->prop, &blob->guid, &buf);
-                    json_object_set_new(item, blob->key,
-                                        json_pack("{s:s s:i s:s? s:n}",
-                                                  "blobId", buf_cstring(&buf),
-                                                  "size", blob->size,
-                                                  "type", blob->type, "name"));
-                    property_blob_free(&blob);
-                }
-
-                r = carddav_remove(mailbox, olduid,
-                                   /*isreplace*/!newmailbox, req->userid);
-            }
-        }
-
         if (json_array_size(invalid)) {
-            json_t *err = json_pack("{s:s s:O}",
+            json_t *err = json_pack("{s:s s:o}",
                                     "type", "invalidProperties",
                                     "properties", invalid);
             json_object_set_new(set.not_updated, uid, err);
-            goto finish;
+            json_decref(errors.blobNotFound);
+            json_decref(item);
+            continue;
         }
-        else if (errors.blobNotFound) {
-            json_t *err = json_pack("{s:s s:O}",
+        json_decref(invalid);
+
+        if (errors.blobNotFound) {
+            json_t *err = json_pack("{s:s s:o}",
                                     "type", "blobNotFound",
                                     "notFound", errors.blobNotFound);
             json_object_set_new(set.not_updated, uid, err);
-            goto finish;
+            json_decref(item);
+            continue;
         }
-        else if (r) {
-            json_t *err = NULL;
-            switch (r) {
-                case HTTP_FORBIDDEN:
-                case IMAP_PERMISSION_DENIED:
-                    err = json_pack("{s:s}", "type", "forbidden");
-                    break;
-                case IMAP_QUOTA_EXCEEDED:
-                    err = json_pack("{s:s}", "type", "overQuota");
-                    break;
-                case IMAP_MESSAGE_TOO_LARGE:
-                    err = json_pack("{s:s}", "type", "tooLarge");
-                    break;
-                default:
-                    err = jmap_server_error(r);
-            }
-            json_object_set_new(set.not_updated, uid, err);
-            goto finish;
-        }
-        else json_object_set(set.updated, uid, item);
 
-      finish:
-        strarray_free(flags);
-        freeentryatts(annots);
-        jmap_closembox(req, &newmailbox);
-        vparse_free_card(vcard);
-        free(resource);
-        json_decref(jupdated);
-        json_decref(invalid);
-        json_decref(errors.blobNotFound);
-        json_decref(item);
-        while ((blob = ptrarray_pop(&blobs))) {
-            property_blob_free(&blob);
-        }
-        ptrarray_fini(&blobs);
-        r = 0;
+        /* Report contact as updated. */
+        json_object_set_new(set.updated, uid, item);
     }
-    buf_free(&buf);
 
 
     /* destroy */
@@ -2421,7 +2214,8 @@ done:
 
 static int jmap_contactgroup_set(struct jmap_req *req)
 {
-    _contacts_set(req, CARDDAV_KIND_GROUP);
+    _contacts_set(req, CARDDAV_KIND_GROUP, group_props,
+                  &_contact_set_create, &_contact_set_update);
     return 0;
 }
 
@@ -5348,9 +5142,253 @@ done:
     return r;
 }
 
+static int _contact_set_update(jmap_req_t *req, unsigned kind,
+                               const char *uid, json_t *jcard,
+                               struct carddav_db *db, struct mailbox **mailbox,
+                               json_t **item, jmap_contact_errors_t *errors)
+{
+    json_t *invalid = errors->invalid;
+    struct mailbox *newmailbox = NULL;
+    struct carddav_data *cdata = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    mbentry_t *mbentry = NULL;
+    uint32_t olduid;
+    char *resource = NULL;
+    int do_move = 0;
+    json_t *jupdated = NULL;
+    struct vparse_card *vcard = NULL;
+    struct entryattlist *annots = NULL;
+    strarray_t *flags = NULL;
+    ptrarray_t blobs = PTRARRAY_INITIALIZER;
+    property_blob_t *blob;
+    int r;
+
+    /* is it a valid contact? */
+    r = carddav_lookup_uid(db, uid, &cdata);
+    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != kind) {
+        r = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+
+    json_t *abookid = json_object_get(jcard, "addressbookId");
+    if (abookid && json_string_value(abookid)) {
+        const char *mboxname =
+            mboxname_abook(req->accountid, json_string_value(abookid));
+        if (mbentry && strcmp(mboxname, mbentry->name)) {
+            /* move */
+            if (!jmap_hasrights(req, mboxname, JACL_ADDITEMS)) {
+                json_array_append_new(invalid, json_string("addressbookId"));
+                goto done;
+            }
+            r = jmap_openmbox(req, mboxname, &newmailbox, 1);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
+                goto done;
+            }
+            do_move = 1;
+        }
+        json_object_del(jcard, "addressbookId");
+    }
+
+    int needrights = do_move ? JACL_UPDATEITEMS : required_set_rights(jcard);
+
+    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, needrights)) {
+        int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
+        r = (rights & JACL_READITEMS) ? HTTP_NOT_ALLOWED : HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    if (!*mailbox || strcmp(mailbox_name(*mailbox), mbentry->name)) {
+        jmap_closembox(req, mailbox);
+        r = jmap_openmbox(req, mbentry->name, mailbox, 1);
+    }
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open %s",
+               mbentry->name);
+        goto done;
+    }
+
+    struct index_record record;
+
+    r = mailbox_find_index_record(*mailbox, cdata->dav.imap_uid, &record);
+    if (r) goto done;
+
+    olduid = cdata->dav.imap_uid;
+    resource = xstrdup(cdata->dav.resource);
+
+    /* Load message containing the resource and parse vcard data */
+    vcard = record_to_vcard(*mailbox, &record);
+    if (!vcard || !vcard->objects) {
+        syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
+               cdata->dav.imap_uid, mailbox_name(*mailbox));
+        r = HTTP_UNPROCESSABLE;
+        goto done;
+    }
+
+    struct vparse_card *card = vcard->objects;
+    if (!vparse_get_entry(card, NULL, "VERSION"))
+        vparse_replace_entry(card, NULL, "VERSION", "3.0");
+    vparse_replace_entry(card, NULL, "PRODID", _prodid);
+
+    *item = json_object();
+
+    if (kind == CARDDAV_KIND_GROUP) {
+        json_t *namep = NULL;
+        json_t *members = NULL;
+        json_t *others = NULL;
+        json_t *jval;
+        const char *key;
+
+        json_object_foreach(jcard, key, jval) {
+            if (!strcmp(key, "name")) {
+                if (json_is_string(jval))
+                    namep = jval;
+                else json_array_append_new(invalid, json_string("name"));
+            }
+            else if (!strcmp(key, "contactIds")) {
+                members = jval;
+            }
+            else if (!strcmp(key, "otherAccountContactIds")) {
+                others = jval;
+            }
+            else if (!strncmp(key, "otherAccountContactIds/", 23)) {
+                /* Read and apply patch to current card */
+                json_t *jcurrent = jmap_group_from_vcard(card);
+                if (!jcurrent) {
+                    syslog(LOG_ERR, "can't read vcard %u:%s for update",
+                           cdata->dav.imap_uid, mailbox_name(*mailbox));
+                    r = HTTP_UNPROCESSABLE;
+                    goto done;
+                }
+                jupdated = jmap_patchobject_apply(jcurrent, jcard, NULL);
+                json_decref(jcurrent);
+                if (JNOTNULL(jupdated)) {
+                    json_object_del(jupdated, "addressbookId");
+                    /* Now read the updated property value */
+                    others = json_object_get(jupdated, "otherAccountContactIds");
+                }
+            }
+            else if (!strcmp(key, "id") || !strcmp(key, "uid")) {
+                if (cdata && strcmpnull(cdata->vcard_uid, json_string_value(jval))) {
+                    json_array_append_new(invalid, json_string(key));
+                }
+            }
+        }
+
+        if (namep) {
+            const char *name = json_string_value(namep);
+            if (name) {
+                vparse_replace_entry(card, NULL, "FN", name);
+                vparse_replace_entry(card, NULL, "N", name);
+            }
+        }
+        else if (!vparse_get_entry(card, NULL, "N")) {
+            struct vparse_entry *entry = vparse_get_entry(card, NULL, "FN");
+            if (entry) vparse_replace_entry(card, NULL, "N", entry->v.value);
+        }
+        if (members) {
+            _add_group_entries(req, card, members, invalid);
+        }
+        if (others) {
+            _add_othergroup_entries(req, card, others, invalid);
+        }
+    }
+    else {
+        flags = mailbox_extract_flags(*mailbox, &record, req->userid);
+        annots = mailbox_extract_annots(*mailbox, &record);
+
+        r = _json_to_card(req, cdata, mailbox_name(*mailbox), card, jcard, flags,
+                          &annots, &blobs, errors);
+        if (r == HTTP_NO_CONTENT) {
+            r = 0;
+            if (!newmailbox) {
+                /* just bump the modseq
+                   if in the same mailbox and no data change */
+                syslog(LOG_NOTICE, "jmap: touch contact %s/%s",
+                       req->accountid, resource);
+                if (strarray_find_case(flags, "\\Flagged", 0) >= 0)
+                    record.system_flags |= FLAG_FLAGGED;
+                else
+                    record.system_flags &= ~FLAG_FLAGGED;
+                annotate_state_t *state = NULL;
+                r = mailbox_get_annotate_state(*mailbox, record.uid, &state);
+                annotate_state_set_auth(state, 0,
+                                        req->userid, req->authstate);
+                if (!r) r = annotate_state_store(state, annots);
+                if (!r) r = mailbox_rewrite_index_record(*mailbox, &record);
+                if (!r) {
+                    json_decref(*item);
+                    *item = json_null();
+                }
+                goto done;
+            }
+        }
+    }
+
+    if (!json_array_size(invalid) && !errors->blobNotFound) {
+        struct mailbox *this_mailbox = newmailbox ? newmailbox : *mailbox;
+
+        syslog(LOG_NOTICE, "jmap: update %s %s/%s",
+               kind == CARDDAV_KIND_GROUP ? "group" : "contact",
+               req->accountid, resource);
+        r = carddav_store(this_mailbox, card, resource,
+                          record.createdmodseq, flags, &annots, req->userid,
+                          req->authstate, ignorequota,
+                          (record.size - record.header_size));
+        if (!r) {
+            struct index_record record;
+
+            mailbox_find_index_record(this_mailbox,
+                                      this_mailbox->i.last_uid, &record);
+
+            jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
+                                       record.uid, NULL, NULL, NULL, NULL, &buf);
+            json_object_set_new(*item, "blobId",
+                                json_string(buf_cstring(&buf)));
+
+            json_object_set_new(*item, "size",
+                                json_integer(record.size - record.header_size));
+
+            while ((blob = ptrarray_pop(&blobs))) {
+                jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
+                                           record.uid, NULL, NULL, blob->prop,
+                                           &blob->guid, &buf);
+                json_object_set_new(*item, blob->key,
+                                    json_pack("{s:s s:i s:s? s:n}",
+                                              "blobId", buf_cstring(&buf),
+                                              "size", blob->size,
+                                              "type", blob->type, "name"));
+                property_blob_free(&blob);
+            }
+
+            r = carddav_remove(*mailbox, olduid,
+                               /*isreplace*/!newmailbox, req->userid);
+        }
+    }
+
+  done:
+    mboxlist_entry_free(&mbentry);
+    jmap_closembox(req, &newmailbox);
+    strarray_free(flags);
+    freeentryatts(annots);
+    vparse_free_card(vcard);
+    free(resource);
+    json_decref(jupdated);
+    while ((blob = ptrarray_pop(&blobs))) {
+        property_blob_free(&blob);
+    }
+    ptrarray_fini(&blobs);
+
+    return r;
+}
+
 static int jmap_contact_set(struct jmap_req *req)
 {
-    _contacts_set(req, CARDDAV_KIND_CONTACT);
+    _contacts_set(req, CARDDAV_KIND_CONTACT, contact_props,
+                  &_contact_set_create, &_contact_set_update);
+
     return 0;
 }
 
