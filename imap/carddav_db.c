@@ -1169,11 +1169,12 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
     return r;
 }
 
-EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
-                           const char *resource, modseq_t createdmodseq,
-                           strarray_t *flags, struct entryattlist **annots,
-                           const char *userid, struct auth_state *authstate,
-                           int ignorequota, uint32_t oldsize)
+static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
+                          const char *uid, const char *fullname,
+                          const char *resource, modseq_t createdmodseq,
+                          strarray_t *flags, struct entryattlist **annots,
+                          const char *userid, struct auth_state *authstate,
+                          int ignorequota, uint32_t oldsize)
 {
     int r = 0;
     FILE *f = NULL;
@@ -1200,26 +1201,17 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
         return -1;
     }
 
-    /* set the REVision time */
-    time_to_iso8601(now, datestr, sizeof(datestr), 0);
-    vparse_replace_entry(vcard, NULL, "REV", datestr);
-
     /* Check size of vCard (allow existing oversized cards to be updated) */
-    struct buf buf = BUF_INITIALIZER;
-    vparse_tobuf(vcard, &buf);
     size_t max_size = vcard_max_size;
     if (oldsize > max_size) {
         max_size += CARDDAV_UPDATE_OVERAGE;
     }
-    if (buf_len(&buf) > max_size) {
-        buf_free(&buf);
+    if (buf_len(vcard) > max_size) {
         r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
     }
 
     /* Create header for resource */
-    const char *uid = vparse_stringval(vcard, "uid");
-    const char *fullname = vparse_stringval(vcard, "fn");
     if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
     mbuserid = mboxname_to_userid(mailbox_name(mailbox));
 
@@ -1244,7 +1236,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 
     fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
 
-    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(&buf));
+    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(vcard));
 
     /* Since we use the vCard UID in the resource name,
        this param may be long and needs to get properly split per RFC 2231 */
@@ -1260,8 +1252,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     fprintf(f, "\r\n");
 
     /* Write the vCard data to the file */
-    fprintf(f, "%s", buf_cstring(&buf));
-    buf_free(&buf);
+    fprintf(f, "%s", buf_cstring(vcard));
 
     qdiffs[QUOTA_STORAGE] = ftell(f);
     qdiffs[QUOTA_MESSAGE] = 1;
@@ -1303,6 +1294,78 @@ done:
     free(mbuserid);
     return r;
 }
+
+EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
+                           const char *resource, modseq_t createdmodseq,
+                           strarray_t *flags, struct entryattlist **annots,
+                           const char *userid, struct auth_state *authstate,
+                           int ignorequota, uint32_t oldsize)
+{
+    time_t now = time(0);
+    char datestr[80];
+
+    /* set the REVision time */
+    time_to_iso8601(now, datestr, sizeof(datestr), 0);
+    vparse_replace_entry(vcard, NULL, "REV", datestr);
+
+    /* get important properties */
+    const char *uid = vparse_stringval(vcard, "uid");
+    const char *fullname = vparse_stringval(vcard, "fn");
+
+    /* serialize the card */
+    struct buf buf = BUF_INITIALIZER;
+    vparse_tobuf(vcard, &buf);
+
+    int r = _carddav_store(mailbox, &buf, uid, fullname,
+                           resource, createdmodseq, flags, annots,
+                           userid, authstate, ignorequota, oldsize);
+
+    buf_free(&buf);
+
+    return r;
+}
+
+#ifdef HAVE_LIBICALVCARD
+
+EXPORTED int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
+                             const char *resource, modseq_t createdmodseq,
+                             strarray_t *flags, struct entryattlist **annots,
+                             const char *userid, struct auth_state *authstate,
+                             int ignorequota, uint32_t oldsize)
+{
+    vcardtimetype now = vcardtime_current_utc_time();
+    vcardproperty *prop;
+
+    /* set the REVision time */
+    prop = vcardcomponent_get_first_property(vcard, VCARD_REV_PROPERTY);
+    if (prop) {
+        vcardproperty_set_rev(prop, now);
+    }
+    else {
+        prop = vcardproperty_new_rev(now);
+        vcardcomponent_add_property(vcard, prop);
+    }
+
+    /* get important properties */
+    prop = vcardcomponent_get_first_property(vcard, VCARD_UID_PROPERTY);
+    const char *uid = vcardproperty_get_uid(prop);
+
+    prop = vcardcomponent_get_first_property(vcard, VCARD_FN_PROPERTY);
+    const char *fullname = vcardproperty_get_fn(prop);
+
+    /* serialize the card */
+    struct buf *buf = vcard_as_buf_x(vcard);
+
+    int r = _carddav_store(mailbox, buf, uid, fullname,
+                           resource, createdmodseq, flags, annots,
+                           userid, authstate, ignorequota, oldsize);
+
+    buf_destroy(buf);
+
+    return r;
+}
+
+#endif /* HAVE_LIBICALVCARD */
 
 EXPORTED int carddav_remove(struct mailbox *mailbox,
                             uint32_t olduid, int isreplace, const char *userid)
