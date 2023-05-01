@@ -202,7 +202,7 @@ AC_CHECK_ALIGNOF(uint32_t)
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
 
-AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdarg.h)
+AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdalign.h stdarg.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror posix_fadvise strsep memmem memrchr)
 AC_CHECK_FUNCS(strlcat strlcpy strnchr getgrouplist fmemopen pselect futimens futimes getline)
 AC_HEADER_DIRENT
@@ -2228,6 +2228,44 @@ AS_IF(
     [test "x$cyrus_cv_declare_optimize" = "xyes"],
     [AC_DEFINE(HAVE_DECLARE_OPTIMIZE,[],
         [Do we have support for optimize __attribute__?])]
+)
+
+AC_CACHE_CHECK(
+    [whether the C compiler supports alignof(expression)],
+    [cyrus_cv_gnu_alignof_expression],
+    [
+        AC_LANG_PUSH([C])
+        saved_CFLAGS="$CFLAGS"
+        saved_CPPFLAGS="$CPPFLAGS"
+        CFLAGS="$CFLAGS -Wall -Werror -Wno-unused"
+        CPPFLAGS="$CPPFLAGS -Wall -Werror -Wno-unused"
+        AC_COMPILE_IFELSE(
+            [AC_LANG_PROGRAM(
+                [
+                    #include <stdalign.h>
+                    #include <stddef.h>
+                ],
+                [
+                    int x;
+                    struct { float y; } y;
+                    size_t a, b;
+
+                    a = alignof(x);
+                    b = alignof(y.y);
+                ])
+            ],
+            [cyrus_cv_gnu_alignof_expression=yes],
+            [cyrus_cv_gnu_alignof_expression=no]
+        )
+        CFLAGS="$saved_CFLAGS"
+        CPPFLAGS="$saved_CPPFLAGS"
+        AC_LANG_POP([C])
+    ])
+AS_IF(
+    [test "x$cyrus_cv_gnu_alignof_expression" = "xyes"],
+    [AC_DEFINE(HAVE_GNU_ALIGNOF_EXPRESSION,[],
+        [Do we have support for alignof(expression)?]
+    )]
 )
 
 dnl documentation generation (sphinx, perl2rst, gitpython)
