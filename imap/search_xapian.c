@@ -2749,6 +2749,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     // this should never be able to fail here, because the first item will always exist!
     if (!tr->activedirs || !tr->activedirs->count) {
         syslog(LOG_ERR, "Failed to resolve activedir for %s", mailbox_name(mailbox));
+        r = IMAP_INTERNAL;
         goto out;
     }
 
