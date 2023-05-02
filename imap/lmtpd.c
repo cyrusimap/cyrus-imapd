@@ -582,6 +582,7 @@ int deliver_mailbox(FILE *f,
                     cyrus_acl_myrights(imap4flags->authstate, mailbox_acl(mailbox));
 
                 as.myrights |= (owner_rights & ~ACL_POST);
+                as.internalseen = mailbox_internal_seen(mailbox, user);
             }
         }
 
