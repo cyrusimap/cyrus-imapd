@@ -164,16 +164,12 @@ static int search_batch_size(void)
  * Returns an IMAP error code or 0 on success.
  */
 static int flush_batch(search_text_receiver_t *rx,
-                       struct mailbox *mailbox,
                        int flags,
                        ptrarray_t *batch)
 {
     int i;
     int r = 0;
     int indexflags = 0;
-
-    /* give someone else a chance */
-    mailbox_unlock_index(mailbox, NULL);
 
     /* prefetch files */
     for (i = 0 ; i < batch->count ; i++) {
@@ -256,7 +252,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     mailbox_iter_done(&iter);
 
     if (batch.count)
-        r = flush_batch(rx, mailbox, flags, &batch);
+        r = flush_batch(rx, flags, &batch);
 
  done:
     ptrarray_fini(&batch);
