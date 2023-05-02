@@ -2407,7 +2407,7 @@ sub test_restore_mail_twice
     ]);
 
     # need a gap between move and destroy otherwise we will restore both copies
-    sleep 1;
+    sleep 6;
 
     xlog "destroy email1";
     $res = $jmap->CallMethods([
@@ -2419,7 +2419,7 @@ sub test_restore_mail_twice
     xlog "restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
-            undoPeriod => "PT1S"
+            undoPeriod => "PT3S"
          }, "R7"],
         ['Email/get', {
             ids => [$emailId1],
@@ -2457,7 +2457,7 @@ sub test_restore_mail_twice
     $self->assert_null($res->[1][1]{list}[0]{mailboxIds}->{$inbox->{id}});
 
     # need a gap between destroys otherwise we will restore both copies
-    sleep 1;
+    sleep 6;
 
     xlog "destroy email1 again";
     $res = $jmap->CallMethods([
@@ -2469,7 +2469,7 @@ sub test_restore_mail_twice
     xlog "restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
-            undoPeriod => "PT1S"
+            undoPeriod => "PT3S"
          }, "R7"],
         ['Email/get', {
             ids => [$emailId1],
