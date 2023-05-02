@@ -1499,8 +1499,9 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
 
     cyrus_icalrestriction_check(itip);
     if ((errstr = get_icalcomponent_errstr(itip)) &&
-        (meth != ICAL_METHOD_REPLY ||
-         !strstr(errstr, "Failed iTIP restrictions for ORGANIZER property"))) {
+        ((meth != ICAL_METHOD_REPLY && meth != ICAL_METHOD_PUBLISH) ||
+         (!strstr(errstr, "Failed iTIP restrictions for ORGANIZER property") &&
+          !strstr(errstr, "No value for ORGANIZER property")))) {
         /* XXX  Outlook sends METHOD:REPLY with no ORGANIZER,
            but libical doesn't allow them in its restrictions checks */
         buf_setcstr(&imip->outcome, "error");
