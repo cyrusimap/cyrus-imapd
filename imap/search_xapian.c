@@ -2663,6 +2663,13 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         goto out;
     }
 
+    if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL)) {
+        syslog(LOG_ERR, "Refusing to index deleted mailbox %s",
+                mailbox_name(mailbox));
+        r = IMAP_MAILBOX_NONEXISTENT;
+        goto out;
+    }
+
     /* make sure the conversations are open before we start indexing
      * to avoid deadlocking against the search state */
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
@@ -2684,12 +2691,6 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     if (r) {
         syslog(LOG_ERR, "Could not acquire shared namelock on %s",
                namelock_fname);
-        goto out;
-    }
-
-    if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL)) {
-        syslog(LOG_ERR, "Refusing to index deleted mailbox %s",
-                mailbox_name(mailbox));
         goto out;
     }
 
@@ -2749,6 +2750,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     // this should never be able to fail here, because the first item will always exist!
     if (!tr->activedirs || !tr->activedirs->count) {
         syslog(LOG_ERR, "Failed to resolve activedir for %s", mailbox_name(mailbox));
+        r = IMAP_INTERNAL;
         goto out;
     }
 
