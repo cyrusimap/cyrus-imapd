@@ -349,9 +349,10 @@ static int send_alarm(struct get_alarm_rock *rock,
     struct buf calcolor = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
 
-    /* get the calendar id */
+    /* get the calendar id and calendar owner id */
     mbname_t *mbname = mbname_from_intname(rock->mboxname);
     const char *calid = strarray_nth(mbname_boxes(mbname), -1);
+    const char *ownerid = mbname_userid(mbname);
 
     /* get the display name annotation */
     const char *displayname_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
@@ -383,6 +384,7 @@ static int send_alarm(struct get_alarm_rock *rock,
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_ID, xstrdup(calid));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, buf_release(&calname));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_COLOR, buf_release(&calcolor));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_OWNER, xstrdup(ownerid));
 
     struct jmap_caleventid eid = { 0 };
 

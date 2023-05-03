@@ -158,6 +158,7 @@ static struct mboxevent event_template =
     { EVENT_CALENDAR_CALENDAR_ID, "calendarId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_CALENDAR_NAME, "calendarName", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_CALENDAR_COLOR, "calendarColor", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_CALENDAR_CALENDAR_OWNER, "calendarOwner", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_UID, "uid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_RECURID, "recurrenceId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_EVENTID, "calendarEventId", EVENT_PARAM_STRING, { 0 }, 0 },
