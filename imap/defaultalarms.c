@@ -36,7 +36,12 @@ EXPORTED void defaultalarms_fini(struct defaultalarms *defalarms)
     }
 }
 
-static icalcomponent *internalize_alarms(icalcomponent *alarms, int deterministic_uid)
+enum internalize_flags {
+    INTERNALIZE_DETERMINISTIC_UID = (1 << 0),
+    INTERNALIZE_KEEP_APPLE        = (1 << 1),
+};
+
+static icalcomponent *internalize_alarms(icalcomponent *alarms, enum internalize_flags flags)
 {
     icalcomponent *myalarms = icalcomponent_new(ICAL_XROOT_COMPONENT);
     struct buf buf = BUF_INITIALIZER;
@@ -69,8 +74,12 @@ static icalcomponent *internalize_alarms(icalcomponent *alarms, int deterministi
             icalcomponent_add_property(valarm, prop);
         }
 
+        if (!(flags & INTERNALIZE_KEEP_APPLE)) {
+            icalcomponent_remove_x_property_by_name(valarm, "X-APPLE-DEFAULT-ALARM");
+        }
+
         if (!icalcomponent_get_uid(valarm)) {
-            if (deterministic_uid) {
+            if (flags & INTERNALIZE_DETERMINISTIC_UID) {
                 // that's just necessary for not-yet migrated legacy alarms
                 icalcomponent *myalarm = icalcomponent_clone(valarm);
                 icalcomponent_normalize(myalarm);
@@ -179,6 +188,7 @@ static int get_alarms_dl(struct dlist *root, const char *name,
 static int load_legacy_alarms(const char *mboxname,
                               const char *userid,
                               const char *annot,
+                              enum internalize_flags flags,
                               struct defaultalarms_record *rec,
                               struct buf *buf)
 {
@@ -217,7 +227,7 @@ static int load_legacy_alarms(const char *mboxname,
     if (*content) {
         icalcomponent *alarms = icalparser_parse_string(content);
         if (alarms) {
-            rec->ical = internalize_alarms(alarms, 1);
+            rec->ical = internalize_alarms(alarms, flags);
             icalcomponent_free(alarms);
         }
 
@@ -270,11 +280,13 @@ EXPORTED int defaultalarms_load(const char *mboxname,
         // alerts. Fall back reading their CalDAV alarms.
         r = load_legacy_alarms(mboxname, userid,
                 CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME,
+                INTERNALIZE_DETERMINISTIC_UID|INTERNALIZE_KEEP_APPLE,
                 &defalarms->with_time, &buf);
 
         if (!r)
             r = load_legacy_alarms(mboxname, userid,
                     CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE,
+                    INTERNALIZE_DETERMINISTIC_UID|INTERNALIZE_KEEP_APPLE,
                     &defalarms->with_date, &buf);
 
         if (r)
@@ -362,11 +374,13 @@ HIDDEN int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
 
     r = load_legacy_alarms(mailbox_name(mbox), userid,
             CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME,
+            INTERNALIZE_DETERMINISTIC_UID,
             &defalarms.with_time, &buf);
     if (r) goto done;
 
     r = load_legacy_alarms(mailbox_name(mbox), userid,
             CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE,
+            INTERNALIZE_DETERMINISTIC_UID,
             &defalarms.with_date, &buf);
     if (r) goto done;
 

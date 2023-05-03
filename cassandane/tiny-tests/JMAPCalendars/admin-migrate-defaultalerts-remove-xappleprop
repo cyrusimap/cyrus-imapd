@@ -1,0 +1,98 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_admin_migrate_defaultalerts_remove_xappleprop
+    :min_version_3_9 :needs_component_jmap :MagicPlus
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $plusstore = $self->{instance}->get_service(
+        'imap')->create_store(username => 'cassandane+dav');
+    my $imap = $plusstore->get_client();
+
+    my @using = qw(
+    urn:ietf:params:jmap:core
+    urn:ietf:params:jmap:calendars
+    https://cyrusimap.org/ns/jmap/admin
+    https://cyrusimap.org/ns/jmap/calendars
+    https://cyrusimap.org/ns/jmap/debug
+    https://cyrusimap.org/ns/jmap/performance
+);
+
+    my $admin = $self->{adminstore}->get_client();
+    my $http = $self->{instance}->get_service("http");
+    my $adminJmap = Mail::JMAPTalk->new(
+        user => 'admin',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $adminJmap->DefaultUsing(\@using);
+
+    xlog $self, "PROPPATCH CalDAV alarms with X-APPLE property";
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-datetime>
+BEGIN:VALARM
+UID:c5f1c439-d18d-4c98-89e1-211ccf752dec
+TRIGGER:-PT5M
+ACTION:DISPLAY
+DESCRIPTION:alarmTime1
+X-APPLE-DEFAULT-ALARM:TRUE
+END:VALARM
+</C:default-alarm-vevent-datetime>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/calendars/user/cassandane/Default",
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    xlog $self, "Remove JMAP default alert annotation from calendar";
+    $imap->setmetadata('#calendars.Default',
+        '/private/vendor/cmu/cyrus-httpd/<urn:ietf:params:jmap:calendars>defaultalerts', '');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    xlog $self, "Create event using default alerts";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                e1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "test",
+                    start => "2023-01-19T11:00:00",
+                    duration => "PT1H",
+                    timeZone => "Etc/UTC",
+                    useDefaultAlerts => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $xhref = $res->[0][1]{created}{e1}{'x-href'};
+    $self->assert_not_null($xhref);
+
+    xlog $self, "Assert iCalendar event keeps X-APPLE property";
+    $res = $caldav->Request('GET', $xhref);
+    $self->assert_matches(qr/X-APPLE-DEFAULT-ALARM/, $res->{content});
+    $self->assert_matches(qr/X-JMAP-DEFAULT-ALARM/, $res->{content});
+
+    xlog $self, "Migrate default alarms";
+    $res = $adminJmap->CallMethods([
+        ['Admin/migrateCalendarDefaultAlarms', { }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{migrated}{cassandane}});
+
+    xlog $self, "Assert iCalendar event does not contain X-APPLE property";
+    $res = $caldav->Request('GET', $xhref);
+    $self->assert_matches(qr/(?!X-APPLE-DEFAULT-ALARM)/, $res->{content});
+    $self->assert_matches(qr/X-JMAP-DEFAULT-ALARM/, $res->{content});
+}
