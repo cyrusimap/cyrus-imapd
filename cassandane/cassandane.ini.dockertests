@@ -65,7 +65,8 @@ zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
 
 [imaptest]
 basedir = /srv/imaptest.git
-suppress = urlauth urlauth2
+# suppress list last reviewed 2023-05-03
+suppress = urlauth2
 
 
 [caldavtester]
