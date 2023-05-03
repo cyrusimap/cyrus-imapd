@@ -437,11 +437,11 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
     const char *id = strarray_nth(boxes, boxes->count-1);
     json_object_set_new(obj, "id", json_string(id));
 
-    if (jmap_wantprop(rock->get->props, "x-href")) {
+    if (jmap_wantprop(rock->get->props, "cyrusimap.org:href")) {
         // XXX - should the x-ref for a shared addressbook point
         // to the authenticated user's addressbook home?
         char *xhref = jmap_xhref(mbentry->name, NULL);
-        json_object_set_new(obj, "x-href", json_string(xhref));
+        json_object_set_new(obj, "cyrusimap.org:href", json_string(xhref));
         free(xhref);
     }
 
@@ -517,7 +517,7 @@ static const jmap_property_t addressbook_props[] = {
 
     /* FM extensions (do ALL of these get through to Cyrus?) */
     {
-        "x-href",
+        "cyrusimap.org:href",
         JMAP_DEBUG_EXTENSION,
         JMAP_PROP_SERVER_SET
     },
@@ -5598,7 +5598,7 @@ static const jmap_property_t card_props[] = {
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
     },
     {
-        "addressbookId",
+        "addressBookId",
         NULL,
         0
     },
@@ -5780,27 +5780,27 @@ static const jmap_property_t card_props[] = {
 
     /* FM extensions */
     {
-        "x-href",
+        "cyrusimap.org:href",
         JMAP_CONTACTS_EXTENSION,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     }, // AJAXUI only
     {
-        "x-hasPhoto",
+        "cyrusimap.org:hasPhoto",
         JMAP_CONTACTS_EXTENSION,
         JMAP_PROP_SERVER_SET
     }, // AJAXUI only
     {
-        "importance",
+        "cyrusimap.org:importance",
         JMAP_CONTACTS_EXTENSION,
         0
     },  // JMAPUI only
     {
-        "blobId",
+        "cyrusimap.org:blobId",
         JMAP_CONTACTS_EXTENSION,
         JMAP_PROP_SERVER_SET
     },
     {
-        "size",
+        "cyrusimap.org:size",
         JMAP_CONTACTS_EXTENSION,
         JMAP_PROP_SERVER_SET
     },
@@ -7072,7 +7072,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
     // record properties
     if (record) {
-        json_object_set_new(obj, "isFlagged",
+        json_object_set_new(obj, "cyrusimap.org:isFlagged",
                             record->system_flags & FLAG_FLAGGED ? json_true() :
                             json_false());
 
@@ -7085,7 +7085,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
         if (buf.len) val = strtod(buf_cstring(&buf), NULL);
 
         // need to keep the x- version while AJAXUI is around
-        json_object_set_new(obj, "importance", json_real(val));
+        json_object_set_new(obj, "cyrusimap.org:importance", json_real(val));
     }
 
   done:
@@ -7136,12 +7136,12 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
     jmap_filterprops(obj, crock->get->props);
 
-    if (jmap_wantprop(crock->get->props, "x-href")) {
+    if (jmap_wantprop(crock->get->props, "cyrusimap.org:href")) {
         char *xhref = jmap_xhref(mbentry->name, cdata->dav.resource);
-        json_object_set_new(obj, "x-href", json_string(xhref));
+        json_object_set_new(obj, "cyrusimap.org:href", json_string(xhref));
         free(xhref);
     }
-    if (jmap_wantprop(crock->get->props, "blobId")) {
+    if (jmap_wantprop(crock->get->props, "cyrusimap.org:blobId")) {
         json_t *jblobid = json_null();
         struct buf blobid = BUF_INITIALIZER;
         const char *uniqueid = NULL;
@@ -7170,15 +7170,15 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
             jblobid = json_string(buf_cstring(&blobid));
         }
         buf_free(&blobid);
-        json_object_set_new(obj, "blobId", jblobid);
+        json_object_set_new(obj, "cyrusimap.org:blobId", jblobid);
     }
-    if (jmap_wantprop(crock->get->props, "size")) {
-        json_object_set_new(obj, "size",
+    if (jmap_wantprop(crock->get->props, "cyrusimap.org:size")) {
+        json_object_set_new(obj, "cyrusimap.org:size",
                             json_integer(record.size - record.header_size));
     }
 
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
-    json_object_set_new(obj, "addressbookId",
+    json_object_set_new(obj, "addressBookId",
                         json_string(strrchr(mbentry->name, '.')+1));
 
     json_array_append_new(crock->get->list, obj);
