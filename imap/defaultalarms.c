@@ -373,14 +373,12 @@ HIDDEN int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
         goto done;
 
     r = load_legacy_alarms(mailbox_name(mbox), userid,
-            CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME,
-            INTERNALIZE_DETERMINISTIC_UID,
+            CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME, 0,
             &defalarms.with_time, &buf);
     if (r) goto done;
 
     r = load_legacy_alarms(mailbox_name(mbox), userid,
-            CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE,
-            INTERNALIZE_DETERMINISTIC_UID,
+            CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE, 0,
             &defalarms.with_date, &buf);
     if (r) goto done;
 
