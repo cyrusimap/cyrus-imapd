@@ -2,6 +2,139 @@
 use Cassandane::Tiny;
 use Data::UUID;
 
+sub test_calendar_set_defaultalerts_shared
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $t = $self->create_test;
+
+    my $ownerJmap = $t->{owner}{jmap};
+    my $shareeJmap = $t->{sharee}{jmap};
+
+    $self->assert_shared_defaultalerts($t);
+
+    xlog $self, "Owner sets default alarms";
+    $t->{owner}->{defaultAlertsWithTime} = {
+        alertWithTimeOwner => {
+            '@type' => 'Alert',
+            uid => '4c08cb1d-60e0-46e0-9cc1-9622b7a820ed',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'email',
+        },
+    };
+    $t->{owner}->{defaultAlertsWithoutTime} = {
+        alertWithoutTimeOwner => {
+            '@type' => 'Alert',
+            uid => '3f8c29c3-d305-4c19-adb6-57cc3308918c',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        },
+    };
+    $ownerJmap->CallMethods([
+        ['Calendar/set', {
+            accountId => 'owner',
+            update => {
+                Default => {
+                    defaultAlertsWithTime =>
+                        $t->{owner}->{defaultAlertsWithTime},
+                    defaultAlertsWithoutTime =>
+                        $t->{owner}->{defaultAlertsWithoutTime},
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_shared_defaultalerts($t);
+
+    xlog $self, 'Sharee sets default alarms';
+    $t->{sharee}->{defaultAlertsWithTime} = {
+        alertWithTimeSharee => {
+            '@type' => 'Alert',
+            uid => 'b61e5b53-8ea2-46f4-949d-7b49734ba4d3',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'email',
+        },
+    };
+    $t->{sharee}->{defaultAlertsWithoutTime} = {
+        alertWithoutTimeSharee => {
+            '@type' => 'Alert',
+            uid => '97d7c889-272f-4ce3-8d21-4a32b17ecece',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        },
+    };
+    $shareeJmap->CallMethods([
+        ['Calendar/set', {
+            accountId => 'owner',
+            update => {
+                Default => {
+                    defaultAlertsWithTime =>
+                        $t->{sharee}->{defaultAlertsWithTime},
+                    defaultAlertsWithoutTime =>
+                        $t->{sharee}->{defaultAlertsWithoutTime},
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_shared_defaultalerts($t);
+
+    xlog $self, 'Owner removes default alarms';
+    $t->{owner}->{defaultAlertsWithTime} = undef;
+    $t->{owner}->{defaultAlertsWithoutTime} = undef;
+    $ownerJmap->CallMethods([
+        ['Calendar/set', {
+            accountId => 'owner',
+            update => {
+                Default => {
+                    defaultAlertsWithTime =>
+                        $t->{owner}->{defaultAlertsWithTime},
+                    defaultAlertsWithoutTime =>
+                        $t->{owner}->{defaultAlertsWithoutTime},
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_shared_defaultalerts($t);
+
+    xlog $self, 'Sharee removes default alarms';
+    $t->{sharee}->{defaultAlertsWithTime} = undef;
+    $t->{sharee}->{defaultAlertsWithoutTime} = undef;
+    $shareeJmap->CallMethods([
+        ['Calendar/set', {
+            accountId => 'owner',
+            update => {
+                Default => {
+                    defaultAlertsWithTime =>
+                        $t->{sharee}->{defaultAlertsWithTime},
+                    defaultAlertsWithoutTime =>
+                        $t->{sharee}->{defaultAlertsWithoutTime},
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_shared_defaultalerts($t);
+}
+
 sub _can_match {
     my $event = shift;
     my $want = shift;
@@ -239,135 +372,3 @@ sub create_test
     };
 }
 
-sub test_calendar_set_defaultalerts_shared
-    :min_version_3_7 :needs_component_jmap
-{
-    my ($self) = @_;
-
-    my $t = $self->create_test;
-
-    my $ownerJmap = $t->{owner}{jmap};
-    my $shareeJmap = $t->{sharee}{jmap};
-
-    $self->assert_shared_defaultalerts($t);
-
-    xlog $self, "Owner sets default alarms";
-    $t->{owner}->{defaultAlertsWithTime} = {
-        alertWithTimeOwner => {
-            '@type' => 'Alert',
-            uid => '4c08cb1d-60e0-46e0-9cc1-9622b7a820ed',
-            trigger => {
-                '@type' => 'OffsetTrigger',
-                relativeTo => 'start',
-                offset => 'PT0S',
-            },
-            action => 'email',
-        },
-    };
-    $t->{owner}->{defaultAlertsWithoutTime} = {
-        alertWithoutTimeOwner => {
-            '@type' => 'Alert',
-            uid => '3f8c29c3-d305-4c19-adb6-57cc3308918c',
-            trigger => {
-                '@type' => 'OffsetTrigger',
-                relativeTo => 'start',
-                offset => 'PT0S',
-            },
-            action => 'display',
-        },
-    };
-    $ownerJmap->CallMethods([
-        ['Calendar/set', {
-            accountId => 'owner',
-            update => {
-                Default => {
-                    defaultAlertsWithTime =>
-                        $t->{owner}->{defaultAlertsWithTime},
-                    defaultAlertsWithoutTime =>
-                        $t->{owner}->{defaultAlertsWithoutTime},
-                },
-            },
-        }, 'R1'],
-    ]);
-
-    $self->assert_shared_defaultalerts($t);
-
-    xlog $self, 'Sharee sets default alarms';
-    $t->{sharee}->{defaultAlertsWithTime} = {
-        alertWithTimeSharee => {
-            '@type' => 'Alert',
-            uid => 'b61e5b53-8ea2-46f4-949d-7b49734ba4d3',
-            trigger => {
-                '@type' => 'OffsetTrigger',
-                relativeTo => 'start',
-                offset => 'PT0S',
-            },
-            action => 'email',
-        },
-    };
-    $t->{sharee}->{defaultAlertsWithoutTime} = {
-        alertWithoutTimeSharee => {
-            '@type' => 'Alert',
-            uid => '97d7c889-272f-4ce3-8d21-4a32b17ecece',
-            trigger => {
-                '@type' => 'OffsetTrigger',
-                relativeTo => 'start',
-                offset => 'PT0S',
-            },
-            action => 'display',
-        },
-    };
-    $shareeJmap->CallMethods([
-        ['Calendar/set', {
-            accountId => 'owner',
-            update => {
-                Default => {
-                    defaultAlertsWithTime =>
-                        $t->{sharee}->{defaultAlertsWithTime},
-                    defaultAlertsWithoutTime =>
-                        $t->{sharee}->{defaultAlertsWithoutTime},
-                },
-            },
-        }, 'R1'],
-    ]);
-
-    $self->assert_shared_defaultalerts($t);
-
-    xlog $self, 'Owner removes default alarms';
-    $t->{owner}->{defaultAlertsWithTime} = undef;
-    $t->{owner}->{defaultAlertsWithoutTime} = undef;
-    $ownerJmap->CallMethods([
-        ['Calendar/set', {
-            accountId => 'owner',
-            update => {
-                Default => {
-                    defaultAlertsWithTime =>
-                        $t->{owner}->{defaultAlertsWithTime},
-                    defaultAlertsWithoutTime =>
-                        $t->{owner}->{defaultAlertsWithoutTime},
-                },
-            },
-        }, 'R1'],
-    ]);
-
-    $self->assert_shared_defaultalerts($t);
-
-    xlog $self, 'Sharee removes default alarms';
-    $t->{sharee}->{defaultAlertsWithTime} = undef;
-    $t->{sharee}->{defaultAlertsWithoutTime} = undef;
-    $shareeJmap->CallMethods([
-        ['Calendar/set', {
-            accountId => 'owner',
-            update => {
-                Default => {
-                    defaultAlertsWithTime =>
-                        $t->{sharee}->{defaultAlertsWithTime},
-                    defaultAlertsWithoutTime =>
-                        $t->{sharee}->{defaultAlertsWithoutTime},
-                },
-            },
-        }, 'R1'],
-    ]);
-
-    $self->assert_shared_defaultalerts($t);
-}

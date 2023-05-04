@@ -2,6 +2,59 @@
 use Cassandane::Tiny;
 use Data::ICal;
 
+sub test_calendarevent_defaultalerts_updated_by_caldav_put
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Set default alerts on calendar";
+    $self->{defaultAlertUids} = [
+        '73aac5e1-e736-4c81-8b30-fb6ad5781f95',
+        'a7ce891b-ae41-4fdb-a3d1-346d3889c90b'
+    ];
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    defaultAlertsWithTime => {
+                        defaultAlert1 => {
+                            '@type' => 'Alert',
+                            uid => $self->{defaultAlertUids}[0],
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT5M',
+                            },
+                            action => 'display',
+                        },
+                        defaultAlert2 => {
+                            '@type' => 'Alert',
+                            uid => $self->{defaultAlertUids}[1],
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => '-PT15M',
+                            },
+                            action => 'display',
+                        },
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $self->assert_preserved_when_unchanged();
+    $self->assert_preserved_by_snooze_alarm();
+    $self->assert_preserved_by_apple_alarm();
+
+    $self->assert_disabled_by_user_alarm();
+    $self->assert_disabled_by_removed_default_alarm();
+    $self->assert_disabled_by_no_alarms();
+}
+
 sub assert_valarms
 {
     my ($self, $vevent, %args) = @_;
@@ -319,55 +372,3 @@ sub assert_disabled_by_no_alarms
     $self->assert_str_not_equals($getetag1, $getetag2);
 }
 
-sub test_defaultalerts_updated_by_caldav_put
-    :min_version_3_9 :needs_component_jmap
-{
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-
-    xlog $self, "Set default alerts on calendar";
-    $self->{defaultAlertUids} = [
-        '73aac5e1-e736-4c81-8b30-fb6ad5781f95',
-        'a7ce891b-ae41-4fdb-a3d1-346d3889c90b'
-    ];
-    $res = $jmap->CallMethods([
-        ['Calendar/set', {
-            update => {
-                Default => {
-                    defaultAlertsWithTime => {
-                        defaultAlert1 => {
-                            '@type' => 'Alert',
-                            uid => $self->{defaultAlertUids}[0],
-                            trigger => {
-                                '@type' => 'OffsetTrigger',
-                                relativeTo => 'start',
-                                offset => '-PT5M',
-                            },
-                            action => 'display',
-                        },
-                        defaultAlert2 => {
-                            '@type' => 'Alert',
-                            uid => $self->{defaultAlertUids}[1],
-                            trigger => {
-                                '@type' => 'OffsetTrigger',
-                                relativeTo => 'start',
-                                offset => '-PT15M',
-                            },
-                            action => 'display',
-                        },
-                    },
-                }
-            }
-        }, 'R1'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
-
-    $self->assert_preserved_when_unchanged();
-    $self->assert_preserved_by_snooze_alarm();
-    $self->assert_preserved_by_apple_alarm();
-
-    $self->assert_disabled_by_user_alarm();
-    $self->assert_disabled_by_removed_default_alarm();
-    $self->assert_disabled_by_no_alarms();
-}

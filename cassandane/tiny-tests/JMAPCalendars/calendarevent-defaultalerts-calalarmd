@@ -1,68 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub _can_match {
-    my $event = shift;
-    my $want = shift;
-
-    # I wrote a really good one of these for Caldav, but this will do for now
-    foreach my $key (keys %$want) {
-        return 0 if not exists $event->{$key};
-        return 0 if $event->{$key} ne $want->{$key};
-    }
-
-    return 1;
-}
-
-
-sub assert_alarms {
-    my $self = shift;
-    my @want = @_;
-    # pick first calendar alarm from notifications
-    my $data = $self->{instance}->getnotify();
-    if ($self->{replica}) {
-        my $more = $self->{replica}->getnotify();
-        push @$data, @$more;
-    }
-    my @events;
-    foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
-            if ($e->{event} eq "CalendarAlarm") {
-                push @events, $e;
-            }
-        }
-    }
-
-    my @left;
-    while (my $event = shift @events) {
-        my $found = 0;
-        my @newwant;
-        foreach my $data (@want) {
-            if (not $found and _can_match($event, $data)) {
-                $found = 1;
-            }
-            else {
-                push @newwant, $data;
-            }
-        }
-        if (not $found) {
-            push @left, $event;
-        }
-        @want = @newwant;
-    }
-
-    if (@want or @left) {
-        my $dump = Data::Dumper->Dump([\@want, \@left], [qw(want left)]);
-        $self->assert_equals(0, scalar @want,
-                             "expected events were not received:\n$dump");
-        $self->assert_equals(0, scalar @left,
-                             "unexpected extra events were received:\n$dump");
-    }
-}
-
-sub test_caldavalarm_update_defaultalerts
-    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd
+sub test_calendarevent_defaultalerts_calalarmd
+    :min_version_3_9 :needs_component_jmap :needs_component_calalarmd
 {
     my ($self) = @_;
 
@@ -184,5 +124,66 @@ EOF
     xlog "Assert alarm gets triggered two minutes after the event";
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 120 );
     $self->assert_alarms({summary => 'Simple', start => $start});
+}
+
+
+sub _can_match {
+    my $event = shift;
+    my $want = shift;
+
+    # I wrote a really good one of these for Caldav, but this will do for now
+    foreach my $key (keys %$want) {
+        return 0 if not exists $event->{$key};
+        return 0 if $event->{$key} ne $want->{$key};
+    }
+
+    return 1;
+}
+
+
+sub assert_alarms {
+    my $self = shift;
+    my @want = @_;
+    # pick first calendar alarm from notifications
+    my $data = $self->{instance}->getnotify();
+    if ($self->{replica}) {
+        my $more = $self->{replica}->getnotify();
+        push @$data, @$more;
+    }
+    my @events;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                push @events, $e;
+            }
+        }
+    }
+
+    my @left;
+    while (my $event = shift @events) {
+        my $found = 0;
+        my @newwant;
+        foreach my $data (@want) {
+            if (not $found and _can_match($event, $data)) {
+                $found = 1;
+            }
+            else {
+                push @newwant, $data;
+            }
+        }
+        if (not $found) {
+            push @left, $event;
+        }
+        @want = @newwant;
+    }
+
+    if (@want or @left) {
+        my $dump = Data::Dumper->Dump([\@want, \@left], [qw(want left)]);
+        $self->assert_equals(0, scalar @want,
+                             "expected events were not received:\n$dump");
+        $self->assert_equals(0, scalar @left,
+                             "unexpected extra events were received:\n$dump");
+    }
 }
 
