@@ -1,0 +1,267 @@
+#!perl
+use Cassandane::Tiny;
+
+use Data::ICal;
+
+sub test_admin_migrate_defaultalerts
+    :needs_component_jmap :min_version_3_9 :ReverseACLs :MagicPlus
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my @using = qw(
+        urn:ietf:params:jmap:core
+        urn:ietf:params:jmap:calendars
+        https://cyrusimap.org/ns/jmap/admin
+        https://cyrusimap.org/ns/jmap/calendars
+        https://cyrusimap.org/ns/jmap/debug
+        https://cyrusimap.org/ns/jmap/performance
+    );
+
+    my $http = $self->{instance}->get_service("http");
+    my $adminJmap = Mail::JMAPTalk->new(
+        user => 'admin',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $adminJmap->DefaultUsing(\@using);
+
+    xlog $self, "Make sure regular user can't call Admin method";
+    my $res = $jmap->CallMethods([
+        ['Admin/migrateCalendarDefaultAlarms', {}, 'R1'],
+    ], \@using);
+    $self->assert_str_equals('accountNotSupportedByMethod',
+        $res->[0][1]{type});
+
+    my $state = {
+        did_migrate => 0
+    };
+
+    $self->assert_calendars($state);
+    $self->assert_events($state);
+
+    xlog $self, "Migrate default alarms";
+    $res = $adminJmap->CallMethods([
+        ['Admin/migrateCalendarDefaultAlarms', { }, 'R1'],
+    ]);
+
+    $state->{did_migrate} = 1;
+    $state->{migrateResponse} = $res->[0][1];
+
+    $self->assert_calendars($state);
+    $self->assert_events($state);
+}
+
+sub assert_calendars
+{
+    my ($self, $state) = @_;
+
+    my $admin = $self->{adminstore}->get_client();
+    my $caldav = $self->{caldav};
+    my $imap = $self->{store}->get_client();
+    my $jmap = $self->{jmap};
+
+    if (not $state->{did_migrate}) {
+        # First, create calendars
+        xlog $self, "Create calendar A and remove JMAP default alert annotation";
+
+        $state->{calendarA} = {
+            id => $caldav->NewCalendar({name => 'A'}),
+        };
+        $self->assert_not_null($state->{calendarA}{id});
+
+        $imap->setmetadata("#calendars.$state->{calendarA}{id}",
+            '/private/vendor/cmu/cyrus-httpd/<urn:ietf:params:jmap:calendars>defaultalerts', '');
+        $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+        xlog $self, "Set CalDAV default alarms on calendar A as shared annotation";
+        # That's not a representative example: An Apple client would set a UID
+        # and not set the X-APPLE property. But not setting them here allows
+        # to check that migration sanitizes default alarms.
+        my $valarms = <<EOF;
+BEGIN:VALARM\r
+TRIGGER:-PT5M\r
+ACTION:AUDIO\r
+X-APPLE-DEFAULT-ALARM:TRUE\r
+END:VALARM\r
+EOF
+        $imap->setmetadata("#calendars.$state->{calendarA}{id}",
+            '/shared/vendor/cmu/cyrus-httpd/<urn:ietf:params:xml:ns:caldav>default-alarm-vevent-datetime', $valarms);
+        $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+        xlog $self, "Create calendar B and remove JMAP default alert annotation";
+
+        $state->{calendarB} = {
+            id => $caldav->NewCalendar({name => 'B'}),
+        };
+        $self->assert_not_null($state->{calendarB}{id});
+
+        $imap->setmetadata("#calendars.$state->{calendarB}{id}",
+            '/private/vendor/cmu/cyrus-httpd/<urn:ietf:params:jmap:calendars>defaultalerts', '');
+        $self->assert_str_equals('ok', $admin->get_last_completion_response());
+    }
+
+    xlog $self, "Assert calendar default alerts";
+
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            properties => [
+                'defaultAlertsWithTime',
+                'defaultAlertsWithoutTime',
+            ],
+        }, 'R1'],
+    ]);
+    my %calendars = map { $_->{id} => $_ } @{$res->[0][1]{list}};
+
+    # Default calendar
+    $self->assert_null($calendars{
+        Default}{defaultAlertsWithTime});
+    $self->assert_null($calendars{
+        Default}{defaultAlertsWithoutTime});
+
+    # Calendar A
+    my $calendarADefaultAlerts = $calendars{$state->{
+        calendarA}{id}}{defaultAlertsWithTime};
+    $self->assert_num_equals(1, scalar keys %$calendarADefaultAlerts);
+    $self->assert_null($calendars{$state->{
+        calendarA}{id}}{defaultAlertsWithoutTime});
+
+    # Calendar B
+    $self->assert_null($calendars{$state->{
+        calendarB}{id}}{defaultAlertsWithTime});
+    $self->assert_null($calendars{$state->{
+        calendarB}{id}}{defaultAlertsWithoutTime});
+
+    if (not $state->{did_migrate}) {
+        $state->{calendarA}{defaultAlert} = (values %$calendarADefaultAlerts)[0];
+    } else {
+        # Migration rewrites default alert UID, if none was set
+        my $defaultAlert = (values %$calendarADefaultAlerts)[0];
+        $self->assert_str_not_equals($defaultAlert->{uid},
+            $state->{calendarA}{defaultAlert}{uid});
+
+        $self->assert_deep_equals({
+            cassandane => [
+                "user.cassandane.#calendars.$state->{calendarA}{id}",
+                "user.cassandane.#calendars.$state->{calendarB}{id}",
+            ]
+        }, $state->{migrateResponse}{migrated});
+    }
+}
+
+sub assert_events
+{
+    my ($self, $state) = @_;
+
+    my $caldav = $self->{caldav};
+    my $jmap = $self->{jmap};
+
+    if (not $state->{did_migrate}) {
+        # First, create events
+        my $res = $jmap->CallMethods([
+            ['CalendarEvent/set', {
+                create => {
+                    eventA => {
+                        calendarIds => {
+                            $state->{calendarA}{id} => JSON::true,
+                        },
+                        title => "eventA",
+                        start => "2023-01-19T11:00:00",
+                        duration => "PT1H",
+                        timeZone => "Australia/Melbourne",
+                        useDefaultAlerts => JSON::true,
+                    },
+                    eventB1 => {
+                        calendarIds => {
+                            $state->{calendarB}{id} => JSON::true,
+                        },
+                        title => "eventB1",
+                        start => "2023-01-20T11:00:00",
+                        duration => "PT1H",
+                        timeZone => "Australia/Melbourne",
+                        useDefaultAlerts => JSON::true,
+                    },
+                    eventB2 => {
+                        calendarIds => {
+                            $state->{calendarB}{id} => JSON::true,
+                        },
+                        title => "eventB2",
+                        start => "2023-01-21T11:00:00",
+                        duration => "PT1H",
+                        timeZone => "Australia/Melbourne",
+                        useDefaultAlerts => JSON::false,
+                    },
+                },
+            }, 'R1'],
+        ]);
+
+        $state->{eventA} = {
+            xhref => $res->[0][1]{created}{eventA}{'x-href'}
+        };
+        $self->assert_not_null($state->{eventA}{xhref});
+
+        $state->{eventB1} = {
+            xhref => $res->[0][1]{created}{eventB1}{'x-href'}
+        };
+        $self->assert_not_null($state->{eventB1}{xhref});
+
+        $state->{eventB2} = {
+            xhref => $res->[0][1]{created}{eventB2}{'x-href'}
+        };
+        $self->assert_not_null($state->{eventB2}{xhref});
+    }
+
+    my ($veventA, $etagA) = $self->get_vevent($state->{eventA}{xhref});
+    my @valarmsA = grep { $_->ical_entry_type() eq 'VALARM' } @{$veventA->entries()};
+    $self->assert_num_equals(1, scalar @valarmsA);
+
+    my ($veventB1, $etagB1) = $self->get_vevent($state->{eventB1}{xhref});
+    my @valarmsB1 = grep { $_->ical_entry_type() eq 'VALARM' } @{$veventB1->entries()};
+    $self->assert_num_equals(0, scalar @valarmsB1);
+
+    my ($veventB2, $etagB2) = $self->get_vevent($state->{eventB2}{xhref});
+    my @valarmsB2 = grep { $_->ical_entry_type() eq 'VALARM' } @{$veventB2->entries()};
+    $self->assert_num_equals(0, scalar @valarmsB2);
+
+    if (not $state->{did_migrate}) {
+        $state->{eventA}{etag} = $etagA;
+        $state->{eventB1}{etag} = $etagB1;
+        $state->{eventB2}{etag} = $etagB2;
+    } else {
+        # Event A ETag must have changed
+        $self->assert_str_not_equals($state->{eventA}{etag}, $etagA);
+
+        # Event B1 ETag has changed - that's a glitch in migration
+        $self->assert_str_not_equals($state->{eventB1}{etag}, $etagB1);
+
+        # Event B@ ETag must not have changed
+        $self->assert_str_equals($state->{eventB2}{etag}, $etagB2);
+    }
+}
+
+sub get_vevent
+{
+    my ($self, $eventHref) = @_;
+    my $caldav = $self->{caldav};
+
+    xlog $self, "GET event";
+    my %headers = (
+        'Content-Type' => 'text/calendar',
+        'Authorization' => $caldav->auth_header(),
+    );
+    my $res = $caldav->{ua}->request('GET',
+        $caldav->request_url($eventHref), {
+            headers => \%headers,
+    });
+    $self->assert_str_equals('200', $res->{status});
+
+    my $vcalendar = Data::ICal->new(data => $res->{content});
+    my @vevents = grep { $_->ical_entry_type() eq 'VEVENT' } @{$vcalendar->entries()};
+    my $vevent = $vevents[0];
+    $self->assert_not_null($vevent);
+    return ($vevent, $res->{headers}{etag});
+}
