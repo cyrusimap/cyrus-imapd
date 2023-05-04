@@ -3824,9 +3824,10 @@ static int find_desc_store(annotate_state_t *state,
         return IMAP_INTERNAL;
     }
 
-    /* check for DAV annotations */
+    /* check for DAV and JMAP annotations */
     if (state->mailbox && mbtypes_dav(mailbox_mbtype(state->mailbox)) &&
-        !strncmp(name, DAV_ANNOT_NS, strlen(DAV_ANNOT_NS))) {
+        (!strncmp(name, DAV_ANNOT_NS, strlen(DAV_ANNOT_NS)) ||
+         !strncmp(name, JMAP_ANNOT_NS, strlen(JMAP_ANNOT_NS)))) {
         *descp = db_entry;
         return 0;
     }

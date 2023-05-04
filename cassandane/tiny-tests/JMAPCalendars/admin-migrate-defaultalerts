@@ -60,7 +60,6 @@ sub assert_calendars
 {
     my ($self, $state) = @_;
 
-    my $admin = $self->{adminstore}->get_client();
     my $caldav = $self->{caldav};
     my $imap = $self->{store}->get_client();
     my $jmap = $self->{jmap};
@@ -75,8 +74,8 @@ sub assert_calendars
         $self->assert_not_null($state->{calendarA}{id});
 
         $imap->setmetadata("#calendars.$state->{calendarA}{id}",
-            '/private/vendor/cmu/cyrus-httpd/<urn:ietf:params:jmap:calendars>defaultalerts', '');
-        $self->assert_str_equals('ok', $admin->get_last_completion_response());
+            '/private/vendor/cmu/cyrus-jmap/defaultalerts', '');
+        $self->assert_str_equals('ok', $imap->get_last_completion_response());
 
         xlog $self, "Set CalDAV default alarms on calendar A as shared annotation";
         # That's not a representative example: An Apple client would set a UID
@@ -101,8 +100,8 @@ EOF
         $self->assert_not_null($state->{calendarB}{id});
 
         $imap->setmetadata("#calendars.$state->{calendarB}{id}",
-            '/private/vendor/cmu/cyrus-httpd/<urn:ietf:params:jmap:calendars>defaultalerts', '');
-        $self->assert_str_equals('ok', $admin->get_last_completion_response());
+            '/private/vendor/cmu/cyrus-jmap/defaultalerts', '');
+        $self->assert_str_equals('ok', $imap->get_last_completion_response());
     }
 
     xlog $self, "Assert calendar default alerts";

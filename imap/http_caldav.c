@@ -281,9 +281,6 @@ static int propfind_shareesactas(const xmlChar *name, xmlNsPtr ns,
 static int proppatch_shareesactas(xmlNodePtr prop, unsigned set,
                                   struct proppatch_ctx *pctx,
                                   struct propstat propstat[], void *rock);
-static int proppatch_forbidden(xmlNodePtr prop, unsigned set,
-                                  struct proppatch_ctx *pctx,
-                                  struct propstat propstat[], void *rock);
 
 static int report_cal_query(struct transaction_t *txn,
                             struct meth_params *rparams,
@@ -581,14 +578,6 @@ static const struct prop_entry caldav_props[] = {
     { "sharees-act-as", NS_JMAPCAL,
         PROP_COLLECTION,
         propfind_shareesactas, proppatch_shareesactas, NULL },
-
-    // Make sure no one can set (or read) JMAP default alarms over DAV.
-    { "defaultalerts-with-time", NS_JMAPCAL,
-        PROP_COLLECTION | PROP_PERUSER,
-        NULL, proppatch_forbidden, NULL },
-    { "defaultalerts-without-time", NS_JMAPCAL,
-        PROP_COLLECTION | PROP_PERUSER,
-        NULL, proppatch_forbidden, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
@@ -6816,21 +6805,6 @@ static int propfind_caldav_alarms(const xmlChar *name, xmlNsPtr ns,
     dlist_free(&dl);
 
     return r;
-}
-
-/* Callback to reject a PROPPATCH as forbidden */
-static int proppatch_forbidden(xmlNodePtr prop,
-                                  unsigned set __attribute__((unused)),
-                                  struct proppatch_ctx *pctx,
-                                  struct propstat propstat[],
-                                  void *rock __attribute__((unused)))
-{
-    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
-                 &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
-
-    *pctx->ret = HTTP_FORBIDDEN;
-
-    return 0;
 }
 
 static int propfind_shareesactas(const xmlChar *name, xmlNsPtr ns,

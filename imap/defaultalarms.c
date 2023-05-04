@@ -13,8 +13,7 @@
 #define CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE \
     DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-date"
 
-#define JMAP_ANNOT_DEFAULTALERTS \
-    DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">defaultalerts"
+#define JMAP_ANNOT_DEFAULTALERTS JMAP_ANNOT_NS "defaultalerts"
 
 static void defaultalarms_record_fini(struct defaultalarms_record *rec)
 {
