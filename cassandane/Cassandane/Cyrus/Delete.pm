@@ -448,14 +448,14 @@ EOF
 
     xlog $self, "Verify user data files/directories exist";
     my $data = $self->{instance}->run_mbpath('-u', 'cassandane');
-    $self->assert( -f $data->{user}{'sub'});
-    $self->assert( -f $data->{user}{seen});
-    $self->assert( -f $data->{user}{dav});
-    $self->assert( -f $data->{user}{counters});
-    $self->assert( -f $data->{user}{conversations});
-    $self->assert( -f $data->{user}{xapianactive});
-    $self->assert( -f "$data->{user}{sieve}/defaultbc");
-    $self->assert( -d $data->{xapian}{t1});
+    $self->assert_file_test($data->{user}{'sub'}, '-f');
+    $self->assert_file_test($data->{user}{seen}, '-f');
+    $self->assert_file_test($data->{user}{dav}, '-f');
+    $self->assert_file_test($data->{user}{counters}, '-f');
+    $self->assert_file_test($data->{user}{conversations}, '-f');
+    $self->assert_file_test($data->{user}{xapianactive}, '-f');
+    $self->assert_file_test("$data->{user}{sieve}/defaultbc", '-f');
+    $self->assert_file_test($data->{xapian}{t1}, '-d');
 
     xlog $self, "admin can delete $inbox";
     $admintalk->delete($inbox);
@@ -494,19 +494,19 @@ EOF
     xlog $self, "Verify user data directories have been deleted";
     if ($maj > 3 || ($maj == 3 && $min > 4)) {
         # Entire UUID-hashed directory should be removed
-        $self->assert( !-e dirname($data->{user}{dav}));
+        $self->assert_not_file_test(dirname($data->{user}{dav}), '-e');
     }
     else {
         # Name-hashed directory will be left behind, so check individual files
-        $self->assert( !-e $data->{user}{'sub'});
-        $self->assert( !-e $data->{user}{seen});
-        $self->assert( !-e $data->{user}{dav});
-        $self->assert( !-e $data->{user}{counters});
-        $self->assert( !-e $data->{user}{conversations});
-        $self->assert( !-e $data->{user}{xapianactive});
+        $self->assert_not_file_test($data->{user}{'sub'}, '-e');
+        $self->assert_not_file_test($data->{user}{seen}, '-e');
+        $self->assert_not_file_test($data->{user}{dav}, '-e');
+        $self->assert_not_file_test($data->{user}{counters}, '-e');
+        $self->assert_not_file_test($data->{user}{conversations}, '-e');
+        $self->assert_not_file_test($data->{user}{xapianactive}, '-e');
     }
-    $self->assert( !-e $data->{user}{sieve});
-    $self->assert( !-e $data->{xapian}{t1});
+    $self->assert_not_file_test($data->{user}{sieve}, '-e');
+    $self->assert_not_file_test($data->{xapian}{t1}, '-e');
 }
 
 sub test_admin_inbox_del
@@ -695,7 +695,7 @@ sub test_cyr_expire_delete
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
 
     # the folder should not exist now!
-    $self->assert(!-d $datapath);
+    $self->assert_not_file_test($datapath, '-d');
 
     # and not exist from mbpath either...
     $self->assert_null($self->{instance}->folder_to_deleted_directories("user.cassandane.$subfoldername"));
@@ -802,15 +802,15 @@ sub test_cyr_expire_delete_with_annotation
     $self->check_messages(\%msg_inbox);
 
     my ($path) = $self->{instance}->folder_to_deleted_directories("user.cassandane.$subfoldername");
-    $self->assert(-d "$path");
+    $self->assert_file_test($path, '-d');
 
     xlog $self, "Run cyr_expire -D now, it shouldn't delete.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
-    $self->assert(-d "$path");
+    $self->assert_file_test($path, '-d');
 
     xlog $self, "Run cyr_expire -D now, with -a, skipping annotation.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
-    $self->assert(!-d "$path");
+    $self->assert_not_file_test($path, '-d');
 }
 
 # https://github.com/cyrusimap/cyrus-imapd/issues/2413
@@ -855,7 +855,7 @@ sub test_cyr_expire_dont_resurrect_convdb
 
     # expect user has a conversations database
     my $convdbfile = $self->{instance}->get_conf_user_file("cassandane", "conversations");
-    $self->assert(-f $convdbfile);
+    $self->assert_file_test($convdbfile, '-f');
 
     # log cassandane user out before it gets thrown out anyway
     undef $talk;
@@ -866,7 +866,7 @@ sub test_cyr_expire_dont_resurrect_convdb
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     # expect user does not have a conversations database
-    $self->assert(!-f $convdbfile);
+    $self->assert_not_file_test($convdbfile, '-f');
     $self->check_folder_not_ondisk($inbox);
     $self->check_folder_ondisk($inbox, deleted => 1);
 
@@ -875,14 +875,14 @@ sub test_cyr_expire_dont_resurrect_convdb
     $self->check_folder_ondisk($inbox, deleted => 1);
 
     # expect user does not have a conversations database
-    $self->assert(!-f $convdbfile);
+    $self->assert_not_file_test($convdbfile, '-f');
 
     xlog $self, "Run cyr_expire -D now.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
     $self->check_folder_not_ondisk($inbox, deleted => 1);
 
     # expect user does not have a conversations database
-    $self->assert(!-f $convdbfile);
+    $self->assert_not_file_test($convdbfile, '-f');
 }
 
 sub test_no_delete_with_children
