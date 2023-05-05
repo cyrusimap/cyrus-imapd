@@ -68,9 +68,6 @@
 #define DFLAG_UNBIND    "DAV:unbind"
 #define DFLAG_UNCHANGED "DAV:unchanged"
 
-/* XML namespace URIs */
-#define XML_NS_CYRUS    "http://cyrusimap.org/ns/"
-
 /* Supported TLS version for Upgrade */
 #define TLS_VERSION      "TLS/1.2"
 
