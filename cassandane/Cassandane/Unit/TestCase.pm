@@ -390,7 +390,35 @@ sub assert_date_matches
     $self->assert((abs($diff) <= $tolerance), $msg);
 }
 
-sub new_test_url {
+sub assert_file_test
+{
+    my ($self, $path, $test_type) = @_;
+
+    # see `perldoc -f -X` for valid test types
+    $test_type ||= '-e';
+    my $test = "$test_type \$path";
+    xlog "XXX test=<$test> path=<$path>";
+    my $result = eval $test;
+    die $@ if $@;
+    $self->assert($result, "'$path' failed '$test_type' test");
+}
+
+sub assert_not_file_test
+{
+    my ($self, $path, $test_type) = @_;
+
+    # see `perldoc -f -X` for valid test types
+    $test_type ||= '-e';
+    my $test = "$test_type \$path";
+    xlog "XXX test=<$test> path=<$path>";
+    my $result = eval $test;
+    die $@ if $@;
+    $self->assert(!$result,
+                  "'$path' unexpectedly passed '$test_type' test");
+}
+
+sub new_test_url
+{
     my ($self, $content_or_app) = @_;
 
     return Cassandane::Util::TestURL->new({
