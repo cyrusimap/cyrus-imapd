@@ -454,7 +454,7 @@ sub icalfile
     my ($self, $name) = @_;
 
     my $path = abs_path("data/icalendar/$name.ics");
-    $self->assert(-f $path);
+    $self->assert_file_test($path, '-f');
     my $data = slurp_file($path);
 
     my ($id) = ($data =~ m/^UID:(\S+)\r?$/m);
