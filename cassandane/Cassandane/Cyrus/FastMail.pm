@@ -712,8 +712,8 @@ sub test_rename_deepfolder_intermediates
 
     xlog $self, "Make sure there are no files left with cassandane in the name";
     $self->assert_str_equals(q{}, join(q{ }, glob "$self->{instance}{basedir}/conf/user/c/cassandane.*"));
-    $self->assert(not -d "$self->{instance}{basedir}/data/c/user/cassandane");
-    $self->assert(not -f "$self->{instance}{basedir}/conf/quota/c/user.cassandane");
+    $self->assert_not_file_test("$self->{instance}{basedir}/data/c/user/cassandane", "-d");
+    $self->assert_not_file_test("$self->{instance}{basedir}/conf/quota/c/user.cassandane", "-f");
 
     # replicate and check the renames
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
@@ -723,8 +723,8 @@ sub test_rename_deepfolder_intermediates
 
     xlog $self, "Make sure there are no files left with cassandane in the name on the replica";
     $self->assert_str_equals(q{}, join(q{ }, glob "$self->{replica}{basedir}/conf/user/c/cassandane.*"));
-    $self->assert(not -d "$self->{replica}{basedir}/data/c/user/cassandane");
-    $self->assert(not -f "$self->{replica}{basedir}/conf/quota/c/user.cassandane");
+    $self->assert_not_file_test("$self->{replica}{basedir}/data/c/user/cassandane", "-d");
+    $self->assert_not_file_test("$self->{replica}{basedir}/conf/quota/c/user.cassandane", "-f");
 
     xlog $self, "Now clean up all the deleted mailboxes";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
@@ -1312,8 +1312,8 @@ sub test_rename_deepfolder_intermediates_rightnow
 
     xlog $self, "Make sure there are no files left with cassandane in the name";
     $self->assert_str_equals(q{}, join(q{ }, glob "$self->{instance}{basedir}/conf/user/c/cassandane.*"));
-    $self->assert(not -d "$self->{instance}{basedir}/data/c/user/cassandane");
-    $self->assert(not -f "$self->{instance}{basedir}/conf/quota/c/user.cassandane");
+    $self->assert_not_file_test("$self->{instance}{basedir}/data/c/user/cassandane", "-d");
+    $self->assert_not_file_test("$self->{instance}{basedir}/conf/quota/c/user.cassandane", "-d");
 
     # replicate and check the renames
     @syslog = $self->{replica}->getsyslog();
@@ -1322,8 +1322,8 @@ sub test_rename_deepfolder_intermediates_rightnow
 
     xlog $self, "Make sure there are no files left with cassandane in the on the replica";
     $self->assert_str_equals(q{}, join(q{ }, glob "$self->{replica}{basedir}/conf/user/c/cassandane.*"));
-    $self->assert(not -d "$self->{replica}{basedir}/data/c/user/cassandane");
-    $self->assert(not -f "$self->{replica}{basedir}/conf/quota/c/user.cassandane");
+    $self->assert_not_file_test("$self->{replica}{basedir}/data/c/user/cassandane", "-d");
+    $self->assert_not_file_test("$self->{replica}{basedir}/conf/quota/c/user.cassandane", "-f");
 
     xlog $self, "Now clean up all the deleted mailboxes";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
@@ -1454,7 +1454,7 @@ sub test_cyr_expire_delete_findpaths_legacy
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
 
     # the folder should not exist now!
-    $self->assert(!-d $datapath);
+    $self->assert_not_file_test($datapath, "-d");
 
     # Delete the entire user!
     $admintalk->delete($inbox);
@@ -1529,7 +1529,7 @@ sub test_cyr_expire_delete_findpaths_nolegacy
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
 
     # the folder should not exist now!
-    $self->assert(!-d $datapath);
+    $self->assert_not_file_test($datapath, "-d");
 
     # Delete the entire user!
     $admintalk->delete($inbox);
