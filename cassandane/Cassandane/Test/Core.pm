@@ -99,7 +99,7 @@ sub _test_core_files_with_size
     if (not -f $core) {
         $core = "$instance->{basedir}/conf/cores/core";
     }
-    $self->assert(-f $core);
+    $self->assert_file_test($core, '-f');
     my $size = -s $core;
 
     # clean up the core we expected, so we don't barf on it existing!
