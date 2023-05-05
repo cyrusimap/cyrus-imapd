@@ -146,7 +146,7 @@ sub test_reportfile_exists
 
     my $reportfile_name = "$self->{instance}->{basedir}/conf/stats/report.txt";
 
-    $self->assert(-f $reportfile_name);
+    $self->assert_file_test($reportfile_name, '-f');
 
     my $report = parse_report(scalar read_file $reportfile_name);
 
@@ -189,7 +189,7 @@ sub test_disabled
 
     # no stats directory
     my $stats_dir = "$self->{instance}->{basedir}/conf/stats";
-    $self->assert(! -d $stats_dir);
+    $self->assert_not_file_test($stats_dir, '-d');
 
     # no http report
     my $response = $self->http_report();
