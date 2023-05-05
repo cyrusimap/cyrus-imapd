@@ -118,36 +118,35 @@ sub test_archive_messages
     my $datadir = $data->{data};
     my $archivedir = $data->{archive};
 
-    $self->assert(-f "$datadir/1.");
-    $self->assert(-f "$datadir/2.");
-    $self->assert(-f "$datadir/3.");
+    $self->assert_file_test("$datadir/1.", "-f");
+    $self->assert_file_test("$datadir/2.", "-f");
+    $self->assert_file_test("$datadir/3.", "-f");
 
-    $self->assert(!-f "$archivedir/1.");
-    $self->assert(!-f "$archivedir/2.");
-    $self->assert(!-f "$archivedir/3.");
+    $self->assert_not_file_test("$archivedir/1.", "-f");
+    $self->assert_not_file_test("$archivedir/2.", "-f");
+    $self->assert_not_file_test("$archivedir/3.", "-f");
 
     xlog $self, "Run cyr_expire but no messages should move";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
 
-    $self->assert(-f "$datadir/1.");
-    $self->assert(-f "$datadir/2.");
-    $self->assert(-f "$datadir/3.");
+    $self->assert_file_test("$datadir/1.", "-f");
+    $self->assert_file_test("$datadir/2.", "-f");
+    $self->assert_file_test("$datadir/3.", "-f");
 
-    $self->assert(!-f "$archivedir/1.");
-    $self->assert(!-f "$archivedir/2.");
-    $self->assert(!-f "$archivedir/3.");
-
+    $self->assert_not_file_test("$archivedir/1.", "-f");
+    $self->assert_not_file_test("$archivedir/2.", "-f");
+    $self->assert_not_file_test("$archivedir/3.", "-f");
 
     xlog $self, "Run cyr_expire to archive now";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
 
-    $self->assert(!-f "$datadir/1.");
-    $self->assert(!-f "$datadir/2.");
-    $self->assert(!-f "$datadir/3.");
+    $self->assert_not_file_test("$datadir/1.", "-f");
+    $self->assert_not_file_test("$datadir/2.", "-f");
+    $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert(-f "$archivedir/1.");
-    $self->assert(-f "$archivedir/2.");
-    $self->assert(-f "$archivedir/3.");
+    $self->assert_file_test("$archivedir/1.", "-f");
+    $self->assert_file_test("$archivedir/2.", "-f");
+    $self->assert_file_test("$archivedir/3.", "-f");
 }
 
 sub test_archivenow_messages
@@ -181,35 +180,35 @@ sub test_archivenow_messages
     my $archivedir = $data->{archive};
 
     # already archived
-    $self->assert(!-f "$datadir/1.");
-    $self->assert(!-f "$datadir/2.");
-    $self->assert(!-f "$datadir/3.");
+    $self->assert_not_file_test("$datadir/1.", "-f");
+    $self->assert_not_file_test("$datadir/2.", "-f");
+    $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert(-f "$archivedir/1.");
-    $self->assert(-f "$archivedir/2.");
-    $self->assert(-f "$archivedir/3.");
+    $self->assert_file_test("$archivedir/1.", "-f");
+    $self->assert_file_test("$archivedir/2.", "-f");
+    $self->assert_file_test("$archivedir/3.", "-f");
 
     xlog $self, "Run cyr_expire with old and messages stay archived";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
 
-    $self->assert(!-f "$datadir/1.");
-    $self->assert(!-f "$datadir/2.");
-    $self->assert(!-f "$datadir/3.");
+    $self->assert_not_file_test("$datadir/1.", "-f");
+    $self->assert_not_file_test("$datadir/2.", "-f");
+    $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert(-f "$archivedir/1.");
-    $self->assert(-f "$archivedir/2.");
-    $self->assert(-f "$archivedir/3.");
+    $self->assert_file_test("$archivedir/1.", "-f");
+    $self->assert_file_test("$archivedir/2.", "-f");
+    $self->assert_file_test("$archivedir/3.", "-f");
 
     xlog $self, "Run cyr_expire to archive now and messages stay archived";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
 
-    $self->assert(!-f "$datadir/1.");
-    $self->assert(!-f "$datadir/2.");
-    $self->assert(!-f "$datadir/3.");
+    $self->assert_not_file_test("$datadir/1.", "-f");
+    $self->assert_not_file_test("$datadir/2.", "-f");
+    $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert(-f "$archivedir/1.");
-    $self->assert(-f "$archivedir/2.");
-    $self->assert(-f "$archivedir/3.");
+    $self->assert_file_test("$archivedir/1.", "-f");
+    $self->assert_file_test("$archivedir/2.", "-f");
+    $self->assert_file_test("$archivedir/3.", "-f");
 }
 
 1;
@@ -246,24 +245,24 @@ sub test_archive_messages_archive_annotation
     my $datadir = $data->{data};
     my $archivedir = $data->{archive};
 
-    $self->assert(-f "$datadir/1.");
-    $self->assert(-f "$datadir/2.");
-    $self->assert(-f "$datadir/3.");
+    $self->assert_file_test("$datadir/1.", "-f");
+    $self->assert_file_test("$datadir/2.", "-f");
+    $self->assert_file_test("$datadir/3.", "-f");
 
-    $self->assert(!-f "$archivedir/1.");
-    $self->assert(!-f "$archivedir/2.");
-    $self->assert(!-f "$archivedir/3.");
+    $self->assert_not_file_test("$archivedir/1.", "-f");
+    $self->assert_not_file_test("$archivedir/2.", "-f");
+    $self->assert_not_file_test("$archivedir/3.", "-f");
 
     xlog $self, "Run cyr_expire but no messages should move";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
 
-    $self->assert(-f "$datadir/1.");
-    $self->assert(-f "$datadir/2.");
-    $self->assert(-f "$datadir/3.");
+    $self->assert_file_test("$datadir/1.", "-f");
+    $self->assert_file_test("$datadir/2.", "-f");
+    $self->assert_file_test("$datadir/3.", "-f");
 
-    $self->assert(!-f "$archivedir/1.");
-    $self->assert(!-f "$archivedir/2.");
-    $self->assert(!-f "$archivedir/3.");
+    $self->assert_not_file_test("$archivedir/1.", "-f");
+    $self->assert_not_file_test("$archivedir/2.", "-f");
+    $self->assert_not_file_test("$archivedir/3.", "-f");
 
     $admintalk->setmetadata('user.cassandane',
                             "/shared/vendor/cmu/cyrus-imapd/archive",
@@ -272,25 +271,24 @@ sub test_archive_messages_archive_annotation
     xlog $self, "Run cyr_expire asking to archive now, but it shouldn't";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
 
-    $self->assert(-f "$datadir/1.");
-    $self->assert(-f "$datadir/2.");
-    $self->assert(-f "$datadir/3.");
+    $self->assert_file_test("$datadir/1.", "-f");
+    $self->assert_file_test("$datadir/2.", "-f");
+    $self->assert_file_test("$datadir/3.", "-f");
 
-    $self->assert(!-f "$archivedir/1.");
-    $self->assert(!-f "$archivedir/2.");
-    $self->assert(!-f "$archivedir/3.");
-
+    $self->assert_not_file_test("$archivedir/1.", "-f");
+    $self->assert_not_file_test("$archivedir/2.", "-f");
+    $self->assert_not_file_test("$archivedir/3.", "-f");
 
     xlog $self, "Run cyr_expire asking to archive now, with skip annotation";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' , '-a');
 
-    $self->assert(!-f "$datadir/1.");
-    $self->assert(!-f "$datadir/2.");
-    $self->assert(!-f "$datadir/3.");
+    $self->assert_not_file_test("$datadir/1.", "-f");
+    $self->assert_not_file_test("$datadir/2.", "-f");
+    $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert(-f "$archivedir/1.");
-    $self->assert(-f "$archivedir/2.");
-    $self->assert(-f "$archivedir/3.");
+    $self->assert_file_test("$archivedir/1.", "-f");
+    $self->assert_file_test("$archivedir/2.", "-f");
+    $self->assert_file_test("$archivedir/3.", "-f");
 }
 
 sub test_archivenow_reconstruct
@@ -324,47 +322,47 @@ sub test_archivenow_reconstruct
     my $archivedir = $data->{archive};
 
     # already archived
-    $self->assert(!-f "$datadir/1.");
-    $self->assert(!-f "$datadir/2.");
-    $self->assert(!-f "$datadir/3.");
+    $self->assert_not_file_test("$datadir/1.", "-f");
+    $self->assert_not_file_test("$datadir/2.", "-f");
+    $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert(-f "$archivedir/1.");
-    $self->assert(-f "$archivedir/2.");
-    $self->assert(-f "$archivedir/3.");
+    $self->assert_file_test("$archivedir/1.", "-f");
+    $self->assert_file_test("$archivedir/2.", "-f");
+    $self->assert_file_test("$archivedir/3.", "-f");
 
     xlog $self, "Run cyr_expire with old and messages stay archived";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
 
-    $self->assert(!-f "$datadir/1.");
-    $self->assert(!-f "$datadir/2.");
-    $self->assert(!-f "$datadir/3.");
+    $self->assert_not_file_test("$datadir/1.", "-f");
+    $self->assert_not_file_test("$datadir/2.", "-f");
+    $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert(-f "$archivedir/1.");
-    $self->assert(-f "$archivedir/2.");
-    $self->assert(-f "$archivedir/3.");
+    $self->assert_file_test("$archivedir/1.", "-f");
+    $self->assert_file_test("$archivedir/2.", "-f");
+    $self->assert_file_test("$archivedir/3.", "-f");
 
     xlog $self, "Run cyr_expire to archive now and messages stay archived";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
 
-    $self->assert(!-f "$datadir/1.");
-    $self->assert(!-f "$datadir/2.");
-    $self->assert(!-f "$datadir/3.");
+    $self->assert_not_file_test("$datadir/1.", "-f");
+    $self->assert_not_file_test("$datadir/2.", "-f");
+    $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert(-f "$archivedir/1.");
-    $self->assert(-f "$archivedir/2.");
-    $self->assert(-f "$archivedir/3.");
+    $self->assert_file_test("$archivedir/1.", "-f");
+    $self->assert_file_test("$archivedir/2.", "-f");
+    $self->assert_file_test("$archivedir/3.", "-f");
 
     xlog $self, "Reconstruct doesn't lose files";
 
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-s');
 
-    $self->assert(!-f "$datadir/1.");
-    $self->assert(!-f "$datadir/2.");
-    $self->assert(!-f "$datadir/3.");
+    $self->assert_not_file_test("$datadir/1.", "-f");
+    $self->assert_not_file_test("$datadir/2.", "-f");
+    $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert(-f "$archivedir/1.");
-    $self->assert(-f "$archivedir/2.");
-    $self->assert(-f "$archivedir/3.");
+    $self->assert_file_test("$archivedir/1.", "-f");
+    $self->assert_file_test("$archivedir/2.", "-f");
+    $self->assert_file_test("$archivedir/3.", "-f");
 }
 
 1;
