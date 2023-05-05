@@ -138,9 +138,9 @@ sub test_autocreate_sieve_script_generation
     my $talk = $store->get_client();
 
     my $sievedir = $self->{instance}->get_sieve_script_dir('foo');
-    $self->assert(-f "$sievedir/foo_sieve.script.script");
-    $self->assert(-f "$sievedir/defaultbc");
-    $self->assert(-f "$sievedir/foo_sieve.script.bc");
+    $self->assert_file_test("$sievedir/foo_sieve.script.script", '-f');
+    $self->assert_file_test("$sievedir/defaultbc", '-f');
+    $self->assert_file_test("$sievedir/foo_sieve.script.bc", '-f');
 }
 
 sub test_autocreate_acl
