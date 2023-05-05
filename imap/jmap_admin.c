@@ -420,6 +420,7 @@ struct migrate_defaultalarms_rock {
     const char *userid;
     json_t *migrated;
     json_t *not_migrated;
+    int keep_caldav_alarms;
 };
 
 static int migrate_defaultalarms(const mbentry_t *mbentry, void *vrock)
@@ -450,7 +451,10 @@ static int migrate_defaultalarms(const mbentry_t *mbentry, void *vrock)
     if (r) goto done;
 
     int did_migrate = 0;
-    r = defaultalarms_migrate(mbox, rock->userid, &did_migrate);
+    enum defaultalarms_migrate_flags flags = rock->keep_caldav_alarms ?
+        DEFAULTALARMS_MIGRATE_KEEP_CALDAV_ALARMS :
+        DEFAULTALARMS_MIGRATE_NOFLAG;
+    r = defaultalarms_migrate(mbox, rock->userid, flags, &did_migrate);
     if (r) {
         xsyslog(LOG_ERR, "could not migrate",
                 "mboxname=<%s> mboxid=<%s> error=<%s>",
@@ -478,6 +482,7 @@ static int jmap_admin_migrate_defaultalarms(jmap_req_t *req)
     json_t *migrated_userids = json_object();
     json_t *not_migrated_userids = json_object();
     strarray_t userids = STRARRAY_INITIALIZER;
+    int keep_caldav_alarms = 0;
 
     if (!httpd_userisadmin) {
         jmap_error(req, json_pack("{s:s}", "type", "forbidden"));
@@ -503,6 +508,14 @@ static int jmap_admin_migrate_defaultalarms(jmap_req_t *req)
             }
             else {
                 jmap_parser_invalid(&parser, "userIds");
+            }
+        }
+        else if (!strcmp(arg, "keepCaldavAlarms")) {
+            if (json_is_boolean(jarg)) {
+                keep_caldav_alarms = json_boolean_value(jarg);
+            }
+            else {
+                jmap_parser_invalid(&parser, "keepCaldavAlarms");
             }
         }
         else {
@@ -548,7 +561,8 @@ static int jmap_admin_migrate_defaultalarms(jmap_req_t *req)
         struct migrate_defaultalarms_rock rock = {
             .userid = userid,
             .migrated = json_array(),
-            .not_migrated = json_object()
+            .not_migrated = json_object(),
+            .keep_caldav_alarms = keep_caldav_alarms
         };
 
         int r = mboxlist_usermboxtree(userid, NULL,

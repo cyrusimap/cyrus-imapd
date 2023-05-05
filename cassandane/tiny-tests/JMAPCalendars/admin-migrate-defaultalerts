@@ -65,22 +65,17 @@ sub assert_calendars
     my $jmap = $self->{jmap};
 
     if (not $state->{did_migrate}) {
-        # First, create calendars
-        xlog $self, "Create calendar A and remove JMAP default alert annotation";
-
+        xlog $self, "Create calendars with legacy CalDAV alarms";
         $state->{calendarA} = {
-            id => $caldav->NewCalendar({name => 'A'}),
+            id => $self->create_legacy_calendar('A'),
         };
-        $self->assert_not_null($state->{calendarA}{id});
+        $state->{calendarB} = {
+            id => $self->create_legacy_calendar('B'),
+        };
 
-        $imap->setmetadata("#calendars.$state->{calendarA}{id}",
-            '/private/vendor/cmu/cyrus-jmap/defaultalerts', '');
-        $self->assert_str_equals('ok', $imap->get_last_completion_response());
-
-        xlog $self, "Set CalDAV default alarms on calendar A as shared annotation";
-        # That's not a representative example: An Apple client would set a UID
-        # and not set the X-APPLE property. But not setting them here allows
-        # to check that migration sanitizes default alarms.
+        xlog $self, "Set CalDAV alarms on calendar A and calendar home";
+        # That's not a representative example but allows to assert
+        # that migration adds a UID and removes the X-APPLE property.
         my $valarms = <<EOF;
 BEGIN:VALARM\r
 TRIGGER:-PT5M\r
@@ -88,20 +83,9 @@ ACTION:AUDIO\r
 X-APPLE-DEFAULT-ALARM:TRUE\r
 END:VALARM\r
 EOF
-        $imap->setmetadata("#calendars.$state->{calendarA}{id}",
-            '/shared/vendor/cmu/cyrus-httpd/<urn:ietf:params:xml:ns:caldav>default-alarm-vevent-datetime', $valarms);
-        $self->assert_str_equals('ok', $imap->get_last_completion_response());
-
-        xlog $self, "Create calendar B and remove JMAP default alert annotation";
-
-        $state->{calendarB} = {
-            id => $caldav->NewCalendar({name => 'B'}),
-        };
-        $self->assert_not_null($state->{calendarB}{id});
-
-        $imap->setmetadata("#calendars.$state->{calendarB}{id}",
-            '/private/vendor/cmu/cyrus-jmap/defaultalerts', '');
-        $self->assert_str_equals('ok', $imap->get_last_completion_response());
+        $self->set_caldav_datetime_alarms($state->{calendarA}{id}, $valarms);
+        $self->set_caldav_datetime_alarms(undef, $valarms);
+        $state->{calendarA}{caldavAlarms} = $valarms;
     }
 
     xlog $self, "Assert calendar default alerts";
@@ -116,20 +100,17 @@ EOF
     ]);
     my %calendars = map { $_->{id} => $_ } @{$res->[0][1]{list}};
 
-    # Default calendar
     $self->assert_null($calendars{
         Default}{defaultAlertsWithTime});
     $self->assert_null($calendars{
         Default}{defaultAlertsWithoutTime});
 
-    # Calendar A
     my $calendarADefaultAlerts = $calendars{$state->{
         calendarA}{id}}{defaultAlertsWithTime};
     $self->assert_num_equals(1, scalar keys %$calendarADefaultAlerts);
     $self->assert_null($calendars{$state->{
         calendarA}{id}}{defaultAlertsWithoutTime});
 
-    # Calendar B
     $self->assert_null($calendars{$state->{
         calendarB}{id}}{defaultAlertsWithTime});
     $self->assert_null($calendars{$state->{
@@ -138,17 +119,35 @@ EOF
     if (not $state->{did_migrate}) {
         $state->{calendarA}{defaultAlert} = (values %$calendarADefaultAlerts)[0];
     } else {
-        # Migration rewrites default alert UID, if none was set
-        my $defaultAlert = (values %$calendarADefaultAlerts)[0];
-        $self->assert_str_not_equals($defaultAlert->{uid},
-            $state->{calendarA}{defaultAlert}{uid});
-
+        # Did migrate both calendars
         $self->assert_deep_equals({
             cassandane => [
                 "user.cassandane.#calendars.$state->{calendarA}{id}",
                 "user.cassandane.#calendars.$state->{calendarB}{id}",
             ]
         }, $state->{migrateResponse}{migrated});
+
+        # Migration rewrites default alert UID, if none was set
+        my $defaultAlert = (values %$calendarADefaultAlerts)[0];
+        $self->assert_str_not_equals($defaultAlert->{uid},
+            $state->{calendarA}{defaultAlert}{uid});
+
+        # JMAP annotation is set on both calendars
+        $self->assert_not_null($self->get_jmap_datetime_annotation(
+                $state->{calendarA}{id}));
+
+        $self->assert_not_null($self->get_jmap_datetime_annotation(
+                $state->{calendarB}{id}));
+
+        # CalDAV default alarms annotation got removed
+        $self->assert_null($self->get_caldav_datetime_annotation(
+                $state->{calendarA}{id}));
+
+        $self->assert_null($self->get_caldav_datetime_annotation(
+                $state->{calendarB}{id}));
+
+        # CalDAV default alarms annotation is kept on calendar home
+        $self->assert_not_null($self->get_caldav_datetime_annotation(undef));
     }
 }
 
@@ -234,13 +233,15 @@ sub assert_events
         # Event A ETag must have changed
         $self->assert_str_not_equals($state->{eventA}{etag}, $etagA);
 
-        # Event B1 ETag has changed - that's a glitch in migration
+        # Event B1 ETag must have changed
         $self->assert_str_not_equals($state->{eventB1}{etag}, $etagB1);
 
         # Event B@ ETag must not have changed
         $self->assert_str_equals($state->{eventB2}{etag}, $etagB2);
     }
 }
+
+# All the remaining functions just make the test code less gnarly
 
 sub get_vevent
 {
@@ -263,4 +264,64 @@ sub get_vevent
     my $vevent = $vevents[0];
     $self->assert_not_null($vevent);
     return ($vevent, $res->{headers}{etag});
+}
+
+sub get_jmap_datetime_annotation
+{
+    my ($self, $calendarId) = @_;
+    my $imap = $self->{store}->get_client();
+
+    my $mboxname = '#calendars';
+    $mboxname .= ".$calendarId" if $calendarId;
+
+    my $res = $imap->getmetadata($mboxname,
+        '/private/vendor/cmu/cyrus-jmap/defaultalerts');
+    return $res->{$mboxname}{
+        '/private/vendor/cmu/cyrus-jmap/defaultalerts'};
+}
+
+sub get_caldav_datetime_annotation
+{
+    my ($self, $calendarId) = @_;
+    my $imap = $self->{store}->get_client();
+
+    my $mboxname = '#calendars';
+    $mboxname .= ".$calendarId" if $calendarId;
+
+    my $res = $imap->getmetadata($mboxname,
+        '/shared/vendor/cmu/cyrus-httpd/<urn:ietf:params:xml:ns:caldav>default-alarm-vevent-datetime');
+    return $res->{$mboxname}{
+        '/shared/vendor/cmu/cyrus-httpd/<urn:ietf:params:xml:ns:caldav>default-alarm-vevent-datetime'};
+}
+
+
+sub create_legacy_calendar
+{
+    my ($self, $name) = @_;
+    my $caldav = $self->{caldav};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "Create calendar named $name";
+    my $calendarId = $caldav->NewCalendar({name => $name});
+    $self->assert_not_null($calendarId);
+
+    xlog $self, "Remove JMAP default alert annotation";
+    $imap->setmetadata("#calendars.$calendarId",
+        '/private/vendor/cmu/cyrus-jmap/defaultalerts', '');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    return $calendarId;
+}
+
+sub set_caldav_datetime_alarms
+{
+    my ($self, $calendarId, $valarms) = @_;
+    my $imap = $self->{store}->get_client();
+
+    my $mboxname = '#calendars';
+    $mboxname .= ".$calendarId" if $calendarId;
+
+    $imap->setmetadata($mboxname,
+        '/shared/vendor/cmu/cyrus-httpd/<urn:ietf:params:xml:ns:caldav>default-alarm-vevent-datetime', $valarms);
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
 }

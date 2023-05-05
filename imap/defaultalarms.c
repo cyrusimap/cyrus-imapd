@@ -323,7 +323,7 @@ static void set_alarms_dl(struct dlist *root, const char *name, icalcomponent *a
     free(atag);
 }
 
-EXPORTED int defaultalarms_save(struct mailbox *mailbox,
+EXPORTED int defaultalarms_save(struct mailbox *mbox,
                                 const char *userid,
                                 icalcomponent *with_time,
                                 icalcomponent *with_date)
@@ -337,11 +337,11 @@ EXPORTED int defaultalarms_save(struct mailbox *mailbox,
 
     static const char *annot = JMAP_ANNOT_DEFAULTALERTS;
     annotate_state_t *astate;
-    int r = mailbox_get_annotate_state(mailbox, 0, &astate);
+    int r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) {
         xsyslog(LOG_ERR, "failed to get annotation state",
                 "mboxname=<%s> err=<%s>",
-                mailbox_name(mailbox), error_message(r));
+                mailbox_name(mbox), error_message(r));
         r = CYRUSDB_INTERNAL;
         goto done;
     }
@@ -349,7 +349,8 @@ EXPORTED int defaultalarms_save(struct mailbox *mailbox,
     r = annotate_state_write(astate, annot, userid, &buf);
     if (r) {
         xsyslog(LOG_ERR, "failed to write annotation",
-                "annot=<%s> err=<%s>", annot, cyrusdb_strerror(r));
+                "mboxname=<%s> annot=<%s> err=<%s>",
+                mailbox_name(mbox), annot, cyrusdb_strerror(r));
         goto done;
     }
 
@@ -360,43 +361,72 @@ done:
 }
 
 HIDDEN int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
+                                 enum defaultalarms_migrate_flags flags,
                                  int *did_migratep)
 {
     struct defaultalarms defalarms = DEFAULTALARMS_INITIALIZER;
+    mbname_t *mbname = mbname_from_intname(mailbox_name(mbox));
     struct buf buf = BUF_INITIALIZER;
     *did_migratep = 0;
 
-    static const char *annot = JMAP_ANNOT_DEFAULTALERTS;
-    int r = annotatemore_lookup(mailbox_name(mbox), annot, userid, &buf);
-    if (r || buf_len(&buf))
-        goto done;
+    // Check if JMAP default alerts annotation already is set
+    int r = annotatemore_lookup(mailbox_name(mbox),
+            JMAP_ANNOT_DEFAULTALERTS, userid, &buf);
 
-    r = load_legacy_alarms(mailbox_name(mbox), userid,
-            CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME, 0,
-            &defalarms.with_time, &buf);
-    if (r) goto done;
+    if (!r && !buf_len(&buf)) {
+        // Set JMAP default alerts annotation
+        r = load_legacy_alarms(mailbox_name(mbox), userid,
+                CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME, 0,
+                &defalarms.with_time, &buf);
+        if (r) goto done;
 
-    r = load_legacy_alarms(mailbox_name(mbox), userid,
-            CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE, 0,
-            &defalarms.with_date, &buf);
-    if (r) goto done;
+        r = load_legacy_alarms(mailbox_name(mbox), userid,
+                CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE, 0,
+                &defalarms.with_date, &buf);
+        if (r) goto done;
 
-    if (!defalarms.with_time.ical && !defalarms.with_date.ical) {
-        // No default alarms defined. Skip writing empty
-        // default alarms for calendar sharees.
-        mbname_t *mbname = mbname_from_intname(mailbox_name(mbox));
-        int is_owner = !strcmpsafe(mbname_userid(mbname), userid);
-        mbname_free(&mbname);
-        if (!is_owner) goto done;
+
+        if (defalarms.with_time.ical || defalarms.with_date.ical ||
+                !strcmpsafe(mbname_userid(mbname), userid)) {
+            r = defaultalarms_save(mbox, userid,
+                    defalarms.with_time.ical, defalarms.with_date.ical);
+            *did_migratep = !r;
+        }
     }
 
-    r = defaultalarms_save(mbox, userid,
-            defalarms.with_time.ical, defalarms.with_date.ical);
+    if (!(flags & DEFAULTALARMS_MIGRATE_KEEP_CALDAV_ALARMS)) {
+        // Remove CalDAV alarms on calendar - they only got set by us
+        annotate_state_t *astate = NULL;
+        int r2 = mailbox_get_annotate_state(mbox, 0, &astate);
+        if (!r2) {
+            buf_reset(&buf);
 
-    *did_migratep = 1;
+            const char *annot = CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME;
+            r2 = annotate_state_write(astate, annot, "", &buf);
+            if (r2) {
+                xsyslog(LOG_ERR, "failed to remove annotation",
+                        "mboxname=<%s> annot=<%s> err=<%s>",
+                        mailbox_name(mbox), annot, cyrusdb_strerror(r2));
+            }
+
+            annot = CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE;
+            r2 = annotate_state_write(astate, annot, "", &buf);
+            if (r2) {
+                xsyslog(LOG_ERR, "failed to remove annotation",
+                        "mboxname=<%s> annot=<%s> err=<%s>",
+                        mailbox_name(mbox), annot, cyrusdb_strerror(r2));
+            }
+        }
+        else {
+            xsyslog(LOG_ERR, "failed to get annotation state",
+                    "mboxname=<%s> err=<%s>",
+                    mailbox_name(mbox), cyrusdb_strerror(r2));
+        }
+    }
 
 done:
     defaultalarms_fini(&defalarms);
+    mbname_free(&mbname);
     buf_free(&buf);
     return r;
 }
