@@ -1,0 +1,90 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_create_anniversaries
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    '@version' => '1.0',
+                    uid => $id,
+                    fullName => 'Jane Doe',
+                    anniversaries => {
+                        k8 => {
+                            '@type' => 'Anniversary',
+                            kind => 'birth',
+                            date => {
+                                '@type' => 'PartialDate',
+                                year => 1953,
+                                month => 4,
+                                day => 15
+                            }
+                        },
+                        k9 => {
+                            '@type' => 'Anniversary',
+                            kind => 'death',
+                            date => {
+                                '@type' => 'Timestamp',
+                                utc => '2019-10-15T23:10:00Z'
+                            },
+                            place => {
+                                '@type' => 'Address',
+                                fullAddress =>
+                                    '4445 Tree Street\nNew England, ND 58647\nUSA'
+                            }
+                        },
+                        k10 => {
+                            '@type' => 'Anniversary',
+                            kind => 'wedding',
+                            date => {
+                                '@type' => 'PartialDate',
+                                year => 1975
+                            },
+                            place => {
+                                '@type' => 'Address',
+                                fullAddress => 'Somewhere'
+                            }
+                        }
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+    $card =~ s/\\;/;/gs;         # unescape semi-colon in URI
+                                 # (is this a libicalvcard bug?)
+
+    $self->assert_matches(qr|BDAY;VALUE=DATE;PROP-ID=k8:19530415|, $card);
+    $self->assert_matches(qr|DEATHDATE;VALUE=TIMESTAMP;PROP-ID=k9:20191015T231000Z|, $card);
+    $self->assert_matches(qr|DEATHPLACE;PROP-ID=k9:4445 Tree Street\\nNew England\\, ND 58647\\nUSA|, $card);
+    $self->assert_matches(qr|ANNIVERSARY;VALUE=DATE;PROP-ID=k10:1975|, $card);
+    $self->assert_matches(qr|JSCONTACT-PROP;JSPTR=anniversaries/k10/place:|, $card);
+}
