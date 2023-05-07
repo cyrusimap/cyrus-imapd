@@ -1,0 +1,104 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_create_addresses
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    '@version' => '1.0',
+                    uid => $id,
+                    fullName => 'John Doe',
+                    addresses => {
+                        k23 => {
+                            '@type' => 'Address',
+                            contexts => {
+                                work => JSON::true
+                            },
+                            fullAddress =>
+                                '54321 Oak St\nReston\nVA\n20190\nUSA',
+                            street => [
+                                {
+                                    '@type' => 'StreetComponent',
+                                    kind => 'name',
+                                    value => 'Oak St'
+                                },
+                                {
+                                    '@type' => 'StreetComponent',
+                                    kind => 'number',
+                                    value => '54321'
+                                }
+                            ],
+                            locality => 'Reston',
+                            region => 'VA',
+                            country => 'USA',
+                            postcode => '20190',
+                            countryCode => 'US'
+                        },
+                        k24 => {
+                            '@type' => 'Address',
+                            contexts => {
+                                private => JSON::true
+                            },
+                            fullAddress =>
+                                '12345 Elm St\nReston\nVA\n20190\nUSA',
+                            street => [
+                                {
+                                    '@type' => 'StreetComponent',
+                                    kind => 'name',
+                                    value => 'Elm St'
+                                },
+                                {
+                                    '@type' => 'StreetComponent',
+                                    kind => 'number',
+                                    value => '12345'
+                                }
+                            ],
+                            locality => 'Reston',
+                            region => 'VA',
+                            country => 'USA',
+                            postcode => '20190',
+                            countryCode => 'US',
+                            timeZone => 'America/New_York'    
+                        }
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+    $card =~ s/\\,/,/gs;         # unescape commas
+    $card =~ s/\^/\\/gs;         # replace ^ (is this a vparse artifact?)
+
+    $self->assert_matches(qr/ADR;PROP-ID=k23;TYPE=WORK;CC=US;LABEL="54321 Oak St\\nReston\\nVA\\n20190\\nUSA":;;Oak St,54321;Reston;VA;20190;USA/, $card);
+    $self->assert_matches(qr/ADR;PROP-ID=k24;TYPE=HOME;TZ=America\/New_York;CC=US;LABEL="12345 Elm St\\nReston\\nVA\\n20190\\nUSA":;;Elm St,12345;Reston;VA;20190;USA/, $card);
+    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+}
