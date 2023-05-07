@@ -4928,7 +4928,13 @@ static int required_set_rights(json_t *props)
     json_t *val;
 
     json_object_foreach(props, name, val) {
-        if (!strcmp(name, "id") ||
+        if (!strncmp(name, "cyrusimap.org:", 14) && (name += 14) &&
+            (!strcmp(name, "href") ||
+             !strcmp(name, "hasPhoto") ||
+             !strcmp(name, "addressBookId"))) {
+            /* immutable */
+        }
+        else if (!strcmp(name, "id") ||
             !strcmp(name, "x-href") ||
             !strcmp(name, "x-hasPhoto") ||
             !strcmp(name, "addressbookId")) {
@@ -5823,29 +5829,29 @@ struct comp_kind {
  * joined by whitespace produce a valid full name of this entity.
 */
 static const struct comp_kind n_comp_kinds[] = {
-    { "prefix",  3 },
-    { "given",   1 },
-    { "middle",  2 },
-    { "surname", 0 },
-    { "suffix",  4 },
-    { NULL,     -1 }
+    { "prefix",  VCARD_N_HONORIFIC_PREFIX },
+    { "given",   VCARD_N_GIVEN            },
+    { "middle",  VCARD_N_ADDITIONAL       },
+    { "surname", VCARD_N_FAMILY           },
+    { "suffix",  VCARD_N_HONORIFIC_SUFFIX },
+    { NULL,     -1                        }
 };
 
 /* vCard ADR fields:
    PO Box, Extension, Street, Locality, Region, Postal Code, Country Name */
 static const struct comp_kind adr_comp_kinds[] = {
-    { "locality", 3 },
-    { "region",   4 },
-    { "postcode", 5 },
-    { "country",  6 },
-    { NULL,      -1 }
+    { "locality", VCARD_ADR_LOCALITY    },
+    { "region",   VCARD_ADR_REGION      },
+    { "postcode", VCARD_ADR_POSTAL_CODE },
+    { "country",  VCARD_ADR_COUNTRY     },
+    { NULL,      -1                     }
 };
 
 static const struct comp_kind street_comp_kinds[] = {
-    { "postOfficeBox", 0 },
-    { "name",          2 },
-    { "extension",     1 },
-    { NULL,           -1 }
+    { "postOfficeBox", VCARD_ADR_PO_BOX   },
+    { "name",          VCARD_ADR_STREET   },
+    { "extension",     VCARD_ADR_EXTENDED },
+    { NULL,           -1                  }
 };
 
 #define ALLOW_CALSCALE_PARAM      (1<<0)
@@ -7190,6 +7196,2053 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     return 0;
 }
 
+static void _jsunknown_to_vcard(struct jmap_parser *parser,
+                                const char *key, json_t *jval,
+                                vcardcomponent *card)
+{
+    if (key) jmap_parser_push(parser, key);
+
+    const char *ptr = jmap_parser_path(parser, &parser->buf);
+    char *val = json_dumps(jval, JSON_COMPACT|JSON_ENCODE_ANY);
+    vcardproperty *prop =
+        vcardproperty_vanew_jscontactprop(val,
+                                          vcardparameter_new_jsptr(ptr),
+                                          0);
+
+    vcardcomponent_add_property(card, prop);
+    
+    if (key) jmap_parser_pop(parser);
+    free(val);
+}
+
+static unsigned jssimple_to_vcard(struct jmap_parser *parser,
+                                  const char *key, json_t *jval,
+                                  vcardcomponent *card,
+                                  vcardproperty_kind pkind,
+                                  vcardvalue_kind vkind)
+{
+    vcardproperty *prop = NULL;
+    vcardvalue *val = NULL;
+
+    switch (vkind) {
+    case VCARD_KIND_VALUE:
+    case VCARD_TEXT_VALUE:
+    case VCARD_GRAMMATICALGENDER_VALUE:
+        if (!json_is_string(jval)) {
+            jmap_parser_invalid(parser, key);
+            return 0;
+        }
+        else {
+            val = vcardvalue_new_from_string(vkind, json_string_value(jval));
+        }
+        break;
+
+    case VCARD_TIMESTAMP_VALUE:
+        if (!json_is_utcdate(jval)) {
+            jmap_parser_invalid(parser, key);
+            return 0;
+        }
+        else {
+            vcardtimetype tt = vcardtime_from_string(json_string_value(jval), 0);
+            val = vcardvalue_new_timestamp(tt);
+        }
+        break;
+
+    default:
+        jmap_parser_invalid(parser, key);
+        return 0;
+    }
+
+    prop = vcardproperty_new(pkind);
+    vcardproperty_set_value(prop, val);
+    vcardcomponent_add_property(card, prop);
+
+    return 1;
+}
+static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
+                                    const char *key, vcardcomponent *card,
+                                    vcardproperty_kind pkind)
+{
+    const char *id;
+    json_t *obj;
+    int r = 0;
+
+    if (!json_is_object(jval)) {
+        jmap_parser_invalid(parser, key);
+        return 0;
+    }
+
+    jmap_parser_push(parser, key);
+
+    json_object_foreach(jval, id, obj) {
+
+        jmap_parser_push(parser, id);
+
+        if (!json_is_true(obj)) {
+            jmap_parser_invalid(parser, id);
+            break;
+        }
+
+        vcardproperty *prop = vcardproperty_new(pkind);
+        vcardproperty_set_value_from_string(prop, id, "NO");
+        vcardcomponent_add_property(card, prop);
+        r = 1;
+
+        jmap_parser_pop(parser);
+    }
+
+    if (json_object_size(jval)) {
+        /* Errored out of loop */
+        jmap_parser_pop(parser);
+    }
+
+    jmap_parser_pop(parser);
+
+    return r;
+}
+
+static void _jsparam_to_vcard(struct jmap_parser *parser,
+                              const char *key, json_t *jval,
+                              vcardproperty *prop,
+                              vcardparameter_kind pkind)
+{
+    json_t *jprop = json_object_get(jval, key);
+    vcardparameter *new = NULL, *param = NULL;
+
+    if (!jprop) return;
+
+    switch (pkind) {
+    case VCARD_TYPE_PARAMETER:
+        if (json_is_object(jprop)) {
+            const char *type;
+            json_t *set;
+
+            param = vcardproperty_get_first_parameter(prop, pkind);
+            if (!param) param = new = vcardparameter_new(pkind);
+
+            json_object_foreach(jprop, type, set) {
+                vcardparameter_add_value_from_string(param,
+                    !strcasecmp("private", type) ? "home" : type);
+            }
+        }
+        break;
+
+    case VCARD_PREF_PARAMETER:
+    case VCARD_INDEX_PARAMETER:
+        if (json_is_integer(jprop)) {
+            param = new = vcardparameter_new(pkind);
+            vcardparameter_set_pref(param, json_integer_value(jprop));
+        }
+        break;
+
+    case VCARD_CREATED_PARAMETER:
+        if (json_is_utcdate(jprop)) {
+            vcardtimetype tt = vcardtime_from_string(json_string_value(jprop), 0);
+
+            param = new = vcardparameter_new_created(tt);
+        }
+        break;
+
+    case VCARD_LEVEL_PARAMETER:
+        if (json_is_string(jprop)) {
+            const char *val = json_string_value(jprop);
+
+            if (!strcasecmp("low", val)) {
+                val = "beginner";
+            }
+            else if (!strcasecmp("medium", val)) {
+                val = "average";
+            }
+            else if (!strcasecmp("high", val)) {
+                val = "expert";
+            }
+
+            param = new = vcardparameter_new(VCARD_LEVEL_PARAMETER);
+            vcardparameter_set_value_from_string(param, val);
+        }
+        break;
+
+    default:
+        if (json_is_string(jprop)) {
+            param = new = vcardparameter_new(pkind);
+            vcardparameter_set_value_from_string(param,
+                                                 json_string_value(jprop));
+        }
+        break;
+    }
+
+    if (param) {
+        if (new) vcardproperty_add_parameter(prop, param);
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, key);
+    }
+
+    json_object_del(jval, key);
+}
+
+struct param_prop_t {
+    const char *key;
+    vcardparameter_kind kind;
+};
+
+struct param_prop_t phone_param_props[] = {
+    { "features", VCARD_TYPE_PARAMETER  },
+    { "label",    VCARD_LABEL_PARAMETER },
+    { "pref",     VCARD_PREF_PARAMETER  },
+    { "contexts", VCARD_TYPE_PARAMETER  },
+    { NULL,       0                     }
+};
+
+#define comm_param_props    (phone_param_props+1)  // label, context & pref
+#define pref_param_props    (phone_param_props+2)  // context & pref
+#define context_param_props (phone_param_props+3)  // context
+
+struct param_prop_t directories_param_props[] = {
+    { "listAs",    VCARD_INDEX_PARAMETER     },
+    { "mediaType", VCARD_MEDIATYPE_PARAMETER },
+    { "label",     VCARD_LABEL_PARAMETER     },
+    { "pref",      VCARD_PREF_PARAMETER      },
+    { "contexts",  VCARD_TYPE_PARAMETER      },
+    { NULL,       0                          }
+};
+
+#define resource_param_props (directories_param_props+1)  // no listAs
+
+static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
+                                       const char *key, const char *type,
+                                       vcardproperty* (*cb)(
+                                           struct jmap_parser *parser, json_t *obj,
+                                           const char *id, vcardcomponent *card,
+                                           void *rock),
+                                       struct param_prop_t param_props[],
+                                       unsigned want_propid, vcardcomponent *card,
+                                       void *rock)
+
+{
+    vcardproperty *prop = NULL;
+    const char *id;
+    json_t *obj;
+    void *tmp;
+    int r = 0;
+
+    if (!json_is_object(jval)) {
+        jmap_parser_invalid(parser, key);
+        return 0;
+    }
+
+    jmap_parser_push(parser, key);
+
+    json_object_foreach_safe(jval, tmp, id, obj) {
+        const char *val;
+        json_t *jprop;
+
+        jmap_parser_push(parser, id);
+
+        val = json_string_value(json_object_get(obj, "@type"));
+        if (strcmpsafe(type, val)) {
+            jmap_parser_invalid(parser, "@type");
+            break;
+        }
+        json_object_del(obj, "@type");
+
+        prop = cb(parser, obj, id, card, rock);
+
+        if (prop) {
+            struct param_prop_t *pprop;
+
+            if (want_propid) {
+                vcardproperty_add_parameter(prop, vcardparameter_new_propid(id));
+            }
+
+            for (pprop = param_props; pprop && pprop->key; pprop++) {
+                _jsparam_to_vcard(parser, pprop->key, obj, prop, pprop->kind);
+            }
+
+            vcardcomponent_add_property(card, prop);
+            r = 1;
+        }
+
+        /* Add unknown properties */
+        json_object_foreach(obj, key, jprop) {
+            _jsunknown_to_vcard(parser, key, jprop, card);
+        }
+
+        json_object_del(jval, id);
+        jmap_parser_pop(parser);
+    }
+
+    if (json_object_size(jval)) {
+        /* Errored out of loop */
+        jmap_parser_pop(parser);
+    }
+
+    jmap_parser_pop(parser);
+
+    return r;
+}
+
+static vcardproperty *_jsrelation_to_vcard(struct jmap_parser *parser,
+                                           json_t *obj, const char *id,
+                                           vcardcomponent *card __attribute__((unused)),
+                                           void *rock __attribute__((unused)))
+{
+    json_t *jprop = jprop = json_object_get(obj, "relation");
+    vcardproperty *prop = NULL;
+
+    if (!jprop || !json_is_object(jprop)) {
+        jmap_parser_invalid(parser, "relation");
+    }
+    else {
+        const char *valkind = "URI";
+        size_t i, len = strlen(id);
+        int have_scheme = 0;
+
+        for (i = 0; i < len; i++) {
+            if (!isascii(id[i]) || !isprint(id[i]) || isspace(id[i])) {
+                break;
+            }
+            else if (i && id[i] == ':') {
+                have_scheme = 1;
+            }
+        }
+        if (!have_scheme || i < len) {
+            valkind = "TEXT";
+        }
+
+        prop = vcardproperty_new(VCARD_RELATED_PROPERTY);
+        vcardproperty_set_value_from_string(prop, id, valkind);
+    }
+
+    return prop;
+}
+
+static int _field_name_to_index(const char *name,
+                                const struct comp_kind *comps)
+{
+    const struct comp_kind *comp;
+
+    for (comp = comps; comp->name; comp++) {
+        if (!strcmpsafe(name, comp->name)) {
+            return comp->idx;
+        }
+    }
+
+    return -1;
+}
+
+static unsigned _jsname_to_vcard(struct jmap_parser *parser,
+                                 json_t *jval, vcardcomponent *card)
+{
+    vcardstructuredtype n = { VCARD_NUM_N_FIELDS, { 0 } };
+    vcardproperty *prop = NULL;
+    vcardstrarray *sortas = NULL;
+    const char *key, *val;
+    json_t *jprop, *jsubprop;
+    size_t i, size;
+    int r = 0;
+
+    if (!json_is_object(jval)) {
+        jmap_parser_invalid(parser, "name");
+        return 0;
+    }
+
+    jmap_parser_push(parser, "name");
+
+    val = json_string_value(json_object_get(jval, "@type"));
+    if (strcmpsafe("Name", val)) {
+        jmap_parser_invalid(parser, "@type");
+        goto done;
+    }
+
+    jprop = json_object_get(jval, "components");
+    if (!jprop || !json_is_array(jprop)) {
+        jmap_parser_invalid(parser, "components");
+        goto done;
+    }
+
+    size = json_array_size(jprop);
+    for (i = 0; i < size; i++) {
+        json_t *comp = json_array_get(jprop, i);
+        vcardstrarray **field;
+        int rank, field_num;
+
+        jmap_parser_push_index(parser, "components", i, NULL);
+
+        val = json_string_value(json_object_get(comp, "@type"));
+        if (strcmpsafe("NameComponent", val)) {
+            jmap_parser_invalid(parser, "@type");
+            break;
+        }
+
+        val = json_string_value(json_object_get(comp, "kind"));
+        field_num = _field_name_to_index(val, n_comp_kinds);
+        if (field_num < 0) {
+            jmap_parser_invalid(parser, "kind");
+            break;
+        }
+
+        val = json_string_value(json_object_get(comp, "value"));
+        if (!val) {
+            jmap_parser_invalid(parser, "value");
+            break;
+        }
+
+        field = &n.field[field_num];
+
+        if (!*field) *field = vcardstrarray_new(1);
+        vcardstrarray_append(*field, val);
+
+        jsubprop = json_object_get(comp, "rank");
+        if (jsubprop) {
+            rank = json_integer_value(json_object_get(comp, "rank"));
+            if (!rank) {
+                jmap_parser_invalid(parser, "rank");
+                break;
+            }
+
+            /* XXX  TODO: rank */
+        }
+
+        json_object_del(comp, "@type");
+        json_object_del(comp, "kind");
+        json_object_del(comp, "value");
+        json_object_del(comp, "rank");
+
+        /* Add unknown properties */
+        json_object_foreach(comp, key, jsubprop) {
+            _jsunknown_to_vcard(parser, key, jsubprop, card);
+        }
+
+        jmap_parser_pop(parser);
+    }
+
+    if (i != size) {
+        jmap_parser_pop(parser);
+        goto done;
+    }
+
+    jprop = json_object_get(jval, "sortAs");
+    if (jprop) {
+        const char *fields[VCARD_NUM_N_FIELDS] = { 0 };
+        int field_num, last_field = -1;
+        void *tmp;
+
+        if (!json_is_object(jprop)) {
+            jmap_parser_invalid(parser, "sortAs");
+            goto done;
+        }
+
+        jmap_parser_push(parser, "sortAs");
+
+        json_object_foreach_safe(jprop, tmp, key, jsubprop) {
+            field_num = _field_name_to_index(key, n_comp_kinds);
+            if (field_num < 0) {
+                _jsunknown_to_vcard(parser, key, jsubprop, card);
+            }
+
+            fields[field_num] = json_string_value(jsubprop);
+            last_field = MAX(last_field, field_num);
+        }
+
+        sortas = vcardstrarray_new(1);
+
+        for (i = 0; i <= (size_t) last_field; i++) {
+            vcardstrarray_append(sortas, fields[i] ? fields[i] : "");
+        }
+
+        jmap_parser_pop(parser);
+    }
+
+    json_object_del(jval, "@type");
+    json_object_del(jval, "components");
+    json_object_del(jval, "sortAs");
+
+    /* Add unknown properties */
+    json_object_foreach(jval, key, jprop) {
+        _jsunknown_to_vcard(parser, key, jprop, card);
+    }
+
+    prop = vcardproperty_new_n(&n);
+    if (prop) {
+        if (sortas) {
+            vcardproperty_add_parameter(prop, vcardparameter_new_sortas(sortas));
+        }
+        vcardcomponent_add_property(card, prop);
+        r = 1;
+    }
+
+  done:
+    jmap_parser_pop(parser);
+    if (!r) {
+        for (i = 0; i < n.num_fields; i++) {
+            if (n.field[i]) vcardstrarray_free(n.field[i]);
+        }
+    }
+
+    return r;
+}
+
+static vcardproperty *_jsnickname_to_vcard(struct jmap_parser *parser,
+                                           json_t *obj,
+                                           const char *id __attribute__((unused)),
+                                           vcardcomponent *card __attribute__((unused)),
+                                           void *rock __attribute__((unused)))
+{
+    const char *val = json_string_value(json_object_get(obj, "name"));
+    vcardproperty *prop = NULL;
+
+    if (!val) {
+        jmap_parser_invalid(parser, "name");
+    }
+    else {
+        vcardstrarray *sa = vcardstrarray_new(1);
+
+        vcardstrarray_append(sa, val);
+
+        prop = vcardproperty_new_nickname(sa);
+
+        json_object_del(obj, "name");
+    }
+
+    return prop;
+}
+
+static vcardproperty *_jsorg_to_vcard(struct jmap_parser *parser, json_t *obj,
+                                      const char *id, vcardcomponent *card,
+                                      void *rock)
+{
+    hash_table *groups = rock;
+    vcardstrarray *units = NULL, *sortas = NULL;
+    vcardproperty *prop = NULL;
+    json_t *jprop;
+
+    jprop = json_object_get(obj, "name");
+    if (json_is_string(jprop)) {
+        units = vcardstrarray_new(1);
+        vcardstrarray_append(units, json_string_value(jprop));
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "name");
+        return NULL;
+    }
+
+    jprop = json_object_get(obj, "sortAs");
+    if (json_is_string(jprop)) {
+        sortas = vcardstrarray_new(1);
+        vcardstrarray_append(sortas, json_string_value(jprop));
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "sortAs");
+        if (units) vcardstrarray_free(units);
+        return NULL;
+    }
+
+    jprop = json_object_get(obj, "units");
+    if (json_is_array(jprop)) {
+        size_t i, size = json_array_size(jprop);
+
+        if (!units) {
+            units = vcardstrarray_new(1);
+            vcardstrarray_append(units, "");
+        }
+
+        for (i = 0; i < size; i++) {
+            json_t *unit = json_array_get(jprop, i);
+            const char *key, *val;
+            json_t *jsubprop;
+
+            jmap_parser_push_index(parser, "units", i, NULL);
+
+            val = json_string_value(json_object_get(unit, "@type"));
+            if (strcmpsafe("OrgUnit", val)) {
+                jmap_parser_invalid(parser, "@type");
+                break;
+            }
+
+            val = json_string_value(json_object_get(unit, "name"));
+            if (val) {
+                vcardstrarray_append(units, val);
+            }
+            else {
+                jmap_parser_invalid(parser, "name");
+                break;
+            }
+
+            jsubprop = json_object_get(unit, "sortAs");
+            if (json_is_string(jsubprop)) {
+                size_t num_empty;
+
+                if (!sortas) {
+                    sortas = vcardstrarray_new(1);
+                }
+
+                num_empty = i - vcardstrarray_size(sortas) + 1;
+                while (num_empty--) {
+                    vcardstrarray_append(sortas, "");
+                }
+
+                vcardstrarray_append(sortas, json_string_value(jsubprop));
+            }
+            else if (jsubprop) {
+                jmap_parser_invalid(parser, "sortAs");
+            }
+
+            json_object_del(unit, "@type");
+            json_object_del(unit, "name");
+            json_object_del(unit, "sortAs");
+
+            /* Add unknown properties */
+            json_object_foreach(unit, key, jsubprop) {
+                _jsunknown_to_vcard(parser, key, jsubprop, card);
+            }
+
+            jmap_parser_pop(parser);
+        }
+
+        if (i != size) {
+            jmap_parser_pop(parser);
+            vcardstrarray_free(units);
+            units = NULL;
+        }
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "units");
+    }
+
+    if (units) {
+        ptrarray_t *props = hash_lookup(id, groups);
+
+        prop =  vcardproperty_new_org(units);
+        if (sortas) {
+            vcardproperty_add_parameter(prop, vcardparameter_new_sortas(sortas));
+        }
+
+        if (!props) {
+            props = ptrarray_new();
+            hash_insert(id, props, groups);
+        }
+        ptrarray_append(props, prop);
+    }
+    else if (sortas) {
+        vcardstrarray_free(sortas);
+    }
+
+    json_object_del(obj, "name");
+    json_object_del(obj, "units");
+    json_object_del(obj, "sortAs");
+
+    return prop;
+}
+
+static vcardproperty *_jspronoun_to_vcard(struct jmap_parser *parser, json_t *obj,
+                                          const char *id __attribute__((unused)),
+                                          vcardcomponent *card __attribute__((unused)),
+                                          void *rock __attribute__((unused)))
+{
+    const char *val = json_string_value(json_object_get(obj, "pronouns"));
+    vcardproperty *prop = NULL;
+
+    if (!val) {
+        jmap_parser_invalid(parser, "pronouns");
+    }
+    else {
+        prop = vcardproperty_new_pronouns(val);
+
+        json_object_del(obj, "pronouns");
+    }
+
+    return prop;
+}
+
+static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
+                                  json_t *jval, vcardcomponent *card)
+{
+    const char *key, *val;
+    json_t *jprop;
+    int r = 0;
+
+    if (!json_is_object(jval)) {
+        jmap_parser_invalid(parser, "speakToAs");
+        return 0;
+    }
+
+    jmap_parser_push(parser, "speakToAs");
+
+    val = json_string_value(json_object_get(jval, "@type"));
+    if (strcmpsafe("SpeakToAs", val)) {
+        jmap_parser_invalid(parser, "@type");
+        goto done;
+    }
+
+    jprop = json_object_get(jval, "grammaticalGender");
+    if (jprop) {
+        if (jssimple_to_vcard(parser, "grammaticalGender", jprop,
+                              card, VCARD_GRAMMATICALGENDER_PROPERTY,
+                              VCARD_GRAMMATICALGENDER_VALUE)) {
+            r = 1;
+        }
+        else {
+            goto done;
+        }
+    }
+
+    jprop = json_object_get(jval, "pronouns");
+    if (jprop) {
+        r |= _jsmultiobject_to_card(parser, jprop, "pronouns", "Pronouns",
+                                    &_jspronoun_to_vcard,
+                                    pref_param_props, 1, card, NULL);
+    }
+
+    json_object_del(jval, "@type");
+    json_object_del(jval, "grammaticalGender");
+    json_object_del(jval, "pronouns");
+
+    /* Add unknown properties */
+    json_object_foreach(jval, key, jprop) {
+        _jsunknown_to_vcard(parser, key, jprop, card);
+    }
+
+  done:
+    jmap_parser_pop(parser);
+
+    return r;
+}
+
+static vcardproperty *_jstitle_to_vcard(struct jmap_parser *parser, json_t *obj,
+                                        const char *id __attribute__((unused)),
+                                        vcardcomponent *card __attribute__((unused)),
+                                        void *rock)
+{
+    hash_table *groups = rock;
+    vcardproperty_kind kind = VCARD_NO_PROPERTY;
+    vcardproperty *prop = NULL;
+    const char *val;
+
+    val = json_string_value(json_object_get(obj, "kind"));
+    if (!strcasecmp("title", val)) {
+        kind = VCARD_TITLE_PROPERTY;
+    }
+    else if (!strcasecmp("role", val)) {
+        kind = VCARD_ROLE_PROPERTY;
+    }
+    else {
+        jmap_parser_invalid(parser, "kind");
+    }
+
+    if (kind != VCARD_NO_PROPERTY) {
+        val = json_string_value(json_object_get(obj, "name"));
+        if (!val) {
+            jmap_parser_invalid(parser, "name");
+        }
+        else {
+            json_t *jprop = json_object_get(obj, "organization");
+
+            prop = vcardproperty_new(kind);
+            vcardproperty_set_value_from_string(prop, val, "TEXT");
+
+            if (json_is_string(jprop)) {
+                const char *group = json_string_value(jprop);
+                ptrarray_t *props = hash_lookup(group, groups);
+
+                if (!props) {
+                    props = ptrarray_new();
+                    hash_insert(group, props, groups);
+                }
+                ptrarray_append(props, prop);
+
+                json_object_del(obj, "organization");
+            }
+            else if (jprop) {
+                jmap_parser_invalid(parser, "organization");
+            }
+
+            json_object_del(obj, "kind");
+            json_object_del(obj, "name");
+        }
+    }
+
+    return prop;
+}
+
+struct comm_rock {
+    const char *val_key;
+    vcardproperty_kind kind;
+};
+
+static vcardproperty *_jscomm_to_vcard(struct jmap_parser *parser, json_t *obj,
+                                        const char *id __attribute__((unused)),
+                                        vcardcomponent *card __attribute__((unused)),
+                                       void *rock)
+{
+    struct comm_rock *crock = rock;
+    vcardproperty *prop = NULL;
+    const char *val = json_string_value(json_object_get(obj, crock->val_key));
+    const char *val_kind = "URI";
+
+    if (!val) {
+        jmap_parser_invalid(parser, crock->val_key);
+    }
+    else {
+        size_t i, len = strlen(val), have_scheme = 0;
+
+        for (i = 0; i < len; i++) {
+            if (!isascii(val[i]) || !isprint(val[i]) || isspace(val[i]))
+                break;
+            else if (i && val[i] == ':')
+                have_scheme = 1;
+        }
+
+        if (!have_scheme || i < len) val_kind = "TEXT";
+
+        prop = vcardproperty_new(crock->kind);
+        vcardproperty_set_value_from_string(prop, val, val_kind);
+
+        json_object_del(obj, crock->val_key);
+    }
+
+    return prop;
+}
+
+static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj,
+                                         const char *id __attribute__((unused)),
+                                         vcardcomponent *card __attribute__((unused)),
+                                         void *rock __attribute__((unused)))
+{
+    const char *service = NULL, *val_kind = "URI", *val;
+    vcardproperty_kind kind = VCARD_NO_PROPERTY;
+    vcardproperty *prop = NULL;
+    json_t *jprop;
+
+    jprop = json_object_get(obj, "service");
+    if (json_is_string(jprop)) {
+        service = json_string_value(jprop);
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "service");
+    }
+
+    val = json_string_value(json_object_get(obj, "kind"));
+    if (!strcasecmp("impp", val)) {
+        kind = VCARD_IMPP_PROPERTY;
+    }
+    else if (!strcasecmp("uri", val)) {
+        kind = VCARD_SOCIALPROFILE_PROPERTY;
+    }
+    else if (!strcasecmp("username", val)) {
+        kind = VCARD_SOCIALPROFILE_PROPERTY;
+        val_kind = "TEXT";
+        if (!service) {
+            jmap_parser_invalid(parser, "service");
+        }
+    }
+    else {
+        jmap_parser_invalid(parser, "kind");
+    }
+    
+    if (kind != VCARD_NO_PROPERTY) {
+        val = json_string_value(json_object_get(obj, "user"));
+        if (!val) {
+            jmap_parser_invalid(parser, "user");
+        }
+        else {
+            prop = vcardproperty_new(kind);
+            vcardproperty_set_value_from_string(prop, val, val_kind);
+            
+            if (service) {
+                vcardproperty_add_parameter(prop,
+                                            vcardparameter_new_servicetype(service));
+                json_object_del(obj, "service");
+            }
+
+            json_object_del(obj, "kind");
+            json_object_del(obj, "user");
+        }
+    }
+
+    return prop;
+}
+
+static unsigned _jspreferred_to_card(struct jmap_parser *parser, json_t *jval,
+                                     const char *key, const char *type,
+                                     vcardcomponent *card)
+
+{
+    vcardproperty *prop = NULL;
+    const char *id;
+    json_t *array;
+    void *tmp;
+    int r = 0;
+
+    if (!json_is_object(jval)) {
+        jmap_parser_invalid(parser, key);
+        return 0;
+    }
+
+    jmap_parser_push(parser, key);
+
+    json_object_foreach_safe(jval, tmp, id, array) {
+        vcardproperty_contact_channel_pref channel = VCARD_CONTACTCHANNELPREF_NONE;
+        size_t i, size;
+        const char *val;
+        json_t *jprop;
+
+        if (!json_is_array(array)) {
+            jmap_parser_invalid(parser, id);
+            break;
+        }
+
+        if (*type == 'C') {
+            if (!strcmp("addresses", id)) {
+                channel = VCARD_CONTACTCHANNELPREF_ADR;
+            }
+            else if (!strcmp("emails", id)) {
+                channel = VCARD_CONTACTCHANNELPREF_EMAIL;
+            }
+            else if (!strcmp("onlineServices", id)) {
+                channel = VCARD_CONTACTCHANNELPREF_IMPP;
+            }
+            else if (!strcmp("phones", id)) {
+                channel = VCARD_CONTACTCHANNELPREF_TEL;
+            }
+            else {
+                jmap_parser_invalid(parser, id);
+                break;
+            }
+        }
+
+        size = json_array_size(array);
+
+        for (i = 0; i < size; i++) {
+            json_t *obj = json_array_get(array, i);
+
+            jmap_parser_push_index(parser, id, i, NULL);
+
+            val = json_string_value(json_object_get(obj, "@type"));
+            if (strcmpsafe(type, val)) {
+                jmap_parser_invalid(parser, "@type");
+                break;
+            }
+            json_object_del(obj, "@type");
+
+            if (*type == 'C') {
+                prop = vcardproperty_new_contactchannelpref(channel);
+            }
+            else {
+                prop = vcardproperty_new_lang(id);
+            }
+
+            if (prop) {
+                struct param_prop_t *pprop;
+
+                for (pprop = pref_param_props; pprop && pprop->key; pprop++) {
+                    _jsparam_to_vcard(parser, pprop->key, obj, prop, pprop->kind);
+                }
+
+                vcardcomponent_add_property(card, prop);
+                r = 1;
+            }
+
+            /* Add unknown properties */
+            json_object_foreach(obj, key, jprop) {
+                _jsunknown_to_vcard(parser, key, jprop, card);
+            }
+
+            jmap_parser_pop(parser);
+        }
+
+        if (i != size) {
+            jmap_parser_pop(parser);
+        }
+
+        json_object_del(jval, id);
+        jmap_parser_pop(parser);
+    }
+
+    if (json_object_size(jval)) {
+        /* Errored out of loop */
+        jmap_parser_pop(parser);
+    }
+
+    jmap_parser_pop(parser);
+
+    return r;
+}
+
+struct resource_map {
+    const char *kind;
+    vcardproperty_kind pkind;
+};
+
+static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *obj,
+                                           const char *id __attribute__((unused)),
+                                           vcardcomponent *card __attribute__((unused)),
+                                           void *rock)
+{
+    struct resource_map *map = rock, *m;
+    vcardproperty *prop = NULL;
+    vcardproperty_kind kind;
+    const char *val;
+
+    val = json_string_value(json_object_get(obj, "kind"));
+    for (m = map; map->kind; m++) {
+        if (!strcmpnull(m->kind, val)) {
+            break;
+        }
+    }
+    kind = m->pkind;
+
+    if (kind == VCARD_NO_PROPERTY) {
+        jmap_parser_invalid(parser, "kind");
+    }
+    else {
+        val = json_string_value(json_object_get(obj, "uri"));
+        if (!val) {
+            jmap_parser_invalid(parser, "uri");
+        }
+        else {
+            prop = vcardproperty_new(kind);
+            vcardproperty_set_value_from_string(prop, val, "URI");
+            json_object_del(obj, "kind");
+            json_object_del(obj, "uri");
+        }
+    }
+
+    return prop;
+}
+
+static const struct comp_kind split_street_comp_kinds[] = {
+    { "number",    VCARD_ADR_STREET   },
+    { "direction", VCARD_ADR_STREET   },
+    { "building",  VCARD_ADR_EXTENDED },
+    { "floor",     VCARD_ADR_EXTENDED },
+    { "room",      VCARD_ADR_EXTENDED },
+    { "apartment", VCARD_ADR_EXTENDED },
+    { NULL,        -1                 }
+};
+
+static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser, json_t *obj,
+                                       const char *id __attribute__((unused)),
+                                       vcardcomponent *card,
+                                       void *rock __attribute__((unused)))
+{
+    vcardstructuredtype adr = { VCARD_NUM_ADR_FIELDS, { 0 } };
+    const struct comp_kind *comp;
+    json_t *jprop = NULL;
+
+    jprop = json_object_get(obj, "street");
+    if (json_is_array(jprop)) {
+        size_t i, size = json_array_size(jprop);
+
+        for (i = 0; i < size; i++) {
+            json_t *comp = json_array_get(jprop, i);
+            vcardstrarray **field;
+            const char *key, *val;
+            json_t *jsubprop;
+            int field_num;
+
+            jmap_parser_push_index(parser, "street", i, NULL);
+
+            val = json_string_value(json_object_get(comp, "@type"));
+            if (strcmpsafe("StreetComponent", val)) {
+                jmap_parser_invalid(parser, "@type");
+                break;
+            }
+
+            val = json_string_value(json_object_get(comp, "kind"));
+            field_num = _field_name_to_index(val, street_comp_kinds);
+            if (field_num < 0) {
+                field_num = _field_name_to_index(val, split_street_comp_kinds);
+            }
+            if (field_num < 0) {
+                jmap_parser_invalid(parser, "kind");
+                break;
+            }
+            
+            val = json_string_value(json_object_get(comp, "value"));
+            if (!val) {
+                jmap_parser_invalid(parser, "value");
+                break;
+            }
+
+            field = &adr.field[field_num];
+
+            if (!*field) *field = vcardstrarray_new(1);
+            vcardstrarray_append(*field, val);
+
+            json_object_del(comp, "@type");
+            json_object_del(comp, "kind");
+            json_object_del(comp, "value");
+
+            /* Add unknown properties */
+            json_object_foreach(comp, key, jsubprop) {
+                _jsunknown_to_vcard(parser, key, jsubprop, card);
+            }
+
+            jmap_parser_pop(parser);
+        }
+
+        if (i != size) {
+            jmap_parser_pop(parser);
+            goto fail;
+        }
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "street");
+        goto fail;
+    }
+
+    for (comp = adr_comp_kinds; comp->name; comp++) {
+        jprop = json_object_get(obj, comp->name);
+        if (json_is_string(jprop)) {
+            vcardstrarray **field = &adr.field[comp->idx];
+
+            *field = vcardstrarray_new(1);
+            vcardstrarray_append(*field, json_string_value(jprop));
+        }
+        else if (jprop) {
+            jmap_parser_invalid(parser, comp->name);
+            goto fail;
+        }
+
+        json_object_del(obj, comp->name);
+    }
+
+    json_object_del(obj, "street");
+
+    return vcardproperty_new_adr(&adr);
+
+  fail:
+    for (unsigned i = 0; i < adr.num_fields; i++) {
+        vcardstrarray *sa = adr.field[i];
+
+        if (sa) vcardstrarray_free(sa);
+    }
+
+    return NULL;
+}
+
+static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
+                                        json_t *anniv, const char *id,
+                                        vcardcomponent *card,
+                                        void *rock __attribute__((unused)))
+{
+    vcardproperty_kind date_kind, place_kind = VCARD_NO_PROPERTY;
+    vcardproperty *prop = NULL;
+    json_t *jprop, *jsubprop;
+    const char *key, *val;
+
+    val = json_string_value(json_object_get(anniv, "kind"));
+    if (!strcmpsafe("birth", val)) {
+        date_kind = VCARD_BDAY_PROPERTY;
+        place_kind = VCARD_BIRTHPLACE_PROPERTY;
+    }
+    else if (!strcmpsafe("death", val)) {
+        date_kind = VCARD_DEATHDATE_PROPERTY;
+        place_kind = VCARD_DEATHPLACE_PROPERTY;
+    }
+    else if (!strcmpsafe("wedding", val)) {
+        date_kind = VCARD_ANNIVERSARY_PROPERTY;
+    }
+    else {
+        _jsunknown_to_vcard(parser, NULL, anniv, card);
+        return NULL;
+    }
+
+    json_object_del(anniv, "kind");
+
+    jprop = json_object_get(anniv, "date");
+    if (json_is_object(jprop)) {
+        const char *calscale = NULL;
+        vcardvalue *value = NULL;
+        vcardtimetype tt;
+
+        jmap_parser_push(parser, "date");
+
+        val = json_string_value(json_object_get(jprop, "@type"));
+        if (!strcmpsafe("Timestamp", val)) {
+
+            jsubprop = json_object_get(jprop, "utc");
+            if (!json_is_utcdate(jsubprop)) {
+                jmap_parser_invalid(parser, "utc");
+            }
+            else {
+                tt = vcardtime_from_string(json_string_value(jsubprop), 0);
+                value = vcardvalue_new_timestamp(tt);
+                json_object_del(jprop, "utc");
+            }
+        }
+        else if (!strcmpsafe("PartialDate", val)) {
+
+            json_object_del(jprop, "@type");
+
+            tt = vcardtime_null_date();
+
+            jsubprop = json_object_get(jprop, "year");
+            if (json_is_integer(jsubprop)) {
+                tt.year = json_integer_value(jsubprop);
+                json_object_del(jprop, "year");
+            }
+            else if (jsubprop) {
+                jmap_parser_invalid(parser, "year");
+            }
+
+            jsubprop = json_object_get(jprop, "month");
+            if (json_is_integer(jsubprop)) {
+                tt.month = json_integer_value(jsubprop);
+                json_object_del(jprop, "month");
+            }
+            else if (jsubprop) {
+                jmap_parser_invalid(parser, "month");
+            }
+
+            jsubprop = json_object_get(jprop, "day");
+            if (json_is_integer(jsubprop)) {
+                tt.day = json_integer_value(jsubprop);
+                json_object_del(jprop, "day");
+            }
+            else if (jsubprop) {
+                jmap_parser_invalid(parser, "day");
+            }
+
+            jsubprop = json_object_get(jprop, "calendarScale");
+            if (json_is_string(jsubprop)) {
+                calscale = json_string_value(jsubprop);
+            }
+            else if (jsubprop) {
+                jmap_parser_invalid(parser, "calendarScale");
+            }
+
+            if (!vcardtime_is_null_datetime(tt)) {
+                value = vcardvalue_new_date(tt);
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, "@type");
+        }
+
+        if (value) {
+            prop = vcardproperty_new(date_kind);
+            vcardproperty_set_value(prop, value);
+
+            if (calscale) {
+                vcardparameter *param =
+                    vcardparameter_new_from_value_string(VCARD_CALSCALE_PARAMETER,
+                                                         calscale);
+                vcardproperty_add_parameter(prop, param);
+            }
+
+            json_object_del(jprop, "@type");
+            json_object_del(jprop, "calendarScale");
+
+            /* Add unknown properties */
+            json_object_foreach(jprop, key, jsubprop) {
+                _jsunknown_to_vcard(parser, key, jsubprop, card);
+            }
+        }
+
+        json_object_del(anniv, "date");
+
+        jmap_parser_pop(parser);
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "date");
+        return NULL;
+    }
+
+    jprop = json_object_get(anniv, "place");
+    if (json_is_object(jprop)) {
+        if (place_kind != VCARD_NO_PROPERTY) {
+
+            jmap_parser_push(parser, "place");
+
+            val = json_string_value(json_object_get(jprop, "@type"));
+            if (strcmpsafe("Address", val)) {
+                jmap_parser_invalid(parser, "@type");
+            }
+            else {
+                const char *val_kind = NULL;
+
+                if ((val =
+                     json_string_value(json_object_get(jprop, "fullAddress")))) {
+                    val_kind = "TEXT";
+                }
+                else if ((val =
+                          json_string_value(json_object_get(jprop,
+                                                            "coordinates")))) {
+                    val_kind = "URI";
+                }
+
+                if (val_kind) {
+                    vcardproperty *myprop = vcardproperty_new(place_kind);
+
+                    vcardproperty_set_value_from_string(myprop, val, val_kind);
+
+                    if (!prop) {
+                        prop = myprop;
+                    }
+                    else {
+                        vcardproperty_add_parameter(myprop,
+                                                    vcardparameter_new_propid(id));
+                        vcardcomponent_add_property(card, myprop);
+                    }
+                }
+
+                json_object_del(jprop, "@type");
+                json_object_del(jprop, "fullAddress");
+                json_object_del(jprop, "coordinates");
+
+                /* Add unknown properties */
+                json_object_foreach(jprop, key, jsubprop) {
+                    _jsunknown_to_vcard(parser, key, jsubprop, card);
+                }
+            }
+
+            jmap_parser_pop(parser);
+        }
+        else {
+            _jsunknown_to_vcard(parser, "place", jprop, card);
+        }
+
+        json_object_del(anniv, "place");
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "place");
+        return NULL;
+    }
+
+    return prop;
+}
+
+static vcardproperty *_jsnote_to_vcard(struct jmap_parser *parser,
+                                       json_t *obj,
+                                       const char *id __attribute__((unused)),
+                                       vcardcomponent *card __attribute__((unused)),
+                                       void *rock __attribute__((unused)))
+{
+    vcardproperty *prop = NULL;
+    json_t *jprop;
+    const char *val;
+
+    val = json_string_value(json_object_get(obj, "note"));
+    if (!val) {
+        jmap_parser_invalid(parser, "note");
+        return NULL;
+    }
+
+    prop = vcardproperty_new_note(val);
+
+    jprop = json_object_get(obj, "author");
+    if (json_is_object(jprop)) {
+        json_t *jsubprop;
+        const char *key;
+
+        jmap_parser_push(parser, "author");
+
+        val = json_string_value(json_object_get(jprop, "@type"));
+        if (strcmpsafe("Author", val)) {
+            jmap_parser_invalid(parser, "@type");
+        }
+        else {
+            jsubprop = json_object_get(jprop, "name");
+            if (json_is_string(jsubprop)) {
+                val = json_string_value(jsubprop);
+                vcardproperty_add_parameter(prop,
+                                            vcardparameter_new_authorname(val));
+
+                json_object_del(jprop, "name");
+            }
+            else if (jsubprop) {
+                jmap_parser_invalid(parser, "name");
+            }
+
+            jsubprop = json_object_get(jprop, "uri");
+            if (json_is_string(jsubprop)) {
+                val = json_string_value(jsubprop);
+                vcardproperty_add_parameter(prop, vcardparameter_new_author(val));
+
+                json_object_del(jprop, "uri");
+            }
+            else if (jsubprop) {
+                jmap_parser_invalid(parser, "uri");
+            }
+        }
+
+        json_object_del(jprop, "@type");
+
+        /* Add unknown properties */
+        json_object_foreach(jprop, key, jsubprop) {
+            _jsunknown_to_vcard(parser, key, jsubprop, card);
+        }
+
+        json_object_del(obj, "author");
+
+        jmap_parser_pop(parser);
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "author");
+    }
+
+    json_object_del(obj, "note");
+
+    return prop;
+}
+
+static vcardproperty *_jspersonal_to_vcard(struct jmap_parser *parser,
+                                           json_t *obj,
+                                           const char *id __attribute__((unused)),
+                                           vcardcomponent *card __attribute__((unused)),
+                                           void *rock __attribute__((unused)))
+{
+    vcardproperty_kind pkind;
+    vcardproperty *prop = NULL;
+    const char *val;
+
+    val = json_string_value(json_object_get(obj, "kind"));
+    if (!strcmpsafe("expertise", val)) {
+        pkind = VCARD_EXPERTISE_PROPERTY;
+    }
+    else if (!strcmpsafe("hobby", val)) {
+        pkind = VCARD_HOBBY_PROPERTY;
+    }
+    else if (!strcmpsafe("interest", val)) {
+        pkind = VCARD_INTEREST_PROPERTY;
+    }
+    else {
+        jmap_parser_invalid(parser, "kind");
+        return NULL;
+    }
+
+    val = json_string_value(json_object_get(obj, "value"));
+    if (!val) {
+        jmap_parser_invalid(parser, "value");
+        return NULL;
+    }
+
+    prop = vcardproperty_new(pkind);
+    vcardproperty_set_value_from_string(prop, val, "TEXT");
+
+    json_object_del(obj, "kind");
+    json_object_del(obj, "value");
+
+    return prop;
+}
+
+static void _set_groups(const char *key, void *val,
+                        void *rock __attribute__((unused)))
+{
+    ptrarray_t *props = val;
+    int i;
+
+    for (i = 0; i < ptrarray_size(props); i++) {
+        vcardproperty *prop = ptrarray_nth(props, i);
+
+        vcardproperty_set_group(prop, key);
+    }
+}
+
+static int _jscard_to_vcard(struct jmap_req *req,
+                            struct carddav_data *cdata,
+                            const char *mboxname,
+                            vcardcomponent *card,
+                            json_t *arg, strarray_t *flags,
+                            struct entryattlist **annotsp,
+                            ptrarray_t *blobs __attribute__((unused)),
+                            jmap_contact_errors_t *errors)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    const char *key;
+    json_t *jval;
+    unsigned has_noncontent = 0;
+    unsigned record_is_dirty = 0;
+    hash_table groups = HASH_TABLE_INITIALIZER;
+    int r = 0;
+
+    json_decref(parser.invalid);
+    parser.invalid = errors->invalid;
+
+    construct_hash_table(&groups, 10, 0);
+
+    json_object_foreach(arg, key, jval) {
+        if (cdata) {
+            if (!strcmp(key, "id")) {
+                if (strcmpnull(cdata->vcard_uid, json_string_value(jval))) {
+                    jmap_parser_invalid(&parser, "id");
+                }
+                continue;
+            }
+            if (!strcmp(key, "uid")) {
+                if (strcmpnull(cdata->vcard_uid, json_string_value(jval))) {
+                    jmap_parser_invalid(&parser, "uid");
+                }
+                continue;
+            }
+            else if (!strcmp(key, "cyrusimap.org:href")) {
+                char *xhref = jmap_xhref(mboxname, cdata->dav.resource);
+                if (strcmpnull(json_string_value(jval), xhref)) {
+                    jmap_parser_invalid(&parser, "cyrusimap.org:href");
+                }
+                free(xhref);
+                continue;
+            }
+            else if (!strcmp(key, "cyrusimap.org:hasPhoto")) {
+                if ((vcardcomponent_get_first_property(card,
+                                                       VCARD_PHOTO_PROPERTY) &&
+                     !json_is_true(jval)) ||
+                    !json_is_false(jval)) {
+                    jmap_parser_invalid(&parser, "cyrusimap.org:hasPhoto");
+                }
+                continue;
+            }
+        }
+
+        /* Metadata properties */
+        if (!strcmp(key, "@type")) {
+            if (strcmpsafe("Card", json_string_value(jval))) {
+                jmap_parser_invalid(&parser, "@type");
+            }
+        }
+        else if (!strcmp(key, "@version")) {
+            if (strcmpsafe("1.0", json_string_value(jval))) {
+                jmap_parser_invalid(&parser, "@version");
+            }
+        }
+        else if (!strcmp(key, "created")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+                                                 VCARD_CREATED_PROPERTY,
+                                                 VCARD_TIMESTAMP_VALUE);
+        }
+        else if (!strcmp(key, "kind")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+                                                 VCARD_KIND_PROPERTY,
+                                                 VCARD_KIND_VALUE);
+        }
+        else if (!strcmp(key, "locale")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+                                                 VCARD_LOCALE_PROPERTY,
+                                                 VCARD_TEXT_VALUE);
+        }
+        else if (!strcmp(key, "members")) {
+            record_is_dirty |= _jsmultikey_to_card(&parser, jval, key, card,
+                                                   VCARD_MEMBER_PROPERTY);
+        }
+        else if (!strcmp(key, "prodId")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+                                                 VCARD_PRODID_PROPERTY,
+                                                 VCARD_TEXT_VALUE);
+        }
+        else if (!strcmp(key, "relatedTo")) {
+            struct param_prop_t relation_props[] = {
+                { "relation", VCARD_TYPE_PARAMETER  },
+                { NULL,       0                     }
+            };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "Relation",
+                                                      &_jsrelation_to_vcard,
+                                                      relation_props, 0, card,
+                                                      NULL);
+        }
+        else if (!strcmp(key, "uid")) {
+            if (!json_is_string(jval)) {
+                jmap_parser_invalid(&parser, "uid");
+                break;
+            }
+        }
+        else if (!strcmp(key, "updated")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+                                                 VCARD_REV_PROPERTY,
+                                                 VCARD_TIMESTAMP_VALUE);
+        }
+
+        /* Name and Organization properties */
+        else if (!strcmp(key, "fullName")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+                                                 VCARD_FN_PROPERTY,
+                                                 VCARD_TEXT_VALUE);
+        }
+        else if (!strcmp(key, "name")) {
+            record_is_dirty |= _jsname_to_vcard(&parser, jval, card);
+        }
+        else if (!strcmp(key, "nickNames")) {
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "NickName",
+                                                      &_jsnickname_to_vcard,
+                                                      pref_param_props, 1, card,
+                                                      NULL);
+        }
+        else if (!strcmp(key, "organizations")) {
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "Organization",
+                                                      &_jsorg_to_vcard,
+                                                      context_param_props, 1, card,
+                                                      &groups);
+        }
+        else if (!strcmp(key, "speakToAs")) {
+            record_is_dirty |= _jsspeak_to_vcard(&parser, jval, card);
+        }
+        else if (!strcmp(key, "titles")) {
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "Title",
+                                                      &_jstitle_to_vcard,
+                                                      NULL, 1, card, &groups);
+        }
+
+        /* Contact properties */
+        else if (!strcmp(key, "emails")) {
+            struct comm_rock crock = { "address", VCARD_EMAIL_PROPERTY };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "EmailAddress",
+                                                      &_jscomm_to_vcard,
+                                                      comm_param_props, 1, card,
+                                                      &crock);
+        }
+        else if (!strcmp(key, "onlineServices")) {
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "OnlineService",
+                                                      &_jsonline_to_vcard,
+                                                      comm_param_props, 1, card,
+                                                      NULL);
+        }
+        else if (!strcmp(key, "phones")) {
+            struct comm_rock crock = { "number", VCARD_TEL_PROPERTY };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "Phone",
+                                                      &_jscomm_to_vcard,
+                                                      phone_param_props, 1, card,
+                                                      &crock);
+        }
+        else if (!strcmp(key, "preferredContactChannels")) {
+            record_is_dirty |= _jspreferred_to_card(&parser, jval,
+                                                    key, "ContactChannelPreference",
+                                                    card);
+        }
+        else if (!strcmp(key, "preferredLanguages")) {
+            record_is_dirty |= _jspreferred_to_card(&parser, jval,
+                                                    key, "LanguagePreference",
+                                                    card);
+        }
+
+        /* Calendaring and Scheduling properties*/
+        else if (!strcmp(key, "calendars")) {
+            struct resource_map map[] = {
+                { "calendar", VCARD_CALURI_PROPERTY },
+                { "freeBusy", VCARD_FBURL_PROPERTY  },
+                { NULL,       VCARD_NO_PROPERTY     }
+            };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "CalendarResource",
+                                                      &_jsresource_to_vcard,
+                                                      resource_param_props, 1, card,
+                                                      &map);
+        }
+        else if (!strcmp(key, "schedulingAddresses")) {
+            struct comm_rock crock = { "uri", VCARD_CALADRURI_PROPERTY };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "SchedulingAddress",
+                                                      &_jscomm_to_vcard,
+                                                      comm_param_props, 1, card,
+                                                      &crock);
+        }
+
+        /* Address and Location properties */
+        else if (!strcmp(key, "addresses")) {
+            struct param_prop_t addr_props[] = {
+                { "pref",        VCARD_PREF_PARAMETER  },
+                { "contexts",    VCARD_TYPE_PARAMETER  },
+                { "timeZone",    VCARD_TZ_PARAMETER    },
+                { "countryCode", VCARD_CC_PARAMETER    },
+                { "coordinates", VCARD_GEO_PARAMETER   },
+                { "fullAddress", VCARD_LABEL_PARAMETER },
+                { NULL,          0                     }
+            };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "Address",
+                                                      &_jsaddr_to_vcard,
+                                                      addr_props, 1, card, NULL);
+        }
+
+        /* Resource properties */
+        else if (!strcmp(key, "cryptoKeys")) {
+            struct resource_map map[] = {
+                { NULL, VCARD_KEY_PROPERTY }
+            };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "CryptoResource",
+                                                      &_jsresource_to_vcard,
+                                                      resource_param_props, 1,
+                                                      card, &map);
+        }
+        else if (!strcmp(key, "directories")) {
+            struct resource_map map[] = {
+                { "directory", VCARD_ORGDIRECTORY_PROPERTY },
+                { "entry",     VCARD_SOURCE_PROPERTY       },
+                { NULL,        VCARD_NO_PROPERTY           }
+            };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "DirectoryResource",
+                                                      &_jsresource_to_vcard,
+                                                      directories_param_props, 1,
+                                                      card, &map);
+        }
+        else if (!strcmp(key, "links")) {
+            struct resource_map map[] = {
+                { "contact", VCARD_CONTACTURI_PROPERTY },
+                { NULL,      VCARD_URL_PROPERTY        },
+            };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "LinkResource",
+                                                      &_jsresource_to_vcard,
+                                                      resource_param_props, 1, card,
+                                                      &map);
+        }
+        else if (!strcmp(key, "media")) {
+            struct resource_map map[] = {
+                { "photo", VCARD_PHOTO_PROPERTY },
+                { "sound", VCARD_SOUND_PROPERTY },
+                { "logo",  VCARD_LOGO_PROPERTY  },
+                { NULL,    VCARD_NO_PROPERTY    },
+            };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "MediaResource",
+                                                      &_jsresource_to_vcard,
+                                                      resource_param_props, 1, card,
+                                                      &map);
+        }
+
+        /* Multilingual properties */
+        else if (!strcmp(key, "localizations")) {
+            /* XXX  TODO */
+        }
+
+        /* Additional properties */
+        else if (!strcmp(key, "anniversaries")) {
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "Anniversary",
+                                                      &_jsanniv_to_vcard,
+                                                      NULL, 1, card, NULL);
+        }
+        else if (!strcmp(key, "keywords")) {
+            record_is_dirty |= _jsmultikey_to_card(&parser, jval, key, card,
+                                                   VCARD_CATEGORIES_PROPERTY);
+        }
+        else if (!strcmp(key, "notes")) {
+            struct param_prop_t note_props[] = {
+                { "created", VCARD_CREATED_PARAMETER },
+                { NULL,      0                       }
+            };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "Note",
+                                                      &_jsnote_to_vcard,
+                                                      note_props, 1, card, NULL);
+        }
+        else if (!strcmp(key, "personalInfo")) {
+            struct param_prop_t personal_props[] = {
+                { "label",  VCARD_LABEL_PARAMETER },
+                { "level",  VCARD_LEVEL_PARAMETER },
+                { "listAs", VCARD_INDEX_PARAMETER },
+                { NULL,     0                     }
+            };
+
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      key, "PersonalInfo",
+                                                      &_jspersonal_to_vcard,
+                                                      personal_props, 1, card,
+                                                      NULL);
+        }
+
+        /* Cyrus-specific properties */
+        else if (!strcmp(key, "cyrusimap.org:isFlagged")) {
+            has_noncontent = 1;
+            if (json_is_true(jval)) {
+                strarray_add_case(flags, "\\Flagged");
+            } else if (json_is_false(jval)) {
+                strarray_remove_all_case(flags, "\\Flagged");
+            } else {
+                jmap_parser_invalid(&parser, "isFlagged");
+            }
+        }
+        else if (!strcmp(key, "cyrusimap.org:importance")) {
+            has_noncontent = 1;
+            double dval = json_number_value(jval);
+            const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
+            const char *attrib = mboxname_userownsmailbox(req->userid, mboxname) ?
+                "value.shared" : "value.priv";
+            struct buf buf = BUF_INITIALIZER;
+            if (dval) {
+                buf_printf(&buf, "%.17g", dval);
+            }
+            setentryatt(annotsp, ns, attrib, &buf);
+            buf_free(&buf);
+        }
+
+        else {
+            _jsunknown_to_vcard(&parser, key, jval, card);
+        }
+    }
+
+    parser.invalid = NULL;
+
+    if (json_array_size(errors->invalid) || errors->blobNotFound) goto done;
+
+    /* Set group label on grouped properties */
+    hash_enumerate(&groups, &_set_groups, NULL);
+
+    if (!vcardcomponent_get_first_property(card, VCARD_FN_PROPERTY)) {
+        /* Need to construct an FN property */
+        vcardproperty *prop =
+            vcardcomponent_get_first_property(card, VCARD_N_PROPERTY);
+
+        if (prop) {
+            /* Derive from N property */
+            vcardstructuredtype *n = vcardproperty_get_n(prop);
+            vcardparameter *param =
+                vcardparameter_new_derived(VCARD_DERIVED_TRUE);
+            const struct comp_kind *ckind;
+            struct buf buf = BUF_INITIALIZER;
+            const char *sep = "";
+
+            for (ckind = n_comp_kinds; ckind->name; ckind++) {
+                vcardstrarray *field = n->field[ckind->idx];
+                size_t i;
+
+                if (!field) continue;
+
+                for (i = 0; i < vcardstrarray_size(field); i++) {
+                    const char *val =
+                        vcardstrarray_element_at(n->field[ckind->idx], i);
+
+                    buf_appendcstr(&buf, sep);
+                    buf_appendcstr(&buf, val);
+                    sep = ckind->idx == VCARD_N_HONORIFIC_SUFFIX ? ", " : " ";
+                }
+            }
+
+            prop = vcardproperty_new_fn(buf_cstring(&buf));
+            vcardproperty_add_parameter(prop, param);
+            buf_free(&buf);
+        }
+        else {
+            /* No Name */
+            prop = vcardproperty_new_fn("No Name");
+        }
+
+        vcardcomponent_add_property(card, prop);
+        record_is_dirty = 1;
+    }
+
+    if (!record_is_dirty && has_noncontent)
+        r = HTTP_NO_CONTENT;  /* no content */
+
+  done:
+    free_hash_table(&groups, (void (*)(void *)) &ptrarray_free);
+    jmap_parser_fini(&parser);
+
+    return r;
+}
+
+static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
+                            struct mailbox **mailbox, json_t *item,
+                            jmap_contact_errors_t *errors)
+{
+    json_t *invalid = errors->invalid;
+    struct entryattlist *annots = NULL;
+    strarray_t *flags = NULL;
+    vcardcomponent *card = NULL;
+    char *uid = NULL;
+    int r = 0;
+    char *resourcename = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    ptrarray_t blobs = PTRARRAY_INITIALIZER;
+    property_blob_t *blob;
+    char *mboxname = NULL;
+
+    /* Validate uid */
+    struct carddav_db *db = carddav_open_userid(req->accountid);
+    if (!db) {
+        xsyslog(LOG_ERR, "can not open carddav db", "accountid=<%s>",
+                req->accountid);
+        r = IMAP_INTERNAL;
+    }
+    if (!r) {
+        struct carddav_data *mycdata = NULL;
+        if ((uid = (char *) json_string_value(json_object_get(jcard, "uid")))) {
+            /* Use custom vCard UID from request object */
+            uid = xstrdup(uid);
+            r = carddav_lookup_uid(db, uid, &mycdata);
+            if (r == CYRUSDB_NOTFOUND) {
+                r = 0;
+            }
+            else if (!r) {
+                json_array_append_new(invalid, json_string("uid"));
+            }
+        }  else {
+            /* Create a vCard UID */
+            static int maxattempts = 3;
+            int i;
+            for (i = 0; i < maxattempts; i++) {
+                free(uid);
+                uid = xstrdup(makeuuid());
+                r = carddav_lookup_uid(db, uid, &mycdata);
+                if (r == CYRUSDB_NOTFOUND) {
+                    json_object_set_new(item, "uid", json_string(uid));
+                    r = 0;
+                    break;
+                }
+            }
+            if (i == maxattempts) {
+                errno = 0;
+                xsyslog(LOG_ERR, "can not create unique uid", "attempts=<%d>", i);
+                r = IMAP_INTERNAL;
+            }
+        }
+    }
+    carddav_close(db);
+    if (r) goto done;
+
+    /* Determine mailbox and resource name of card.
+     * We attempt to reuse the UID as DAV resource name; but
+     * only if it looks like a reasonable URL path segment. */
+    const char *p;
+    for (p = uid; *p; p++) {
+        if ((*p >= '0' && *p <= '9') ||
+            (*p >= 'a' && *p <= 'z') ||
+            (*p >= 'A' && *p <= 'Z') ||
+            (p > uid &&
+                (*p == '@' || *p == '.' ||
+                 *p == '_' || *p == '-'))) {
+            continue;
+        }
+        break;
+    }
+    if (*p == '\0' && p - uid >= 16 && p - uid <= 200) {
+        buf_setcstr(&buf, uid);
+    } else {
+        buf_setcstr(&buf, makeuuid());
+    }
+    buf_appendcstr(&buf, ".vcf");
+    resourcename = buf_newcstring(&buf);
+
+    const char *addressbookId = "Default";
+    json_t *abookid = json_object_get(jcard, "addressBookId");
+    if (abookid && json_string_value(abookid)) {
+        /* XXX - invalid arguments */
+        addressbookId = json_string_value(abookid);
+    }
+    else {
+        json_object_set_new(item, "addressBookId", json_string(addressbookId));
+    }
+    mboxname = mboxname_abook(req->accountid, addressbookId);
+    json_object_del(jcard, "addressBookId");
+    addressbookId = NULL;
+
+    int needrights = required_set_rights(jcard);
+
+    /* Check permissions. */
+    if (!jmap_hasrights(req, mboxname, needrights)) {
+        json_array_append_new(invalid, json_string("addressBookId"));
+        goto done;
+    }
+
+    card = vcardcomponent_vanew(VCARD_VCARD_COMPONENT,
+                                vcardproperty_new_version(VCARD_VERSION_40),
+                                vcardproperty_new_uid(uid),
+                                0);
+
+    /* we need to create and append a record */
+    if (!*mailbox || strcmp(mailbox_name(*mailbox), mboxname)) {
+        jmap_closembox(req, mailbox);
+        r = jmap_openmbox(req, mboxname, mailbox, 1);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            json_array_append_new(invalid, json_string("addressbookId"));
+            r = 0;
+            goto done;
+        }
+        else if (r) goto done;
+    }
+
+    const char *name = NULL;
+    const char *logfmt = NULL;
+
+    if (kind == CARDDAV_KIND_GROUP) {
+        jmap_readprop(jcard, "fullName", 0, invalid, "s", &name);
+        logfmt = "jmap: create group %s/%s/%s (%s)";
+    }
+    else {
+        logfmt = "jmap: create contact %s/%s (%s)";
+    }
+
+    flags = strarray_new();
+    r = _jscard_to_vcard(req, NULL, mboxname, card,
+                         jcard, flags, &annots, &blobs, errors);
+
+    if (json_array_size(invalid) || errors->blobNotFound) {
+        goto done;
+    }
+
+    syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name ? name : "");
+    r = carddav_store_x(*mailbox, card, resourcename, 0, flags, &annots,
+                        req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
+    if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
+        syslog(LOG_ERR, "carddav_store failed for user %s: %s",
+               req->userid, error_message(r));
+        goto done;
+    }
+    r = 0;
+
+    json_object_set_new(item, "id", json_string(uid));
+
+    if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
+        struct index_record record;
+        mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
+
+        jmap_encode_rawdata_blobid('V', mailbox_uniqueid(*mailbox), record.uid,
+                                   NULL, NULL, NULL, NULL, &buf);
+        json_object_set_new(item, "cyrusimap.org:blobId",
+                            json_string(buf_cstring(&buf)));
+
+        json_object_set_new(item, "cyrusimap.org:size",
+                            json_integer(record.size - record.header_size));
+
+        while ((blob = ptrarray_pop(&blobs))) {
+            jmap_encode_rawdata_blobid('V', mailbox_uniqueid(*mailbox),
+                                       record.uid, NULL, NULL,
+                                       blob->prop, &blob->guid, &buf);
+            json_object_set_new(item, blob->key,
+                                json_pack("{s:s s:i s:s? s:n}",
+                                          "blobId", buf_cstring(&buf),
+                                          "size", blob->size,
+                                          "type", blob->type, "name"));
+            property_blob_free(&blob);
+        }
+    }
+
+done:
+    vcardcomponent_free(card);
+    free(mboxname);
+    free(resourcename);
+    strarray_free(flags);
+    freeentryatts(annots);
+    free(uid);
+    buf_free(&buf);
+    while ((blob = ptrarray_pop(&blobs))) {
+        property_blob_free(&blob);
+    }
+    ptrarray_fini(&blobs);
+
+    return r;
+}
+
 static int jmap_card_get(struct jmap_req *req)
 {
     return _contacts_get(req, &getcards_cb, CARDDAV_KIND_CONTACT, card_props);
@@ -7203,7 +9256,7 @@ static int jmap_card_changes(struct jmap_req *req)
 static int jmap_card_set(struct jmap_req *req)
 {
     _contacts_set(req, CARDDAV_KIND_CONTACT, card_props,
-                  NULL, NULL);
+                  &_card_set_create, NULL);
 
     return 0;
 }
@@ -7221,7 +9274,7 @@ static int jmap_cardgroup_changes(struct jmap_req *req)
 static int jmap_cardgroup_set(struct jmap_req *req)
 {
     _contacts_set(req, CARDDAV_KIND_GROUP, card_props,
-                  NULL, NULL);
+                  &_card_set_create, NULL);
 
     return 0;
 }

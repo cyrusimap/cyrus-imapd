@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_create_cryptokeys
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $key = 'data:,-----BEGIN RSA PUBLIC KEY-----\nMIIBCgKCAQEA+xGZ/wcz9ugFpP07Nspo6U17l0YhFiFpxxU4pTk3Lifz9R3zsIsu\nERwta7+fWIfxOo208ett/jhskiVodSEt3QBGh4XBipyWopKwZ93HHaDVZAALi/2A\n+xTBtWdEo7XGUujKDvC2/aZKukfjpOiUI8AhLAfjmlcD/UZ1QPh0mHsglRNCmpCw\nmwSXA9VNmhz+PiB+Dml4WWnKW/VHo2ujTXxq7+efMU4H2fny3Se3KYOsFPFGZ1TN\nQSYlFuShWrHPtiLmUdPoP6CV2mML1tk+l7DIIqXrQhLUKDACeM5roMx0kLhUWB8P\n+0uj1CNlNN4JRZlC7xFfqiMbFRU9Z4N6YwIDAQAB\n-----END RSA PUBLIC KEY-----';
+
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    '@version' => '1.0',
+                    uid => $id,
+                    fullName => 'Jane Doe',
+                    cryptoKeys => {
+                        mykey1 => {
+                            '@type' => 'CryptoResource',
+                            uri => 'https://www.example.com/keys/jdoe.cer'
+                        },
+                        mykey2 => {
+                            '@type' => 'CryptoResource',
+                            uri => $key
+                        }
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+    $card =~ s/\\,/,/gs;         # unescape commas
+
+    $self->assert_matches(qr|KEY;PROP-ID=mykey1:https://www.example.com/keys/jdoe.cer|, $card);
+    $self->assert_matches(qr|KEY;PROP-ID=mykey2:data:,|, $card);
+    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+}
