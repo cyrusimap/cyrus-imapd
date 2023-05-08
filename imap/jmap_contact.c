@@ -7409,18 +7409,63 @@ struct param_prop_t directories_param_props[] = {
 
 #define resource_param_props (directories_param_props+1)  // no listAs
 
+#define WANT_PROPID_FLAG (1<<0)
+
+typedef vcardproperty* (*prop_cb_t)(struct jmap_parser *parser, json_t *obj,
+                                    const char *id, vcardcomponent *card,
+                                    void *rock);
+
+static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
+                                  const char *id, const char *type, prop_cb_t cb,
+                                  struct param_prop_t param_props[],
+                                  unsigned flags, vcardcomponent *card,
+                                  void *rock)
+{
+    vcardproperty *prop = NULL;
+    const char *key, *val;
+    json_t *jprop;
+    int r = 0;
+
+    val = json_string_value(json_object_get(obj, "@type"));
+    if (strcmpsafe(type, val)) {
+        jmap_parser_invalid(parser, "@type");
+        return 0;
+    }
+    json_object_del(obj, "@type");
+
+    prop = cb(parser, obj, id, card, rock);
+
+    if (prop) {
+        struct param_prop_t *pprop;
+
+        if (flags & WANT_PROPID_FLAG) {
+            vcardproperty_add_parameter(prop, vcardparameter_new_propid(id));
+        }
+
+        for (pprop = param_props; pprop && pprop->key; pprop++) {
+            _jsparam_to_vcard(parser, pprop->key, obj, prop, pprop->kind);
+        }
+
+        vcardcomponent_add_property(card, prop);
+        r = 1;
+    }
+
+    /* Add unknown properties */
+    json_object_foreach(obj, key, jprop) {
+        _jsunknown_to_vcard(parser, key, jprop, card);
+    }
+
+    return r;
+}
+
 static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
                                        const char *key, const char *type,
-                                       vcardproperty* (*cb)(
-                                           struct jmap_parser *parser, json_t *obj,
-                                           const char *id, vcardcomponent *card,
-                                           void *rock),
+                                       prop_cb_t prop_cb,
                                        struct param_prop_t param_props[],
-                                       unsigned want_propid, vcardcomponent *card,
+                                       unsigned flags, vcardcomponent *card,
                                        void *rock)
 
 {
-    vcardproperty *prop = NULL;
     const char *id;
     json_t *obj;
     void *tmp;
@@ -7434,47 +7479,17 @@ static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
     jmap_parser_push(parser, key);
 
     json_object_foreach_safe(jval, tmp, id, obj) {
-        const char *val;
-        json_t *jprop;
+        int r1;
 
         jmap_parser_push(parser, id);
 
-        val = json_string_value(json_object_get(obj, "@type"));
-        if (strcmpsafe(type, val)) {
-            jmap_parser_invalid(parser, "@type");
-            break;
-        }
-        json_object_del(obj, "@type");
-
-        prop = cb(parser, obj, id, card, rock);
-
-        if (prop) {
-            struct param_prop_t *pprop;
-
-            if (want_propid) {
-                vcardproperty_add_parameter(prop, vcardparameter_new_propid(id));
-            }
-
-            for (pprop = param_props; pprop && pprop->key; pprop++) {
-                _jsparam_to_vcard(parser, pprop->key, obj, prop, pprop->kind);
-            }
-
-            vcardcomponent_add_property(card, prop);
-            r = 1;
-        }
-
-        /* Add unknown properties */
-        json_object_foreach(obj, key, jprop) {
-            _jsunknown_to_vcard(parser, key, jprop, card);
-        }
+        r |= (r1 = _jsobject_to_card(parser, obj, id, type, prop_cb,
+                                     param_props, flags, card, rock));
 
         json_object_del(jval, id);
         jmap_parser_pop(parser);
-    }
 
-    if (json_object_size(jval)) {
-        /* Errored out of loop */
-        jmap_parser_pop(parser);
+        if (!r1) break;
     }
 
     jmap_parser_pop(parser);
@@ -7890,8 +7905,8 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
     jprop = json_object_get(jval, "pronouns");
     if (jprop) {
         r |= _jsmultiobject_to_card(parser, jprop, "pronouns", "Pronouns",
-                                    &_jspronoun_to_vcard,
-                                    pref_param_props, 1, card, NULL);
+                                    &_jspronoun_to_vcard, pref_param_props,
+                                    WANT_PROPID_FLAG, card, NULL);
     }
 
     json_object_del(jval, "@type");
@@ -8063,12 +8078,33 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
     return prop;
 }
 
+static vcardproperty *_jsprefchannel_to_card(struct jmap_parser *parser __attribute__((unused)),
+                                             json_t *obj __attribute__((unused)),
+                                             const char *id __attribute__((unused)),
+                                             vcardcomponent *card __attribute__((unused)),
+                                             void *rock)
+{
+    vcardproperty_contact_channel_pref *channel = rock;
+
+    return vcardproperty_new_contactchannelpref(*channel);
+}
+
+static vcardproperty *_jspreflang_to_card(struct jmap_parser *parser __attribute__((unused)),
+                                          json_t *obj __attribute__((unused)),
+                                          const char *id,
+                                          vcardcomponent *card __attribute__((unused)),
+                                          void *rock __attribute__((unused)))
+{
+    return vcardproperty_new_lang(id);
+}
+
 static unsigned _jspreferred_to_card(struct jmap_parser *parser, json_t *jval,
                                      const char *key, const char *type,
                                      vcardcomponent *card)
 
 {
-    vcardproperty *prop = NULL;
+    prop_cb_t prop_cb =
+        (*type == 'C') ? &_jsprefchannel_to_card : &_jspreflang_to_card;
     const char *id;
     json_t *array;
     void *tmp;
@@ -8082,10 +8118,9 @@ static unsigned _jspreferred_to_card(struct jmap_parser *parser, json_t *jval,
     jmap_parser_push(parser, key);
 
     json_object_foreach_safe(jval, tmp, id, array) {
-        vcardproperty_contact_channel_pref channel = VCARD_CONTACTCHANNELPREF_NONE;
-        size_t i, size;
-        const char *val;
-        json_t *jprop;
+        vcardproperty_contact_channel_pref channel =
+            VCARD_CONTACTCHANNELPREF_NONE;
+        size_t i;
 
         if (!json_is_array(array)) {
             jmap_parser_invalid(parser, id);
@@ -8111,48 +8146,19 @@ static unsigned _jspreferred_to_card(struct jmap_parser *parser, json_t *jval,
             }
         }
 
-        size = json_array_size(array);
-
-        for (i = 0; i < size; i++) {
+        for (i = 0; i < json_array_size(array); i++) {
             json_t *obj = json_array_get(array, i);
+            int r1;
 
             jmap_parser_push_index(parser, id, i, NULL);
 
-            val = json_string_value(json_object_get(obj, "@type"));
-            if (strcmpsafe(type, val)) {
-                jmap_parser_invalid(parser, "@type");
-                break;
-            }
-            json_object_del(obj, "@type");
+            r |= (r1 = _jsobject_to_card(parser, obj, id, type, prop_cb,
+                                         pref_param_props, 0, card, &channel));
 
-            if (*type == 'C') {
-                prop = vcardproperty_new_contactchannelpref(channel);
-            }
-            else {
-                prop = vcardproperty_new_lang(id);
-            }
-
-            if (prop) {
-                struct param_prop_t *pprop;
-
-                for (pprop = pref_param_props; pprop && pprop->key; pprop++) {
-                    _jsparam_to_vcard(parser, pprop->key, obj, prop, pprop->kind);
-                }
-
-                vcardcomponent_add_property(card, prop);
-                r = 1;
-            }
-
-            /* Add unknown properties */
-            json_object_foreach(obj, key, jprop) {
-                _jsunknown_to_vcard(parser, key, jprop, card);
-            }
 
             jmap_parser_pop(parser);
-        }
 
-        if (i != size) {
-            jmap_parser_pop(parser);
+            if (!r1) break;
         }
 
         json_object_del(jval, id);
