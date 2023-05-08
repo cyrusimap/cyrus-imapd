@@ -22,7 +22,10 @@ jobs:
       with:
         fetch-depth: 0
     - name: configure and build
-      run: ./tools/build-with-cyruslibs.sh
+      run: |
+        git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
+        echo "building cyrus version" $(./tools/git-version.sh)
+        ./tools/build-with-cyruslibs.sh
       shell: bash
     - name: update jmap test suite
       run: |
