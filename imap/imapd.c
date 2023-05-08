@@ -3964,7 +3964,7 @@ static char *normalize_mboxname(char *name, struct listargs *listargs)
     if (strcmp(nfc_name, name)) {
         if (listargs) {
             /* Setup to emit LIST response with OLDNAME */
-            strarray_appendm(&listargs->pat, nfc_name);
+            strarray_append(&listargs->pat, nfc_name);
             listargs->denormalized = name;
         }
         return nfc_name;
@@ -4020,8 +4020,8 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
             /* Eat the argument */
             eatline(imapd_in, prot_getc(imapd_in));
             mboxlist_entry_free(&mbentry);
-            free(intname);
-            return IMAP_OK_COMPLETED;
+            r = IMAP_OK_COMPLETED;
+            goto cleanup;
         }
 
         s = proxy_findserver(mbentry->server, &imap_protocol,
@@ -4059,9 +4059,8 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
                         prot_error(imapd_in) ? prot_error(imapd_in) :
                         error_message(r));
         }
-        free(intname);
 
-        return r;
+        goto cleanup;
     }
 
     mboxlist_entry_free(&mbentry);
@@ -4355,6 +4354,7 @@ cleanup:
     free(intname);
     ptrarray_fini(&stages);
     strarray_fini(&listargs.pat);
+    if (name != origname) free(name);
 
     return r;
 }
@@ -4749,6 +4749,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
  done:
     strarray_fini(&listargs.pat);
+    if (name != origname) free(name);
     free(intname);
 }
 
@@ -7744,6 +7745,7 @@ done:
     mbname_free(&mbname);
     free(mailboxid);
     strarray_fini(&listargs.pat);
+    if (name != origname) free(name);
 }
 
 /* Callback for use by cmd_delete */
@@ -8098,6 +8100,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
                     "%s NO Cross-server or cross-partition move w/rename not supported\r\n",
                     tag);
         if (oldname != orig_oldname) free(oldname);
+        if (newname != orig_newname) free(newname);
         strarray_fini(&listargs.pat);
         return;
     }
@@ -8518,6 +8521,7 @@ done:
     mboxname_release(&newnamespacelock);
     mboxlist_entry_free(&mbentry);
     if (oldname != orig_oldname) free(oldname);
+    if (newname != orig_newname) free(newname);
     strarray_fini(&listargs.pat);
     free(oldextname);
     free(newextname);
