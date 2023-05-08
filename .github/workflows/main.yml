@@ -19,11 +19,12 @@ jobs:
         options: --sysctl net.ipv6.conf.all.disable_ipv6=0 --init
     steps:
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
     - name: configure and build
       run: |
-        git fetch --unshallow
-        git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
-        git fetch --tags upstream
+        git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
+        echo "building cyrus version" $(./tools/git-version.sh)
         ./tools/build-with-cyruslibs.sh
       shell: bash
     - name: update jmap test suite
