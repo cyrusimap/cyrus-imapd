@@ -65,6 +65,8 @@
 #include "jmap_ical.h"
 #endif
 
+#include "imap/imap_err.h"
+
 #ifdef HAVE_ICAL
 
 static int initialized = 0;
@@ -824,6 +826,75 @@ EXPORTED void icalcomponent_add_personal_data(icalcomponent *ical, struct buf *u
     dlist_parsemap(&dl, 1, 0, buf_base(userdata), buf_len(userdata));
     icalcomponent_add_personal_data_from_dl(ical, dl);
     dlist_free(&dl);
+}
+
+EXPORTED int icalsupport_encode_personal_data(struct buf *value,
+                                              struct icalsupport_personal_data *data)
+{
+    struct dlist *dl = dlist_newkvlist(NULL, "CALDATA");
+    dlist_setdate(dl, "LASTMOD", data->lastmod);
+    dlist_setnum64(dl, "MODSEQ", data->modseq);
+
+    const char *icalstr = icalcomponent_as_ical_string(data->vpatch);
+    message_guid_generate(&data->guid, icalstr, strlen(icalstr));
+    dlist_setguid(dl, "GUID", &data->guid);
+    dlist_setatom(dl, "VPATCH", icalstr);
+
+    dlist_setatom(dl, "USEDEFAULTALERTS", data->usedefaultalerts ? "YES" : "NO");
+
+    dlist_printbuf(dl, 1, value);
+    dlist_free(&dl);
+    return 0;
+}
+
+EXPORTED int icalsupport_decode_personal_data(const struct buf *value,
+                                              struct icalsupport_personal_data *data)
+{
+    if (!value || !buf_len(value))
+        return -1;
+
+    struct dlist *dl;
+    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    if (!dl) return -1;
+
+    int is_valid = 0;
+
+    if (!dlist_getdate(dl, "LASTMOD", &data->lastmod))
+        goto done;
+
+    if (!dlist_getnum64(dl, "MODSEQ", &data->modseq))
+        goto done;
+
+    struct message_guid *guidp;
+    if (!dlist_getguid(dl, "GUID", &guidp))
+        goto done;
+    message_guid_copy(&data->guid, guidp);
+
+    const char *sval;
+    if (!dlist_getatom(dl, "VPATCH", &sval))
+        goto done;
+
+    data->vpatch = icalparser_parse_string(sval);
+    if (!data->vpatch)
+        goto done;
+
+    if (!dlist_getatom(dl, "USEDEFAULTALERTS", &sval))
+        goto done;
+
+    data->usedefaultalerts = !strcmpsafe(sval, "YES");
+
+    is_valid = 1;
+
+done:
+    dlist_free(&dl);
+    if (!is_valid) icalsupport_personal_data_fini(data);
+    return is_valid ? 0 : -1;
+}
+
+EXPORTED void icalsupport_personal_data_fini(struct icalsupport_personal_data *data)
+{
+    if (data->vpatch) icalcomponent_free(data->vpatch);
+    memset(data, 0, sizeof(struct icalsupport_personal_data));
 }
 
 EXPORTED const char *get_icalcomponent_errstr(icalcomponent *ical)

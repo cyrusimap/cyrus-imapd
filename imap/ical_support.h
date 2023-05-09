@@ -53,6 +53,7 @@
 #define icalerror_warn(message) \
 {syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s", __FUNCTION__, __FILE__, __LINE__, message);}
 
+#include "dav_util.h"
 #include "mailbox.h"
 
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
@@ -113,6 +114,22 @@ extern const char *icalproperty_get_xparam_value(icalproperty *prop,
 
 extern void icalcomponent_add_personal_data(icalcomponent *ical, struct buf *userdata);
 extern void icalcomponent_add_personal_data_from_dl(icalcomponent *ical, struct dlist *dl);
+
+struct icalsupport_personal_data {
+    time_t lastmod;
+    modseq_t modseq;
+    int usedefaultalerts;
+    icalcomponent *vpatch;
+    struct message_guid guid; // read-only
+};
+
+extern int icalsupport_encode_personal_data(struct buf *value,
+                                            struct icalsupport_personal_data *data);
+
+extern int icalsupport_decode_personal_data(const struct buf *value,
+                                            struct icalsupport_personal_data *data);
+
+extern void icalsupport_personal_data_fini(struct icalsupport_personal_data *data);
 
 extern int icalcomponent_get_usedefaultalerts(icalcomponent *comp);
 extern void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use, const char *atag);

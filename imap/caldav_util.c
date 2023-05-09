@@ -653,7 +653,6 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
     return 0;
 }
 
-
 static int write_personal_data(const char *userid,
                                struct mailbox *mailbox,
                                uint32_t uid,
@@ -661,29 +660,21 @@ static int write_personal_data(const char *userid,
                                int usedefaultalerts,
                                icalcomponent *vpatch)
 {
-    struct message_guid guid;
     struct buf value = BUF_INITIALIZER;
-    const char *icalstr = icalcomponent_as_ical_string(vpatch);
-    struct dlist *dl;
-    int ret;
 
-    ret = mailbox_get_annotate_state(mailbox, uid, NULL);
-    if (ret) return ret;
+    struct icalsupport_personal_data data = {
+        .lastmod = time(NULL),
+        .modseq = modseq,
+        .vpatch = vpatch,
+        .usedefaultalerts = usedefaultalerts
+    };
 
-    dl = dlist_newkvlist(NULL, "CALDATA");
-    dlist_setdate(dl, "LASTMOD", time(0));
-    dlist_setnum64(dl, "MODSEQ", modseq);
-    message_guid_generate(&guid, icalstr, strlen(icalstr));
-    dlist_setguid(dl, "GUID", &guid);
-    dlist_setatom(dl, "VPATCH", icalstr);
-    dlist_setatom(dl, "USEDEFAULTALERTS", usedefaultalerts ? "YES" : "NO");
-    dlist_printbuf(dl, 1, &value);
-    dlist_free(&dl);
+    icalsupport_encode_personal_data(&value, &data);
 
-    ret = mailbox_annotation_write(mailbox, uid,
-                                   PER_USER_CAL_DATA, userid, &value);
+    int ret = mailbox_annotation_write(mailbox, uid,
+            PER_USER_CAL_DATA, userid, &value);
+
     buf_free(&value);
-
     return ret;
 }
 
