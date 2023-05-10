@@ -1555,13 +1555,14 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
         /* translate internal mailbox name to external */
         char *extname = mboxname_to_external(quota->root, &namespace, NULL);
         imapurl.mailbox = extname;
-        free(extname);
 
         if (!event->params[EVENT_URI].filled) {
             struct buf url = BUF_INITIALIZER;
             imapurl_toURL(&url, &imapurl);
             FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
         }
+
+        xzfree(extname);
 
         /* Note that userbuf for shared folders is NULL, and xstrdup
          * doesn't like it. However, shared folder hierarchies can have
@@ -1574,6 +1575,7 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
             FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(userid));
             free(userid);
         }
+
     }
 }
 
