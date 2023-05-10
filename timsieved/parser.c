@@ -586,6 +586,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
 
   prot_flush(sieved_out);
 
+  if (authenticated && ret == TRUE)
+      actions_unsetuser();
+
   return ret;
 
  error:
