@@ -128,6 +128,14 @@ void shut_down(int code)
         free(backend);
     }
 
+#ifdef HAVE_SSL
+    tls_shutdown_serverengine();
+#endif
+
+    saslprops_free(&saslprops);
+
+    cyrus_done();
+
     /* cleanup */
     if (sieved_out) {
         prot_flush(sieved_out);
@@ -136,14 +144,6 @@ void shut_down(int code)
     if (sieved_in) prot_free(sieved_in);
 
     if (sieved_logfd != -1) close(sieved_logfd);
-
-#ifdef HAVE_SSL
-    tls_shutdown_serverengine();
-#endif
-
-    saslprops_free(&saslprops);
-
-    cyrus_done();
 
     cyrus_reset_stdio();
 
