@@ -413,6 +413,7 @@ int main(int argc, char **argv)
         backup_close(&backup);
 
     /* clean up and exit */
+    mbname_free(&mbname);
     backup_cleanup_staging_path();
     cyrus_done();
 
