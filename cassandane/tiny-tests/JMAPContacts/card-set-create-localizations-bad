@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_card_set_create_localizations_bad
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    '@version' => '1.0',
+                    uid => $id,
+                    locale => 'es',
+                    fullName => 'Gabriel García Márquez',
+                    speakToAs => {
+                        '@type' => 'SpeakToAs',
+                        grammaticalGender => 'masculino',
+                        pronouns => {
+                            k19 => {
+                                '@type' => 'Pronouns',
+                                pronouns => 'él',
+                            }
+                        }
+                    },
+                    localizations => {
+                        en => {
+                            'foo/bar' => JSON::false
+                        },
+                        de => {
+                            'titles/foo' => JSON::false
+                        },
+                        es => {
+                            titles => {
+                                t1 => {
+                                    '@type' => 'Title',
+                                    title => 'Novelista'
+                                }
+                            }
+                        },
+                        jp => {
+                            'speakToAs/foo/bar' => JSON::false
+                        }
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_str_equals('invalidProperties',
+                             $res->[0][1]{notCreated}{1}{type});
+    $self->assert_num_equals(4,
+                             scalar @{$res->[0][1]{notCreated}{1}{properties}});
+
+    my @bad_props = sort @{$res->[0][1]{notCreated}{1}{properties}};
+
+    $self->assert_str_equals('localizations/de/titles/foo', $bad_props[0]);
+    $self->assert_str_equals('localizations/en/foo/bar', $bad_props[1]);
+    $self->assert_str_equals('localizations/es/titles/t1/name', $bad_props[2]);
+    $self->assert_str_equals('localizations/jp/speakToAs/foo/bar', $bad_props[3]);
+}
