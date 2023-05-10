@@ -8631,7 +8631,7 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
         if (r) json_object_set_new(errors, uidrec->email_id, jmap_server_error(r));
         // otherwise, record the success
         else if (success && json_array_find(success, uidrec->email_id) < 0)
-            json_array_append(success, json_string(uidrec->email_id));
+            json_array_append_new(success, json_string(uidrec->email_id));
     }
     if (mrw) msgrecord_unref(&mrw);
 
