@@ -3825,7 +3825,11 @@ static char *encode_addrheader(const char *header, size_t len, int force_quote,
         /* jump to end of address */
         n += phrase_len + addr_len;
 
-    } while ((addr = find_addr(header + n , len - n, &addr_len)) || n < len);
+        /* reached end of header */
+        if (n >= len)
+            break;
+
+    } while ((addr = find_addr(header + n , len - n, &addr_len)));
 
     return buf_release(&buf);
 }
