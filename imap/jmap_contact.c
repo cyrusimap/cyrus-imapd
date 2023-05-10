@@ -5817,6 +5817,10 @@ static const jmap_property_t card_props[] = {
 
 #ifdef HAVE_LIBICALVCARD
 
+/*
+ * Card[Group}/get
+ */
+
 struct comp_kind {
     const char *name;
     unsigned idx;
@@ -7196,6 +7200,22 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     return 0;
 }
 
+/*
+ * Card[Group]/set
+ */
+
+struct l10n_by_id_t {
+    const char *locale;
+    const char *lang;
+    hash_table *patches;
+};
+
+struct l10n_patch_t {
+    const char *lang;
+    const char *path;
+    json_t *obj;
+};
+
 static void _jsunknown_to_vcard(struct jmap_parser *parser,
                                 const char *key, json_t *jval,
                                 vcardcomponent *card)
@@ -7216,8 +7236,8 @@ static void _jsunknown_to_vcard(struct jmap_parser *parser,
 }
 
 static unsigned jssimple_to_vcard(struct jmap_parser *parser,
-                                  const char *key, json_t *jval,
-                                  vcardcomponent *card,
+                                  const char *key, const char *lang,
+                                  json_t *jval, vcardcomponent *card,
                                   vcardproperty_kind pkind,
                                   vcardvalue_kind vkind)
 {
@@ -7256,6 +7276,10 @@ static unsigned jssimple_to_vcard(struct jmap_parser *parser,
     prop = vcardproperty_new(pkind);
     vcardproperty_set_value(prop, val);
     vcardcomponent_add_property(card, prop);
+
+    if (lang && *lang) {
+        vcardproperty_add_parameter(prop, vcardparameter_new_language(lang));
+    }
 
     return 1;
 }
@@ -7410,6 +7434,7 @@ struct param_prop_t directories_param_props[] = {
 #define resource_param_props (directories_param_props+1)  // no listAs
 
 #define WANT_PROPID_FLAG (1<<0)
+#define WANT_ALTID_FLAG  (1<<1)
 
 typedef vcardproperty* (*prop_cb_t)(struct jmap_parser *parser, json_t *obj,
                                     const char *id, vcardcomponent *card,
@@ -7418,8 +7443,8 @@ typedef vcardproperty* (*prop_cb_t)(struct jmap_parser *parser, json_t *obj,
 static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
                                   const char *id, const char *type, prop_cb_t cb,
                                   struct param_prop_t param_props[],
-                                  unsigned flags, vcardcomponent *card,
-                                  void *rock)
+                                  unsigned flags, const char *lang,
+                                  vcardcomponent *card, void *rock)
 {
     vcardproperty *prop = NULL;
     const char *key, *val;
@@ -7441,6 +7466,12 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
         if (flags & WANT_PROPID_FLAG) {
             vcardproperty_add_parameter(prop, vcardparameter_new_propid(id));
         }
+        else if (flags & WANT_ALTID_FLAG) {
+            vcardproperty_add_parameter(prop, vcardparameter_new_altid(id));
+        }
+        if (lang && *lang) {
+            vcardproperty_add_parameter(prop, vcardparameter_new_language(lang));
+        }
 
         for (pprop = param_props; pprop && pprop->key; pprop++) {
             _jsparam_to_vcard(parser, pprop->key, obj, prop, pprop->kind);
@@ -7460,10 +7491,10 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
 
 static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
                                        const char *key, const char *type,
-                                       prop_cb_t prop_cb,
+                                       prop_cb_t prop_cb, unsigned flags,
                                        struct param_prop_t param_props[],
-                                       unsigned flags, vcardcomponent *card,
-                                       void *rock)
+                                       struct l10n_by_id_t *l10n,
+                                       vcardcomponent *card, void *rock)
 
 {
     const char *id;
@@ -7479,12 +7510,50 @@ static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
     jmap_parser_push(parser, key);
 
     json_object_foreach_safe(jval, tmp, id, obj) {
+        ptrarray_t *patches =
+            l10n->patches ? hash_del(id, l10n->patches) : NULL;
+        const char *lang;
         int r1;
 
         jmap_parser_push(parser, id);
 
+        if (patches) {
+            /* Apply localization patches and add new objectes to Card */
+            struct l10n_patch_t *lpatch;
+
+            while ((lpatch = ptrarray_pop(patches))) {
+                json_t *jpatch = json_pack("{s:O}", lpatch->path, lpatch->obj);
+                json_t *altobj =
+                    jmap_patchobject_apply(obj, jpatch, parser->invalid);
+
+                json_decref(jpatch);
+
+                if (altobj) {
+                    lang = strcasecmp(l10n->locale, lpatch->lang) ?
+                        lpatch->lang : NULL;
+
+                    flags = WANT_ALTID_FLAG;
+
+                    r |= (r1 = _jsobject_to_card(parser, altobj, id, type,
+                                                 prop_cb, param_props,
+                                                 flags, lang, card, rock));
+                    json_decref(altobj);
+                }
+
+                free(lpatch);
+            }
+
+            ptrarray_free(patches);
+        }
+
+        if (l10n->lang) {
+            flags = WANT_ALTID_FLAG;
+        }
+
+        /* Add base object to Card */
         r |= (r1 = _jsobject_to_card(parser, obj, id, type, prop_cb,
-                                     param_props, flags, card, rock));
+                                     param_props, flags, l10n->lang,
+                                     card, rock));
 
         json_object_del(jval, id);
         jmap_parser_pop(parser);
@@ -7546,8 +7615,9 @@ static int _field_name_to_index(const char *name,
     return -1;
 }
 
-static unsigned _jsname_to_vcard(struct jmap_parser *parser,
-                                 json_t *jval, vcardcomponent *card)
+static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
+                                 struct l10n_by_id_t *l10n,
+                                 vcardcomponent *card)
 {
     vcardstructuredtype n = { VCARD_NUM_N_FIELDS, { 0 } };
     vcardproperty *prop = NULL;
@@ -7680,6 +7750,13 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser,
 
     prop = vcardproperty_new_n(&n);
     if (prop) {
+        if (l10n->lang) {
+            vcardproperty_add_parameter(prop, vcardparameter_new_altid("n1"));
+            if (*l10n->lang) {
+                vcardproperty_add_parameter(prop,
+                                            vcardparameter_new_language(l10n->lang));
+            }
+        }
         if (sortas) {
             vcardproperty_add_parameter(prop, vcardparameter_new_sortas(sortas));
         }
@@ -7871,8 +7948,11 @@ static vcardproperty *_jspronoun_to_vcard(struct jmap_parser *parser, json_t *ob
 }
 
 static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
-                                  json_t *jval, vcardcomponent *card)
+                                  json_t *jval, struct l10n_by_id_t *l10n,
+                                  vcardcomponent *card)
 {
+    ptrarray_t *patches;
+    struct l10n_patch_t *lpatch;
     const char *key, *val;
     json_t *jprop;
     int r = 0;
@@ -7892,7 +7972,27 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
 
     jprop = json_object_get(jval, "grammaticalGender");
     if (jprop) {
-        if (jssimple_to_vcard(parser, "grammaticalGender", jprop,
+        patches = l10n->patches ?
+            hash_del("grammaticalGender", l10n->patches) : NULL;
+
+        if (patches) {
+            /* Apply localization patches and add new objects to Card */
+            while ((lpatch = ptrarray_pop(patches))) {
+                if (jssimple_to_vcard(parser, "grammaticalGender",
+                                      lpatch->lang, lpatch->obj,
+                                      card, VCARD_GRAMMATICALGENDER_PROPERTY,
+                                      VCARD_GRAMMATICALGENDER_VALUE)) {
+                    r = 1;
+                }
+
+                free(lpatch);
+            }
+
+            ptrarray_free(patches);
+        }
+
+        /* Add base object to Card */
+        if (jssimple_to_vcard(parser, "grammaticalGender", l10n->lang, jprop,
                               card, VCARD_GRAMMATICALGENDER_PROPERTY,
                               VCARD_GRAMMATICALGENDER_VALUE)) {
             r = 1;
@@ -7904,9 +8004,39 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
 
     jprop = json_object_get(jval, "pronouns");
     if (jprop) {
+        patches = l10n->patches ?
+            hash_del("pronouns", l10n->patches) : NULL;
+
+        if (patches) {
+            /* Apply localization patches and add new objects to Card */
+            struct buf buf = BUF_INITIALIZER;
+
+            while ((lpatch = ptrarray_pop(patches))) {
+                const char *p = strchr(lpatch->path, '/'), *id;
+                ptrarray_t *mypatches;
+
+                buf_setmap(&buf, lpatch->path, p - lpatch->path);
+                id = buf_cstring(&buf);
+
+                mypatches = hash_lookup(id, l10n->patches);
+                if (!mypatches) {
+                    mypatches = ptrarray_new();
+                    hash_insert(id, mypatches, l10n->patches);
+                }
+
+                lpatch->path = ++p;
+
+                ptrarray_append(mypatches, lpatch);
+            }
+
+            ptrarray_free(patches);
+            buf_free(&buf);
+        }
+
+        /* Add base object to Card */
         r |= _jsmultiobject_to_card(parser, jprop, "pronouns", "Pronouns",
-                                    &_jspronoun_to_vcard, pref_param_props,
-                                    WANT_PROPID_FLAG, card, NULL);
+                                    &_jspronoun_to_vcard, WANT_PROPID_FLAG,
+                                    pref_param_props, l10n, card, NULL);
     }
 
     json_object_del(jval, "@type");
@@ -7932,17 +8062,28 @@ static vcardproperty *_jstitle_to_vcard(struct jmap_parser *parser, json_t *obj,
     hash_table *groups = rock;
     vcardproperty_kind kind = VCARD_NO_PROPERTY;
     vcardproperty *prop = NULL;
+    json_t *jprop;
     const char *val;
 
-    val = json_string_value(json_object_get(obj, "kind"));
-    if (!strcasecmp("title", val)) {
-        kind = VCARD_TITLE_PROPERTY;
+    jprop = json_object_get(obj, "kind");
+    if (json_is_string(jprop)) {
+        val = json_string_value(jprop);
+
+        if (!strcmp("title", val)) {
+            kind = VCARD_TITLE_PROPERTY;
+        }
+        else if (!strcmp("role", val)) {
+            kind = VCARD_ROLE_PROPERTY;
+        }
+        else {
+            jmap_parser_invalid(parser, "kind");
+        }
     }
-    else if (!strcasecmp("role", val)) {
-        kind = VCARD_ROLE_PROPERTY;
+    else if (jprop) {
+        jmap_parser_invalid(parser, "kind");
     }
     else {
-        jmap_parser_invalid(parser, "kind");
+        kind = VCARD_TITLE_PROPERTY;
     }
 
     if (kind != VCARD_NO_PROPERTY) {
@@ -8038,13 +8179,13 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
     }
 
     val = json_string_value(json_object_get(obj, "kind"));
-    if (!strcasecmp("impp", val)) {
+    if (!strcmp("impp", val)) {
         kind = VCARD_IMPP_PROPERTY;
     }
-    else if (!strcasecmp("uri", val)) {
+    else if (!strcmp("uri", val)) {
         kind = VCARD_SOCIALPROFILE_PROPERTY;
     }
-    else if (!strcasecmp("username", val)) {
+    else if (!strcmp("username", val)) {
         kind = VCARD_SOCIALPROFILE_PROPERTY;
         val_kind = "TEXT";
         if (!service) {
@@ -8153,7 +8294,8 @@ static unsigned _jspreferred_to_card(struct jmap_parser *parser, json_t *jval,
             jmap_parser_push_index(parser, id, i, NULL);
 
             r |= (r1 = _jsobject_to_card(parser, obj, id, type, prop_cb,
-                                         pref_param_props, 0, card, &channel));
+                                         pref_param_props, 0 /* no flags */,
+                                         NULL /* no l10n */, card, &channel));
 
 
             jmap_parser_pop(parser);
@@ -8647,6 +8789,47 @@ static void _set_groups(const char *key, void *val,
     }
 }
 
+struct bad_patch_rock {
+    struct jmap_parser *parser;
+    const char *key;
+};
+
+static void _invalid_l10n_patches_by_id(const char *id, void *val, void *rock)
+{
+    struct bad_patch_rock *brock = rock;
+    struct l10n_patch_t *lpatch;
+    ptrarray_t *patches = val;
+
+    while ((lpatch = ptrarray_pop(patches))) {
+        jmap_parser_push(brock->parser, lpatch->lang);
+        jmap_parser_push(brock->parser, brock->key);
+        jmap_parser_push(brock->parser, id);
+
+        jmap_parser_invalid(brock->parser, lpatch->path);
+
+        jmap_parser_pop(brock->parser);
+        jmap_parser_pop(brock->parser);
+        jmap_parser_pop(brock->parser);
+
+        free(lpatch);
+    }
+
+    ptrarray_free(patches);
+}
+
+static void _invalid_l10n_patches_by_key(const char *key, void *val, void *rock)
+{
+    struct bad_patch_rock brock = { rock /* parser */, key };
+    hash_table *patches_by_id = val;
+
+    hash_enumerate(patches_by_id, &_invalid_l10n_patches_by_id, &brock);
+    free_hash_table(patches_by_id, NULL);
+    free(patches_by_id);
+}
+
+#define PROP_LANG_TAG_PREFIX      "cyrusimap.org:lang:"
+#define PROP_LANG_TAG_PREFIX_LEN  19
+
 static int _jscard_to_vcard(struct jmap_req *req,
                             struct carddav_data *cdata,
                             const char *mboxname,
@@ -8657,19 +8840,89 @@ static int _jscard_to_vcard(struct jmap_req *req,
                             jmap_contact_errors_t *errors)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    const char *key;
+    const char *key, *locale = NULL, *lang, *p;
     json_t *jval;
     unsigned has_noncontent = 0;
     unsigned record_is_dirty = 0;
     hash_table groups = HASH_TABLE_INITIALIZER;
+    hash_table l10n_by_key = HASH_TABLE_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+    unsigned has_localized_name = 0;
     int r = 0;
 
     json_decref(parser.invalid);
     parser.invalid = errors->invalid;
 
     construct_hash_table(&groups, 10, 0);
+    construct_hash_table(&l10n_by_key, 10, 0);
+
+    locale = json_string_value(json_object_get(arg, "locale"));
+    json_object_foreach(json_object_get(arg, "localizations"), lang, jval) {
+        json_t *jsubval;
+
+        json_object_foreach(jval, key, jsubval) {
+            p = strchr(key, '/');
+
+            if (p) {
+                /* Localization patch:
+                 *
+                 * Patches are stored in a hash table (by property key)
+                 * of hash tables (by object id) of ptrarrays.
+                 */
+                struct l10n_patch_t *local =
+                    xzmalloc(sizeof(struct l10n_patch_t));
+                hash_table *patches_by_id;
+                ptrarray_t *patches;
+                const char *prop_key, *id = p+1;
+
+                buf_setmap(&buf, key, p - key);
+                prop_key = buf_cstring(&buf);
+                patches_by_id = hash_lookup(prop_key, &l10n_by_key);
+                if (!patches_by_id) {
+                    patches_by_id = xzmalloc(sizeof(hash_table));
+                    construct_hash_table(patches_by_id, 10, 0);
+                    hash_insert(prop_key, patches_by_id, &l10n_by_key);
+                }
+
+                p = strchr(id, '/');
+                if (p) {
+                    buf_setmap(&buf, id, p - id);
+                    id = buf_cstring(&buf);
+                    local->path = ++p;
+                }
+
+                patches = hash_lookup(id, patches_by_id);
+                if (!patches) {
+                    patches = ptrarray_new();
+                    hash_insert(id, patches, patches_by_id);
+                }
+
+                local->lang = lang;
+                local->obj = jsubval;
+
+                ptrarray_append(patches, local);
+            }
+            else {
+                /* Localization object:
+                 *
+                 * Prefix the property key with vendor + language tags
+                 * and add the object to the Card for normal processing.
+                 */
+                if (!strcmp("name", key)) {
+                    has_localized_name = 1;
+                }
+
+                buf_reset(&buf);
+                buf_printf(&buf, "%s%s:%s", PROP_LANG_TAG_PREFIX, lang, key);
+                json_object_set(arg, buf_cstring(&buf), jsubval);
+            }
+        }
+    }
 
     json_object_foreach(arg, key, jval) {
+        struct l10n_by_id_t l10n = { locale, NULL, NULL };
+        const char *mykey;
+
         if (cdata) {
             if (!strcmp(key, "id")) {
                 if (strcmpnull(cdata->vcard_uid, json_string_value(jval))) {
@@ -8702,137 +8955,178 @@ static int _jscard_to_vcard(struct jmap_req *req,
             }
         }
 
+        /* Localization property? */
+        if (!strncmp(PROP_LANG_TAG_PREFIX, key, PROP_LANG_TAG_PREFIX_LEN)) {
+            /* Strip prefix and get language tag */
+            lang = key + PROP_LANG_TAG_PREFIX_LEN;
+            p = strchr(lang, ':');
+
+            buf_setmap(&buf, lang, p - lang);
+            lang = buf_cstring(&buf);
+            mykey = ++p;
+
+            /* If language tag == locale,
+               don't add LANGUAGE parameter, but still force ALTID parameter */
+            l10n.lang = strcasecmp(lang, l10n.locale) ? lang : "";
+
+            jmap_parser_push(&parser, "localizations");
+            jmap_parser_push(&parser, lang);
+        }
+        else {
+            /* Fetch any localization patches for this property */
+            l10n.patches = hash_lookup(key, &l10n_by_key);
+            mykey = key;
+        }
+
         /* Metadata properties */
-        if (!strcmp(key, "@type")) {
+        if (!strcmp(mykey, "@type")) {
             if (strcmpsafe("Card", json_string_value(jval))) {
                 jmap_parser_invalid(&parser, "@type");
             }
         }
-        else if (!strcmp(key, "@version")) {
+        else if (!strcmp(mykey, "@version")) {
             if (strcmpsafe("1.0", json_string_value(jval))) {
                 jmap_parser_invalid(&parser, "@version");
             }
         }
-        else if (!strcmp(key, "created")) {
-            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+        else if (!strcmp(mykey, "created")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, mykey, l10n.lang,
+                                                 jval, card,
                                                  VCARD_CREATED_PROPERTY,
                                                  VCARD_TIMESTAMP_VALUE);
         }
-        else if (!strcmp(key, "kind")) {
-            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+        else if (!strcmp(mykey, "kind")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, mykey, l10n.lang,
+                                                 jval, card,
                                                  VCARD_KIND_PROPERTY,
                                                  VCARD_KIND_VALUE);
         }
-        else if (!strcmp(key, "locale")) {
-            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+        else if (!strcmp(mykey, "locale")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, mykey, l10n.lang,
+                                                 jval, card,
                                                  VCARD_LOCALE_PROPERTY,
                                                  VCARD_TEXT_VALUE);
         }
-        else if (!strcmp(key, "members")) {
-            record_is_dirty |= _jsmultikey_to_card(&parser, jval, key, card,
+        else if (!strcmp(mykey, "members")) {
+            record_is_dirty |= _jsmultikey_to_card(&parser, jval, mykey, card,
                                                    VCARD_MEMBER_PROPERTY);
         }
-        else if (!strcmp(key, "prodId")) {
-            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+        else if (!strcmp(mykey, "prodId")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, mykey, l10n.lang,
+                                                 jval, card,
                                                  VCARD_PRODID_PROPERTY,
                                                  VCARD_TEXT_VALUE);
         }
-        else if (!strcmp(key, "relatedTo")) {
+        else if (!strcmp(mykey, "relatedTo")) {
             struct param_prop_t relation_props[] = {
                 { "relation", VCARD_TYPE_PARAMETER  },
                 { NULL,       0                     }
             };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "Relation",
+                                                      mykey, "Relation",
                                                       &_jsrelation_to_vcard,
-                                                      relation_props, 0, card,
-                                                      NULL);
+                                                      0 /* no flags */,
+                                                      relation_props, &l10n,
+                                                      card, NULL);
         }
-        else if (!strcmp(key, "uid")) {
+        else if (!strcmp(mykey, "uid")) {
             if (!json_is_string(jval)) {
                 jmap_parser_invalid(&parser, "uid");
                 break;
             }
         }
-        else if (!strcmp(key, "updated")) {
-            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+        else if (!strcmp(mykey, "updated")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, mykey, l10n.lang,
+                                                 jval, card,
                                                  VCARD_REV_PROPERTY,
                                                  VCARD_TIMESTAMP_VALUE);
         }
 
         /* Name and Organization properties */
-        else if (!strcmp(key, "fullName")) {
-            record_is_dirty |= jssimple_to_vcard(&parser, key, jval, card,
+        else if (!strcmp(mykey, "fullName")) {
+            record_is_dirty |= jssimple_to_vcard(&parser, mykey, l10n.lang,
+                                                 jval, card,
                                                  VCARD_FN_PROPERTY,
                                                  VCARD_TEXT_VALUE);
         }
-        else if (!strcmp(key, "name")) {
-            record_is_dirty |= _jsname_to_vcard(&parser, jval, card);
+        else if (!strcmp(mykey, "name")) {
+            if (!l10n.lang && has_localized_name) {
+                l10n.lang = "";
+            }
+            record_is_dirty |= _jsname_to_vcard(&parser, jval, &l10n, card);
         }
-        else if (!strcmp(key, "nickNames")) {
+        else if (!strcmp(mykey, "nickNames")) {
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "NickName",
+                                                      mykey, "NickName",
                                                       &_jsnickname_to_vcard,
-                                                      pref_param_props, 1, card,
-                                                      NULL);
+                                                      WANT_PROPID_FLAG,
+                                                      pref_param_props, &l10n,
+                                                      card, NULL);
         }
-        else if (!strcmp(key, "organizations")) {
+        else if (!strcmp(mykey, "organizations")) {
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "Organization",
+                                                      mykey, "Organization",
                                                       &_jsorg_to_vcard,
-                                                      context_param_props, 1, card,
-                                                      &groups);
+                                                      WANT_PROPID_FLAG,
+                                                      context_param_props, &l10n,
+                                                      card, &groups);
         }
-        else if (!strcmp(key, "speakToAs")) {
-            record_is_dirty |= _jsspeak_to_vcard(&parser, jval, card);
+        else if (!strcmp(mykey, "speakToAs")) {
+            record_is_dirty |= _jsspeak_to_vcard(&parser, jval, &l10n, card);
         }
-        else if (!strcmp(key, "titles")) {
+        else if (!strcmp(mykey, "titles")) {
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "Title",
+                                                      mykey, "Title",
                                                       &_jstitle_to_vcard,
-                                                      NULL, 1, card, &groups);
+                                                      WANT_PROPID_FLAG,
+                                                      NULL, &l10n,
+                                                      card, &groups);
         }
 
         /* Contact properties */
-        else if (!strcmp(key, "emails")) {
+        else if (!strcmp(mykey, "emails")) {
             struct comm_rock crock = { "address", VCARD_EMAIL_PROPERTY };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "EmailAddress",
+                                                      mykey, "EmailAddress",
                                                       &_jscomm_to_vcard,
-                                                      comm_param_props, 1, card,
-                                                      &crock);
+                                                      WANT_PROPID_FLAG,
+                                                      comm_param_props, &l10n,
+                                                      card, &crock);
         }
-        else if (!strcmp(key, "onlineServices")) {
+        else if (!strcmp(mykey, "onlineServices")) {
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "OnlineService",
+                                                      mykey, "OnlineService",
                                                       &_jsonline_to_vcard,
-                                                      comm_param_props, 1, card,
-                                                      NULL);
+                                                      WANT_PROPID_FLAG,
+                                                      comm_param_props, &l10n,
+                                                      card, NULL);
         }
-        else if (!strcmp(key, "phones")) {
+        else if (!strcmp(mykey, "phones")) {
             struct comm_rock crock = { "number", VCARD_TEL_PROPERTY };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "Phone",
+                                                      mykey, "Phone",
                                                       &_jscomm_to_vcard,
-                                                      phone_param_props, 1, card,
-                                                      &crock);
+                                                      WANT_PROPID_FLAG,
+                                                      phone_param_props, &l10n,
+                                                      card, &crock);
         }
-        else if (!strcmp(key, "preferredContactChannels")) {
+        else if (!strcmp(mykey, "preferredContactChannels")) {
             record_is_dirty |= _jspreferred_to_card(&parser, jval,
-                                                    key, "ContactChannelPreference",
+                                                    mykey,
+                                                    "ContactChannelPreference",
                                                     card);
         }
-        else if (!strcmp(key, "preferredLanguages")) {
+        else if (!strcmp(mykey, "preferredLanguages")) {
             record_is_dirty |= _jspreferred_to_card(&parser, jval,
-                                                    key, "LanguagePreference",
+                                                    mykey, "LanguagePreference",
                                                     card);
         }
 
         /* Calendaring and Scheduling properties*/
-        else if (!strcmp(key, "calendars")) {
+        else if (!strcmp(mykey, "calendars")) {
             struct resource_map map[] = {
                 { "calendar", VCARD_CALURI_PROPERTY },
                 { "freeBusy", VCARD_FBURL_PROPERTY  },
@@ -8840,23 +9134,25 @@ static int _jscard_to_vcard(struct jmap_req *req,
             };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "CalendarResource",
+                                                      mykey, "CalendarResource",
                                                       &_jsresource_to_vcard,
-                                                      resource_param_props, 1, card,
-                                                      &map);
+                                                      WANT_PROPID_FLAG,
+                                                      resource_param_props,
+                                                      &l10n, card, &map);
         }
-        else if (!strcmp(key, "schedulingAddresses")) {
+        else if (!strcmp(mykey, "schedulingAddresses")) {
             struct comm_rock crock = { "uri", VCARD_CALADRURI_PROPERTY };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "SchedulingAddress",
+                                                      mykey, "SchedulingAddress",
                                                       &_jscomm_to_vcard,
-                                                      comm_param_props, 1, card,
-                                                      &crock);
+                                                      WANT_PROPID_FLAG,
+                                                      comm_param_props, &l10n,
+                                                      card, &crock);
         }
 
         /* Address and Location properties */
-        else if (!strcmp(key, "addresses")) {
+        else if (!strcmp(mykey, "addresses")) {
             struct param_prop_t addr_props[] = {
                 { "pref",        VCARD_PREF_PARAMETER  },
                 { "contexts",    VCARD_TYPE_PARAMETER  },
@@ -8868,24 +9164,27 @@ static int _jscard_to_vcard(struct jmap_req *req,
             };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "Address",
+                                                      mykey, "Address",
                                                       &_jsaddr_to_vcard,
-                                                      addr_props, 1, card, NULL);
+                                                      WANT_PROPID_FLAG,
+                                                      addr_props, &l10n,
+                                                      card, NULL);
         }
 
         /* Resource properties */
-        else if (!strcmp(key, "cryptoKeys")) {
+        else if (!strcmp(mykey, "cryptoKeys")) {
             struct resource_map map[] = {
                 { NULL, VCARD_KEY_PROPERTY }
             };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "CryptoResource",
+                                                      mykey, "CryptoResource",
                                                       &_jsresource_to_vcard,
-                                                      resource_param_props, 1,
-                                                      card, &map);
+                                                      WANT_PROPID_FLAG,
+                                                      resource_param_props,
+                                                      &l10n, card, &map);
         }
-        else if (!strcmp(key, "directories")) {
+        else if (!strcmp(mykey, "directories")) {
             struct resource_map map[] = {
                 { "directory", VCARD_ORGDIRECTORY_PROPERTY },
                 { "entry",     VCARD_SOURCE_PROPERTY       },
@@ -8893,24 +9192,26 @@ static int _jscard_to_vcard(struct jmap_req *req,
             };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "DirectoryResource",
+                                                      mykey, "DirectoryResource",
                                                       &_jsresource_to_vcard,
-                                                      directories_param_props, 1,
-                                                      card, &map);
+                                                      WANT_PROPID_FLAG,
+                                                      directories_param_props,
+                                                      &l10n, card, &map);
         }
-        else if (!strcmp(key, "links")) {
+        else if (!strcmp(mykey, "links")) {
             struct resource_map map[] = {
                 { "contact", VCARD_CONTACTURI_PROPERTY },
                 { NULL,      VCARD_URL_PROPERTY        },
             };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "LinkResource",
+                                                      mykey, "LinkResource",
                                                       &_jsresource_to_vcard,
-                                                      resource_param_props, 1, card,
-                                                      &map);
+                                                      WANT_PROPID_FLAG,
+                                                      resource_param_props,
+                                                      &l10n, card, &map);
         }
-        else if (!strcmp(key, "media")) {
+        else if (!strcmp(mykey, "media")) {
             struct resource_map map[] = {
                 { "photo", VCARD_PHOTO_PROPERTY },
                 { "sound", VCARD_SOUND_PROPERTY },
@@ -8919,40 +9220,44 @@ static int _jscard_to_vcard(struct jmap_req *req,
             };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "MediaResource",
+                                                      mykey, "MediaResource",
                                                       &_jsresource_to_vcard,
-                                                      resource_param_props, 1, card,
-                                                      &map);
+                                                      WANT_PROPID_FLAG,
+                                                      resource_param_props,
+                                                      &l10n, card, &map);
         }
 
         /* Multilingual properties */
-        else if (!strcmp(key, "localizations")) {
-            /* XXX  TODO */
+        else if (!strcmp(mykey, "localizations")) {
+            /* Handled elsewhere */
         }
 
         /* Additional properties */
-        else if (!strcmp(key, "anniversaries")) {
+        else if (!strcmp(mykey, "anniversaries")) {
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "Anniversary",
+                                                      mykey, "Anniversary",
                                                       &_jsanniv_to_vcard,
-                                                      NULL, 1, card, NULL);
+                                                      WANT_PROPID_FLAG,
+                                                      NULL, &l10n, card, NULL);
         }
-        else if (!strcmp(key, "keywords")) {
-            record_is_dirty |= _jsmultikey_to_card(&parser, jval, key, card,
+        else if (!strcmp(mykey, "keywords")) {
+            record_is_dirty |= _jsmultikey_to_card(&parser, jval, mykey, card,
                                                    VCARD_CATEGORIES_PROPERTY);
         }
-        else if (!strcmp(key, "notes")) {
+        else if (!strcmp(mykey, "notes")) {
             struct param_prop_t note_props[] = {
                 { "created", VCARD_CREATED_PARAMETER },
                 { NULL,      0                       }
             };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "Note",
+                                                      mykey, "Note",
                                                       &_jsnote_to_vcard,
-                                                      note_props, 1, card, NULL);
+                                                      WANT_PROPID_FLAG,
+                                                      note_props, &l10n,
+                                                      card, NULL);
         }
-        else if (!strcmp(key, "personalInfo")) {
+        else if (!strcmp(mykey, "personalInfo")) {
             struct param_prop_t personal_props[] = {
                 { "label",  VCARD_LABEL_PARAMETER },
                 { "level",  VCARD_LEVEL_PARAMETER },
@@ -8961,14 +9266,15 @@ static int _jscard_to_vcard(struct jmap_req *req,
             };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      key, "PersonalInfo",
+                                                      mykey, "PersonalInfo",
                                                       &_jspersonal_to_vcard,
-                                                      personal_props, 1, card,
-                                                      NULL);
+                                                      WANT_PROPID_FLAG,
+                                                      personal_props, &l10n,
+                                                      card, NULL);
         }
 
         /* Cyrus-specific properties */
-        else if (!strcmp(key, "cyrusimap.org:isFlagged")) {
+        else if (!strcmp(mykey, "cyrusimap.org:isFlagged")) {
             has_noncontent = 1;
             if (json_is_true(jval)) {
                 strarray_add_case(flags, "\\Flagged");
@@ -8978,7 +9284,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
                 jmap_parser_invalid(&parser, "isFlagged");
             }
         }
-        else if (!strcmp(key, "cyrusimap.org:importance")) {
+        else if (!strcmp(mykey, "cyrusimap.org:importance")) {
             has_noncontent = 1;
             double dval = json_number_value(jval);
             const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
@@ -8993,9 +9299,20 @@ static int _jscard_to_vcard(struct jmap_req *req,
         }
 
         else {
-            _jsunknown_to_vcard(&parser, key, jval, card);
+            _jsunknown_to_vcard(&parser, mykey, jval, card);
+        }
+
+        if (l10n.lang) {
+            jmap_parser_pop(&parser);
+            jmap_parser_pop(&parser);
         }
     }
+
+    /* Report and free and invalid localization patches */
+    jmap_parser_push(&parser, "localizations");
+    hash_enumerate(&l10n_by_key, &_invalid_l10n_patches_by_key, &parser);
+    free_hash_table(&l10n_by_key, NULL);
+    jmap_parser_pop(&parser);
 
     parser.invalid = NULL;
 
@@ -9052,6 +9369,8 @@ static int _jscard_to_vcard(struct jmap_req *req,
 
   done:
     free_hash_table(&groups, (void (*)(void *)) &ptrarray_free);
+    free_hash_table(&l10n_by_key, NULL);
+    buf_free(&buf);
     jmap_parser_fini(&parser);
 
     return r;

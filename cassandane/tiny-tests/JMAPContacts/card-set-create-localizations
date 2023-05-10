@@ -1,0 +1,167 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_card_set_create_localizations
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    '@version' => '1.0',
+                    uid => $id,
+                    locale => 'es',
+                    fullName => 'Gabriel García Márquez',
+                    name => {
+                        '@type' => 'Name',
+                        components => [
+                            {
+                                '@type' => 'NameComponent',
+                                kind => 'given',
+                                value => 'Gabriel'
+                            },
+                            {
+                                '@type' => 'NameComponent',
+                                kind => 'middle',
+                                value => 'García'
+                            },
+                            {
+                                '@type' => 'NameComponent',
+                                kind => 'surname',
+                                value => 'Márquez'
+                            }
+                        ]
+                    },
+                    addresses => {
+                        addr1 => {
+                            '@type' => 'Address',
+                            locality => 'Tokio'
+                        }
+                    },
+                    speakToAs => {
+                        '@type' => 'SpeakToAs',
+                        grammaticalGender => 'masculino',
+                        pronouns => {
+                            k19 => {
+                                '@type' => 'Pronouns',
+                                pronouns => 'él',
+                            }
+                        }
+                    },
+                    localizations => {
+                        en => {
+                            titles => {
+                                t1 => {
+                                    '@type' => 'Title',
+                                    name => 'Novelist'
+                                }
+                            },
+                            'addresses/addr1/locality' => 'Tokyo',
+                            'speakToAs/grammaticalGender' => 'masculine'
+                        },
+                        de => {
+                            'speakToAs/pronouns/k19/pronouns' => 'er'
+                        },
+                        it => {
+                            'speakToAs/pronouns/k19/pronouns' => 'lui'
+                        },
+                        fr => {
+                            titles => {
+                                t1 => {
+                                    '@type' => 'Title',
+                                    name => 'Écrivain'
+                                }
+                            },
+                            speakToAs => {
+                                '@type' => 'SpeakToAs',
+                                pronouns => {
+                                    k19 => {
+                                        '@type' => 'Pronouns',
+                                        pronouns => 'il',
+                                    }
+                                }
+                            }
+                        },
+                        es => {
+                            titles => {
+                                t1 => {
+                                    '@type' => 'Title',
+                                    name => 'Novelista'
+                                }
+                            }
+                        },
+                        jp => {
+                            fullName => 'ガブリエル・ガルシア・マルケス',
+                            name => {
+                                '@type' => 'Name',
+                                components => [
+                                    {
+                                        '@type' => 'NameComponent',
+                                        kind => 'given',
+                                        value => 'ガブリエル'
+                                    },
+                                    {
+                                        '@type' => 'NameComponent',
+                                        kind => 'middle',
+                                        value => 'ガルシア'
+                                    },
+                                    {
+                                        '@type' => 'NameComponent',
+                                        kind => 'surname',
+                                        value => 'マルケス'
+                                    }
+                                ]
+                            },
+                            'addresses/addr1/locality' => '東京'
+                        }
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+    $card =~ s/\\,/,/gs;         # unescape commas
+
+    $self->assert_matches(qr/FN:Gabriel/, $card);
+    $self->assert_matches(qr/FN;LANGUAGE=jp:/, $card);
+    $self->assert_matches(qr/N;ALTID=n1:M/, $card);
+    $self->assert_matches(qr/N;ALTID=n1;LANGUAGE=jp:/, $card);
+    $self->assert_matches(qr/ADR;ALTID=addr1:;;;Tokio;;;/, $card);
+    $self->assert_matches(qr/ADR;ALTID=addr1;LANGUAGE=jp:/, $card);
+    $self->assert_matches(qr/ADR;ALTID=addr1;LANGUAGE=en:;;;Tokyo;;;/, $card);
+    $self->assert_matches(qr/TITLE;ALTID=t1:Novelista/, $card);
+    $self->assert_matches(qr/TITLE;ALTID=t1;LANGUAGE=en:Novelist/, $card);
+    $self->assert_matches(qr/GRAMMATICAL-GENDER:masculino/, $card);
+    $self->assert_matches(qr/GRAMMATICAL-GENDER;LANGUAGE=en:MASCULINE/, $card);
+    $self->assert_matches(qr/PRONOUNS;ALTID=k19:/, $card);
+    $self->assert_matches(qr/PRONOUNS;ALTID=k19;LANGUAGE=de:er/, $card);
+    $self->assert_matches(qr/PRONOUNS;ALTID=k19;LANGUAGE=it:lui/, $card);
+    $self->assert_does_not_match(qr/JSCONTACT-PROP/, $card);
+}
