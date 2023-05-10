@@ -8018,6 +8018,9 @@ done:
     if (mbox) jmap_closembox(req, &mbox);
     if (update.oldical) icalcomponent_free(update.oldical);
     if (update.newical) icalcomponent_free(update.newical);
+    jstimezones_free(&update.jstzones);
+    json_decref(update.event_patch);
+    json_decref(update.old_event);
     strarray_fini(&schedule_addr);
     mboxlist_entry_free(&mbentry);
     return 0;
