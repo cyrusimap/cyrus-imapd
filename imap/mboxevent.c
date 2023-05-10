@@ -1531,11 +1531,11 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
 
         imapurl_toURL(url, &imapurl);
 
-        free(extname);
-
         if (!event->params[EVENT_URI].filled) {
             FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
         }
+
+        xzfree(extname);
 
         /* Note that userbuf for shared folders is NULL, and xstrdup
          * doesn't like it. However, shared folder hierarchies can have
@@ -1548,6 +1548,7 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
             FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(userid));
             free(userid);
         }
+
     }
 }
 
