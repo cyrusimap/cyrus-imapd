@@ -415,9 +415,6 @@ int main(int argc, char **argv)
     signals_set_shutdown(shut_down);
     signals_add_handlers(0);
 
-    sqldb_init();
-    db = sqldb_open(":memory:", CMD_CREATE, 1, NULL, SQLDB_DEFAULT_TIMEOUT);
-
     if (!idle_make_server_address(&local) ||
         !idle_init_sock(&local)) {
         cyrus_done();
@@ -441,6 +438,8 @@ int main(int argc, char **argv)
     }
     /* child */
 
+    sqldb_init();
+    db = sqldb_open(":memory:", CMD_CREATE, 1, NULL, SQLDB_DEFAULT_TIMEOUT);
 
     /* get ready for select() */
     FD_ZERO(&read_set);

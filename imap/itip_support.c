@@ -628,6 +628,7 @@ static int deliver_merge_request(const char *attendee,
     icalparameter *param;
     const char *tzid, *recurid, *organizer = NULL;
     int itip_is_all_instances = 0;
+    ptrarray_t free_icalcomps = PTRARRAY_INITIALIZER;
 
     /* Add each VTIMEZONE of current object to hash table for comparison */
     tz_table = construct_hash_table(&comp_table, 10, 1);
@@ -779,7 +780,7 @@ static int deliver_merge_request(const char *attendee,
 
             /* Remove component from current object */
             icalcomponent_remove_component(ical, comp);
-            icalcomponent_free(comp);
+            ptrarray_append(&free_icalcomps, comp);
         }
         else {
             /* Component does NOT exist in current object */
@@ -860,12 +861,17 @@ static int deliver_merge_request(const char *attendee,
 
             if (hash_lookup(recurid, override_table)) {
                 icalcomponent_remove_component(ical, comp);
-                icalcomponent_free(comp);
+                ptrarray_append(&free_icalcomps, comp);
             }
         }
     }
 
     free_hash_table(override_table, NULL);
+
+    while ((comp = ptrarray_pop(&free_icalcomps))) {
+        icalcomponent_free(comp);
+    }
+    ptrarray_fini(&free_icalcomps);
 
     return deliver_inbox;
 }

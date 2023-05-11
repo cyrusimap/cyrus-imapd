@@ -2057,7 +2057,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
         case B_ENOTIFY:
         case B_NOTIFY:
         {
-            const char *method = cmd.u.n.method;
+            char *method = cmd.u.n.method;
             const char *message = cmd.u.n.message;
             const char *priority = priority_to_string(cmd.u.n.priority);
 
@@ -2080,7 +2080,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             if (op == B_ENOTIFY) {
                 /* Parse/split the method URI */
                 if (!strncasecmp(method, "mailto:", 7)) {
-                    strarray_insert(cmd.u.n.options, 0, method+7);
+                    strarray_insertm(cmd.u.n.options, 0, method+7);
                     method = "mailto";
                 }
                 else if (!strncasecmp(method,
