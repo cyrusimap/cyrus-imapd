@@ -7620,9 +7620,11 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
                                  vcardcomponent *card)
 {
     vcardstructuredtype n = { VCARD_NUM_N_FIELDS, { 0 } };
-    vcardproperty *prop = NULL;
+    vcardstructuredtype *ranks = NULL;
     vcardstrarray *sortas = NULL;
+    vcardproperty *prop = NULL;
     const char *key, *val;
+    struct buf buf = BUF_INITIALIZER;
     json_t *jprop, *jsubprop;
     size_t i, size;
     int r = 0;
@@ -7650,7 +7652,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
     for (i = 0; i < size; i++) {
         json_t *comp = json_array_get(jprop, i);
         vcardstrarray **field;
-        int rank, field_num;
+        int field_num;
 
         jmap_parser_push_index(parser, "components", i, NULL);
 
@@ -7680,13 +7682,29 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
 
         jsubprop = json_object_get(comp, "rank");
         if (jsubprop) {
-            rank = json_integer_value(json_object_get(comp, "rank"));
+            int rank = json_integer_value(json_object_get(comp, "rank"));
+            size_t num_names = vcardstrarray_size((*field));
+
             if (!rank) {
                 jmap_parser_invalid(parser, "rank");
                 break;
             }
+            if (!ranks) ranks = vcardstructured_new();
 
-            /* XXX  TODO: rank */
+            ranks->num_fields = MAX(ranks->num_fields, (unsigned) field_num+1);
+
+            field = &ranks->field[field_num];
+            if (!*field) *field = vcardstrarray_new(1);
+
+            num_names -= vcardstrarray_size(*field) + 1;
+            while (num_names--) {
+                vcardstrarray_append(*field, "");
+            }
+
+            buf_reset(&buf);
+            buf_printf(&buf, "%d", rank);
+            vcardstrarray_append(*field, buf_cstring(&buf));
+
         }
 
         json_object_del(comp, "@type");
@@ -7757,6 +7775,9 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
                                             vcardparameter_new_language(l10n->lang));
             }
         }
+        if (ranks) {
+            vcardproperty_add_parameter(prop, vcardparameter_new_ranks(ranks));
+        }
         if (sortas) {
             vcardproperty_add_parameter(prop, vcardparameter_new_sortas(sortas));
         }
@@ -7766,6 +7787,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
 
   done:
     jmap_parser_pop(parser);
+    buf_free(&buf);
     if (!r) {
         for (i = 0; i < n.num_fields; i++) {
             if (n.field[i]) vcardstrarray_free(n.field[i]);
