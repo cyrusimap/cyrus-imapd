@@ -19,12 +19,21 @@ sub test_card_set_create_basic
         expandurl => 1,
     );
 
+    xlog $self, "create addressbook";
+    my $res = $jmap->CallMethods([
+            ['AddressBook/set', { create => { "1" => {
+                            name => "foo"
+             }}}, "R1"]
+    ]);
+
+    my $abookid = $res->[0][1]{created}{"1"}{id};
+
     my $now = DateTime->now();
     my $created = $now->strftime('%Y-%m-%dT%H:%M:%SZ');
     my $prodid = '-//Example Corp.//CardDAV Client//EN';
     my $name = 'Mr. John Q. Public, Esq.';
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "Default/$id.vcf";
+    my $href = "$abookid/$id.vcf";
 
     my $res = $jmap->CallMethods([
         ['Card/set', {
@@ -32,6 +41,7 @@ sub test_card_set_create_basic
                 "1" => {
                     '@type' => 'Card',
                     '@version' => '1.0',
+                    addressBookId => $abookid,
                     uid => $id,
                     prodId => $prodid,
                     kind => 'individual',
