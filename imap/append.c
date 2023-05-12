@@ -814,9 +814,11 @@ static int append_apply_flags(struct appendstate *as,
         long need_rights = 0; // keep track of required ACLs
 
         if (!strcasecmp(flag, "\\seen")) {
-            r = append_setseen(as, msgrec);
-            if (r) goto out;
-            mboxevent_add_flag(mboxevent, flag);
+            if (as->myrights & (need_rights = ACL_SETSEEN)) {
+                r = append_setseen(as, msgrec);
+                if (r) goto out;
+                mboxevent_add_flag(mboxevent, flag);
+            }
         }
         else if (!strcasecmp(flag, "\\expunged")) {
             /* NOTE - this is a fake internal name */

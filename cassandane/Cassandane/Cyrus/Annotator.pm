@@ -469,7 +469,7 @@ sub test_add_annot_splitconv_rerun
     $self->check_messages(\%exp, keyed_on => 'uid', check_guid => 0);
 }
 
-sub test_log_missing_acl_userflag
+sub test_log_missing_acl
 {
     my ($self) = @_;
 
@@ -478,45 +478,30 @@ sub test_log_missing_acl_userflag
     my $imap = $self->{store}->get_client();
     my $admin = $self->{adminstore}->get_client();
 
-    xlog $self, "share mailbox but sharee does not get 'w' right";
-
     $self->{instance}->create_user("other");
-    $admin->setacl("user.other", "cassandane", "lrsitne") or die;
 
-    xlog $self, "sharee creates message, expect error log for the missing ACL";
+    my @testCases = ({
+        flag => '$Artisanal',
+        acl => 'lrsitne',
+        need_rights => 'w'
+    }, {
+        flag => '\Seen',
+        acl => 'lritne',
+        need_rights => 's'
+    });
 
-    $self->{instance}->getsyslog();
-    $self->{store}->set_folder('Other Users.other');
-    my $flag = '$Artisanal';
-    $self->make_message("Email", body => "set_flag $flag\r\n",
-        store => $self->{store}) or die;
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert(grep /could not write flag due missing ACL/, @lines);
-}
+    foreach (@testCases) {
+        $admin->setacl("user.other", "cassandane", $_->{acl}) or die;
 
-sub test_no_log_missing_seen_flag
-{
-    my ($self) = @_;
-
-    $self->start_my_instances();
-
-    my $imap = $self->{store}->get_client();
-    my $admin = $self->{adminstore}->get_client();
-
-    xlog $self, "share mailbox but sharee does not get 's' right";
-
-    $self->{instance}->create_user("other");
-    $admin->setacl("user.other", "cassandane", "lritne") or die;
-
-    xlog $self, "sharee creates message, expect no error log for the missing ACL";
-
-    $self->{instance}->getsyslog();
-    $self->{store}->set_folder('Other Users.other');
-    my $flag = '\Seen';
-    $self->make_message("Email", body => "set_flag $flag\r\n",
-        store => $self->{store}) or die;
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert(not grep /could not write flag due missing ACL/, @lines);
+        $self->{instance}->getsyslog();
+        $self->{store}->set_folder('Other Users.other');
+        $self->make_message("Email", body => "set_flag $_->{flag}\r\n",
+            store => $self->{store}) or die;
+        my @logs = $self->{instance}->getsyslog();
+        my $wantLog = "could not write flag due missing ACL: "
+                    . "flag=<\\$_->{flag}> need_rights=<$_->{need_rights}>";
+        $self->assert(grep /$wantLog/, @logs);
+    }
 }
 
 1;
