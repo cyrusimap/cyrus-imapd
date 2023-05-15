@@ -114,7 +114,19 @@ IMAPTest_ is a testing suite which uses libraries from the Dovecot installation.
     * ``./configure --with-dovecot=../dovecot-2.2 && make`` (No need for make install)
     * The ``--with-dovecot=<path>`` parameter is used to specify path to Dovecot v2.2 sources' root directory.
 
+This is not quite the same IMAPTest that CI uses.  The CI system uses
+a docker image, which among other things has Dovecot and IMAPTest already
+built in so that they don't need to be rebuilt every time CI runs.
+
+The docker image is built from Dockerfile_ in the cyrus-docker repo.  If you
+want to locally reproduce the same testing that CI runs, you can search it
+for "dovecot.git" and "imaptest.git" to see how these two components
+are fetched and built, and do the same yourself.  Briefly, Dovecot is built
+from a known commit id on the upstream repository, whereas IMAPTest is built
+from the "cyrus" branch of our own fork.
+
 .. _IMAPTest: http://www.imapwiki.org/ImapTest
+.. _Dockerfile: https://github.com/cyrusimap/cyrus-docker/blob/master/Debian/Dockerfile
 
 Rebuild Cyrus for Testing
 =========================
