@@ -1,0 +1,97 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cardgroup_set_update
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $name = 'The Doe Family';
+    my $member1 = "urn:uuid:03a0e51f-d1aa-4385-8a53-e29025acd8af";
+    my $member2 = "urn:uuid:b8767877-b4a1-4c70-9acc-505d3819e519";
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+
+    my $res = $jmap->CallMethods([
+        ['CardGroup/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    '@version' => '1.0',
+                    uid => $id,
+                    kind => 'group',
+                    fullName => $name,
+                    members => {
+                        $member1 => JSON::true
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+    $card =~ s/\\,/,/gs;         # unescape commas
+
+    $self->assert_matches(qr/MEMBER:$member1/, $card);
+
+    $res = $jmap->CallMethods([
+        ['CardGroup/set', {
+            update => {
+                $id => {
+                    "members/$member2" => JSON::true
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/MEMBER:$member2/, $card);
+    $self->assert_matches(qr/MEMBER:$member1/, $card);
+
+    $res = $jmap->CallMethods([
+        ['CardGroup/set', {
+            update => {
+                $id => {
+                    "members/$member1" => JSON::null
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/MEMBER:$member2/, $card);
+    $self->assert_does_not_match(qr/MEMBER:$member1/, $card);
+}
