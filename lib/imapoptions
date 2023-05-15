@@ -2364,7 +2364,20 @@ If all partitions are over that limit, this feature is not used anymore.
    to the extractor.
    Xapian only.
  */
+{ "search_attachment_extractor_request_timeout", "5m", DURATION, "UNRELEASED" }
+/* Defines the duration after which to cancel non-responding
+   requests to the search attachment extractor service.
 
+   If no unit is specified, seconds is assumed. */
+ */
+{ "search_attachment_extractor_idle_timeout", "5m", DURATION, "UNRELEASED" }
+/* Defines the duration after which to close unused connections to
+   the search attachment extractor service. If the idle timeout is
+   less than search_attachment_extractor_request_timeout, then it
+   is ignored and request timeout used instead.
+
+   If no unit is specified, seconds is assumed. */
+ */
 { "search_index_language", 0, SWITCH, "3.3.1" }
 /*
   If enabled, then messages bodies are stemmed by detected language

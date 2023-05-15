@@ -1,0 +1,20 @@
+Description:
+
+Updates squatter to not lock a mailbox while extracting text
+from attachments.
+
+
+Config changes:
+
+search_attachment_extractor_request_timeout
+search_attachment_extractor_idle_timeout
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

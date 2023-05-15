@@ -371,12 +371,14 @@ magic(JMAPExtensions => sub {
 });
 magic(SearchAttachmentExtractor => sub {
     my $port = Cassandane::PortManager::alloc("localhost");
-    shift->config_set('search_attachment_extractor_url' =>
+    my $self = shift;
+    $self->config_set('search_attachment_extractor_url' =>
         "http://localhost:$port/extractor");
+    $self->config_set('search_attachment_extractor_request_timeout' => '3s');
+    $self->config_set('search_attachment_extractor_idle_timeout' => '3s');
 });
 magic(SearchLanguage => sub {
-    my $self = shift;
-    $self->config_set('search_index_language' => 'yes');
+    shift->config_set('search_index_language' => 'yes');
 });
 magic(SieveUTF8Fileinto => sub {
     shift->config_set('sieve_utf8fileinto' => 'yes');

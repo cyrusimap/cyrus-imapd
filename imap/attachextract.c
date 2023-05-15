@@ -67,6 +67,8 @@ struct extractor_ctx {
 
 static char *attachextract_cachedir = NULL;
 static int attachextract_cacheonly = 0;
+static unsigned attachextract_idle_timeout = 5 * 60;
+static unsigned attachextract_request_timeout = 5 * 60;
 
 static struct extractor_ctx *global_extractor = NULL;
 
@@ -92,22 +94,19 @@ static void extractor_disconnect(struct extractor_ctx *ext)
 }
 
 static struct prot_waitevent *
-extractor_timeout(struct protstream *s __attribute__((unused)),
-                  struct prot_waitevent *ev __attribute__((unused)),
-                  void *rock)
+extractor_idle_timeout_cb(struct protstream *s __attribute__((unused)),
+                          struct prot_waitevent *ev __attribute__((unused)),
+                          void *rock)
 {
     struct extractor_ctx *ext = rock;
 
-    syslog(LOG_DEBUG, "extractor_timeout(%p)", ext);
+    syslog(LOG_DEBUG, "extractor_idle_timeout(%p)", ext);
 
     /* too long since we last used the extractor - disconnect */
     extractor_disconnect(ext);
 
     return NULL;
 }
-
-
-#define IDLE_TIMEOUT (5 * 60)  /* 5 min */
 
 static int login(struct backend *s __attribute__((unused)),
                  const char *userid __attribute__((unused)),
@@ -143,7 +142,9 @@ static int extractor_connect(struct extractor_ctx *ext)
     be = ext->be;
     if (be && be->sock != -1) {
         // extend the timeout
-        if (be->timeout) be->timeout->mark = now + IDLE_TIMEOUT;
+        if (be->timeout) {
+            be->timeout->mark = now + attachextract_idle_timeout;
+        }
         return 0;
     }
 
@@ -158,12 +159,14 @@ static int extractor_connect(struct extractor_ctx *ext)
         return IMAP_IOERROR;
     }
 
+    // set request timeout
+    prot_settimeout(be->in, attachextract_request_timeout);
+
     if (ext->clientin) {
-        /* add a default timeout */
+        /* set idle timeout */
         be->clientin = ext->clientin;
         be->timeout = prot_addwaitevent(ext->clientin,
-                                        now + IDLE_TIMEOUT,
-                                        extractor_timeout, ext);
+                now + attachextract_idle_timeout, extractor_idle_timeout_cb, ext);
     }
 
     return 0;
@@ -282,6 +285,8 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     hostlen = strcspn(ext->hostname, "/");
     guidstr = message_guid_encode(&axrec->guid);
 
+    prot_settimeout(be->in, attachextract_idle_timeout);
+
     /* try to fetch previously extracted text */
     unsigned statuscode = 0;
     prot_printf(be->out,
@@ -295,7 +300,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
                 "\r\n",
                 ext->path, guidstr, HTTP_VERSION,
                 (int) hostlen, be->hostname, CYRUS_VERSION,
-                IDLE_TIMEOUT, config_search_maxsize);
+                attachextract_idle_timeout, config_search_maxsize);
     prot_flush(be->out);
 
     /* Read GET response */
@@ -357,7 +362,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
                     "X-Truncate-Length: " SIZE_T_FMT "\r\n"
                     "\r\n",
                     ext->path, guidstr, HTTP_VERSION,
-                    (int) hostlen, be->hostname, CYRUS_VERSION, IDLE_TIMEOUT,
+                    (int) hostlen, be->hostname, CYRUS_VERSION, attachextract_idle_timeout,
                     buf_cstring(&ctypehdr), buf_len(data), config_search_maxsize);
         prot_putbuf(be->out, data);
         prot_flush(be->out);
@@ -383,13 +388,14 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
             goto gotdata;
         }
 
-        if (statuscode >= 400 && statuscode <= 499) {
+        if ((statuscode >= 400 && statuscode <= 499) || statuscode == 599) {
             /* indexer can't extract this for some reason, never try again */
             goto done;
         }
 
         /* any other status code is an error */
-        syslog(LOG_ERR, "extract GOT STATUSCODE %d with timeout %d: %s", statuscode, IDLE_TIMEOUT, errstr);
+        syslog(LOG_ERR, "extract GOT STATUSCODE %d with timeout %d: %s",
+                statuscode, attachextract_request_timeout, errstr);
     }
 
     // dropped out of the loop?  Then we failed!
@@ -447,12 +453,23 @@ done:
 
 EXPORTED void attachextract_init(struct protstream *clientin)
 {
+    syslog(LOG_DEBUG, "extractor_init(%p)", clientin);
+
+    /* Read config */
+    attachextract_idle_timeout =
+        config_getduration(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_IDLE_TIMEOUT, 's');
+
+    attachextract_request_timeout =
+        config_getduration(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_REQUEST_TIMEOUT, 's');
+
+    if (attachextract_idle_timeout < attachextract_request_timeout)
+        attachextract_idle_timeout = attachextract_request_timeout;
+
     const char *exturl =
          config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
     if (!exturl) return;
 
-    syslog(LOG_DEBUG, "extractor_init(%p)", clientin);
-
+    /* Initialize extractor URL */
     char scheme[6], server[100], path[256], *p;
     unsigned https, port;
 

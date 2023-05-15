@@ -2177,4 +2177,56 @@ sub test_squatter_attachextract_nolock
     $self->assert_deep_equals([2], $uids);
 }
 
+sub test_squatter_attachextract_timeout
+    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor :NoCheckSyslog
+{
+    my ($self) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    my $tracedir = tempdir (DIR => $instance->{basedir} . "/tmp");
+
+    # SearchAttachmentExtractor magic configures Cyrus to
+    # wait at most 3 seconds for a response from extractor
+
+    $self->start_echo_extractor(
+        tracedir => $tracedir,
+        response_delay_seconds => 5,
+    );
+
+    xlog $self, "Make message with attachment";
+    $self->make_message("msg2",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/pdf\r\n"
+        ."\r\n"
+        ."attachterm"
+        ."\r\n--123456789abcdef--\r\n");
+
+    xlog $self, "Clear syslog";
+    $self->{instance}->getsyslog();
+
+    xlog $self, "Run squatter (allowing partials)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-p');
+
+    xlog "Assert text body is indexed";
+    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1], $uids);
+
+    xlog "Assert attachement is not indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+    $self->assert_deep_equals([], $uids);
+
+    xlog "Assert extractor got only called once";
+    my @tracefiles = glob($tracedir."/*");
+    $self->assert_num_equals(1, scalar @tracefiles);
+    $self->assert_matches(qr/req1_GET_/, $tracefiles[0]);
+}
+
 1;
