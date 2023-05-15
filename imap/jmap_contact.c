@@ -7308,7 +7308,17 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
         }
 
         vcardproperty *prop = vcardproperty_new(pkind);
-        vcardproperty_set_value_from_string(prop, id, "NO");
+
+        if (vcardproperty_is_multivalued(pkind)) {
+            vcardstrarray *text = vcardstrarray_new(1);
+
+            vcardstrarray_append(text, id);
+            vcardproperty_set_value(prop, vcardvalue_new_textlist(text));
+        }
+        else {
+            vcardproperty_set_value_from_string(prop, id, "NO");
+        }
+
         vcardcomponent_add_property(card, prop);
         r = 1;
 
