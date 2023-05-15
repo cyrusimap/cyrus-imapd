@@ -2102,6 +2102,9 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
             case HTTP_NOT_ALLOWED:
                 err = json_pack("{s:s}", "type", "accountReadOnly");
                 break;
+            case HTTP_BAD_REQUEST:
+                err = json_pack("{s:s}", "type", "invalidPatch");
+                break;
             case HTTP_UNPROCESSABLE:
                 err = json_pack("{s:s s:s}", "type", "serverFail",
                                 "description", "invalid current card");
@@ -4928,23 +4931,25 @@ static int required_set_rights(json_t *props)
     json_t *val;
 
     json_object_foreach(props, name, val) {
-        if (!strncmp(name, "cyrusimap.org:", 14) && (name += 14) &&
-            (!strcmp(name, "href") ||
-             !strcmp(name, "hasPhoto") ||
-             !strcmp(name, "addressBookId"))) {
+        const char *myname = name;
+
+        if (!strcmp(myname, "id") ||
+            !strcmp(myname, "x-href") ||
+            !strcmp(myname, "x-hasPhoto") ||
+            !strcmp(myname, "addressbookId")) {
             /* immutable */
         }
-        else if (!strcmp(name, "id") ||
-            !strcmp(name, "x-href") ||
-            !strcmp(name, "x-hasPhoto") ||
-            !strcmp(name, "addressbookId")) {
+        else if (!strcmp(myname, "addressBookId") ||
+                 (!strncmp(myname, "cyrusimap.org:", 14) && (myname += 14) &&
+                  (!strcmp(myname, "href") ||
+                   !strcmp(myname, "hasPhoto")))) {
             /* immutable */
         }
-        else if (!strcmp(name, "importance")) {
+        else if (!strcmp(myname, "importance")) {
             /* writing shared meta-data (per RFC 5257) */
             needrights |= JACL_SETPROPERTIES;
         }
-        else if (!strcmp(name, "isFlagged")) {
+        else if (!strcmp(myname, "isFlagged")) {
             /* writing private meta-data */
             needrights |= JACL_SETKEYWORDS;
         }
@@ -5801,6 +5806,11 @@ static const jmap_property_t card_props[] = {
         0
     },  // JMAPUI only
     {
+        "cyrusimap.org:isFlagged",
+        JMAP_CONTACTS_EXTENSION,
+        0,
+    },
+    {
         "cyrusimap.org:blobId",
         JMAP_CONTACTS_EXTENSION,
         JMAP_PROP_SERVER_SET
@@ -6250,11 +6260,14 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
     if (label) json_object_set_new(obj, "label", jmap_utf8string(label));
 }
 
+#define IGNORE_VCARD_VERSION (1<<0)
+
 /* Convert the vCard to JSContact Card properties */
 static json_t *jmap_card_from_vcard(const char *userid,
                                     vcardcomponent *vcard,
                                     struct mailbox *mailbox,
-                                    struct index_record *record)
+                                    struct index_record *record,
+                                    unsigned flags)
 {
     json_t *obj = json_pack("{s:s s:s}", "@type", "Card", "@version", "1.0");
     vcardproperty_version version = VCARD_VERSION_NONE;
@@ -6939,7 +6952,8 @@ static json_t *jmap_card_from_vcard(const char *userid,
             goto links;
 
         case VCARD_VERSION_PROPERTY:
-            goto unmapped;
+            if (flags & IGNORE_VCARD_VERSION) break;
+            else goto unmapped;
 
             /* Security Properties */
         case VCARD_KEY_PROPERTY: {
@@ -7141,7 +7155,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
     /* Convert the vCard to a JSContact Card. */
     obj = jmap_card_from_vcard(crock->req->userid, vcard,
-                               crock->mailbox, &record);
+                               crock->mailbox, &record, 0 /*flags*/);
     vcardcomponent_free(vcard);
 
     jmap_filterprops(obj, crock->get->props);
@@ -8859,6 +8873,40 @@ static void _invalid_l10n_patches_by_key(const char *key, void *val, void *rock)
     free(patches_by_id);
 }
 
+static void _jscard_set_isflagged(const char *key, json_t *arg,
+                                  strarray_t *flags,
+                                  jmap_contact_errors_t *errors)
+{
+    if (json_is_true(arg)) {
+        strarray_add_case(flags, "\\Flagged");
+    } else if (json_is_false(arg)) {
+        strarray_remove_all_case(flags, "\\Flagged");
+    } else {
+        json_array_append_new(errors->invalid, json_string(key));
+    }
+}
+
+static void _jscard_set_importance(struct jmap_req *req,
+                                   const char *mboxname,
+                                   const char *key, json_t *arg,
+                                   struct entryattlist **annotsp,
+                                   jmap_contact_errors_t *errors)
+{
+    if (json_is_number(arg)) {
+        const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
+        const char *attrib = mboxname_userownsmailbox(req->userid, mboxname) ?
+            "value.shared" : "value.priv";
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_printf(&buf, "%.17g", json_number_value(arg));
+
+        setentryatt(annotsp, ns, attrib, &buf);
+        buf_free(&buf);
+    } else {
+        json_array_append_new(errors->invalid, json_string(key));
+    }
+}
+
 #define PROP_LANG_TAG_PREFIX      "cyrusimap.org:lang:"
 #define PROP_LANG_TAG_PREFIX_LEN  19
 
@@ -9308,26 +9356,11 @@ static int _jscard_to_vcard(struct jmap_req *req,
         /* Cyrus-specific properties */
         else if (!strcmp(mykey, "cyrusimap.org:isFlagged")) {
             has_noncontent = 1;
-            if (json_is_true(jval)) {
-                strarray_add_case(flags, "\\Flagged");
-            } else if (json_is_false(jval)) {
-                strarray_remove_all_case(flags, "\\Flagged");
-            } else {
-                jmap_parser_invalid(&parser, "isFlagged");
-            }
+            _jscard_set_isflagged(mykey, jval, flags, errors);
         }
         else if (!strcmp(mykey, "cyrusimap.org:importance")) {
             has_noncontent = 1;
-            double dval = json_number_value(jval);
-            const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
-            const char *attrib = mboxname_userownsmailbox(req->userid, mboxname) ?
-                "value.shared" : "value.priv";
-            struct buf buf = BUF_INITIALIZER;
-            if (dval) {
-                buf_printf(&buf, "%.17g", dval);
-            }
-            setentryatt(annotsp, ns, attrib, &buf);
-            buf_free(&buf);
+            _jscard_set_importance(req, mboxname, mykey, jval, annotsp, errors);
         }
 
         else {
@@ -9600,6 +9633,217 @@ done:
     return r;
 }
 
+static int _card_set_update(jmap_req_t *req, unsigned kind,
+                            const char *uid, json_t *jcard,
+                            struct carddav_db *db, struct mailbox **mailbox,
+                            json_t **item, jmap_contact_errors_t *errors)
+{
+    json_t *invalid = errors->invalid;
+    struct mailbox *newmailbox = NULL;
+    struct carddav_data *cdata = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    mbentry_t *mbentry = NULL;
+    uint32_t olduid;
+    char *resource = NULL;
+    int do_move = 0;
+    json_t *jupdated = NULL;
+    vcardcomponent *vcard = NULL;
+    struct entryattlist *annots = NULL;
+    strarray_t *flags = NULL;
+    ptrarray_t blobs = PTRARRAY_INITIALIZER;
+    property_blob_t *blob;
+    int r;
+
+    /* is it a valid contact? */
+    r = carddav_lookup_uid(db, uid, &cdata);
+    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != kind) {
+        r = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+
+    json_t *abookid = json_object_get(jcard, "addressBookId");
+    if (abookid && json_string_value(abookid)) {
+        const char *mboxname =
+            mboxname_abook(req->accountid, json_string_value(abookid));
+        if (mbentry && strcmp(mboxname, mbentry->name)) {
+            /* move */
+            if (!jmap_hasrights(req, mboxname, JACL_ADDITEMS)) {
+                json_array_append_new(invalid, json_string("addressBookId"));
+                goto done;
+            }
+            r = jmap_openmbox(req, mboxname, &newmailbox, 1);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
+                goto done;
+            }
+            do_move = 1;
+        }
+        json_object_del(jcard, "addressBookId");
+    }
+
+    int needrights = do_move ? JACL_UPDATEITEMS : required_set_rights(jcard);
+
+    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, needrights)) {
+        int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
+        r = (rights & JACL_READITEMS) ? HTTP_NOT_ALLOWED : HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    if (!*mailbox || strcmp(mailbox_name(*mailbox), mbentry->name)) {
+        jmap_closembox(req, mailbox);
+        r = jmap_openmbox(req, mbentry->name, mailbox, 1);
+    }
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open %s",
+               mbentry->name);
+        goto done;
+    }
+
+    struct index_record record;
+
+    r = mailbox_find_index_record(*mailbox, cdata->dav.imap_uid, &record);
+    if (r) goto done;
+
+    olduid = cdata->dav.imap_uid;
+    resource = xstrdup(cdata->dav.resource);
+
+    flags = mailbox_extract_flags(*mailbox, &record, req->userid);
+    annots = mailbox_extract_annots(*mailbox, &record);
+
+    if (!newmailbox) {
+        size_t num_props = json_object_size(jcard);
+        const char *key = "cyrusimap.org:isFlagged";
+        json_t *jval;
+
+        if (num_props &&
+            (jval = json_object_get(jcard, key))) {
+            _jscard_set_isflagged(key, jval, flags, errors);
+            json_object_del(jcard, key);
+            num_props--;
+        }
+
+        key = "cyrusimap.org:importance";
+        if (num_props &&
+            (jval = json_object_get(jcard, key))) {
+            _jscard_set_importance(req, mailbox_name(*mailbox),
+                                   key, jval, &annots, errors);
+            json_object_del(jcard, key);
+            num_props--;
+        }
+
+        if (!num_props) {
+            /* just bump the modseq
+               if in the same mailbox and no data change */
+            annotate_state_t *state = NULL;
+
+            syslog(LOG_NOTICE, "jmap: touch contact %s/%s",
+                   req->accountid, resource);
+            if (strarray_find_case(flags, "\\Flagged", 0) >= 0)
+                record.system_flags |= FLAG_FLAGGED;
+            else
+                record.system_flags &= ~FLAG_FLAGGED;
+
+            r = mailbox_get_annotate_state(*mailbox, record.uid, &state);
+            annotate_state_set_auth(state, 0,
+                                    req->userid, req->authstate);
+            if (!r) r = annotate_state_store(state, annots);
+            if (!r) r = mailbox_rewrite_index_record(*mailbox, &record);
+            if (!r) *item = json_null();
+            goto done;
+        }
+    }
+
+    /* Load message containing the resource and parse vcard data */
+    vcard = record_to_vcard_x(*mailbox, &record);
+    if (!vcard) {
+        syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
+               cdata->dav.imap_uid, mailbox_name(*mailbox));
+        r = HTTP_UNPROCESSABLE;
+        goto done;
+    }
+
+    /* Convert the vCard to a JSContact Card. */
+    json_t *old_obj = jmap_card_from_vcard(req->userid, vcard,
+                                           *mailbox, &record,
+                                           IGNORE_VCARD_VERSION);
+    vcardcomponent_free(vcard);
+
+    /* Apply the patch as provided */
+    json_t *new_obj = jmap_patchobject_apply(old_obj, jcard, invalid);
+    if (!new_obj) {
+        r = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    vcard = vcardcomponent_vanew(VCARD_VCARD_COMPONENT,
+                                 vcardproperty_new_version(VCARD_VERSION_40),
+                                 vcardproperty_new_uid(uid),
+                                 0);
+
+    *item = json_object();
+
+    r = _jscard_to_vcard(req, cdata, mailbox_name(*mailbox), vcard,
+                         new_obj, flags, &annots, &blobs, errors);
+
+    if (!json_array_size(invalid) && !errors->blobNotFound) {
+        struct mailbox *this_mailbox = newmailbox ? newmailbox : *mailbox;
+
+        syslog(LOG_NOTICE, "jmap: update %s %s/%s",
+               kind == CARDDAV_KIND_GROUP ? "group" : "contact",
+               req->accountid, resource);
+        r = carddav_store_x(this_mailbox, vcard, resource,
+                            record.createdmodseq, flags, &annots, req->userid,
+                            req->authstate, ignorequota,
+                            (record.size - record.header_size));
+        if (!r) {
+            struct index_record record;
+
+            mailbox_find_index_record(this_mailbox,
+                                      this_mailbox->i.last_uid, &record);
+
+            jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
+                                       record.uid, NULL, NULL, NULL, NULL, &buf);
+            json_object_set_new(*item, "cyrusimap.org:blobId",
+                                json_string(buf_cstring(&buf)));
+
+            json_object_set_new(*item, "cyrusimap.org:size",
+                                json_integer(record.size - record.header_size));
+
+            while ((blob = ptrarray_pop(&blobs))) {
+                jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
+                                           record.uid, NULL, NULL, blob->prop,
+                                           &blob->guid, &buf);
+                json_object_set_new(*item, blob->key,
+                                    json_pack("{s:s s:i s:s? s:n}",
+                                              "blobId", buf_cstring(&buf),
+                                              "size", blob->size,
+                                              "type", blob->type, "name"));
+                property_blob_free(&blob);
+            }
+
+            r = carddav_remove(*mailbox, olduid,
+                               /*isreplace*/!newmailbox, req->userid);
+        }
+    }
+
+  done:
+    mboxlist_entry_free(&mbentry);
+    jmap_closembox(req, &newmailbox);
+    strarray_free(flags);
+    freeentryatts(annots);
+    vcardcomponent_free(vcard);
+    free(resource);
+    json_decref(jupdated);
+    while ((blob = ptrarray_pop(&blobs))) {
+        property_blob_free(&blob);
+    }
+    ptrarray_fini(&blobs);
+
+    return r;
+}
+
 static int jmap_card_get(struct jmap_req *req)
 {
     return _contacts_get(req, &getcards_cb, CARDDAV_KIND_CONTACT, card_props);
@@ -9613,7 +9857,7 @@ static int jmap_card_changes(struct jmap_req *req)
 static int jmap_card_set(struct jmap_req *req)
 {
     _contacts_set(req, CARDDAV_KIND_CONTACT, card_props,
-                  &_card_set_create, NULL);
+                  &_card_set_create, &_card_set_update);
 
     return 0;
 }
@@ -9631,7 +9875,7 @@ static int jmap_cardgroup_changes(struct jmap_req *req)
 static int jmap_cardgroup_set(struct jmap_req *req)
 {
     _contacts_set(req, CARDDAV_KIND_GROUP, card_props,
-                  &_card_set_create, NULL);
+                  &_card_set_create, &_card_set_update);
 
     return 0;
 }
