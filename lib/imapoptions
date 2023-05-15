@@ -316,6 +316,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "aps_topic_carddav", NULL, STRING, "3.0.0" }
 /* Topic for Apple Push Service registration for CardDAV. */
 
+{ "aps_expiry", "1d", DURATION, "UNRELEASED" }
+/* Time after which a CalDAV/CardDAV push subscription will expire.
+   A client will have to refresh the subscription in order to continue to
+   receive push notifications. */
+
 { "archive_enabled", 0, SWITCH, "3.0.0" }
 /* Is archiving enabled for this server.  You also need to have an
    archivepartition for the mailbox.  Archiving allows older email
