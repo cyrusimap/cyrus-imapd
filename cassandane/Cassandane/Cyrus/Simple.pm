@@ -40,11 +40,14 @@
 package Cassandane::Cyrus::Simple;
 use strict;
 use warnings;
+use Data::Dumper;
 use DateTime;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+
+$Data::Dumper::Sortkeys = 1;
 
 sub new
 {
@@ -88,6 +91,52 @@ sub test_append
     xlog $self, "generating message D";
     $exp{D} = $self->make_message("Message D");
     $self->check_messages(\%exp);
+}
+
+sub test_appendlimit_default
+    :min_version_3_6
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $capa = $imaptalk->capability();
+    my @appendlimits = grep { m/^appendlimit/ } keys %{$capa};
+
+    # should be only one appendlimit
+    $self->assert_num_equals(1, scalar @appendlimits);
+
+    # we do not support per-mailbox limits, so it must have a value too
+    $self->assert_matches(qr{^appendlimit=\d+$}, $appendlimits[0]);
+
+    # and since we haven't configured it, it ought to be the default
+    # value, which is BYTESIZE_UNLIMITED (2147483647).
+    $self->assert_str_equals("appendlimit=2147483647", $appendlimits[0]);
+}
+
+sub test_appendlimit_configured
+    :min_version_3_6 :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $desired_limit = "52428800"; # based on known failure
+
+    $self->{instance}->{config}->set('maxmessagesize' => $desired_limit);
+    $self->_start_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $capa = $imaptalk->capability();
+    my @appendlimits = grep { m/^appendlimit/ } keys %{$capa};
+
+    # should be only one appendlimit
+    $self->assert_num_equals(1, scalar @appendlimits);
+
+    # we do not support per-mailbox limits, so it must have a value too
+    $self->assert_matches(qr{^appendlimit=\d+$}, $appendlimits[0]);
+
+    # and since we've configured it, it'd better be what we asked for!
+    $self->assert_str_equals("appendlimit=$desired_limit", $appendlimits[0]);
 }
 
 sub test_select
