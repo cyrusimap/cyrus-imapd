@@ -1528,22 +1528,25 @@ static int caldav_delete_cal(struct transaction_t *txn,
         /* XXX - after legacy records are gone, we can strip this and just not send a
          * cancellation if deleting a record which was never replied to... */
 
-        char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+        char *cal_ownerid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+        char *sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
+            xstrdup(txn->req_tgt.userid) : NULL;
         if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && !is_draft)
-                sched_request(userid, &schedule_addresses, cdata->organizer,
-                              ical, NULL, SCHED_MECH_CALDAV);
+                sched_request(cal_ownerid, sched_userid, &schedule_addresses,
+                              cdata->organizer, ical, NULL, SCHED_MECH_CALDAV);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
-                sched_reply(userid, &schedule_addresses,
+                sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
                             ical, NULL, SCHED_MECH_CALDAV);
         }
 
-        free(userid);
+        free(sched_userid);
+        free(cal_ownerid);
     }
 
 #ifdef WITH_JMAP
@@ -3090,24 +3093,26 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         caldav_get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
                                       txn->req_tgt.userid, &schedule_addresses);
 
-        char *userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
-            xstrdup(txn->req_tgt.userid) :
-            mboxname_to_userid(txn->req_tgt.mbentry->name);
+        char *cal_ownerid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+        char *sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
+            xstrdup(txn->req_tgt.userid) : NULL;
+            
         if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, calendar))
-                sched_request(userid, &schedule_addresses,
+                sched_request(cal_ownerid, sched_userid, &schedule_addresses,
                               cdata->organizer, oldical, ical, SCHED_MECH_CALDAV);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, calendar) && strarray_size(&schedule_addresses))
-                sched_reply(userid, &schedule_addresses,
+                sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
                             oldical, ical, SCHED_MECH_CALDAV);
         }
 
-        free(userid);
+        free(sched_userid);
+        free(cal_ownerid);
     }
 
     /* Store updated calendar resource */
@@ -3734,6 +3739,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     struct buf buf = BUF_INITIALIZER;
     struct caldav_data *cdata;
     char *sched_userid = NULL;
+    char *cal_ownerid = NULL;
     int is_draft = 0;
 
     /* Validate the iCal data */
@@ -3977,9 +3983,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             caldav_get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
                                           txn->req_tgt.userid, &schedule_addresses);
 
+            cal_ownerid = mboxname_to_userid(txn->req_tgt.mbentry->name);
             sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
-                xstrdup(txn->req_tgt.userid) :
-                mboxname_to_userid(txn->req_tgt.mbentry->name);
+                xstrdup(txn->req_tgt.userid) : NULL;
 
             if (strarray_find_case(&schedule_addresses, organizer, 0) >= 0) {
                 /* Organizer scheduling object resource */
@@ -3988,7 +3994,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
                 else {
                     if (_scheduling_enabled(txn, mailbox) && !is_draft)
-                        sched_request(sched_userid, &schedule_addresses,
+                        sched_request(cal_ownerid, sched_userid, &schedule_addresses,
                                       organizer, oldical, ical, SCHED_MECH_CALDAV);
                 }
             }
@@ -4007,7 +4013,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif
                 else {
                     if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
-                        sched_reply(sched_userid, &schedule_addresses,
+                        sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
                                     oldical, ical, SCHED_MECH_CALDAV);
                 }
             }
@@ -4099,6 +4105,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     free_hashu64_table(&rdates, NULL);
     free_hashu64_table(&overrides, NULL);
     free(sched_userid);
+    free(cal_ownerid);
     buf_free(&buf);
 
     return ret;

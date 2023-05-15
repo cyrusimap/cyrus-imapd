@@ -592,7 +592,8 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
 
 
 /* Send an iMIP request for attendees in 'ical' */
-static int imip_send(const char *userid, struct sched_data *sched_data,
+static int imip_send(const char *cal_ownerid, const char *sched_userid,
+                     struct sched_data *sched_data,
                      const char *sender, const char *encoded_recipient)
 {
     const char *notifier = config_getstring(IMAPOPT_IMIPNOTIFIER);
@@ -605,7 +606,7 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
 
     /* if no notifier, fall back to sendmail */
     if (!notifier) {
-        r = imip_send_sendmail(userid, sched_data->itip,
+        r = imip_send_sendmail(sched_userid, sched_data->itip,
                                   sender, buf_cstring(&recipient),
                                   SCHED_IS_UPDATE(sched_data));
         goto done;
@@ -668,7 +669,7 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
                                   icalcomponent_get_method(sched_data->itip));
 
     json_t *val = json_pack("{s:s s:s s:s s:s s:o s:s s:o s:o s:b s:s}",
-                            "calendarOwner", userid,
+                            "calendarOwner", cal_ownerid,
                             "recipient", buf_cstring(&recipient),
                             "sender", sender,
                             "method", imip_method,
@@ -680,7 +681,7 @@ static int imip_send(const char *userid, struct sched_data *sched_data,
                             "schedulingMechanism",
                             sched_mechanisms[sched_data->mech]);
     char *serial = json_dumps(val, JSON_COMPACT);
-    notify(notifier, "IMIP", NULL, userid, NULL, 0, NULL, serial, NULL);
+    notify(notifier, "IMIP", NULL, sched_userid, NULL, 0, NULL, serial, NULL);
     free(serial);
     json_decref(val);
 
@@ -1080,7 +1081,7 @@ int sched_busytime_query(struct transaction_t *txn,
 #define SCHEDSTAT_REJECTED      "5.3"
 
 /* Deliver scheduling object to a remote recipient */
-static void sched_deliver_remote(const char *userid,
+static void sched_deliver_remote(const char *cal_ownerid, const char *sched_userid,
                                  const char *sender, const char *recipient,
                                  struct caldav_sched_param *sparam,
                                  struct sched_data *sched_data)
@@ -1142,7 +1143,7 @@ static void sched_deliver_remote(const char *userid,
         }
     }
     else {
-        r = imip_send(userid, sched_data, sender, recipient);
+        r = imip_send(cal_ownerid, sched_userid, sched_data, sender, recipient);
         if (!r) {
             SCHED_STATUS(sched_data, REQSTAT_SENT, SCHEDSTAT_SENT);
         }
@@ -1184,7 +1185,8 @@ static void sched_vpoll_reply(icalcomponent *poll)
 }
 
 
-static void sched_pollstatus(const char *organizer,
+static void sched_pollstatus(const char *cal_ownerid, const char *sched_userid,
+                             const char *organizer,
                              struct caldav_sched_param *sparam, icalcomponent *ical,
                              const char *voter)
 {
@@ -1192,7 +1194,6 @@ static void sched_pollstatus(const char *organizer,
     struct sched_data sched_data;
     icalcomponent *itip, *comp;
     icalproperty *prop;
-    const char *userid = httpd_userid;
 
     /* XXX  Do we need to do more checks here? */
     if (sparam->flags & SCHEDTYPE_REMOTE)
@@ -1265,7 +1266,8 @@ static void sched_pollstatus(const char *organizer,
             struct strlist *next = voters->next;
 
             sched_data.itip = stat;
-            sched_deliver(userid, organizer, voters->s, &sched_data, authstate);
+            sched_deliver(cal_ownerid, sched_userid, organizer,
+                          voters->s, &sched_data, authstate);
 
             free(voters->s);
             free(voters);
@@ -1281,7 +1283,9 @@ static void sched_pollstatus(const char *organizer,
 
 
 /* Deliver scheduling object to recipient's Inbox */
-void sched_deliver(const char *userid, const char *sender, const char *recipient, void *data, void *rock)
+void sched_deliver(const char *cal_ownerid, const char *sched_userid,
+                   const char *sender, const char *recipient,
+                   void *data, void *rock)
 {
     struct sched_data *sched_data = (struct sched_data *) data;
     struct auth_state *authstate = (struct auth_state *) rock;
@@ -1331,7 +1335,8 @@ void sched_deliver(const char *userid, const char *sender, const char *recipient
                (sparam.flags & SCHEDTYPE_ISCHEDULE) ? "iSchedule" : "iMIP",
                recipient);
 
-        sched_deliver_remote(userid, sender, recipient, &sparam, sched_data);
+        sched_deliver_remote(cal_ownerid, sched_userid,
+                             sender, recipient, &sparam, sched_data);
     }
     else {
         /* Local recipient */
@@ -1341,17 +1346,18 @@ void sched_deliver(const char *userid, const char *sender, const char *recipient
 
         syslog(LOG_NOTICE, "CalDAV scheduling delivery to %s", recipient);
 
-        r = sched_deliver_local(userid, sender, recipient, NULL, &sparam, sched_data,
-                                authstate, &attendee, &ical);
+        r = sched_deliver_local(sched_userid, sender, recipient, NULL, &sparam,
+                                sched_data, authstate, &attendee, &ical);
 
         /* XXX  Should this be a config option? - it might have perf implications */
         if (r == 1 && SCHED_IS_REPLY(sched_data)) {
             /* Send updates to attendees - skipping sender of reply */
             icalcomponent *comp = icalcomponent_get_first_real_component(ical);
             if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
-                sched_pollstatus(recipient, &sparam, ical, attendee);
+                sched_pollstatus(cal_ownerid, sched_userid,
+                                 recipient, &sparam, ical, attendee);
             else
-                sched_request(userid, NULL, recipient,
+                sched_request(cal_ownerid, sched_userid, NULL, recipient,
                               NULL, ical, sched_data->mech); // oldical?
         }
         if (ical) icalcomponent_free(ical);
@@ -1821,7 +1827,7 @@ static int icalcomponent_is_historical(icalcomponent *comp, icaltimetype cutoff)
     return (icaltime_compare(span.end, cutoff) < 0);
 }
 
-static void schedule_full_cancel(const char *userid,
+static void schedule_full_cancel(const char *cal_ownerid, const char *sched_userid,
                                  const strarray_t *schedule_addresses,
                                  const char *organizer, const char *attendee,
                                  icalcomponent *mastercomp, icaltimetype h_cutoff,
@@ -1871,14 +1877,15 @@ static void schedule_full_cancel(const char *userid,
         struct sched_data sched =
             { mech, 0, itip, oldical, newical,
               ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL, NULL };
-        sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
+        sched_deliver(cal_ownerid, sched_userid,
+                      organizer, attendee, &sched, httpd_authstate);
     }
 
     icalcomponent_free(itip);
 }
 
 /* we've already tested that master does NOT contain this attendee */
-static void schedule_sub_cancels(const char *userid,
+static void schedule_sub_cancels(const char *cal_ownerid, const char *sched_userid,
                                  const strarray_t *schedule_addresses,
                                  const char *organizer, const char *attendee,
                                  icaltimetype h_cutoff,
@@ -1923,7 +1930,8 @@ static void schedule_sub_cancels(const char *userid,
         struct sched_data sched =
             { mech, 0, itip, oldical, newical,
               ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL, NULL };
-        sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
+        sched_deliver(cal_ownerid, sched_userid,
+                      organizer, attendee, &sched, httpd_authstate);
 
     }
 
@@ -1941,7 +1949,7 @@ icalparameter_scheduleforcesend get_forcesend(icalproperty *prop)
 
 /* we've already tested that master does NOT contain this attendee or that
  * master doesn't need to be scheduled */
-static void schedule_sub_updates(const char *userid,
+static void schedule_sub_updates(const char *cal_ownerid, const char *sched_userid,
                                  const strarray_t *schedule_addresses,
                                  const char *organizer, const char *attendee,
                                  icaltimetype h_cutoff,
@@ -2023,7 +2031,8 @@ static void schedule_sub_updates(const char *userid,
         struct sched_data sched =
             { mech, flags, itip, oldical, newical,
               force_send, schedule_addresses, NULL, NULL };
-        sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
+        sched_deliver(cal_ownerid, sched_userid,
+                      organizer, attendee, &sched, httpd_authstate);
         update_attendee_status(newical, &recurids, attendee, sched.status);
     }
 
@@ -2032,7 +2041,8 @@ static void schedule_sub_updates(const char *userid,
 }
 
 /* we've already tested that master does contain this attendee */
-static void schedule_full_update(const char *userid, const strarray_t *schedule_addresses,
+static void schedule_full_update(const char *cal_ownerid, const char *sched_userid,
+                                 const strarray_t *schedule_addresses,
                                  const char *organizer, const char *attendee,
                                  icalcomponent *mastercomp, icaltimetype h_cutoff,
                                  icalcomponent *oldical, icalcomponent *newical,
@@ -2113,14 +2123,15 @@ static void schedule_full_update(const char *userid, const strarray_t *schedule_
         struct sched_data sched =
             { mech, flags, itip, oldical, newical,
               force_send, schedule_addresses, NULL, NULL };
-        sched_deliver(userid, organizer, attendee, &sched, httpd_authstate);
+        sched_deliver(cal_ownerid, sched_userid,
+                      organizer, attendee, &sched, httpd_authstate);
 
         update_attendee_status(newical, NULL, attendee, sched.status);
     }
     else {
         /* just look for sub updates */
-        schedule_sub_updates(userid, schedule_addresses, organizer, attendee,
-                             h_cutoff, oldical, newical, mech);
+        schedule_sub_updates(cal_ownerid, sched_userid, schedule_addresses,
+                             organizer, attendee, h_cutoff, oldical, newical, mech);
     }
 
     icalcomponent_free(itip);
@@ -2128,7 +2139,7 @@ static void schedule_full_update(const char *userid, const strarray_t *schedule_
 
 /* sched_request() helper
  * handles scheduling for a single attendee */
-static void schedule_one_attendee(const char *userid,
+static void schedule_one_attendee(const char *cal_ownerid, const char *sched_userid,
                                   const strarray_t *schedule_addresses,
                                   const char *organizer, const char *attendee,
                                   icaltimetype h_cutoff,
@@ -2138,7 +2149,8 @@ static void schedule_one_attendee(const char *userid,
     /* case: this attendee is attending the master event */
     icalcomponent *mastercomp;
     if ((mastercomp = find_attended_component(newical, "", attendee))) {
-        schedule_full_update(userid, schedule_addresses, organizer, attendee,
+        schedule_full_update(cal_ownerid, sched_userid, schedule_addresses,
+                             organizer, attendee,
                              mastercomp, h_cutoff, oldical, newical, mech);
         return;
     }
@@ -2146,15 +2158,18 @@ static void schedule_one_attendee(const char *userid,
     /* otherwise we need to cancel for each sub event and then we'll still
      * send the updates if any */
     if ((mastercomp = find_attended_component(oldical, "", attendee))) {
-        schedule_full_cancel(userid, schedule_addresses, organizer, attendee,
+        schedule_full_cancel(cal_ownerid, sched_userid, schedule_addresses,
+                             organizer, attendee,
                              mastercomp, h_cutoff, oldical, newical, mech);
     }
     else {
-        schedule_sub_cancels(userid, schedule_addresses, organizer, attendee,
+        schedule_sub_cancels(cal_ownerid, sched_userid, schedule_addresses,
+                             organizer, attendee,
                              h_cutoff, oldical, newical, mech);
     }
 
-    schedule_sub_updates(userid, schedule_addresses, organizer, attendee,
+    schedule_sub_updates(cal_ownerid, sched_userid, schedule_addresses,
+                         organizer, attendee,
                          h_cutoff, oldical, newical, mech);
 }
 
@@ -2415,8 +2430,8 @@ static int get_hide_attendees(icalcomponent *ical)
 }
 
 /* Create and deliver an organizer scheduling request */
-void sched_request(const char *userid, const strarray_t *schedule_addresses,
-                   const char *organizer,
+void sched_request(const char *cal_ownerid, const char *sched_userid,
+                   const strarray_t *schedule_addresses, const char *organizer,
                    icalcomponent *oldical, icalcomponent *newical,
                    enum sched_mechanism mech)
 {
@@ -2425,8 +2440,10 @@ void sched_request(const char *userid, const strarray_t *schedule_addresses,
     icalcomponent *myoldical = NULL;
     icalcomponent *mynewical = NULL;
 
+    if (!sched_userid) sched_userid = cal_ownerid;
+
     mbentry_t *mbentry = NULL;
-    char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
+    char *outboxname = caldav_mboxname(sched_userid, SCHED_OUTBOX);
     int r = mboxlist_lookup(outboxname, &mbentry, NULL);
     if (r) {
         syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
@@ -2449,7 +2466,7 @@ void sched_request(const char *userid, const strarray_t *schedule_addresses,
     }
 
     /* Rewrite CalDAV managed attachments */
-    caldav_rewrite_attachments(userid, caldav_attachments_to_binary,
+    caldav_rewrite_attachments(sched_userid, caldav_attachments_to_binary,
             oldical, newical, &myoldical, &mynewical);
     if (myoldical) oldical = myoldical;
     if (mynewical) newical = mynewical;
@@ -2492,7 +2509,8 @@ void sched_request(const char *userid, const strarray_t *schedule_addresses,
 
         syslog(LOG_NOTICE, "iTIP scheduling request from %s to %s",
                organizer, attendee);
-        schedule_one_attendee(userid, schedule_addresses, organizer, attendee,
+        schedule_one_attendee(cal_ownerid, sched_userid, schedule_addresses,
+                              organizer, attendee,
                               h_cutoff, oldical, newical, mech);
 
         if (hide_attendees) {
@@ -2871,7 +2889,8 @@ static void schedule_full_reply(const char *attendee,
 }
 
 /* Create and deliver an attendee scheduling reply */
-void sched_reply(const char *userid, const strarray_t *schedule_addresses,
+void sched_reply(const char *cal_ownerid, const char *sched_userid,
+                 const strarray_t *schedule_addresses,
                  icalcomponent *oldical, icalcomponent *newical,
                  enum sched_mechanism mech)
 {
@@ -2880,8 +2899,10 @@ void sched_reply(const char *userid, const strarray_t *schedule_addresses,
     icalcomponent *myoldical = NULL;
     icalcomponent *mynewical = NULL;
 
+    if (!sched_userid) sched_userid = cal_ownerid;
+
     mbentry_t *mbentry = NULL;
-    char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
+    char *outboxname = caldav_mboxname(sched_userid, SCHED_OUTBOX);
     int r = mboxlist_lookup(outboxname, &mbentry, NULL);
     if (r) {
         syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
@@ -2896,13 +2917,13 @@ void sched_reply(const char *userid, const strarray_t *schedule_addresses,
     if (!(rights & DACL_REPLY)) {
         /* DAV:need-privileges */
         syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
-               httpd_userid, userid);
+               httpd_userid, sched_userid);
         update_organizer_status(newical, NULL, SCHEDSTAT_NOPRIVS);
         return;
     }
 
     /* Rewrite CalDAV managed attachments */
-    caldav_rewrite_attachments(userid, caldav_attachments_to_binary,
+    caldav_rewrite_attachments(sched_userid, caldav_attachments_to_binary,
             oldical, newical, &myoldical, &mynewical);
     if (myoldical) oldical = myoldical;
     if (mynewical) newical = mynewical;
@@ -2928,7 +2949,8 @@ void sched_reply(const char *userid, const strarray_t *schedule_addresses,
                   reply.force_send, schedule_addresses, NULL, NULL };
             syslog(LOG_NOTICE, "iTIP scheduling reply from %s to %s",
                    attendee, reply.organizer ? reply.organizer : "<unknown>");
-            sched_deliver(userid, attendee, reply.organizer, &sched, httpd_authstate);
+            sched_deliver(cal_ownerid, sched_userid, attendee,
+                          reply.organizer, &sched, httpd_authstate);
             update_organizer_status(newical, reply.didparts, sched.status);
         }
 
