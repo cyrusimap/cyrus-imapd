@@ -83,6 +83,7 @@ static int jmap_addressbook_set(struct jmap_req *req);
 static int jmap_card_get(struct jmap_req *req);
 static int jmap_card_changes(struct jmap_req *req);
 static int jmap_card_set(struct jmap_req *req);
+static int jmap_card_copy(struct jmap_req *req);
 static int jmap_cardgroup_get(struct jmap_req *req);
 static int jmap_cardgroup_changes(struct jmap_req *req);
 static int jmap_cardgroup_set(struct jmap_req *req);
@@ -158,8 +159,14 @@ static jmap_method_t jmap_contact_methods_standard[] = {
     },
     {
         "Card/set",
-        JMAP_CONTACTS_EXTENSION,
+        JMAP_URN_CONTACTS,
         &jmap_card_set,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "Card/copy",
+        JMAP_URN_CONTACTS,
+        &jmap_card_copy,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
@@ -176,7 +183,7 @@ static jmap_method_t jmap_contact_methods_standard[] = {
     },
     {
         "CardGroup/set",
-        JMAP_CONTACTS_EXTENSION,
+        JMAP_URN_CONTACTS,
         &jmap_cardgroup_set,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
@@ -9892,6 +9899,34 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     return r;
 }
 
+static json_t *_card_from_record(jmap_req_t *req, struct mailbox *mailbox,
+                                 struct index_record *record)
+{
+    vcardcomponent *vcard = record_to_vcard_x(mailbox, record);
+
+    if (!vcard) return NULL;
+
+    /* Patch JMAP event */
+    json_t *jcard = jmap_card_from_vcard(req->userid, vcard, mailbox, record,
+                                         IGNORE_VCARD_VERSION);
+    vcardcomponent_free(vcard);
+
+    if (jcard && strstr(req->method, "/copy")) {
+        json_t *media = json_object_get(jcard, "media");
+        if (media) {
+            /* _blob_to_card() needs to know in which account to find blobs */
+            json_object_set(media, "accountId",
+                            json_object_get(req->args, "fromAccountId"));
+        }
+
+        // immutable and WILL change
+        json_object_del(jcard, "cyrusimap.org:href");
+        json_object_del(jcard, "cyrusimap.org:hasPhoto");
+    }
+
+    return jcard;
+}
+
 static int jmap_card_get(struct jmap_req *req)
 {
     return _contacts_get(req, &getcards_cb, CARDDAV_KIND_CONTACT, card_props);
@@ -9908,6 +9943,11 @@ static int jmap_card_set(struct jmap_req *req)
                   &_card_set_create, &_card_set_update);
 
     return 0;
+}
+
+static int jmap_card_copy(struct jmap_req *req)
+{
+    return _contacts_copy(req, &_card_from_record, &_card_set_create);
 }
 
 static int jmap_cardgroup_get(struct jmap_req *req)
