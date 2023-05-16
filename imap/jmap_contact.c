@@ -5420,12 +5420,20 @@ static int jmap_contact_set(struct jmap_req *req)
 static void _contact_copy(jmap_req_t *req,
                           json_t *jcard,
                           struct carddav_db *src_db,
+                          json_t *(*_from_record)(jmap_req_t *req,
+                                                  struct mailbox *mailbox,
+                                                  struct index_record *record),
+                          int (*_set_create)(jmap_req_t *req,
+                                             unsigned kind,
+                                             json_t *jcard,
+                                             struct mailbox **mailbox,
+                                             json_t *item,
+                                             jmap_contact_errors_t *errors),
                           json_t **new_card,
                           json_t **set_err)
 {
     struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
-    struct vparse_card *vcard = NULL;
-    json_t *dst_card = NULL;
+    json_t *src_card = NULL, *dst_card = NULL;
     struct mailbox *src_mbox = NULL;
     struct mailbox *dst_mbox = NULL;
     mbentry_t *mbentry = NULL;
@@ -5468,36 +5476,23 @@ static void _contact_copy(jmap_req_t *req,
 
     struct index_record record;
     r = mailbox_find_index_record(src_mbox, cdata->dav.imap_uid, &record);
-    if (!r) vcard = record_to_vcard(src_mbox, &record);
-    if (!vcard || !vcard->objects) {
+    if (!r) src_card = _from_record(req, src_mbox, &record);
+    if (!src_card) {
         syslog(LOG_ERR, "contact_copy: can't convert %s to JMAP", src_id);
         r = IMAP_INTERNAL;
         goto done;
     }
 
-    /* Patch JMAP event */
-    json_t *src_card = jmap_contact_from_vcard(req->userid, vcard->objects,
-                                               src_mbox, &record);
-    if (src_card) {
-        json_t *avatar = json_object_get(src_card, "avatar");
-        if (avatar) {
-            /* _blob_to_card() needs to know in which account to find blob */
-            json_object_set(avatar, "accountId",
-                            json_object_get(req->args, "fromAccountId"));
-        }
-        json_object_del(src_card, "x-href");  // immutable and WILL change
-        json_object_del(src_card, "x-hasPhoto");  // immutable and WILL change
-        dst_card = jmap_patchobject_apply(src_card, jcard, NULL);
-        json_object_del(dst_card, "id");  // immutable and WILL change
-    }
+    dst_card = jmap_patchobject_apply(src_card, jcard, NULL);
+    json_object_del(dst_card, "id");  // immutable and WILL change
     json_decref(src_card);
 
     /* Create vcard */
     json_t *invalid = json_array();
     jmap_contact_errors_t errors = { invalid, NULL };
     json_t *item = json_object();
-    r = _contact_set_create(req, CARDDAV_KIND_CONTACT, dst_card,
-                            &dst_mbox, item, &errors);
+    r = _set_create(req, CARDDAV_KIND_CONTACT, dst_card,
+                    &dst_mbox, item, &errors);
     if (r || json_array_size(invalid) || errors.blobNotFound) {
         if (json_array_size(invalid)) {
             *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
@@ -5530,12 +5525,20 @@ done:
     mboxlist_entry_free(&mbentry);
     jmap_closembox(req, &dst_mbox);
     jmap_closembox(req, &src_mbox);
-    if (vcard) vparse_free_card(vcard);
     json_decref(dst_card);
     jmap_parser_fini(&myparser);
 }
 
-static int jmap_contact_copy(struct jmap_req *req)
+static int _contacts_copy(struct jmap_req *req,
+                          json_t *(*_from_record)(jmap_req_t *req,
+                                                  struct mailbox *mailbox,
+                                                  struct index_record *record),
+                          int (*_set_create)(jmap_req_t *req,
+                                             unsigned kind,
+                                             json_t *jcard,
+                                             struct mailbox **mailbox,
+                                             json_t *item,
+                                             jmap_contact_errors_t *errors))
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_copy copy;
@@ -5564,7 +5567,8 @@ static int jmap_contact_copy(struct jmap_req *req)
         json_t *set_err = NULL;
         json_t *new_card = NULL;
 
-        _contact_copy(req, jcard, src_db, /*dst_db,*/ &new_card, &set_err);
+        _contact_copy(req, jcard, src_db,
+                      _from_record, _set_create, &new_card, &set_err);
         if (set_err) {
             json_object_set_new(copy.not_created, creation_id, set_err);
             continue;
@@ -5584,10 +5588,12 @@ static int jmap_contact_copy(struct jmap_req *req)
 
     /* Destroy originals, if requested */
     if (copy.on_success_destroy_original && json_array_size(destroy_cards)) {
+        const char *submethod = !strcmp(req->method, "Contact/copy") ?
+            "Contact/set" : "Card/set";
         json_t *subargs = json_object();
         json_object_set(subargs, "destroy", destroy_cards);
         json_object_set_new(subargs, "accountId", json_string(copy.from_account_id));
-        jmap_add_subreq(req, "Contact/set", subargs, NULL);
+        jmap_add_subreq(req, submethod, subargs, NULL);
     }
 
 done:
@@ -5597,6 +5603,41 @@ done:
     jmap_copy_fini(&copy);
     return 0;
 }
+
+static json_t *_contact_from_record(jmap_req_t *req, struct mailbox *mailbox,
+                                    struct index_record *record)
+{
+    struct vparse_card *vcard = record_to_vcard(mailbox, record);
+
+    if (!vcard || !vcard->objects) {
+        if (vcard) vparse_free_card(vcard);
+        return NULL;
+    }
+
+    /* Patch JMAP event */
+    json_t *contact = jmap_contact_from_vcard(req->userid, vcard->objects,
+                                              mailbox, record);
+    vparse_free_card(vcard);
+
+    if (contact && strstr(req->method, "/copy")) {
+        json_t *avatar = json_object_get(contact, "avatar");
+        if (avatar) {
+            /* _blob_to_card() needs to know in which account to find blob */
+            json_object_set(avatar, "accountId",
+                            json_object_get(req->args, "fromAccountId"));
+        }
+        json_object_del(contact, "x-href");      // immutable and WILL change
+        json_object_del(contact, "x-hasPhoto");  // immutable and WILL change
+    }
+
+    return contact;
+}
+
+static int jmap_contact_copy(struct jmap_req *req)
+{
+    return _contacts_copy(req, &_contact_from_record, &_contact_set_create);
+}
+
 
 /*****************************************************************************
  * JMAP Card[Group] API
