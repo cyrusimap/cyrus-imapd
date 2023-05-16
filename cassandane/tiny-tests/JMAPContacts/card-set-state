@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_state
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create contact";
+    my $name = 'Mr. John Q. Public, Esq.';
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    '@version' => '1.0',
+                    uid => $id,
+                    fullName => $name
+                }
+            }
+        }, 'R1']
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Card/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog $self, "get contact $id";
+    $res = $jmap->CallMethods([['Card/get', {}, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Card/get', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+    $self->assert_str_equals($name, $res->[0][1]{list}[0]{fullName});
+    $self->assert_str_equals($state, $res->[0][1]{state});
+
+    xlog $self, "update $id with state token $state";
+    $res = $jmap->CallMethods([['Card/set', {
+                    ifInState => $state,
+                    update => {$id =>
+                        {fullName => $name}
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    my $oldState = $state;
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "update $id with expired state token $oldState";
+    $res = $jmap->CallMethods([['Card/set', {
+                    ifInState => $oldState,
+                    update => {$id =>
+                        {fullName => $name}
+                    }}, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
+
+    xlog $self, "get contact $id to make sure state didn't change";
+    $res = $jmap->CallMethods([['Contact/get', {ids => [$id]}, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]{state});
+
+    xlog $self, "destroy $id with expired state token $oldState";
+    $res = $jmap->CallMethods([['Card/set', {
+                    ifInState => $oldState,
+                    destroy => [$id]
+                }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
+
+    xlog $self, "destroy contact $id with current state";
+    $res = $jmap->CallMethods([
+            ['Card/set', {
+                    ifInState => $state,
+                    destroy => [$id]
+            }, "R1"]
+    ]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+}
