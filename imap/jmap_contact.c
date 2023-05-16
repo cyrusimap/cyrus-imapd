@@ -6434,6 +6434,9 @@ static json_t *jmap_card_from_vcard(const char *userid,
                     goto unmapped;
                 }
             }
+            else {
+                prop_value = vcardproperty_get_deathplace(prop);
+            }
 
             subprop.key = "place";
             subprop.val = json_pack("{s:s s:o}",
@@ -6467,6 +6470,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
         }
 
         case VCARD_FN_PROPERTY:
+            prop_value = vcardproperty_get_fn(prop);
             json_object_set_new(obj, "fullName", jmap_utf8string(prop_value));
             break;
 
@@ -6868,6 +6872,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             if (!kind) kind = "title";
 
+            prop_value = vcardproperty_get_title(prop);
             json_object_set_new(titles, _prop_id(prop),
                                 json_pack("{s:s s:s s:o}",
                                           "@type", "Title",
@@ -6923,6 +6928,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
         case VCARD_NOTE_PROPERTY: {
             json_t *notes = json_object_get_vanew(obj, "notes", "{}");
 
+            prop_value = vcardproperty_get_note(prop);
             jprop = json_pack("{s:s s:o}",
                               "@type", "Note",
                               "note", jmap_utf8string(prop_value));
@@ -6932,6 +6938,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
         }
 
         case VCARD_PRODID_PROPERTY:
+            prop_value = vcardproperty_get_prodid(prop);
             json_object_set_new(obj, "prodId", jmap_utf8string(prop_value));
             break;
 
