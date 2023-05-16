@@ -1,0 +1,229 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Needs to be updated once the mechanism for setting media gets sorted out
+#
+
+sub test_card_copy
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared accounts";
+    $admintalk->create("user.other");
+    $admintalk->create("user.other2");
+    $admintalk->create("user.other3");
+
+#    my $carddav = Net::CardDAVTalk->new(
+#        user => 'cassandane',
+#        password => 'pass',
+#        host => $service->host(),
+#        port => $service->port(),
+#        scheme => 'http',
+#        url => '/',
+#        expandurl => 1,
+#    );
+
+    my $othercarddav = Net::CardDAVTalk->new(
+        user => "other",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $other2carddav = Net::CardDAVTalk->new(
+        user => "other2",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $other3carddav = Net::CardDAVTalk->new(
+        user => "other3",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "share addressbooks";
+    $admintalk->setacl("user.other.#addressbooks.Default",
+                       "cassandane" => 'lrswipkxtecdn') or die;
+    $admintalk->setacl("user.other2.#addressbooks.Default",
+                       "cassandane" => 'lrswipkxtecdn') or die;
+    $admintalk->setacl("user.other3.#addressbooks.Default",
+                       "cassandane" => 'lrswipkxtecdn') or die;
+
+    # avatar
+    xlog $self, "upload avatar";
+    my $data = "some photo";
+    my $res = $jmap->Upload($data, "image/jpeg");
+    my $blobid = $res->{blobId};
+
+    my $card =  {
+        "addressBookId" => "Default",
+        "fullName"=> "foo bar",
+#        "avatar" => {
+#            "blobId" => $blobid,
+#            "size" => 10,
+#            "type" => "image/jpeg",
+#            "name" => JSON::null
+#         }
+    };
+
+    xlog $self, "create card";
+    $res = $jmap->CallMethods([['Card/set',{
+        create => {"1" => $card}},
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $cardId = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "copy card $cardId w/o changes";
+    $res = $jmap->CallMethods([['Card/copy', {
+        fromAccountId => 'cassandane',
+        accountId => 'other',
+        create => {
+            1 => {
+                id => $cardId,
+                addressBookId => "Default",
+            },
+        },
+    },
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $copiedCardId = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->CallMethods([
+        ['Card/get', {
+            accountId => 'other',
+            ids => [$copiedCardId],
+        }, 'R1'],
+        ['Card/get', {
+            accountId => undef,
+            ids => [$cardId],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('foo bar', $res->[0][1]{list}[0]{fullName});
+#    my $blob = $jmap->Download({ accept => 'image/jpeg' },
+#                               'other', $res->[0][1]{list}[0]{avatar}{blobId});
+#    $self->assert_str_equals('image/jpeg',
+#                             $blob->{headers}->{'content-type'});
+#    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+#    $self->assert_equals($data, $blob->{content});
+
+    $self->assert_str_equals('foo bar', $res->[1][1]{list}[0]{fullName});
+#    $blob = $jmap->Download({ accept => 'image/jpeg' },
+#                            'cassandane', $res->[1][1]{list}[0]{avatar}{blobId});
+#    $self->assert_str_equals('image/jpeg',
+#                             $blob->{headers}->{'content-type'});
+#    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+#    $self->assert_equals($data, $blob->{content});
+
+    xlog $self, "move card $cardId with changes";
+    $res = $jmap->CallMethods([['Card/copy', {
+        fromAccountId => 'cassandane',
+        accountId => 'other2',
+        create => {
+            1 => {
+                id => $cardId,
+                addressBookId => "Default",
+#                avatar => JSON::null,
+                nickNames => { n1 => { '@type' => 'NickName', name => "xxxxx" } }
+            },
+        }
+    },
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    $copiedCardId = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->CallMethods([
+        ['Card/get', {
+            accountId => 'other2',
+            ids => [$copiedCardId],
+        }, 'R1'],
+        ['Card/get', {
+            accountId => undef,
+            ids => [$cardId],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('foo bar', $res->[0][1]{list}[0]{fullName});
+    $self->assert_str_equals('xxxxx', $res->[0][1]{list}[0]{nickNames}{n1}{name});
+#    $self->assert_null($res->[0][1]{list}[0]{avatar});
+return;
+    my $other3Jmap = Mail::JMAPTalk->new(
+        user => 'other3',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $other3Jmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    # avatar
+    xlog $self, "upload avatar for other3";
+    $data = "some other photo";
+    $res = $other3Jmap->Upload($data, "image/jpeg");
+    $blobid = $res->{blobId};
+
+    $admintalk->setacl("user.other3.#jmap",
+                       "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "move card $cardId with different avatar";
+    $res = $jmap->CallMethods([['Contact/copy', {
+        fromAccountId => 'cassandane',
+        accountId => 'other3',
+        create => {
+            1 => {
+                id => $cardId,
+                addressbookId => "Default",
+                avatar => {
+                    blobId => "$blobid",
+                    size => 16,
+                    type => "image/jpeg",
+                    name => JSON::null
+                }
+            },
+        },
+        onSuccessDestroyOriginal => JSON::true,
+    },
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    $copiedCardId = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            accountId => 'other3',
+            ids => [$copiedCardId],
+        }, 'R1'],
+        ['Contact/get', {
+            accountId => undef,
+            ids => [$cardId],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('foo', $res->[0][1]{list}[0]{firstName});
+    $blob = $jmap->Download({ accept => 'image/jpeg' },
+                               'other3', $res->[0][1]{list}[0]{avatar}{blobId});
+    $self->assert_str_equals('image/jpeg',
+                             $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+    $self->assert_equals($data, $blob->{content});
+
+    $self->assert_str_equals($cardId, $res->[1][1]{notFound}[0]);
+}
