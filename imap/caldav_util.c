@@ -160,7 +160,7 @@ EXPORTED void add_personal_data(icalcomponent *ical, struct buf *userdata)
 EXPORTED int caldav_read_usedefaultalerts(struct dlist *dl,
                                           struct mailbox *mailbox,
                                           const struct index_record *record,
-                                          icalcomponent **icalp)
+                                          icalcomponent *ical)
 {
     /* Read from annotation */
     if (dl) {
@@ -179,10 +179,7 @@ EXPORTED int caldav_read_usedefaultalerts(struct dlist *dl,
     }
 
     /* Read from client-supplied iCalendar data */
-    if (icalp && *icalp) {
-        int ret = icalcomponent_read_usedefaultalerts(*icalp);
-        if (ret >= 0) return ret;
-    }
+    if (ical) return icalcomponent_read_usedefaultalerts(ical);
 
     /* Read from record */
     if (!mailbox || !record) return 0;
@@ -192,10 +189,7 @@ EXPORTED int caldav_read_usedefaultalerts(struct dlist *dl,
 
     if (dl) add_personal_data_from_dl(myical, dl);
     ret = icalcomponent_read_usedefaultalerts(myical);
-    if (icalp) {
-        *icalp = myical;
-    }
-    else icalcomponent_free(myical);
+    icalcomponent_free(myical);
 
     return ret >= 0 ? ret : 0;
 }
@@ -280,12 +274,10 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
             message_guid_export(user_guid, buf+MESSAGE_GUID_SIZE);
 
             /* Read default alarm GUID from per-user data */
-            icalcomponent *ical = NULL;
-            int defaultalerts = caldav_read_usedefaultalerts(dl, mailbox, record, &ical);
+            int defaultalerts = caldav_read_usedefaultalerts(dl, mailbox, record, NULL);
             if (defaultalerts) {
                 add_defaultalarm_guid(mailbox_name(mailbox), userid, buf, &buf_len);
             }
-            icalcomponent_free(ical);
 
             /* Generate ETag */
             message_guid_generate(user_guid, buf, buf_len);

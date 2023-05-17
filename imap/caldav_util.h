@@ -167,7 +167,7 @@ extern void caldav_format_defaultalarms_annot(struct buf *dst, const char *icals
 extern int caldav_read_usedefaultalerts(struct dlist *dl,
                                         struct mailbox *mailbox,
                                         const struct index_record *record,
-                                        icalcomponent **icalp);
+                                        icalcomponent *ical);
 
 extern int caldav_is_secretarymode(const char *mboxname);
 

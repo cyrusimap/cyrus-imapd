@@ -2434,7 +2434,7 @@ static void personalize_and_add_defaultalerts(struct mailbox *mailbox,
         if (caldav_is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
             dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
             add_personal_data_from_dl(ical, dl);
-            has_defaultalerts = caldav_read_usedefaultalerts(dl, mailbox, record, &ical);
+            has_defaultalerts = caldav_read_usedefaultalerts(dl, mailbox, record, ical);
         }
     }
 
