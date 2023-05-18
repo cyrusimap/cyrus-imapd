@@ -1329,7 +1329,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 
 EXPORTED int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
                              const char *resource, modseq_t createdmodseq,
-                             strarray_t *flags, struct entryattlist **annots,
+                             struct entryattlist **annots,
                              const char *userid, struct auth_state *authstate,
                              int ignorequota, uint32_t oldsize)
 {
@@ -1357,7 +1357,7 @@ EXPORTED int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
     struct buf *buf = vcard_as_buf_x(vcard);
 
     int r = _carddav_store(mailbox, buf, uid, fullname,
-                           resource, createdmodseq, flags, annots,
+                           resource, createdmodseq, NULL, annots,
                            userid, authstate, ignorequota, oldsize);
 
     buf_destroy(buf);

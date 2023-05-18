@@ -204,7 +204,7 @@ int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 
 int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
                     const char *resource, modseq_t createdmodseq,
-                    strarray_t *flags, struct entryattlist **annots,
+                    struct entryattlist **annots,
                     const char *userid, struct auth_state *authstate,
                     int ignorequota, uint32_t oldsize);
 

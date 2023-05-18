@@ -5646,6 +5646,8 @@ static int jmap_contact_copy(struct jmap_req *req)
 }
 
 
+#ifdef HAVE_LIBICALVCARD
+
 /*****************************************************************************
  * JMAP Card[Group] API
  ****************************************************************************/
@@ -5854,11 +5856,6 @@ static const jmap_property_t card_props[] = {
         0
     },  // JMAPUI only
     {
-        "cyrusimap.org:isFlagged",
-        JMAP_CONTACTS_EXTENSION,
-        0,
-    },
-    {
         "cyrusimap.org:blobId",
         JMAP_CONTACTS_EXTENSION,
         JMAP_PROP_SERVER_SET
@@ -5872,8 +5869,6 @@ static const jmap_property_t card_props[] = {
     { NULL, NULL, 0 }
 };
 
-
-#ifdef HAVE_LIBICALVCARD
 
 /*
  * Card[Group}/get
@@ -7151,10 +7146,6 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
     // record properties
     if (record) {
-        json_object_set_new(obj, "cyrusimap.org:isFlagged",
-                            record->system_flags & FLAG_FLAGGED ? json_true() :
-                            json_false());
-
         const char *annot = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
         // NOTE: using buf_free here because annotatemore_msg_lookup uses
         // buf_init_ro on the buffer, which blats the base pointer.
@@ -7163,7 +7154,6 @@ static json_t *jmap_card_from_vcard(const char *userid,
         double val = 0;
         if (buf.len) val = strtod(buf_cstring(&buf), NULL);
 
-        // need to keep the x- version while AJAXUI is around
         json_object_set_new(obj, "cyrusimap.org:importance", json_real(val));
     }
 
@@ -8928,19 +8918,6 @@ static void _invalid_l10n_patches_by_key(const char *key, void *val, void *rock)
     free(patches_by_id);
 }
 
-static void _jscard_set_isflagged(const char *key, json_t *arg,
-                                  strarray_t *flags,
-                                  jmap_contact_errors_t *errors)
-{
-    if (json_is_true(arg)) {
-        strarray_add_case(flags, "\\Flagged");
-    } else if (json_is_false(arg)) {
-        strarray_remove_all_case(flags, "\\Flagged");
-    } else {
-        json_array_append_new(errors->invalid, json_string(key));
-    }
-}
-
 static void _jscard_set_importance(struct jmap_req *req,
                                    const char *mboxname,
                                    const char *key, json_t *arg,
@@ -8969,7 +8946,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
                             struct carddav_data *cdata,
                             const char *mboxname,
                             vcardcomponent *card,
-                            json_t *arg, strarray_t *flags,
+                            json_t *arg,
                             struct entryattlist **annotsp,
                             ptrarray_t *blobs __attribute__((unused)),
                             jmap_contact_errors_t *errors)
@@ -9409,10 +9386,6 @@ static int _jscard_to_vcard(struct jmap_req *req,
         }
 
         /* Cyrus-specific properties */
-        else if (!strcmp(mykey, "cyrusimap.org:isFlagged")) {
-            has_noncontent = 1;
-            _jscard_set_isflagged(mykey, jval, flags, errors);
-        }
         else if (!strcmp(mykey, "cyrusimap.org:importance")) {
             has_noncontent = 1;
             _jscard_set_importance(req, mboxname, mykey, jval, annotsp, errors);
@@ -9502,7 +9475,6 @@ static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
 {
     json_t *invalid = errors->invalid;
     struct entryattlist *annots = NULL;
-    strarray_t *flags = NULL;
     vcardcomponent *card = NULL;
     char *uid = NULL;
     int r = 0;
@@ -9627,16 +9599,15 @@ static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
         logfmt = "jmap: create contact %s/%s (%s)";
     }
 
-    flags = strarray_new();
     r = _jscard_to_vcard(req, NULL, mboxname, card,
-                         jcard, flags, &annots, &blobs, errors);
+                         jcard, &annots, &blobs, errors);
 
     if (json_array_size(invalid) || errors->blobNotFound) {
         goto done;
     }
 
     syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name ? name : "");
-    r = carddav_store_x(*mailbox, card, resourcename, 0, flags, &annots,
+    r = carddav_store_x(*mailbox, card, resourcename, 0, &annots,
                         req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "carddav_store failed for user %s: %s",
@@ -9676,7 +9647,6 @@ done:
     vcardcomponent_free(card);
     free(mboxname);
     free(resourcename);
-    strarray_free(flags);
     freeentryatts(annots);
     free(uid);
     buf_free(&buf);
@@ -9704,7 +9674,6 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     json_t *jupdated = NULL;
     vcardcomponent *vcard = NULL;
     struct entryattlist *annots = NULL;
-    strarray_t *flags = NULL;
     ptrarray_t blobs = PTRARRAY_INITIALIZER;
     property_blob_t *blob;
     int r;
@@ -9764,22 +9733,13 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     olduid = cdata->dav.imap_uid;
     resource = xstrdup(cdata->dav.resource);
 
-    flags = mailbox_extract_flags(*mailbox, &record, req->userid);
     annots = mailbox_extract_annots(*mailbox, &record);
 
     if (!newmailbox) {
         size_t num_props = json_object_size(jcard);
-        const char *key = "cyrusimap.org:isFlagged";
+        const char *key = "cyrusimap.org:importance";
         json_t *jval;
 
-        if (num_props &&
-            (jval = json_object_get(jcard, key))) {
-            _jscard_set_isflagged(key, jval, flags, errors);
-            json_object_del(jcard, key);
-            num_props--;
-        }
-
-        key = "cyrusimap.org:importance";
         if (num_props &&
             (jval = json_object_get(jcard, key))) {
             _jscard_set_importance(req, mailbox_name(*mailbox),
@@ -9795,11 +9755,6 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
 
             syslog(LOG_NOTICE, "jmap: touch contact %s/%s",
                    req->accountid, resource);
-            if (strarray_find_case(flags, "\\Flagged", 0) >= 0)
-                record.system_flags |= FLAG_FLAGGED;
-            else
-                record.system_flags &= ~FLAG_FLAGGED;
-
             r = mailbox_get_annotate_state(*mailbox, record.uid, &state);
             annotate_state_set_auth(state, 0,
                                     req->userid, req->authstate);
@@ -9840,7 +9795,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     *item = json_object();
 
     r = _jscard_to_vcard(req, cdata, mailbox_name(*mailbox), vcard,
-                         new_obj, flags, &annots, &blobs, errors);
+                         new_obj, &annots, &blobs, errors);
 
     if (!json_array_size(invalid) && !errors->blobNotFound) {
         struct mailbox *this_mailbox = newmailbox ? newmailbox : *mailbox;
@@ -9849,7 +9804,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                req->accountid, resource);
         r = carddav_store_x(this_mailbox, vcard, resource,
-                            record.createdmodseq, flags, &annots, req->userid,
+                            record.createdmodseq, &annots, req->userid,
                             req->authstate, ignorequota,
                             (record.size - record.header_size));
         if (!r) {
@@ -9886,7 +9841,6 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
   done:
     mboxlist_entry_free(&mbentry);
     jmap_closembox(req, &newmailbox);
-    strarray_free(flags);
     freeentryatts(annots);
     vcardcomponent_free(vcard);
     free(resource);
