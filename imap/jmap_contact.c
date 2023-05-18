@@ -5841,15 +5841,10 @@ static const jmap_property_t card_props[] = {
 
     /* FM extensions */
     {
-        "cyrusimap.org:href",
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    }, // AJAXUI only
-    {
         "cyrusimap.org:importance",
         JMAP_CONTACTS_EXTENSION,
         0
-    },  // JMAPUI only
+    },
     {
         "cyrusimap.org:blobId",
         JMAP_CONTACTS_EXTENSION,
@@ -5859,6 +5854,11 @@ static const jmap_property_t card_props[] = {
         "cyrusimap.org:size",
         JMAP_CONTACTS_EXTENSION,
         JMAP_PROP_SERVER_SET
+    },
+    {
+        "cyrusimap.org:href", 
+        JMAP_DEBUG_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     },
 
     { NULL, NULL, 0 }
