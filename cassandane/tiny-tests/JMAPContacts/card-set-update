@@ -95,7 +95,7 @@ sub test_card_set_update
         ['Card/set', {
             update => {
                 $id => {
-                    'cyrusimap.org:isFlagged' => JSON::true
+                    'cyrusimap.org:importance' => -0.1
                 }
             }
          }, "R2"]
@@ -108,7 +108,7 @@ sub test_card_set_update
         ['Card/set', {
             update => {
                 $id => {
-                    'cyrusimap.org:isFlagged' => JSON::false,
+                    'cyrusimap.org:importance' => 0.0,
                     keywords => { foo => JSON::true }
                 }
             }
