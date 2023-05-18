@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_importance_float
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                c1 => {
+                    fullName => 'John Doe',
+                    'cyrusimap.org:importance' => -122.129545321514,
+                },
+            },
+        }, 'R1'],
+        ['Card/get', {
+            ids => ['#c1'],
+            properties => ['cyrusimap.org:importance'],
+        }, 'R2'],
+    ]);
+    my $contactId = $res->[0][1]{created}{c1}{id};
+    $self->assert_not_null($contactId);
+    $self->assert_equals(-122.129545321514,
+                         $res->[1][1]{list}[0]{'cyrusimap.org:importance'});
+}

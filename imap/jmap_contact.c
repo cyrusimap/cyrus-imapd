@@ -9730,7 +9730,6 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
             (jval = json_object_get(jcard, key))) {
             _jscard_set_importance(req, mailbox_name(*mailbox),
                                    key, jval, &annots, errors);
-            json_object_del(jcard, key);
             num_props--;
         }
 
