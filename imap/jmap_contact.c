@@ -5846,11 +5846,6 @@ static const jmap_property_t card_props[] = {
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     }, // AJAXUI only
     {
-        "cyrusimap.org:hasPhoto",
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET
-    }, // AJAXUI only
-    {
         "cyrusimap.org:importance",
         JMAP_CONTACTS_EXTENSION,
         0
@@ -9056,15 +9051,6 @@ static int _jscard_to_vcard(struct jmap_req *req,
                 free(xhref);
                 continue;
             }
-            else if (!strcmp(key, "cyrusimap.org:hasPhoto")) {
-                if ((vcardcomponent_get_first_property(card,
-                                                       VCARD_PHOTO_PROPERTY) &&
-                     !json_is_true(jval)) ||
-                    !json_is_false(jval)) {
-                    jmap_parser_invalid(&parser, "cyrusimap.org:hasPhoto");
-                }
-                continue;
-            }
         }
 
         /* Localization property? */
@@ -9875,7 +9861,6 @@ static json_t *_card_from_record(jmap_req_t *req, struct mailbox *mailbox,
 
         // immutable and WILL change
         json_object_del(jcard, "cyrusimap.org:href");
-        json_object_del(jcard, "cyrusimap.org:hasPhoto");
     }
 
     return jcard;
