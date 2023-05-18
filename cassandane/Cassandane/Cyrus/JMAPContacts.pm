@@ -84,6 +84,7 @@ sub set_up
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:contacts',
         'https://cyrusimap.org/ns/jmap/contacts',
+        'https://cyrusimap.org/ns/jmap/debug',
     ]);
 }
 
