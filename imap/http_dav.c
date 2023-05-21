@@ -5731,10 +5731,11 @@ int meth_mkcol(struct transaction_t *txn, void *params)
             txn->error.precond = mparams->mkcol.location_precond;
             ret = HTTP_FORBIDDEN;
             goto done;
-	}
+        }
 
         be = proxy_findserver(parent->server, &http_protocol, httpd_userid,
                               &backend_cached, NULL, NULL, httpd_in);
+        mboxlist_entry_free(&parent);
 
         if (!be) ret = HTTP_UNAVAILABLE;
         else ret = http_pipe_req_resp(be, txn);
