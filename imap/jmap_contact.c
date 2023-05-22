@@ -5936,46 +5936,39 @@ static const char *_prop_id(vcardproperty *prop)
     }
 }
 
-static const char *_value_to_data_uri(vcardproperty *prop,
-                                      const char *type, struct buf *buf)
+static const char *_value_to_uri_blobid(vcardproperty *prop,
+                                        struct mailbox *mailbox,
+                                        struct index_record *record,
+                                        char **type, char **blobid)
 {
-    vcardparameter *param =
-        vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
+    const char *prop_name = vcardproperty_get_property_name(prop);
+    struct message_guid guid;
+    const char *uri = NULL;
+    size_t size;
 
-    buf_setcstr(buf, "data:");
+    size = vcard_prop_decode_value_x(prop, NULL, type, &guid);
+    if (size) {
+        vcardparameter *param =
+            vcardproperty_get_first_parameter(prop, VCARD_ENCODING_PARAMETER);
+        struct buf buf = BUF_INITIALIZER;
 
-    if (param) {
-        vcardenumarray *subtypes = vcardparameter_get_type(param);
-
-        for (size_t i = 0; i < vcardenumarray_size(subtypes); i++) {
-            const vcardenumarray_element *subtype =
-                vcardenumarray_element_at(subtypes, i);
-
-            if (subtype->xvalue && strcasecmp(subtype->xvalue, "PREF")) {
-                buf_printf(buf, "%s/%s", type, subtype->xvalue);
-                buf_lcase(buf);
-
-                /* Replace TYPE with MEDIATYPE */
-                vcardproperty_remove_parameter_by_ref(prop, param);
-                param = vcardparameter_new_mediatype(buf_cstring(buf) + 5);
-                vcardproperty_add_parameter(prop, param);
-                break;
-            }
+        if (param) {
+            vcardproperty_remove_parameter_by_ref(prop, param);
+            vcardproperty_remove_parameter_by_kind(prop, VCARD_TYPE_PARAMETER);
         }
+
+        if (!*type) *type = xstrdup("application/octet-stream");
+
+        jmap_encode_rawdata_blobid('V', mailbox_uniqueid(mailbox),
+                                   record->uid, NULL, NULL,
+                                   prop_name, &guid, &buf);
+        *blobid = buf_release(&buf);
+    }
+    else {
+        uri = vcardvalue_get_uri(vcardproperty_get_value(prop));
     }
 
-    param = vcardproperty_get_first_parameter(prop, VCARD_ENCODING_PARAMETER);
-    if (param &&
-        vcardparameter_get_encoding(param) == VCARD_ENCODING_B) {
-        buf_appendcstr(buf, ";base64");
-
-        /* Remove ENCODING */
-        vcardproperty_remove_parameter_by_ref(prop, param);
-    }
-
-    buf_printf(buf, ",%s", vcardproperty_get_photo(prop));
-    
-    return buf_cstring(buf);
+    return uri;
 }
 
 static json_t *vcardtime_to_jmap_utcdate(vcardtimetype t)
@@ -6619,29 +6612,25 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
         media:
             json_t *media = json_object_get_vanew(obj, "media", "{}");
-            const char *uri;
+            char *type = NULL, *blobid = NULL;
+            const char *uri = NULL;
 
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
                 ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
 
-            param = vcardproperty_get_first_parameter(prop,
-                                                      VCARD_VALUE_PARAMETER);
-            if (version == VCARD_VERSION_40 ||
-                vcardparameter_get_value(param) == VCARD_VALUE_URI) {
-                uri = vcardproperty_get_photo(prop);
-            }
-            else {
-                /* Rewrite 'B' encoded value as data: URI */
-                uri = _value_to_data_uri(prop,
-                                         *kind == 's' ? "audio" : "image", &buf);
-            }
+            uri = _value_to_uri_blobid(prop, mailbox, record, &type, &blobid);
 
-            jprop = json_pack("{s:s s:s s:s}",
-                              "@type", "mediaResource",
+            jprop = json_pack("{s:s s:s s:s* s:s* s:s*}",
+                              "@type", "MediaResource",
                               "kind", kind,
-                              "uri", uri);
+                              "mediaType", type,
+                              "uri", uri,
+                              "blobId", blobid);
 
             json_object_set_new(media, _prop_id(prop), jprop);
+
+            free(blobid);
+            free(type);
             break;
         }
 
@@ -7003,27 +6992,24 @@ static json_t *jmap_card_from_vcard(const char *userid,
             /* Security Properties */
         case VCARD_KEY_PROPERTY: {
             json_t *keys = json_object_get_vanew(obj, "cryptoKeys", "{}");
-            const char *uri;
+            char *type = NULL, *blobid = NULL;
+            const char *uri = NULL;
 
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
                 ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
 
-            param =
-                vcardproperty_get_first_parameter(prop, VCARD_VALUE_PARAMETER);
-            if (version == VCARD_VERSION_40 ||
-                vcardparameter_get_value(param) == VCARD_VALUE_URI) {
-                uri = vcardproperty_get_key(prop);
-            }
-            else {
-                /* Rewrite 'b' encoded value as data: URI */
-                uri = _value_to_data_uri(prop, "application", &buf);
-            }
+            uri = _value_to_uri_blobid(prop, mailbox, record, &type, &blobid);
 
-            jprop = json_pack("{s:s s:s}",
+            jprop = json_pack("{s:s s:s* s:s* s:s*}",
                               "@type", "CryptoResource",
-                              "uri", uri);
+                              "mediaType", type,
+                              "uri", uri,
+                              "blobId", blobid);
 
             json_object_set_new(keys, _prop_id(prop), jprop);
+
+            free(blobid);
+            free(type);
             break;
         }
 
@@ -7057,7 +7043,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
                 ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
 
             jprop = json_pack("{s:s s:s s:s}",
-                              "@type", "calendarResource",
+                              "@type", "CalendarResource",
                               "kind", kind,
                               "uri", prop_value);
 
