@@ -44,23 +44,32 @@ require 5;
 use strict;
 use warnings;
 
+# invoked by make like this:
+#./tools/config2header CC="gcc" ./lib/imapopts.c ./lib/imapopts.h < ./lib/imapoptions
+
 my $enum_size = 0;
 my @enum_values = ();
 
-my $CC;
-#
-# Look for CC=xxx "assignments" in the argument list.
-#
-while ($#ARGV >= 0) {
-        last unless ($ARGV[0] =~ m/^(\S+)=(.*)$/);
-        eval "\$$1='$2';";
-        die "$@" if ($@);
+my %vars;
+my %known_vars = map { $_ => 1 } qw(CC);
+
+# process command line arguments
+while (scalar @ARGV) {
+    if ($ARGV[0] =~ m{^(\S+)=(.*)$}) {
+        # var=value
+        die "unrecognised variable $1" if not exists $known_vars{$1};
+        die "missing value for $1" if not defined $2;
+        $vars{$1} = $2;
         shift @ARGV;
+    }
+    else {
+        last;
+    }
 }
 
-my $use_gcc_extension = ($CC and $CC eq 'gcc');
+my $use_gcc_extension = (exists $vars{CC} and $vars{CC} eq 'gcc');
 
-die "wrong number of arguments" if ($#ARGV != 1);
+die "wrong number of arguments" if scalar @ARGV != 2;
 my ($cfile, $hfile) = @ARGV;
 
 open CFILE, ">$cfile";
