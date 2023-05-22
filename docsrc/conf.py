@@ -451,7 +451,7 @@ rst_prolog = """
 
 .. |imap_development_release_notes| raw:: html
 
-    <a href="3.9/x/3.9.0-alpha0.html">3.9.0-alpha0</a>
+    <a href="https://www.cyrusimap.org/dev/imap/download/release-notes/3.9/x/3.9.0-alpha0.html">3.9.0-alpha0</a>
 
 """
 
