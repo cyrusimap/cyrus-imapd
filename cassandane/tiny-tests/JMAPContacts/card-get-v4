@@ -47,6 +47,8 @@ KEY;PROP-ID=K1;TYPE=work;VALUE=uri:
  http://www.viagenie.ca/simon.perreault/simon.asc
 TZ:-0500
 URL;PROP-ID=L1;TYPE=home:http://nomis80.org
+PHOTO;PROP-ID=P1:data:image/jpeg;base64,c29tZSBwaG90bw==
+LOGO;PROP-ID=L1;MEDIATYPE=image/png:http://example.org/logo.png
 REV:20230422T194639Z
 END:VCARD
 EOF
@@ -141,4 +143,22 @@ EOF
             'contexts' => { 'private' => JSON::true }
         }
     }, $res->[0][1]{list}[0]{links});
+    $self->assert_deep_equals({
+        '@type' => 'MediaResource',
+        'kind' => 'logo',
+        'mediaType' => 'image/png',
+        'uri' => 'http://example.org/logo.png'
+    }, $res->[0][1]{list}[0]{media}{L1});
+    $self->assert_str_equals('photo',
+                             $res->[0][1]{list}[0]{media}{P1}{kind});
+    $self->assert_str_equals('image/jpeg',
+                             $res->[0][1]{list}[0]{media}{P1}{mediaType});
+
+    my $blobid = $res->[0][1]{list}[0]{media}{P1}{blobId};
+    $self->assert_not_null($blobid);
+
+    $res = $jmap->Download('cassandane', $blobid);
+
+    $self->assert_str_equals('image/jpeg', $res->{headers}{'content-type'});
+    $self->assert_str_equals('some photo', $res->{content});
 }
