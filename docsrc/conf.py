@@ -1063,13 +1063,13 @@ epub_exclude_files = ['search.html']
 #epub_use_index = True
 
 rst_prolog = """
-.. |imap_last_stable_version| replace:: 3.2.8
-.. |imap_last_stable_branch| replace:: `cyrus-imapd-3.2`
-.. |imap_last_stable_next_version| replace:: 3.2.8 + patches
-.. |imap_current_stable_version| replace:: 3.4.2
-.. |imap_current_stable_next_version| replace:: 3.4.2 + patches
-.. |imap_current_stable_branch| replace:: `cyrus-imapd-3.4`
-.. |imap_latest_development_version| replace:: 3.5.0-alpha0
+.. |imap_last_stable_version| replace:: 3.6.1
+.. |imap_last_stable_branch| replace:: `cyrus-imapd-3.6`
+.. |imap_last_stable_next_version| replace:: 3.6.1 + patches
+.. |imap_current_stable_version| replace:: 3.8.0
+.. |imap_current_stable_branch| replace:: `cyrus-imapd-3.8`
+.. |imap_current_stable_next_version| replace:: 3.8.0 + patches
+.. |imap_latest_development_version| replace:: 3.9.0-alpha0
 .. |imap_latest_development_branch| replace:: master
 .. |imap_tikanga_stock_version| replace:: 2.3.7
 .. |imap_santiago_stock_version| replace:: 2.3.16
@@ -1082,11 +1082,11 @@ rst_prolog = """
 .. |sasl_current_stable_version| replace:: 2.1.28
 .. |imap_stable_release_notes| raw:: html
 
-    <a href="3.4/x/3.4.2.html">3.4.2</a>
+    <a href="3.8/x/3.8.0.html">3.8.0</a>
 
 .. |imap_development_release_notes| raw:: html
 
-    <a href="3.5/x/3.5.0-alpha0.html">3.5.0-alpha0</a>
+    <a href="https://www.cyrusimap.org/dev/imap/download/release-notes/3.9/x/3.9.0-alpha0.html">3.9.0-alpha0</a>
 
 """
 
@@ -1154,8 +1154,10 @@ extlinks = {
         'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #'),
         'cyrus-2.5':('https://www.cyrusimap.org/2.5%s',None),
         'cyrus-3.0':('https://www.cyrusimap.org/3.0%s',None),
-        'cyrus-3.2':('https://www.cyrusimap.org/3.0%s',None),
-        'cyrus-3.4':('https://www.cyrusimap.org/3.0%s',None),
+        'cyrus-3.2':('https://www.cyrusimap.org/3.2%s',None),
+        'cyrus-3.4':('https://www.cyrusimap.org/3.4%s',None),
+        'cyrus-3.6':('https://www.cyrusimap.org/3.6%s',None),
+        'cyrus-3.8':('https://www.cyrusimap.org/3.8%s',None),
         'cyrus-dev':('https://www.cyrusimap.org/dev%s',None),
         'cyrus-stable': ('https://www.cyrusimap.org%s',None),
         'github-release':
