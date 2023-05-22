@@ -79,6 +79,11 @@ extern struct buf *vcard_as_buf_x(vcardcomponent *vcard);
 extern vcardcomponent *record_to_vcard_x(struct mailbox *mailbox,
                                          const struct index_record *record);
 
+extern size_t vcard_prop_decode_value_x(vcardproperty *prop,
+                                        struct buf *value,
+                                        char **content_type,
+                                        struct message_guid *guid);
+
 #endif /* HAVE_LIBICALVCARD */
 
 #endif /* VCARD_SUPPORT_H */

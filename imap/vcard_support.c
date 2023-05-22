@@ -163,50 +163,13 @@ static const struct image_signature {
 };
 
 /* Decode a base64-encoded binary vCard property and calculate a GUID. */
-EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
-                                        struct buf *value,
-                                        char **content_type,
-                                        struct message_guid *guid)
+static size_t _prop_decode_value(const char *data,
+                                 struct buf *decoded,
+                                 char **content_type,
+                                 struct message_guid *guid)
 {
-    struct vparse_param *param;
-    char *data, *mt, *b64;
     char *decbuf = NULL;
     size_t size = 0;
-
-    if (!prop) return 0;
-
-    if (content_type) *content_type = NULL;
-
-    /* Make sure we have base64-encoded data */
-    if (((param = vparse_get_param(prop, "encoding")) &&
-         !strcasecmp("b", param->value))) {
-        /* vCard v3 */
-        data = prop->v.value;
-
-        if (content_type && (param = vparse_get_param(prop, "type"))) {
-            struct buf buf = BUF_INITIALIZER;
-
-            buf_setcstr(&buf, param->value);
-            if (strncmp("image/", buf_lcase(&buf), 6))
-                buf_insertcstr(&buf, 0, "image/");
-
-            *content_type = buf_release(&buf);
-        }
-    }
-    else if (!strncmp("data:", prop->v.value, 5) &&
-             (mt = prop->v.value + 5) &&
-             (b64 = strstr(mt, ";base64,"))) {
-        /* data URI -- data:[<media type>][;base64],<data> */
-        size_t mt_len = b64 - mt;
-
-        data = b64 + 8;
-
-        if (content_type && mt_len)
-            *content_type = xstrndup(mt, mt_len);
-    }
-    else {
-        return 0;
-    }
 
     /* Decode property value */
     charset_decode_mimebody(data, strlen(data), ENCODING_BASE64, &decbuf, &size);
@@ -250,13 +213,60 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
         message_guid_generate(guid, decbuf, size);
     }
 
-    if (value) {
+    if (decoded) {
         /* Return the value in the specified buffer */
-        buf_setmap(value, decbuf, size);
+        buf_setmap(decoded, decbuf, size);
     }
     free(decbuf);
 
     return size;
+}
+
+EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
+                                        struct buf *value,
+                                        char **content_type,
+                                        struct message_guid *guid)
+{
+    struct vparse_param *param;
+    char *data, *mt, *b64;
+
+    if (!prop) return 0;
+
+    if (content_type) *content_type = NULL;
+
+    /* Make sure we have base64-encoded data */
+    if (((param = vparse_get_param(prop, "encoding")) &&
+         !strcasecmp("b", param->value))) {
+        /* vCard v3 */
+        data = prop->v.value;
+
+        if (content_type && (param = vparse_get_param(prop, "type"))) {
+            struct buf buf = BUF_INITIALIZER;
+
+            buf_setcstr(&buf, param->value);
+            if (strncmp("image/", buf_lcase(&buf), 6))
+                buf_insertcstr(&buf, 0, "image/");
+
+            *content_type = buf_release(&buf);
+        }
+    }
+    else if (!strncmp("data:", prop->v.value, 5) &&
+             (mt = prop->v.value + 5) &&
+             (b64 = strstr(mt, ";base64,"))) {
+        /* data URI -- data:[<media type>][;base64],<data> */
+        size_t mt_len = b64 - mt;
+
+        data = b64 + 8;
+
+        if (content_type && mt_len)
+            *content_type = xstrndup(mt, mt_len);
+    }
+    else {
+        return 0;
+    }
+    
+    /* Decode property value */
+    return _prop_decode_value(data, value, content_type, guid);
 }
 
 EXPORTED void vcard_to_v3(struct vparse_card *vcard)
@@ -467,6 +477,79 @@ EXPORTED vcardcomponent *record_to_vcard_x(struct mailbox *mailbox,
     }
 
     return vcard;
+}
+
+EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
+                                          struct buf *value,
+                                          char **content_type,
+                                          struct message_guid *guid)
+{
+    const char *data = vcardvalue_get_uri(vcardproperty_get_value(prop));
+    vcardparameter *param;
+    const char *mt, *b64;
+
+    if (!prop) return 0;
+
+    if (content_type) *content_type = NULL;
+
+    /* Make sure we have base64-encoded data */
+    param = vcardproperty_get_first_parameter(prop, VCARD_ENCODING_PARAMETER);
+    if (param &&
+        vcardparameter_get_encoding(param) == VCARD_ENCODING_B) {
+        /* vCard v3 */
+
+        param = vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
+        if (param && content_type) {
+            vcardenumarray *subtypes = vcardparameter_get_type(param);
+            struct buf buf = BUF_INITIALIZER;
+            const char *type;
+
+            switch (vcardproperty_isa(prop)) {
+            case VCARD_PHOTO_PROPERTY:
+            case VCARD_LOGO_PROPERTY:
+                type = "image/";
+                break;
+            case VCARD_SOUND_PROPERTY:
+                type = "audio/";
+                break;
+            default:
+                type = "application/";
+                break;
+            }
+
+            for (size_t i = 0; i < vcardenumarray_size(subtypes); i++) {
+                const vcardenumarray_element *subtype =
+                    vcardenumarray_element_at(subtypes, i);
+
+                if (subtype->xvalue && strcasecmp(subtype->xvalue, "PREF")) {
+                    buf_setcstr(&buf, subtype->xvalue);
+                    break;
+                }
+            }
+
+            if (strncmp(type, buf_lcase(&buf), strlen(type)))
+                buf_insertcstr(&buf, 0, type);
+
+            *content_type = buf_release(&buf);
+        }
+    }
+    else if (!strncmp("data:", data, 5) &&
+             (mt = data + 5) &&
+             (b64 = strstr(mt, ";base64,"))) {
+        /* data URI -- data:[<media type>][;base64],<data> */
+        size_t mt_len = b64 - mt;
+
+        data = b64 + 8;
+
+        if (content_type && mt_len)
+            *content_type = xstrndup(mt, mt_len);
+    }
+    else {
+        return 0;
+    }
+    
+    /* Decode property value */
+    return _prop_decode_value(data, value, content_type, guid);
 }
 
 #endif /* HAVE_LIBICALVCARD */
