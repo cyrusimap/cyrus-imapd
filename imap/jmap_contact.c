@@ -8392,41 +8392,167 @@ static unsigned _jspreferred_to_card(struct jmap_parser *parser, json_t *jval,
 struct resource_map {
     const char *kind;
     vcardproperty_kind pkind;
+    unsigned supports_blobid : 1;
+};
+
+struct resource_rock {
+    struct jmap_req *req;
+    struct resource_map *map;
+    ptrarray_t *blobs;
+    jmap_contact_errors_t *errors;
 };
 
 static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *obj,
-                                           const char *id __attribute__((unused)),
+                                           const char *id,
                                            vcardcomponent *card __attribute__((unused)),
                                            void *rock)
 {
-    struct resource_map *map = rock, *m;
-    vcardproperty *prop = NULL;
-    vcardproperty_kind kind;
-    const char *val;
+    struct resource_rock *rrock = rock;
+    struct resource_map *m;
+    vcardproperty_kind pkind;
+    const char *mkind, *uri = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    char *media_type;
+    json_t *jprop;
 
-    val = json_string_value(json_object_get(obj, "kind"));
-    for (m = map; map->kind; m++) {
-        if (!strcmpnull(m->kind, val)) {
+    mkind = json_string_value(json_object_get(obj, "kind"));
+    for (m = rrock->map; m->kind; m++) {
+        if (!strcmpnull(m->kind, mkind)) {
             break;
         }
     }
-    kind = m->pkind;
+    pkind = m->pkind;
 
-    if (kind == VCARD_NO_PROPERTY) {
+    if (pkind == VCARD_NO_PROPERTY) {
         jmap_parser_invalid(parser, "kind");
+        return NULL;
     }
-    else {
-        val = json_string_value(json_object_get(obj, "uri"));
-        if (!val) {
-            jmap_parser_invalid(parser, "uri");
-        }
-        else {
-            prop = vcardproperty_new(kind);
-            vcardproperty_set_value_from_string(prop, val, "URI");
-            json_object_del(obj, "kind");
-            json_object_del(obj, "uri");
-        }
+
+    jprop = json_object_get(obj, "uri");
+    if (json_is_string(jprop)) {
+        uri = json_string_value(jprop);
     }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "uri");
+        return NULL;
+    }
+
+    media_type =
+        xstrdupnull(json_string_value(json_object_get(obj, "mediaType")));
+
+    if (m->supports_blobid) {
+        jmap_getblob_context_t ctx = { 0 };
+        struct buf *blob = NULL;
+
+        /* blobId supersedes uri */
+        jprop = json_object_get(obj, "blobId");
+        if (jprop) {
+            /* Extract blobId */
+            if (!json_is_string(jprop)) {
+                jmap_parser_invalid(parser, "blobId");
+                return NULL;
+            }
+
+            const char *blobid = jmap_id_string_value(rrock->req, jprop);
+            const char *accountid =
+                json_string_value(json_object_get(obj, "accountId"));
+
+            /* Find blob */
+            jmap_getblob_ctx_init(&ctx, accountid, blobid, media_type, 1);
+
+            int r = jmap_getblob(rrock->req, &ctx);
+
+            switch (r) {
+            case 0:
+                if (!buf_len(&ctx.content_type) ||
+                    strchr(buf_cstring(&ctx.content_type), '/')) break;
+
+                /* Fall through */
+                GCC_FALLTHROUGH
+
+            case HTTP_NOT_ACCEPTABLE:
+                jmap_parser_invalid(parser, "mediaType");
+                return NULL;
+
+            default:
+                /* Not found, or system error */
+                if (!rrock->errors->blobNotFound)
+                    rrock->errors->blobNotFound = json_array();
+                json_array_append(rrock->errors->blobNotFound, jprop);
+                return NULL;
+            }
+
+            buf_printf(&buf, "data:%s;base64,", buf_lcase(&ctx.content_type));
+
+            const char *base = buf_base(&ctx.blob);
+            size_t len = buf_len(&ctx.blob);
+
+            /* Pre-flight base64 encoder to determine length */
+            size_t len64 = 0;
+            charset_encode_mimebody(NULL, len, NULL,
+                                    &len64, NULL, 0 /* no wrap */);
+
+            /* Now encode the blob */
+            buf_ensure(&buf, len64+1);
+            charset_encode_mimebody(base, len,
+                                    (char *) buf_base(&buf) + buf_len(&buf),
+                                    &len64, NULL, 0 /* no wrap */);
+            buf_truncate(&buf, buf_len(&buf) + len64);
+            uri = buf_cstring(&buf);
+
+            if (!media_type) media_type = buf_release(&ctx.content_type);
+            blob = &ctx.blob;
+
+            json_object_del(obj, "blobId");
+            json_object_del(obj, "accountId");
+        }
+        else if (uri && !strncmp(uri, "data:", 5)) {
+            const char *data = strchr(uri, ',') + 1;
+            char *decbuf = NULL;
+            size_t size = 0;
+
+            if (!media_type) {
+                const char *mt = uri + 5;
+
+                size = strcspn(mt, ";,");
+                if (size) {
+                    media_type = xstrndup(mt, size);
+                }
+            }
+
+            /* Decode property value */
+            charset_decode_mimebody(data, strlen(data),
+                                    ENCODING_BASE64, &decbuf, &size);
+            buf_initm(&buf, decbuf, size);
+            blob = &buf;
+        }
+
+        if (blob) {
+            /* Add this blob to our list */
+            const char *prop_name = vcardproperty_kind_to_string(pkind);
+
+            ptrarray_append(rrock->blobs,
+                            property_blob_new(id, prop_name, media_type, blob));
+        }
+
+        jmap_getblob_ctx_fini(&ctx);
+    }
+
+    free(media_type);
+
+    if (!uri) {
+        jmap_parser_invalid(parser, "uri");
+        return NULL;
+    }
+
+    vcardproperty *prop = vcardproperty_new(pkind);
+    vcardproperty_set_value_from_string(prop, uri, "URI");
+
+    json_object_del(obj, "kind");
+    json_object_del(obj, "uri");
+    json_object_del(obj, "mediaType");
+
+    buf_free(&buf);
 
     return prop;
 }
@@ -8929,7 +9055,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
                             vcardcomponent *card,
                             json_t *arg,
                             struct entryattlist **annotsp,
-                            ptrarray_t *blobs __attribute__((unused)),
+                            ptrarray_t *blobs,
                             jmap_contact_errors_t *errors)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -9212,17 +9338,18 @@ static int _jscard_to_vcard(struct jmap_req *req,
         /* Calendaring and Scheduling properties*/
         else if (!strcmp(mykey, "calendars")) {
             struct resource_map map[] = {
-                { "calendar", VCARD_CALURI_PROPERTY },
-                { "freeBusy", VCARD_FBURL_PROPERTY  },
-                { NULL,       VCARD_NO_PROPERTY     }
+                { "calendar", VCARD_CALURI_PROPERTY, 0 },
+                { "freeBusy", VCARD_FBURL_PROPERTY,  0 },
+                { NULL,       VCARD_NO_PROPERTY,     0 }
             };
+            struct resource_rock rrock = { req, map, blobs, errors };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
                                                       mykey, "CalendarResource",
                                                       &_jsresource_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       resource_param_props,
-                                                      &l10n, card, &map);
+                                                      &l10n, card, &rrock);
         }
         else if (!strcmp(mykey, "schedulingAddresses")) {
             struct comm_rock crock = { "uri", VCARD_CALADRURI_PROPERTY };
@@ -9258,57 +9385,61 @@ static int _jscard_to_vcard(struct jmap_req *req,
         /* Resource properties */
         else if (!strcmp(mykey, "cryptoKeys")) {
             struct resource_map map[] = {
-                { NULL, VCARD_KEY_PROPERTY }
+                { NULL, VCARD_KEY_PROPERTY, 1 }
             };
+            struct resource_rock rrock = { req, map, blobs, errors };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
                                                       mykey, "CryptoResource",
                                                       &_jsresource_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       resource_param_props,
-                                                      &l10n, card, &map);
+                                                      &l10n, card, &rrock);
         }
         else if (!strcmp(mykey, "directories")) {
             struct resource_map map[] = {
-                { "directory", VCARD_ORGDIRECTORY_PROPERTY },
-                { "entry",     VCARD_SOURCE_PROPERTY       },
-                { NULL,        VCARD_NO_PROPERTY           }
+                { "directory", VCARD_ORGDIRECTORY_PROPERTY, 0 },
+                { "entry",     VCARD_SOURCE_PROPERTY,       0 },
+                { NULL,        VCARD_NO_PROPERTY,           0 }
             };
+            struct resource_rock rrock = { req, map, blobs, errors };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
                                                       mykey, "DirectoryResource",
                                                       &_jsresource_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       directories_param_props,
-                                                      &l10n, card, &map);
+                                                      &l10n, card, &rrock);
         }
         else if (!strcmp(mykey, "links")) {
             struct resource_map map[] = {
-                { "contact", VCARD_CONTACTURI_PROPERTY },
-                { NULL,      VCARD_URL_PROPERTY        },
+                { "contact", VCARD_CONTACTURI_PROPERTY, 0 },
+                { NULL,      VCARD_URL_PROPERTY,        0 }
             };
+            struct resource_rock rrock = { req, map, blobs, errors };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
                                                       mykey, "LinkResource",
                                                       &_jsresource_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       resource_param_props,
-                                                      &l10n, card, &map);
+                                                      &l10n, card, &rrock);
         }
         else if (!strcmp(mykey, "media")) {
             struct resource_map map[] = {
-                { "photo", VCARD_PHOTO_PROPERTY },
-                { "sound", VCARD_SOUND_PROPERTY },
-                { "logo",  VCARD_LOGO_PROPERTY  },
-                { NULL,    VCARD_NO_PROPERTY    },
+                { "photo", VCARD_PHOTO_PROPERTY, 1 },
+                { "sound", VCARD_SOUND_PROPERTY, 1 },
+                { "logo",  VCARD_LOGO_PROPERTY,  1 },
+                { NULL,    VCARD_NO_PROPERTY,    0 }
             };
+            struct resource_rock rrock = { req, map, blobs, errors };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
                                                       mykey, "MediaResource",
                                                       &_jsresource_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       resource_param_props,
-                                                      &l10n, card, &map);
+                                                      &l10n, card, &rrock);
         }
 
         /* Multilingual properties */
@@ -9455,6 +9586,7 @@ static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
     ptrarray_t blobs = PTRARRAY_INITIALIZER;
     property_blob_t *blob;
     char *mboxname = NULL;
+    json_t *media = NULL, *keys = NULL;
 
     /* Validate uid */
     struct carddav_db *db = carddav_open_userid(req->accountid);
@@ -9560,6 +9692,11 @@ static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
         else if (r) goto done;
     }
 
+    /* Make copies of media/cryptoKeys properties
+       in case we need to report updated blobIds */
+    media = json_deep_copy(json_object_get(jcard, "media"));
+    keys = json_deep_copy(json_object_get(jcard, "cryptoKeys"));
+
     const char *name = NULL;
     const char *logfmt = NULL;
 
@@ -9590,10 +9727,36 @@ static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
 
     json_object_set_new(item, "id", json_string(uid));
 
-    if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
-        struct index_record record;
-        mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
+    struct index_record record;
+    mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
 
+    while ((blob = ptrarray_pop(&blobs))) {
+        json_t *obj;
+
+        // blob->key is id of the subobj
+        if (*blob->prop == 'K') {
+            json_object_set(item, "cryptoKeys", keys);
+            obj = json_object_get(keys, blob->key);
+        }
+        else {
+            json_object_set(item, "media", media);
+            obj = json_object_get(media, blob->key);
+        }
+
+        jmap_encode_rawdata_blobid('V', mailbox_uniqueid(*mailbox),
+                                   record.uid, NULL, NULL,
+                                   blob->prop, &blob->guid, &buf);
+
+        json_object_set_new(obj, "blobId", json_string(buf_cstring(&buf)));
+        if (blob->type) {
+            json_object_set_new(obj, "mediaType", json_string(blob->type));
+        }
+        json_object_del(obj, "uri");
+
+        property_blob_free(&blob);
+    }
+
+    if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
         jmap_encode_rawdata_blobid('V', mailbox_uniqueid(*mailbox), record.uid,
                                    NULL, NULL, NULL, NULL, &buf);
         json_object_set_new(item, "cyrusimap.org:blobId",
@@ -9601,18 +9764,6 @@ static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
 
         json_object_set_new(item, "cyrusimap.org:size",
                             json_integer(record.size - record.header_size));
-
-        while ((blob = ptrarray_pop(&blobs))) {
-            jmap_encode_rawdata_blobid('V', mailbox_uniqueid(*mailbox),
-                                       record.uid, NULL, NULL,
-                                       blob->prop, &blob->guid, &buf);
-            json_object_set_new(item, blob->key,
-                                json_pack("{s:s s:i s:s? s:n}",
-                                          "blobId", buf_cstring(&buf),
-                                          "size", blob->size,
-                                          "type", blob->type, "name"));
-            property_blob_free(&blob);
-        }
     }
 
 done:
@@ -9626,6 +9777,8 @@ done:
         property_blob_free(&blob);
     }
     ptrarray_fini(&blobs);
+    json_decref(media);
+    json_decref(keys);
 
     return r;
 }
@@ -9648,6 +9801,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     struct entryattlist *annots = NULL;
     ptrarray_t blobs = PTRARRAY_INITIALIZER;
     property_blob_t *blob;
+    json_t *media = NULL, *keys = NULL;
     int r;
 
     /* is it a valid contact? */
@@ -9753,10 +9907,17 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
 
     /* Apply the patch as provided */
     json_t *new_obj = jmap_patchobject_apply(old_obj, jcard, invalid);
+
+    json_decref(old_obj);
     if (!new_obj) {
         r = HTTP_BAD_REQUEST;
         goto done;
     }
+
+    /* Make copies of patched media/cryptoKeys properties
+       in case we need to report updated blobIds */
+    media = json_deep_copy(json_object_get(new_obj, "media"));
+    keys = json_deep_copy(json_object_get(new_obj, "cryptoKeys"));
 
     vcard = vcardcomponent_vanew(VCARD_VCARD_COMPONENT,
                                  vcardproperty_new_version(VCARD_VERSION_40),
@@ -9767,6 +9928,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
 
     r = _jscard_to_vcard(req, cdata, mailbox_name(*mailbox), vcard,
                          new_obj, &annots, &blobs, errors);
+    json_decref(new_obj);
 
     if (!json_array_size(invalid) && !errors->blobNotFound) {
         struct mailbox *this_mailbox = newmailbox ? newmailbox : *mailbox;
@@ -9793,14 +9955,31 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                                 json_integer(record.size - record.header_size));
 
             while ((blob = ptrarray_pop(&blobs))) {
-                jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
-                                           record.uid, NULL, NULL, blob->prop,
-                                           &blob->guid, &buf);
-                json_object_set_new(*item, blob->key,
-                                    json_pack("{s:s s:i s:s? s:n}",
-                                              "blobId", buf_cstring(&buf),
-                                              "size", blob->size,
-                                              "type", blob->type, "name"));
+                json_t *obj;
+
+                // blob->key is id of the subobj
+                if (*blob->prop == 'K') {
+                    json_object_set(*item, "cryptoKeys", keys);
+                    obj = json_object_get(keys, blob->key);
+                }
+                else {
+                    json_object_set(*item, "media", media);
+                    obj = json_object_get(media, blob->key);
+                }
+
+                jmap_encode_rawdata_blobid('V',
+                                           mailbox_uniqueid(this_mailbox),
+                                           record.uid, NULL, NULL,
+                                           blob->prop, &blob->guid, &buf);
+
+                json_object_set_new(obj, "blobId",
+                                    json_string(buf_cstring(&buf)));
+                if (blob->type) {
+                    json_object_set_new(obj, "mediaType",
+                                        json_string(blob->type));
+                }
+                json_object_del(obj, "uri");
+
                 property_blob_free(&blob);
             }
 
@@ -9816,10 +9995,13 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     vcardcomponent_free(vcard);
     free(resource);
     json_decref(jupdated);
+    buf_free(&buf);
     while ((blob = ptrarray_pop(&blobs))) {
         property_blob_free(&blob);
     }
     ptrarray_fini(&blobs);
+    json_decref(media);
+    json_decref(keys);
 
     return r;
 }
