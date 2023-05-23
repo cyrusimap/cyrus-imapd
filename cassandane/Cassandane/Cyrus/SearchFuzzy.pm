@@ -1960,7 +1960,12 @@ sub start_echo_extractor
         }
 
         if ($params{response_delay_seconds}) {
-            sleep $params{response_delay_seconds};
+            my $secs = $params{response_delay_seconds};
+            if (ref($secs) eq 'ARRAY') {
+                $secs = ($nrequests <= scalar @$secs) ?
+                    $secs->[$nrequests-1] : 0;
+            }
+            sleep $secs;
         }
 
         $conn->send_response($res);
@@ -2191,11 +2196,11 @@ sub test_squatter_attachextract_timeout
 
     $self->start_echo_extractor(
         tracedir => $tracedir,
-        response_delay_seconds => 5,
+        response_delay_seconds => [5], # timeout on first request only
     );
 
     xlog $self, "Make message with attachment";
-    $self->make_message("msg2",
+    $self->make_message("msg1",
         mime_type => "multipart/related",
         mime_boundary => "123456789abcdef",
         body => ""
@@ -2223,10 +2228,28 @@ sub test_squatter_attachextract_timeout
     $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
     $self->assert_deep_equals([], $uids);
 
-    xlog "Assert extractor got only called once";
+    xlog "Assert extractor got called once";
     my @tracefiles = glob($tracedir."/*");
     $self->assert_num_equals(1, scalar @tracefiles);
     $self->assert_matches(qr/req1_GET_/, $tracefiles[0]);
+
+    xlog $self, "Rerun squatter for partials";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-i', '-P');
+
+    xlog "Assert text body is indexed";
+    $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1], $uids);
+
+    xlog "Assert attachement is indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+    $self->assert_deep_equals([1], $uids);
+
+    xlog "Assert extractor got called three times";
+    @tracefiles = glob($tracedir."/*");
+    $self->assert_num_equals(3, scalar @tracefiles);
+    $self->assert_matches(qr/req1_GET_/, $tracefiles[0]);
+    $self->assert_matches(qr/req2_GET_/, $tracefiles[1]);
+    $self->assert_matches(qr/req3_PUT_/, $tracefiles[2]);
 }
 
 1;

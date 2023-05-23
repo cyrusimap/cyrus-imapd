@@ -205,6 +205,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
                                    const char *charset,
                                    struct buf *text)
 {
+    struct extractor_ctx *ext = global_extractor;
     struct backend *be;
     struct buf ctypehdr = BUF_INITIALIZER;
     hdrcache_t hdrs = NULL;
@@ -277,7 +278,6 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     }
 
     /* Fetch from network */
-    struct extractor_ctx *ext = global_extractor;
     r = extractor_connect(ext);
     if (r) goto done;
     be = ext->be;
@@ -319,6 +319,8 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
            ext->path, guidstr, statuscode);
 
     if (statuscode == 200) goto gotdata;
+
+    if (statuscode == 599) goto done;
 
     // otherwise we're going to try three times to PUT this request to the server!
 
@@ -443,6 +445,10 @@ gotdata:
     }
 
 done:
+    if (statuscode == 599) {
+        xsyslog(LOG_DEBUG, "could not connect to backend", NULL);
+        extractor_disconnect(ext);
+    }
     spool_free_hdrcache(hdrs);
     free(cachefname);
     buf_free(&body.payload);
