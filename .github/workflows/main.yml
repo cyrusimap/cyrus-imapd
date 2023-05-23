@@ -46,7 +46,7 @@ jobs:
       run: |
         cp -af cassandane.ini.dockertests cassandane.ini
         chown cyrus:mail cassandane.ini
-        make
+        make -j4
     - name: run cassandane quietly
       id: cass1
       continue-on-error: true
