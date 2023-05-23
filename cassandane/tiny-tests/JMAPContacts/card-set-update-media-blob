@@ -1,7 +1,7 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_card_set_create_media
+sub test_card_set_update_media_blob
     :min_version_3_9 :needs_component_jmap
 {
     my ($self) = @_;
@@ -31,20 +31,10 @@ sub test_card_set_create_media
                     uid => $id,
                     fullName => 'Jane Doe',
                     media => {
-                        res45 => {
-                            '@type' => 'MediaResource',
-                            kind => 'sound',
-                            uri => 'CID:JOHNQ.part8.19960229T080000.xyzMail@example.com'
-                        },
-                        res47 => {
-                            '@type' => 'MediaResource',
-                            kind => 'logo',
-                            uri => 'https://www.example.com/pub/logos/abccorp.jpg'
-                        },
                         res1 => {
                             '@type' => 'MediaResource',
                             kind => 'photo',
-                            uri => 'data:image/jpeg;base64,c29tZSBwaG90bw=='
+                            uri => 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA='
                         }
                     }
                 }
@@ -53,7 +43,32 @@ sub test_card_set_create_media
     ]);
 
     $self->assert_not_null($res->[0][1]{created}{1});
-    my $blobId = $res->[0][1]{created}{1}{media}{res1}{blobId};
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr|PHOTO;PROP-ID=res1:data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=|, $card);
+    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+
+    xlog $self, "upload photo";
+    my $res = $jmap->Upload("some photo", "image/jpeg");
+    my $blobId = $res->{blobId};
+
+    $res = $jmap->CallMethods([
+        ['Card/set', {
+            update => {
+                $id => {
+                    'media/res1/blobId' => $blobId
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+    $blobId = $res->[0][1]{updated}{$id}{media}{res1}{blobId};
     $self->assert_not_null($blobId);
 
     $res = $carddav->Request('GET', $href, '',
@@ -62,8 +77,6 @@ sub test_card_set_create_media
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
-    $self->assert_matches(qr|LOGO;PROP-ID=res47:https://www.example.com/pub/logos/abccorp.jpg|, $card);
-    $self->assert_matches(qr|SOUND;PROP-ID=res45:CID:JOHNQ.part8.19960229T080000.xyzMail\@example.com|, $card);
     $self->assert_matches(qr|PHOTO;PROP-ID=res1:data:image/jpeg;base64,c29tZSBwaG90bw==|, $card);
     $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
 
