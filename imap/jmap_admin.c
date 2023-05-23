@@ -419,16 +419,13 @@ static int collect_userids(const char *userid, void *rock)
 struct migrate_defaultalarms_rock {
     const char *userid;
     json_t *migrated;
-    json_t *not_migrated;
     int keep_caldav_alarms;
 };
 
 static int migrate_defaultalarms(const mbentry_t *mbentry, void *vrock)
 {
     mbname_t *mbname = mbname_from_intname(mbentry->name);
-    struct mailbox *mbox  = NULL;
     struct migrate_defaultalarms_rock *rock = vrock;
-    int r = 0;
 
     if (mbentry->mbtype != MBTYPE_CALENDAR)
         goto done;
@@ -447,32 +444,18 @@ static int migrate_defaultalarms(const mbentry_t *mbentry, void *vrock)
         goto done;
     }
 
-    r = mailbox_open_iwl(mbentry->name, &mbox);
-    if (r) goto done;
+    const char *id = strarray_nth(boxes, boxes->count-1);
 
-    int did_migrate = 0;
-    enum defaultalarms_migrate_flags flags = rock->keep_caldav_alarms ?
+    json_t *jerr = NULL;
+    enum defaultalarms_migrate39_flags flags = rock->keep_caldav_alarms ?
         DEFAULTALARMS_MIGRATE_KEEP_CALDAV_ALARMS :
         DEFAULTALARMS_MIGRATE_NOFLAG;
-    r = defaultalarms_migrate(mbox, rock->userid, flags, &did_migrate);
-    if (r) {
-        xsyslog(LOG_ERR, "could not migrate",
-                "mboxname=<%s> mboxid=<%s> error=<%s>",
-                mbentry->name, mbentry->uniqueid, cyrusdb_strerror(r));
-        goto done;
-    }
+    defaultalarms_migrate39(mbentry, flags, &jerr);
 
-    if (did_migrate) {
-        json_array_append_new(rock->migrated, json_string(mbentry->name));
-    }
+    json_object_set_new(rock->migrated, id, jerr ? jerr : json_null());
 
 done:
-    if (r) {
-        json_object_set_new(rock->not_migrated, mbentry->name,
-                jmap_server_error(r));
-    }
     mbname_free(&mbname);
-    mailbox_close(&mbox);
     return 0;
 }
 
@@ -560,29 +543,20 @@ static int jmap_admin_migrate_defaultalarms(jmap_req_t *req)
 
         struct migrate_defaultalarms_rock rock = {
             .userid = userid,
-            .migrated = json_array(),
-            .not_migrated = json_object(),
+            .migrated = json_object(),
             .keep_caldav_alarms = keep_caldav_alarms
         };
 
-        int r = mboxlist_usermboxtree(userid, NULL,
-                migrate_defaultalarms, &rock, MBOXTREE_PLUS_RACL);
-
-        if (json_object_size(rock.not_migrated)) {
-            json_object_set(not_migrated_userids,
-                    userid, rock.not_migrated);
-        }
-        else if (r) {
-            json_object_set_new(not_migrated_userids, userid,
-                    jmap_server_error(r));
-        }
+        char *calhomename = caldav_mboxname(userid, NULL);
+        mboxlist_mboxtree(calhomename,
+                migrate_defaultalarms, &rock, MBOXTREE_SKIP_ROOT);
+        xzfree(calhomename);
 
         json_object_set(migrated_userids, userid,
-                json_array_size(rock.migrated) ?
+                json_object_size(rock.migrated) ?
                 rock.migrated : json_null());
 
         json_decref(rock.migrated);
-        json_decref(rock.not_migrated);
 
         mboxname_release(&namespacelock);
     }

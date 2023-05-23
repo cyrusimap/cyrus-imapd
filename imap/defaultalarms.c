@@ -1,5 +1,3 @@
-#include "config.h"
-
 #include "annotate.h"
 #include "bsearch.h"
 #include "caldav_util.h"
@@ -246,9 +244,10 @@ static int load_legacy_alarms(const char *mboxname,
     return 0;
 }
 
-EXPORTED int defaultalarms_load(const char *mboxname,
-                                const char *userid,
-                                struct defaultalarms *defalarms)
+static int load_alarms(const char *mboxname,
+                       const char *userid,
+                       enum internalize_flags legacy_flags,
+                       struct defaultalarms *defalarms)
 {
     struct buf buf = BUF_INITIALIZER;
     defaultalarms_fini(defalarms);
@@ -279,14 +278,12 @@ EXPORTED int defaultalarms_load(const char *mboxname,
         // alerts. Fall back reading their CalDAV alarms.
         r = load_legacy_alarms(mboxname, userid,
                 CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME,
-                INTERNALIZE_DETERMINISTIC_UID|INTERNALIZE_KEEP_APPLE,
-                &defalarms->with_time, &buf);
+                legacy_flags, &defalarms->with_time, &buf);
 
         if (!r)
             r = load_legacy_alarms(mboxname, userid,
                     CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE,
-                    INTERNALIZE_DETERMINISTIC_UID|INTERNALIZE_KEEP_APPLE,
-                    &defalarms->with_date, &buf);
+                    legacy_flags, &defalarms->with_date, &buf);
 
         if (r)
             defaultalarms_fini(defalarms);
@@ -295,6 +292,14 @@ EXPORTED int defaultalarms_load(const char *mboxname,
     free(calhomename);
     buf_free(&buf);
     return r;
+}
+
+EXPORTED int defaultalarms_load(const char *mboxname,
+                                const char *userid,
+                                struct defaultalarms *defalarms)
+{
+    return load_alarms(mboxname, userid,
+            INTERNALIZE_DETERMINISTIC_UID|INTERNALIZE_KEEP_APPLE, defalarms);
 }
 
 static void set_alarms_dl(struct dlist *root, const char *name, icalcomponent *alarms)
@@ -323,10 +328,10 @@ static void set_alarms_dl(struct dlist *root, const char *name, icalcomponent *a
     free(atag);
 }
 
-EXPORTED int defaultalarms_save(struct mailbox *mbox,
-                                const char *userid,
-                                icalcomponent *with_time,
-                                icalcomponent *with_date)
+static int defaultalarms_save_astate(annotate_state_t *astate,
+                                     const char *userid,
+                                     icalcomponent *with_time,
+                                     icalcomponent *with_date)
 {
     struct dlist *root = dlist_newkvlist(NULL, "DEFAULTALARMS");
     set_alarms_dl(root, "WITH_TIME", with_time);
@@ -335,100 +340,30 @@ EXPORTED int defaultalarms_save(struct mailbox *mbox,
     struct buf buf = BUF_INITIALIZER;
     dlist_printbuf(root, 1, &buf);
 
-    static const char *annot = JMAP_ANNOT_DEFAULTALERTS;
-    annotate_state_t *astate;
-    int r = mailbox_get_annotate_state(mbox, 0, &astate);
-    if (r) {
-        xsyslog(LOG_ERR, "failed to get annotation state",
-                "mboxname=<%s> err=<%s>",
-                mailbox_name(mbox), error_message(r));
-        r = CYRUSDB_INTERNAL;
-        goto done;
-    }
+    int r = annotate_state_write(astate,
+            JMAP_ANNOT_DEFAULTALERTS, userid, &buf);
 
-    r = annotate_state_write(astate, annot, userid, &buf);
-    if (r) {
-        xsyslog(LOG_ERR, "failed to write annotation",
-                "mboxname=<%s> annot=<%s> err=<%s>",
-                mailbox_name(mbox), annot, cyrusdb_strerror(r));
-        goto done;
-    }
-
-done:
     dlist_free(&root);
     buf_free(&buf);
     return r;
 }
 
-HIDDEN int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
-                                 enum defaultalarms_migrate_flags flags,
-                                 int *did_migratep)
+EXPORTED int defaultalarms_save(struct mailbox *mbox,
+                                const char *userid,
+                                icalcomponent *with_time,
+                                icalcomponent *with_date)
 {
-    struct defaultalarms defalarms = DEFAULTALARMS_INITIALIZER;
-    mbname_t *mbname = mbname_from_intname(mailbox_name(mbox));
-    struct buf buf = BUF_INITIALIZER;
-    *did_migratep = 0;
+    annotate_state_t *astate;
 
-    // Check if JMAP default alerts annotation already is set
-    int r = annotatemore_lookup(mailbox_name(mbox),
-            JMAP_ANNOT_DEFAULTALERTS, userid, &buf);
-
-    if (!r && !buf_len(&buf)) {
-        // Set JMAP default alerts annotation
-        r = load_legacy_alarms(mailbox_name(mbox), userid,
-                CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME, 0,
-                &defalarms.with_time, &buf);
-        if (r) goto done;
-
-        r = load_legacy_alarms(mailbox_name(mbox), userid,
-                CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE, 0,
-                &defalarms.with_date, &buf);
-        if (r) goto done;
-
-
-        if (defalarms.with_time.ical || defalarms.with_date.ical ||
-                !strcmpsafe(mbname_userid(mbname), userid)) {
-            r = defaultalarms_save(mbox, userid,
-                    defalarms.with_time.ical, defalarms.with_date.ical);
-            *did_migratep = !r;
-        }
+    int r = mailbox_get_annotate_state(mbox, 0, &astate);
+    if (r) {
+        xsyslog(LOG_ERR, "failed to get annotation state",
+                "mboxname=<%s> err=<%s>",
+                mailbox_name(mbox), error_message(r));
+        return CYRUSDB_INTERNAL;
     }
 
-    if (!(flags & DEFAULTALARMS_MIGRATE_KEEP_CALDAV_ALARMS)) {
-        // Remove CalDAV alarms on calendar - they only got set by us
-        annotate_state_t *astate = NULL;
-        int r2 = mailbox_get_annotate_state(mbox, 0, &astate);
-        if (!r2) {
-            buf_reset(&buf);
-
-            const char *annot = CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME;
-            r2 = annotate_state_write(astate, annot, "", &buf);
-            if (r2) {
-                xsyslog(LOG_ERR, "failed to remove annotation",
-                        "mboxname=<%s> annot=<%s> err=<%s>",
-                        mailbox_name(mbox), annot, cyrusdb_strerror(r2));
-            }
-
-            annot = CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE;
-            r2 = annotate_state_write(astate, annot, "", &buf);
-            if (r2) {
-                xsyslog(LOG_ERR, "failed to remove annotation",
-                        "mboxname=<%s> annot=<%s> err=<%s>",
-                        mailbox_name(mbox), annot, cyrusdb_strerror(r2));
-            }
-        }
-        else {
-            xsyslog(LOG_ERR, "failed to get annotation state",
-                    "mboxname=<%s> err=<%s>",
-                    mailbox_name(mbox), cyrusdb_strerror(r2));
-        }
-    }
-
-done:
-    defaultalarms_fini(&defalarms);
-    mbname_free(&mbname);
-    buf_free(&buf);
-    return r;
+    return defaultalarms_save_astate(astate, userid, with_time, with_date);
 }
 
 static int compare_valarm(const void **va, const void **vb)
@@ -768,4 +703,311 @@ EXPORTED void defaultalarms_caldav_put(struct defaultalarms *defalarms,
 
     // Keep using default alarms
     insert_alarms(defalarms, ical, 0);
+}
+
+// Migration code starts - this should be required after version 3.9
+
+static int migrate39_rewrite_peruser_data(struct mailbox *mbox,
+                                          const char *userid,
+                                          struct caldav_data *cdata,
+                                          const char *annotval,
+                                          struct defaultalarms *defalarms,
+                                          int *rewrite,
+                                          struct buf *buf)
+{
+    struct icalsupport_personal_data data = { 0 };
+    struct buf value = BUF_INITIALIZER;
+    buf_init_ro_cstr(&value, annotval);
+    int r = 0;
+
+    if (icalsupport_decode_personal_data(&value, &data)) {
+        xsyslog(LOG_ERR, "invalid per-user data",
+                "mboxname=<%s> imap_uid=<%d> userid=<%s>",
+                mailbox_name(mbox), cdata->dav.imap_uid, userid);
+        r = CYRUSDB_INTERNAL;
+        goto done;
+    }
+
+    if (!data.usedefaultalerts)
+        goto done;
+
+    int is_date = strlen(cdata->dtstart) == 6;
+    icalcomponent *alarms = is_date ?
+        defalarms->with_date.ical : defalarms->with_time.ical;
+
+    if (data.vpatch) {
+        icalcomponent *patch, *nextpatch;
+        for (patch = icalcomponent_get_first_component(data.vpatch,
+                    ICAL_ANY_COMPONENT); patch; patch = nextpatch) {
+
+            nextpatch = icalcomponent_get_next_component(data.vpatch,
+                    ICAL_ANY_COMPONENT);
+
+            icalproperty *prop = icalcomponent_get_first_property(patch,
+                    ICAL_PATCHTARGET_PROPERTY);
+            if (prop) {
+                const char *tgt = icalproperty_get_patchtarget(prop);
+
+                if (!strncasecmpsafe(tgt, "/VCALENDAR/VEVENT", 17) &&
+                        !strchr(&tgt[17], '/') && !strchr(&tgt[17], '#')) {
+
+                    icalcomponent_remove_x_property_by_name(patch,
+                            "X-APPLE-DEFAULT-ALARM");
+                    icalcomponent_remove_x_property_by_name(patch,
+                            "X-JMAP-USEDEFAULTALERTS");
+
+                    if (alarms) {
+                        icalcomponent *valarm;
+                        for (valarm = icalcomponent_get_first_component(alarms,
+                                    ICAL_VALARM_COMPONENT);
+                             valarm;
+                             valarm = icalcomponent_get_next_component(alarms,
+                                 ICAL_VALARM_COMPONENT)) {
+
+                            icalcomponent_add_component(patch,
+                                    icalcomponent_clone(valarm));
+                        }
+                    }
+
+                    prop = icalcomponent_get_first_property(patch, ICAL_ANY_PROPERTY);
+                    if ((icalproperty_isa(prop) == ICAL_PATCHTARGET_PROPERTY) &&
+                        !icalcomponent_get_next_property(patch, ICAL_ANY_PROPERTY) &&
+                        !icalcomponent_get_first_component(patch, ICAL_ANY_COMPONENT)) {
+
+                        icalcomponent_remove_component(data.vpatch, patch);
+                        icalcomponent_free(patch);
+                    }
+                }
+            }
+        }
+
+        if (!icalcomponent_get_first_component(data.vpatch, ICAL_ANY_COMPONENT)) {
+            icalcomponent_free(data.vpatch);
+            data.vpatch = NULL;
+        }
+
+    }
+
+    buf_reset(buf);
+
+    if (data.vpatch) {
+        data.usedefaultalerts = 0;
+        data.modseq = mbox->i.highestmodseq;
+        data.lastmod = time(NULL);
+
+        icalcomponent_set_dtstamp(data.vpatch,
+            icaltime_from_timet_with_zone(time(NULL), 0,
+                icaltimezone_get_utc_timezone()));
+
+        icalsupport_encode_personal_data(buf, &data);
+    }
+
+    *rewrite = 1;
+
+done:
+    icalsupport_personal_data_fini(&data);
+    return r;
+}
+
+static int migrate39_find_peruser_cb(const char *mboxname __attribute__((unused)),
+                           uint32_t uid __attribute__((unused)),
+                           const char *entry __attribute__((unused)),
+                           const char *userid,
+                           const struct buf *value,
+                           const struct annotate_metadata *mdata __attribute__((unused)),
+                           void *vrock)
+{
+    if (buf_len(value))
+        hash_insert(userid, xstrdup(buf_cstring(value)), (hash_table*)vrock);
+
+    return 0;
+}
+
+HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
+                                    enum defaultalarms_migrate39_flags flags,
+                                    json_t **errp)
+{
+    struct defaultalarms defalarms = DEFAULTALARMS_INITIALIZER;
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    struct mailbox *mbox  = NULL;
+    const char *ownerid = mbname_userid(mbname);
+    struct buf buf = BUF_INITIALIZER;
+    annotate_state_t *astate = NULL;
+    json_t *err = NULL;
+    json_t *caldav_alarm_err = json_object();
+    json_t *sharee_err = json_object();
+
+    int r = mailbox_open_iwl(mbentry->name, &mbox);
+    if (r) {
+        xsyslog(LOG_ERR, "could not open mailbox",
+                "mboxname=<%s> err=<%s>",
+                mbentry->name, cyrusdb_strerror(r));
+        err = jmap_server_error(r);
+        goto done;
+    }
+
+    // Load default alerts, either from JMAP or CalDAV
+    r = load_alarms(mailbox_name(mbox), ownerid, 0, &defalarms);
+    if (r) {
+        xsyslog(LOG_ERR, "could not load default alarms",
+                "mboxname=<%s> userid=<%s> err=<%s>",
+                mailbox_name(mbox), ownerid, cyrusdb_strerror(r));
+        err = jmap_server_error(r);
+        goto done;
+    }
+
+    // We manage our own annotation state, because switching
+    // the mailbox annotation state to mailbox scope is gnarly
+    astate = annotate_state_new();
+    if (!astate) {
+        xsyslog(LOG_ERR, "could not get annotation state",
+                "mboxname=<%s>", mailbox_name(mbox));
+        r = CYRUSDB_INTERNAL;
+        err = jmap_server_error(r);
+        goto done;
+    }
+    annotate_state_set_mailbox(astate, mbox);
+
+    // Set JMAP default alerts annotation if not already set
+    r = annotatemore_lookup(mailbox_name(mbox),
+            JMAP_ANNOT_DEFAULTALERTS, ownerid, &buf);
+    if (!buf_len(&buf)) {
+        r = defaultalarms_save_astate(astate, ownerid,
+                defalarms.with_time.ical, defalarms.with_date.ical);
+        if (r) {
+            xsyslog(LOG_ERR, "could not set JMAP default alerts",
+                    "mboxname=<%s> userid=<%s> err=<%s>",
+                    mailbox_name(mbox), ownerid, cyrusdb_strerror(r));
+            err = jmap_server_error(r);
+            goto done;
+        }
+    }
+
+    if (!(flags & DEFAULTALARMS_MIGRATE_KEEP_CALDAV_ALARMS)) {
+        // Remove CalDAV alarms on calendar - they only got set by us
+        buf_reset(&buf);
+
+        const char *annot = CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME;
+        r = annotate_state_write(astate, annot, "", &buf);
+        if (r) {
+            xsyslog(LOG_ERR, "failed to remove annotation",
+                    "mboxname=<%s> annot=<%s> err=<%s>",
+                    mailbox_name(mbox), annot, cyrusdb_strerror(r));
+            json_object_set_new(caldav_alarm_err, "withTime",
+                    jmap_server_error(r));
+        }
+
+        annot = CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE;
+        r = annotate_state_write(astate, annot, "", &buf);
+        if (r) {
+            xsyslog(LOG_ERR, "failed to remove annotation",
+                    "mboxname=<%s> annot=<%s> err=<%s>",
+                    mailbox_name(mbox), annot, cyrusdb_strerror(r));
+
+            json_object_set_new(caldav_alarm_err, "withoutTime",
+                    jmap_server_error(r));
+        }
+    }
+
+    r = annotate_state_commit(&astate);
+    if (r) {
+        xsyslog(LOG_ERR, "could not commit annotation state",
+                "mboxname=<%s>", mailbox_name(mbox));
+        err = jmap_server_error(r);
+        goto done;
+    }
+
+    // Migrate sharee alerts
+
+    struct caldav_db *caldav_db = caldav_open_mailbox(mbox);
+    if (!caldav_db) {
+        xsyslog(LOG_ERR, "could not open caldav.db", "mboxname=<%s>",
+                mailbox_name(mbox));
+        err = jmap_server_error(CYRUSDB_INTERNAL);
+        goto done;
+    }
+
+    struct mailbox_iter *mit = mailbox_iter_init(mbox, 0, ITER_SKIP_UNLINKED);
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(mit))) {
+        hash_table peruser = HASH_TABLE_INITIALIZER;
+        construct_hash_table(&peruser, 32, 0);
+        const struct index_record *record = msg_record(msg);
+        annotatemore_findall_mailbox(mbox, record->uid, PER_USER_CAL_DATA,
+                0, migrate39_find_peruser_cb, &peruser, ANNOTATE_TOMBSTONES);
+
+        if (!hash_numrecords(&peruser)) {
+            free_hash_table(&peruser, free);
+            continue;
+        }
+
+        struct caldav_data *cdata;
+        r = caldav_lookup_imapuid(caldav_db, mbentry, record->uid, &cdata, 1);
+        if (r) {
+            xsyslog(LOG_ERR, "can not load entry in caldav.db",
+                    "mboxname=<%s> imap_uid=<%d> err=<%s>",
+                    mailbox_name(mbox), record->uid, cyrusdb_strerror(r));
+            free_hash_table(&peruser, free);
+
+            buf_reset(&buf);
+            buf_printf(&buf, "%d", record->uid);
+            json_object_set_new(sharee_err, buf_cstring(&buf),
+                    jmap_server_error(r));
+            continue;
+        }
+
+        hash_iter *hit = hash_table_iter(&peruser);
+        while (hash_iter_next(hit)) {
+            const char *userid = hash_iter_key(hit);
+            char *annotval = hash_iter_val(hit);
+
+            if (strcmp(userid, ownerid)) {
+                int rewrite = 0;
+                migrate39_rewrite_peruser_data(mbox, userid, cdata, annotval,
+                        &defalarms, &rewrite, &buf);
+                if (rewrite) {
+                    r = mailbox_annotation_write(mbox, record->uid,
+                            PER_USER_CAL_DATA, userid, &buf);
+                    if (r) {
+                        xsyslog(LOG_ERR, "could not rewrite per-user data",
+                                "mboxname=<%s> imap_uid=<%d> userid=<%s> err=<%s>",
+                                mailbox_name(mbox), record->uid,
+                                userid, error_message(r));
+
+                        buf_reset(&buf);
+                        buf_printf(&buf, "%d/%s", record->uid, userid);
+                        json_object_set_new(sharee_err, buf_cstring(&buf),
+                                jmap_server_error(r));
+                    }
+                }
+            }
+        }
+        hash_iter_free(&hit);
+
+        free_hash_table(&peruser, free);
+    }
+
+    mailbox_iter_done(&mit);
+    caldav_close(caldav_db);
+
+done:
+    if (json_object_size(caldav_alarm_err)) {
+        if (!err) err = json_object();
+        json_object_set_new(err, "caldavAlarmErrors", caldav_alarm_err);
+    }
+    else json_decref(caldav_alarm_err);
+
+    if (json_object_size(sharee_err)) {
+        if (!err) err = json_object();
+        json_object_set_new(err, "shareeAlarmErrors", sharee_err);
+    }
+    else json_decref(sharee_err);
+
+    *errp = err;
+
+    if (astate) annotate_state_abort(&astate);
+    defaultalarms_fini(&defalarms);
+    mailbox_close(&mbox);
+    mbname_free(&mbname);
+    buf_free(&buf);
 }

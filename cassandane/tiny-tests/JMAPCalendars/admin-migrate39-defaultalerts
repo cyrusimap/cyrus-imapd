@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 
 use Data::ICal;
 
-sub test_admin_migrate_defaultalerts
+sub test_admin_migrate39_defaultalerts
     :needs_component_jmap :min_version_3_9 :ReverseACLs :MagicPlus
 {
     my ($self) = @_;
@@ -43,6 +43,7 @@ sub test_admin_migrate_defaultalerts
 
     $self->assert_calendars($state);
     $self->assert_events($state);
+    $self->assert_shared_calendars($state);
 
     xlog $self, "Migrate default alarms";
     $res = $adminJmap->CallMethods([
@@ -54,6 +55,7 @@ sub test_admin_migrate_defaultalerts
 
     $self->assert_calendars($state);
     $self->assert_events($state);
+    $self->assert_shared_calendars($state);
 }
 
 sub assert_calendars
@@ -119,13 +121,12 @@ EOF
     if (not $state->{did_migrate}) {
         $state->{calendarA}{defaultAlert} = (values %$calendarADefaultAlerts)[0];
     } else {
-        # Did migrate both calendars
+        # Did migrate calendars
         $self->assert_deep_equals({
-            cassandane => [
-                "user.cassandane.#calendars.$state->{calendarA}{id}",
-                "user.cassandane.#calendars.$state->{calendarB}{id}",
-            ]
-        }, $state->{migrateResponse}{migrated});
+            $state->{calendarA}{id} => undef,
+            $state->{calendarB}{id} => undef,
+            Default => undef,
+        }, $state->{migrateResponse}{migrated}{cassandane});
 
         # Migration rewrites default alert UID, if none was set
         my $defaultAlert = (values %$calendarADefaultAlerts)[0];
@@ -213,15 +214,15 @@ sub assert_events
         $self->assert_not_null($state->{eventB2}{xhref});
     }
 
-    my ($veventA, $etagA) = $self->get_vevent($state->{eventA}{xhref});
+    my ($veventA, $etagA) = $self->get_vevent($caldav, $state->{eventA}{xhref});
     my @valarmsA = grep { $_->ical_entry_type() eq 'VALARM' } @{$veventA->entries()};
     $self->assert_num_equals(1, scalar @valarmsA);
 
-    my ($veventB1, $etagB1) = $self->get_vevent($state->{eventB1}{xhref});
+    my ($veventB1, $etagB1) = $self->get_vevent($caldav, $state->{eventB1}{xhref});
     my @valarmsB1 = grep { $_->ical_entry_type() eq 'VALARM' } @{$veventB1->entries()};
     $self->assert_num_equals(0, scalar @valarmsB1);
 
-    my ($veventB2, $etagB2) = $self->get_vevent($state->{eventB2}{xhref});
+    my ($veventB2, $etagB2) = $self->get_vevent($caldav, $state->{eventB2}{xhref});
     my @valarmsB2 = grep { $_->ical_entry_type() eq 'VALARM' } @{$veventB2->entries()};
     $self->assert_num_equals(0, scalar @valarmsB2);
 
@@ -241,12 +242,165 @@ sub assert_events
     }
 }
 
+sub assert_shared_calendars
+{
+    my ($self, $state) = @_;
+
+    my $eventUidA1 = '40d6fe3c-6a51-489e-823e-3ea22f427a3e';
+    my $eventUidA2 = '00a90af9-8398-4074-94bf-6251a1ab9e70';
+    my $eventUidB1 = '93c7831d-e246-4dda-ab3f-52acba6b9e3b';
+    my $eventUidB2 = '379e7061-d20f-45e4-8366-52d45836a7fd';
+
+    if (not $state->{did_migrate}) {
+        xlog $self, "Create sharee";
+        ($self->{shareeJmap}, $self->{shareeCaldav}) = $self->create_user('sharee');
+
+        xlog $self, "Share calendars";
+        my $admintalk = $self->{adminstore}->get_client();
+        $admintalk->setacl("user.cassandane.#calendars.$state->{calendarA}{id}",
+            sharee => 'lrswipkxtecdn') or die;
+        $admintalk->setacl("user.cassandane.#calendars.$state->{calendarB}{id}",
+            sharee => 'lrswipkxtecdn') or die;
+
+        xlog $self, "Create sharee useDefaultAlerts=true in calendar A";
+        my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DURATION:PT1H
+UID:$eventUidA1
+DTSTAMP:20150928T132434Z
+SUMMARY:shareeEventA1
+LAST-MODIFIED:20150928T132434Z
+X-APPLE-DEFAULT-ALARM:TRUE
+COLOR:blue
+END:VEVENT
+END:VCALENDAR
+EOF
+        $self->{shareeCaldav}->Request('PUT',
+            "cassandane.$state->{calendarA}{id}/$eventUidA1.ics",
+            $ical, 'Content-Type' => 'text/calendar');
+
+        xlog $self, "Create sharee per-user prop in calendar A";
+        my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DURATION:PT1H
+UID:$eventUidA2
+DTSTAMP:20150928T132434Z
+SUMMARY:shareeEventA2
+LAST-MODIFIED:20150928T132434Z
+COLOR:red
+END:VEVENT
+END:VCALENDAR
+EOF
+        $self->{shareeCaldav}->Request('PUT',
+            "cassandane.$state->{calendarA}{id}/$eventUidA2.ics",
+            $ical, 'Content-Type' => 'text/calendar');
+
+        xlog $self, "Create sharee useDefaultAlerts=true in calendar B";
+        $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DURATION:PT1H
+UID:$eventUidB1
+DTSTAMP:20150928T132434Z
+SUMMARY:shareeEventB1
+LAST-MODIFIED:20150928T132434Z
+X-APPLE-DEFAULT-ALARM:TRUE
+END:VEVENT
+END:VCALENDAR
+EOF
+        $self->{shareeCaldav}->Request('PUT',
+            "cassandane.$state->{calendarB}{id}/$eventUidB1.ics",
+            $ical, 'Content-Type' => 'text/calendar');
+
+        xlog $self, "Create sharee per-user prop in calendar B";
+        $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DURATION:PT1H
+UID:$eventUidB2
+DTSTAMP:20150928T132434Z
+SUMMARY:shareeEventB
+LAST-MODIFIED:20150928T132434Z
+COLOR:brown
+END:VEVENT
+END:VCALENDAR
+EOF
+        $self->{shareeCaldav}->Request('PUT',
+            "cassandane.$state->{calendarB}{id}/$eventUidB2.ics",
+            $ical, 'Content-Type' => 'text/calendar');
+    }
+
+    my $res = $self->{shareeJmap}->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            properties => ['useDefaultAlerts', 'alerts', 'color', 'uid'],
+        }, 'R1'],
+    ]);
+    my %eventsByUid = map { $_->{uid} => $_ } @{$res->[0][1]{list}};
+
+    my $eventA1 = $eventsByUid{$eventUidA1};
+    $self->assert_not_null($eventA1);
+    $self->assert_str_equals('blue', $eventA1->{color});
+
+    my $eventA2 = $eventsByUid{$eventUidA2};
+    $self->assert_not_null($eventA2);
+    $self->assert_str_equals('red', $eventA2->{color});
+    $self->assert_equals(JSON::false, $eventA2->{useDefaultAlerts});
+    $self->assert_null($eventA2->{alerts});
+
+    my $eventB1 = $eventsByUid{$eventUidB1};
+    $self->assert_not_null($eventB1);
+    $self->assert_null($eventB1->{color});
+
+    my $eventB2 = $eventsByUid{$eventUidB2};
+    $self->assert_not_null($eventB2);
+    $self->assert_str_equals('brown', $eventB2->{color});
+    $self->assert_equals(JSON::false, $eventB2->{useDefaultAlerts});
+    $self->assert_null($eventB2->{alerts});
+
+    if (not $state->{did_migrate}) {
+        $self->assert_equals(JSON::true, $eventA1->{useDefaultAlerts});
+        $self->assert_null($eventA1->{alerts});
+
+        $self->assert_equals(JSON::true, $eventB1->{useDefaultAlerts});
+        $self->assert_null($eventB1->{alerts});
+    }
+    else {
+        $self->assert_deep_equals({
+            Default => undef,
+        }, $state->{migrateResponse}{migrated}{sharee});
+
+        $self->assert_equals(JSON::false, $eventA1->{useDefaultAlerts});
+        $self->assert_not_null($eventA1->{alerts});
+
+        $self->assert_equals(JSON::false, $eventB1->{useDefaultAlerts});
+        $self->assert_null($eventB1->{alerts});
+    }
+}
+
 # All the remaining functions just make the test code less gnarly
 
 sub get_vevent
 {
-    my ($self, $eventHref) = @_;
-    my $caldav = $self->{caldav};
+    my ($self, $caldav, $eventHref) = @_;
 
     xlog $self, "GET event";
     my %headers = (

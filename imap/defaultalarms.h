@@ -77,18 +77,21 @@ extern void defaultalarms_fini(struct defaultalarms *defalarms);
 extern void defaultalarms_insert(struct defaultalarms *defalarms,
                                  icalcomponent *ical);
 
-enum defaultalarms_migrate_flags {
-    DEFAULTALARMS_MIGRATE_NOFLAG             = 0,
-    DEFAULTALARMS_MIGRATE_KEEP_CALDAV_ALARMS = 1 << 0,
-};
-extern int defaultalarms_migrate(struct mailbox *mbox, const char *userid,
-                                 enum defaultalarms_migrate_flags flags,
-                                 int *did_migratep);
-
 extern void defaultalarms_caldav_get(struct defaultalarms *defalarms,
                                      icalcomponent *ical);
 
 extern void defaultalarms_caldav_put(struct defaultalarms *defalarms,
                                      icalcomponent *ical, int is_update);
+
+// Migration functions for Cyrus version 3.9
+
+enum defaultalarms_migrate39_flags {
+    DEFAULTALARMS_MIGRATE_NOFLAG             = 0,
+    DEFAULTALARMS_MIGRATE_KEEP_CALDAV_ALARMS = 1 << 0,
+};
+
+extern void defaultalarms_migrate39(const mbentry_t *mbentry,
+                                    enum defaultalarms_migrate39_flags flags,
+                                    json_t **errp);
 
 #endif /* DEFAULTALARMS_H */
