@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_parse
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    # PROP-IDs added so we can easily compare the results
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$id
+BDAY:1944-06-07
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG;PROP-ID=O1:Bubba Gump Shrimp Co.
+TITLE;PROP-ID=T1:Shrimp Man
+PHOTO;PROP-ID=P1;ENCODING=b;TYPE=JPEG:c29tZSBwaG90bw==
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+
+    xlog $self, "upload vCard";
+    my $res = $jmap->Upload($card, "text/vcard");
+    my $blobId = $res->{blobId};
+
+    my $res = $jmap->CallMethods([
+        ['Card/parse', {
+            blobIds => [ $blobId ],
+            properties => [ "\@type", "uid", "fullName", "media", "vCardProps" ]
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{parsed}{$blobId});
+    $self->assert_str_equals('Card', $res->[0][1]{parsed}{$blobId}{'@type'});
+    $self->assert_str_equals($id, $res->[0][1]{parsed}{$blobId}{uid});
+    $self->assert_deep_equals([
+        [ 'version', {}, 'text', '3.0' ]
+    ], $res->[0][1]{parsed}{$blobId}{vCardProps});
+    $self->assert_str_equals('Forrest Gump', $res->[0][1]{parsed}{$blobId}{fullName});
+
+    $self->assert_null($res->[0][1]{parsed}{$blobId}{'@version'});
+    $self->assert_null($res->[0][1]{parsed}{$blobId}{updated});
+    $self->assert_null($res->[0][1]{parsed}{$blobId}{name});
+    $self->assert_null($res->[0][1]{parsed}{$blobId}{anniversaries});
+    $self->assert_null($res->[0][1]{parsed}{$blobId}{organizations});
+    $self->assert_null($res->[0][1]{parsed}{$blobId}{titles});
+
+    $self->assert_str_equals('photo',
+                             $res->[0][1]{parsed}{$blobId}{media}{P1}{kind});
+    $self->assert_str_equals('image/jpeg',
+                             $res->[0][1]{parsed}{$blobId}{media}{P1}{mediaType});
+
+    my $blobid = $res->[0][1]{parsed}{$blobId}{media}{P1}{blobId};
+    $self->assert_not_null($blobid);
+
+    $res = $jmap->Download('cassandane', $blobid);
+
+    $self->assert_str_equals('image/jpeg', $res->{headers}{'content-type'});
+    $self->assert_str_equals('some photo', $res->{content});
+}
