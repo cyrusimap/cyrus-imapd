@@ -5419,6 +5419,7 @@ static int _contact_set_update(jmap_req_t *req, unsigned kind,
         property_blob_free(&blob);
     }
     ptrarray_fini(&blobs);
+    buf_free(&buf);
 
     return r;
 }
