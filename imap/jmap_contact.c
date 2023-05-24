@@ -8545,6 +8545,8 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
 
             ptrarray_append(rrock->blobs,
                             property_blob_new(id, prop_name, media_type, blob));
+
+            json_object_del(obj, "mediaType");
         }
 
         jmap_getblob_ctx_fini(&ctx);
@@ -8562,7 +8564,6 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
 
     json_object_del(obj, "kind");
     json_object_del(obj, "uri");
-    json_object_del(obj, "mediaType");
 
     buf_free(&buf);
 
