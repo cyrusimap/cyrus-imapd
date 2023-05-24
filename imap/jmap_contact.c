@@ -84,6 +84,7 @@ static int jmap_card_get(struct jmap_req *req);
 static int jmap_card_changes(struct jmap_req *req);
 static int jmap_card_set(struct jmap_req *req);
 static int jmap_card_copy(struct jmap_req *req);
+static int jmap_card_parse(jmap_req_t *req);
 static int jmap_cardgroup_get(struct jmap_req *req);
 static int jmap_cardgroup_changes(struct jmap_req *req);
 static int jmap_cardgroup_set(struct jmap_req *req);
@@ -168,6 +169,12 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         JMAP_URN_CONTACTS,
         &jmap_card_copy,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "Card/parse",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_card_parse,
+        JMAP_NEED_CSTATE
     },
     {
         "CardGroup/get",
@@ -5936,39 +5943,44 @@ static const char *_prop_id(vcardproperty *prop)
     }
 }
 
-static const char *_value_to_uri_blobid(vcardproperty *prop,
-                                        struct mailbox *mailbox,
-                                        struct index_record *record,
-                                        char **type, char **blobid)
+static char *_value_to_uri_blobid(vcardproperty *prop,
+                                  struct mailbox *mailbox,
+                                  struct index_record *record,
+                                  char **type, char **blobid)
 {
-    const char *prop_name = vcardproperty_get_property_name(prop);
     struct message_guid guid;
-    const char *uri = NULL;
-    size_t size;
+    size_t size = vcard_prop_decode_value_x(prop, NULL, type, &guid);
 
-    size = vcard_prop_decode_value_x(prop, NULL, type, &guid);
     if (size) {
         vcardparameter *param =
             vcardproperty_get_first_parameter(prop, VCARD_ENCODING_PARAMETER);
         struct buf buf = BUF_INITIALIZER;
+
+        if (!*type) *type = xstrdup("application/octet-stream");
 
         if (param) {
             vcardproperty_remove_parameter_by_ref(prop, param);
             vcardproperty_remove_parameter_by_kind(prop, VCARD_TYPE_PARAMETER);
         }
 
-        if (!*type) *type = xstrdup("application/octet-stream");
+        if (mailbox && record) {
+            const char *prop_name = vcardproperty_get_property_name(prop);
 
-        jmap_encode_rawdata_blobid('V', mailbox_uniqueid(mailbox),
-                                   record->uid, NULL, NULL,
-                                   prop_name, &guid, &buf);
-        *blobid = buf_release(&buf);
-    }
-    else {
-        uri = vcardvalue_get_uri(vcardproperty_get_value(prop));
+            jmap_encode_rawdata_blobid('V', mailbox_uniqueid(mailbox),
+                                       record->uid, NULL, NULL,
+                                       prop_name, &guid, &buf);
+            *blobid = buf_release(&buf);
+            return NULL;
+        }
+        else if (param) {
+            /* Build data: uri */
+            buf_printf(&buf, "data:%s;base64,%s",
+                       *type, vcardvalue_get_uri(vcardproperty_get_value(prop)));
+            return buf_release(&buf);
+        }
     }
 
-    return uri;
+    return xstrdup(vcardvalue_get_uri(vcardproperty_get_value(prop)));
 }
 
 static json_t *vcardtime_to_jmap_utcdate(vcardtimetype t)
@@ -6612,8 +6624,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
         media:
             json_t *media = json_object_get_vanew(obj, "media", "{}");
-            char *type = NULL, *blobid = NULL;
-            const char *uri = NULL;
+            char *uri = NULL, *type = NULL, *blobid = NULL;
 
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
                 ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
@@ -6631,6 +6642,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             free(blobid);
             free(type);
+            free(uri);
             break;
         }
 
@@ -6992,8 +7004,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             /* Security Properties */
         case VCARD_KEY_PROPERTY: {
             json_t *keys = json_object_get_vanew(obj, "cryptoKeys", "{}");
-            char *type = NULL, *blobid = NULL;
-            const char *uri = NULL;
+            char *uri = NULL, *type = NULL, *blobid = NULL;
 
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
                 ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
@@ -7010,6 +7021,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             free(blobid);
             free(type);
+            free(uri);
             break;
         }
 
@@ -10054,6 +10066,122 @@ static int jmap_card_set(struct jmap_req *req)
 static int jmap_card_copy(struct jmap_req *req)
 {
     return _contacts_copy(req, &_card_from_record, &_card_set_create);
+}
+
+static int _card_parseargs_parse(jmap_req_t *req __attribute__((unused)),
+                                 struct jmap_parser *parser,
+                                 const char *key,
+                                 json_t *arg,
+                                 void *rock)
+{
+    hash_table **props = (hash_table **) rock;
+
+    if (!strcmp(key, "properties")) {
+        if (json_is_array(arg)) {
+            size_t i;
+            json_t *val;
+
+            *props = xzmalloc(sizeof(hash_table));
+            construct_hash_table(*props, json_array_size(arg) + 1, 0);
+            json_array_foreach(arg, i, val) {
+                const char *s = json_string_value(val);
+                if (!s) {
+                    jmap_parser_push_index(parser, "properties", i, s);
+                    jmap_parser_invalid(parser, NULL);
+                    jmap_parser_pop(parser);
+                    continue;
+                }
+                hash_insert(s, (void*)1, *props);
+            }
+        }
+        else if (JNOTNULL(arg)) {
+            return 0;
+        }
+
+        return 1;
+    }
+
+    return 0;
+}
+
+static int jmap_card_parse(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_parse parse;
+    hash_table *props = NULL;
+    json_t *err = NULL;
+
+    /* Parse request */
+    jmap_parse_parse(req, &parser, &_card_parseargs_parse, &props, &parse, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Process request */
+    jmap_getblob_context_t blob_ctx;
+    jmap_getblob_ctx_init(&blob_ctx, NULL, NULL, "text/vcard", 1);
+
+    json_t *jval;
+    size_t i;
+    json_array_foreach(parse.blob_ids, i, jval) {
+        const char *blobid = json_string_value(jval);
+        vcardcomponent *vcard = NULL;
+        struct mailbox *mailbox = NULL;
+        struct index_record record;
+        json_t *jcard = NULL;
+        int r = 0;
+
+        if (!blobid) continue;
+
+        /* Find blob */
+        blob_ctx.blobid = blobid;
+        if (blobid[0] == '#') {
+            blob_ctx.blobid = jmap_lookup_id(req, blobid + 1);
+            if (!blob_ctx.blobid) {
+                json_array_append_new(parse.not_found, json_string(blobid));
+                continue;
+            }
+        }
+
+        blob_ctx.mboxp = &mailbox;
+        blob_ctx.recordp = &record;
+        buf_reset(&blob_ctx.blob);
+        r = jmap_getblob(req, &blob_ctx);
+        if (r) {
+            json_array_append_new(parse.not_found, json_string(blobid));
+            continue;
+        }
+
+        vcard = vcard_parse_buf_x(&blob_ctx.blob);
+        if (vcard) {
+            jcard = jmap_card_from_vcard(req->userid, vcard,
+                                         mailbox, &record, 0 /*flags*/);
+            vcardcomponent_free(vcard);
+        }
+
+        if (jcard) {
+            jmap_filterprops(jcard, props);
+            json_object_set_new(parse.parsed, blobid, jcard);
+        }
+        else {
+            json_array_append_new(parse.not_parsable, json_string(blobid));
+        }
+
+        if (mailbox) jmap_closembox(req, &mailbox);
+    }
+
+    jmap_getblob_ctx_fini(&blob_ctx);
+
+    /* Build response */
+    jmap_ok(req, jmap_parse_reply(&parse));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_parse_fini(&parse);
+    free_hash_table(props, NULL);
+    free(props);
+    return 0;
 }
 
 static int jmap_cardgroup_get(struct jmap_req *req)
