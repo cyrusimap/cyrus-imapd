@@ -9815,7 +9815,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     ptrarray_t blobs = PTRARRAY_INITIALIZER;
     property_blob_t *blob;
     json_t *media = NULL, *keys = NULL;
-    int r;
+    int r = 0;
 
     /* is it a valid contact? */
     r = carddav_lookup_uid(db, uid, &cdata);
@@ -9828,22 +9828,25 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
 
     json_t *abookid = json_object_get(jcard, "addressBookId");
     if (abookid && json_string_value(abookid)) {
-        const char *mboxname =
-            mboxname_abook(req->accountid, json_string_value(abookid));
+        char *mboxname = mboxname_abook(req->accountid, json_string_value(abookid));
+
         if (mbentry && strcmp(mboxname, mbentry->name)) {
             /* move */
             if (!jmap_hasrights(req, mboxname, JACL_ADDITEMS)) {
                 json_array_append_new(invalid, json_string("addressBookId"));
-                goto done;
+                r = HTTP_FORBIDDEN;
             }
-            r = jmap_openmbox(req, mboxname, &newmailbox, 1);
-            if (r) {
+            else if ((r = jmap_openmbox(req, mboxname, &newmailbox, 1))) {
                 syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
-                goto done;
             }
-            do_move = 1;
+            else {
+                do_move = 1;
+            }
         }
         json_object_del(jcard, "addressBookId");
+        free(mboxname);
+
+        if (r) goto done;
     }
 
     int needrights = do_move ? JACL_UPDATEITEMS : required_set_rights(jcard);
