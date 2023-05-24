@@ -215,6 +215,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     const char **hdr, *p;
     char *cachefname = NULL;
     struct buf buf = BUF_INITIALIZER;
+    unsigned statuscode = 0;
     int r = 0;
 
     if (!global_extractor) {
@@ -288,7 +289,6 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     prot_settimeout(be->in, attachextract_idle_timeout);
 
     /* try to fetch previously extracted text */
-    unsigned statuscode = 0;
     prot_printf(be->out,
                 "GET %s/%s %s\r\n"
                 "Host: %.*s\r\n"
