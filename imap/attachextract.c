@@ -308,9 +308,9 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         r = http_read_response(be, METH_GET,
                                &statuscode, &hdrs, &body, &errstr);
         if (r) {
-            syslog(LOG_ERR,
-                   "extract_attachment: failed to read response for GET %s/%s",
-                   ext->path, guidstr);
+            xsyslog(LOG_ERR,
+                   "failed to read response for GET", "url=<%s/%s> err=<%s>",
+                   ext->path, guidstr, error_message(r));
             statuscode = 599;
         }
     } while (statuscode < 200);
@@ -375,9 +375,9 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
             r = http_read_response(be, METH_PUT,
                                    &statuscode, &hdrs, &body, &errstr);
             if (r) {
-                syslog(LOG_ERR,
-                       "extract_attachment: failed to read response for PUT %s/%s",
-                       ext->path, guidstr);
+                xsyslog(LOG_ERR,
+                        "failed to read response for PUT", "url=<%s/%s> err=<%s>",
+                        ext->path, guidstr, error_message(r));
                 statuscode = 599;
             }
         } while (statuscode < 200);
