@@ -196,6 +196,8 @@ typedef struct {
     struct buf content_type;     // output from the handler
     struct buf encoding;         // output from the handler
     const char *errstr;          // output from the handler
+    struct mailbox **mboxp;      // output from the handler
+    struct index_record *recordp;// output from the handler
 } jmap_getblob_context_t;
 
 void jmap_getblob_ctx_init(jmap_getblob_context_t *ctx,
