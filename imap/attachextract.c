@@ -216,6 +216,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     char *cachefname = NULL;
     struct buf buf = BUF_INITIALIZER;
     unsigned statuscode = 0;
+    int retry;
     int r = 0;
 
     if (!global_extractor) {
@@ -289,7 +290,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     prot_settimeout(be->in, attachextract_idle_timeout);
 
     /* try to fetch previously extracted text */
-    prot_printf(be->out,
+    r = prot_printf(be->out,
                 "GET %s/%s %s\r\n"
                 "Host: %.*s\r\n"
                 "User-Agent: Cyrus/%s\r\n"
@@ -301,7 +302,15 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
                 ext->path, guidstr, HTTP_VERSION,
                 (int) hostlen, be->hostname, CYRUS_VERSION,
                 attachextract_idle_timeout, config_search_maxsize);
-    prot_flush(be->out);
+    if (!r) r = prot_flush(be->out);
+
+    if (r == EOF) {
+        r = IMAP_IOERROR;
+        xsyslog(LOG_DEBUG,
+                "failed to send GET request", "url=<%s/%s> err=<%s>",
+                ext->path, guidstr, error_message(r));
+        goto done;
+    }
 
     /* Read GET response */
     do {
@@ -309,7 +318,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
                                &statuscode, &hdrs, &body, &errstr);
         if (r) {
             xsyslog(LOG_ERR,
-                   "failed to read response for GET", "url=<%s/%s> err=<%s>",
+                   "failed to read GET response", "url=<%s/%s> err=<%s>",
                    ext->path, guidstr, error_message(r));
             statuscode = 599;
         }
@@ -340,7 +349,6 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         buf_printf(&ctypehdr, ";charset=%s", charset);
     }
 
-    int retry;
     for (retry = 0; retry < 3; retry++) {
         if (retry) {
             // second and third time around, sleep and reconnect
@@ -352,7 +360,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         }
 
         /* Send attachment to service for text extraction */
-        prot_printf(be->out,
+        r = prot_printf(be->out,
                     "PUT %s/%s %s\r\n"
                     "Host: %.*s\r\n"
                     "User-Agent: Cyrus/%s\r\n"
@@ -366,8 +374,16 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
                     ext->path, guidstr, HTTP_VERSION,
                     (int) hostlen, be->hostname, CYRUS_VERSION, attachextract_idle_timeout,
                     buf_cstring(&ctypehdr), buf_len(data), config_search_maxsize);
-        prot_putbuf(be->out, data);
-        prot_flush(be->out);
+        if (!r) r = prot_putbuf(be->out, data);
+        if (!r) r = prot_flush(be->out);
+
+        if (r == EOF) {
+            r = IMAP_IOERROR;
+            xsyslog(LOG_DEBUG,
+                    "failed to send PUT request", "url=<%s/%s> err=<%s>",
+                    ext->path, guidstr, error_message(r));
+                goto done;
+        }
 
         /* Read PUT response */
         body.flags = 0;
@@ -376,7 +392,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
                                    &statuscode, &hdrs, &body, &errstr);
             if (r) {
                 xsyslog(LOG_ERR,
-                        "failed to read response for PUT", "url=<%s/%s> err=<%s>",
+                        "failed to read PUT response", "url=<%s/%s> err=<%s>",
                         ext->path, guidstr, error_message(r));
                 statuscode = 599;
             }
@@ -446,7 +462,7 @@ gotdata:
 
 done:
     if (statuscode == 599) {
-        xsyslog(LOG_DEBUG, "could not connect to backend", NULL);
+        xsyslog(LOG_DEBUG, "could not read from backend", NULL);
         extractor_disconnect(ext);
     }
     spool_free_hdrcache(hdrs);
