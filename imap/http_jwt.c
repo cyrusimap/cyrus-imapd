@@ -503,7 +503,7 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
         goto done;
     }
 
-    if (json_object_size(jws) == 2) {
+    if (json_object_size(jws) >= 2) {
         json_t *jiat = json_object_get(jws, "iat");
         if (!json_is_integer(jiat)) {
             if (jiat) {
