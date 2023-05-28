@@ -3935,7 +3935,21 @@ static int _contactsquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
     return 0;
 }
 
-static int _contactsquery(struct jmap_req *req, unsigned kind)
+static int _contactsquery(struct jmap_req *req, unsigned kind,
+                          void *(*_filter_parse)(json_t *arg),
+                          void (*_filter_free)(void *vf),
+                          void (*_filter_validate)(jmap_req_t *req,
+                                                   struct jmap_parser *parser,
+                                                   json_t *filter,
+                                                   json_t *unsupported,
+                                                   void *rock,
+                                                   json_t **err),
+                          int (*_comparator_validate)(jmap_req_t *req,
+                                                      struct jmap_comparator *comp,
+                                                      void *rock,
+                                                      json_t **err),
+                          int (*_query_cb)(void *rock,
+                                           struct carddav_data *cdata))
 {
     if (!has_addressbooks(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
@@ -3959,14 +3973,8 @@ static int _contactsquery(struct jmap_req *req, unsigned kind)
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req, &parser, NULL, NULL,
-                     kind == CARDDAV_KIND_GROUP ?
-                        contactgroup_filter_validate :
-                        contact_filter_validate,
-                     NULL,
-                     kind == CARDDAV_KIND_GROUP ?
-                        contactgroup_comparator_validate :
-                        contact_comparator_validate,
-                     NULL,
+                     _filter_validate, NULL,
+                     _comparator_validate, NULL,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -3983,9 +3991,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind)
     json_t *filter = json_object_get(req->args, "filter");
     const char *wantuid = NULL;
     if (JNOTNULL(filter)) {
-        parsed_filter = jmap_buildfilter(filter,
-                kind == CARDDAV_KIND_GROUP ?
-                    contactgroup_filter_parse : contact_filter_parse);
+        parsed_filter = jmap_buildfilter(filter, _filter_parse);
         wantuid = json_string_value(json_object_get(filter, "uid"));
     }
 
@@ -4013,7 +4019,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind)
         /* Fast-path single filter condition by UID */
         struct carddav_data *cdata = NULL;
         r = carddav_lookup_uid(db, wantuid, &cdata);
-        if (!r) _contactsquery_cb(&rock, cdata);
+        if (!r) _query_cb(&rock, cdata);
         if (r == CYRUSDB_NOTFOUND) r = 0;
     }
     else if (!is_complexsort && query.position >= 0 && !query.anchor) {
@@ -4027,12 +4033,12 @@ static int _contactsquery(struct jmap_req *req, unsigned kind)
             }
             nsort = 1;
         }
-        r = carddav_foreach_sort(db, NULL, &sort, nsort, _contactsquery_cb, &rock);
+        r = carddav_foreach_sort(db, NULL, &sort, nsort, _query_cb, &rock);
     }
     else {
         /* Run carddav db query and apply custom sort */
         rock.build_response = 0;
-        r = carddav_foreach(db, NULL, _contactsquery_cb, &rock);
+        r = carddav_foreach(db, NULL, _query_cb, &rock);
         if (!r) {
             /* Sort entries */
             enum contactsquery_sort *sort = buildsort(query.sort);
@@ -4112,8 +4118,7 @@ done:
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
     if (parsed_filter) {
-        jmap_filter_free(parsed_filter, kind == CARDDAV_KIND_GROUP ?
-            contactgroup_filter_free : contact_filter_free);
+        jmap_filter_free(parsed_filter, _filter_free);
     }
     if (db) carddav_close(db);
     return 0;
@@ -4121,12 +4126,18 @@ done:
 
 static int jmap_contact_query(struct jmap_req *req)
 {
-    return _contactsquery(req, CARDDAV_KIND_CONTACT);
+    return _contactsquery(req, CARDDAV_KIND_CONTACT,
+                          &contact_filter_parse, &contact_filter_free,
+                          &contact_filter_validate,
+                          &contact_comparator_validate, &_contactsquery_cb);
 }
 
 static int jmap_contactgroup_query(struct jmap_req *req)
 {
-    return _contactsquery(req, CARDDAV_KIND_GROUP);
+    return _contactsquery(req, CARDDAV_KIND_GROUP,
+                          &contactgroup_filter_parse, &contactgroup_filter_free,
+                          &contactgroup_filter_validate,
+                          &contactgroup_comparator_validate, &_contactsquery_cb);
 }
 
 static struct vparse_entry *_card_multi(struct vparse_card *card,
