@@ -26,8 +26,7 @@ Major changes since the 3.6 series
 * Adds support for IMAP Saved Search Results (:rfc:`5182`).
 * Advertise support for IMAP URL-PARTIAL (:rfc:`5550`).
 * Implements the JMAP calendars specification
-  (:draft:`draft-ietf-jmap-calendars`).  See the "jmap_guesstz_fname" option
-  in :cyrusman:`imapd.conf(5)`.
+  (:draft:`draft-ietf-jmap-calendars`).
 * Adds support for a new read-only ``\Scheduled`` mailbox that contains
   emails created via JMAP EmailSubmission/set that are to be sent
   at a later date/time.  Also extends the JMAP EmailSubmission object
