@@ -54,6 +54,7 @@
 #include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
 #include "imap/imap_err.h"
 
 #include "attachextract.h"
@@ -172,6 +173,152 @@ static int extractor_connect(struct extractor_ctx *ext)
     return 0;
 }
 
+static int extractor_httpreq(struct extractor_ctx *ext,
+                             const char *method,
+                             const char *guidstr,
+                             const char *req_ctype,
+                             const struct buf *req_body,
+                             unsigned *res_statuscode,
+                             struct body_t *res_body)
+{
+    struct buf req_buf = BUF_INITIALIZER;
+    size_t hostlen = strcspn(ext->hostname, "/");
+    hdrcache_t res_hdrs = NULL;
+    const char **hdr;
+    *res_statuscode = HTTP_BAD_GATEWAY;
+    int r = IMAP_INTERNAL;
+    struct buf url_buf = BUF_INITIALIZER;
+    buf_printf(&url_buf, "%s/%s", ext->path, guidstr);
+    const char *url = buf_cstring(&url_buf);
+
+    xsyslog(LOG_DEBUG, "starting HTTP request",
+            "method=<%s> guid=<%s>", method, guidstr);
+
+    // Prepare request
+    buf_printf(&req_buf,
+            "%s %s %s\r\n"
+            "Host: %.*s\r\n"
+            "User-Agent: Cyrus/%s\r\n"
+            "Connection: Keep-Alive\r\n"
+            "Keep-Alive: timeout=%u\r\n"
+            "Accept: text/plain\r\n"
+            "X-Truncate-Length: " SIZE_T_FMT "\r\n",
+            method, url, HTTP_VERSION,
+            (int) hostlen, ext->be->hostname, CYRUS_VERSION,
+            attachextract_idle_timeout, config_search_maxsize);
+
+    if (req_body) {
+        buf_printf(&req_buf,
+                "Content-Type: %s\r\n",
+                req_ctype ? req_ctype : "application/octet-stream");
+
+        buf_printf(&req_buf,
+                "Content-Length: " SIZE_T_FMT "\r\n",
+                buf_len(req_body));
+    }
+
+    buf_appendcstr(&req_buf, "\r\n");
+
+    int retry = 0;
+    do {
+        // Connect to backend
+        r = extractor_connect(ext);
+        if (r) goto done;
+
+        struct backend *be = ext->be;
+
+        // Send request
+        prot_settimeout(be->in, attachextract_idle_timeout);
+
+        r = prot_putbuf(be->out, &req_buf);
+
+        if (!r && req_body)
+            r = prot_putbuf(be->out, req_body);
+
+        if (!r)
+            r = prot_flush(be->out);
+
+        if (r == EOF) {
+            r = IMAP_IOERROR;
+            xsyslog(LOG_DEBUG,
+                    "failed to send HTTP request",
+                    "method=<%s> url=<%s> err=<%s>",
+                    method, url, error_message(r));
+            goto done;
+        }
+
+        // Read response
+        const char *res_err = NULL;
+        *res_statuscode = 599;
+        int prev_bytes_in = be->in->bytes_in;
+
+        do {
+            r = http_read_response(be,
+                    !strcmp(method, "GET") ? METH_GET : METH_PUT,
+                    res_statuscode, &res_hdrs, res_body, &res_err);
+        } while (*res_statuscode < 200 && !r);
+
+        // Reconnect if the socket is closed
+        if (r == HTTP_BAD_GATEWAY && !retry &&
+                be->in->eof && prev_bytes_in == be->in->bytes_in &&
+                time(NULL) < be->in->timeout_mark) {
+            xsyslog(LOG_DEBUG,
+                    "no bytes read from socket - retrying",
+                    "method=<%s> url=<%s>", method, url);
+            extractor_disconnect(ext);
+            retry = 1;
+        }
+        // Reconnect if the connection expired
+        else if (r == HTTP_TIMEOUT && !retry &&
+                (res_hdrs &&
+                 (hdr = spool_getheader(res_hdrs, "Connection")) &&
+                 !strcasecmpsafe(hdr[0], "close") &&
+                 time(NULL) < be->in->timeout_mark)) {
+            xsyslog(LOG_DEBUG,
+                    "keep-alive connection got closed - retrying",
+                    "method=<%s> url=<%s>", method, url);
+            extractor_disconnect(ext);
+            retry = 1;
+        }
+        // Handle response
+        else {
+            if (r) {
+                xsyslog(LOG_ERR,
+                        "failed to read HTTP response",
+                        "method=<%s> url=<%s> res_err=<%s> err=<%s>",
+                        method, url, res_err, error_message(r));
+                *res_statuscode = 599;
+            }
+            else xsyslog(LOG_INFO, "read HTTP response",
+                    "method=<%s> url=<%s> statuscode=<%d>",
+                    method, url, *res_statuscode);
+
+            if (*res_statuscode == 200 || *res_statuscode == 201) {
+                /* Abide by server's timeout, if any */
+                const char *p;
+                if (res_hdrs &&
+                        (hdr = spool_getheader(res_hdrs, "Keep-Alive")) &&
+                        (p = strstr(hdr[0], "timeout="))) {
+                    int timeout = atoi(p+8);
+                    if (be->timeout) be->timeout->mark = time(NULL) + timeout;
+                }
+            }
+            retry = 0;
+        }
+    } while (retry);
+
+done:
+    xsyslog(LOG_DEBUG, "ending HTTP request",
+            "method=<%s> guid=<%s> statuscode=<%d> r=<%s>",
+            method, guidstr, *res_statuscode, error_message(r));
+
+    spool_free_hdrcache(res_hdrs);
+    buf_free(&req_buf);
+    buf_free(&url_buf);
+    return r;
+}
+
+
 static void generate_record_id(struct buf *id, const struct attachextract_record *rec)
 {
     // encode content guid
@@ -206,16 +353,13 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
                                    struct buf *text)
 {
     struct extractor_ctx *ext = global_extractor;
-    struct backend *be;
-    struct buf ctypehdr = BUF_INITIALIZER;
-    hdrcache_t hdrs = NULL;
+    struct buf ctype = BUF_INITIALIZER;
     struct body_t body = { 0, 0, 0, 0, 0, BUF_INITIALIZER };
-    const char *guidstr, *errstr = NULL;
-    size_t hostlen;
-    const char **hdr, *p;
+    const char *guidstr = message_guid_encode(&axrec->guid);
     char *cachefname = NULL;
     struct buf buf = BUF_INITIALIZER;
     unsigned statuscode = 0;
+    int is_cached = 0;
     int retry;
     int r = 0;
 
@@ -252,6 +396,12 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         goto done;
     }
 
+    /* Build Content-Type */
+    buf_printf(&ctype, "%s/%s", axrec->type, axrec->subtype);
+    if (charset) {
+        buf_printf(&ctype, ";charset=%s", charset);
+    }
+
     /* Fetch from cache */
     if (cachefname) {
         int fd = open(cachefname, O_RDONLY);
@@ -264,7 +414,8 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
 
             xsyslog(LOG_DEBUG, "read from cache",
                     "cachefname=<%s>", cachefname);
-            goto done;
+            is_cached = 1;
+            goto gotdata;
         }
         else {
             xsyslog(LOG_DEBUG, "not found in cache",
@@ -280,54 +431,12 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     }
 
     /* Fetch from network */
-    r = extractor_connect(ext);
-    if (r) goto done;
-    be = ext->be;
+    r = extractor_httpreq(ext, "GET", guidstr, NULL, NULL, &statuscode, &body);
 
-    hostlen = strcspn(ext->hostname, "/");
-    guidstr = message_guid_encode(&axrec->guid);
-
-    prot_settimeout(be->in, attachextract_idle_timeout);
-
-    /* try to fetch previously extracted text */
-    r = prot_printf(be->out,
-                "GET %s/%s %s\r\n"
-                "Host: %.*s\r\n"
-                "User-Agent: Cyrus/%s\r\n"
-                "Connection: Keep-Alive\r\n"
-                "Keep-Alive: timeout=%u\r\n"
-                "Accept: text/plain\r\n"
-                "X-Truncate-Length: " SIZE_T_FMT "\r\n"
-                "\r\n",
-                ext->path, guidstr, HTTP_VERSION,
-                (int) hostlen, be->hostname, CYRUS_VERSION,
-                attachextract_idle_timeout, config_search_maxsize);
-    if (!r) r = prot_flush(be->out);
-
-    if (r == EOF) {
-        r = IMAP_IOERROR;
-        xsyslog(LOG_DEBUG,
-                "failed to send GET request", "url=<%s/%s> err=<%s>",
-                ext->path, guidstr, error_message(r));
-        goto done;
+    if (statuscode == 200) {
+        buf_copy(text, &body.payload);
+        goto gotdata;
     }
-
-    /* Read GET response */
-    do {
-        r = http_read_response(be, METH_GET,
-                               &statuscode, &hdrs, &body, &errstr);
-        if (r) {
-            xsyslog(LOG_ERR,
-                   "failed to read GET response", "url=<%s/%s> err=<%s>",
-                   ext->path, guidstr, error_message(r));
-            statuscode = 599;
-        }
-    } while (statuscode < 200);
-
-    syslog(LOG_DEBUG, "extract_attachment: GET %s/%s: got status %u",
-           ext->path, guidstr, statuscode);
-
-    if (statuscode == 200) goto gotdata;
 
     if (statuscode == 599) goto done;
 
@@ -343,66 +452,21 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         data = &buf;
     }
 
-    /* Build Content-Type */
-    buf_printf(&ctypehdr, "%s/%s", axrec->type, axrec->subtype);
-    if (charset) {
-        buf_printf(&ctypehdr, ";charset=%s", charset);
-    }
-
     for (retry = 0; retry < 3; retry++) {
         if (retry) {
-            // second and third time around, sleep and reconnect
+            // second and third time around, sleep
             sleep(retry);
-            extractor_disconnect(ext);
-            r = extractor_connect(ext);
-            if (r) continue;
-            be = ext->be;
         }
 
         /* Send attachment to service for text extraction */
-        r = prot_printf(be->out,
-                    "PUT %s/%s %s\r\n"
-                    "Host: %.*s\r\n"
-                    "User-Agent: Cyrus/%s\r\n"
-                    "Connection: Keep-Alive\r\n"
-                    "Keep-Alive: timeout=%u\r\n"
-                    "Accept: text/plain\r\n"
-                    "Content-Type: %s\r\n"
-                    "Content-Length: " SIZE_T_FMT "\r\n"
-                    "X-Truncate-Length: " SIZE_T_FMT "\r\n"
-                    "\r\n",
-                    ext->path, guidstr, HTTP_VERSION,
-                    (int) hostlen, be->hostname, CYRUS_VERSION, attachextract_idle_timeout,
-                    buf_cstring(&ctypehdr), buf_len(data), config_search_maxsize);
-        if (!r) r = prot_putbuf(be->out, data);
-        if (!r) r = prot_flush(be->out);
-
-        if (r == EOF) {
-            r = IMAP_IOERROR;
-            xsyslog(LOG_DEBUG,
-                    "failed to send PUT request", "url=<%s/%s> err=<%s>",
-                    ext->path, guidstr, error_message(r));
-                goto done;
-        }
-
-        /* Read PUT response */
-        body.flags = 0;
-        do {
-            r = http_read_response(be, METH_PUT,
-                                   &statuscode, &hdrs, &body, &errstr);
-            if (r) {
-                xsyslog(LOG_ERR,
-                        "failed to read PUT response", "url=<%s/%s> err=<%s>",
-                        ext->path, guidstr, error_message(r));
-                statuscode = 599;
-            }
-        } while (statuscode < 200);
-
-        syslog(LOG_DEBUG, "extract_attachment: PUT %s/%s: got status %u",
-               ext->path, guidstr, statuscode);
+        r = extractor_httpreq(ext, "PUT", guidstr,
+                buf_cstring(&ctype), data,
+                &statuscode, &body);
+        if (r == IMAP_IOERROR) goto done;
 
         if (statuscode == 200 || statuscode == 201) {
             // we got a result, yay
+            buf_copy(text, &body.payload);
             goto gotdata;
         }
 
@@ -411,9 +475,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
             goto done;
         }
 
-        /* any other status code is an error */
-        syslog(LOG_ERR, "extract GOT STATUSCODE %d with timeout %d: %s",
-                statuscode, attachextract_request_timeout, errstr);
+        // Keep trying
     }
 
     // dropped out of the loop?  Then we failed!
@@ -421,16 +483,11 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     goto done;
 
 gotdata:
-    /* Abide by server's timeout, if any */
-    if ((hdr = spool_getheader(hdrs, "Keep-Alive")) &&
-        (p = strstr(hdr[0], "timeout="))) {
-        int timeout = atoi(p+8);
-        if (be->timeout) be->timeout->mark = time(NULL) + timeout;
-    }
+    xsyslog(LOG_INFO, "extracted text from attachment",
+            "guid=<%s> content_type=<%s> size=<%zu>",
+            guidstr, buf_cstring(&ctype), buf_len(text));
 
-    buf_copy(text, &body.payload);
-
-    if (cachefname) {
+    if (!is_cached && cachefname) {
         /* Add to cache */
         char *tempfname = strconcat(cachefname, ".download.XXXXXX", NULL);
         int fd = mkstemp(tempfname);
@@ -456,7 +513,6 @@ gotdata:
         }
         else xsyslog(LOG_WARNING, "could not create temp file",
                     "tempfname=<%s>", tempfname);
-
         free(tempfname);
     }
 
@@ -465,10 +521,9 @@ done:
         xsyslog(LOG_DEBUG, "could not read from backend", NULL);
         extractor_disconnect(ext);
     }
-    spool_free_hdrcache(hdrs);
     free(cachefname);
     buf_free(&body.payload);
-    buf_free(&ctypehdr);
+    buf_free(&ctype);
     buf_free(&buf);
     return r;
 }
