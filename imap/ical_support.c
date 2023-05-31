@@ -2117,20 +2117,6 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
     return 0;
 }
 
-
-#ifndef HAVE_RFC7986_COLOR
-
-/* Replacement for missing function in 3.0.0 <= libical < 3.0.5 */
-
-EXPORTED icalproperty *icalproperty_new_color(const char *v)
-{
-    icalproperty *prop = icalproperty_new_x(v);
-    icalproperty_set_x_name(prop, "COLOR");
-    return prop;
-}
-
-#endif /* HAVE_RFC7986_COLOR */
-
 EXPORTED const char *icaltimezone_get_location_tzid(const icaltimezone *zone)
 {
     const char *v = icaltimezone_get_location((icaltimezone*) zone);

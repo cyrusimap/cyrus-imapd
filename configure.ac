@@ -1636,17 +1636,12 @@ dnl
                                 [Do we have support for xmlBufferDetach()?]))
                 ])
 
-        PKG_CHECK_MODULES([ICAL], [libical >= 3.0.0], [
+        PKG_CHECK_MODULES([ICAL], [libical >= 3.0.10], [
                 AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
                 LIBS="$LIBS ${ICAL_LIBS}"
                 with_ical=yes
                 ],
-                AC_MSG_ERROR([Need libical 3.0.0 for http]))
-
-        dnl icalproperty_new_color was overlooked, and eventually added in 3.0.5
-        AC_CHECK_LIB(ical, icalproperty_new_color,
-                AC_DEFINE(HAVE_RFC7986_COLOR,[],
-                        [Do we have built-in support for RFC7986 color prop?]))
+                AC_MSG_ERROR([Need libical 3.0.10 for http]))
 
         dnl libical may have been built without RSCALE support
         AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
@@ -1658,7 +1653,7 @@ dnl
                 AC_DEFINE(HAVE_NEW_CLONE_API,[],
                         [Do we have support for new clone API?]))
 
-        dnl ical_set_invalid_rrule_handling_setting, was added in libical 3.0.9
+        dnl ical_set_invalid_rrule_handling_setting will be new in libical 3.1.0
         AC_CHECK_LIB(ical, ical_set_invalid_rrule_handling_setting,
                 AC_DEFINE(HAVE_INVALID_RRULE_HANDLING,[],
                         [Do we have support for controlling invalid RRULE handline?]))

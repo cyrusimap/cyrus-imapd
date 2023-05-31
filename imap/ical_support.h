@@ -203,14 +203,6 @@ extern void icalcomponent_normalize_x(icalcomponent *ical);
 #define icalcomponent_get_acknowledged_property(comp) \
     icalcomponent_get_first_property(comp, ICAL_ACKNOWLEDGED_PROPERTY)
 
-#ifndef HAVE_RFC7986_COLOR
-
-/* Replacement for missing function in 3.0.0 <= libical < 3.0.5 */
-
-extern icalproperty *icalproperty_new_color(const char *v);
-
-#endif /* HAVE_RFC7986_COLOR */
-
 #ifndef HAVE_RSCALE
 
 /* Functions to replace those not available in libical < v1.0 */
