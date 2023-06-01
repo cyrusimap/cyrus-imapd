@@ -289,8 +289,10 @@ static int extractor_httpreq(struct extractor_ctx *ext,
                         method, url, res_err, error_message(r));
                 *res_statuscode = 599;
             }
-            else xsyslog(LOG_INFO, "read HTTP response",
-                    "method=<%s> url=<%s> statuscode=<%d>",
+            else xsyslog(
+                    (*res_statuscode == 200 || *res_statuscode == 201 ||
+                     *res_statuscode == 404) ? LOG_DEBUG : LOG_WARNING,
+                    "got HTTP response", "method=<%s> url=<%s> statuscode=<%d>",
                     method, url, *res_statuscode);
 
             if (*res_statuscode == 200 || *res_statuscode == 201) {
@@ -479,7 +481,9 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     goto done;
 
 gotdata:
-    xsyslog(LOG_INFO, "extracted text from attachment",
+    xsyslog(LOG_DEBUG, is_cached ?
+            "read cached attachment extract" :
+            "extracted text from attachment",
             "guid=<%s> content_type=<%s> size=<%zu>",
             guidstr, ctype, buf_len(text));
 
@@ -514,7 +518,6 @@ gotdata:
 
 done:
     if (statuscode == 599) {
-        xsyslog(LOG_DEBUG, "could not read from backend", NULL);
         extractor_disconnect(ext);
     }
     free(cachefname);
