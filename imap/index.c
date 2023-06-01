@@ -5528,27 +5528,29 @@ done:
 
 EXPORTED int index_want_attachextract(const char *type, const char *subtype)
 {
-    if (!strcasecmpsafe(type, "APPLICATION")) {
-        if (!strcasecmpsafe(subtype, "ICS")) {
-            // this gets handled like text/calendar
-            return 0;
-        }
-        else if (!strcasecmpsafe(subtype, "PKCS7-MIME") ||
-            !strcasecmpsafe(subtype, "PKCS7-ENCRYPTED") ||
-            !strcasecmpsafe(subtype, "PKCS7-SIGNATURE") ||
-            !strcasecmpsafe(subtype, "PGP-SIGNATURE") ||
-            !strcasecmpsafe(subtype, "PGP-KEYS") ||
-            !strcasecmpsafe(subtype, "PGP-ENCRYPTED")) {
-            // these are encrypted fields which aren't worth indexing
-            return 0;
-        }
-        else return 1;
-    }
-    else return !strcasecmpsafe(type, "TEXT") &&
-        strcasecmpsafe(subtype, "PLAIN") &&
-        strcasecmpsafe(subtype, "HTML") &&
-        strcasecmpsafe(subtype, "CALENDAR") &&
-        strcasecmpsafe(subtype, "VCARD");
+    return ((!strcasecmpsafe(type, "APPLICATION") &&
+                // this gets handled like text/calendar
+                strcasecmpsafe(subtype, "ICS") &&
+                // crypto isn't worth indexing
+                strcasecmpsafe(subtype, "PKCS7-MIME") &&
+                strcasecmpsafe(subtype, "PKCS7-ENCRYPTED") &&
+                strcasecmpsafe(subtype, "PKCS7-SIGNATURE") &&
+                strcasecmpsafe(subtype, "PGP-SIGNATURE") &&
+                strcasecmpsafe(subtype, "PGP-KEYS") &&
+                strcasecmpsafe(subtype, "PGP-ENCRYPTED") &&
+                // don't index executables
+                strcasecmpsafe(subtype, "X-MSDOWNLOAD") &&
+                strcasecmpsafe(subtype, "X-SHAREDLIB") &&
+                strcasecmpsafe(subtype, "X-ELF") &&
+                strcasecmpsafe(subtype, "X-OBJECT") &&
+                strcasecmpsafe(subtype, "X-EXECUTABLE") &&
+                strcasecmpsafe(subtype, "X-COREDUMP") &&
+                // other unwanted attachments
+                strcasecmpsafe(subtype, "MBOX") &&
+                strcasecmpsafe(subtype, "MP4")) ||
+            // only text/rtf
+            (!strcasecmpsafe(type, "TEXT") &&
+                !strcasecmpsafe(subtype, "RTF")));
 }
 
 static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
