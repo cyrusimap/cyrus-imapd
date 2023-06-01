@@ -69,13 +69,12 @@ struct attachextract_record {
 /**
  * Extracts text from attachment data.
  *
- * Data may be optionally encoded and its charset identifier specified.
+ * Data may be encoded with one of the charset ENCODING enums.
  *
  * Returns 0 on success or an IMAP error.
  */
 extern int attachextract_extract(const struct attachextract_record *record,
-                                 const struct buf *data,
-                                 int encoding, const char *charset,
+                                 const struct buf *data, int encoding,
                                  struct buf *text);
 
 /**

@@ -213,7 +213,6 @@ struct withattach_record {
     size_t content_offset;
     size_t content_size;
     int encoding;
-    char *charset;
     struct attachextract_record axrec;
     strarray_t freeme;
 };
@@ -269,15 +268,6 @@ static int create_withattach(struct mailbox *mailbox,
                 .axrec.guid = message_guid_clone(&body->content_guid),
             };
 
-            const struct param *param = body->params;
-            while (param && param->attribute) {
-                if (!strcmp(param->attribute, "charset") && param->value) {
-                    wa.charset = xstrdupnull(param->value);
-                    break;
-                }
-                param = param->next;
-            }
-
             wa.freeme = freeme;
             dynarray_append(withattach, &wa);
             created = 1;
@@ -299,7 +289,6 @@ static void free_withattach(dynarray_t *withattach)
         struct withattach_record *wa = dynarray_nth(withattach, i);
         free(wa->fname);
         free(wa->imap_partid);
-        free(wa->charset);
         strarray_fini(&wa->freeme);
     }
     dynarray_fini(withattach);
@@ -347,8 +336,7 @@ static void warmup_attachextract_cache(dynarray_t *withattach)
         struct buf data = BUF_INITIALIZER;
         buf_init_ro(&data, mapped + wa->content_offset, wa->content_size);
 
-        int r = attachextract_extract(&wa->axrec, &data,
-                wa->encoding, wa->charset, &buf);
+        int r = attachextract_extract(&wa->axrec, &data, wa->encoding, &buf);
         if (!r) {
             xsyslog(LOG_DEBUG, "warmed up attachextract cache for body part",
                     "file=<%s> imap_partid=<%s>", wa->fname, wa->imap_partid);

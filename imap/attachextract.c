@@ -349,14 +349,13 @@ static void generate_record_id(struct buf *id, const struct attachextract_record
 EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
                                    const struct buf *data,
                                    int encoding,
-                                   const char *charset,
                                    struct buf *text)
 {
     struct extractor_ctx *ext = global_extractor;
-    struct buf ctype = BUF_INITIALIZER;
     struct body_t body = { 0, 0, 0, 0, 0, BUF_INITIALIZER };
     const char *guidstr = message_guid_encode(&axrec->guid);
     char *cachefname = NULL;
+    char *ctype = NULL;
     struct buf buf = BUF_INITIALIZER;
     unsigned statuscode = 0;
     int is_cached = 0;
@@ -397,10 +396,8 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     }
 
     /* Build Content-Type */
-    buf_printf(&ctype, "%s/%s", axrec->type, axrec->subtype);
-    if (charset) {
-        buf_printf(&ctype, ";charset=%s", charset);
-    }
+    buf_printf(&buf, "%s/%s", axrec->type, axrec->subtype);
+    ctype = buf_release(&buf);
 
     /* Fetch from cache */
     if (cachefname) {
@@ -459,8 +456,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         }
 
         /* Send attachment to service for text extraction */
-        r = extractor_httpreq(ext, "PUT", guidstr,
-                buf_cstring(&ctype), data,
+        r = extractor_httpreq(ext, "PUT", guidstr, ctype, data,
                 &statuscode, &body);
         if (r == IMAP_IOERROR) goto done;
 
@@ -485,7 +481,7 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
 gotdata:
     xsyslog(LOG_INFO, "extracted text from attachment",
             "guid=<%s> content_type=<%s> size=<%zu>",
-            guidstr, buf_cstring(&ctype), buf_len(text));
+            guidstr, ctype, buf_len(text));
 
     if (!is_cached && cachefname) {
         /* Add to cache */
@@ -523,8 +519,8 @@ done:
     }
     free(cachefname);
     buf_free(&body.payload);
-    buf_free(&ctype);
     buf_free(&buf);
+    free(ctype);
     return r;
 }
 

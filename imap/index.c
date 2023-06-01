@@ -5693,16 +5693,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             .guid = message_guid_clone(content_guid),
         };
 
-        const char *charset_param = NULL;
-        const struct param *param;
-        for (param = type_params; param && param->attribute; param = param->next) {
-            if (!strcmp(param->attribute, "charset")) {
-                charset_param = param->value;
-                break;
-            }
-        }
-
-        r = attachextract_extract(&axrecord, data, encoding, charset_param, &text);
+        r = attachextract_extract(&axrecord, data, encoding, &text);
 
         if (!r && buf_len(&text)) {
             /* Append extracted text */
