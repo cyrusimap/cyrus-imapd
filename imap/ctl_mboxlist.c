@@ -65,6 +65,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
 #include <sysexits.h>
@@ -693,13 +694,34 @@ static void do_undump_legacy(void)
 
     while (fgets(buf, sizeof(buf), stdin)) {
         mbentry_t *newmbentry = mboxlist_entry_create();
+        int fields;
+
         line++;
 
-        sscanf(buf, "%m[^\t]\t%d %ms %m[^>]>%ms " TIME_T_FMT " %" SCNu32
-               " %llu %llu %m[^\n]\n", &newmbentry->name, &newmbentry->mbtype,
-               &newmbentry->partition, &newmbentry->acl, &newmbentry->uniqueid,
-               &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
-               &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
+        errno = 0;
+        fields = sscanf(buf, "%m[^\t]\t%d %ms %m[^>]>%ms " TIME_T_FMT
+                             " %" SCNu32 " %llu %llu %m[^\n]\n",
+                             &newmbentry->name,
+                             &newmbentry->mbtype,
+                             &newmbentry->partition,
+                             &newmbentry->acl,
+                             &newmbentry->uniqueid,
+                             &newmbentry->mtime,
+                             &newmbentry->uidvalidity,
+                             &newmbentry->foldermodseq,
+                             &newmbentry->createdmodseq,
+                             &newmbentry->legacy_specialuse);
+
+        if (fields <= 0) {
+            fprintf(stderr, "line %d: parse error", line);
+            if (errno) {
+                fprintf(stderr, " (%s)", strerror(errno));
+                errno = 0;
+            }
+            fputc('\n', stderr);
+            mboxlist_entry_free(&newmbentry);
+            continue;
+        }
 
         if (!newmbentry->acl) {
            /*
@@ -712,11 +734,30 @@ static void do_undump_legacy(void)
             */
             mboxlist_entry_free(&newmbentry);
             newmbentry = mboxlist_entry_create();
-            sscanf(buf, "%m[^\t]\t%d %ms >%ms " TIME_T_FMT " %" SCNu32
-                   " %llu %llu %m[^\n]\n", &newmbentry->name, &newmbentry->mbtype,
-                   &newmbentry->partition, &newmbentry->uniqueid,
-                   &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
-                   &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
+
+            errno = 0;
+            fields = sscanf(buf, "%m[^\t]\t%d %ms >%ms " TIME_T_FMT " %" SCNu32
+                                 " %llu %llu %m[^\n]\n",
+                                 &newmbentry->name,
+                                 &newmbentry->mbtype,
+                                 &newmbentry->partition,
+                                 &newmbentry->uniqueid,
+                                 &newmbentry->mtime,
+                                 &newmbentry->uidvalidity,
+                                 &newmbentry->foldermodseq,
+                                 &newmbentry->createdmodseq,
+                                 &newmbentry->legacy_specialuse);
+
+            if (fields <= 0) {
+                fprintf(stderr, "line %d: parse error", line);
+                if (errno) {
+                    fprintf(stderr, " (%s)", strerror(errno));
+                    errno = 0;
+                }
+                fputc('\n', stderr);
+                mboxlist_entry_free(&newmbentry);
+                continue;
+            }
         }
 
         if (!newmbentry->partition) {
