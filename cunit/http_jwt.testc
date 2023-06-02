@@ -174,22 +174,13 @@ static void test_validate(void)
     struct buf tok = BUF_INITIALIZER;
     char out[256];
 
-    // valid token
+    // invalid token missing iat/exp
     token(&tok,
         "{\"alg\":\"HS256\",\"typ\":\"JWT\"}",
         "{\"sub\":\"test\"}", pkey, EVP_sha256());
     r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, sizeof(out));
-    CU_ASSERT_EQUAL(SASL_OK, r);
-    CU_ASSERT_STRING_EQUAL("test", out);
-
-    // valid token: ignored iat
-    token(&tok,
-        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
-        "{\"sub\": \"test\", \"iat\":1516239022}",
-        pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_OK, r);
-    CU_ASSERT_STRING_EQUAL("test", out);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
 
     // invalid token: no signature
     token(&tok,
@@ -254,15 +245,6 @@ static void test_validate(void)
     CU_ASSERT_EQUAL(SASL_BADAUTH, r);
     CU_ASSERT_STRING_EQUAL("", out);
 
-    // invalid token: bad iat
-    token(&tok,
-        "{\"alg\": \"HS256\", \"typ\": \"XXX\"}",
-        "{\"sub\": \"test\", \"iat\":\"1516239022\"}",
-        pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
-    CU_ASSERT_STRING_EQUAL("", out);
-
     // invalid token: bad JWS
     token(&tok,
         "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
@@ -299,6 +281,184 @@ static void test_validate(void)
     http_jwt_reset();
 }
 
+static void test_validate_claims_no_max_age(void)
+{
+    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
+
+    char *fname = strconcat(dname, "/key.pem", NULL);
+    FILE *fp = fopen(fname, "w");
+    CU_ASSERT_PTR_NOT_NULL(fp);
+    fputs(HMAC_PEM, fp);
+    fclose(fp);
+
+    int r = http_jwt_init(dname, 0);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_NOT_EQUAL(0, http_jwt_is_enabled());
+
+    EVP_PKEY *pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, NULL,
+                    (unsigned char*)HMAC_KEY_RAW, strlen(HMAC_KEY_RAW));
+
+    struct buf tok = BUF_INITIALIZER;
+    char out[256];
+
+    time_t now = time(NULL);
+
+    // valid token: exp = now + 2s
+    int length = snprintf( NULL, 0, "%ld", now );
+    char p2[] = "{\"sub\": \"test\", \"exp\":%ld}";
+    char payloadTwoFields[strlen(p2) + length];
+    sprintf(payloadTwoFields, p2, now + 2);
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payloadTwoFields,
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+
+    // valid token: exp OK iat not used and custom fields
+    char p5[] = "{\"sub\": \"test\", \"exp\":%ld, \"iat\": %ld, \"foo\": \"bar\", \"baz\": \"qux\"}";
+    char payloadFiveFields[strlen(p5) + 2 * length];
+    sprintf(payloadFiveFields, p5, now + 2, now);
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payloadFiveFields,
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+
+    // valid token: exp and nbf OK
+    char p3[] = "{\"sub\": \"test\", \"exp\":%ld, \"nbf\": %ld}";
+    char payloadThreeFields[strlen(p3) + 2 * length];
+    sprintf(payloadThreeFields, p3, now + 2, now);
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payloadThreeFields,
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+
+    // invalid token: bad iat
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+          "{\"sub\": \"test\", \"iat\":\"1516239022\"}",
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token: outdated exp
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+          "{\"sub\": \"test\", \"exp\":\"1516239022\"}",
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token: exp OK but nbf is in the future
+    sprintf(payloadThreeFields, p3, now + 2, now + 2);
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payloadThreeFields,
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token no exp and no iat but nb claims >=2
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+          "{\"sub\": \"test\", \"foo\":\"bar\"}",
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token iat without max_age
+    sprintf(payloadTwoFields, "{\"sub\": \"test\", \"iat\":%ld}", now);
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payloadTwoFields,
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token more than MAX_JWT_PAYLOAD_FIELD_NB
+    char p6[] = "{\"sub\": \"test\", \"exp\":%ld, \"iat\": %ld, \"foo\": \"bar\", \"baz\": \"qux\", \"thud\": \"fred\"}";
+    char payloadSixFields[strlen(p6) + 2 * length];
+    sprintf(payloadSixFields, p6, now + 2, now);
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payloadSixFields,
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    buf_free(&tok);
+
+    EVP_PKEY_free(pkey);
+    xunlink(fname);
+    free(fname);
+    rmdir(dname);
+    http_jwt_reset();
+}
+
+static void test_validate_claims_with_max_age(void)
+{
+    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
+
+    char *fname = strconcat(dname, "/key.pem", NULL);
+    FILE *fp = fopen(fname, "w");
+    CU_ASSERT_PTR_NOT_NULL(fp);
+    fputs(HMAC_PEM, fp);
+    fclose(fp);
+
+    int r = http_jwt_init(dname, 60);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_NOT_EQUAL(0, http_jwt_is_enabled());
+
+    EVP_PKEY *pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, NULL,
+                      (unsigned char*)HMAC_KEY_RAW, strlen(HMAC_KEY_RAW));
+
+    struct buf tok = BUF_INITIALIZER;
+    char out[256];
+
+    // valid token with iat/max_age
+    time_t now = time(NULL);
+    long nowMinusTwoSecs = now - 2;
+    char p2[] = "{\"sub\": \"test\", \"iat\":%ld}";
+    int length = snprintf( NULL, 0, "%ld", nowMinusTwoSecs );
+    char payloadTwoFields[strlen(p2) + length];
+    sprintf(payloadTwoFields, p2, nowMinusTwoSecs);
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payloadTwoFields,
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+
+    // valid token with outdated iat/max_age
+    // and valid exp : precedence for exp
+    char p3[] = "{\"sub\": \"test\", \"iat\":\"1516239022\", \"exp\":%ld}";
+    char payloadThreeFields[strlen(p3) + length];
+    sprintf(payloadThreeFields, p3, now + 2);
+    token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payloadThreeFields,
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+
+    buf_free(&tok);
+
+    EVP_PKEY_free(pkey);
+    xunlink(fname);
+    free(fname);
+    rmdir(dname);
+    http_jwt_reset();
+}
+
 static void test_auth(void)
 {
     char dname[] = "/tmp/cyrus-cunit-XXXXXX";
@@ -323,18 +483,18 @@ static void test_auth(void)
     CU_ASSERT_EQUAL(0, r);
     CU_ASSERT_EQUAL(1, http_jwt_is_enabled());
 
-#define TESTCASE(alg, pkey, emd) \
+#define TESTCASE(alg, pkey, emd, payload) \
     { \
         struct buf tok = BUF_INITIALIZER; \
         char out[256]; \
         token(&tok, \
                 "{\"alg\":\"" alg "\",\"typ\":\"JWT\"}", \
-                "{\"sub\":\"test\"}", pkey, emd); \
+                payload, pkey, emd); \
         r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, sizeof(out)); \
         CU_ASSERT_EQUAL(SASL_OK, r); \
         CU_ASSERT_STRING_EQUAL("test", out); \
         char c = buf_base(&tok)[buf_len(&tok)-1]; \
-        c = c == 'A' ? 'B' : 'A'; \
+        c = c == 'A' ? '/' : 'A'; \
         buf_truncate(&tok, -1); \
         buf_putc(&tok, c); \
         r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, sizeof(out)); \
@@ -342,21 +502,26 @@ static void test_auth(void)
         CU_ASSERT_STRING_EQUAL("", out); \
         buf_free(&tok); \
     }
+    time_t nowPlusOneHour = time(NULL) + 3600;
+    int length = snprintf( NULL, 0, "%ld", nowPlusOneHour );
+    char p[] = "{\"sub\": \"test\", \"exp\":%ld}";
+    char payload[strlen(p) + length];
+    sprintf(payload, p, nowPlusOneHour);
 
     EVP_PKEY *pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, NULL,
             (unsigned char*)HMAC_KEY_RAW, strlen(HMAC_KEY_RAW));
-    TESTCASE("HS256", pkey, EVP_sha256());
-    TESTCASE("HS384", pkey, EVP_sha384());
-    TESTCASE("HS512", pkey, EVP_sha512());
+    TESTCASE("HS256", pkey, EVP_sha256(), payload);
+    TESTCASE("HS384", pkey, EVP_sha384(), payload);
+    TESTCASE("HS512", pkey, EVP_sha512(), payload);
     EVP_PKEY_free(pkey);
 
     BIO *bp = BIO_new_mem_buf(RSA_PRIVATE_KEY_PEM, -1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(bp);
     pkey = PEM_read_bio_PrivateKey(bp, NULL, NULL, NULL);
     CU_ASSERT_PTR_NOT_NULL_FATAL(pkey);
-    TESTCASE("RS256", pkey, EVP_sha256());
-    TESTCASE("RS384", pkey, EVP_sha384());
-    TESTCASE("RS512", pkey, EVP_sha512());
+    TESTCASE("RS256", pkey, EVP_sha256(), payload);
+    TESTCASE("RS384", pkey, EVP_sha384(), payload);
+    TESTCASE("RS512", pkey, EVP_sha512(), payload);
     EVP_PKEY_free(pkey);
     BIO_free(bp);
 
