@@ -399,17 +399,7 @@ Check the :ref:`3.6 release notes <imap-release-notes-3.6>` for the full list.
 10. Upgrade complete
 --------------------
 
-Your upgrade is complete! We have a super-quick survey (3 questions only,
-anonymous responses) we would love for you to fill out, so we can get a feel for
-how many Cyrus installations are out there, and how the upgrade process went.
-
-|3.6 survey link|
-
-.. |3.6 survey link| raw:: html
-
-    <a href="https://cyrusimap.typeform.com/to/YI9P0f" target="_blank">
-    I'll fill in the survey right now</a> (opens in a new window)
-
+Your upgrade is complete, congratulations!
 
 Special note for Murder configurations
 --------------------------------------
