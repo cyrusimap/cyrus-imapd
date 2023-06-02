@@ -432,7 +432,7 @@ epub_exclude_files = ['search.html']
 # When this is updated, you may also need to update the version and release
 # definitions listed above to stay up to date.
 rst_prolog = """
-.. |imap_last_stable_version| replace:: 3.6.1
+.. |imap_last_stable_version| replace:: 3.6.2
 .. |imap_last_stable_branch| replace:: `cyrus-imapd-3.6`
 .. |imap_current_stable_version| replace:: 3.8.0
 .. |imap_current_stable_branch| replace:: `cyrus-imapd-3.8`

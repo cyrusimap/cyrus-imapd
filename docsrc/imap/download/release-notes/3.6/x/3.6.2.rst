@@ -1,0 +1,47 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.6.2 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.6.2/cyrus-imapd-3.6.2.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.6.2/cyrus-imapd-3.6.2.tar.gz.sig
+
+.. _relnotes-3.6.2-changes:
+
+Changes since 3.6.1
+===================
+
+Bug fixes
+---------
+
+* Fixed :issue:`3771`: XFER to 3.4 destination no longer loses specialuse
+  annotations
+* Fixed :issue:`3892`: :cyrusman:`squatter(8)` no longer crashes on invalid
+  mailbox names (thanks Martin Osvald)
+* Fixed :issue:`4383`: :cyrusman:`squatter(8)` in rolling mode now
+  periodically compacts databases, rather than only at shutdown
+* Fixed :issue:`4401`: JMAP no longer permits moving a mailbox under a
+  deleted one
+* Fixed :issue:`4415`: sieve path lookup errors no longer lead to writes
+  to root directory
+* Fixed :issue:`4426`: deleting mailboxes no longer leaves behind orphan
+  ``I`` records in mailboxes.db
+* Fixed :issue:`4437`: murder frontends now proxy DAV PUT correctly
+* Fixed :issue:`4439`: murder frontends now proxy GETMETADATA correctly
+  (thanks Stéphane GAUBERT)
+* Fixed :issue:`4442`: :cyrusman:`httpd(8)` no longer crashes on precondition
+  failure during deletion of calendar collection
+* Fixed :issue:`4440`: uninitialized value warning from :cyrusman:`cyradm(8)`
+  ``listmailbox`` command (thanks Stéphane GAUBERT)
+* Fixed :issue:`4465`: missing calls to ``mailbox_iter_done()`` (thanks
+  Дилян Палаузов)
+
+
+Other changes
+-------------
+
+* Fixed :issue:`4187`: :cyrusman:`ctl_mboxlist(8)` ``-v`` option now detects
+  and reports broken UUID mailboxes (thanks Matthias Hunstock)
