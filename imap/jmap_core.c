@@ -934,7 +934,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
                     };
                     struct caleventid_rock rock = { &buf, ids };
                     caldav_foreach_jscal(caldav_db, req->accountid, &filter,
-                            NULL, 0, caleventid_cb, &rock);
+                            NULL, NULL, 0, caleventid_cb, &rock);
                     buf_reset(&buf);
                     break;
                     }

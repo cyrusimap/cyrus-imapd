@@ -3988,8 +3988,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
             enum caldav_sort sort[] = {
                 CAL_SORT_MAILBOX, CAL_SORT_IMAP_UID
             };
-            r = caldav_foreach_jscal(db, req->userid, &jscal_filter, sort, 2,
-                   &getcalendarevents_cb, &rock);
+            r = caldav_foreach_jscal(db, req->userid, &jscal_filter, NULL,
+                    sort, 2, &getcalendarevents_cb, &rock);
             if (r) break;
             if (nseen == json_array_size(get.list) + json_array_size(get.not_found)) {
                 /* caldavdb silently ignores non-existent uids */
@@ -4019,8 +4019,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         enum caldav_sort sort[] = {
             CAL_SORT_MAILBOX, CAL_SORT_IMAP_UID
         };
-        r = caldav_foreach_jscal(db, req->userid, NULL, sort, 2,
-                &getcalendarevents_cb, &rock);
+        r = caldav_foreach_jscal(db, req->userid, NULL, NULL,
+                sort, 2, &getcalendarevents_cb, &rock);
     }
     if (r) goto done;
 
@@ -4454,8 +4454,8 @@ static int createevent_load_ical(jmap_req_t *req,
     struct createevent_load_ical_rock rock = {
         .ical_recurid = create->ical_recurid ? create->ical_recurid : ""
     };
-    int r = caldav_foreach_jscal(create->db, NULL, &jscal_filter, NULL, 0,
-            createevent_load_ical_cb, &rock);
+    int r = caldav_foreach_jscal(create->db, NULL, &jscal_filter,
+            NULL, NULL, 0, createevent_load_ical_cb, &rock);
     if (r) goto done;
 
     if (rock.imap_uid) {
@@ -5345,7 +5345,7 @@ static void remove_itip_messages(struct caldav_db *db,
             .ical_recurid = recurid
         };
 
-        caldav_foreach_jscal(db, NULL, &filter, NULL, 0, &remove_itip_cb, inbox);
+        caldav_foreach_jscal(db, NULL, &filter, NULL, NULL, 0, &remove_itip_cb, inbox);
     }
 }
 
@@ -5356,8 +5356,8 @@ static int check_eventid_exists(struct jmap_caleventid *eid,
         .ical_uid = eid->ical_uid,
         .ical_recurid = eid->ical_recurid
     };
-    int r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, 0,
-                             updateevent_check_exists_cb, NULL);
+    int r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, NULL, 0,
+                                 updateevent_check_exists_cb, NULL);
     if (r && r != CYRUSDB_DONE)
         return r;
 
@@ -5365,7 +5365,7 @@ static int check_eventid_exists(struct jmap_caleventid *eid,
     if (!*is_standalone) {
         // if it isn't there must be a main event
         jscal_filter.ical_recurid = "";
-        r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, 0,
+        r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, NULL, 0,
                                  updateevent_check_exists_cb, NULL);
         if (r != CYRUSDB_DONE)
             return HTTP_NOT_FOUND;
@@ -5797,7 +5797,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
             .ical_uid = eid->ical_uid,
             .ical_recurid = eid->ical_recurid
         };
-        r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, 0,
+        r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, NULL, 0,
                 updateevent_check_exists_cb, NULL);
         if (r && r != CYRUSDB_DONE)
             goto done;
@@ -5805,7 +5805,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         if (!is_standalone_instance) {
             // if it isn't there must be a main event
             jscal_filter.ical_recurid = "";
-            r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, 0,
+            r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, NULL, 0,
                     updateevent_check_exists_cb, NULL);
             if (r != CYRUSDB_DONE) {
                 r = HTTP_NOT_FOUND;
@@ -6383,13 +6383,13 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
     }
 
     /* Lookup changes. */
-    struct caldav_jscal_filter jscal_filter = {
+    struct caldav_jscal_window jscal_window = {
         .aftermodseq = changes.since_modseq,
         .maxcount = changes.max_changes ? changes.max_changes + 1 : 0,
         .tombstones = 1,
     };
     enum caldav_sort sort[] = { CAL_SORT_MODSEQ };
-    r = caldav_foreach_jscal(db, NULL, &jscal_filter, sort, 1,
+    r = caldav_foreach_jscal(db, NULL, NULL, &jscal_window, sort, 1,
             geteventchanges_cb, &rock);
     if (r) goto done;
     strip_spurious_changes(&rock);
@@ -6879,7 +6879,7 @@ static int eventquery_textsearch_run(jmap_req_t *req,
         struct eventquery_textsearch_cb_rock rock = {
             req, icalbefore, icalafter, matches, expandrecur, mailbox, is_sharee
         };
-        caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, 0,
+        caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, NULL, 0,
                 eventquery_textsearch_cb, &rock);
 
         mboxlist_entry_free(&mbentry);
@@ -7106,7 +7106,7 @@ static int eventquery_run(jmap_req_t *req,
             .after = &after,
             .before = &before,
         };
-        r = caldav_foreach_jscal(db, req->userid, &jscal_filter,
+        r = caldav_foreach_jscal(db, req->userid, &jscal_filter, NULL,
                 sort, nsort, eventquery_fastpath_cb, &rock);
         buf_free(&rock.buf);
         is_fastpath = 1;
@@ -7132,7 +7132,7 @@ static int eventquery_run(jmap_req_t *req,
             .after = &after,
             .before = &before
         };
-        r = caldav_foreach_jscal(db, req->userid, &jscal_filter,
+        r = caldav_foreach_jscal(db, req->userid, &jscal_filter, NULL,
                                      args.expandrecur ? &mboxsort : sort,
                                      args.expandrecur ? 1 : nsort,
                                      eventquery_cb, &rock);
@@ -9369,7 +9369,7 @@ static void principal_getavailability(jmap_req_t *req,
         .after = &tstart,
         .before = &tend,
     };
-    int r = caldav_foreach_jscal(db, NULL, &jscal_filter, sort, 1,
+    int r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, sort, 1,
                                  principal_getavailability_cb, &rock);
     if (r) jmap_error(req, jmap_server_error(r));
     if (rock.mbox) {

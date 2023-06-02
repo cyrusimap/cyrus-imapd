@@ -815,6 +815,7 @@ static int read_jscal_cb(sqlite3_stmt *stmt, void *rock)
 EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
                                   const char *cache_userid,
                                   struct caldav_jscal_filter *filter,
+                                  struct caldav_jscal_window *window,
                                   enum caldav_sort* sort, size_t nsort,
                                   caldav_jscal_cb_t *cb, void *rock)
 {
@@ -847,40 +848,49 @@ EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
         else {
             buf_appendcstr(&stmt, " WHERE mailbox != :inbox");
         }
+
         if (filter->ical_uid) {
             buf_appendcstr(&stmt, " AND ical_uid = :ical_uid");
             bval[1].val.s = filter->ical_uid;
         }
+
         if (filter->ical_recurid) {
             buf_appendcstr(&stmt, " AND ical_recurid = :ical_recurid");
             bval[2].val.s = filter->ical_recurid;
         }
+
         if (filter->imap_uid) {
             buf_appendcstr(&stmt, " AND imap_uid = :imap_uid");
             bval[3].val.i = filter->imap_uid;
         }
+
         if (filter->after || filter->before) {
             icaltimezone *utc = icaltimezone_get_utc_timezone();
             icaltimetype dt;
+
             if (filter->after) {
                 buf_appendcstr(&stmt, " AND jscal_objs.dtend > :after");
                 dt = icaltime_from_timet_with_zone(*filter->after, 0, utc);
                 bval[4].val.s = icaltime_as_ical_string(dt);
             }
+
             if (filter->before) {
                 buf_appendcstr(&stmt, " AND jscal_objs.dtstart < :before");
                 dt = icaltime_from_timet_with_zone(*filter->before, 0, utc);
                 bval[5].val.s = icaltime_as_ical_string(dt);
             }
         }
-        if (filter->aftermodseq) {
-            buf_appendcstr(&stmt, " AND jscal_objs.modseq > :aftermodseq");
-            bval[7].val.i = filter->aftermodseq;
-        }
-        if (!filter->tombstones) {
-            buf_appendcstr(&stmt, " AND jscal_objs.alive = 1");
-        }
     }
+
+    if (window && window->aftermodseq) {
+        buf_appendcstr(&stmt, " AND jscal_objs.modseq > :aftermodseq");
+        bval[7].val.i = window->aftermodseq;
+    }
+
+    if (!window || !window->tombstones) {
+        buf_appendcstr(&stmt, " AND jscal_objs.alive = 1");
+    }
+
     if (nsort) {
         buf_appendcstr(&stmt, " ORDER BY ");
         size_t i;
@@ -908,9 +918,10 @@ EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
             buf_appendcstr(&stmt, sort[i] & CAL_SORT_DESC ? " DESC" : " ASC");
         }
     }
-    if (filter && filter->maxcount) {
+
+    if (window && window->maxcount) {
         buf_appendcstr(&stmt, " LIMIT :maxcount");
-        bval[8].val.i = filter->maxcount;
+        bval[8].val.i = window->maxcount;
     }
 
     buf_putc(&stmt, ';');

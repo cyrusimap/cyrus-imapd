@@ -222,6 +222,9 @@ struct caldav_jscal_filter {
     uint32_t imap_uid;
     const time_t *after;
     const time_t *before;
+};
+
+struct caldav_jscal_window {
     modseq_t aftermodseq;
     int tombstones;
     size_t maxcount;
@@ -232,6 +235,7 @@ typedef int caldav_jscal_cb_t(void *rock, struct caldav_jscal *jscal);
 int caldav_foreach_jscal(struct caldav_db *caldavdb,
                          const char *cache_userid,
                          struct caldav_jscal_filter *filter,
+                         struct caldav_jscal_window *window,
                          enum caldav_sort* sort, size_t nsort,
                          caldav_jscal_cb_t *cb, void *rock);
 
