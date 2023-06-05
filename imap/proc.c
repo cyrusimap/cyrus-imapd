@@ -81,6 +81,12 @@
 
 #define FNAME_PROCDIR "/proc"
 
+/* n.b. setproctitle might come from setproctitle.c, or might come from a
+ * system library
+ */
+extern void setproctitle(const char *fmt, ...)
+                         __attribute__((format(printf, 1, 2)));
+
 static char *procfname = 0;
 
 static char *proc_getpath(pid_t pid, int isnew)
@@ -161,8 +167,6 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
         xunlink(newfname);
         fatal("can't write proc file", EX_IOERR);
     }
-
-    setproctitle("%s: %s %s %s %s", servicename, clienthost, userid, mailbox, cmd);
 
     free(newfname);
     return 0;
@@ -408,4 +412,20 @@ EXPORTED void proc_killusercmd(const char *userid, const char *cmd, int sig)
     rock.sig = sig;
 
     proc_foreach(prockill_cb, &rock);
+}
+
+/* n.b. proc_settitle_init() is defined in setproctitle.c */
+
+EXPORTED void proc_settitle(const char *servicename, const char *clienthost,
+                            const char *userid, const char *mailbox,
+                            const char *cmd)
+{
+    if (!servicename) servicename = "";
+    if (!clienthost) clienthost = "";
+    if (!userid) userid = "";
+    if (!mailbox) mailbox = "";
+    if (!cmd) cmd = "";
+
+    setproctitle("%s: %s %s %s %s",
+                 servicename, clienthost, userid, mailbox, cmd);
 }

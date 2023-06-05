@@ -795,7 +795,7 @@ int service_init(int argc __attribute__((unused)),
     LIBXML_TEST_VERSION
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* Initialize HTTP connection */
     memset(&http_conn, 0, sizeof(struct http_connection));
@@ -1018,6 +1018,7 @@ int service_main(int argc __attribute__((unused)),
         config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
 
     proc_register(config_ident, http_conn.clienthost, NULL, NULL, NULL);
+    proc_settitle(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
     /* Construct Alt-Svc header value */
     struct buf buf = BUF_INITIALIZER;
@@ -1934,6 +1935,8 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
                namespace->well_known ? strrchr(namespace->well_known, '/') :
                namespace->prefix);
     proc_register(buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
+                  txn->req_tgt.path, txn->req_line.meth);
+    proc_settitle(buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
                   txn->req_tgt.path, txn->req_line.meth);
     buf_reset(&txn->buf);
 

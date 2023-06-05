@@ -89,6 +89,12 @@
 
 extern char **environ;
 #ifdef USE_SETPROCTITLE
+/* n.b. USE_SETPROCTITLE is NOT managed by configure!  Thus, this is only ever
+ * defined if the packager has set -DUSE_SETPROCTITLE in CFLAGS or similar
+ * during compile.  So all of this behaviour is usually off, unless your system
+ * provides its own setproctitle(), in which case it'll do whatever it does.
+ * No idea which platforms (if any) provide it...
+ */
 static int setproctitle_enable = 1;
 #else
 static int setproctitle_enable = 0;
@@ -99,8 +105,12 @@ static char             *LastArgv = NULL;       /* end of argv */
 
 /*
  * Sets up a process to be able to use setproctitle()
+ *
+ * This needs to be adjacent to our setproctitle() implementation, if that's
+ * the one being used, which is why it's in here rather than in proc.c with
+ * the rest of the proc_ functions.
  */
-EXPORTED void setproctitle_init(int argc, char **argv, char **envp)
+EXPORTED void proc_settitle_init(int argc, char **argv, char **envp)
 {
     int i;
 

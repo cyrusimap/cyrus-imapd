@@ -59,6 +59,7 @@
 #include "auth_pts.h"
 #include "cyrusdb.h"
 #include "imap/global.h"
+#include "imap/proc.h"
 #include "libconfig.h"
 #include "retry.h"
 #include "xmalloc.h"
@@ -73,8 +74,6 @@ struct pts_module *pts_modules[] = {
     &pts_afskrb,
 #endif
     NULL };
-
-extern void setproctitle_init(int argc, char **argv, char **envp);
 
 static struct pts_module *pts_fromname()
 {
@@ -239,7 +238,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     char *tofree = NULL;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);

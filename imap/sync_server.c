@@ -242,7 +242,7 @@ int service_init(int argc __attribute__((unused)),
     int opt, r;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down_via_signal);
@@ -366,6 +366,7 @@ int service_main(int argc __attribute__((unused)),
     }
 
     proc_register(config_ident, sync_clienthost, NULL, NULL, NULL);
+    proc_settitle(config_ident, sync_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
@@ -784,6 +785,7 @@ static void cmd_authenticate(char *mech, char *resp)
 
     sync_userid = xstrdup((const char *) val);
     proc_register(config_ident, sync_clienthost, sync_userid, NULL, NULL);
+    proc_settitle(config_ident, sync_clienthost, sync_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", sync_clienthost, sync_userid,
            mech, sync_starttls_done ? "+TLS" : "", "User logged in");

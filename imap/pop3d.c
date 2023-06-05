@@ -415,7 +415,7 @@ int service_init(int argc __attribute__((unused)),
     int opt;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -860,7 +860,12 @@ static void cmdloop(void)
         signals_poll();
 
         /* register process */
-        proc_register(config_ident, popd_clienthost, popd_userid, popd_mailbox ? mailbox_name(popd_mailbox) : NULL, NULL);
+        proc_register(config_ident, popd_clienthost, popd_userid,
+                      popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
+                      NULL);
+        proc_settitle(config_ident, popd_clienthost, popd_userid,
+                      popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
+                      NULL);
 
         libcyrus_run_delayed();
 
@@ -939,7 +944,12 @@ static void cmdloop(void)
             syslog(LOG_NOTICE, "command: %s", inputbuf);
 
         /* register process */
-        proc_register(config_ident, popd_clienthost, popd_userid, popd_mailbox ? mailbox_name(popd_mailbox) : NULL, inputbuf);
+        proc_register(config_ident, popd_clienthost, popd_userid,
+                      popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
+                      inputbuf);
+        proc_settitle(config_ident, popd_clienthost, popd_userid,
+                      popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
+                      inputbuf);
 
         if (!strcmp(inputbuf, "quit")) {
             if (!arg) {

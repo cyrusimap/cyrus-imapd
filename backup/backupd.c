@@ -184,7 +184,7 @@ EXPORTED int service_init(int argc __attribute__((unused)),
 {
     // FIXME should this be calling fatal? fatal exits directly
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -269,6 +269,7 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     }
 
     proc_register(config_ident, backupd_clienthost, NULL, NULL, NULL);
+    proc_settitle(config_ident, backupd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
@@ -824,6 +825,7 @@ static void cmd_authenticate(char *mech, char *resp)
 
     backupd_userid = xstrdup((const char *) val);
     proc_register(config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
+    proc_settitle(config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", backupd_clienthost, backupd_userid,
            mech, backupd_starttls_done ? "+TLS" : "", "User logged in");

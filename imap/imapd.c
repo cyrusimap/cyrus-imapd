@@ -984,7 +984,7 @@ int service_init(int argc, char **argv, char **envp)
     int opt, events;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -1119,6 +1119,7 @@ int service_main(int argc __attribute__((unused)),
         ((extprops_ssf < 2) && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT));
 
     proc_register(config_ident, imapd_clienthost, NULL, NULL, NULL);
+    proc_settitle(config_ident, imapd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     imapd_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
@@ -1428,7 +1429,10 @@ static void cmdloop(void)
         if (backend_current) prot_flush(backend_current->out);
 
         /* command no longer running */
-        proc_register(config_ident, imapd_clienthost, imapd_userid, index_mboxname(imapd_index), NULL);
+        proc_register(config_ident, imapd_clienthost, imapd_userid,
+                      index_mboxname(imapd_index), NULL);
+        proc_settitle(config_ident, imapd_clienthost, imapd_userid,
+                      index_mboxname(imapd_index), NULL);
 
         /* run any delayed cleanup while a user isn't waiting on a reply */
         libcyrus_run_delayed();
@@ -1497,7 +1501,10 @@ static void cmdloop(void)
         if (config_getswitch(IMAPOPT_CHATTY))
             syslog(LOG_NOTICE, "command: %s %s", tag.s, cmd.s);
 
-        proc_register(config_ident, imapd_clienthost, imapd_userid, index_mboxname(imapd_index), cmd.s);
+        proc_register(config_ident, imapd_clienthost, imapd_userid,
+                      index_mboxname(imapd_index), cmd.s);
+        proc_settitle(config_ident, imapd_clienthost, imapd_userid,
+                      index_mboxname(imapd_index), cmd.s);
 
         /* if we need to force a kick, do so */
         if (referral_kick) {

@@ -58,12 +58,9 @@ typedef int procdata_t(pid_t pid,
                        const char *userid, const char *mailbox,
                        const char *cmd, void *rock);
 
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern void setproctitle(const char *fmt, ...)
-                        __attribute__((format(printf, 1, 2)));
-
 extern int proc_register(const char *servicename, const char *clienthost,
-                         const char *userid, const char *mailbox, const char *cmd);
+                         const char *userid, const char *mailbox,
+                         const char *cmd);
 
 extern void proc_cleanup(void);
 
@@ -75,4 +72,8 @@ extern void proc_killuser(const char *userid);
 extern void proc_killmbox(const char *mboxname);
 extern void proc_killusercmd(const char *userid, const char *cmd, int sig);
 
+extern void proc_settitle_init(int argc, char **argv, char **envp);
+extern void proc_settitle(const char *servicename, const char *clienthost,
+                          const char *userid, const char *mailbox,
+                          const char *cmd);
 #endif /* _PROC_H */
