@@ -793,6 +793,7 @@ include_HEADERS = \
 	lib/murmurhash2.h \
 	lib/nonblock.h \
 	lib/parseaddr.h \
+	lib/proc.h \
 	lib/procinfo.h \
 	lib/retry.h \
 	lib/rfc822tok.h \
@@ -1065,8 +1066,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/notify.h \
 	imap/partlist.c \
 	imap/partlist.h \
-	imap/proc.c \
-	imap/proc.h \
 	imap/prometheus.c \
 	imap/prometheus.h \
 	imap/protocol.h \
@@ -1087,7 +1086,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/search_sort.h \
 	imap/seen.h \
 	imap/seen_db.c \
-	imap/setproctitle.c \
 	imap/sievedir.c \
 	imap/sievedir.h \
 	imap/smtpclient.c \
@@ -1573,7 +1571,9 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/hashu64.c \
 	lib/libconfig.c \
 	lib/mpool.c \
+	lib/proc.c \
 	lib/retry.c \
+	lib/setproctitle.c \
 	lib/smallarrayu64.c \
 	lib/strarray.c \
 	lib/strhash.c \

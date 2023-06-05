@@ -56,6 +56,7 @@
 #include "lib/bsearch.h"
 #include "lib/imparse.h"
 #include "lib/map.h"
+#include "lib/proc.h"
 #include "lib/signals.h"
 #include "lib/strarray.h"
 #include "lib/util.h"
@@ -63,7 +64,6 @@
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
-#include "imap/proc.h"
 #include "imap/sync_support.h"
 #include "imap/telemetry.h"
 #include "imap/tls.h"

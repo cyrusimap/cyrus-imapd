@@ -54,7 +54,7 @@
 #include <sys/stat.h>
 
 #include "assert.h"
-#include "global.h"
+#include "libconfig.h"
 #include "proc.h"
 #include "retry.h"
 #include "util.h"
