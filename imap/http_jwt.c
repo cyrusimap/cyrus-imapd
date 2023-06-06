@@ -68,7 +68,6 @@
 static int is_enabled = 0;
 
 static ptrarray_t pkeys = PTRARRAY_INITIALIZER;
-static const size_t MAX_JWT_PAYLOAD_FIELD_NB = 5;
 
 static time_t max_age = 0;
 
@@ -493,7 +492,7 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
     int ret = 0;
 
     json_t *jws = json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
-    if (!json_object_size(jws) || json_object_size(jws) > MAX_JWT_PAYLOAD_FIELD_NB) {
+    if (!json_object_size(jws)) {
         xsyslog(LOG_ERR, "Unexpected JWS payload structure", NULL);
         goto done;
     }
@@ -522,7 +521,8 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
                 xsyslog(LOG_ERR, "Out-of-range \"exp\" claim", NULL);
                 goto done;
             }
-        } else {
+        }
+        else {
             json_t *jiat = json_object_get(jws, "iat");
             if (json_is_integer(jiat)) {
                 if (max_age) {
@@ -533,9 +533,6 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
                         free(val);
                         goto done;
                     }
-                } else {
-                    xsyslog(LOG_ERR, "Missing \"max_age\" parameter with \"iat\" claim", NULL);
-                    goto done;
                 }
             } else {
                 if (jiat) {
@@ -547,8 +544,9 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
                 goto done;
             }
         }
-    } else {
-        xsyslog(LOG_ERR, "Missing \"iat\" or \"exp\" claim", NULL);
+    }
+    else if (max_age) {
+        xsyslog(LOG_ERR, "Missing \"iat\" claim", NULL);
         goto done;
     }
 
