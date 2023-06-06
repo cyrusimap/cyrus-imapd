@@ -32,7 +32,6 @@ sub test_card_set_create_emails
                     fullName => 'Jane Doe',
                     emails => {
                         e1 => {
-                            '@type' => 'EmailAddress',
                             contexts => {
                                 work => JSON::true
                             },

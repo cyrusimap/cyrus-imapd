@@ -30,20 +30,16 @@ sub test_card_set_create_name
                     '@version' => '1.0',
                     uid => $id,
                     name => {
-                        '@type' => 'Name',
                         components => [
                             {
-                                '@type' => 'NameComponent',
                                 kind => 'given',
                                 value => 'Robert'
                             },
                             {
-                                '@type' => 'NameComponent',
                                 kind => 'middle',
                                 value => 'Pau'
                             },
                             {
-                                '@type' => 'NameComponent',
                                 kind => 'surname',
                                 value => 'Shou'
                             },

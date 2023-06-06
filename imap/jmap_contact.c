@@ -7496,12 +7496,12 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
                                   vcardcomponent *card, void *rock)
 {
     vcardproperty *prop = NULL;
-    const char *key, *val;
+    const char *key;
     json_t *jprop;
     int r = 0;
 
-    val = json_string_value(json_object_get(obj, "@type"));
-    if (strcmpsafe(type, val)) {
+    jprop = json_object_get(obj, "@type");
+    if (jprop && strcmpsafe(type, json_string_value(jprop))) {
         jmap_parser_invalid(parser, "@type");
         return 0;
     }
@@ -7685,8 +7685,8 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
 
     jmap_parser_push(parser, "name");
 
-    val = json_string_value(json_object_get(jval, "@type"));
-    if (strcmpsafe("Name", val)) {
+    jprop = json_object_get(jval, "@type");
+    if (jprop && strcmpsafe("Name", json_string_value(jprop))) {
         jmap_parser_invalid(parser, "@type");
         goto done;
     }
@@ -7705,8 +7705,9 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
 
         jmap_parser_push_index(parser, "components", i, NULL);
 
-        val = json_string_value(json_object_get(comp, "@type"));
-        if (strcmpsafe("NameComponent", val)) {
+        jsubprop = json_object_get(comp, "@type");
+        if (jsubprop &&
+            strcmpsafe("NameComponent", json_string_value(jsubprop))) {
             jmap_parser_invalid(parser, "@type");
             break;
         }
@@ -7917,8 +7918,8 @@ static vcardproperty *_jsorg_to_vcard(struct jmap_parser *parser, json_t *obj,
 
             jmap_parser_push_index(parser, "units", i, NULL);
 
-            val = json_string_value(json_object_get(unit, "@type"));
-            if (strcmpsafe("OrgUnit", val)) {
+            jsubprop = json_object_get(unit, "@type");
+            if (jsubprop && strcmpsafe("OrgUnit", json_string_value(jsubprop))) {
                 jmap_parser_invalid(parser, "@type");
                 break;
             }
@@ -8024,7 +8025,7 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
 {
     ptrarray_t *patches;
     struct l10n_patch_t *lpatch;
-    const char *key, *val;
+    const char *key;
     json_t *jprop;
     int r = 0;
 
@@ -8035,8 +8036,8 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
 
     jmap_parser_push(parser, "speakToAs");
 
-    val = json_string_value(json_object_get(jval, "@type"));
-    if (strcmpsafe("SpeakToAs", val)) {
+    jprop = json_object_get(jval, "@type");
+    if (jprop && strcmpsafe("SpeakToAs", json_string_value(jprop))) {
         jmap_parser_invalid(parser, "@type");
         goto done;
     }
@@ -8589,8 +8590,9 @@ static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser, json_t *obj,
 
             jmap_parser_push_index(parser, "street", i, NULL);
 
-            val = json_string_value(json_object_get(comp, "@type"));
-            if (strcmpsafe("StreetComponent", val)) {
+            jsubprop = json_object_get(comp, "@type");
+            if (jsubprop &&
+                strcmpsafe("StreetComponent", json_string_value(jsubprop))) {
                 jmap_parser_invalid(parser, "@type");
                 break;
             }
@@ -8705,20 +8707,9 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
 
         jmap_parser_push(parser, "date");
 
-        val = json_string_value(json_object_get(jprop, "@type"));
-        if (!strcmpsafe("Timestamp", val)) {
-
-            jsubprop = json_object_get(jprop, "utc");
-            if (!json_is_utcdate(jsubprop)) {
-                jmap_parser_invalid(parser, "utc");
-            }
-            else {
-                tt = vcardtime_from_string(json_string_value(jsubprop), 0);
-                value = vcardvalue_new_timestamp(tt);
-                json_object_del(jprop, "utc");
-            }
-        }
-        else if (!strcmpsafe("PartialDate", val)) {
+        jsubprop = json_object_get(jprop, "@type");
+        if (!jsubprop ||  // defaultType
+            !strcmpsafe("PartialDate", json_string_value(jsubprop))) {
 
             json_object_del(jprop, "@type");
 
@@ -8763,6 +8754,17 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
                 value = vcardvalue_new_date(tt);
             }
         }
+        else if (!strcmpsafe("Timestamp", json_string_value(jsubprop))) {
+            jsubprop = json_object_get(jprop, "utc");
+            if (!json_is_utcdate(jsubprop)) {
+                jmap_parser_invalid(parser, "utc");
+            }
+            else {
+                tt = vcardtime_from_string(json_string_value(jsubprop), 0);
+                value = vcardvalue_new_timestamp(tt);
+                json_object_del(jprop, "utc");
+            }
+        }
         else {
             jmap_parser_invalid(parser, "@type");
         }
@@ -8780,11 +8782,11 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
 
             json_object_del(jprop, "@type");
             json_object_del(jprop, "calendarScale");
+        }
 
-            /* Add unknown properties */
-            json_object_foreach(jprop, key, jsubprop) {
-                _jsunknown_to_vcard(parser, key, jsubprop, card);
-            }
+        /* Add unknown properties */
+        json_object_foreach(jprop, key, jsubprop) {
+            _jsunknown_to_vcard(parser, key, jsubprop, card);
         }
 
         json_object_del(anniv, "date");
@@ -8802,8 +8804,8 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
 
             jmap_parser_push(parser, "place");
 
-            val = json_string_value(json_object_get(jprop, "@type"));
-            if (strcmpsafe("Address", val)) {
+            jsubprop = json_object_get(jprop, "@type");
+            if (jsubprop && strcmpsafe("Address", json_string_value(jsubprop))) {
                 jmap_parser_invalid(parser, "@type");
             }
             else {
@@ -8885,8 +8887,8 @@ static vcardproperty *_jsnote_to_vcard(struct jmap_parser *parser,
 
         jmap_parser_push(parser, "author");
 
-        val = json_string_value(json_object_get(jprop, "@type"));
-        if (strcmpsafe("Author", val)) {
+        jsubprop = json_object_get(jprop, "@type");
+        if (jsubprop && strcmpsafe("Author", json_string_value(jsubprop))) {
             jmap_parser_invalid(parser, "@type");
         }
         else {
