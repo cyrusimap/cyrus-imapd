@@ -35,7 +35,6 @@ sub test_card_set_create_speaktoas
                         grammaticalGender => 'neuter',
                         pronouns => {
                             k19 => {
-                                '@type' => 'Pronouns',
                                 pronouns => 'they/them',
                                 pref => 2
                             },
