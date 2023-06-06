@@ -6025,7 +6025,7 @@ static json_t *_to_jmap_date(vcardproperty *prop)
     }
 
     int y = date.year, m = date.month, d = date.day;
-    json_t *jdate = json_pack("{s:s}", "@type", "PartialDate");
+    json_t *jdate = json_object();
     vcardparameter *param;
 
     for (param = vcardproperty_get_first_parameter(prop, VCARD_X_PARAMETER);
@@ -6093,8 +6093,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
 
             if (prop_kind == VCARD_NOTE_PROPERTY) {
                 json_t *author =
-                    json_object_get_vanew(obj, "author",
-                                          "{s:s}", "@type", "Author");
+                    json_object_get_vanew(obj, "author", "{}");
 
                 json_object_set_new(author, key,
                                     json_string(param_value));
@@ -6426,8 +6425,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
                 ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
 
-            jprop = json_pack("{s:s s:s s:o}",
-                              "@type", "DirectoryResource",
+            jprop = json_pack("{s:s s:o}",
                               "kind", kind,
                               "uri", jmap_utf8string(prop_value));
 
@@ -6461,9 +6459,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             json_t *annivs = json_object_get_vanew(obj, "anniversaries", "{}");
 
             jprop = json_object_get_vanew(annivs, kind,
-                                          "{s:s s:s}",
-                                          "@type", "Anniversary",
-                                          "kind", kind);
+                                          "{s:s}", "kind", kind);
 
             json_object_set_new(jprop, subprop.key, subprop.val);
             break;
@@ -6494,8 +6490,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             }
 
             subprop.key = "place";
-            subprop.val = json_pack("{s:s s:o}",
-                                    "@type", "Address",
+            subprop.val = json_pack("{s:o}",
                                     comp, jmap_utf8string(prop_value));
 
             goto anniversaries;
@@ -6516,8 +6511,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM;
 
-            jprop = json_pack("{s:s s:o}",
-                              "@type", "Pronouns",
+            jprop = json_pack("{s:o}",
                               "pronouns", jmap_utf8string(prop_value));
 
             json_object_set_new(pronouns, _prop_id(prop), jprop);
@@ -6564,8 +6558,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
                         vcardstrarray_element_at(n->field[ckind->idx], i);
 
                     if (*val) {
-                        json_t *comp = json_pack("{s:s s:s s:o}",
-                                                 "@type", "NameComponent",
+                        json_t *comp = json_pack("{s:s s:o}",
                                                  "kind", ckind->name,
                                                  "value",
                                                  jmap_utf8string(val));
@@ -6603,8 +6596,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             }
 
             if (comps) {
-                jprop = json_pack("{s:s s:o* s:o*}",
-                                  "@type", "Name",
+                jprop = json_pack("{s:o* s:o*}",
                                   "components", comps,
                                   "sortAs", sortas);
 
@@ -6622,8 +6614,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             for (size_t i = 0; i < vcardstrarray_size(names); i++) {
                 const char *name = vcardstrarray_element_at(names, i);
 
-                jprop = json_pack("{s:s s:o}",
-                                  "@type", "NickName",
+                jprop = json_pack("{s:o}",
                                   "name", jmap_utf8string(name));
 
                 json_object_set_new(nicks, _prop_id(prop), jprop);
@@ -6643,8 +6634,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             uri = _value_to_uri_blobid(prop, mailbox, record, &type, &blobid);
 
-            jprop = json_pack("{s:s s:s s:s* s:s* s:s*}",
-                              "@type", "MediaResource",
+            jprop = json_pack("{s:s s:s* s:s* s:s*}",
                               "kind", kind,
                               "mediaType", type,
                               "uri", uri,
@@ -6668,7 +6658,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             param_flags = ALLOW_TYPE_PARAM |
                 ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
 
-            jprop = json_pack("{s:s}", "@type", "Address");
+            jprop = json_object();
 
             for (ckind = street_comp_kinds; ckind->name; ckind++) {
                 if (ckind->idx >= adr->num_fields) continue;
@@ -6680,8 +6670,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
                         json_object_get_vanew(jprop, "street", "[]");
 
                     json_array_append_new(street,
-                                          json_pack("{s:s s:s s:o}",
-                                                    "@type", "StreetComponent",
+                                          json_pack("{s:s s:o}",
                                                     "kind", ckind->name,
                                                     "value",
                                                     jmap_utf8string(val)));
@@ -6731,8 +6720,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM;
 
-            jprop = json_pack("{s:s}",
-                              "@type", "ContactChannelPreference");
+            jprop = json_object();
 
             json_object_set_new(channels, key, jprop);
             break;
@@ -6744,8 +6732,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             param_flags = ALLOW_TYPE_PARAM |
                 ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
 
-            jprop = json_pack("{s:s s:o}",
-                              "@type", "EmailAddress",
+            jprop = json_pack("{s:o}",
                               "address", jmap_utf8string(prop_value));
 
             json_object_set_new(emails, _prop_id(prop), jprop);
@@ -6773,8 +6760,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             if (!kind) kind = "impp";
 
-            jprop = json_pack("{s:s s:s s:o}",
-                              "@type", "OnlineService",
+            jprop = json_pack("{s:s s:o}",
                               "kind", kind,
                               "user", jmap_utf8string(prop_value));
 
@@ -6788,7 +6774,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM;
 
-            jprop = json_pack("{s:s}", "@type", "LanguagePreference");
+            jprop = json_object();
 
             json_object_set_new(langs, prop_value, jprop);
             break;
@@ -6804,8 +6790,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             param_flags = ALLOW_TYPE_PARAM |
                 ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
 
-            jprop = json_pack("{s:s s:o}",
-                              "@type", "Phone",
+            jprop = json_pack("{s:o}",
                               "number", jmap_utf8string(prop_value));
 
             json_object_set_new(phones, _prop_id(prop), jprop);
@@ -6831,8 +6816,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             param_flags = ALLOW_TYPE_PARAM |
                 ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
 
-            jprop = json_pack("{s:s s:s* s:o}",
-                              "@type", "LinkResource",
+            jprop = json_pack("{s:s* s:o}",
                               "kind", kind,
                               "uri", jmap_utf8string(prop_value));
 
@@ -6870,8 +6854,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
                 if (!*sort) sort = NULL;
             }
 
-            jprop = json_pack("{s:s s:o* s:o* s:s*}",
-                              "@type", "Organization",
+            jprop = json_pack("{s:o* s:o* s:s*}",
                               "name", *name ? jmap_utf8string(name) : NULL,
                               "units", units,
                               "sortAs", sort);
@@ -6886,8 +6869,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
                     sort = NULL;
                 }
                 json_array_append_new(units,
-                                      json_pack("{s:s s:s s:s*}",
-                                                "@type", "OrgUnit",
+                                      json_pack("{s:s s:s*}",
                                                 "name", jmap_utf8string(name),
                                                 "sortAs", sort));
             }
@@ -6907,8 +6889,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             jprop = json_object();
 
             json_object_set_new(relatedto, prop_value,
-                                json_pack("{s:s s:o}",
-                                          "@type", "Relation",
+                                json_pack("{s:o}",
                                           "relation", jprop));
             break;
         }
@@ -6925,8 +6906,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             prop_value = vcardproperty_get_title(prop);
             json_object_set_new(titles, _prop_id(prop),
-                                json_pack("{s:s s:s s:o}",
-                                          "@type", "Title",
+                                json_pack("{s:s s:o}",
                                           "kind", kind,
                                           "name",
                                           jmap_utf8string(prop_value)));
@@ -6944,8 +6924,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             buf_setcstr(&buf, vcardproperty_get_property_name(prop));
 
             jprop = json_object_get_vanew(personal, _prop_id(prop),
-                                          "{s:s s:s s:s}",
-                                          "@type", "PersonalInfo",
+                                          "{s:s s:s}",
                                           "kind", buf_lcase(&buf),
                                           "value", prop_value);
             break;
@@ -6980,8 +6959,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             json_t *notes = json_object_get_vanew(obj, "notes", "{}");
 
             prop_value = vcardproperty_get_note(prop);
-            jprop = json_pack("{s:s s:o}",
-                              "@type", "Note",
+            jprop = json_pack("{s:o}",
                               "note", jmap_utf8string(prop_value));
 
             json_object_set_new(notes, _prop_id(prop), jprop);
@@ -7023,8 +7001,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             uri = _value_to_uri_blobid(prop, mailbox, record, &type, &blobid);
 
-            jprop = json_pack("{s:s s:s* s:s* s:s*}",
-                              "@type", "CryptoResource",
+            jprop = json_pack("{s:s* s:s* s:s*}",
                               "mediaType", type,
                               "uri", uri,
                               "blobId", blobid);
@@ -7045,8 +7022,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             param_flags = ALLOW_TYPE_PARAM |
                 ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
 
-            jprop = json_pack("{s:s s:s}",
-                              "@type", "SchedulingAddress",
+            jprop = json_pack("{s:s}",
                               "uri", prop_value);
 
             json_object_set_new(addrs, _prop_id(prop), jprop);
@@ -7066,8 +7042,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
                 ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
 
-            jprop = json_pack("{s:s s:s s:s}",
-                              "@type", "CalendarResource",
+            jprop = json_pack("{s:s s:s}",
                               "kind", kind,
                               "uri", prop_value);
 

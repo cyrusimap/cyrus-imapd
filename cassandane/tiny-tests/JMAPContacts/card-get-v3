@@ -57,24 +57,20 @@ EOF
     ], $res->[0][1]{list}[0]{vCardProps});
     $self->assert_str_equals('Forrest Gump', $res->[0][1]{list}[0]{fullName});
     $self->assert_deep_equals({
-        '@type' => 'Name',
         'components' => [
-            { '@type' => 'NameComponent', 'kind' => 'prefix',  'value' => 'Mr.' },
-            { '@type' => 'NameComponent', 'kind' => 'given',   'value' => 'Forrest' },
-            { '@type' => 'NameComponent', 'kind' => 'surname', 'value' => 'Gump' }
+            { 'kind' => 'prefix',  'value' => 'Mr.' },
+            { 'kind' => 'given',   'value' => 'Forrest' },
+            { 'kind' => 'surname', 'value' => 'Gump' }
         ]
     }, $res->[0][1]{list}[0]{name});
     $self->assert_deep_equals({
-        '@type' => 'Anniversary',
         'kind' => 'birth',
-        'date' => { '@type' => 'PartialDate', 'year' => 1944, 'month' => 6, 'day' => 7 }
+        'date' => { 'year' => 1944, 'month' => 6, 'day' => 7 }
     }, $res->[0][1]{list}[0]{anniversaries}{birth});
     $self->assert_deep_equals({
-        '@type' => 'Organization',
         'name' => 'Bubba Gump Shrimp Co.'
     }, $res->[0][1]{list}[0]{organizations}{O1});
     $self->assert_deep_equals({
-        '@type' => 'Title',
         'kind' => 'title',
         'name' => 'Shrimp Man'
     }, $res->[0][1]{list}[0]{titles}{T1});
