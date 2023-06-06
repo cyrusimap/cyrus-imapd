@@ -35,7 +35,6 @@ sub test_card_set_create_anniversaries
                             '@type' => 'Anniversary',
                             kind => 'birth',
                             date => {
-                                '@type' => 'PartialDate',
                                 year => 1953,
                                 month => 4,
                                 day => 15
@@ -62,7 +61,6 @@ sub test_card_set_create_anniversaries
                                 year => 1975
                             },
                             place => {
-                                '@type' => 'Address',
                                 fullAddress => 'Somewhere'
                             }
                         }
