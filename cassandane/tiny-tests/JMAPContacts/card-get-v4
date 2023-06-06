@@ -76,37 +76,31 @@ EOF
     ], $res->[0][1]{list}[0]{vCardProps});
     $self->assert_str_equals('Simon Perreault', $res->[0][1]{list}[0]{fullName});
     $self->assert_deep_equals({
-        '@type' => 'Name',
         'components' => [
-            { '@type' => 'NameComponent', 'kind' => 'given', 'value' => 'Simon' },
-            { '@type' => 'NameComponent', 'kind' => 'surname', 'value' => 'Perreault' },
-            { '@type' => 'NameComponent', 'kind' => 'suffix', 'value' => 'ing. jr' }
+            { 'kind' => 'given', 'value' => 'Simon' },
+            { 'kind' => 'surname', 'value' => 'Perreault' },
+            { 'kind' => 'suffix', 'value' => 'ing. jr' }
         ]
     }, $res->[0][1]{list}[0]{name});
     $self->assert_deep_equals({
-        '@type' => 'Anniversary',
         'kind' => 'birth',
-        'date' => { '@type' => 'PartialDate', 'month' => 2, 'day' => 3 }
+        'date' => { 'month' => 2, 'day' => 3 }
 
     }, $res->[0][1]{list}[0]{anniversaries}{birth});
     $self->assert_deep_equals({
-        '@type' => 'Anniversary',
         'kind' => 'wedding',
         'date' => { '@type' => 'Timestamp', 'utc' => '2009-08-08T19:30:00Z' }
     }, $res->[0][1]{list}[0]{anniversaries}{wedding});
     $self->assert_deep_equals({
-        '@type' => 'LanguagePreference',
         'pref' => 1
     }, $res->[0][1]{list}[0]{preferredLanguages}{fr});
     $self->assert_deep_equals({
-        '@type' => 'Organization',
         'name' => 'Viagenie'
     }, $res->[0][1]{list}[0]{organizations}{O1});
     $self->assert_deep_equals({
-        '@type' => 'Address',
         'street' => [
-            { '@type' => 'StreetComponent', 'kind' => 'name',      'value' => '2875 Laurier' },
-            { '@type' => 'StreetComponent', 'kind' => 'extension', 'value' => 'Suite D2-630' }
+            { 'kind' => 'name',      'value' => '2875 Laurier' },
+            { 'kind' => 'extension', 'value' => 'Suite D2-630' }
         ],
         'locality' => 'Quebec',
         'region' => 'QC',
@@ -115,7 +109,6 @@ EOF
         'contexts' => { 'work' => JSON::true }
     }, $res->[0][1]{list}[0]{addresses}{A1});
     $self->assert_deep_equals({
-        '@type' => 'Phone',
         'number' => 'tel:+1-418-262-6501',
         'contexts' => { 'work' => JSON::true },
         'features' => { 'cell'  => JSON::true, 'voice' => JSON::true,
@@ -124,27 +117,23 @@ EOF
     }, $res->[0][1]{list}[0]{phones}{P2});
     $self->assert_deep_equals({
         'E1' => {
-            '@type' => 'EmailAddress',
             'address' => 'simon.perreault.ca',
             'contexts' => { 'work' => JSON::true }
         }
     }, $res->[0][1]{list}[0]{emails});
     $self->assert_deep_equals({
         'K1' => {
-            '@type' => 'CryptoResource',
             'uri' => 'http://www.viagenie.ca/simon.perreault/simon.asc',
             'contexts' => { 'work' => JSON::true }
         }
     }, $res->[0][1]{list}[0]{cryptoKeys});
     $self->assert_deep_equals({
         'L1' => {
-            '@type' => 'LinkResource',
             'uri' => 'http://nomis80.org',
             'contexts' => { 'private' => JSON::true }
         }
     }, $res->[0][1]{list}[0]{links});
     $self->assert_deep_equals({
-        '@type' => 'MediaResource',
         'kind' => 'logo',
         'mediaType' => 'image/png',
         'uri' => 'http://example.org/logo.png'
