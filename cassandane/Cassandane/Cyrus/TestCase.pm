@@ -445,6 +445,10 @@ magic(ArchiveNow => sub {
     $conf->config_set('archive_enabled' => 'yes');
     $conf->config_set('archive_after' => '0d');
 });
+magic(AllowCalendarAdmin => sub {
+    my $conf = shift;
+    $conf->config_set('caldav_allowcalendaradmin' => 'yes');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
