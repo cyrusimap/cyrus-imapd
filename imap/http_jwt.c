@@ -489,6 +489,7 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
         return 0;
     }
 
+    time_t now = time(NULL);
     int ret = 0;
 
     json_t *jws = json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
@@ -503,48 +504,60 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
         goto done;
     }
 
-    if (json_object_size(jws) >= 2) {
-        time_t now = time(NULL);
-        json_t *jnbf = json_object_get(jws, "nbf");
-        if (json_is_integer(jnbf)) {
-            time_t nbf = json_integer_value(jnbf);
-            if (!(now >= nbf)) {
-                xsyslog(LOG_ERR, "Out-of-range \"nbf\" claim", NULL);
-                goto done;
-            }
-        }
+    // Parse claims
+    int has_err = 0;
 
-        json_t *jexp = json_object_get(jws, "exp");
-        if (json_is_integer(jexp)) {
-            time_t exp = json_integer_value(jexp);
-            if (!(now < exp)) {
-                xsyslog(LOG_ERR, "Out-of-range \"exp\" claim", NULL);
+    json_t *jnbf = json_object_get(jws, "nbf");
+    if (jnbf && !json_is_integer(jnbf)) {
+        xsyslog(LOG_ERR, "Invalid \"nbf\" claim", NULL);
+        has_err = 1;
+    }
+
+    json_t *jexp = json_object_get(jws, "exp");
+    if (jexp && !json_is_integer(jexp)) {
+        xsyslog(LOG_ERR, "Invalid \"exp\" claim", NULL);
+        has_err = 1;
+    }
+
+    json_t *jiat = json_object_get(jws, "iat");
+    if (jiat && !json_is_integer(jiat)) {
+        xsyslog(LOG_ERR, "Invalid \"iat\" claim", NULL);
+        has_err = 1;
+    }
+
+    if (has_err)
+        goto done;
+
+    // Validate claims
+
+    if (jnbf) {
+        time_t nbf = json_integer_value(jnbf);
+        if (!(now >= nbf)) {
+            xsyslog(LOG_ERR, "Out-of-range \"nbf\" claim", NULL);
+            goto done;
+        }
+    }
+
+    if (jexp) {
+        time_t exp = json_integer_value(jexp);
+        if (!(now < exp)) {
+            xsyslog(LOG_ERR, "Out-of-range \"exp\" claim", NULL);
+            goto done;
+        }
+    }
+
+    if (max_age && !jexp) { // exp has precedence over iat claim
+        if (jiat) {
+            time_t iat = json_integer_value(jiat);
+            if (iat + max_age <= now || iat > now) {
+                xsyslog(LOG_ERR, "Out-of-range \"iat\" claim", NULL);
                 goto done;
             }
         }
         else {
-            json_t *jiat = json_object_get(jws, "iat");
-            if (json_is_integer(jiat)) {
-                if (max_age) {
-                    time_t iat = json_integer_value(jiat);
-                    if (iat + max_age <= now || iat > now) {
-                        char *val = json_dumps(jiat, JSON_COMPACT|JSON_ENCODE_ANY);
-                        xsyslog(LOG_ERR, "Out-of-range \"iat\" claim", "iat=<%s>", val);
-                        free(val);
-                        goto done;
-                    }
-                }
-            } else if (jiat) {
-                char *val = json_dumps(jiat, JSON_COMPACT|JSON_ENCODE_ANY);
-                xsyslog(LOG_ERR, "Invalid \"iat\" claim", "iat=<%s>", val);
-                free(val);
-                goto done;
-            }
+            xsyslog(LOG_ERR, "Max token age set, missing \"iat\" claim", NULL);
+            goto done;
         }
-    }
-    else if (max_age) {
-        xsyslog(LOG_ERR, "Missing \"iat\" claim", NULL);
-        goto done;
     }
 
     size_t sublen = strlen(sub);
@@ -553,8 +566,9 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
                 "length=<%zu> maxlength=<%zu>", sublen, outlen-1);
         goto done;
     }
-    strncpy(out, sub, outlen);
 
+    // All fine!
+    strncpy(out, sub, outlen);
     ret = 1;
 
 done:

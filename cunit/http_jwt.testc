@@ -281,6 +281,33 @@ static void test_validate(void)
     CU_ASSERT_EQUAL(SASL_BADAUTH, r);
     CU_ASSERT_STRING_EQUAL("", out);
 
+    // invalid token: non-number iat claim
+    token(&tok,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\", \"iat\": \"xxx\"}",
+        pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token: non-number nbf claim
+    token(&tok,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\", \"nbf\": \"xxx\"}",
+        pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token: non-number exp claim
+    token(&tok,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\", \"exp\": \"xxx\"}",
+        pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
     buf_free(&tok);
 
     EVP_PKEY_free(pkey);
@@ -359,7 +386,7 @@ static void test_validate_claims_no_max_age(void)
     // invalid token: outdated exp
     token(&tok,
           "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
-          "{\"sub\": \"test\", \"exp\":\"1516239022\"}",
+          "{\"sub\": \"test\", \"exp\":1516239022}",
           pkey, EVP_sha256());
     r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
     CU_ASSERT_EQUAL(SASL_BADAUTH, r);
@@ -420,7 +447,7 @@ static void test_validate_claims_with_max_age(void)
 
     // valid token with outdated iat/max_age
     // and valid exp : precedence for exp
-    char p3[] = "{\"sub\": \"test\", \"iat\":\"1516239022\", \"exp\":%ld}";
+    char p3[] = "{\"sub\": \"test\", \"iat\":1516239022, \"exp\":%ld}";
     char payload_three_fields[strlen(p3) + length];
     sprintf(payload_three_fields, p3, now + 2);
     token(&tok,
