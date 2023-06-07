@@ -191,6 +191,15 @@ static void test_validate(void)
     CU_ASSERT_EQUAL(SASL_OK, r);
     CU_ASSERT_STRING_EQUAL("test", out);
 
+    // valid token: ignore unknown claim
+    token(&tok,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\", \"iss\":\"foo\"}",
+        pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+
     // invalid token: no signature
     token(&tok,
         "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
@@ -267,15 +276,6 @@ static void test_validate(void)
     token(&tok,
         "{\"alg\": \"HS256\", \"typ\": \"JWT\", \"iss\":\"foo\"}",
         "{\"sub\": \"test\"}",
-        pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
-    CU_ASSERT_STRING_EQUAL("", out);
-
-    // invalid token: unsupported claim
-    token(&tok,
-        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
-        "{\"sub\": \"test\", \"iss\":\"foo\"}",
         pkey, EVP_sha256());
     r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
     CU_ASSERT_EQUAL(SASL_BADAUTH, r);

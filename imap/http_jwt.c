@@ -534,13 +534,10 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
                         goto done;
                     }
                 }
-            } else {
-                if (jiat) {
-                    char *val = json_dumps(jiat, JSON_COMPACT|JSON_ENCODE_ANY);
-                    xsyslog(LOG_ERR, "Invalid \"iat\" claim", "iat=<%s>", val);
-                    free(val);
-                }
-                else xsyslog(LOG_ERR, "JWT contains unsupported claims", NULL);
+            } else if (jiat) {
+                char *val = json_dumps(jiat, JSON_COMPACT|JSON_ENCODE_ANY);
+                xsyslog(LOG_ERR, "Invalid \"iat\" claim", "iat=<%s>", val);
+                free(val);
                 goto done;
             }
         }
