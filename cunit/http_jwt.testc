@@ -1,6 +1,7 @@
 #include "config.h"
 #include "cunit/cyrunit.h"
 
+#include <jansson.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
@@ -317,6 +318,23 @@ static void test_validate(void)
     http_jwt_reset();
 }
 
+#define TEST_TIMECLAIMS(nbf, exp, iat, want_r) \
+    { \
+        json_t *jws = json_pack("{s:s}", "sub", "test"); \
+        if (nbf) json_object_set_new(jws, "nbf", json_integer(nbf)); \
+        if (exp) json_object_set_new(jws, "exp", json_integer(exp)); \
+        if (iat) json_object_set_new(jws, "iat", json_integer(iat)); \
+        char *s = json_dumps(jws, JSON_COMPACT); \
+        token(&tok, \
+            "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", s, pkey, EVP_sha256()); \
+        r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256); \
+        CU_ASSERT_EQUAL((want_r), r); \
+        CU_ASSERT_STRING_EQUAL((want_r == SASL_OK) ? "test" : "", out); \
+        free(s); \
+        json_decref(jws); \
+    }
+
+
 static void test_validate_claims_no_max_age(void)
 {
     char dname[] = "/tmp/cyrus-cunit-XXXXXX";
@@ -337,69 +355,31 @@ static void test_validate_claims_no_max_age(void)
 
     struct buf tok = BUF_INITIALIZER;
     char out[256];
-
     time_t now = time(NULL);
 
+    // valid token: no time claim set
+    TEST_TIMECLAIMS(0, 0, 0, SASL_OK);
+
+    // valid token: iat = now
+    TEST_TIMECLAIMS(0, 0, now, SASL_OK);
+
+    // valid token: iat < now
+    TEST_TIMECLAIMS(0, 0, now - 2, SASL_OK);
+
+    // valid token: iat > now ignored (no max_age)
+    TEST_TIMECLAIMS(0, 0, now + 2, SASL_OK);
+
     // valid token: exp = now + 2s
-    int length = snprintf( NULL, 0, "%ld", now );
-    char p2[] = "{\"sub\": \"test\", \"exp\":%ld}";
-    char payload_two_fields[strlen(p2) + length];
-    sprintf(payload_two_fields, p2, now + 2);
-    token(&tok,
-          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payload_two_fields,
-          pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_OK, r);
-    CU_ASSERT_STRING_EQUAL("test", out);
+    TEST_TIMECLAIMS(0, now + 2, 0, SASL_OK);
 
-    // valid token: exp OK iat not used and custom fields
-    char p5[] = "{\"sub\": \"test\", \"exp\":%ld, \"iat\": %ld, \"foo\": \"bar\", \"baz\": \"qux\"}";
-    char payload_five_fields[strlen(p5) + 2 * length];
-    sprintf(payload_five_fields, p5, now + 2, now);
-    token(&tok,
-          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payload_five_fields,
-          pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_OK, r);
-    CU_ASSERT_STRING_EQUAL("test", out);
+    // valid token: exp = now + 2s, nbf = now
+    TEST_TIMECLAIMS(now, now + 2, 0, SASL_OK);
 
-    // valid token: exp and nbf OK
-    char p3[] = "{\"sub\": \"test\", \"exp\":%ld, \"nbf\": %ld}";
-    char payload_three_fields[strlen(p3) + 2 * length];
-    sprintf(payload_three_fields, p3, now + 2, now);
-    token(&tok,
-          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payload_three_fields,
-          pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_OK, r);
-    CU_ASSERT_STRING_EQUAL("test", out);
+    // invalid token: exp = now
+    TEST_TIMECLAIMS(0, now, 0, SASL_BADAUTH);
 
-    // invalid token: bad iat
-    token(&tok,
-          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
-          "{\"sub\": \"test\", \"iat\":\"1516239022\"}",
-          pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
-    CU_ASSERT_STRING_EQUAL("", out);
-
-    // invalid token: outdated exp
-    token(&tok,
-          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
-          "{\"sub\": \"test\", \"exp\":1516239022}",
-          pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
-    CU_ASSERT_STRING_EQUAL("", out);
-
-    // invalid token: exp OK but nbf is in the future
-    sprintf(payload_three_fields, p3, now + 2, now + 2);
-    token(&tok,
-          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payload_three_fields,
-          pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
-    CU_ASSERT_STRING_EQUAL("", out);
+    // invalid token: nbf > now
+    TEST_TIMECLAIMS(now + 2, now + 2, 0, SASL_BADAUTH);
 
     buf_free(&tok);
 
@@ -421,7 +401,9 @@ static void test_validate_claims_with_max_age(void)
     fputs(HMAC_PEM, fp);
     fclose(fp);
 
-    int r = http_jwt_init(dname, 60);
+    int max_age = 60;
+
+    int r = http_jwt_init(dname, max_age);
     CU_ASSERT_EQUAL(0, r);
     CU_ASSERT_NOT_EQUAL(0, http_jwt_is_enabled());
 
@@ -430,40 +412,28 @@ static void test_validate_claims_with_max_age(void)
 
     struct buf tok = BUF_INITIALIZER;
     char out[256];
-
-    // valid token with iat/max_age
     time_t now = time(NULL);
-    long now_minus_two_secs = now - 2;
-    char p2[] = "{\"sub\": \"test\", \"iat\":%ld}";
-    int length = snprintf( NULL, 0, "%ld", now_minus_two_secs );
-    char payload_two_fields[strlen(p2) + length];
-    sprintf(payload_two_fields, p2, now_minus_two_secs);
-    token(&tok,
-          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payload_two_fields,
-          pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_OK, r);
-    CU_ASSERT_STRING_EQUAL("test", out);
 
-    // valid token with outdated iat/max_age
-    // and valid exp : precedence for exp
-    char p3[] = "{\"sub\": \"test\", \"iat\":1516239022, \"exp\":%ld}";
-    char payload_three_fields[strlen(p3) + length];
-    sprintf(payload_three_fields, p3, now + 2);
-    token(&tok,
-          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", payload_three_fields,
-          pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_OK, r);
-    CU_ASSERT_STRING_EQUAL("test", out);
+    // invalid token: no iat set, but max_age configured
+    TEST_TIMECLAIMS(0, 0, 0, SASL_BADAUTH);
 
-    // invalid token max_age without iat
-    token(&tok,
-          "{\"alg\":\"HS256\",\"typ\":\"JWT\"}",
-          "{\"sub\":\"test\"}", pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, sizeof(out));
-    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
-    CU_ASSERT_STRING_EQUAL("", out);
+    // valid token: iat + max_age > now
+    TEST_TIMECLAIMS(0, 0, now - 2, SASL_OK);
+
+    // invalid token: iat + max_age <= now
+    TEST_TIMECLAIMS(0, 0, now - max_age, SASL_BADAUTH);
+
+    // invalid token: iat > now
+    TEST_TIMECLAIMS(0, 0, now + 2, SASL_BADAUTH);
+
+    // valid token: exp > now
+    TEST_TIMECLAIMS(0, now + 2, 0, SASL_OK);
+
+    // valid token: exp > now, even if iat+max_age expired
+    TEST_TIMECLAIMS(0, now + 2, now - max_age, SASL_OK);
+
+    // invalid token: exp == now, at+max_age expired
+    TEST_TIMECLAIMS(0, now, now - max_age, SASL_BADAUTH);
 
     buf_free(&tok);
 
@@ -473,6 +443,8 @@ static void test_validate_claims_with_max_age(void)
     rmdir(dname);
     http_jwt_reset();
 }
+
+#undef TEST_TIMECLAIMS
 
 static void test_auth(void)
 {
