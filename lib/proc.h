@@ -43,6 +43,17 @@
 #ifndef _PROC_H
 #define _PROC_H
 
+extern int proc_register(const char *servicename, const char *clienthost,
+                         const char *userid, const char *mailbox,
+                         const char *cmd);
+extern void proc_cleanup(void);
+
+typedef int procdata_t(pid_t pid,
+                       const char *servicename, const char *clienthost,
+                       const char *userid, const char *mailbox,
+                       const char *cmd, void *rock);
+extern int proc_foreach(procdata_t *func, void *rock);
+
 struct proc_limits {
     const char *procname;
     const char *clienthost;
@@ -52,20 +63,6 @@ struct proc_limits {
     int host;
     int maxhost;
 };
-
-typedef int procdata_t(pid_t pid,
-                       const char *servicename, const char *clienthost,
-                       const char *userid, const char *mailbox,
-                       const char *cmd, void *rock);
-
-extern int proc_register(const char *servicename, const char *clienthost,
-                         const char *userid, const char *mailbox,
-                         const char *cmd);
-
-extern void proc_cleanup(void);
-
-extern int proc_foreach(procdata_t *func, void *rock);
-
 extern int proc_checklimits(struct proc_limits *limitsp);
 
 extern void proc_killuser(const char *userid);
