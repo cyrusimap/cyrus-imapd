@@ -1,6 +1,7 @@
 #include "config.h"
 #include "cunit/cyrunit.h"
 
+#include <jansson.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
@@ -176,16 +177,25 @@ static void test_validate(void)
 
     // valid token
     token(&tok,
-        "{\"alg\":\"HS256\",\"typ\":\"JWT\"}",
-        "{\"sub\":\"test\"}", pkey, EVP_sha256());
+          "{\"alg\":\"HS256\",\"typ\":\"JWT\"}",
+          "{\"sub\":\"test\"}", pkey, EVP_sha256());
     r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, sizeof(out));
     CU_ASSERT_EQUAL(SASL_OK, r);
     CU_ASSERT_STRING_EQUAL("test", out);
 
     // valid token: ignored iat
     token(&tok,
+          "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+          "{\"sub\": \"test\", \"iat\":1516239022}",
+          pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_OK, r);
+    CU_ASSERT_STRING_EQUAL("test", out);
+
+    // valid token: ignore unknown claim
+    token(&tok,
         "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
-        "{\"sub\": \"test\", \"iat\":1516239022}",
+        "{\"sub\": \"test\", \"iss\":\"foo\"}",
         pkey, EVP_sha256());
     r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
     CU_ASSERT_EQUAL(SASL_OK, r);
@@ -254,15 +264,6 @@ static void test_validate(void)
     CU_ASSERT_EQUAL(SASL_BADAUTH, r);
     CU_ASSERT_STRING_EQUAL("", out);
 
-    // invalid token: bad iat
-    token(&tok,
-        "{\"alg\": \"HS256\", \"typ\": \"XXX\"}",
-        "{\"sub\": \"test\", \"iat\":\"1516239022\"}",
-        pkey, EVP_sha256());
-    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
-    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
-    CU_ASSERT_STRING_EQUAL("", out);
-
     // invalid token: bad JWS
     token(&tok,
         "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
@@ -281,10 +282,28 @@ static void test_validate(void)
     CU_ASSERT_EQUAL(SASL_BADAUTH, r);
     CU_ASSERT_STRING_EQUAL("", out);
 
-    // invalid token: unsupported claim
+    // invalid token: non-number iat claim
     token(&tok,
         "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
-        "{\"sub\": \"test\", \"iss\":\"foo\"}",
+        "{\"sub\": \"test\", \"iat\": \"xxx\"}",
+        pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token: non-number nbf claim
+    token(&tok,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\", \"nbf\": \"xxx\"}",
+        pkey, EVP_sha256());
+    r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
+    CU_ASSERT_EQUAL(SASL_BADAUTH, r);
+    CU_ASSERT_STRING_EQUAL("", out);
+
+    // invalid token: non-number exp claim
+    token(&tok,
+        "{\"alg\": \"HS256\", \"typ\": \"JWT\"}",
+        "{\"sub\": \"test\", \"exp\": \"xxx\"}",
         pkey, EVP_sha256());
     r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256);
     CU_ASSERT_EQUAL(SASL_BADAUTH, r);
@@ -298,6 +317,134 @@ static void test_validate(void)
     rmdir(dname);
     http_jwt_reset();
 }
+
+#define TEST_TIMECLAIMS(nbf, exp, iat, want_r) \
+    { \
+        json_t *jws = json_pack("{s:s}", "sub", "test"); \
+        if (nbf) json_object_set_new(jws, "nbf", json_integer(nbf)); \
+        if (exp) json_object_set_new(jws, "exp", json_integer(exp)); \
+        if (iat) json_object_set_new(jws, "iat", json_integer(iat)); \
+        char *s = json_dumps(jws, JSON_COMPACT); \
+        token(&tok, \
+            "{\"alg\": \"HS256\", \"typ\": \"JWT\"}", s, pkey, EVP_sha256()); \
+        r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, 256); \
+        CU_ASSERT_EQUAL((want_r), r); \
+        CU_ASSERT_STRING_EQUAL((want_r == SASL_OK) ? "test" : "", out); \
+        free(s); \
+        json_decref(jws); \
+    }
+
+
+static void test_validate_claims_no_max_age(void)
+{
+    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
+
+    char *fname = strconcat(dname, "/key.pem", NULL);
+    FILE *fp = fopen(fname, "w");
+    CU_ASSERT_PTR_NOT_NULL(fp);
+    fputs(HMAC_PEM, fp);
+    fclose(fp);
+
+    int r = http_jwt_init(dname, 0);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_NOT_EQUAL(0, http_jwt_is_enabled());
+
+    EVP_PKEY *pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, NULL,
+                    (unsigned char*)HMAC_KEY_RAW, strlen(HMAC_KEY_RAW));
+
+    struct buf tok = BUF_INITIALIZER;
+    char out[256];
+    time_t now = time(NULL);
+
+    // valid token: no time claim set
+    TEST_TIMECLAIMS(0, 0, 0, SASL_OK);
+
+    // valid token: iat = now
+    TEST_TIMECLAIMS(0, 0, now, SASL_OK);
+
+    // valid token: iat < now
+    TEST_TIMECLAIMS(0, 0, now - 2, SASL_OK);
+
+    // valid token: iat > now ignored (no max_age)
+    TEST_TIMECLAIMS(0, 0, now + 2, SASL_OK);
+
+    // valid token: exp = now + 2s
+    TEST_TIMECLAIMS(0, now + 2, 0, SASL_OK);
+
+    // valid token: exp = now + 2s, nbf = now
+    TEST_TIMECLAIMS(now, now + 2, 0, SASL_OK);
+
+    // invalid token: exp = now
+    TEST_TIMECLAIMS(0, now, 0, SASL_BADAUTH);
+
+    // invalid token: nbf > now
+    TEST_TIMECLAIMS(now + 2, now + 2, 0, SASL_BADAUTH);
+
+    buf_free(&tok);
+
+    EVP_PKEY_free(pkey);
+    xunlink(fname);
+    free(fname);
+    rmdir(dname);
+    http_jwt_reset();
+}
+
+static void test_validate_claims_with_max_age(void)
+{
+    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
+
+    char *fname = strconcat(dname, "/key.pem", NULL);
+    FILE *fp = fopen(fname, "w");
+    CU_ASSERT_PTR_NOT_NULL(fp);
+    fputs(HMAC_PEM, fp);
+    fclose(fp);
+
+    int max_age = 60;
+
+    int r = http_jwt_init(dname, max_age);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_NOT_EQUAL(0, http_jwt_is_enabled());
+
+    EVP_PKEY *pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, NULL,
+                      (unsigned char*)HMAC_KEY_RAW, strlen(HMAC_KEY_RAW));
+
+    struct buf tok = BUF_INITIALIZER;
+    char out[256];
+    time_t now = time(NULL);
+
+    // invalid token: no iat set, but max_age configured
+    TEST_TIMECLAIMS(0, 0, 0, SASL_BADAUTH);
+
+    // valid token: iat + max_age > now
+    TEST_TIMECLAIMS(0, 0, now - 2, SASL_OK);
+
+    // invalid token: iat + max_age <= now
+    TEST_TIMECLAIMS(0, 0, now - max_age, SASL_BADAUTH);
+
+    // invalid token: iat > now
+    TEST_TIMECLAIMS(0, 0, now + 2, SASL_BADAUTH);
+
+    // valid token: exp > now
+    TEST_TIMECLAIMS(0, now + 2, 0, SASL_OK);
+
+    // valid token: exp > now, even if iat+max_age expired
+    TEST_TIMECLAIMS(0, now + 2, now - max_age, SASL_OK);
+
+    // invalid token: exp == now, at+max_age expired
+    TEST_TIMECLAIMS(0, now, now - max_age, SASL_BADAUTH);
+
+    buf_free(&tok);
+
+    EVP_PKEY_free(pkey);
+    xunlink(fname);
+    free(fname);
+    rmdir(dname);
+    http_jwt_reset();
+}
+
+#undef TEST_TIMECLAIMS
 
 static void test_auth(void)
 {
@@ -334,7 +481,7 @@ static void test_auth(void)
         CU_ASSERT_EQUAL(SASL_OK, r); \
         CU_ASSERT_STRING_EQUAL("test", out); \
         char c = buf_base(&tok)[buf_len(&tok)-1]; \
-        c = c == 'A' ? 'B' : 'A'; \
+        c = c == 'A' ? '/' : 'A'; \
         buf_truncate(&tok, -1); \
         buf_putc(&tok, c); \
         r = http_jwt_auth(buf_base(&tok), buf_len(&tok), out, sizeof(out)); \

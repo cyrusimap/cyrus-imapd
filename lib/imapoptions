@@ -1148,9 +1148,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    "iat" claim of the JWS Payload and ends after the duration of this
    option value has passed. Tokens without an "iat" claim,
    or with an issue date in the future, are rejected. There is no leeway
-   for clock skew.
+   for clock skew. Starting from Cyrus version 3.8, the "iat" claim
+   only is validated if no "exp" claim is present.
 
    The zero value disables validation of the "iat" JWS claim.
+
+   Starting from Cyrus 3.8, the "nbf" and "exp" claims always are validated.
 */
 
 { "icalendar_max_size", "0", BYTESIZE, "3.8.0" }
