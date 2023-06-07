@@ -87,8 +87,6 @@
 extern void setproctitle(const char *fmt, ...)
                          __attribute__((format(printf, 1, 2)));
 
-static char *procfname = 0;
-
 static char *proc_getpath(pid_t pid, int isnew)
 {
     struct buf buf = BUF_INITIALIZER;
@@ -127,15 +125,36 @@ static char *proc_getdir(void)
     return proc_getpath(0, 0);
 }
 
-EXPORTED int proc_register(const char *servicename, const char *clienthost,
-                  const char *userid, const char *mailbox, const char *cmd)
+struct proc_handle {
+    pid_t pid;
+    char *fname;
+};
+
+EXPORTED int proc_register(struct proc_handle **handlep,
+                           pid_t pid,
+                           const char *servicename,
+                           const char *clienthost,
+                           const char *userid,
+                           const char *mailbox,
+                           const char *cmd)
 {
-    pid_t pid = getpid();
     FILE *procfile = NULL;
     char *newfname = NULL;
+    struct proc_handle *handle = NULL;
 
-    if (!procfname)
-        procfname = proc_getpath(pid, /*isnew*/0);
+    assert(handlep != NULL);
+
+    if (*handlep != NULL) {
+        handle = *handlep;
+        pid = handle->pid;
+    }
+    else {
+        handle = xmalloc(sizeof *handle);
+        if (!pid) pid = getpid();
+        handle->pid = pid;
+        handle->fname = proc_getpath(pid, /*isnew*/0);
+        *handlep = handle;
+    }
 
     newfname = proc_getpath(pid, /*isnew*/1);
 
@@ -159,11 +178,14 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
     if (!userid) userid = "";
     if (!mailbox) mailbox = "";
     if (!cmd) cmd = "";
-    fprintf(procfile, "%s\t%s\t%s\t%s\t%s\n", servicename, clienthost, userid, mailbox, cmd);
+    fprintf(procfile, "%s\t%s\t%s\t%s\t%s\n",
+                      servicename, clienthost, userid, mailbox, cmd);
     fclose(procfile);
 
-    if (rename(newfname, procfname)) {
-        syslog(LOG_ERR, "IOERROR: renaming %s to %s: %m", newfname, procfname);
+    if (rename(newfname, handle->fname)) {
+        xsyslog(LOG_ERR, "IOERROR: rename failed",
+                         "source=<%s> dest=<%s>",
+                         newfname, handle->fname);
         xunlink(newfname);
         fatal("can't write proc file", EX_IOERR);
     }
@@ -172,12 +194,19 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
     return 0;
 }
 
-EXPORTED void proc_cleanup(void)
+EXPORTED void proc_cleanup(struct proc_handle **handlep)
 {
-    if (procfname) {
-        xunlink(procfname);
-        free(procfname);
-        procfname = NULL;
+    struct proc_handle *handle;
+
+    assert(handlep != NULL);
+
+    handle = *handlep;
+    *handlep = NULL;
+
+    if (handle) {
+        xunlink(handle->fname);
+        free(handle->fname);
+        free(handle);
     }
 }
 

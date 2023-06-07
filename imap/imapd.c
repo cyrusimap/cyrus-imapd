@@ -131,6 +131,7 @@ extern char *optarg;
 
 /* global state */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+static struct proc_handle *proc_handle = NULL;
 
 static int imaps = 0;
 static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
@@ -866,7 +867,7 @@ static void imapd_reset(void)
     /* run delayed commands first before closing anything */
     libcyrus_run_delayed();
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     /* close backend connections */
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
@@ -1118,7 +1119,8 @@ int service_main(int argc __attribute__((unused)),
     imapd_login_disabled = imapd_tls_required ||
         ((extprops_ssf < 2) && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT));
 
-    proc_register(config_ident, imapd_clienthost, NULL, NULL, NULL);
+    proc_register(&proc_handle, 0,
+                  config_ident, imapd_clienthost, NULL, NULL, NULL);
     proc_settitle(config_ident, imapd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
@@ -1228,7 +1230,7 @@ void shut_down(int code)
     /* run delayed commands before we take away all the environment */
     libcyrus_run_delayed();
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
         struct backend *be = ptrarray_nth(&backend_cached, i);
@@ -1312,7 +1314,7 @@ EXPORTED void fatal(const char *s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         if (imapd_out) {
             /* one less active connection */
             prometheus_decrement(CYRUS_IMAP_ACTIVE_CONNECTIONS);
@@ -1429,7 +1431,8 @@ static void cmdloop(void)
         if (backend_current) prot_flush(backend_current->out);
 
         /* command no longer running */
-        proc_register(config_ident, imapd_clienthost, imapd_userid,
+        proc_register(&proc_handle, 0,
+                      config_ident, imapd_clienthost, imapd_userid,
                       index_mboxname(imapd_index), NULL);
         proc_settitle(config_ident, imapd_clienthost, imapd_userid,
                       index_mboxname(imapd_index), NULL);
@@ -1501,7 +1504,8 @@ static void cmdloop(void)
         if (config_getswitch(IMAPOPT_CHATTY))
             syslog(LOG_NOTICE, "command: %s %s", tag.s, cmd.s);
 
-        proc_register(config_ident, imapd_clienthost, imapd_userid,
+        proc_register(&proc_handle, 0,
+                      config_ident, imapd_clienthost, imapd_userid,
                       index_mboxname(imapd_index), cmd.s);
         proc_settitle(config_ident, imapd_clienthost, imapd_userid,
                       index_mboxname(imapd_index), cmd.s);

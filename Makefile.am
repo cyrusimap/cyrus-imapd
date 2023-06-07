@@ -642,6 +642,7 @@ cunit_TESTS = \
 	cunit/msgid.testc \
 	cunit/parseaddr.testc \
 	cunit/parse.testc \
+	cunit/proc.testc \
 	cunit/procinfo.testc \
 	cunit/prot.testc \
 	cunit/ptrarray.testc \

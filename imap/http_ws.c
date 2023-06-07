@@ -898,7 +898,8 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     buf_printf(&service, "%s%s", config_ident,
                namespace->well_known ? strrchr(namespace->well_known, '/') :
                namespace->prefix);
-    proc_register(buf_cstring(&service), txn->conn->clienthost, httpd_userid,
+    proc_register(&httpd_proc_handle, 0,
+                  buf_cstring(&service), txn->conn->clienthost, httpd_userid,
                   txn->req_tgt.path, "WS");
     buf_free(&service);
 

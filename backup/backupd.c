@@ -84,6 +84,7 @@ static sasl_conn_t *backupd_saslconn = NULL;
 static int backupd_starttls_done = 0;
 static int backupd_compress_done = 0;
 static int backupd_logfd = -1;
+static struct proc_handle *proc_handle = NULL;
 
 struct open_backup {
     char *name;
@@ -159,7 +160,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         exit(recurse_code);
     }
     recurse_code = code;
@@ -268,7 +269,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
         tcp_disable_nagle(1); /* XXX magic fd */
     }
 
-    proc_register(config_ident, backupd_clienthost, NULL, NULL, NULL);
+    proc_register(&proc_handle, 0,
+                  config_ident, backupd_clienthost, NULL, NULL, NULL);
     proc_settitle(config_ident, backupd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
@@ -296,7 +298,7 @@ static void backupd_reset(void)
 {
     open_backups_list_close(&backupd_open_backups, 0);
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     if (backupd_in) {
         prot_NONBLOCK(backupd_in);
@@ -824,7 +826,8 @@ static void cmd_authenticate(char *mech, char *resp)
     }
 
     backupd_userid = xstrdup((const char *) val);
-    proc_register(config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
+    proc_register(&proc_handle, 0,
+                  config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
     proc_settitle(config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", backupd_clienthost, backupd_userid,

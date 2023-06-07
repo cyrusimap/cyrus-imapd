@@ -156,6 +156,8 @@ static int popd_tls_required = 0;
 
 static int popd_myrights;
 
+static struct proc_handle *proc_handle = NULL;
+
 /* the sasl proxy policy context */
 static struct proxy_context popd_proxyctx = {
     0, 1, &popd_authstate, NULL, NULL
@@ -328,7 +330,7 @@ static void popd_reset(void)
     int bytes_in = 0;
     int bytes_out = 0;
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     syslog(LOG_NOTICE, "counts: retr=<%d> top=<%d> dele=<%d>",
                        count_retr, count_top, count_dele);
@@ -605,7 +607,7 @@ void shut_down(int code)
 
     libcyrus_run_delayed();
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     /* close local mailbox */
     if (popd_mailbox)
@@ -676,7 +678,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         exit(recurse_code);
     }
     recurse_code = code;
@@ -860,7 +862,8 @@ static void cmdloop(void)
         signals_poll();
 
         /* register process */
-        proc_register(config_ident, popd_clienthost, popd_userid,
+        proc_register(&proc_handle, 0,
+                      config_ident, popd_clienthost, popd_userid,
                       popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
                       NULL);
         proc_settitle(config_ident, popd_clienthost, popd_userid,
@@ -944,7 +947,8 @@ static void cmdloop(void)
             syslog(LOG_NOTICE, "command: %s", inputbuf);
 
         /* register process */
-        proc_register(config_ident, popd_clienthost, popd_userid,
+        proc_register(&proc_handle, 0,
+                      config_ident, popd_clienthost, popd_userid,
                       popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
                       inputbuf);
         proc_settitle(config_ident, popd_clienthost, popd_userid,

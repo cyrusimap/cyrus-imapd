@@ -43,10 +43,15 @@
 #ifndef _PROC_H
 #define _PROC_H
 
-extern int proc_register(const char *servicename, const char *clienthost,
-                         const char *userid, const char *mailbox,
+struct proc_handle;
+extern int proc_register(struct proc_handle **handlep,
+                         pid_t pid,
+                         const char *servicename,
+                         const char *clienthost,
+                         const char *userid,
+                         const char *mailbox,
                          const char *cmd);
-extern void proc_cleanup(void);
+extern void proc_cleanup(struct proc_handle **handlep);
 
 typedef int procdata_t(pid_t pid,
                        const char *servicename, const char *clienthost,

@@ -136,6 +136,7 @@ static int sync_starttls_done = 0;
 static int sync_compress_done = 0;
 static int sync_sieve_mailbox_enabled = 0;
 static int sync_archive_enabled = 0;
+static struct proc_handle *proc_handle = NULL;
 
 static int opt_force = 0;
 
@@ -180,7 +181,7 @@ static struct sasl_callback mysasl_cb[] = {
 
 static void sync_reset(void)
 {
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     if (sync_in) {
         prot_NONBLOCK(sync_in);
@@ -365,7 +366,8 @@ int service_main(int argc __attribute__((unused)),
         tcp_disable_nagle(1); /* XXX magic fd */
     }
 
-    proc_register(config_ident, sync_clienthost, NULL, NULL, NULL);
+    proc_register(&proc_handle, 0,
+                  config_ident, sync_clienthost, NULL, NULL, NULL);
     proc_settitle(config_ident, sync_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
@@ -413,7 +415,7 @@ void shut_down(int code)
 
     libcyrus_run_delayed();
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     seen_done();
 
@@ -456,7 +458,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         exit(recurse_code);
     }
     recurse_code = code;
@@ -784,7 +786,8 @@ static void cmd_authenticate(char *mech, char *resp)
     }
 
     sync_userid = xstrdup((const char *) val);
-    proc_register(config_ident, sync_clienthost, sync_userid, NULL, NULL);
+    proc_register(&proc_handle, 0,
+                  config_ident, sync_clienthost, sync_userid, NULL, NULL);
     proc_settitle(config_ident, sync_clienthost, sync_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", sync_clienthost, sync_userid,

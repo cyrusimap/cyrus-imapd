@@ -114,6 +114,8 @@
 
 static unsigned accept_encodings = 0;
 
+struct proc_handle *httpd_proc_handle = NULL;
+
 #ifdef HAVE_ZLIB
 #include <zlib.h>
 
@@ -694,7 +696,7 @@ static void httpd_reset(struct http_connection *conn)
     /* Reset available authentication schemes */
     avail_auth_schemes = 0;
 
-    proc_cleanup();
+    proc_cleanup(&httpd_proc_handle);
 
     /* close backend connections */
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
@@ -1017,7 +1019,8 @@ int service_main(int argc __attribute__((unused)),
     httpd_tls_required =
         config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
 
-    proc_register(config_ident, http_conn.clienthost, NULL, NULL, NULL);
+    proc_register(&httpd_proc_handle, 0,
+                  config_ident, http_conn.clienthost, NULL, NULL, NULL);
     proc_settitle(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
     /* Construct Alt-Svc header value */
@@ -1133,7 +1136,7 @@ void shut_down(int code)
 
     xmlCleanupParser();
 
-    proc_cleanup();
+    proc_cleanup(&httpd_proc_handle);
 
     /* close backend connections */
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
@@ -1191,7 +1194,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&httpd_proc_handle);
         if (httpd_out) {
             /* one less active connection */
             prometheus_decrement(CYRUS_HTTP_ACTIVE_CONNECTIONS);
@@ -1934,7 +1937,8 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
     buf_printf(&txn->buf, "%s%s", config_ident,
                namespace->well_known ? strrchr(namespace->well_known, '/') :
                namespace->prefix);
-    proc_register(buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
+    proc_register(&httpd_proc_handle, 0,
+                  buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
                   txn->req_tgt.path, txn->req_line.meth);
     proc_settitle(buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
                   txn->req_tgt.path, txn->req_line.meth);
