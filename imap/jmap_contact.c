@@ -5703,7 +5703,7 @@ static const jmap_property_t card_props[] = {
         0
     },
     {
-        "locale",
+        "language",
         NULL,
         0
     },
@@ -5783,7 +5783,7 @@ static const jmap_property_t card_props[] = {
         0
     },
     {
-        "preferredContactChannels",
+        "contactBy",
         NULL,
         0
     },
@@ -6298,6 +6298,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
             }
             break;
 
+        case VCARD_USERNAME_PARAMETER:
         case VCARD_VALUE_PARAMETER:
             /* Should be handled by the properties that use it */
             continue;
@@ -6496,7 +6497,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             goto anniversaries;
         }
 
-        case VCARD_GRAMMATICALGENDER_PROPERTY: {
+        case VCARD_GRAMGENDER_PROPERTY: {
             json_t *speakto = json_object_get_vanew(obj, "speakToAs", "{}");
 
             buf_setcstr(&buf, prop_value);
@@ -6693,30 +6694,27 @@ static json_t *jmap_card_from_vcard(const char *userid,
         }
 
             /* Communications Properties */
-        case VCARD_CONTACTCHANNELPREF_PROPERTY: {
-            vcardproperty_contact_channel_pref pref =
-                vcardproperty_get_contactchannelpref(prop);
+        case VCARD_CONTACTBY_PROPERTY: {
             const char *key = NULL;
 
-            switch (pref) {
-            case VCARD_CONTACTCHANNELPREF_ADR:
+            switch (vcardproperty_get_contactby(prop)) {
+            case VCARD_CONTACTBY_ADR:
                 key = "addresses";
                 break;
-            case VCARD_CONTACTCHANNELPREF_EMAIL:
+            case VCARD_CONTACTBY_EMAIL:
                 key = "emails";
                 break;
-            case VCARD_CONTACTCHANNELPREF_IMPP:
+            case VCARD_CONTACTBY_IMPP:
                 key = "onlineServices";
                 break;
-            case VCARD_CONTACTCHANNELPREF_TEL:
+            case VCARD_CONTACTBY_TEL:
                 key = "phones";
                 break;
             default:
                 goto unmapped;
             }
             
-            json_t *channels =
-                json_object_get_vanew(obj, "preferredContactChannels", "{}");
+            json_t *channels = json_object_get_vanew(obj, "contactBy", "{}");
 
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM;
 
@@ -6739,30 +6737,38 @@ static json_t *jmap_card_from_vcard(const char *userid,
             break;
         }
 
-        case VCARD_SOCIALPROFILE_PROPERTY:
-            param = vcardproperty_get_first_parameter(prop,
-                                                      VCARD_VALUE_PARAMETER);
-            if (param && vcardparameter_get_value(param) == VCARD_VALUE_TEXT) {
-                kind = "username";
-            }
-            else {
-                kind = "uri";
-            }
+        case VCARD_IMPP_PROPERTY:
+            kind = "impp";
 
             GCC_FALLTHROUGH
 
-        case VCARD_IMPP_PROPERTY: {
-            json_t *services = json_object_get_vanew(obj,
-                                                     "onlineServices", "{}");
+        case VCARD_SOCIALPROFILE_PROPERTY: {
+            json_t *user = NULL, *uri = NULL,
+                *services = json_object_get_vanew(obj, "onlineServices", "{}");
+
+            param = vcardproperty_get_first_parameter(prop,
+                                                      VCARD_VALUE_PARAMETER);
+            if (param && vcardparameter_get_value(param) == VCARD_VALUE_TEXT) {
+                user = jmap_utf8string(prop_value);
+            }
+            else {
+                uri = jmap_utf8string(prop_value);
+
+                param =
+                    vcardproperty_get_first_parameter(prop,
+                                                      VCARD_USERNAME_PARAMETER);
+                if (param) {
+                    user = jmap_utf8string(vcardparameter_get_username(param));
+                }
+            }
 
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
                 ALLOW_LABEL_PARAM | ALLOW_SERVICETYPE_PARAM;
 
-            if (!kind) kind = "impp";
-
-            jprop = json_pack("{s:s s:o}",
-                              "kind", kind,
-                              "user", jmap_utf8string(prop_value));
+            jprop = json_pack("{s:o* s:o* s:s*}",
+                              "user", user,
+                              "uri", uri,
+                              "vCardName", kind);
 
             json_object_set_new(services, _prop_id(prop), jprop);
             break;
@@ -6780,8 +6786,8 @@ static json_t *jmap_card_from_vcard(const char *userid,
             break;
         }
 
-        case VCARD_LOCALE_PROPERTY:
-            json_object_set_new(obj, "locale", jmap_utf8string(prop_value));
+        case VCARD_DEFLANGUAGE_PROPERTY:
+            json_object_set_new(obj, "language", jmap_utf8string(prop_value));
             break;
 
         case VCARD_TEL_PROPERTY: {
@@ -7244,7 +7250,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
  */
 
 struct l10n_by_id_t {
-    const char *locale;
+    const char *deflang;
     const char *lang;
     hash_table *patches;
 };
@@ -7286,7 +7292,7 @@ static unsigned jssimple_to_vcard(struct jmap_parser *parser,
     switch (vkind) {
     case VCARD_KIND_VALUE:
     case VCARD_TEXT_VALUE:
-    case VCARD_GRAMMATICALGENDER_VALUE:
+    case VCARD_GRAMGENDER_VALUE:
         if (!json_is_string(jval)) {
             jmap_parser_invalid(parser, key);
             return 0;
@@ -7578,7 +7584,7 @@ static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
                 json_decref(jpatch);
 
                 if (altobj) {
-                    lang = strcasecmp(l10n->locale, lpatch->lang) ?
+                    lang = strcasecmp(l10n->deflang, lpatch->lang) ?
                         lpatch->lang : NULL;
 
                     flags = WANT_ALTID_FLAG;
@@ -8052,8 +8058,8 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
             while ((lpatch = ptrarray_pop(patches))) {
                 if (jssimple_to_vcard(parser, "grammaticalGender",
                                       lpatch->lang, lpatch->obj,
-                                      card, VCARD_GRAMMATICALGENDER_PROPERTY,
-                                      VCARD_GRAMMATICALGENDER_VALUE)) {
+                                      card, VCARD_GRAMGENDER_PROPERTY,
+                                      VCARD_GRAMGENDER_VALUE)) {
                     r = 1;
                 }
 
@@ -8065,8 +8071,8 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
 
         /* Add base object to Card */
         if (jssimple_to_vcard(parser, "grammaticalGender", l10n->lang, jprop,
-                              card, VCARD_GRAMMATICALGENDER_PROPERTY,
-                              VCARD_GRAMMATICALGENDER_VALUE)) {
+                              card, VCARD_GRAMGENDER_PROPERTY,
+                              VCARD_GRAMGENDER_VALUE)) {
             r = 1;
         }
         else {
@@ -8237,8 +8243,8 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
                                          vcardcomponent *card __attribute__((unused)),
                                          void *rock __attribute__((unused)))
 {
-    const char *service = NULL, *val_kind = "URI", *val;
-    vcardproperty_kind kind = VCARD_NO_PROPERTY;
+    const char *service = NULL, *user = NULL, *val = NULL, *val_kind = "TEXT";
+    vcardproperty_kind kind = VCARD_SOCIALPROFILE_PROPERTY;
     vcardproperty *prop = NULL;
     json_t *jprop;
 
@@ -8250,74 +8256,102 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
         jmap_parser_invalid(parser, "service");
     }
 
-    val = json_string_value(json_object_get(obj, "kind"));
-    if (!strcmp("impp", val)) {
-        kind = VCARD_IMPP_PROPERTY;
+    jprop = json_object_get(obj, "user");
+    if (json_is_string(jprop)) {
+        user = json_string_value(jprop);
     }
-    else if (!strcmp("uri", val)) {
-        kind = VCARD_SOCIALPROFILE_PROPERTY;
+    else if (jprop) {
+        jmap_parser_invalid(parser, "user");
     }
-    else if (!strcmp("username", val)) {
-        kind = VCARD_SOCIALPROFILE_PROPERTY;
-        val_kind = "TEXT";
-        if (!service) {
-            jmap_parser_invalid(parser, "service");
+
+    jprop = json_object_get(obj, "uri");
+    if (json_is_string(jprop)) {
+        val_kind = "URI";
+        val = json_string_value(jprop);
+
+        if (!strncasecmp("xmpp:", val, 5)) {
+            kind = VCARD_IMPP_PROPERTY;
         }
+    }
+    else if (jprop || !user) {
+        jmap_parser_invalid(parser, "uri");
     }
     else {
-        jmap_parser_invalid(parser, "kind");
+        val = user;
+        user = NULL;
     }
-    
-    if (kind != VCARD_NO_PROPERTY) {
-        val = json_string_value(json_object_get(obj, "user"));
-        if (!val) {
-            jmap_parser_invalid(parser, "user");
-        }
-        else {
-            prop = vcardproperty_new(kind);
-            vcardproperty_set_value_from_string(prop, val, val_kind);
-            
-            if (service) {
-                vcardproperty_add_parameter(prop,
-                                            vcardparameter_new_servicetype(service));
-                json_object_del(obj, "service");
-            }
 
-            json_object_del(obj, "kind");
-            json_object_del(obj, "user");
+    if (val) {
+        prop = vcardproperty_new(kind);
+        vcardproperty_set_value_from_string(prop, val, val_kind);
+            
+        if (service) {
+            vcardproperty_add_parameter(prop,
+                                        vcardparameter_new_servicetype(service));
+        }
+        if (user) {
+            vcardproperty_add_parameter(prop, vcardparameter_new_username(user));
         }
     }
+
+    json_object_del(obj, "service");
+    json_object_del(obj, "user");
+    json_object_del(obj, "uri");
 
     return prop;
 }
 
-static vcardproperty *_jsprefchannel_to_card(struct jmap_parser *parser __attribute__((unused)),
-                                             json_t *obj __attribute__((unused)),
-                                             const char *id __attribute__((unused)),
-                                             vcardcomponent *card __attribute__((unused)),
-                                             void *rock)
+static vcardproperty *_jscontactby_to_card(struct jmap_parser *parser __attribute__((unused)),
+                                           json_t *obj, const char *id,
+                                           vcardcomponent *card __attribute__((unused)),
+                                           void *rock __attribute__((unused)))
 {
-    vcardproperty_contact_channel_pref *channel = rock;
+    static vcardproperty_contact_by channel;
 
-    return vcardproperty_new_contactchannelpref(*channel);
+    if (obj) {
+        return vcardproperty_new_contactby(channel);
+    }
+
+    /* Convert 'id' to a vCard communication channel value */
+    if (!strcmp("addresses", id)) {
+        channel = VCARD_CONTACTBY_ADR;
+    }
+    else if (!strcmp("emails", id)) {
+        channel = VCARD_CONTACTBY_EMAIL;
+    }
+    else if (!strcmp("onlineServices", id)) {
+        channel = VCARD_CONTACTBY_IMPP;
+    }
+    else if (!strcmp("phones", id)) {
+        channel = VCARD_CONTACTBY_TEL;
+    }
+    else {
+        /* Unknown channel -- fail */
+        return NULL;
+    }
+
+    /* Known channel -- success */
+    return (void *) 1;
 }
 
 static vcardproperty *_jspreflang_to_card(struct jmap_parser *parser __attribute__((unused)),
-                                          json_t *obj __attribute__((unused)),
-                                          const char *id,
+                                          json_t *obj, const char *id,
                                           vcardcomponent *card __attribute__((unused)),
                                           void *rock __attribute__((unused)))
 {
-    return vcardproperty_new_lang(id);
+    if (obj) {
+        return vcardproperty_new_lang(id);
+    }
+
+    /* Nothing to check -- success */
+    return (void *) 1;
 }
 
-static unsigned _jspreferred_to_card(struct jmap_parser *parser, json_t *jval,
-                                     const char *key, const char *type,
-                                     vcardcomponent *card)
+static unsigned _jspreference_to_card(struct jmap_parser *parser, json_t *jval,
+                                      const char *key, const char *type,
+                                      prop_cb_t prop_cb, vcardcomponent *card)
 
 {
-    prop_cb_t prop_cb =
-        (*type == 'C') ? &_jsprefchannel_to_card : &_jspreflang_to_card;
     const char *id;
     json_t *array;
     void *tmp;
@@ -8331,32 +8365,11 @@ static unsigned _jspreferred_to_card(struct jmap_parser *parser, json_t *jval,
     jmap_parser_push(parser, key);
 
     json_object_foreach_safe(jval, tmp, id, array) {
-        vcardproperty_contact_channel_pref channel =
-            VCARD_CONTACTCHANNELPREF_NONE;
         size_t i;
 
-        if (!json_is_array(array)) {
+        if (!json_is_array(array) || !prop_cb(parser, NULL, id, card, NULL)) {
             jmap_parser_invalid(parser, id);
             break;
-        }
-
-        if (*type == 'C') {
-            if (!strcmp("addresses", id)) {
-                channel = VCARD_CONTACTCHANNELPREF_ADR;
-            }
-            else if (!strcmp("emails", id)) {
-                channel = VCARD_CONTACTCHANNELPREF_EMAIL;
-            }
-            else if (!strcmp("onlineServices", id)) {
-                channel = VCARD_CONTACTCHANNELPREF_IMPP;
-            }
-            else if (!strcmp("phones", id)) {
-                channel = VCARD_CONTACTCHANNELPREF_TEL;
-            }
-            else {
-                jmap_parser_invalid(parser, id);
-                break;
-            }
         }
 
         for (i = 0; i < json_array_size(array); i++) {
@@ -8367,7 +8380,7 @@ static unsigned _jspreferred_to_card(struct jmap_parser *parser, json_t *jval,
 
             r |= (r1 = _jsobject_to_card(parser, obj, id, type, prop_cb,
                                          pref_param_props, 0 /* no flags */,
-                                         NULL /* no l10n */, card, &channel));
+                                         NULL /* no l10n */, card, NULL));
 
 
             jmap_parser_pop(parser);
@@ -9061,7 +9074,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
                             jmap_contact_errors_t *errors)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    const char *key, *locale = NULL, *lang, *p;
+    const char *key, *deflang = NULL, *lang, *p;
     json_t *jval;
     unsigned has_noncontent = 0;
     unsigned record_is_dirty = 0;
@@ -9077,7 +9090,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
     construct_hash_table(&groups, 10, 0);
     construct_hash_table(&l10n_by_key, 10, 0);
 
-    locale = json_string_value(json_object_get(arg, "locale"));
+    deflang = json_string_value(json_object_get(arg, "language"));
     json_object_foreach(json_object_get(arg, "localizations"), lang, jval) {
         json_t *jsubval;
 
@@ -9141,7 +9154,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
     }
 
     json_object_foreach(arg, key, jval) {
-        struct l10n_by_id_t l10n = { locale, NULL, NULL };
+        struct l10n_by_id_t l10n = { deflang, NULL, NULL };
         const char *mykey;
 
         if (cdata) {
@@ -9177,9 +9190,9 @@ static int _jscard_to_vcard(struct jmap_req *req,
             lang = buf_cstring(&buf);
             mykey = ++p;
 
-            /* If language tag == locale,
+            /* If language tag == deflang,
                don't add LANGUAGE parameter, but still force ALTID parameter */
-            l10n.lang = strcasecmp(lang, l10n.locale) ? lang : "";
+            l10n.lang = strcasecmp(lang, l10n.deflang) ? lang : "";
 
             jmap_parser_push(&parser, "localizations");
             jmap_parser_push(&parser, lang);
@@ -9213,10 +9226,10 @@ static int _jscard_to_vcard(struct jmap_req *req,
                                                  VCARD_KIND_PROPERTY,
                                                  VCARD_KIND_VALUE);
         }
-        else if (!strcmp(mykey, "locale")) {
+        else if (!strcmp(mykey, "language")) {
             record_is_dirty |= jssimple_to_vcard(&parser, mykey, l10n.lang,
                                                  jval, card,
-                                                 VCARD_LOCALE_PROPERTY,
+                                                 VCARD_DEFLANGUAGE_PROPERTY,
                                                  VCARD_TEXT_VALUE);
         }
         else if (!strcmp(mykey, "members")) {
@@ -9325,16 +9338,17 @@ static int _jscard_to_vcard(struct jmap_req *req,
                                                       phone_param_props, &l10n,
                                                       card, &crock);
         }
-        else if (!strcmp(mykey, "preferredContactChannels")) {
-            record_is_dirty |= _jspreferred_to_card(&parser, jval,
-                                                    mykey,
-                                                    "ContactChannelPreference",
-                                                    card);
+        else if (!strcmp(mykey, "contactBy")) {
+            record_is_dirty |= _jspreference_to_card(&parser, jval,
+                                                     mykey, "ContactBy",
+                                                     &_jscontactby_to_card,
+                                                     card);
         }
         else if (!strcmp(mykey, "preferredLanguages")) {
-            record_is_dirty |= _jspreferred_to_card(&parser, jval,
-                                                    mykey, "LanguagePreference",
-                                                    card);
+            record_is_dirty |= _jspreference_to_card(&parser, jval,
+                                                     mykey, "LanguagePreference",
+                                                     &_jspreflang_to_card,
+                                                     card);
         }
 
         /* Calendaring and Scheduling properties*/

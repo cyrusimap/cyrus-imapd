@@ -58,7 +58,7 @@ sub test_card_set_create_speaktoas
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
-    $self->assert_matches(qr|GRAMMATICAL-GENDER:NEUTER|, $card);
+    $self->assert_matches(qr|GRAMGENDER:NEUTER|, $card);
     $self->assert_matches(qr|PRONOUNS;PROP-ID=k19;PREF=2:they/them|, $card);
     $self->assert_matches(qr|PRONOUNS;PROP-ID=k32;PREF=1:xe/xir|, $card);
     $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
