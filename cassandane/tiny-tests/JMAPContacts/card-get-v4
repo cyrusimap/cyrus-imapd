@@ -41,7 +41,7 @@ ADR;PROP-ID=A1;TYPE=work:;Suite D2-630;2875 Laurier;
  Quebec;QC;G1V 2M2;Canada
 TEL;PROP-ID=P1;VALUE=uri;TYPE="work,voice";PREF=1:tel:+1-418-656-9254;ext=102
 TEL;PROP-ID=P2;VALUE=uri;TYPE="work,cell,voice,video,text":tel:+1-418-262-6501
-EMAIL;PROP-ID=E1;TYPE=work:simon.perreault@viagenie.ca
+EMAIL;PROP-ID=E1;TYPE=work:simon.perreault\@viagenie.ca
 GEO;TYPE=work:geo:46.772673,-71.282945
 KEY;PROP-ID=K1;TYPE=work;VALUE=uri:
  http://www.viagenie.ca/simon.perreault/simon.asc
@@ -49,6 +49,8 @@ TZ:-0500
 URL;PROP-ID=L1;TYPE=home:http://nomis80.org
 PHOTO;PROP-ID=P1:data:image/jpeg;base64,c29tZSBwaG90bw==
 LOGO;PROP-ID=L1;MEDIATYPE=image/png:http://example.org/logo.png
+IMPP;PROP-ID=OS1;PREF=1:xmpp:simon\@example.com
+SOCIALPROFILE;PROP-ID=OS2;SERVICE-TYPE=Mastodon;USERNAME="Simon P.":https://example.com/\@simon
 REV:20230422T194639Z
 END:VCARD
 EOF
@@ -117,7 +119,7 @@ EOF
     }, $res->[0][1]{list}[0]{phones}{P2});
     $self->assert_deep_equals({
         'E1' => {
-            'address' => 'simon.perreault.ca',
+            'address' => 'simon.perreault@viagenie.ca',
             'contexts' => { 'work' => JSON::true }
         }
     }, $res->[0][1]{list}[0]{emails});
@@ -133,6 +135,18 @@ EOF
             'contexts' => { 'private' => JSON::true }
         }
     }, $res->[0][1]{list}[0]{links});
+    $self->assert_deep_equals({
+        'OS1' => {
+            'uri' => 'xmpp:simon@example.com',
+            'vCardName' => 'impp',
+            'pref' => 1
+        },
+        'OS2' => {
+            'user' => 'Simon P.',
+            'uri' => 'https://example.com/@simon',
+            'service' => 'Mastodon'
+        }
+    }, $res->[0][1]{list}[0]{onlineServices});
     $self->assert_deep_equals({
         'kind' => 'logo',
         'mediaType' => 'image/png',

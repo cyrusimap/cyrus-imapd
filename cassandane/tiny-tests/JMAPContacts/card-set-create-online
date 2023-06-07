@@ -33,15 +33,14 @@ sub test_card_set_create_online
                     onlineServices => {
                         x1 => {
                             '@type' => 'OnlineService',
-                            user => 'xmpp:alice@example.com',
-                            kind => 'impp',
+                            uri => 'xmpp:alice@example.com',
                             pref => 1
                         },
                         x2 => {
                             '@type' => 'OnlineService',
                             service => 'Mastodon',
-                            user => 'https://example.com/@foo',
-                            kind => 'uri'
+                            user => '@foo@example.com',
+                            uri => 'https://example.com/@foo'
                         }
                     }
                 }
@@ -59,6 +58,6 @@ sub test_card_set_create_online
     $card =~ s/\\,/,/gs;         # unescape commas
 
     $self->assert_matches(qr|IMPP;PROP-ID=x1;PREF=1:xmpp:alice\@example.com|, $card);
-    $self->assert_matches(qr|SOCIALPROFILE;SERVICE-TYPE=Mastodon;PROP-ID=x2:https://example.com/\@foo|, $card);
+    $self->assert_matches(qr|SOCIALPROFILE;SERVICE-TYPE=Mastodon;USERNAME=\@foo\@example.com;PROP-ID=x2:https://example.com/\@foo|, $card);
     $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
 }

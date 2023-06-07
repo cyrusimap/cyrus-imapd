@@ -30,7 +30,7 @@ sub test_card_set_create_localizations
                     '@type' => 'Card',
                     '@version' => '1.0',
                     uid => $id,
-                    locale => 'es',
+                    language => 'es',
                     fullName => 'Gabriel García Márquez',
                     name => {
                         '@type' => 'Name',
@@ -158,8 +158,8 @@ sub test_card_set_create_localizations
     $self->assert_matches(qr/ADR;ALTID=addr1;LANGUAGE=en:;;;Tokyo;;;/, $card);
     $self->assert_matches(qr/TITLE;ALTID=t1:Novelista/, $card);
     $self->assert_matches(qr/TITLE;ALTID=t1;LANGUAGE=en:Novelist/, $card);
-    $self->assert_matches(qr/GRAMMATICAL-GENDER:masculino/, $card);
-    $self->assert_matches(qr/GRAMMATICAL-GENDER;LANGUAGE=en:MASCULINE/, $card);
+    $self->assert_matches(qr/GRAMGENDER:masculino/, $card);
+    $self->assert_matches(qr/GRAMGENDER;LANGUAGE=en:MASCULINE/, $card);
     $self->assert_matches(qr/PRONOUNS;ALTID=k19:/, $card);
     $self->assert_matches(qr/PRONOUNS;ALTID=k19;LANGUAGE=de:er/, $card);
     $self->assert_matches(qr/PRONOUNS;ALTID=k19;LANGUAGE=it:lui/, $card);
