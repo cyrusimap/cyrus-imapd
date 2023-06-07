@@ -2271,7 +2271,7 @@ static int list_calendars(struct transaction_t *txn)
 
     memset(&lrock, 0, sizeof(struct list_cal_rock));
     lrock.scheddefault = caldav_scheddefault(httpd_userid, 0);
-    lrock.defaultlen = strlen(lrock.scheddefault);
+    lrock.defaultlen = lrock.scheddefault ? strlen(lrock.scheddefault) : 0;
     mboxlist_mboxtree(txn->req_tgt.mbentry->name,
                       list_cal_cb, &lrock, MBOXTREE_SKIP_ROOT);
     free(lrock.scheddefault);
