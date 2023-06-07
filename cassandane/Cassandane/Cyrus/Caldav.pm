@@ -5653,4 +5653,18 @@ sub test_conditional_delete_collection
     $self->assert_str_equals('204', $res->{status});
 }
 
+sub test_calendaradmin_get
+    :min_version_3_8 :needs_component_httpd :AllowCalendarAdmin
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    my $res = $caldav->ua->request('GET', $caldav->request_url(""), {
+        headers => {
+            'Authorization' => $caldav->auth_header(),
+        }
+    });
+    $self->assert_str_equals('200', $res->{status});
+}
+
 1;
