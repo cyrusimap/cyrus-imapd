@@ -771,8 +771,8 @@ static int read_jscals_cb(sqlite3_stmt *stmt, void *vrock)
     "   ON (ical_objs.rowid = jscal_objs.rowid)"                   \
     "   LEFT JOIN jscal_cache"                                     \
     "   ON (jscal_objs.rowid = jscal_cache.rowid "                 \
-    "     AND jscal_objs.ical_recurid = jscal_cache.ical_recurid = :ical_recurid" \
-    "     AND jscal_cache.userid = :cache_userid)"
+    "     AND jscal_objs.ical_recurid = jscal_cache.ical_recurid"  \
+    "     AND jscal_cache.userid = :cache_userid_1)"
 
 #define CMD_READFIELDS_JSCALOBJS_NOCACHE                           \
     "SELECT "                                                      \
@@ -812,6 +812,186 @@ static int read_jscal_cb(sqlite3_stmt *stmt, void *rock)
     return rrock->cb(rrock->rock, jscal);
 }
 
+struct bindvals {
+    dynarray_t vals;
+    struct buf buf;
+    strarray_t strpool;
+};
+
+static void bindvals_init(struct bindvals *bvals)
+{
+    memset(bvals, 0, sizeof(struct bindvals));
+    dynarray_init(&bvals->vals, sizeof(struct sqldb_bindval));
+}
+
+static void bindvals_fini(struct bindvals *bvals)
+{
+    dynarray_fini(&bvals->vals);
+    strarray_fini(&bvals->strpool);
+    buf_free(&bvals->buf);
+}
+
+static struct sqldb_bindval *bindvals_vals(struct bindvals *bvals)
+{
+    struct sqldb_bindval *val = dynarray_nth(&bvals->vals, -1);
+
+    if (!val || val->type != SQLITE_NULL) {
+        // finish parameter list
+        dynarray_append(&bvals->vals, &(struct sqldb_bindval){
+            NULL, SQLITE_NULL, { .s = NULL },
+        });
+    }
+
+    return bvals->vals.data;
+}
+
+static const char *bval(const char *name,
+                        int sqltype,
+                        union sqldb_sqlval sqlval,
+                        struct bindvals *bvals)
+{
+    buf_reset(&bvals->buf);
+    buf_printf(&bvals->buf, ":%s_%d", name, dynarray_size(&bvals->vals) + 1);
+    strarray_append(&bvals->strpool, buf_cstring(&bvals->buf));
+    struct sqldb_bindval val = {
+        strarray_nth(&bvals->strpool, -1), sqltype, sqlval
+    };
+    dynarray_append(&bvals->vals, &val);
+    return val.name;
+}
+
+static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
+                                 struct caldav_jscal_filter *filter,
+                                 struct buf *stmt,
+                                 struct bindvals *bvals)
+{
+    int nargs = 0;
+
+    if (filter->op == CALDAV_JSCAL_FALSE) {
+        buf_appendcstr(stmt, " FALSE");
+        return;
+    }
+
+    if (ptrarray_size(&filter->mbentries)) {
+        if (nargs++) buf_appendcstr(stmt, " AND");
+
+        if (ptrarray_size(&filter->mbentries) > 1)
+            buf_appendcstr(stmt, " (");
+
+        for (int i = 0; i < ptrarray_size(&filter->mbentries); i++) {
+            mbentry_t *mbentry = ptrarray_nth(&filter->mbentries, i);
+
+            const char *mbarg = caldavdb->db->version >= DB_MBOXID_VERSION ?
+                mbentry->uniqueid : mbentry->name;
+
+            if (i) buf_appendcstr(stmt, " OR");
+            buf_printf(stmt, " mailbox = %s", bval("mailbox",
+                    SQLITE_TEXT, (union sqldb_sqlval){ .s = mbarg }, bvals));
+        }
+
+        if (ptrarray_size(&filter->mbentries) > 1)
+            buf_appendcstr(stmt, " )");
+    }
+
+    if (filter->ical_uid) {
+        if (nargs++) buf_appendcstr(stmt, " AND");
+        buf_printf(stmt, " ical_uid = %s", bval("ical_uid",
+            SQLITE_TEXT, (union sqldb_sqlval){ .s = filter->ical_uid }, bvals));
+    }
+
+    if (filter->ical_recurid) {
+        if (nargs++) buf_appendcstr(stmt, " AND");
+        buf_printf(stmt, " ical_recurid = %s", bval("ical_recurid",
+           SQLITE_TEXT, (union sqldb_sqlval){ .s = filter->ical_recurid }, bvals));
+    }
+
+    if (filter->imap_uid) {
+        if (nargs++) buf_appendcstr(stmt, " AND");
+        buf_printf(stmt, " imap_uid = %s", bval("imap_uid",
+           SQLITE_INTEGER, (union sqldb_sqlval){ .i = filter->imap_uid }, bvals));
+    }
+
+    if (filter->after || filter->before) {
+        icaltimezone *utc = icaltimezone_get_utc_timezone();
+        icaltimetype dt;
+
+        if (filter->after) {
+            dt = icaltime_from_timet_with_zone(*filter->after, 0, utc);
+            strarray_append(&bvals->strpool, icaltime_as_ical_string(dt));
+            const char *arg = strarray_nth(&bvals->strpool, -1);
+
+            if (nargs++) buf_appendcstr(stmt, " AND");
+            buf_printf(stmt, " jscal_objs.dtend > %s", bval("after",
+                SQLITE_TEXT, (union sqldb_sqlval){ .s = arg }, bvals));
+        }
+
+        if (filter->before) {
+            dt = icaltime_from_timet_with_zone(*filter->before, 0, utc);
+            strarray_append(&bvals->strpool, icaltime_as_ical_string(dt));
+            const char *arg = strarray_nth(&bvals->strpool, -1);
+
+            if (nargs++) buf_appendcstr(stmt, " AND");
+            buf_printf(stmt, " jscal_objs.dtstart < %s", bval("before",
+                SQLITE_TEXT, (union sqldb_sqlval){ .s = arg }, bvals));
+        }
+    }
+
+    if (filter->op && ptrarray_size(&filter->subfilters)) {
+        if (nargs++) buf_appendcstr(stmt, " AND");
+
+        if (ptrarray_size(&filter->subfilters) > 1)
+            buf_appendcstr(stmt, " (");
+
+        for (int i = 0; i < ptrarray_size(&filter->subfilters); i++) {
+            struct caldav_jscal_filter *sub = ptrarray_nth(&filter->subfilters, i);
+            switch (filter->op) {
+                case CALDAV_JSCAL_AND:
+                    if (i) buf_appendcstr(stmt, " AND");
+                    break;
+                case CALDAV_JSCAL_OR:
+                    if (i) buf_appendcstr(stmt, " OR");
+                    break;
+                case CALDAV_JSCAL_NOT:
+                    if (i) buf_appendcstr(stmt, " AND");
+                    buf_appendcstr(stmt, " NOT");
+                    break;
+                default:
+                    assert(0);
+            }
+            buf_appendcstr(stmt, " (");
+            jscal_filter_to_stmt(caldavdb, sub, stmt, bvals);
+            buf_appendcstr(stmt, " )");
+        }
+
+        if (ptrarray_size(&filter->subfilters) > 1)
+            buf_appendcstr(stmt, " )");
+    }
+
+    if (!nargs) buf_appendcstr(stmt, " TRUE");
+}
+
+static int filters_sched_inbox(struct caldav_db *caldavdb, struct caldav_jscal_filter *f)
+{
+    if (!f) return 0;
+
+    int i;
+    for (i = 0; i < ptrarray_size(&f->mbentries); i++) {
+        mbentry_t *mbentry = ptrarray_nth(&f->mbentries, i);
+        const char *mbarg = caldavdb->db->version >= DB_MBOXID_VERSION ?
+            mbentry->uniqueid : mbentry->name;
+
+        if (!strcmpsafe(mbarg, caldavdb->sched_inbox))
+            return 1;
+    }
+
+    for (i = 0; i < ptrarray_size(&f->subfilters); i++) {
+        if (filters_sched_inbox(caldavdb, ptrarray_nth(&f->subfilters, i)))
+            return 1;
+    }
+
+    return 0;
+}
+
 EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
                                   const char *cache_userid,
                                   struct caldav_jscal_filter *filter,
@@ -819,72 +999,39 @@ EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
                                   enum caldav_sort* sort, size_t nsort,
                                   caldav_jscal_cb_t *cb, void *rock)
 {
-    struct sqldb_bindval bval[] = {
-        { ":mailbox",      SQLITE_TEXT,    { .s = NULL } },
-        { ":ical_uid",     SQLITE_TEXT,    { .s = NULL } },
-        { ":ical_recurid", SQLITE_TEXT,    { .s = NULL } },
-        { ":imap_uid",     SQLITE_INTEGER, { .i = 0    } },
-        { ":after",        SQLITE_TEXT,    { .s = NULL } },
-        { ":before",       SQLITE_TEXT,    { .s = NULL } },
-        { ":cache_userid", SQLITE_TEXT,    { .s = cache_userid } },
-        { ":aftermodseq",  SQLITE_INTEGER, { .i = 0 } },
-        { ":maxcount",     SQLITE_INTEGER, { .i = 0 } },
-        { ":inbox",        SQLITE_TEXT,    { .s = caldavdb->sched_inbox } },
-        { NULL,            SQLITE_NULL,    { .s = NULL } } };
-
     struct buf stmt = BUF_INITIALIZER;
-    buf_setcstr(&stmt, cache_userid ?
-            CMD_READFIELDS_JSCALOBJS : CMD_READFIELDS_JSCALOBJS_NOCACHE);
+    struct bindvals bvals = { 0 };
+    bindvals_init(&bvals);
 
-    if (!filter) {
-        buf_appendcstr(&stmt, " WHERE mailbox != :inbox");
+    if (cache_userid) {
+        buf_setcstr(&stmt, CMD_READFIELDS_JSCALOBJS);
+        // CMD_READFIELDS_JSCALOBJS hard-codes parameter id to ":cache_userid_1"
+        bval("cache_userid", SQLITE_TEXT,
+                (union sqldb_sqlval){ .s = cache_userid }, &bvals);
     }
     else {
-        if (filter->mbentry) {
-            buf_appendcstr(&stmt, " WHERE mailbox = :mailbox");
-            bval[0].val.s = caldavdb->db->version >= DB_MBOXID_VERSION ?
-                filter->mbentry->uniqueid : filter->mbentry->name;
-        }
-        else {
-            buf_appendcstr(&stmt, " WHERE mailbox != :inbox");
-        }
+        buf_setcstr(&stmt, CMD_READFIELDS_JSCALOBJS_NOCACHE);
+    }
 
-        if (filter->ical_uid) {
-            buf_appendcstr(&stmt, " AND ical_uid = :ical_uid");
-            bval[1].val.s = filter->ical_uid;
-        }
+    buf_appendcstr(&stmt, " WHERE");
 
-        if (filter->ical_recurid) {
-            buf_appendcstr(&stmt, " AND ical_recurid = :ical_recurid");
-            bval[2].val.s = filter->ical_recurid;
-        }
+    // ignore sched_inbox, if filter does not explicitly filter by it
+    if (!filters_sched_inbox(caldavdb, filter)) {
+        buf_printf(&stmt, " mailbox != %s", bval("sched_inbox",
+            SQLITE_TEXT, (union sqldb_sqlval){ .s = caldavdb->sched_inbox }, &bvals));
+    }
+    else {
+        buf_appendcstr(&stmt, " TRUE");
+    }
 
-        if (filter->imap_uid) {
-            buf_appendcstr(&stmt, " AND imap_uid = :imap_uid");
-            bval[3].val.i = filter->imap_uid;
-        }
-
-        if (filter->after || filter->before) {
-            icaltimezone *utc = icaltimezone_get_utc_timezone();
-            icaltimetype dt;
-
-            if (filter->after) {
-                buf_appendcstr(&stmt, " AND jscal_objs.dtend > :after");
-                dt = icaltime_from_timet_with_zone(*filter->after, 0, utc);
-                bval[4].val.s = icaltime_as_ical_string(dt);
-            }
-
-            if (filter->before) {
-                buf_appendcstr(&stmt, " AND jscal_objs.dtstart < :before");
-                dt = icaltime_from_timet_with_zone(*filter->before, 0, utc);
-                bval[5].val.s = icaltime_as_ical_string(dt);
-            }
-        }
+    if (filter) {
+        buf_appendcstr(&stmt, " AND");
+        jscal_filter_to_stmt(caldavdb, filter, &stmt, &bvals);
     }
 
     if (window && window->aftermodseq) {
-        buf_appendcstr(&stmt, " AND jscal_objs.modseq > :aftermodseq");
-        bval[7].val.i = window->aftermodseq;
+        buf_printf(&stmt, " AND jscal_objs.modseq > %s", bval("aftermodseq",
+            SQLITE_INTEGER, (union sqldb_sqlval){ .i = window->aftermodseq }, &bvals));
     }
 
     if (!window || !window->tombstones) {
@@ -920,8 +1067,8 @@ EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
     }
 
     if (window && window->maxcount) {
-        buf_appendcstr(&stmt, " LIMIT :maxcount");
-        bval[8].val.i = window->maxcount;
+        buf_printf(&stmt, " LIMIT %s", bval("maxcount",
+            SQLITE_INTEGER, (union sqldb_sqlval){ .i = window->maxcount }, &bvals));
     }
 
     buf_putc(&stmt, ';');
@@ -931,8 +1078,10 @@ EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
         .cb = cb,
         .rock = rock
     };
-    int r = sqldb_exec(caldavdb->db, buf_cstring(&stmt), bval,
-            &read_jscal_cb, &rrock);
+    int r = sqldb_exec(caldavdb->db, buf_cstring(&stmt),
+                bindvals_vals(&bvals), &read_jscal_cb, &rrock);
+
+    bindvals_fini(&bvals);
     buf_free(&stmt);
     return r;
 }
@@ -1289,6 +1438,30 @@ EXPORTED int caldav_write_jscalcache(struct caldav_db *caldavdb,
 
     /* insert the cache record */
     return sqldb_exec(caldavdb->db, CMD_INSERT_JSCALCACHE_USER, bval, NULL, NULL);
+}
+
+EXPORTED void caldav_jscal_filter_fini(struct caldav_jscal_filter *f)
+{
+    if (!f) return;
+
+    mbentry_t *mbentry;
+    while ((mbentry = ptrarray_pop(&f->mbentries)))
+        mboxlist_entry_free(&mbentry);
+    ptrarray_fini(&f->mbentries);
+
+    xzfree(f->ical_uid);
+    xzfree(f->ical_recurid);
+    f->imap_uid = 0;
+    xzfree(f->after);
+    xzfree(f->before);
+    f->op = CALDAV_JSCAL_NOOP;
+
+    struct caldav_jscal_filter *subf;
+    while ((subf = ptrarray_pop(&f->subfilters))) {
+        caldav_jscal_filter_fini(subf);
+        free(subf);
+    }
+    ptrarray_fini(&f->subfilters);
 }
 
 struct shareacls_rock {

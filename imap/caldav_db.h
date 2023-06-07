@@ -215,14 +215,28 @@ struct caldav_jscal {
     const char *cachedata;
 };
 
-struct caldav_jscal_filter {
-    const mbentry_t *mbentry;
-    const char *ical_uid;
-    const char *ical_recurid;
-    uint32_t imap_uid;
-    const time_t *after;
-    const time_t *before;
+enum caldav_jscal_filterop {
+    CALDAV_JSCAL_NOOP = 0,
+    CALDAV_JSCAL_AND,
+    CALDAV_JSCAL_OR,
+    CALDAV_JSCAL_NOT,
+    CALDAV_JSCAL_FALSE // never matches
 };
+
+struct caldav_jscal_filter {
+    ptrarray_t mbentries; // any of
+    char *ical_uid;
+    char *ical_recurid;
+    uint32_t imap_uid;
+    time_t *after;
+    time_t *before;
+
+    enum caldav_jscal_filterop op;
+    ptrarray_t subfilters;
+};
+
+// Frees heap-allocated fields, including subfilters
+void caldav_jscal_filter_fini(struct caldav_jscal_filter *);
 
 struct caldav_jscal_window {
     modseq_t aftermodseq;

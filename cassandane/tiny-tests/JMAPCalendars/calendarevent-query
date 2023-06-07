@@ -8,134 +8,233 @@ sub test_calendarevent_query
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
+    my ($maj, $min) = Cassandane::Instance->get_version();
 
-    xlog $self, "create calendars A and B";
+    xlog $self, "create calendars";
     my $res = $jmap->CallMethods([
-            ['Calendar/set', {
-                    create => {
-                        "1" => {
-                            name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
-                        },
-                        "2" => {
-                            name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
-                        }
-                    }}, "R1"]
-        ]);
-    my $calidA = $res->[0][1]{created}{"1"}{id};
-    my $calidB = $res->[0][1]{created}{"2"}{id};
-    my $state = $res->[0][1]{newState};
+        ['Calendar/set', {
+            create => {
+                calendarA => {
+                    name => "A",
+                },
+                calendarB => {
+                    name => "B",
+                }
+            }
+        }, "R1"]
+    ]);
+    my $calendarIdA = $res->[0][1]{created}{calendarA}{id};
+    $self->assert_not_null($calendarIdA);
+    my $calendarIdB = $res->[0][1]{created}{calendarB}{id};
+    $self->assert_not_null($calendarIdB);
 
-    xlog $self, "create event #1 in calendar $calidA and event #2 in calendar $calidB";
-    $res = $jmap->CallMethods([['CalendarEvent/set', {
-                    create => {
-                        "1" => {
-                            calendarIds => {
-                                $calidA => JSON::true,
-                            },
-                            "title" => "foo",
-                            "description" => "bar",
-                            "freeBusyStatus" => "busy",
-                            "showWithoutTime" => JSON::false,
-                            "start" => "2016-07-01T10:00:00",
-                            "timeZone" => "Europe/Vienna",
-                            "duration" => "PT1H",
-                        },
-                        "2" => {
-                            calendarIds => {
-                                $calidB => JSON::true,
-                            },
-                            "title" => "foo",
-                            "description" => "",
-                            "freeBusyStatus" => "busy",
-                            "showWithoutTime" => JSON::true,
-                            "start" => "2016-01-01T00:00:00",
-                            "duration" => "P2D",
-                            "timeZone" => undef,
-                        }
-                    }}, "R1"]]);
-    my $id1 = $res->[0][1]{created}{"1"}{id};
-    my $id2 = $res->[0][1]{created}{"2"}{id};
+    my %eventA1 = (
+        uid => 'a1-03df209b28-4005-a458-751e2f6058b5'
+    );
+    my %eventA2 = (
+        uid => 'a2-73e05c2f12fa-43c4-a17f-9c6e35ddd8'
+    );
+    my %eventB1 = (
+        uid => 'b1-8528b44b7cdd-4867-85f0-09746080d9'
+    );
+
+    xlog $self, "create events";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                eventA1 => {
+                    calendarIds => {
+                        $calendarIdA => JSON::true,
+                    },
+                    uid => $eventA1{uid},
+                    title => 'eventA1',
+                    description => 'test',
+                    start => '2023-01-01T01:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                },
+                eventB1 => {
+                    calendarIds => {
+                        $calendarIdB => JSON::true,
+                    },
+                    uid => $eventB1{uid},
+                    title => 'eventB1',
+                    description => 'test',
+                    start => '2023-02-01T01:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                },
+                eventA2 => {
+                    calendarIds => {
+                        $calendarIdA => JSON::true,
+                    },
+                    uid => $eventA2{uid},
+                    title => 'eventA2',
+                    description => 'test',
+                    start => '2023-03-01T01:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                },
+            }
+        }, 'R1']
+    ]);
+
+    $eventA1{id} = $res->[0][1]{created}{eventA1}{id};
+    $self->assert_not_null($eventA1{id});
+    $eventA2{id} = $res->[0][1]{created}{eventA2}{id};
+    $self->assert_not_null($eventA2{id});
+    $eventB1{id} = $res->[0][1]{created}{eventB1}{id};
+    $self->assert_not_null($eventB1{id});
 
     xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog $self, "get unfiltered calendar event list";
-    $res = $jmap->CallMethods([ ['CalendarEvent/query', { }, "R1"] ]);
-    $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    my @testCases = ({
+        filter => undef,
+        wantIds => [$eventA1{id}, $eventA2{id}, $eventB1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            before => '2023-03-01T01:00:00',
+        },
+        wantIds => [$eventA1{id}, $eventB1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            after => '2023-01-01T02:00:00',
+        },
+        wantIds => [$eventA2{id}, $eventB1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            after =>  '2023-01-01T02:00:00',
+            before => '2023-03-01T01:00:00',
+        },
+        wantIds => [$eventB1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            operator => 'AND',
+            conditions => [{
+                after =>  '2023-01-01T02:00:00',
+            }, {
+                before => '2023-03-01T01:00:00',
+            }],
+        },
+        wantIds => [$eventB1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            operator => 'NOT',
+            conditions => [{
+                after => '2023-01-01T02:00:00',
+            }],
+        },
+        wantIds => [$eventA1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            uid => $eventA2{uid},
+        },
+        wantIds => [$eventA2{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            operator => 'NOT',
+            conditions => [{
+                uid => $eventA2{uid},
+            }],
+        },
+        wantIds => [$eventA1{id}, $eventB1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            operator => 'OR',
+            conditions => [{
+                uid => $eventA1{uid},
+            }, {
+                uid => $eventB1{uid},
+            }],
+        },
+        wantIds => [$eventA1{id}, $eventB1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            inCalendars => [$calendarIdA, $calendarIdB],
+        },
+        wantIds => [$eventA1{id}, $eventA2{id}, $eventB1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            operator => 'NOT',
+            conditions => [{
+                inCalendars => [$calendarIdA],
+            }],
+        },
+        wantIds => [$eventB1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            operator => 'OR',
+            conditions => [{
+                inCalendars => [$calendarIdA, $calendarIdB],
+            }],
+        },
+        wantIds => [$eventA1{id}, $eventA2{id}, $eventB1{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => {
+            operator => 'AND',
+            conditions => [{
+                inCalendars => [$calendarIdA],
+            }, {
+                text => 'test',
+            }],
+        },
+        wantIds => [$eventA1{id}, $eventA2{id}],
+        wantFastPath => JSON::false,
+    }, {
+        filter => undef,
+        position => 1,
+        limit => 1,
+        wantTotal => 3,
+        wantIds => [$eventA2{id}],
+        wantFastPath => JSON::true,
+    }, {
+        filter => undef,
+        position => -1,
+        wantTotal => 3,
+        wantIds => [$eventB1{id}],
+        wantFastPath => JSON::false,
+    });
 
-    xlog $self, "get filtered calendar event list with flat filter";
-    $res = $jmap->CallMethods([ ['CalendarEvent/query', {
-                    "filter" => {
-                        "after" => "2015-12-31T00:00:00",
-                        "before" => "2016-12-31T23:59:59",
-                        "text" => "foo",
-                        "description" => "bar"
-                    }
-                }, "R1"] ]);
-    $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+    for my $tc (@testCases) {
+        my $q = {
+            filter => $tc->{filter},
+            sort => [{
+                property => 'uid',
+            }],
+        };
 
-    xlog $self, "get filtered calendar event list";
-    $res = $jmap->CallMethods([ ['CalendarEvent/query', {
-                    "filter" => {
-                        "operator" => "AND",
-                        "conditions" => [
-                            {
-                                "after" => "2015-12-31T00:00:00",
-                                "before" => "2016-12-31T23:59:59"
-                            },
-                            {
-                                "text" => "foo",
-                                "description" => "bar"
-                            }
-                        ]
-                    }
-                }, "R1"] ]);
-    $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+        if (defined $tc->{position}) {
+            $q->{position} = $tc->{position};
+        }
 
-    xlog $self, "filter by calendar $calidA";
-    $res = $jmap->CallMethods([ ['CalendarEvent/query', {
-                    "filter" => {
-                        "inCalendars" => [ $calidA ],
-                    }
-                }, "R1"] ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+        if (defined $tc->{limit}) {
+            $q->{limit} = $tc->{limit};
+        }
 
-    xlog $self, "filter by calendar $calidA or $calidB";
-    $res = $jmap->CallMethods([ ['CalendarEvent/query', {
-                    "filter" => {
-                        "inCalendars" => [ $calidA, $calidB ],
-                    }
-                }, "R1"] ]);
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+        $res = $jmap->CallMethods([
+            ['CalendarEvent/query', $q, 'R1'],
+        ]);
+        my $wantTotal = defined $tc->{wantTotal} ?
+            $tc->{wantTotal} : scalar @{$tc->{wantIds}};
+        $self->assert_num_equals($wantTotal, $res->[0][1]{total});
+        $self->assert_deep_equals($tc->{wantIds}, $res->[0][1]{ids});
 
-    xlog $self, "filter by calendar NOT in $calidA and $calidB";
-    $res = $jmap->CallMethods([['CalendarEvent/query', {
-                    "filter" => {
-                        "operator" => "NOT",
-                        "conditions" => [{
-                                "inCalendars" => [ $calidA, $calidB ],
-                            }],
-                    }}, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{ids}});
-
-    xlog $self, "limit results";
-    $res = $jmap->CallMethods([ ['CalendarEvent/query', { limit => 1 }, "R1"] ]);
-    $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-
-    xlog $self, "skip result a position 1";
-    $res = $jmap->CallMethods([ ['CalendarEvent/query', { position => 1 }, "R1"] ]);
-    $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-
-    xlog $self, "set negative position";
-    $res = $jmap->CallMethods([ ['CalendarEvent/query', { position => -1 }, "R1"] ]);
-    $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+        if ($maj > 3 || ($maj == 3 && $min > 8)) {
+            $self->assert_equals($tc->{wantFastPath},
+                $res->[0][1]{debug}{isFastPath});
+        }
+    }
 }

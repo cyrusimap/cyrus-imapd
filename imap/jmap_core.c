@@ -929,12 +929,14 @@ static int jmap_blob_lookup(jmap_req_t *req)
 
                 case DATATYPE_CALENDAREVENT: {
                     struct caldav_jscal_filter filter = {
-                        .mbentry = mbentry,
                         .imap_uid = getblob->uid,
                     };
+                    ptrarray_push(&filter.mbentries,
+                            mboxlist_entry_copy(mbentry));
                     struct caleventid_rock rock = { &buf, ids };
                     caldav_foreach_jscal(caldav_db, req->accountid, &filter,
                             NULL, NULL, 0, caleventid_cb, &rock);
+                    caldav_jscal_filter_fini(&filter);
                     buf_reset(&buf);
                     break;
                     }
