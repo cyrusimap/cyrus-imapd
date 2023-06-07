@@ -1,0 +1,18 @@
+Description:
+
+Adds support for the "exp" and "nbf" to JSON Web Token claims. Thanks to Bruno Thomas (bamthomas).
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+https://github.com/cyrusimap/cyrus-imapd/pull/4515
