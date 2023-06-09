@@ -88,6 +88,7 @@ EXPORTED unsigned config_maxword;
 EXPORTED unsigned config_maxquoted;
 EXPORTED int config_qosmarking;
 EXPORTED int config_debug;
+EXPORTED const char *config_defrealm = NULL;	/* NULL */
 
 static int config_loaded;
 
@@ -603,6 +604,7 @@ EXPORTED void config_reset(void)
     config_maxword = 0;
     config_qosmarking = 0;
     config_debug = 0;
+    config_defrealm = NULL;
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
@@ -772,9 +774,12 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     /* look up mailbox hashing */
     config_hashimapspool = config_getswitch(IMAPOPT_HASHIMAPSPOOL);
 
-    /* are we supporting virtual domains?  */
+    /* are we supporting virtual domains? */
     config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
     config_defdomain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
+
+    /* are we supporting a default realm? */
+    config_defrealm = config_getstring(IMAPOPT_DEFAULTREALM);
 
     /* are we auditlogging */
     config_auditlog = config_getswitch(IMAPOPT_AUDITLOG);

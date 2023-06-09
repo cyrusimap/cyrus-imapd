@@ -1108,6 +1108,9 @@ int service_main(int argc __attribute__((unused)),
         fatal("SASL failed initializing: sasl_server_new()", EX_TEMPFAIL);
     }
 
+    if ((config_defrealm != NULL) && (sasl_setprop(imapd_saslconn, SASL_DEFUSERREALM, config_defrealm) != SASL_OK))
+	fatal("Failed to set SASL property", EX_TEMPFAIL);
+
     secprops = mysasl_secprops(0);
     if (sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
         fatal("Failed to set SASL property", EX_TEMPFAIL);
@@ -14497,6 +14500,11 @@ static int reset_saslconn(sasl_conn_t **conn)
                           buf_cstringnull_ifempty(&saslprops.ipremoteport),
                           NULL, 0, conn);
     if(ret != SASL_OK) return ret;
+
+    if (config_defrealm != NULL) {
+	ret = sasl_setprop(imapd_saslconn, SASL_DEFUSERREALM, config_defrealm);
+	if(ret != SASL_OK) return ret;
+    }
 
     secprops = mysasl_secprops(0);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);

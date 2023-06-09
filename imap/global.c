@@ -689,15 +689,24 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
     const char *val = config_getstring(IMAPOPT_LOGINREALMS);
     struct auth_state *authstate;
     int userisadmin = 0;
-    char *realm;
+    char *realm = strchr(auth_identity, '@');
+    unsigned realm_len = 0;
+
+    /* skip '@' and get length of remainder */
+    if (realm)
+        realm_len = strlen(++realm);
+
+    /* first check default realm */
+    if (realm_len>0 && !strncasecmp(def_realm, realm, realm_len))
+        goto found;
 
     /* check if remote realm */
     if ((!config_virtdomains || *val) &&
-        (realm = strchr(auth_identity, '@'))!=NULL) {
-        realm++;
+        realm!=NULL) {
         while (*val) {
-            if (!strncasecmp(val, realm, strlen(realm)) &&
-                (!val[strlen(realm)] || Uisspace(val[strlen(realm)]))) {
+            unsigned realm_len = strlen(realm);
+            if (!strncasecmp(val, realm, realm_len) &&
+                (!val[realm_len] || Uisspace(val[realm_len]))) {
                 break;
             }
             /* not this realm, try next one */
@@ -711,6 +720,7 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
         }
     }
 
+found:
     authstate = auth_newstate(auth_identity);
 
     /* ok, is auth_identity an admin? */
