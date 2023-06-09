@@ -7270,6 +7270,7 @@ struct card_filter {
     struct contact_textfilter *surname;
     struct contact_textfilter *suffix;
     struct contact_textfilter *nickName;
+    struct contact_textfilter *organization;
     struct contact_textfilter *title;
     struct contact_textfilter *role;
     struct contact_textfilter *email;
@@ -7299,6 +7300,7 @@ static void card_filter_free(void *vf)
     contact_textfilter_free(f->surname);
     contact_textfilter_free(f->suffix);
     contact_textfilter_free(f->nickName);
+    contact_textfilter_free(f->organization);
     contact_textfilter_free(f->title);
     contact_textfilter_free(f->role);
     contact_textfilter_free(f->email);
@@ -7384,6 +7386,13 @@ static void *card_filter_parse(json_t *arg)
         const char *s = NULL;
         if (jmap_readprop(arg, "nickName", 0, NULL, "s", &s) > 0) {
             f->nickName = contact_textfilter_new(s);
+        }
+    }
+    /* organization */
+    if (JNOTNULL(json_object_get(arg, "organization"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "organization", 0, NULL, "s", &s) > 0) {
+            f->organization = contact_textfilter_new(s);
         }
     }
     /* title */
@@ -7489,6 +7498,7 @@ static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
             !strcmp(field, "name/surname") ||
             !strcmp(field, "name/suffix") ||
             !strcmp(field, "nickName") ||
+            !strcmp(field, "organization") ||
             !strcmp(field, "title") ||
             !strcmp(field, "role") ||
             !strcmp(field, "email") ||
@@ -7687,8 +7697,7 @@ static int card_filter_match_address(json_t *jentry, const char *compname,
     return ret;
 }
 
-static const char *nickName_vals[] = { "name", NULL };
-static const char *title_vals[] =    { "name", NULL };
+static const char *name_vals[] =     { "name", NULL };
 static const char *email_vals[] =    { "address", "label", NULL };
 static const char *phone_vals[] =    { "number", "label", NULL };
 static const char *online_vals[] =   { "service", "uri", "user", "label", NULL };
@@ -7724,13 +7733,16 @@ static int card_filter_match(void *vf, void *rock)
         !card_filter_match_namecomp(card, "suffix", f->suffix,
                                     f->text, &cfrock->cached_termsets) ||
         !card_filter_match_listprop(card, "nickNames", NULL,
-                                    nickName_vals, f->nickName,
+                                    name_vals, f->nickName,
                                     f->text, &cfrock->cached_termsets) ||
         !card_filter_match_listprop(card, "titles", "title",
-                                    title_vals, f->title,
+                                    name_vals, f->title,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "organizations", NULL,
+                                    name_vals, f->organization,
                                     f->text, &cfrock->cached_termsets) ||
         !card_filter_match_listprop(card, "titles", "role",
-                                    title_vals, f->role,
+                                    name_vals, f->role,
                                     f->text, &cfrock->cached_termsets) ||
         !card_filter_match_listprop(card, "emails", NULL,
                                     email_vals, f->email,
