@@ -53,7 +53,7 @@ EOF
     ], $res->[0][1]{list}[0]{vCardProps});
     $self->assert_str_equals('The Doe Family', $res->[0][1]{list}[0]{fullName});
     $self->assert_equals(JSON::true,
-                         $res->[0][1]{list}[0]{members}{"urn:uuid:$member1"});
+                         $res->[0][1]{list}[0]{members}{"$member1"});
     $self->assert_equals(JSON::true,
-                         $res->[0][1]{list}[0]{members}{"urn:uuid:$member2"});
+                         $res->[0][1]{list}[0]{members}{"$member2"});
 }
