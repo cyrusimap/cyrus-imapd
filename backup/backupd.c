@@ -223,7 +223,7 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 {
     const char *localip, *remoteip;
     sasl_security_properties_t *secprops = NULL;
-    int timeout;
+    int r, timeout;
 
     signals_poll();
 
@@ -269,8 +269,9 @@ EXPORTED int service_main(int argc __attribute__((unused)),
         tcp_disable_nagle(1); /* XXX magic fd */
     }
 
-    proc_register(&proc_handle, 0,
-                  config_ident, backupd_clienthost, NULL, NULL, NULL);
+    r = proc_register(&proc_handle, 0,
+                      config_ident, backupd_clienthost, NULL, NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
     proc_settitle(config_ident, backupd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
@@ -826,8 +827,10 @@ static void cmd_authenticate(char *mech, char *resp)
     }
 
     backupd_userid = xstrdup((const char *) val);
-    proc_register(&proc_handle, 0,
-                  config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
+    r = proc_register(&proc_handle, 0,
+                      config_ident, backupd_clienthost, backupd_userid,
+                      NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
     proc_settitle(config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", backupd_clienthost, backupd_userid,

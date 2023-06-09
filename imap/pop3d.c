@@ -857,15 +857,17 @@ static void cmdloop(void)
     char *p;
     char *arg;
     uint32_t msgno = 0;
+    int r;
 
     for (;;) {
         signals_poll();
 
         /* register process */
-        proc_register(&proc_handle, 0,
-                      config_ident, popd_clienthost, popd_userid,
-                      popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
-                      NULL);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, popd_clienthost, popd_userid,
+                          popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
+                          NULL);
+        if (r) fatal("unable to register process", EX_IOERR);
         proc_settitle(config_ident, popd_clienthost, popd_userid,
                       popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
                       NULL);
@@ -947,10 +949,11 @@ static void cmdloop(void)
             syslog(LOG_NOTICE, "command: %s", inputbuf);
 
         /* register process */
-        proc_register(&proc_handle, 0,
-                      config_ident, popd_clienthost, popd_userid,
-                      popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
-                      inputbuf);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, popd_clienthost, popd_userid,
+                          popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
+                          inputbuf);
+        if (r) fatal("unable to register process", EX_IOERR);
         proc_settitle(config_ident, popd_clienthost, popd_userid,
                       popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
                       inputbuf);

@@ -935,6 +935,7 @@ int service_main(int argc __attribute__((unused)),
     int mechcount = 0;
     size_t mechlen;
     struct auth_scheme_t *scheme;
+    int r;
 
     /* fatal/shut_down will adjust these, so we need to set them early */
     prometheus_decrement(CYRUS_HTTP_READY_LISTENERS);
@@ -1019,8 +1020,9 @@ int service_main(int argc __attribute__((unused)),
     httpd_tls_required =
         config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
 
-    proc_register(&httpd_proc_handle, 0,
-                  config_ident, http_conn.clienthost, NULL, NULL, NULL);
+    r = proc_register(&httpd_proc_handle, 0,
+                      config_ident, http_conn.clienthost, NULL, NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
     proc_settitle(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
     /* Construct Alt-Svc header value */
@@ -1906,7 +1908,7 @@ static void postauth_check_hdrs(struct transaction_t *txn)
 
 EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
 {
-    int ret = 0, sasl_result = 0;
+    int r, ret = 0, sasl_result = 0;
     const char *query;
     const struct namespace_t *namespace;
     struct request_line_t *req_line = &txn->req_line;
@@ -1937,9 +1939,10 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
     buf_printf(&txn->buf, "%s%s", config_ident,
                namespace->well_known ? strrchr(namespace->well_known, '/') :
                namespace->prefix);
-    proc_register(&httpd_proc_handle, 0,
-                  buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
-                  txn->req_tgt.path, txn->req_line.meth);
+    r = proc_register(&httpd_proc_handle, 0,
+                      buf_cstring(&txn->buf), txn->conn->clienthost,
+                      httpd_userid, txn->req_tgt.path, txn->req_line.meth);
+    if (r) fatal("unable to register process", EX_IOERR);
     proc_settitle(buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
                   txn->req_tgt.path, txn->req_line.meth);
     buf_reset(&txn->buf);

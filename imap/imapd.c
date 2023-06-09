@@ -1069,6 +1069,7 @@ int service_main(int argc __attribute__((unused)),
     struct mboxevent *mboxevent = NULL;
     struct io_count *io_count_start = NULL;
     struct io_count *io_count_stop = NULL;
+    int r;
 
     /* fatal/shut_down will adjust these, so we need to set them early */
     prometheus_decrement(CYRUS_IMAP_READY_LISTENERS);
@@ -1119,8 +1120,9 @@ int service_main(int argc __attribute__((unused)),
     imapd_login_disabled = imapd_tls_required ||
         ((extprops_ssf < 2) && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT));
 
-    proc_register(&proc_handle, 0,
-                  config_ident, imapd_clienthost, NULL, NULL, NULL);
+    r = proc_register(&proc_handle, 0,
+                      config_ident, imapd_clienthost, NULL, NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
     proc_settitle(config_ident, imapd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
@@ -1417,6 +1419,8 @@ static void cmdloop(void)
     }
 
     for (;;) {
+        int r;
+
         /* Release any held index */
         index_release(imapd_index);
 
@@ -1431,9 +1435,10 @@ static void cmdloop(void)
         if (backend_current) prot_flush(backend_current->out);
 
         /* command no longer running */
-        proc_register(&proc_handle, 0,
-                      config_ident, imapd_clienthost, imapd_userid,
-                      index_mboxname(imapd_index), NULL);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, imapd_clienthost, imapd_userid,
+                          index_mboxname(imapd_index), NULL);
+        if (r) fatal("unable to register process", EX_IOERR);
         proc_settitle(config_ident, imapd_clienthost, imapd_userid,
                       index_mboxname(imapd_index), NULL);
 
@@ -1504,9 +1509,10 @@ static void cmdloop(void)
         if (config_getswitch(IMAPOPT_CHATTY))
             syslog(LOG_NOTICE, "command: %s %s", tag.s, cmd.s);
 
-        proc_register(&proc_handle, 0,
-                      config_ident, imapd_clienthost, imapd_userid,
-                      index_mboxname(imapd_index), cmd.s);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, imapd_clienthost, imapd_userid,
+                          index_mboxname(imapd_index), cmd.s);
+        if (r) fatal("unable to register process", EX_IOERR);
         proc_settitle(config_ident, imapd_clienthost, imapd_userid,
                       index_mboxname(imapd_index), cmd.s);
 

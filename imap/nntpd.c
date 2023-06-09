@@ -730,9 +730,10 @@ static void cmdloop(void)
 
         signals_poll();
 
-        proc_register(&proc_handle, 0,
-                      config_ident, nntp_clienthost, nntp_userid,
-                      index_mboxname(group_state), NULL);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, nntp_clienthost, nntp_userid,
+                          index_mboxname(group_state), NULL);
+        if (r) fatal("unable to register process", EX_IOERR);
         proc_settitle(config_ident, nntp_clienthost, nntp_userid,
                       index_mboxname(group_state), NULL);
 
@@ -779,9 +780,10 @@ static void cmdloop(void)
             if (Uisupper(*p)) *p = tolower((unsigned char) *p);
         }
 
-        proc_register(&proc_handle, 0,
-                      config_ident, nntp_clienthost, nntp_userid,
-                      index_mboxname(group_state), cmd.s);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, nntp_clienthost, nntp_userid,
+                          index_mboxname(group_state), cmd.s);
+        if (r) fatal("unable to register process", EX_IOERR);
         proc_settitle(config_ident, nntp_clienthost, nntp_userid,
                       index_mboxname(group_state), cmd.s);
 

@@ -141,6 +141,7 @@ EXPORTED int proc_register(struct proc_handle **handlep,
     FILE *procfile = NULL;
     char *newfname = NULL;
     struct proc_handle *handle = NULL;
+    int handle_is_new = 0;
 
     assert(handlep != NULL);
 
@@ -150,6 +151,7 @@ EXPORTED int proc_register(struct proc_handle **handlep,
     }
     else {
         handle = xmalloc(sizeof *handle);
+        handle_is_new = 1;
         if (!pid) pid = getpid();
         handle->pid = pid;
         handle->fname = proc_getpath(pid, /*isnew*/0);
@@ -161,14 +163,17 @@ EXPORTED int proc_register(struct proc_handle **handlep,
     procfile = fopen(newfname, "w+");
     if (!procfile) {
         if (cyrus_mkdir(newfname, 0755) == -1) {
-            fatal("couldn't create proc directory", EX_IOERR);
+            xsyslog(LOG_ERR, "IOERROR: failed to create proc directory",
+                               "fname=<%s>", newfname);
+            goto error;
         }
         else {
             syslog(LOG_NOTICE, "created proc directory");
             procfile = fopen(newfname, "w+");
             if (!procfile) {
-                syslog(LOG_ERR, "IOERROR: creating %s: %m", newfname);
-                fatal("can't write proc file", EX_IOERR);
+                xsyslog(LOG_ERR, "IOERROR: failed to create proc file",
+                                 "fname=<%s>", newfname);
+                goto error;
             }
         }
     }
@@ -187,11 +192,21 @@ EXPORTED int proc_register(struct proc_handle **handlep,
                          "source=<%s> dest=<%s>",
                          newfname, handle->fname);
         xunlink(newfname);
-        fatal("can't write proc file", EX_IOERR);
+        goto error;
     }
 
     free(newfname);
     return 0;
+
+error:
+    if (handle_is_new) {
+        xunlink(handle->fname);
+        free(handle->fname);
+        free(handle);
+        *handlep = NULL;
+    }
+    free(newfname);
+    return -1;
 }
 
 EXPORTED void proc_cleanup(struct proc_handle **handlep)

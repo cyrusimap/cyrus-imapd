@@ -898,9 +898,10 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     buf_printf(&service, "%s%s", config_ident,
                namespace->well_known ? strrchr(namespace->well_known, '/') :
                namespace->prefix);
-    proc_register(&httpd_proc_handle, 0,
-                  buf_cstring(&service), txn->conn->clienthost, httpd_userid,
-                  txn->req_tgt.path, "WS");
+    r = proc_register(&httpd_proc_handle, 0,
+                      buf_cstring(&service), txn->conn->clienthost,
+                      httpd_userid, txn->req_tgt.path, "WS");
+    if (r) fatal("unable to register process", EX_IOERR);
     buf_free(&service);
 
     return 0;
