@@ -171,11 +171,17 @@ sub test_card_query
     xlog $self, "create card groups";
     $res = $jmap->CallMethods([['CardGroup/set', {create => {
         "1" => { kind => 'group',
-                 fullName => "group1", members => [$id1, $id2] },
+                 fullName => "group1",
+                 members => { $id1 => JSON::true, $id2 => JSON::true }
+               },
         "2" => { kind => 'group',
-                 fullName => "group2", members => [$id3] },
+                 fullName => "group2",
+                 members => { $id3 => JSON::true }
+               },
         "3" => { kind => 'group',
-                 fullName => "group3", members => [$id4] }
+                 fullName => "group3",
+                 members => { $id4 => JSON::true }
+               }
     }}, "R1"]]);
 
     $self->assert_not_null($res);
@@ -287,16 +293,17 @@ sub test_card_query
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-return;
+
     xlog $self, "filter by inCardGroup";
     $res = $jmap->CallMethods([ ['Card/query', {
                     filter => { inCardGroup => [$group1, $group3] }
                 }, "R1"] ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
-    xlog $self, "filter by inCardGroup and firstName";
+    xlog $self, "filter by inCardGroup and name/given";
     $res = $jmap->CallMethods([ ['Card/query', {
-                    filter => { inCardGroup => [$group1, $group3], firstName => "foo" }
+                    filter => { inCardGroup => [$group1, $group3],
+                                'name/given' => "foo" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
