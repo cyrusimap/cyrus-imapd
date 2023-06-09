@@ -3861,7 +3861,7 @@ enum contactsquery_sort {
     CONTACTS_SORT_DESC = 0x80,
 };
 
-enum contactsquery_sort *buildsort(json_t *jsort)
+static enum contactsquery_sort *contactsquery_buildsort(json_t *jsort)
 {
     enum contactsquery_sort *sort =
         xzmalloc((json_array_size(jsort) + 1) * sizeof(enum contactsquery_sort));
@@ -3894,9 +3894,9 @@ enum contactsquery_sort *buildsort(json_t *jsort)
     return sort;
 }
 
-static int _contactsquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
-                                                  const void *vb,
-                                                  void *rock)
+static int contactsquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                                 const void *vb,
+                                                 void *rock)
 {
     enum contactsquery_sort *sort = rock;
     json_t *ja = (json_t*) *(void**)va;
@@ -3956,7 +3956,11 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
                                                       void *rock,
                                                       json_t **err),
                           int (*_query_cb)(void *rock,
-                                           struct carddav_data *cdata))
+                                           struct carddav_data *cdata),
+                          enum contactsquery_sort *(*_buildsort)(json_t *jsort),
+                          int (*_sort_cmp) QSORT_R_COMPAR_ARGS(const void *va,
+                                                               const void *vb,
+                                                               void *rock))
 {
     if (!has_addressbooks(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
@@ -4048,9 +4052,9 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
         r = carddav_foreach(db, NULL, _query_cb, &rock);
         if (!r) {
             /* Sort entries */
-            enum contactsquery_sort *sort = buildsort(query.sort);
+            enum contactsquery_sort *sort = _buildsort(query.sort);
             cyr_qsort_r(rock.entries.data, rock.entries.count, sizeof(void*),
-                        _contactsquery_cmp, sort);
+                        _sort_cmp, sort);
             free(sort);
             /* Build result ids */
             int i;
@@ -4136,7 +4140,8 @@ static int jmap_contact_query(struct jmap_req *req)
     return _contactsquery(req, CARDDAV_KIND_CONTACT,
                           &contact_filter_parse, &contact_filter_free,
                           &contact_filter_validate,
-                          &contact_comparator_validate, &_contactsquery_cb);
+                          &contact_comparator_validate, &_contactsquery_cb,
+                          &contactsquery_buildsort, &contactsquery_cmp);
 }
 
 static int jmap_contactgroup_query(struct jmap_req *req)
@@ -4144,7 +4149,8 @@ static int jmap_contactgroup_query(struct jmap_req *req)
     return _contactsquery(req, CARDDAV_KIND_GROUP,
                           &contactgroup_filter_parse, &contactgroup_filter_free,
                           &contactgroup_filter_validate,
-                          &contactgroup_comparator_validate, &_contactsquery_cb);
+                          &contactgroup_comparator_validate, &_contactsquery_cb,
+                          &contactsquery_buildsort, &contactsquery_cmp);
 }
 
 static struct vparse_entry *_card_multi(struct vparse_card *card,
@@ -10734,7 +10740,8 @@ static int jmap_card_query(struct jmap_req *req)
     return _contactsquery(req, CARDDAV_KIND_CONTACT,
                           &card_filter_parse, &card_filter_free,
                           &card_filter_validate,
-                          &card_comparator_validate, &_cardquery_cb);
+                          &card_comparator_validate, &_cardquery_cb,
+                          NULL, NULL);
 }
 
 static int jmap_card_set(struct jmap_req *req)
