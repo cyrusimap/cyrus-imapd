@@ -82,6 +82,7 @@ static int jmap_addressbook_changes(struct jmap_req *req);
 static int jmap_addressbook_set(struct jmap_req *req);
 static int jmap_card_get(struct jmap_req *req);
 static int jmap_card_changes(struct jmap_req *req);
+static int jmap_card_query(struct jmap_req *req);
 static int jmap_card_set(struct jmap_req *req);
 static int jmap_card_copy(struct jmap_req *req);
 static int jmap_card_parse(jmap_req_t *req);
@@ -156,6 +157,12 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         "Card/changes",
         JMAP_URN_CONTACTS,
         &jmap_card_changes,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Card/query",
+        JMAP_URN_CONTACTS,
+        &jmap_card_query,
         JMAP_NEED_CSTATE
     },
     {
@@ -6316,6 +6323,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
 }
 
 #define IGNORE_VCARD_VERSION (1<<0)
+#define WANT_DERIVED_PROPS   (1<<1)
 
 /* Convert the vCard to JSContact Card properties */
 static json_t *jmap_card_from_vcard(const char *userid,
@@ -6385,7 +6393,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
         } subprop = { 0 };
 
         param = vcardproperty_get_first_parameter(prop, VCARD_DERIVED_PARAMETER);
-        if (param &&
+        if (param && !(flags & WANT_DERIVED_PROPS) &&
             vcardparameter_get_derived(param) == VCARD_DERIVED_TRUE) {
             /* Don't convert this property */
             continue;
@@ -7243,6 +7251,594 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     mboxlist_entry_free(&mbentry);
 
     return 0;
+}
+
+/*
+ * Card[Group]/query
+ */
+
+#define card_filter_match_textval   contact_filter_match_textval
+#define card_filter_match_textprop  contact_filter_match_textprop
+
+struct card_filter {
+    const char *uid;
+    struct contact_textfilter *fullName;
+    struct contact_textfilter *prefix;
+    struct contact_textfilter *given;
+    struct contact_textfilter *middle;
+    struct contact_textfilter *surname;
+    struct contact_textfilter *suffix;
+    struct contact_textfilter *nickName;
+    struct contact_textfilter *title;
+    struct contact_textfilter *role;
+    struct contact_textfilter *email;
+    struct contact_textfilter *phone;
+    struct contact_textfilter *online;
+    struct contact_textfilter *address;
+    struct contact_textfilter *expertise;
+    struct contact_textfilter *hobby;
+    struct contact_textfilter *interest;
+    struct contact_textfilter *note;
+    struct contact_textfilter *text;
+};
+
+/* Free the memory allocated by this card filter. */
+static void card_filter_free(void *vf)
+{
+    struct card_filter *f = (struct card_filter *) vf;
+
+    contact_textfilter_free(f->fullName);
+    contact_textfilter_free(f->prefix);
+    contact_textfilter_free(f->given);
+    contact_textfilter_free(f->middle);
+    contact_textfilter_free(f->surname);
+    contact_textfilter_free(f->suffix);
+    contact_textfilter_free(f->nickName);
+    contact_textfilter_free(f->title);
+    contact_textfilter_free(f->role);
+    contact_textfilter_free(f->email);
+    contact_textfilter_free(f->phone);
+    contact_textfilter_free(f->online);
+    contact_textfilter_free(f->address);
+    contact_textfilter_free(f->expertise);
+    contact_textfilter_free(f->hobby);
+    contact_textfilter_free(f->interest);
+    contact_textfilter_free(f->note);
+    contact_textfilter_free(f->text);
+    free(f);
+}
+
+/* Parse the JMAP Card FilterCondition in arg.
+ * Report any invalid properties in invalid, prefixed by prefix.
+ * Return NULL on error. */
+static void *card_filter_parse(json_t *arg)
+{
+    struct card_filter *f =
+        (struct card_filter *) xzmalloc(sizeof(struct card_filter));
+
+    /* fullName */
+    if (JNOTNULL(json_object_get(arg, "name"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "name", 0, NULL, "s", &s) > 0) {
+            f->fullName = contact_textfilter_new(s);
+        }
+    }
+    /* prefix */
+    if (JNOTNULL(json_object_get(arg, "name/prefix"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "name/prefix", 0, NULL, "s", &s) > 0) {
+            f->prefix = contact_textfilter_new(s);
+        }
+    }
+    /* given */
+    if (JNOTNULL(json_object_get(arg, "name/given"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "name/given", 0, NULL, "s", &s) > 0) {
+            f->given = contact_textfilter_new(s);
+        }
+    }
+    /* middle */
+    if (JNOTNULL(json_object_get(arg, "name/middle"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "name/middle", 0, NULL, "s", &s) > 0) {
+            f->middle = contact_textfilter_new(s);
+        }
+    }
+    /* surname */
+    if (JNOTNULL(json_object_get(arg, "name/surname"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "name/surname", 0, NULL, "s", &s) > 0) {
+            f->surname = contact_textfilter_new(s);
+        }
+    }
+    /* suffix */
+    if (JNOTNULL(json_object_get(arg, "name/suffix"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "name/suffix", 0, NULL, "s", &s) > 0) {
+            f->suffix = contact_textfilter_new(s);
+        }
+    }
+    /* nickName */
+    if (JNOTNULL(json_object_get(arg, "nickName"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "nickName", 0, NULL, "s", &s) > 0) {
+            f->nickName = contact_textfilter_new(s);
+        }
+    }
+    /* title */
+    if (JNOTNULL(json_object_get(arg, "title"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "title", 0, NULL, "s", &s) > 0) {
+            f->nickName = contact_textfilter_new(s);
+        }
+    }
+    /* role */
+    if (JNOTNULL(json_object_get(arg, "role"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "role", 0, NULL, "s", &s) > 0) {
+            f->role = contact_textfilter_new(s);
+        }
+    }
+    /* email */
+    if (JNOTNULL(json_object_get(arg, "email"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "email", 0, NULL, "s", &s) > 0) {
+            f->email = contact_textfilter_new(s);
+        }
+    }
+    /* phone */
+    if (JNOTNULL(json_object_get(arg, "phone"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "phone", 0, NULL, "s", &s) > 0) {
+            f->phone = contact_textfilter_new(s);
+        }
+    }
+    /* onlineServices */
+    if (JNOTNULL(json_object_get(arg, "onlineService"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "onlineService", 0, NULL, "s", &s) > 0) {
+            f->online = contact_textfilter_new(s);
+        }
+    }
+    /* address */
+    if (JNOTNULL(json_object_get(arg, "address"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "address", 0, NULL, "s", &s) > 0) {
+            f->address = contact_textfilter_new(s);
+        }
+    }
+    /* expertise */
+    if (JNOTNULL(json_object_get(arg, "expertise"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "expertise", 0, NULL, "s", &s) > 0) {
+            f->expertise = contact_textfilter_new(s);
+        }
+    }
+    /* hobby */
+    if (JNOTNULL(json_object_get(arg, "hobby"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "hobby", 0, NULL, "s", &s) > 0) {
+            f->hobby = contact_textfilter_new(s);
+        }
+    }
+    /* interest */
+    if (JNOTNULL(json_object_get(arg, "interest"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "interest", 0, NULL, "s", &s) > 0) {
+            f->interest = contact_textfilter_new(s);
+        }
+    }
+    /* note */
+    if (JNOTNULL(json_object_get(arg, "note"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "note", 0, NULL, "s", &s) > 0) {
+            f->note = contact_textfilter_new(s);
+        }
+    }
+    /* text */
+    if (JNOTNULL(json_object_get(arg, "text"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "text", 0, NULL, "s", &s) > 0) {
+            f->text = contact_textfilter_new(s);
+        }
+    }
+    /* uid */
+    if (JNOTNULL(json_object_get(arg, "uid"))) {
+        jmap_readprop(arg, "uid", 0, NULL, "s", &f->uid);
+    }
+
+    return f;
+}
+
+static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
+                                 struct jmap_parser *parser,
+                                 json_t *filter,
+                                 json_t *unsupported __attribute__((unused)),
+                                 void *rock __attribute__((unused)),
+                                 json_t **err __attribute__((unused)))
+{
+    const char *field;
+    json_t *arg;
+
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "name") ||
+            !strcmp(field, "name/prefix") ||
+            !strcmp(field, "name/given") ||
+            !strcmp(field, "name/middle") ||
+            !strcmp(field, "name/surname") ||
+            !strcmp(field, "name/suffix") ||
+            !strcmp(field, "nickName") ||
+            !strcmp(field, "title") ||
+            !strcmp(field, "role") ||
+            !strcmp(field, "email") ||
+            !strcmp(field, "phone") ||
+            !strcmp(field, "onlineService") ||
+            !strcmp(field, "address") ||
+            !strcmp(field, "expertise") ||
+            !strcmp(field, "hobby") ||
+            !strcmp(field, "interest") ||
+            !strcmp(field, "note") ||
+            !strcmp(field, "text") ||
+            !strcmp(field, "uid")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, field);
+        }
+    }
+}
+
+static int card_comparator_validate(jmap_req_t *req __attribute__((unused)),
+                                    struct jmap_comparator *comp,
+                                    void *rock __attribute__((unused)),
+                                    json_t **err __attribute__((unused)))
+{
+    /* Reject any collation */
+    if (comp->collation) {
+        return 0;
+    }
+    if (!strcmp(comp->property, "name") ||
+        !strcmp(comp->property, "uid")) {
+        return 1;
+    }
+    return 0;
+}
+
+static int card_filter_match_listprop(json_t *jentry, const char *propname,
+                                      const char *kind, const char *val_keys[],
+                                      struct contact_textfilter *propfilter,
+                                      struct contact_textfilter *textfilter,
+                                      ptrarray_t *cached_termsets)
+{
+    /* Skip matching if possible */
+    if (!propfilter &&
+        (!textfilter || contact_textfilter_matched_all(textfilter))) {
+        return 1;
+    }
+
+    /* Combine values into text buffer */
+    json_t *jlist = json_object_get(jentry, propname);
+    struct buf buf = BUF_INITIALIZER;
+    const char *id;
+    json_t *jinfo;
+
+    json_object_foreach(jlist, id, jinfo) {
+        if (kind &&
+            strcmpnull(kind, json_string_value(json_object_get(jinfo, "kind"))))
+            continue;
+
+        for (; *val_keys; val_keys++) {
+            const char *val =
+                json_string_value(json_object_get(jinfo, *val_keys));
+            if (!val) continue;
+            if (buf_len(&buf)) buf_putc(&buf, ' ');
+            buf_appendcstr(&buf, val);
+        }
+    }
+    if (propfilter && !buf_len(&buf)) return 0;
+
+    /* Evaluate search on text buffer */
+    hash_table *termset = getorset_termset(cached_termsets, propname);
+    int ret = card_filter_match_textval(buf_cstring(&buf),
+                                        propfilter, textfilter, termset);
+    buf_free(&buf);
+
+    return ret;
+}
+
+static int card_filter_match_namecomp(json_t *jentry, const char *compname,
+                                      struct contact_textfilter *propfilter,
+                                      struct contact_textfilter *textfilter,
+                                      ptrarray_t *cached_termsets)
+{
+    /* Skip matching if possible */
+    if (!propfilter &&
+        (!textfilter || contact_textfilter_matched_all(textfilter))) {
+        return 1;
+    }
+
+    /* Combine name component values into text buffer */
+    json_t *name = json_object_get(jentry, "name");
+    json_t *comps = json_object_get(name, "components");
+    const char *sep,
+        *defsep = json_string_value(json_object_get(name, "defaultSeparator"));
+    struct buf buf = BUF_INITIALIZER;
+    size_t i;
+    json_t *jinfo;
+
+    if (!defsep) defsep = " ";
+    sep = defsep;
+
+    json_array_foreach(comps, i, jinfo) {
+        const char *kind = json_string_value(json_object_get(jinfo, "kind"));
+        const char *val = json_string_value(json_object_get(jinfo, "value"));
+
+        if (!strcmp("separator", kind)) {
+            sep = val;
+            continue;
+        }
+
+        if (!strcmp(compname, kind)) {
+            if (buf_len(&buf)) buf_appendcstr(&buf, sep);
+            buf_appendcstr(&buf, val);
+        }
+
+        sep = defsep;
+    }
+    if (propfilter && !buf_len(&buf)) return 0;
+
+    /* Evaluate search on text buffer */
+    hash_table *termset = getorset_termset(cached_termsets, compname);
+    int ret = card_filter_match_textval(buf_cstring(&buf),
+                                        propfilter, textfilter, termset);
+    buf_free(&buf);
+
+    return ret;
+}
+
+static const char *address_vals[] = {
+    "street", "locality", "region", "postcode", "country", "countryCode", NULL
+};
+
+static int card_filter_match_address(json_t *jentry, const char *compname,
+                                     struct contact_textfilter *propfilter,
+                                     struct contact_textfilter *textfilter,
+                                     ptrarray_t *cached_termsets)
+{
+    /* Skip matching if possible */
+    if (!propfilter &&
+        (!textfilter || contact_textfilter_matched_all(textfilter))) {
+        return 1;
+    }
+
+    /* Combine values into text buffer */
+    json_t *jlist = json_object_get(jentry, "addresses");
+    struct buf buf = BUF_INITIALIZER;
+    const char *id;
+    json_t *jinfo;
+
+    json_object_foreach(jlist, id, jinfo) {
+        const char *val, **val_keys;
+
+        val = json_string_value(json_object_get(jinfo, "fullAddress"));
+        if (val && !compname) {
+            if (buf_len(&buf)) buf_putc(&buf, ' ');
+            buf_appendcstr(&buf, val);
+            continue;
+        }
+
+        for (val_keys = address_vals; *val_keys; val_keys++) {
+            if (!compname || !strcmp(*val_keys, compname)) {
+                json_t *jcomp = json_object_get(jinfo, *val_keys);
+
+                if (!strcmp(*val_keys, "street"))
+                    jcomp = json_object_get(json_array_get(jcomp, 0), "value");
+
+                val = json_string_value(jcomp);
+                if (val) {
+                    if (buf_len(&buf)) buf_putc(&buf, ' ');
+                    buf_appendcstr(&buf, val);
+                }
+
+                if (compname) break;
+            }
+        }
+    }
+    if (propfilter && !buf_len(&buf)) return 0;
+
+    /* Evaluate search on text buffer */
+    hash_table *termset = getorset_termset(cached_termsets,
+                                           compname ? compname : "address");
+    int ret = card_filter_match_textval(buf_cstring(&buf),
+                                        propfilter, textfilter, termset);
+    buf_free(&buf);
+
+    return ret;
+}
+
+static const char *nickName_vals[] = { "name", NULL };
+static const char *title_vals[] =    { "name", NULL };
+static const char *email_vals[] =    { "address", "label", NULL };
+static const char *phone_vals[] =    { "number", "label", NULL };
+static const char *online_vals[] =   { "service", "uri", "user", "label", NULL };
+static const char *personal_vals[] = { "value", NULL };
+static const char *note_vals[] =     { "note", NULL };
+
+/* Match the card in rock against filter. */
+static int card_filter_match(void *vf, void *rock)
+{
+    struct card_filter *f = (struct card_filter *) vf;
+    struct contactsquery_filter_rock *cfrock = (struct contactsquery_filter_rock*) rock;
+    json_t *card = cfrock->entry;
+    struct carddav_data *cdata = cfrock->cdata;
+//    struct carddav_db *db = cfrock->carddavdb;
+
+    /* uid */
+    if (f->uid && strcmpsafe(cdata->vcard_uid, f->uid)) {
+        return 0;
+    }
+
+    /* Match text filters */
+    if (f->text) contact_textfilter_reset(f->text);
+    if (!card_filter_match_textprop(card, "fullName", f->fullName,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_namecomp(card, "prefix", f->prefix,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_namecomp(card, "given", f->given,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_namecomp(card, "middle", f->middle,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_namecomp(card, "surname", f->surname,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_namecomp(card, "suffix", f->suffix,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "nickNames", NULL,
+                                    nickName_vals, f->nickName,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "titles", "title",
+                                    title_vals, f->title,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "titles", "role",
+                                    title_vals, f->role,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "emails", NULL,
+                                    email_vals, f->email,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "phones", NULL,
+                                    phone_vals, f->phone,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "onlineServices", NULL,
+                                    online_vals, f->online,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "personalInfo", "expertise",
+                                    personal_vals, f->expertise,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "personalInfo", "hobby",
+                                    personal_vals, f->hobby,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "personalInfo", "interest",
+                                    personal_vals, f->interest,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_listprop(card, "notes", NULL,
+                                    note_vals, f->note,
+                                    f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_address(card, NULL, f->address,
+                                   f->text, &cfrock->cached_termsets)) {
+        return 0;
+    }
+
+    if (f->text && !contact_textfilter_matched_all(f->text)) return 0;
+
+    /* All matched. */
+    return 1;
+}
+
+static json_t *_card_from_record(jmap_req_t *req, struct mailbox *mailbox,
+                                 struct index_record *record);
+
+static int _cardquery_cb(void *rock, struct carddav_data *cdata)
+{
+    struct contactsquery_rock *crock = (struct contactsquery_rock*) rock;
+    struct index_record record;
+    json_t *entry = NULL;
+    int r = 0;
+
+    if (!cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
+        return 0;
+    }
+
+    /* Ignore anything but the requested kind. */
+    if (cdata->kind != crock->kind) {
+        return 0;
+    }
+
+    mbentry_t *mbentry = jmap_mbentry_from_dav(crock->req, &cdata->dav);
+
+    if (!mbentry || !jmap_hasrights_mbentry(crock->req, mbentry, JACL_READITEMS)) {
+        mboxlist_entry_free(&mbentry);
+        return 0;
+    }
+#if 0
+    if (cdata->jmapversion == JMAPCACHE_CONTACTVERSION) {
+        json_error_t jerr;
+        entry = json_loads(cdata->jmapdata, 0, &jerr);
+        if (entry) goto gotvalue;
+    }
+#endif
+    /* Open mailbox. */
+    if (!crock->mailbox || strcmp(mailbox_name(crock->mailbox), mbentry->name)) {
+        mailbox_close(&crock->mailbox);
+        r = mailbox_open_irl(mbentry->name, &crock->mailbox);
+    }
+    mboxlist_entry_free(&mbentry);
+    if (r) return r;
+
+    /* Load record. */
+    r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
+    if (r) goto done;
+
+    /* Load contact from record. */
+    entry = _card_from_record(crock->req, crock->mailbox, &record);
+    if (!entry) {
+        syslog(LOG_ERR, "_card_from_record failed for record %u:%s",
+                cdata->dav.imap_uid, mailbox_name(crock->mailbox));
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+//gotvalue:
+
+
+    if (crock->filter) {
+        /* Match the contact against the filter */
+        struct contactsquery_filter_rock cfrock = {
+            crock->carddavdb, cdata, entry, PTRARRAY_INITIALIZER
+        };
+        /* Match filter */
+        int matches =
+            jmap_filter_match(crock->filter, &card_filter_match, &cfrock);
+        /* Free text search cached_termsets */
+        int i;
+        for (i = 0; i < ptrarray_size(&cfrock.cached_termsets); i++) {
+            struct named_termset *nts = ptrarray_nth(&cfrock.cached_termsets, i);
+            free_hash_table(&nts->termset, NULL);
+            free(nts);
+        }
+        ptrarray_fini(&cfrock.cached_termsets);
+        /* Skip non-matching entries */
+        if (!matches) goto done;
+    }
+
+    /* Update statistics */
+    crock->query->total++;
+
+    if (crock->build_response) {
+        struct jmap_query *query = crock->query;
+        /* Apply windowing and build response ids */
+        if (query->position > 0 && query->position > (ssize_t) query->total - 1) {
+            goto done;
+        }
+        if (query->limit && json_array_size(query->ids) >= query->limit) {
+            goto done;
+        }
+        if (!json_array_size(query->ids)) {
+            query->result_position = query->total - 1;
+        }
+        json_array_append_new(query->ids, json_string(cdata->vcard_uid));
+    }
+    else {
+        /* Keep matching entries for post-processing */
+        json_object_set_new(entry, "id", json_string(cdata->vcard_uid));
+        json_object_set_new(entry, "uid", json_string(cdata->vcard_uid));
+        ptrarray_append(&crock->entries, entry);
+        entry = NULL;
+    }
+
+done:
+    if (entry) json_decref(entry);
+    return r;
 }
 
 /*
@@ -8205,8 +8801,8 @@ struct comm_rock {
 };
 
 static vcardproperty *_jscomm_to_vcard(struct jmap_parser *parser, json_t *obj,
-                                        const char *id __attribute__((unused)),
-                                        vcardcomponent *card __attribute__((unused)),
+                                       const char *id __attribute__((unused)),
+                                       vcardcomponent *card __attribute__((unused)),
                                        void *rock)
 {
     struct comm_rock *crock = rock;
@@ -10034,7 +10630,7 @@ static json_t *_card_from_record(jmap_req_t *req, struct mailbox *mailbox,
 
     /* Patch JMAP event */
     json_t *jcard = jmap_card_from_vcard(req->userid, vcard, mailbox, record,
-                                         IGNORE_VCARD_VERSION);
+                                         IGNORE_VCARD_VERSION | WANT_DERIVED_PROPS);
     vcardcomponent_free(vcard);
 
     if (jcard && strstr(req->method, "/copy")) {
@@ -10060,6 +10656,14 @@ static int jmap_card_get(struct jmap_req *req)
 static int jmap_card_changes(struct jmap_req *req)
 {
     return _contacts_changes(req, CARDDAV_KIND_CONTACT);
+}
+
+static int jmap_card_query(struct jmap_req *req)
+{
+    return _contactsquery(req, CARDDAV_KIND_CONTACT,
+                          &card_filter_parse, &card_filter_free,
+                          &card_filter_validate,
+                          &card_comparator_validate, &_cardquery_cb);
 }
 
 static int jmap_card_set(struct jmap_req *req)
