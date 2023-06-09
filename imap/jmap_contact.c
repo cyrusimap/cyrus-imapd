@@ -6847,7 +6847,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             json_t *members = json_object_get_vanew(obj, "members", "{}");
 
-            json_object_set_new(members, prop_value, json_true());
+            json_object_set_new(members, prop_value+9, json_true());
             break;
         }
 
@@ -7955,6 +7955,13 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
 
             vcardstrarray_append(text, id);
             vcardproperty_set_value(prop, vcardvalue_new_textlist(text));
+        }
+        else if (pkind == VCARD_MEMBER_PROPERTY) {
+            struct buf buf = BUF_INITIALIZER;
+            buf_setcstr(&buf, "urn:uuid:");
+            buf_appendcstr(&buf, id);
+            vcardproperty_set_value_from_string(prop, buf_cstring(&buf), "NO");
+            buf_reset(&buf);
         }
         else {
             vcardproperty_set_value_from_string(prop, id, "NO");
