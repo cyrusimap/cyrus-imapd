@@ -7262,6 +7262,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
 struct card_filter {
     const char *uid;
+    hash_table *inCardGroup;
     struct contact_textfilter *fullName;
     struct contact_textfilter *prefix;
     struct contact_textfilter *given;
@@ -7287,6 +7288,10 @@ static void card_filter_free(void *vf)
 {
     struct card_filter *f = (struct card_filter *) vf;
 
+    if (f->inCardGroup) {
+        free_hash_table(f->inCardGroup, NULL);
+        free(f->inCardGroup);
+    }
     contact_textfilter_free(f->fullName);
     contact_textfilter_free(f->prefix);
     contact_textfilter_free(f->given);
@@ -7315,6 +7320,22 @@ static void *card_filter_parse(json_t *arg)
 {
     struct card_filter *f =
         (struct card_filter *) xzmalloc(sizeof(struct card_filter));
+
+    /* inCardGroup */
+    json_t *inCardGroup = json_object_get(arg, "inCardGroup");
+    if (inCardGroup) {
+        f->inCardGroup = xmalloc(sizeof(struct hash_table));
+        construct_hash_table(f->inCardGroup,
+                             json_array_size(inCardGroup)+1, 0);
+        size_t i;
+        json_t *val;
+        json_array_foreach(inCardGroup, i, val) {
+            const char *id;
+            if (json_unpack(val, "s", &id) != -1) {
+                hash_insert(id, (void*)1, f->inCardGroup);
+            }
+        }
+    }
 
     /* fullName */
     if (JNOTNULL(json_object_get(arg, "name"))) {
@@ -7482,6 +7503,14 @@ static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
             !strcmp(field, "uid")) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "inCardGroup")) {
+            if (!json_is_array(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+            else {
+                jmap_parse_strings(arg, parser, field);
             }
         }
         else {
@@ -7673,7 +7702,7 @@ static int card_filter_match(void *vf, void *rock)
     struct contactsquery_filter_rock *cfrock = (struct contactsquery_filter_rock*) rock;
     json_t *card = cfrock->entry;
     struct carddav_data *cdata = cfrock->cdata;
-//    struct carddav_db *db = cfrock->carddavdb;
+    struct carddav_db *db = cfrock->carddavdb;
 
     /* uid */
     if (f->uid && strcmpsafe(cdata->vcard_uid, f->uid)) {
@@ -7730,6 +7759,29 @@ static int card_filter_match(void *vf, void *rock)
     }
 
     if (f->text && !contact_textfilter_matched_all(f->text)) return 0;
+
+    /* inCardGroup */
+    if (f->inCardGroup) {
+        /* XXX Calling carddav_db for every contact isn't really efficient. If
+         * this turns out to be a performance issue, the carddav_db API might
+         * support lookup contacts by group ids. */
+        strarray_t *gids = carddav_getuid_groups(db, cdata->vcard_uid);
+        if (!gids) {
+            syslog(LOG_INFO,
+                   "carddav_getuid_groups(%s) returned NULL group array",
+                   cdata->vcard_uid);
+            return 0;
+        }
+        int i, m = 0;
+        for (i = 0; i < gids->count; i++) {
+            if (hash_lookup(strarray_nth(gids, i), f->inCardGroup)) {
+                m = 1;
+                break;
+            }
+        }
+        strarray_free(gids);
+        if (!m) return 0;
+    }
 
     /* All matched. */
     return 1;
@@ -7928,6 +7980,7 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
                                     const char *key, vcardcomponent *card,
                                     vcardproperty_kind pkind)
 {
+    struct buf buf = BUF_INITIALIZER;
     const char *id;
     json_t *obj;
     int r = 0;
@@ -7957,11 +8010,9 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
             vcardproperty_set_value(prop, vcardvalue_new_textlist(text));
         }
         else if (pkind == VCARD_MEMBER_PROPERTY) {
-            struct buf buf = BUF_INITIALIZER;
             buf_setcstr(&buf, "urn:uuid:");
             buf_appendcstr(&buf, id);
             vcardproperty_set_value_from_string(prop, buf_cstring(&buf), "NO");
-            buf_reset(&buf);
         }
         else {
             vcardproperty_set_value_from_string(prop, id, "NO");
@@ -7979,6 +8030,7 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
     }
 
     jmap_parser_pop(parser);
+    buf_free(&buf);
 
     return r;
 }
