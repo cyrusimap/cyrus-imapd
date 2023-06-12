@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_query_multi_sort
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create cards";
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                card1 => {
+                    uid => 'XXX-UID-1',
+                    organizations => {
+                        'o1' => {
+                            name => 'companyB'
+                        }
+                    }
+                },
+                card2 => {
+                    uid => 'XXX-UID-2',
+                    organizations => {
+                        'o1' => {
+                            name => 'companyA'
+                        }
+                    }
+                },
+                card3 => {
+                    uid => 'XXX-UID-3',
+                    organizations => {
+                        'o1' => {
+                            name => 'companyB'
+                        }
+                    }
+                },
+                card4 => {
+                    uid => 'XXX-UID-4',
+                    organizations => {
+                        'o1' => {
+                            name => 'companyC'
+                        }
+                    }
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $cardId1 = $res->[0][1]{created}{card1}{id};
+    $self->assert_not_null($cardId1);
+
+    my $cardId2 = $res->[0][1]{created}{card2}{id};
+    $self->assert_not_null($cardId2);
+
+    my $cardId3 = $res->[0][1]{created}{card3}{id};
+    $self->assert_not_null($cardId3);
+
+    my $cardId4 = $res->[0][1]{created}{card4}{id};
+    $self->assert_not_null($cardId4);
+
+    xlog $self, "sort by multi-dimensional comparator";
+    $res = $jmap->CallMethods([
+        ['Card/query', {
+            sort => [{
+                property => 'organization',
+            }, {
+                property => 'uid',
+                isAscending => JSON::false,
+            }],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([
+            $cardId2,
+            $cardId3,
+            $cardId1,
+            $cardId4,
+        ], $res->[0][1]{ids}
+    );
+}
