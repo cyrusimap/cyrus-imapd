@@ -1,0 +1,225 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cardgroup_query
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create cards";
+    my $res = $jmap->CallMethods([['Card/set', {
+        create => {
+            "1" => {
+                name => {
+                    components => [
+                        {
+                            kind => "given",
+                            value => "foo"
+                        },
+                        {
+                            kind => "surname",
+                            value => "last"
+                        },
+                    ],
+                    sortAs => {
+                        surname => 'aaa'
+                    }
+                },
+                nickNames => {
+                    'n1' => {
+                        name => "foo"
+                    }
+                },
+                emails => {
+                    'e1' => {
+                        contexts => {
+                            private => JSON::true
+                        },
+                        address => "foo\@example.com"
+                    }
+                },
+                personalInfo => {
+                    'p1' => {
+                        kind => 'hobby',
+                        value => 'reading'
+                    }
+                }
+            },
+            "2" => {
+                name => {
+                    components => [
+                        {
+                            kind => "given",
+                            value => "bar"
+                        },
+                        {
+                            kind => "surname",
+                            value => "last"
+                        },
+                    ]
+                },
+                emails => {
+                    'e1' => {
+                        contexts => {
+                            work => JSON::true
+                        },
+                        address => "bar\@bar.org"
+                    },
+                    'e2' => {
+                        contexts => {
+                            other => JSON::true
+                        },
+                        address => "me\@example.com"
+                    }
+                },
+                addresses => {
+                    'a1' => {
+                        contexts => {
+                            private => JSON::true
+                        },
+                        street => [
+                            {
+                                kind => "name",
+                                value => "Some Lane"
+                            },
+                            {
+                                kind => "number",
+                                value => "24"
+                            }
+                        ],
+                        locality => "SomeWhere City",
+                        region => "",
+                        postcode => "1234",
+                    }
+                }
+            },
+            "3" => {
+                name => {
+                    components => [
+                        {
+                            kind => "given",
+                            value => "baz"
+                        },
+                        {
+                            kind => "surname",
+                            value => "last"
+                        },
+                    ]
+                },
+                addresses => {
+                    'a1' => {
+                        contexts => {
+                            private => JSON::true
+                        },
+                        street => [
+                            {
+                                kind => "name",
+                                value => "Some Lane"
+                            },
+                            {
+                                kind => "number",
+                                value => "24"
+                            }
+                        ],
+                        locality => "SomeWhere City",
+                        region => "",
+                        postcode => "1234",
+                        country => "Someinistan"
+                    }
+                },
+                personalInfo => {
+                    'p1' => {
+                        kind => 'interest',
+                        value => 'r&b music'
+                    }
+                }
+            },
+            "4" => {
+                name => {
+                    components => [
+                        {
+                            kind => "given",
+                            value => "bam"
+                        },
+                        {
+                            kind => "surname",
+                            value => "last"
+                        },
+                    ]
+                },
+                nickNames => {
+                    'n1' => {
+                        name => "bam"
+                    }
+                },
+                notes => {
+                    'n1' => {
+                        note => "hello"
+                    }
+                }
+            }
+        }
+    }, "R1"]]);
+
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Card/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+    my $id3 = $res->[0][1]{created}{"3"}{id};
+    my $id4 = $res->[0][1]{created}{"4"}{id};
+
+    xlog $self, "create card groups";
+    $res = $jmap->CallMethods([['CardGroup/set', {create => {
+        "1" => { kind => 'group',
+                 fullName => "group1",
+                 members => { $id1 => JSON::true, $id2 => JSON::true }
+               },
+        "2" => { kind => 'group',
+                 fullName => "group2",
+                 members => { $id3 => JSON::true }
+               },
+        "3" => { kind => 'group',
+                 fullName => "group3",
+                 members => { $id4 => JSON::true }
+               }
+    }}, "R1"]]);
+
+    $self->assert_not_null($res);
+    $self->assert_str_equals('CardGroup/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $group1 = $res->[0][1]{created}{"1"}{id};
+    my $group2 = $res->[0][1]{created}{"2"}{id};
+    my $group3 = $res->[0][1]{created}{"3"}{id};
+
+    xlog $self, "get unfiltered card list";
+    $res = $jmap->CallMethods([ ['CardGroup/query', { }, "R1"] ]);
+
+    $self->assert_num_equals(3, $res->[0][1]{total});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+
+    xlog $self, "filter by name (fullName)";
+    $res = $jmap->CallMethods([ ['CardGroup/query', {
+                    filter => { fullName => "group1" }
+                }, "R1"] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($group1, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by name (fullName)";
+    $res = $jmap->CallMethods([ ['CardGroup/query', {
+                    filter => { fullName => "group" }
+                }, "R1"] ]);
+    $self->assert_num_equals(0, $res->[0][1]{total});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{ids}});
+
+    xlog $self, "filter by member";
+    $res = $jmap->CallMethods([ ['CardGroup/query', {
+                    filter => { member => $id3 }
+                }, "R1"] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($group2, $res->[0][1]{ids}[0]);
+}
