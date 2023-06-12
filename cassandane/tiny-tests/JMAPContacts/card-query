@@ -22,7 +22,10 @@ sub test_card_query
                             kind => "surname",
                             value => "last"
                         },
-                    ]
+                    ],
+                    sortAs => {
+                        surname => 'aaa'
+                    }
                 },
                 nickNames => {
                     'n1' => {
@@ -306,5 +309,24 @@ sub test_card_query
                                 'name/given' => "foo" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+    xlog $self, "sort by name/given";
+    $res = $jmap->CallMethods([ ['Card/query', {
+                    sort => [ { property => "name/given" } ]
+                }, "R1"] ]);
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id4, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($id2, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[2]);
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[3]);
+
+    xlog $self, "sort by name/surname";
+    $res = $jmap->CallMethods([ ['Card/query', {
+                    sort => [ { property => "name/surname" } ]
+                }, "R1"] ]);
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 }
