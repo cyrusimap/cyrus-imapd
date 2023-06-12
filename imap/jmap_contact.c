@@ -7574,13 +7574,15 @@ static int card_filter_match_listprop(json_t *jentry, const char *propname,
     json_t *jinfo;
 
     json_object_foreach(jlist, id, jinfo) {
+        const char *key;
+
         if (kind &&
             strcmpnull(kind, json_string_value(json_object_get(jinfo, "kind"))))
             continue;
 
-        for (; *val_keys; val_keys++) {
+        for (key = *val_keys; *key; key++) {
             const char *val =
-                json_string_value(json_object_get(jinfo, *val_keys));
+                json_string_value(json_object_get(jinfo, key));
             if (!val) continue;
             if (buf_len(&buf)) buf_putc(&buf, ' ');
             buf_appendcstr(&buf, val);
