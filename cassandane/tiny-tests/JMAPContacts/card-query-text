@@ -1,0 +1,142 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_query_text
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create cards";
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                card1 => {
+                    notes => {
+                        'n1' => {
+                            note => 'cats and dogs'
+                        }
+                    }
+                },
+                card2 => {
+                    notes => {
+                        'n1' => {
+                            note => 'hats and bats'
+                        }
+                    }
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $cardId1 = $res->[0][1]{created}{card1}{id};
+    $self->assert_not_null($cardId1);
+    my $cardId2 = $res->[0][1]{created}{card2}{id};
+    $self->assert_not_null($cardId2);
+
+    xlog "Query with loose terms";
+    $res = $jmap->CallMethods([
+        ['Card/query', {
+            filter => {
+                note => "cats dogs",
+            },
+        }, 'R1'],
+        ['Card/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    note => 'cats dogs',
+                }],
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$cardId1], $res->[0][1]{ids});
+    $self->assert_deep_equals([$cardId2], $res->[1][1]{ids});
+
+    xlog "Query with phrase";
+    $res = $jmap->CallMethods([
+        ['Card/query', {
+            filter => {
+                note => "'cats and dogs'",
+            },
+        }, 'R1'],
+        ['Card/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    note => "'cats and dogs'",
+                }],
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([$cardId1], $res->[0][1]{ids});
+    $self->assert_deep_equals([$cardId2], $res->[1][1]{ids});
+
+    xlog "Query with both phrase and loose terms";
+    $res = $jmap->CallMethods([
+        ['Card/query', {
+            filter => {
+                note => "cats 'cats and dogs' dogs",
+            },
+        }, 'R1'],
+        ['Card/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    note => "cats 'cats and dogs' dogs",
+                }],
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$cardId1], $res->[0][1]{ids});
+    $self->assert_deep_equals([$cardId2], $res->[1][1]{ids});
+
+    xlog "Query text";
+    $res = $jmap->CallMethods([
+        ['Card/query', {
+            filter => {
+                text => "cats dogs",
+            },
+        }, 'R1'],
+        ['Card/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    text => "cats dogs",
+                }],
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$cardId1], $res->[0][1]{ids});
+    $self->assert_deep_equals([$cardId2], $res->[1][1]{ids});
+
+    xlog "Query text and notes";
+    $res = $jmap->CallMethods([
+        ['Card/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    text => "cats",
+                }, {
+                    note => "dogs",
+                }],
+            },
+        }, 'R1'],
+        ['Card/query', {
+
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    operator => 'AND',
+                    conditions => [{
+                        text => "cats",
+                    }, {
+                        note => "dogs",
+                    }],
+                }],
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([$cardId1], $res->[0][1]{ids});
+    $self->assert_deep_equals([$cardId2], $res->[1][1]{ids});
+}
