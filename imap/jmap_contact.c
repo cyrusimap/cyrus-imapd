@@ -7544,8 +7544,12 @@ static int card_comparator_validate(jmap_req_t *req __attribute__((unused)),
     if (comp->collation) {
         return 0;
     }
-    if (!strcmp(comp->property, "name") ||
-        !strcmp(comp->property, "uid")) {
+    if (!strcmp(comp->property, "uid") ||
+        !strcmp(comp->property, "fullName") ||
+        !strcmp(comp->property, "name/given") ||
+        !strcmp(comp->property, "name/surname") ||
+        !strcmp(comp->property, "nickName") ||
+        !strcmp(comp->property, "organization")) {
         return 1;
     }
     return 0;
@@ -7593,6 +7597,40 @@ static int card_filter_match_listprop(json_t *jentry, const char *propname,
     return ret;
 }
 
+static const char *jsname_comp(json_t *name, const char *compname,
+                               struct buf *buf)
+{
+    json_t *comps = json_object_get(name, "components");
+    const char *sep,
+        *defsep = json_string_value(json_object_get(name, "defaultSeparator"));
+    size_t i;
+    json_t *jinfo;
+
+    if (!defsep) defsep = " ";
+    sep = defsep;
+
+    buf_reset(buf);
+
+    json_array_foreach(comps, i, jinfo) {
+        const char *kind = json_string_value(json_object_get(jinfo, "kind"));
+        const char *val = json_string_value(json_object_get(jinfo, "value"));
+
+        if (!strcmp("separator", kind)) {
+            sep = val;
+            continue;
+        }
+
+        if (!strcmp(compname, kind)) {
+            if (buf_len(buf)) buf_appendcstr(buf, sep);
+            buf_appendcstr(buf, val);
+        }
+
+        sep = defsep;
+    }
+
+    return buf_cstringnull_ifempty(buf);
+}
+
 static int card_filter_match_namecomp(json_t *jentry, const char *compname,
                                       struct contact_textfilter *propfilter,
                                       struct contact_textfilter *textfilter,
@@ -7606,33 +7644,9 @@ static int card_filter_match_namecomp(json_t *jentry, const char *compname,
 
     /* Combine name component values into text buffer */
     json_t *name = json_object_get(jentry, "name");
-    json_t *comps = json_object_get(name, "components");
-    const char *sep,
-        *defsep = json_string_value(json_object_get(name, "defaultSeparator"));
     struct buf buf = BUF_INITIALIZER;
-    size_t i;
-    json_t *jinfo;
-
-    if (!defsep) defsep = " ";
-    sep = defsep;
-
-    json_array_foreach(comps, i, jinfo) {
-        const char *kind = json_string_value(json_object_get(jinfo, "kind"));
-        const char *val = json_string_value(json_object_get(jinfo, "value"));
-
-        if (!strcmp("separator", kind)) {
-            sep = val;
-            continue;
-        }
-
-        if (!strcmp(compname, kind)) {
-            if (buf_len(&buf)) buf_appendcstr(&buf, sep);
-            buf_appendcstr(&buf, val);
-        }
-
-        sep = defsep;
-    }
-    if (propfilter && !buf_len(&buf)) return 0;
+    const char *val = jsname_comp(name, compname, &buf);
+    if (propfilter && !val) return 0;
 
     /* Evaluate search on text buffer */
     hash_table *termset = getorset_termset(cached_termsets, compname);
@@ -7909,6 +7923,107 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
 done:
     if (entry) json_decref(entry);
     return r;
+}
+
+static enum contactsquery_sort *cardquery_buildsort(json_t *jsort)
+{
+    enum contactsquery_sort *sort =
+        xzmalloc((json_array_size(jsort) + 1) * sizeof(enum contactsquery_sort));
+
+    size_t i;
+    json_t *jcomp;
+    json_array_foreach(jsort, i, jcomp) {
+        const char *prop = json_string_value(json_object_get(jcomp, "property"));
+        if (!strcmp(prop, "uid"))
+            sort[i] = CONTACTS_SORT_UID;
+        /* Comparators for Contact */
+        else if (!strcmp(prop, "name/given"))
+            sort[i] = CONTACTS_SORT_FIRSTNAME;
+        else if (!strcmp(prop, "name/surname"))
+            sort[i] = CONTACTS_SORT_LASTNAME;
+        else if (!strcmp(prop, "nickName"))
+            sort[i] = CONTACTS_SORT_NICKNAME;
+        else if (!strcmp(prop, "organization"))
+            sort[i] = CONTACTS_SORT_COMPANY;
+        /* Comparators for ContactGroup */
+        else if (!strcmp(prop, "fullName"))
+            sort[i] = CONTACTS_SORT_NAME;
+
+        if (json_object_get(jcomp, "isAscending") == json_false())
+            sort[i] |= CONTACTS_SORT_DESC;
+    }
+
+    return sort;
+}
+
+static const char *jsname_sortas(json_t *card, const char *comp, struct buf *buf)
+{
+    json_t *name = json_object_get(card, "name");
+    const char *val = NULL;
+
+    if (name) {
+        json_t *sortas = json_object_get(name, "sortAs");
+
+        if (sortas) val = json_string_value(json_object_get(sortas, comp));
+        if (!val) val = jsname_comp(name, comp, buf);
+    }
+
+    return val;
+}
+
+static int cardquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                             const void *vb,
+                                             void *rock)
+{
+    enum contactsquery_sort *sort = rock;
+    enum contactsquery_sort *comp;
+    json_t *ja = (json_t*) *(void**)va;
+    json_t *jb = (json_t*) *(void**)vb;
+    struct buf bufa = BUF_INITIALIZER;
+    struct buf bufb = BUF_INITIALIZER;
+    int ret = 0;
+
+    for (comp = sort; *comp != CONTACTS_SORT_NONE; comp++) {
+        const char *vala = NULL, *valb = NULL;
+
+        switch (*comp & ~CONTACTS_SORT_DESC) {
+            case CONTACTS_SORT_UID:
+                vala = json_string_value(json_object_get(ja, "uid"));
+                valb = json_string_value(json_object_get(jb, "uid"));
+                break;
+            case CONTACTS_SORT_FIRSTNAME:
+                vala = jsname_sortas(ja, "given", &bufa);
+                valb = jsname_sortas(jb, "given", &bufb);
+                break;
+            case CONTACTS_SORT_LASTNAME:
+                vala = jsname_sortas(ja, "surname", &bufa);
+                valb = jsname_sortas(jb, "surname", &bufb);
+                break;
+            case CONTACTS_SORT_NICKNAME:
+                vala = json_string_value(json_object_get(ja, "nickName"));
+                valb = json_string_value(json_object_get(jb, "nickName"));
+                break;
+            case CONTACTS_SORT_COMPANY:
+                vala = json_string_value(json_object_get(ja, "organization"));
+                valb = json_string_value(json_object_get(jb, "organization"));
+                break;
+            case CONTACTS_SORT_NAME:
+                vala = json_string_value(json_object_get(ja, "fullName"));
+                valb = json_string_value(json_object_get(jb, "fullName"));
+                break;
+        }
+
+        ret = strcmpsafe(vala, valb);
+        if (ret && (*comp & CONTACTS_SORT_DESC)) {
+            ret = -ret;
+            break;
+        }
+    }
+
+    buf_free(&bufa);
+    buf_free(&bufb);
+
+    return ret;
 }
 
 /*
@@ -10741,7 +10856,7 @@ static int jmap_card_query(struct jmap_req *req)
                           &card_filter_parse, &card_filter_free,
                           &card_filter_validate,
                           &card_comparator_validate, &_cardquery_cb,
-                          NULL, NULL);
+                          &cardquery_buildsort, &cardquery_cmp);
 }
 
 static int jmap_card_set(struct jmap_req *req)
