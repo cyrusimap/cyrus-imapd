@@ -6589,8 +6589,8 @@ static json_t *jmap_card_from_vcard(const char *userid,
                             }
                         }
 
-                        if (sorts && i < vcardstrarray_size(sorts)) {
-                            val = vcardstrarray_element_at(sorts, i);
+                        if (sorts && ckind->idx < vcardstrarray_size(sorts)) {
+                            val = vcardstrarray_element_at(sorts, ckind->idx);
                             if (*val) {
                                 if (!sortas) sortas = json_object();
                                 json_object_set_new(sortas,
