@@ -1,0 +1,125 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_query_windowing
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create cards";
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                card1 => {
+                    uid => 'XXX-UID-1',
+                    organizations => {
+                        'o1' => {
+                            name => 'companyB'
+                        }
+                    }
+                },
+                card2 => {
+                    uid => 'XXX-UID-2',
+                    organizations => {
+                        'o1' => {
+                            name => 'companyA'
+                        }
+                    }
+                },
+                card3 => {
+                    uid => 'XXX-UID-3',
+                    organizations => {
+                        'o1' => {
+                            name => 'companyB'
+                        }
+                    }
+                },
+                card4 => {
+                    uid => 'XXX-UID-4',
+                    organizations => {
+                        'o1' => {
+                            name => 'companyC'
+                        }
+                    }
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $cardId1 = $res->[0][1]{created}{card1}{id};
+    $self->assert_not_null($cardId1);
+
+    my $cardId2 = $res->[0][1]{created}{card2}{id};
+    $self->assert_not_null($cardId2);
+
+    my $cardId3 = $res->[0][1]{created}{card3}{id};
+    $self->assert_not_null($cardId3);
+
+    my $cardId4 = $res->[0][1]{created}{card4}{id};
+    $self->assert_not_null($cardId4);
+
+    xlog $self, "run query with windowing";
+    $res = $jmap->CallMethods([
+        ['Card/query', {
+            sort => [{
+                property => 'uid',
+            }],
+            limit => 2,
+        }, 'R1'],
+        ['Card/query', {
+            sort => [{
+                property => 'uid',
+            }],
+            limit => 2,
+            position => 2,
+        }, 'R2'],
+        ['Card/query', {
+            sort => [{
+                property => 'uid',
+            }],
+            anchor => $cardId3,
+            anchorOffset => -1,
+            limit => 2,
+        }, 'R3'],
+        ['Card/query', {
+            sort => [{
+                property => 'uid',
+            }],
+            limit => 2,
+            position => -2,
+        }, 'R4'],
+    ]);
+    # Request 1
+    $self->assert_deep_equals([
+            $cardId1,
+            $cardId2,
+        ], $res->[0][1]{ids}
+    );
+    $self->assert_num_equals(0, $res->[0][1]{position});
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    # Request 2
+    $self->assert_deep_equals([
+            $cardId3,
+            $cardId4,
+        ], $res->[1][1]{ids}
+    );
+    $self->assert_num_equals(2, $res->[1][1]{position});
+    $self->assert_num_equals(4, $res->[1][1]{total});
+    # Request 3
+    $self->assert_deep_equals([
+            $cardId2,
+            $cardId3,
+        ], $res->[2][1]{ids}
+    );
+    $self->assert_num_equals(1, $res->[2][1]{position});
+    $self->assert_num_equals(4, $res->[2][1]{total});
+    # Request 4
+    $self->assert_deep_equals([
+            $cardId3,
+            $cardId4,
+        ], $res->[3][1]{ids}
+    );
+    $self->assert_num_equals(2, $res->[3][1]{position});
+    $self->assert_num_equals(4, $res->[3][1]{total});
+}
