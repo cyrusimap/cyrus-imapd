@@ -7938,7 +7938,7 @@ static enum contactsquery_sort *cardquery_buildsort(json_t *jsort)
         const char *prop = json_string_value(json_object_get(jcomp, "property"));
         if (!strcmp(prop, "uid"))
             sort[i] = CONTACTS_SORT_UID;
-        /* Comparators for Contact */
+        /* Comparators for Card */
         else if (!strcmp(prop, "name/given"))
             sort[i] = CONTACTS_SORT_FIRSTNAME;
         else if (!strcmp(prop, "name/surname"))
@@ -7947,7 +7947,7 @@ static enum contactsquery_sort *cardquery_buildsort(json_t *jsort)
             sort[i] = CONTACTS_SORT_NICKNAME;
         else if (!strcmp(prop, "organization"))
             sort[i] = CONTACTS_SORT_COMPANY;
-        /* Comparators for ContactGroup */
+        /* Comparators for CardGroup */
         else if (!strcmp(prop, "fullName"))
             sort[i] = CONTACTS_SORT_NAME;
 
@@ -7968,6 +7968,29 @@ static const char *jsname_sortas(json_t *card, const char *comp, struct buf *buf
 
         if (sortas) val = json_string_value(json_object_get(sortas, comp));
         if (!val) val = jsname_comp(name, comp, buf);
+    }
+
+    return val;
+}
+
+static const char *jsorg_sortas(json_t *card, struct buf *buf)
+{
+    json_t *orgs = json_object_get(card, "organizations");
+    const char *val = NULL;
+
+    buf_reset(buf);
+
+    if (orgs) {
+        const char *id;
+        json_t *org;
+
+        json_object_foreach(orgs, id, org) {
+            val = json_string_value(json_object_get(org, "sortAs"));
+            if (!val) val = json_string_value(json_object_get(org, "name"));
+
+            if (buf_len(buf)) buf_putc(buf, ' ');
+            buf_appendcstr(buf, val);
+        }
     }
 
     return val;
@@ -8006,8 +8029,8 @@ static int cardquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
                 valb = json_string_value(json_object_get(jb, "nickName"));
                 break;
             case CONTACTS_SORT_COMPANY:
-                vala = json_string_value(json_object_get(ja, "organization"));
-                valb = json_string_value(json_object_get(jb, "organization"));
+                vala = jsorg_sortas(ja, &bufa);
+                valb = jsorg_sortas(jb, &bufb);
                 break;
             case CONTACTS_SORT_NAME:
                 vala = json_string_value(json_object_get(ja, "fullName"));
@@ -8016,8 +8039,8 @@ static int cardquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
         }
 
         ret = strcmpsafe(vala, valb);
-        if (ret && (*comp & CONTACTS_SORT_DESC)) {
-            ret = -ret;
+        if (ret) {
+            if (*comp & CONTACTS_SORT_DESC) ret = -ret;
             break;
         }
     }
