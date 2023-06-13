@@ -6452,22 +6452,23 @@ static json_t *jmap_card_from_vcard(const char *userid,
             json_object_set_new(obj, "kind", json_string(buf_lcase(&buf)));
             break;
 
-        case VCARD_SOURCE_PROPERTY: {
+        case VCARD_SOURCE_PROPERTY:
             kind = "entry";
 
         directories:
-            json_t *dirs = json_object_get_vanew(obj, "directories", "{}");
+            {
+                json_t *dirs = json_object_get_vanew(obj, "directories", "{}");
 
-            param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
-                ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
+                param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
+                    ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
 
-            jprop = json_pack("{s:s s:o}",
-                              "kind", kind,
-                              "uri", jmap_utf8string(prop_value));
+                jprop = json_pack("{s:s s:o}",
+                                  "kind", kind,
+                                  "uri", jmap_utf8string(prop_value));
 
-            json_object_set_new(dirs, _prop_id(prop), jprop);
+                json_object_set_new(dirs, _prop_id(prop), jprop);
+            }
             break;
-        }
 
         case VCARD_XML_PROPERTY:
             goto unmapped;
@@ -6483,7 +6484,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
             GCC_FALLTHROUGH
 
-        case VCARD_ANNIVERSARY_PROPERTY: {
+        case VCARD_ANNIVERSARY_PROPERTY:
             if (!kind) kind = "wedding";
 
             subprop.key = "date";
@@ -6492,14 +6493,16 @@ static json_t *jmap_card_from_vcard(const char *userid,
             param_flags = ALLOW_CALSCALE_PARAM;
 
         anniversaries:
-            json_t *annivs = json_object_get_vanew(obj, "anniversaries", "{}");
+            {
+                json_t *annivs =
+                    json_object_get_vanew(obj, "anniversaries", "{}");
 
-            jprop = json_object_get_vanew(annivs, kind,
-                                          "{s:s}", "kind", kind);
+                jprop = json_object_get_vanew(annivs, kind,
+                                              "{s:s}", "kind", kind);
 
-            json_object_set_new(jprop, subprop.key, subprop.val);
+                json_object_set_new(jprop, subprop.key, subprop.val);
+            }
             break;
-        }
 
         case VCARD_BIRTHPLACE_PROPERTY:
             kind = "birth";
@@ -6658,31 +6661,33 @@ static json_t *jmap_card_from_vcard(const char *userid,
             break;
         }
 
-        case VCARD_PHOTO_PROPERTY: {
+        case VCARD_PHOTO_PROPERTY:
             kind = "photo";
 
         media:
-            json_t *media = json_object_get_vanew(obj, "media", "{}");
-            char *uri = NULL, *type = NULL, *blobid = NULL;
+            {
+                json_t *media = json_object_get_vanew(obj, "media", "{}");
+                char *uri = NULL, *type = NULL, *blobid = NULL;
 
-            param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
-                ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
+                param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
+                    ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
 
-            uri = _value_to_uri_blobid(prop, mailbox, record, &type, &blobid);
+                uri =
+                    _value_to_uri_blobid(prop, mailbox, record, &type, &blobid);
 
-            jprop = json_pack("{s:s s:s* s:s* s:s*}",
-                              "kind", kind,
-                              "mediaType", type,
-                              "uri", uri,
-                              "blobId", blobid);
+                jprop = json_pack("{s:s s:s* s:s* s:s*}",
+                                  "kind", kind,
+                                  "mediaType", type,
+                                  "uri", uri,
+                                  "blobId", blobid);
 
-            json_object_set_new(media, _prop_id(prop), jprop);
+                json_object_set_new(media, _prop_id(prop), jprop);
 
-            free(blobid);
-            free(type);
-            free(uri);
+                free(blobid);
+                free(type);
+                free(uri);
+            }
             break;
-        }
 
             /* Delivery Addressing Properties */
         case VCARD_ADR_PROPERTY: {
@@ -6848,22 +6853,23 @@ static json_t *jmap_card_from_vcard(const char *userid,
             break;
 
         /* Organizational Properties */
-        case VCARD_CONTACTURI_PROPERTY: {
+        case VCARD_CONTACTURI_PROPERTY:
             kind = "contact";
 
         links:
-            json_t *links = json_object_get_vanew(obj, "links", "{}");
+            {
+                json_t *links = json_object_get_vanew(obj, "links", "{}");
 
-            param_flags = ALLOW_TYPE_PARAM |
-                ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
+                param_flags = ALLOW_TYPE_PARAM |
+                    ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
 
-            jprop = json_pack("{s:s* s:o}",
-                              "kind", kind,
-                              "uri", jmap_utf8string(prop_value));
+                jprop = json_pack("{s:s* s:o}",
+                                  "kind", kind,
+                                  "uri", jmap_utf8string(prop_value));
 
-            json_object_set_new(links, _prop_id(prop), jprop);
+                json_object_set_new(links, _prop_id(prop), jprop);
+            }
             break;
-        }
 
         case VCARD_LOGO_PROPERTY:
             kind = "logo";
