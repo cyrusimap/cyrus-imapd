@@ -910,4 +910,38 @@ sub test_no_delete_with_children
     $self->assert_str_equals('no', $talk->get_last_completion_response());
 }
 
+sub test_cyr_expire_inherit_annot
+    :DelayedDelete :min_version_3_9 :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "Create subfolder";
+    my $subfolder = 'INBOX.A';
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Set /vendor/cmu/cyrus-imapd/expire annotation on inbox";
+    $talk->setmetadata('INBOX', "/shared/vendor/cmu/cyrus-imapd/expire", '1s');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response);
+
+    xlog $self, "Create message";
+    $store->set_folder($subfolder);
+    $self->make_message('msg1') or die;
+
+    $talk->unselect();
+    $talk->select($subfolder);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+
+    xlog $self, "Run cyr_expire";
+    sleep(2);
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X' => '1s' );
+
+    $talk->unselect();
+    $talk->select($subfolder);
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+}
+
 1;

@@ -305,7 +305,7 @@ static int get_annotation_value(const mbentry_t *mbentry,
      */
     do {
         buf_free(&attrib);
-        ret = annotatemore_lookup_mbe(mbentry, annot_entry, "", &attrib);
+        ret = annotatemore_lookup(buf, annot_entry, "", &attrib);
         if (ret ||              /* error */
             attrib.s)           /* found an entry */
             break;
