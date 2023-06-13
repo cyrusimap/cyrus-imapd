@@ -222,4 +222,28 @@ sub print_failures
     }
 }
 
+sub print_header {
+    my $self = shift;
+    my ($result) = @_;
+    if ($result->was_successful()) {
+        $self->_print("\n",
+                      $self->ansi([32], "OK"),
+                      " (", $result->run_count(), " tests)\n");
+    } else {
+        my $failure_count = $result->failure_count()
+                          ? $self->ansi([33], $result->failure_count)
+                          : "0";
+        my $error_count = $result->error_count()
+                        ? $self->ansi([31], $result->error_count)
+                        : "0";
+
+        $self->_print("\n", $self->ansi([31], "!!!FAILURES!!!"), "\n",
+                      "Test Results:\n",
+                      "Run: ", $result->run_count(),
+                      ", Failures: $failure_count",
+                      ", Errors: $error_count",
+                      "\n");
+    }
+}
+
 1;
