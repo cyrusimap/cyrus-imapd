@@ -43,8 +43,9 @@ There are various annotations that **cyr_expire** respects:
 - ``/vendor/cmu/cyrus-imapd/delete`` which controls the deletion of
   messages
 
-These mailbox annotations specify the age(in days) of messages in the
-given mailbox that should be expired/archived/deleted.
+These mailbox annotations specify the age of messages in the
+given mailbox that should be expired/archived/deleted. The
+age is specified as a duration, the default unit are days.
 
 The value of the ``/vendor/cmu/cyrus-imapd/expire`` annotation is
 inherited by all children of the mailbox on which it is set, so an

@@ -191,7 +191,8 @@ enum {
     ATTRIB_TYPE_STRING,
     ATTRIB_TYPE_BOOLEAN,
     ATTRIB_TYPE_UINT,
-    ATTRIB_TYPE_INT
+    ATTRIB_TYPE_INT,
+    ATTRIB_TYPE_DURATION
 };
 #define ATTRIB_NO_FETCH_ACL_CHECK   (1<<30)
 
@@ -2270,7 +2271,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         NULL
     },{
         IMAP_ANNOT_NS "archive",
-        ATTRIB_TYPE_UINT,
+        ATTRIB_TYPE_DURATION,
         BACKEND_ONLY,
         ATTRIB_VALUE_SHARED,
         ACL_ADMIN,
@@ -2280,7 +2281,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         NULL
     },{
         IMAP_ANNOT_NS "delete",
-        ATTRIB_TYPE_UINT,
+        ATTRIB_TYPE_DURATION,
         BACKEND_ONLY,
         ATTRIB_VALUE_SHARED,
         ACL_ADMIN,
@@ -2300,7 +2301,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         (void *)OPT_IMAP_DUPDELIVER
     },{
         IMAP_ANNOT_NS "expire",
-        ATTRIB_TYPE_UINT,
+        ATTRIB_TYPE_DURATION,
         BACKEND_ONLY,
         ATTRIB_VALUE_SHARED,
         ACL_ADMIN,
@@ -2574,7 +2575,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         NULL
     },{
         IMAP_ANNOT_NS "expire",
-        ATTRIB_TYPE_UINT,
+        ATTRIB_TYPE_DURATION,
         PROXY_AND_BACKEND,
         ATTRIB_VALUE_SHARED,
         ACL_ADMIN,
@@ -3406,6 +3407,16 @@ static int annotate_canon_value(struct buf *value, int type)
                                         /* embedded NUL */
             || errno) {                 /* underflow/overflow */
             return IMAP_ANNOTATION_BADVALUE;
+        }
+        break;
+
+    case ATTRIB_TYPE_DURATION:
+        /* make sure it is a valid positive duration ( >= 0 ) */
+        {
+            buf_cstring(value);
+            int secs = -1;
+            if (config_parseduration(value->s, 'd', &secs) || secs < 0)
+                return IMAP_ANNOTATION_BADVALUE;
         }
         break;
 

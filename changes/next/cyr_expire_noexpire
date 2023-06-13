@@ -1,0 +1,15 @@
+Description:
+
+Supports non-day durations in the archive/delete/expire annotations.
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+None
+
+GitHub issue:
+
+If theres a github issue number for this, put it here.

@@ -2053,6 +2053,112 @@ static int create_messages(struct mailbox *mailbox, int count)
     return 0;
 }
 
+static void test_canon_value(void)
+{
+    struct {
+        const char *annot;
+        const char *attrb;
+        const char *value;
+        int is_invalid;
+    } tests[] = {{
+        .annot = "/check",
+        .attrb = "value.shared",
+        .value = "true",
+    }, {
+        .annot = "/check",
+        .attrb = "value.shared",
+        .value = "false",
+    }, {
+        .annot = "/check",
+        .attrb = "value.shared",
+        .value = "yes",
+        .is_invalid = 1,
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/sortorder",
+        .attrb = "value.priv",
+        .value = "123",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/sortorder",
+        .attrb = "value.priv",
+        .value = "12298189749871298739829873",
+        .is_invalid = 1
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/sortorder",
+        .attrb = "value.priv",
+        .value = "-1",
+        .is_invalid = 1
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/expire",
+        .attrb = "value.shared",
+        .value = "1",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/expire",
+        .attrb = "value.shared",
+        .value = "1s",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/expire",
+        .attrb = "value.shared",
+        .value = "1x",
+        .is_invalid = 1,
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/archive",
+        .attrb = "value.shared",
+        .value = "1",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/archive",
+        .attrb = "value.shared",
+        .value = "1s",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/archive",
+        .attrb = "value.shared",
+        .value = "1x",
+        .is_invalid = 1,
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/delete",
+        .attrb = "value.shared",
+        .value = "1",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/delete",
+        .attrb = "value.shared",
+        .value = "1s",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/delete",
+        .attrb = "value.shared",
+        .value = "1x",
+        .is_invalid = 1,
+    }};
+
+    struct mailbox *mailbox = NULL;
+    annotate_state_t *astate = NULL;
+    struct entryattlist *ealist = NULL;
+    struct buf val = BUF_INITIALIZER;
+
+    annotate_init(NULL, NULL);
+    annotatemore_open();
+
+    int r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    astate = annotate_state_new();
+    r = annotate_state_set_mailbox(astate, mailbox);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
+
+    /* validate value */
+    for (size_t i = 0; i < sizeof(tests)/sizeof(tests[0]); i++) {
+        buf_setcstr(&val, tests[i].value);
+        setentryatt(&ealist, tests[i].annot, tests[i].attrb, &val);
+        r = annotate_state_store(astate, ealist);
+        CU_ASSERT_EQUAL(r, tests[i].is_invalid ? IMAP_ANNOTATION_BADVALUE : 0);
+        freeentryatts(ealist);
+        ealist = NULL;
+    }
+
+    annotate_state_abort(&astate);
+    mailbox_close(&mailbox);
+    annotatemore_close();
+}
+
 
 static int set_up(void)
 {
