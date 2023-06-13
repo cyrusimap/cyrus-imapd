@@ -83,12 +83,14 @@ static int jmap_addressbook_set(struct jmap_req *req);
 static int jmap_card_get(struct jmap_req *req);
 static int jmap_card_changes(struct jmap_req *req);
 static int jmap_card_query(struct jmap_req *req);
+static int jmap_card_querychanges(struct jmap_req *req);
 static int jmap_card_set(struct jmap_req *req);
 static int jmap_card_copy(struct jmap_req *req);
 static int jmap_card_parse(jmap_req_t *req);
 static int jmap_cardgroup_get(struct jmap_req *req);
 static int jmap_cardgroup_changes(struct jmap_req *req);
 static int jmap_cardgroup_query(struct jmap_req *req);
+static int jmap_cardgroup_querychanges(struct jmap_req *req);
 static int jmap_cardgroup_set(struct jmap_req *req);
 #endif /* HAVE_LIBICALVCARD */
 
@@ -167,6 +169,12 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         JMAP_NEED_CSTATE
     },
     {
+        "Card/queryChanges",
+        JMAP_URN_CONTACTS,
+        &jmap_card_querychanges,
+        JMAP_NEED_CSTATE
+    },
+    {
         "Card/set",
         JMAP_URN_CONTACTS,
         &jmap_card_set,
@@ -200,6 +208,12 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         "CardGroup/query",
         JMAP_URN_CONTACTS,
         &jmap_cardgroup_query,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CardGroup/queryChanges",
+        JMAP_URN_CONTACTS,
+        &jmap_cardgroup_querychanges,
         JMAP_NEED_CSTATE
     },
     {
@@ -10959,6 +10973,28 @@ static int jmap_card_query(struct jmap_req *req)
                           &cardquery_buildsort, &cardquery_cmp);
 }
 
+static int jmap_card_querychanges(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_querychanges query;
+
+    json_t *err = NULL;
+    jmap_querychanges_parse(req, &parser, NULL, NULL,
+                            &card_filter_validate, NULL,
+                            &card_comparator_validate, NULL,
+                            &query, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+
+done:
+    jmap_querychanges_fini(&query);
+    jmap_parser_fini(&parser);
+    return 0;
+}
+
 static int jmap_card_set(struct jmap_req *req)
 {
     _contacts_set(req, CARDDAV_KIND_CONTACT, card_props,
@@ -11105,6 +11141,28 @@ static int jmap_cardgroup_query(struct jmap_req *req)
                           &cardgroup_filter_validate,
                           &cardgroup_comparator_validate, &_cardquery_cb,
                           &cardquery_buildsort, &cardquery_cmp);
+}
+
+static int jmap_cardgroup_querychanges(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_querychanges query;
+
+    json_t *err = NULL;
+    jmap_querychanges_parse(req, &parser, NULL, NULL,
+                            &cardgroup_filter_validate, NULL,
+                            &cardgroup_comparator_validate, NULL,
+                            &query, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+
+done:
+    jmap_querychanges_fini(&query);
+    jmap_parser_fini(&parser);
+    return 0;
 }
 
 static int jmap_cardgroup_set(struct jmap_req *req)
