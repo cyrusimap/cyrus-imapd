@@ -319,7 +319,6 @@ static int get_annotation_value(const mbentry_t *mbentry,
     buf_free(&attrib);
     free(buf);
 
-    syslog(LOG_DEBUG, "get_annotation_value: ret(%d):secondsp(%d)", ret, *secondsp);
     return ret;
 }
 
