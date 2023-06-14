@@ -42,10 +42,18 @@ There are various annotations that **cyr_expire** respects:
   messages
 - ``/vendor/cmu/cyrus-imapd/delete`` which controls the deletion of
   messages
+- ``/vendor/cmu/cyrus-imapd/noexpire_until`` which disables the expire
+  and delete operations per user
 
-These mailbox annotations specify the age of messages in the
+The first three mailbox annotations specify the age of messages in the
 given mailbox that should be expired/archived/deleted. The
 age is specified as a duration, the default unit are days.
+
+The last mailbox annotation specifies the UNIX epoch time in seconds
+until which expiring messages or removing deleted mailboxes is blocked.
+The zero epoch time represents infinity. This annotation has precedence
+over any of the other annotations or command line flags. It must only
+be set on the user inbox and applies to all mailboxes of that user.
 
 The value of the ``/vendor/cmu/cyrus-imapd/expire`` annotation is
 inherited by all children of the mailbox on which it is set, so an

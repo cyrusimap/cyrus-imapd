@@ -2,6 +2,8 @@ Description:
 
 Supports non-day durations in the archive/delete/expire annotations.
 
+Adds the 'noexpire_until' annotation to disable cyr_expire per user.
+
 Config changes:
 
 None
