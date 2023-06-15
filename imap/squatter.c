@@ -247,6 +247,18 @@ static int should_index(const char *name)
         goto done;
     }
 
+    // skip JMAP blobs
+    if (mboxname_isjmapuploadmailbox(mbentry->name, mbentry->mbtype)) {
+        ret = 0;
+        goto done;
+    }
+
+    // skip JMAP notifications
+    if (mboxname_isjmapnotificationsmailbox(mbentry->name, mbentry->mbtype)) {
+        ret = 0;
+        goto done;
+    }
+
     // skip COLLECTION mailboxes (just files)
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_COLLECTION) {
         ret = 0;
