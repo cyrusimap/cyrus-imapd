@@ -6363,24 +6363,34 @@ static json_t *jmap_card_from_vcard(const char *userid,
     vcardproperty_version version = VCARD_VERSION_NONE;
     hash_table countrycodes = HASH_TABLE_INITIALIZER;
     hash_table labels = HASH_TABLE_INITIALIZER;
+    hash_table adrs = HASH_TABLE_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     vcardproperty *prop;
     vcardparameter *param;
 
     /* Get version and fetch any Apple-style labels & country codes */
+    construct_hash_table(&adrs, 10, 0);
     construct_hash_table(&labels, 10, 0);
     construct_hash_table(&countrycodes, 10, 0);
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
          prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
         vcardproperty_kind prop_kind = vcardproperty_isa(prop);
-        const char *group;
+        const char *group = vcardproperty_get_group(prop);
 
         if (prop_kind == VCARD_VERSION_PROPERTY) {
             version = vcardproperty_get_version(prop);
         }
-        else if (prop_kind == VCARD_X_PROPERTY &&
-                 (group = vcardproperty_get_group(prop))) {
+        else if (prop_kind == VCARD_ADR_PROPERTY) {
+            strarray_t *ids = hash_lookup(group ? group : "", &adrs);
+
+            if (!ids) {
+                ids = strarray_new();
+                hash_insert(group ? group : "", ids, &adrs);
+            }
+            strarray_append(ids, _prop_id(prop));
+        }
+        else if (group && (prop_kind == VCARD_X_PROPERTY)) {
             const char *prop_name = vcardproperty_get_property_name(prop);
 
             if (!strcasecmp(prop_name, VCARD_APPLE_ABADR_PROPERTY)) {
@@ -6404,6 +6414,12 @@ static json_t *jmap_card_from_vcard(const char *userid,
     }
 
     if (version == VCARD_VERSION_NONE || version == VCARD_VERSION_X) goto done;
+
+    if (hash_numrecords(&adrs) == 1 && hash_lookup("", &adrs)) {
+        /* Don't combine geographical properties
+           unless at least one ADR has GROUP set */
+        strarray_free(hash_del("", &adrs));
+    }
 
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
@@ -6435,8 +6451,9 @@ static json_t *jmap_card_from_vcard(const char *userid,
             else if (!strcmp(prop_name, "X-ADDRESSBOOKSERVER-MEMBER")) {
                 prop_kind = VCARD_MEMBER_PROPERTY;
             }
-            else if (!strcasecmp(prop_name, VCARD_APPLE_ABADR_PROPERTY) ||
-                     !strcasecmp(prop_name, VCARD_APPLE_LABEL_PROPERTY)) {
+            else if (prop_group &&
+                     (!strcasecmp(prop_name, VCARD_APPLE_ABADR_PROPERTY) ||
+                      !strcasecmp(prop_name, VCARD_APPLE_LABEL_PROPERTY))) {
                 /* Ignore -- handled elsewhere */
                 continue;
             }
@@ -6699,7 +6716,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
             param_flags = ALLOW_TYPE_PARAM |
                 ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
 
-            jprop = json_object();
+            jprop = json_object_get_vanew(addrs, _prop_id(prop), "{}");
 
             for (ckind = street_comp_kinds; ckind->name; ckind++) {
                 if (ckind->idx >= adr->num_fields) continue;
@@ -6729,7 +6746,6 @@ static json_t *jmap_card_from_vcard(const char *userid,
                 }
             }
 
-            json_object_set_new(addrs, _prop_id(prop), jprop);
             break;
         }
 
@@ -6844,15 +6860,66 @@ static json_t *jmap_card_from_vcard(const char *userid,
         }
 
             /* Geographical Properties */
-        case VCARD_GEO_PROPERTY:
-            /* XXX  TODO: Combine with ADR via ALTID? */
-            break;
+        case VCARD_GEO_PROPERTY: {
+            vcardgeotype geo = vcardproperty_get_geo(prop);
+            struct buf buf = BUF_INITIALIZER;
+            const char *val = NULL;
+            strarray_t *ids = NULL;
+
+            kind = "coordinates";
+
+            if (geo.uri) {
+                val = geo.uri;
+            }
+            else {
+                buf_printf(&buf, "geo:%s,%s", geo.coords.lat, geo.coords.lon);
+                val = buf_cstring(&buf);
+            }
+
+            GCC_FALLTHROUGH
 
         case VCARD_TZ_PROPERTY:
-            /* XXX  TODO: Combine with ADR via ALTID? */
-            break;
+            if (!kind) {
+                vcardtztype tz = vcardproperty_get_tz(prop);
 
-        /* Organizational Properties */
+                kind = "timeZone";
+
+                if (tz.uri) {
+                    goto unmapped;
+                }
+                else if (tz.tzid) {
+                    val = tz.tzid;
+                }
+                else if (!tz.utcoffset) {
+                    val = "Etc/UTC";
+                }
+                else {
+                    buf_printf(&buf, "Etc/GMT%+d", -tz.utcoffset / 3600);
+                    val = buf_cstring(&buf);
+                }
+            }
+
+            ids = hash_lookup(prop_group ? prop_group : "", &adrs);
+            if (ids) {
+                for (int i = 0; i < strarray_size(ids); i++) {
+                    json_t *addrs =
+                        json_object_get_vanew(obj, "addresses", "{}");
+                    const char *prop_id = strarray_nth(ids, i);
+
+                    jprop = json_object_get_vanew(addrs, prop_id, "{}");
+
+                    json_object_set_new(jprop, kind, json_string(val));
+                }
+
+                buf_free(&buf);
+            }
+            else {
+                goto unmapped;
+            }
+            break;
+        }
+
+            /* Organizational Properties */
         case VCARD_CONTACTURI_PROPERTY:
             kind = "contact";
 
@@ -7186,8 +7253,9 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
   done:
     buf_free(&buf);
-    free_hash_table(&labels, free);
-    free_hash_table(&countrycodes, free);
+    free_hash_table(&labels, &free);
+    free_hash_table(&countrycodes, &free);
+    free_hash_table(&adrs, (void (*)(void *)) &strarray_free);
 
     return obj;
 }

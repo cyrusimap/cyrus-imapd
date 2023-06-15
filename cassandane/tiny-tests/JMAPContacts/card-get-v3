@@ -32,6 +32,9 @@ FN:Forrest Gump
 ORG;PROP-ID=O1:Bubba Gump Shrimp Co.
 TITLE;PROP-ID=T1:Shrimp Man
 PHOTO;PROP-ID=P1;ENCODING=b;TYPE=JPEG:c29tZSBwaG90bw==
+foo.ADR;PROP-ID=A1:;;1501 Broadway;New York;NY;10036;USA
+foo.GEO:40.7571383482188;-73.98695548990568
+foo.TZ:-05:00
 REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
@@ -74,6 +77,17 @@ EOF
         'kind' => 'title',
         'name' => 'Shrimp Man'
     }, $res->[0][1]{list}[0]{titles}{T1});
+    $self->assert_deep_equals({
+        'street' => [
+            { 'kind' => 'name', 'value' => '1501 Broadway' }
+        ],
+        'locality' => 'New York',
+        'region' => 'NY',
+        'postcode' => '10036',
+        'country' => 'USA',
+        'coordinates' => 'geo:40.7571383482188,-73.98695548990568',
+        'timeZone' => 'Etc/GMT+5'
+    }, $res->[0][1]{list}[0]{addresses}{A1});
     $self->assert_str_equals('photo',
                              $res->[0][1]{list}[0]{media}{P1}{kind});
     $self->assert_str_equals('image/jpeg',
