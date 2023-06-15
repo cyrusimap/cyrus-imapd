@@ -251,7 +251,9 @@ static int extractor_httpreq(struct extractor_ctx *ext,
                     "failed to send HTTP request",
                     "method=<%s> url=<%s> err=<%s>",
                     method, url, error_message(r));
-            goto done;
+            extractor_disconnect(ext);
+            retry++;
+            continue;
         }
 
         // Read response
@@ -266,17 +268,17 @@ static int extractor_httpreq(struct extractor_ctx *ext,
         } while (*res_statuscode < 200 && !r);
 
         // Reconnect if the socket is closed
-        if (r == HTTP_BAD_GATEWAY && !retry &&
+        if (r == HTTP_BAD_GATEWAY &&
                 be->in->eof && prev_bytes_in == be->in->bytes_in &&
                 time(NULL) < be->in->timeout_mark) {
             xsyslog(LOG_DEBUG,
                     "no bytes read from socket - retrying",
                     "method=<%s> url=<%s>", method, url);
             extractor_disconnect(ext);
-            retry = 1;
+            retry++;
         }
         // Reconnect if the connection expired
-        else if (r == HTTP_TIMEOUT && !retry &&
+        else if (r == HTTP_TIMEOUT &&
                 (res_hdrs &&
                  (hdr = spool_getheader(res_hdrs, "Connection")) &&
                  !strcasecmpsafe(hdr[0], "close") &&
@@ -285,7 +287,7 @@ static int extractor_httpreq(struct extractor_ctx *ext,
                     "keep-alive connection got closed - retrying",
                     "method=<%s> url=<%s>", method, url);
             extractor_disconnect(ext);
-            retry = 1;
+            retry++;
         }
         // Handle response
         else {
@@ -314,7 +316,7 @@ static int extractor_httpreq(struct extractor_ctx *ext,
             }
             retry = 0;
         }
-    } while (retry);
+    } while (retry && retry < 3);
 
 done:
     xsyslog(LOG_DEBUG, "ending HTTP request",
@@ -484,6 +486,8 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     }
 
     // dropped out of the loop?  Then we failed!
+    xsyslog(LOG_ERR, "exhausted retry attempts - giving up",
+            "retry=<%d>", retry);
     r = IMAP_IOERROR;
     goto done;
 
