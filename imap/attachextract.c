@@ -323,6 +323,13 @@ done:
             "method=<%s> guid=<%s> statuscode=<%d> r=<%s>",
             method, guidstr, *res_statuscode, error_message(r));
 
+    if (r) {
+        xsyslog(LOG_WARNING, "failed HTTP request - resetting connection",
+                "method=<%s> guid=<%s> statuscode=<%d> r=<%s>",
+                method, guidstr, *res_statuscode, error_message(r));
+        extractor_disconnect(ext);
+    }
+
     spool_free_hdrcache(res_hdrs);
     buf_free(&req_buf);
     buf_free(&url_buf);
