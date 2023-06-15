@@ -37,15 +37,15 @@ GENDER:M
 LANG;PREF=1:fr
 LANG;PREF=2:en
 ORG;PROP-ID=O1;TYPE=work:Viagenie
-ADR;PROP-ID=A1;TYPE=work:;Suite D2-630;2875 Laurier;
+foo.ADR;PROP-ID=A1;TYPE=work:;Suite D2-630;2875 Laurier;
  Quebec;QC;G1V 2M2;Canada
 TEL;PROP-ID=P1;VALUE=uri;TYPE="work,voice";PREF=1:tel:+1-418-656-9254;ext=102
 TEL;PROP-ID=P2;VALUE=uri;TYPE="work,cell,voice,video,text":tel:+1-418-262-6501
 EMAIL;PROP-ID=E1;TYPE=work:simon.perreault\@viagenie.ca
-GEO;TYPE=work:geo:46.772673,-71.282945
+foo.GEO;TYPE=work:geo:46.772673,-71.282945
 KEY;PROP-ID=K1;TYPE=work;VALUE=uri:
  http://www.viagenie.ca/simon.perreault/simon.asc
-TZ:-0500
+foo.TZ:America/Montreal
 URL;PROP-ID=L1;TYPE=home:http://nomis80.org
 PHOTO;PROP-ID=P1:data:image/jpeg;base64,c29tZSBwaG90bw==
 LOGO;PROP-ID=L1;MEDIATYPE=image/png:http://example.org/logo.png
@@ -108,7 +108,9 @@ EOF
         'region' => 'QC',
         'postcode' => 'G1V 2M2',
         'country' => 'Canada',
-        'contexts' => { 'work' => JSON::true }
+        'contexts' => { 'work' => JSON::true },
+        'coordinates' => 'geo:46.772673,-71.282945',
+        'timeZone' => 'America/Montreal'
     }, $res->[0][1]{list}[0]{addresses}{A1});
     $self->assert_deep_equals({
         'number' => 'tel:+1-418-262-6501',
