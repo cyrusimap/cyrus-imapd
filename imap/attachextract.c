@@ -145,6 +145,13 @@ static int extractor_connect(struct extractor_ctx *ext)
         // extend the timeout
         if (be->timeout) {
             be->timeout->mark = now + attachextract_idle_timeout;
+            xsyslog(LOG_DEBUG, "keep using socket with timeout mark",
+                    "sockfd=<%d> timeout_mark=<" TIME_T_FMT ">",
+                    be->sock, be->timeout->mark);
+        }
+        else {
+            xsyslog(LOG_DEBUG, "keep using socket",
+                    "sockfd=<%d>", be->sock);
         }
         return 0;
     }
