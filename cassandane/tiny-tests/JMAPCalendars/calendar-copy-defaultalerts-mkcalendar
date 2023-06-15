@@ -42,9 +42,8 @@ sub test_calendar_copy_defaultalerts_mkcalendar
 
     xlog $self, "Set default alarms on test1";
     my $defaultAlertsWithTime1 = {
-        alert1 => {
+        'e905cd3a-fdb7-413a-b7fa-1cd9daad501d' => {
             '@type' => 'Alert',
-            uid => 'e905cd3a-fdb7-413a-b7fa-1cd9daad501d',
             trigger => {
                 '@type' => 'OffsetTrigger',
                 relativeTo => 'start',
@@ -54,9 +53,8 @@ sub test_calendar_copy_defaultalerts_mkcalendar
         }
     };
     my $defaultAlertsWithoutTime1 = {
-        alert1 => {
+        '04c2bcfa-c35c-410c-83f5-27fba35257b3' => {
             '@type' => 'Alert',
-            uid => '04c2bcfa-c35c-410c-83f5-27fba35257b3',
             trigger => {
                 '@type' => 'OffsetTrigger',
                 relativeTo => 'start',
@@ -97,9 +95,8 @@ sub test_calendar_copy_defaultalerts_mkcalendar
 
     xlog $self, "Set default alarms with time on Default alert";
     my $defaultAlertsWithTime2 = {
-        alert2 => {
+        'e905cd3a-fdb7-413a-b7fa-1cd9daad501d' => {
             '@type' => 'Alert',
-            uid => 'e905cd3a-fdb7-413a-b7fa-1cd9daad501d',
             trigger => {
                 '@type' => 'OffsetTrigger',
                 relativeTo => 'start',

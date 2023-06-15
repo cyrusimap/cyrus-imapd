@@ -15,7 +15,7 @@ sub test_calendarevent_set_defaultalerts_caldav_etag
             update => {
                 Default => {
                     defaultAlertsWithTime => {
-                        alert1 => {
+                        '4c7086e0-6114-4a71-b6ab-4b237c66f079' => {
                             '@type' => 'Alert',
                             trigger => {
                                 '@type' => 'OffsetTrigger',
@@ -86,7 +86,7 @@ sub test_calendarevent_set_defaultalerts_caldav_etag
             update => {
                 Default => {
                     defaultAlertsWithTime => {
-                        alert1 => {
+                        '56bd7c39-e618-41c9-91cb-fd2f2674e674' => {
                             '@type' => 'Alert',
                             trigger => {
                                 '@type' => 'OffsetTrigger',

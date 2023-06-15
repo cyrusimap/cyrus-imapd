@@ -128,10 +128,12 @@ EOF
             Default => undef,
         }, $state->{migrateResponse}{migrated}{cassandane});
 
+=pod
         # Migration rewrites default alert UID, if none was set
         my $defaultAlert = (values %$calendarADefaultAlerts)[0];
         $self->assert_str_not_equals($defaultAlert->{uid},
             $state->{calendarA}{defaultAlert}{uid});
+=cut
 
         # JMAP annotation is set on both calendars
         $self->assert_not_null($self->get_jmap_datetime_annotation(

@@ -177,7 +177,7 @@ json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *id);
 
 /* Convert alert to iCalendar VALARM. Returns NULL on error */
 extern icalcomponent *jmapical_alert_to_ical(json_t *alert, struct jmap_parser *parser,
-                                             const char *alert_jmapid,
+                                             const char *alert_uid,
                                              const char *description,
                                              const char *email_summary,
                                              const char *email_recipient);

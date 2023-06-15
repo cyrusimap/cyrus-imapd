@@ -10,8 +10,11 @@ sub test_calendar_set_defaultalerts
     my $jmap = $self->{jmap};
     my $CalDAV = $self->{caldav};
 
+    my $alert1Id = '589c1b45-ca59-4072-90fb-93c41491e484';
+    my $alert2Id = '899fd3e7-c0a0-442d-a04f-725c58728afb';
+
     my $defaultAlertsWithTime = {
-        alert1 => {
+        $alert1Id => {
             '@type' => 'Alert',
             trigger => {
                 '@type' => 'OffsetTrigger',
@@ -20,7 +23,7 @@ sub test_calendar_set_defaultalerts
             },
             action => 'email',
         },
-        alert2 => {
+        $alert2Id => {
             '@type' => 'Alert',
             trigger => {
                 '@type' => 'OffsetTrigger',
@@ -30,9 +33,11 @@ sub test_calendar_set_defaultalerts
             action => 'display',
         },
     };
+
+    my $alert3Id = '2905eb80-48af-4e0f-85cc-de58155a2152';
 
     my $defaultAlertsWithoutTime = {
-        alert3 => {
+        $alert3Id => {
             '@type' => 'Alert',
             trigger => {
                 '@type' => 'OffsetTrigger',
@@ -42,18 +47,6 @@ sub test_calendar_set_defaultalerts
             action => 'display',
         },
     };
-
-    my ($maj, $min) = Cassandane::Instance->get_version();
-    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
-        my $uuid = new Data::UUID;
-        # Set uid so that Cyrus doesn't pick any random
-        for my $alert (values %{$defaultAlertsWithTime}) {
-            $alert->{uid} = $uuid->to_string($uuid->create());
-        }
-        for my $alert (values %{$defaultAlertsWithoutTime}) {
-            $alert->{uid} = $uuid->to_string($uuid->create());
-        }
-    }
 
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
@@ -78,6 +71,7 @@ sub test_calendar_set_defaultalerts
     $self->assert_deep_equals($defaultAlertsWithoutTime,
         $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
 
+    my $alert4Id = '5e7b49d3-fcef-484f-8d31-f9fb178ebc65';
     my $alert4 = {
         '@type' => 'Alert',
         trigger => {
@@ -88,17 +82,13 @@ sub test_calendar_set_defaultalerts
         action => 'display',
     };
 
-    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
-        $alert4->{uid} = '118e48d3-ee09-4b45-a16c-40262bfe62df';
-    }
-
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
                 $calendarId => {
-                    'defaultAlertsWithTime/alert1' => undef,
-                    'defaultAlertsWithTime/alert4' => $alert4,
-                    'defaultAlertsWithoutTime/alert3/trigger/offset' => '-PT5M',
+                    "defaultAlertsWithTime/$alert1Id" => undef,
+                    "defaultAlertsWithTime/$alert4Id" => $alert4,
+                    "defaultAlertsWithoutTime/$alert3Id/trigger/offset" => '-PT5M',
                 }
             }
         }, 'R1'],
@@ -108,11 +98,11 @@ sub test_calendar_set_defaultalerts
         }, 'R2']
                               ]);
     $self->assert(exists $res->[0][1]{updated}{$calendarId});
-    $self->assert_null($res->[1][1]{list}[0]{defaultAlertsWithTime}{alert1});
+    $self->assert_null($res->[1][1]{list}[0]{defaultAlertsWithTime}{$alert1Id});
     $self->assert_deep_equals($alert4,
-        $res->[1][1]{list}[0]{defaultAlertsWithTime}{alert4});
+        $res->[1][1]{list}[0]{defaultAlertsWithTime}{$alert4Id});
     $self->assert_equals('-PT5M',
-                         $res->[1][1]{list}[0]{defaultAlertsWithoutTime}{alert3}{trigger}{offset});
+                         $res->[1][1]{list}[0]{defaultAlertsWithoutTime}{$alert3Id}{trigger}{offset});
 
     $res = $jmap->CallMethods([
         ['Calendar/set', {

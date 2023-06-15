@@ -21,6 +21,7 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
 EOF
     );
 
+    my $alertWithTimeId = '8f335685-7e2a-49ee-bae3-ee4a5afd0a5e';
     my $alertWithTime = {
         '@type' => 'Alert',
         trigger => {
@@ -30,6 +31,8 @@ EOF
         },
         action => 'display',
     };
+
+    my $alertWithoutTimeId = 'baedd1d3-36d6-4d8f-986c-073c5e1f2f70';
     my $alertWithoutTime = {
         '@type' => 'Alert',
         trigger => {
@@ -40,21 +43,16 @@ EOF
         action => 'display',
     };
 
-    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
-        $alertWithTime->{uid} = $uuid->to_string($uuid->create());
-        $alertWithoutTime->{uid} = $uuid->to_string($uuid->create());
-    }
-
     xlog 'Set default alerts on calendar';
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
                 Default => {
                     defaultAlertsWithTime => {
-                        alert1 => $alertWithTime,
+                        $alertWithTimeId => $alertWithTime,
                     },
                     defaultAlertsWithoutTime => {
-                        alert2 => $alertWithoutTime,
+                        $alertWithoutTimeId => $alertWithoutTime,
                     },
                 }
             }
@@ -107,12 +105,13 @@ EOF
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{useDefaultAlerts});
-    $self->assert_deep_equals({ alert1 => $alertWithTime },
+    $self->assert_deep_equals({ $alertWithTimeId => $alertWithTime },
         $res->[0][1]{list}[0]{alerts});
 
     my $eventId = $res->[0][1]{list}[0]{id};
     $self->assert_not_null($eventId);
 
+    my $customAlertId = '3b438031-621e-4e1c-b7eb-fe8c75cc2d6a';
     my $customAlert = {
         '@type' => 'Alert',
         trigger => {
@@ -122,9 +121,6 @@ EOF
         },
         action => 'display',
     };
-    if ($maj > 3 || ($maj == 3 && $min >= 7)) {
-        $customAlert->{uid} = $uuid->to_string($uuid->create());
-    }
 
     xlog "Set custom alert on event";
     $res = $jmap->CallMethods([
@@ -132,7 +128,7 @@ EOF
             update => {
                 $eventId => {
                     alerts => {
-                        alert1 => $customAlert,
+                        $customAlertId => $customAlert,
                     },
                     useDefaultAlerts => JSON::false,
                 },
@@ -186,6 +182,6 @@ EOF
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
     $self->assert_equals(JSON::false,
         $res->[0][1]{list}[0]{useDefaultAlerts});
-    $self->assert_deep_equals({ alert1 => $customAlert },
+    $self->assert_deep_equals({ $customAlertId => $customAlert },
         $res->[0][1]{list}[0]{alerts});
 }

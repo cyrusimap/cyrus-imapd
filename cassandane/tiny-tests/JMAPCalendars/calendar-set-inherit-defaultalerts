@@ -10,10 +10,11 @@ sub test_calendar_set_inherit_defaultalerts
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
+    my $alert1Id = '589c1b45-ca59-4072-90fb-93c41491e484';
+
     my $defaultAlertsWithTime = {
-        alert1 => {
+        $alert1Id => {
             '@type' => 'Alert',
-            uid => '4c08cb1d-60e0-46e0-9cc1-9622b7a820ed',
             trigger => {
                 '@type' => 'OffsetTrigger',
                 relativeTo => 'start',
@@ -23,10 +24,11 @@ sub test_calendar_set_inherit_defaultalerts
         },
     };
 
+    my $alert2Id = '899fd3e7-c0a0-442d-a04f-725c58728afb';
+
     my $defaultAlertsWithoutTime = {
-        alert2 => {
+        $alert2Id => {
             '@type' => 'Alert',
-            uid => '3f8c29c3-d305-4c19-adb6-57cc3308918c',
             trigger => {
                 '@type' => 'OffsetTrigger',
                 relativeTo => 'start',

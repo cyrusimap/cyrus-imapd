@@ -10,7 +10,7 @@ sub test_calendarevent_defaultalerts_updated_by_caldav_put
     my $jmap = $self->{jmap};
 
     xlog $self, "Set default alerts on calendar";
-    $self->{defaultAlertUids} = [
+    $self->{defaultAlertIds} = [
         '73aac5e1-e736-4c81-8b30-fb6ad5781f95',
         'a7ce891b-ae41-4fdb-a3d1-346d3889c90b'
     ];
@@ -19,9 +19,8 @@ sub test_calendarevent_defaultalerts_updated_by_caldav_put
             update => {
                 Default => {
                     defaultAlertsWithTime => {
-                        defaultAlert1 => {
+                        $self->{defaultAlertIds}[0] => {
                             '@type' => 'Alert',
-                            uid => $self->{defaultAlertUids}[0],
                             trigger => {
                                 '@type' => 'OffsetTrigger',
                                 relativeTo => 'start',
@@ -29,9 +28,8 @@ sub test_calendarevent_defaultalerts_updated_by_caldav_put
                             },
                             action => 'display',
                         },
-                        defaultAlert2 => {
+                        $self->{defaultAlertIds}[1] => {
                             '@type' => 'Alert',
-                            uid => $self->{defaultAlertUids}[1],
                             trigger => {
                                 '@type' => 'OffsetTrigger',
                                 relativeTo => 'start',
@@ -172,7 +170,7 @@ sub assert_preserved_when_unchanged
     my ($vcalendar, $vevent, $getetag1) = $self->caldav_get($eventHref);
     $self->assert_valarms($vevent,
         useDefaultAlerts => 1,
-        uids => $self->{defaultAlertUids},
+        uids => $self->{defaultAlertIds},
     );
 
     xlog $self, "PUT back unchanged event";
@@ -184,7 +182,7 @@ sub assert_preserved_when_unchanged
     $self->assert_str_equals($getetag1, $getetag2);
     $self->assert_valarms($vevent,
         useDefaultAlerts => 1,
-        uids => $self->{defaultAlertUids},
+        uids => $self->{defaultAlertIds},
     );
 }
 
@@ -202,7 +200,7 @@ sub assert_preserved_by_snooze_alarm
     $alarm->add_properties(
 	description => 'useralarm',
 	trigger   => '-PT15M',
-        'related-to' => $self->{defaultAlertUids}[0],
+        'related-to' => $self->{defaultAlertIds}[0],
         uid => $alarmUid,
     );
 
@@ -213,7 +211,7 @@ sub assert_preserved_by_snooze_alarm
     my ($vcalendar, $vevent, $getetag1) = $self->caldav_get($eventHref);
     $self->assert_valarms($vevent,
         useDefaultAlerts => 1,
-        uids => $self->{defaultAlertUids},
+        uids => $self->{defaultAlertIds},
     );
 
     xlog $self, "Add snooze alarm via CalDAV";
@@ -223,7 +221,7 @@ sub assert_preserved_by_snooze_alarm
 
     xlog $self, "Assert alarms via CalDAV";
     ($vcalendar, $vevent, $getetag2) = $self->caldav_get($eventHref);
-    my @wantUids = (($alarmUid), @{$self->{defaultAlertUids}});
+    my @wantUids = (($alarmUid), @{$self->{defaultAlertIds}});
     $self->assert_valarms($vevent,
         useDefaultAlerts => 1, uids => \@wantUids,
     );
@@ -252,7 +250,7 @@ sub assert_disabled_by_user_alarm
     my ($vcalendar, $vevent, $getetag1) = $self->caldav_get($eventHref);
     $self->assert_valarms($vevent,
         useDefaultAlerts => 1,
-        uids => $self->{defaultAlertUids},
+        uids => $self->{defaultAlertIds},
     );
 
     xlog $self, "Add user alarm via CalDAV";
@@ -262,7 +260,7 @@ sub assert_disabled_by_user_alarm
 
     xlog $self, "Assert alarms via CalDAV";
     ($vcalendar, $vevent, $getetag2) = $self->caldav_get($eventHref);
-    my @wantUids = (($alarmUid), @{$self->{defaultAlertUids}});
+    my @wantUids = (($alarmUid), @{$self->{defaultAlertIds}});
     $self->assert_valarms($vevent,
         useDefaultAlerts => 0, uids => \@wantUids,
     );
@@ -292,7 +290,7 @@ sub assert_preserved_by_apple_alarm
     my ($vcalendar, $vevent, $getetag1) = $self->caldav_get($eventHref);
     $self->assert_valarms($vevent,
         useDefaultAlerts => 1,
-        uids => $self->{defaultAlertUids},
+        uids => $self->{defaultAlertIds},
     );
 
     xlog $self, "Add user alarm via CalDAV";
@@ -302,7 +300,7 @@ sub assert_preserved_by_apple_alarm
 
     xlog $self, "Assert alarms via CalDAV";
     ($vcalendar, $vevent, $getetag2) = $self->caldav_get($eventHref);
-    my @wantUids = (($alarmUid), @{$self->{defaultAlertUids}});
+    my @wantUids = (($alarmUid), @{$self->{defaultAlertIds}});
     $self->assert_valarms($vevent,
         useDefaultAlerts => 1, uids => \@wantUids,
     );
@@ -323,7 +321,7 @@ sub assert_disabled_by_removed_default_alarm
     my ($vcalendar, $vevent, $getetag1) = $self->caldav_get($eventHref);
     $self->assert_valarms($vevent,
         useDefaultAlerts => 1,
-        uids => $self->{defaultAlertUids},
+        uids => $self->{defaultAlertIds},
     );
 
     xlog $self, "Remove one of two default alarms";
@@ -354,7 +352,7 @@ sub assert_disabled_by_no_alarms
     my ($vcalendar, $vevent, $getetag1) = $self->caldav_get($eventHref);
     $self->assert_valarms($vevent,
         useDefaultAlerts => 1,
-        uids => $self->{defaultAlertUids},
+        uids => $self->{defaultAlertIds},
     );
 
     xlog $self, "Remove all alarms from VEVENT";

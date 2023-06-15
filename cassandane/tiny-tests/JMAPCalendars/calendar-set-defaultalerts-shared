@@ -15,10 +15,11 @@ sub test_calendar_set_defaultalerts_shared
     $self->assert_shared_defaultalerts($t);
 
     xlog $self, "Owner sets default alarms";
+
+    my $alertWithTimeOwnerId = '4c08cb1d-60e0-46e0-9cc1-9622b7a820ed';
     $t->{owner}->{defaultAlertsWithTime} = {
-        alertWithTimeOwner => {
+        $alertWithTimeOwnerId => {
             '@type' => 'Alert',
-            uid => '4c08cb1d-60e0-46e0-9cc1-9622b7a820ed',
             trigger => {
                 '@type' => 'OffsetTrigger',
                 relativeTo => 'start',
@@ -27,10 +28,11 @@ sub test_calendar_set_defaultalerts_shared
             action => 'email',
         },
     };
+
+    my $alertWithoutTimeOwnerId = '3f8c29c3-d305-4c19-adb6-57cc3308918c';
     $t->{owner}->{defaultAlertsWithoutTime} = {
-        alertWithoutTimeOwner => {
+        $alertWithoutTimeOwnerId => {
             '@type' => 'Alert',
-            uid => '3f8c29c3-d305-4c19-adb6-57cc3308918c',
             trigger => {
                 '@type' => 'OffsetTrigger',
                 relativeTo => 'start',
@@ -56,10 +58,10 @@ sub test_calendar_set_defaultalerts_shared
     $self->assert_shared_defaultalerts($t);
 
     xlog $self, 'Sharee sets default alarms';
+    my $alertWithTimeShareeId = 'b61e5b53-8ea2-46f4-949d-7b49734ba4d3';
     $t->{sharee}->{defaultAlertsWithTime} = {
-        alertWithTimeSharee => {
+        $alertWithTimeShareeId => {
             '@type' => 'Alert',
-            uid => 'b61e5b53-8ea2-46f4-949d-7b49734ba4d3',
             trigger => {
                 '@type' => 'OffsetTrigger',
                 relativeTo => 'start',
@@ -68,10 +70,10 @@ sub test_calendar_set_defaultalerts_shared
             action => 'email',
         },
     };
+    my $alertWithoutTimeShareeId = '97d7c889-272f-4ce3-8d21-4a32b17ecece';
     $t->{sharee}->{defaultAlertsWithoutTime} = {
-        alertWithoutTimeSharee => {
+        $alertWithoutTimeShareeId => {
             '@type' => 'Alert',
-            uid => '97d7c889-272f-4ce3-8d21-4a32b17ecece',
             trigger => {
                 '@type' => 'OffsetTrigger',
                 relativeTo => 'start',
