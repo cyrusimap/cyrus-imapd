@@ -452,6 +452,11 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         buf_copy(text, &body.payload);
         goto gotdata;
     }
+    else if (statuscode == 422) {
+        // handle unprocessable content like empty file
+        buf_reset(text);
+        goto gotdata;
+    }
 
     if (statuscode == 599) goto done;
 
@@ -481,6 +486,11 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         if (statuscode == 200 || statuscode == 201) {
             // we got a result, yay
             buf_copy(text, &body.payload);
+            goto gotdata;
+        }
+        else if (statuscode == 422) {
+            // handle unprocessable content like empty file
+            buf_reset(text);
             goto gotdata;
         }
 
