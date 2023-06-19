@@ -7016,11 +7016,9 @@ static json_t *jmap_card_from_vcard(const char *userid,
         case VCARD_TITLE_PROPERTY: {
             json_t *titles = json_object_get_vanew(obj, "titles", "{}");
 
-            if (!kind) kind = "title";
-
             prop_value = vcardproperty_get_title(prop);
             json_object_set_new(titles, _prop_id(prop),
-                                json_pack("{s:s s:o}",
+                                json_pack("{s:s* s:o}",
                                           "kind", kind,
                                           "name",
                                           jmap_utf8string(prop_value)));

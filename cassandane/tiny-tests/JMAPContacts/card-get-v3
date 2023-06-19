@@ -74,7 +74,6 @@ EOF
         'name' => 'Bubba Gump Shrimp Co.'
     }, $res->[0][1]{list}[0]{organizations}{O1});
     $self->assert_deep_equals({
-        'kind' => 'title',
         'name' => 'Shrimp Man'
     }, $res->[0][1]{list}[0]{titles}{T1});
     $self->assert_deep_equals({
