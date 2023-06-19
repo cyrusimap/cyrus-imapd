@@ -42,6 +42,7 @@ use strict;
 use warnings;
 use Cwd qw(realpath);
 use Data::Dumper;
+use Date::Format qw(time2str);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -307,6 +308,41 @@ sub test_proc_periodic_events_slow
         # wait until next period
         sleep 60 - $sleeper_time;
     }
+}
+
+sub test_proc_scheduled_events
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $sleeper_time = 10;
+
+    # schedule an event to fire at the next minute boundary that is at
+    # least ten seconds away
+    my $at = time + 70;
+    $at -= ($at % 60);
+    my $at_hm = time2str('%H%M', $at);
+    xlog $self, "scheduling event to run at $at_hm ($at)";
+    $self->{instance}->add_event(
+        name => 'sleeper',
+        argv => [ realpath('utils/sleeper'), $sleeper_time ],
+        at => $at_hm,
+    );
+    $self->{instance}->start();
+
+    # event process should not be running at startup
+    my @output = $self->run_cyr_info('proc');
+    $self->assert_num_equals(0, scalar @output);
+
+    # should be running at the scheduled time (with a little slop)
+    sleep 2 + $at - time;
+    @output = $self->run_cyr_info('proc');
+    $self->assert_num_equals(1, scalar @output);
+
+    # should not be running after we expect it to have finished
+    sleep $sleeper_time;
+    @output = $self->run_cyr_info('proc');
+    $self->assert_num_equals(0, scalar @output);
 }
 
 1;
