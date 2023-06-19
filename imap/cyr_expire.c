@@ -236,53 +236,6 @@ static void usage(void)
 }
 
 /*
- * Parse a non-negative duration string as seconds.
- *
- * Convert "23.5m" to fractional days.  Accepts the suffixes "d" (day),
- * (day), "h" (hour), "m" (minute) and "s" (second).  If no suffix, assume
- * days.
- * Returns 1 if successful and *secondsp is filled in, or 0 if the suffix
- * is unknown or on error.
- */
-static int parse_duration(const char *s, int *secondsp)
-{
-    char *end = NULL;
-    double val;
-    int multiplier = SECS_IN_A_DAY; /* default is days */
-
-    /* no negative or empty numbers please */
-    if (!*s || *s == '-')
-        return 0;
-
-    val = strtod(s, &end);
-    /* Allow 'd', 'h', 'm' and 's' as end, else return error. */
-    if (*end) {
-        if (end[1]) return 0; /* trailing extra junk */
-
-        switch (*end) {
-        case 'd':
-            /* already the default */
-            break;
-        case 'h':
-            multiplier = SECS_IN_AN_HR;
-            break;
-        case 'm':
-            multiplier = SECS_IN_A_MIN;
-            break;
-        case 's':
-            multiplier = 1;
-            break;
-        default:
-            return 0;
-        }
-    }
-
-    *secondsp = multiplier * val;
-
-    return 1;
-}
-
-/*
  * Given an annotation, reads it from the mailbox or any of its
  * parents if iterate is true.
  *
@@ -325,7 +278,7 @@ static int get_duration_annotation(const char *mboxname,
     int ret = 0;
 
     if (get_annotation_value(mboxname, annot_entry, &attrib, iterate) &&
-            parse_duration(buf_cstring(&attrib), secondsp))
+            !config_parseduration(buf_cstring(&attrib), 'd', secondsp))
         ret = 1;
 
     buf_free(&attrib);
@@ -877,7 +830,8 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
     {
         switch (opt) {
         case 'A':
-            if (!parse_duration(optarg, &args->archive_seconds)) usage();
+            if (config_parseduration(optarg, 'd', &args->archive_seconds) < 0)
+                usage();
             break;
 
         case 'C':
@@ -885,17 +839,17 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
             break;
 
         case 'D':
-            if (!parse_duration(optarg, &args->delete_seconds))
+            if (config_parseduration(optarg, 'd', &args->delete_seconds) < 0)
                 usage();
             break;
 
         case 'E':
-            if (!parse_duration(optarg, &args->expire_seconds))
+            if (config_parseduration(optarg, 'd', &args->expire_seconds) < 0)
                 usage();
             break;
 
         case 'X':
-            if (!parse_duration(optarg, &args->expunge_seconds))
+            if (config_parseduration(optarg, 'd', &args->expunge_seconds) < 0)
                 usage();
             break;
 
