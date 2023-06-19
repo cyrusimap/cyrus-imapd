@@ -211,4 +211,60 @@ sub test_info_lint_partitions
     );
 }
 
+sub test_proc_services
+{
+    my ($self) = @_;
+
+    # no clients => no service daemons => no processes
+    my @output = $self->run_cyr_info('proc');
+    $self->assert_num_equals(0, scalar @output);
+
+    # master spawns service processes when clients connect to them
+    my $imap_svc = $self->{instance}->get_service('imap');
+    my @clients;
+    foreach (1..5) {
+        # five concurrent connections for a single user is normal,
+        # e.g. thunderbird does this
+        my $store = $imap_svc->create_store(username => 'cassandane');
+        my $imaptalk = $store->get_client();
+        push @clients, $imaptalk if $imaptalk;
+    }
+
+    # better have got some clients from that!
+    $self->assert_num_gte(1, scalar @clients);
+
+    # five clients => five service daemons => five processes
+    @output = $self->run_cyr_info('proc');
+    $self->assert_num_equals(scalar @clients, scalar @output);
+
+    # log clients out one at a time, expect proc count to decrease
+    while (scalar @clients) {
+        my $old = shift @clients;
+        $old->logout();
+
+        @output = $self->run_cyr_info('proc');
+        $self->assert_num_equals(scalar @clients, scalar @output);
+    }
+}
+
+sub test_proc_starts
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    # we used to recommend starting idled from START, and it will
+    # still work like that, so using it here saves me mocking something
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    # entries listed in START run to completion before master fully
+    # starts up.  if they fork themselves and hang around (like idled
+    # does) then that's their business, but master can't and doesn't
+    # track them
+    my @output = $self->run_cyr_info('proc');
+
+    $self->assert_num_equals(0, scalar @output);
+}
+
 1;
