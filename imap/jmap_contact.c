@@ -6102,8 +6102,7 @@ static void _unmapped_param(json_t *obj,
 }
 
 static void _add_vcard_params(json_t *obj, vcardproperty *prop,
-                              const char *label, const char *cc,
-                              unsigned param_flags)
+                              const char *label, unsigned param_flags)
 {
     vcardproperty_kind prop_kind = vcardproperty_isa(prop);
     vcardparameter *param;
@@ -6147,7 +6146,6 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
             if (prop_kind == VCARD_ADR_PROPERTY) {
                 json_object_set_new(obj, "countryCode",
                                     json_string(lcase(param_value)));
-                cc = NULL;
                 continue;
             }
             break;
@@ -6345,7 +6343,6 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
         _unmapped_param(obj, param_kind, param_value);
     }
 
-    if (cc) json_object_set_new(obj, "countryCode", json_string(cc));
     if (label) json_object_set_new(obj, "label", jmap_utf8string(label));
 }
 
@@ -6361,7 +6358,6 @@ static json_t *jmap_card_from_vcard(const char *userid,
 {
     json_t *obj = json_pack("{s:s s:s}", "@type", "Card", "@version", "1.0");
     vcardproperty_version version = VCARD_VERSION_NONE;
-    hash_table countrycodes = HASH_TABLE_INITIALIZER;
     hash_table labels = HASH_TABLE_INITIALIZER;
     hash_table adrs = HASH_TABLE_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
@@ -6371,7 +6367,6 @@ static json_t *jmap_card_from_vcard(const char *userid,
     /* Get version and fetch any Apple-style labels & country codes */
     construct_hash_table(&adrs, 10, 0);
     construct_hash_table(&labels, 10, 0);
-    construct_hash_table(&countrycodes, 10, 0);
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
          prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
@@ -6390,26 +6385,19 @@ static json_t *jmap_card_from_vcard(const char *userid,
             }
             strarray_append(ids, _prop_id(prop));
         }
-        else if (group && (prop_kind == VCARD_X_PROPERTY)) {
-            const char *prop_name = vcardproperty_get_property_name(prop);
+        else if (group && (prop_kind == VCARD_X_PROPERTY) &&
+                 !strcasecmp(VCARD_APPLE_LABEL_PROPERTY,
+                             vcardproperty_get_property_name(prop))) {
+            const char *label = vcardproperty_get_value_as_string(prop);
+            size_t label_len = strlen(label);
 
-            if (!strcasecmp(prop_name, VCARD_APPLE_ABADR_PROPERTY)) {
-                const char *cc = vcardproperty_get_value_as_string(prop);
-
-                hash_insert(group, lcase(xstrdup(cc)), &countrycodes);
+            /* Check and adjust for weird (localized?) labels */
+            if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
+                label += 4;      // skip "_$!<" prefix
+                label_len -= 8;  // and trim ">!$_" suffix
             }
-            else if (!strcasecmp(prop_name, VCARD_APPLE_LABEL_PROPERTY)) {
-                const char *label = vcardproperty_get_value_as_string(prop);
-                size_t label_len = strlen(label);
 
-                /* Check and adjust for weird (localized?) labels */
-                if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
-                    label += 4;      // skip "_$!<" prefix
-                    label_len -= 8;  // and trim ">!$_" suffix
-                }
-
-                hash_insert(group, xstrndup(label, label_len), &labels);
-            }
+            hash_insert(group, xstrndup(label, label_len), &labels);
         }
     }
 
@@ -6442,28 +6430,35 @@ static json_t *jmap_card_from_vcard(const char *userid,
             continue;
         }
 
-        if (prop_kind == VCARD_X_PROPERTY) {
+        switch (prop_kind) {
+            /* Apple Properties */
+        case VCARD_X_PROPERTY: {
             const char *prop_name = vcardproperty_get_property_name(prop);
 
             if (!strcmp(prop_name, "X-ADDRESSBOOKSERVER-KIND")) {
-                prop_kind = VCARD_KIND_PROPERTY;
+                goto kind;
             }
             else if (!strcmp(prop_name, "X-ADDRESSBOOKSERVER-MEMBER")) {
-                prop_kind = VCARD_MEMBER_PROPERTY;
+                goto member;
             }
-            else if (prop_group &&
-                     (!strcasecmp(prop_name, VCARD_APPLE_ABADR_PROPERTY) ||
-                      !strcasecmp(prop_name, VCARD_APPLE_LABEL_PROPERTY))) {
-                /* Ignore -- handled elsewhere */
-                continue;
+            else if (prop_group) {
+                if (!strcasecmp(prop_name, VCARD_APPLE_ABADR_PROPERTY)) {
+                    kind = "countryCode";
+                    buf_setcstr(&buf, prop_value);
+                    prop_value = buf_lcase(&buf);
+                    goto grouped_geo;
+                }
+                else if (!strcasecmp(prop_name, VCARD_APPLE_LABEL_PROPERTY)) {
+                    /* Ignore -- handled elsewhere */
+                    continue;
+                }
             }
-            else {
-                goto unmapped;
-            }
+
+            goto unmapped;
         }
 
-        switch (prop_kind) {
             /* General Properties */
+        kind:
         case VCARD_KIND_PROPERTY:
             buf_setcstr(&buf, prop_value);
             json_object_set_new(obj, "kind", json_string(buf_lcase(&buf)));
@@ -6862,21 +6857,21 @@ static json_t *jmap_card_from_vcard(const char *userid,
             /* Geographical Properties */
         case VCARD_GEO_PROPERTY: {
             vcardgeotype geo = vcardproperty_get_geo(prop);
-            struct buf buf = BUF_INITIALIZER;
-            const char *val = NULL;
-            strarray_t *ids = NULL;
 
             kind = "coordinates";
 
             if (geo.uri) {
-                val = geo.uri;
+                prop_value = geo.uri;
             }
             else {
-                buf_printf(&buf, "geo:%s,%s", geo.coords.lat, geo.coords.lon);
-                val = buf_cstring(&buf);
+                buf_reset(&buf);
+                buf_printf(&buf, "geo:%s,%s",
+                           geo.coords.lat, geo.coords.lon);
+                prop_value = buf_cstring(&buf);
             }
 
             GCC_FALLTHROUGH
+        }
 
         case VCARD_TZ_PROPERTY:
             if (!kind) {
@@ -6888,19 +6883,25 @@ static json_t *jmap_card_from_vcard(const char *userid,
                     goto unmapped;
                 }
                 else if (tz.tzid) {
-                    val = tz.tzid;
+                    prop_value = tz.tzid;
                 }
                 else if (!tz.utcoffset) {
-                    val = "Etc/UTC";
+                    prop_value = "Etc/UTC";
                 }
                 else {
+                    buf_reset(&buf);
                     buf_printf(&buf, "Etc/GMT%+d", -tz.utcoffset / 3600);
-                    val = buf_cstring(&buf);
+                    prop_value = buf_cstring(&buf);
                 }
             }
 
-            ids = hash_lookup(prop_group ? prop_group : "", &adrs);
-            if (ids) {
+        grouped_geo:
+            {
+                strarray_t *ids =
+                    hash_lookup(prop_group ? prop_group : "", &adrs);
+
+                if (!ids) goto unmapped;
+
                 for (int i = 0; i < strarray_size(ids); i++) {
                     json_t *addrs =
                         json_object_get_vanew(obj, "addresses", "{}");
@@ -6908,16 +6909,10 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
                     jprop = json_object_get_vanew(addrs, prop_id, "{}");
 
-                    json_object_set_new(jprop, kind, json_string(val));
+                    json_object_set_new(jprop, kind, json_string(prop_value));
                 }
-
-                buf_free(&buf);
-            }
-            else {
-                goto unmapped;
             }
             break;
-        }
 
             /* Organizational Properties */
         case VCARD_CONTACTURI_PROPERTY:
@@ -6942,14 +6937,15 @@ static json_t *jmap_card_from_vcard(const char *userid,
             kind = "logo";
             goto media;
 
-        case VCARD_MEMBER_PROPERTY: {
-            if (strncmp(prop_value, "urn:uuid:", 9)) goto unmapped;
+        member:
+        case VCARD_MEMBER_PROPERTY:
+            if (!strncmp(prop_value, "urn:uuid:", 9)) {
+                json_t *members = json_object_get_vanew(obj, "members", "{}");
 
-            json_t *members = json_object_get_vanew(obj, "members", "{}");
-
-            json_object_set_new(members, prop_value+9, json_true());
+                json_object_set_new(members, prop_value+9, json_true());
+            }
+            else goto unmapped;
             break;
-        }
 
         case VCARD_ORG_PROPERTY: {
             json_t *orgs = json_object_get_vanew(obj, "organizations", "{}");
@@ -7219,20 +7215,14 @@ static json_t *jmap_card_from_vcard(const char *userid,
         }
 
         if (jprop) {
-            const char *cc = NULL, *label = NULL;
+            const char *label = NULL;
 
-            if (prop_group) {
-                if (prop_kind == VCARD_ADR_PROPERTY) {
-                    /* Apple country code? */
-                    cc = hash_lookup(prop_group, &countrycodes);
-                }
-                if (param_flags & ALLOW_LABEL_PARAM) {
-                    /* Apple label? */
-                    label = hash_lookup(prop_group, &labels);
-                }
+            if (prop_group && (param_flags & ALLOW_LABEL_PARAM)) {
+                /* Apple label? */
+                label = hash_lookup(prop_group, &labels);
             }
 
-            _add_vcard_params(jprop, prop, label, cc, param_flags);
+            _add_vcard_params(jprop, prop, label, param_flags);
         }
     }
 
@@ -7252,7 +7242,6 @@ static json_t *jmap_card_from_vcard(const char *userid,
   done:
     buf_free(&buf);
     free_hash_table(&labels, &free);
-    free_hash_table(&countrycodes, &free);
     free_hash_table(&adrs, (void (*)(void *)) &strarray_free);
 
     return obj;
