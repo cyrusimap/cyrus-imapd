@@ -91,7 +91,8 @@ be summed together, for example \fB1h30m\fR is equivalent to \fB90m\fR.  If
 no unit is specified, an option-specific backward-compatible default unit
 is assumed (documented on an option-by-option basis).  These are simple time
 units: 1d=24h, 1h=60m, 1m=60s (daylight savings, timezones, leap adjustments,
-etc are not considered).
+etc are not considered). The minimum and maximum durations in seconds are
+-2147483647 and 2147483647, respectively.
 .PP
 Byte size options take the form of a number followed by a unit, for example
 \fB1KiB\fR (1 kibibyte).  Units are \fBB\fR (bytes), \fBKiB\fR (kibibytes),

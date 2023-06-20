@@ -196,8 +196,8 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
 
     const size_t len = strlen(str);
     const char *p;
-    int accum = 0, duration = 0, neg = 0, sawdigit = 0, r = 0;
-    char *copy = NULL;
+    int duration = 0, neg = 0, r = 0;
+    char *copy = NULL, *end;
 
     /* the default default unit is seconds */
     if (!defunit) defunit = 's';
@@ -211,53 +211,65 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
     p = copy;
     if (*p == '-') {
         neg = 1;
-        p++;
-    }
-    for (; *p; p++) {
-        if (cyrus_isdigit(*p)) {
-            accum *= 10;
-            accum += (*p - '0');
-            sawdigit = 1;
-        }
-        else {
-            if (!sawdigit) {
-                syslog(LOG_DEBUG, "%s: no digit before '%c' in '%s'",
-                                  __func__, *p, str);
-                r = -1;
-                goto done;
-            }
-            sawdigit = 0;
-            switch (*p) {
-            case 'd':
-                accum *= 24;
-                /* fall through */
-            case 'h':
-                accum *= 60;
-                /* fall through */
-            case 'm':
-                accum *= 60;
-                /* fall through */
-            case 's':
-                duration += accum;
-                accum = 0;
-                break;
-            default:
-                syslog(LOG_DEBUG, "%s: bad unit '%c' in %s",
-                                  __func__, *p, str);
-                r = -1;
-                goto done;
-            }
+        if (!*++p) {
+            r = -1;
+            goto done;
         }
     }
 
-    /* we shouldn't have anything left in the accumulator */
-    assert(accum == 0);
+    while (*p) {
+
+        if (!isdigit(*p)) {
+            r = -1;
+            goto done;
+        }
+
+        uint64_t val = strtoul(p, &end, 10);
+        if (p == end) {
+            r = -1;
+            goto done;
+        }
+
+        switch (*end) {
+        case 'd':
+            val *= 24;
+            /* fall through */
+        case 'h':
+            val *= 60;
+            /* fall through */
+        case 'm':
+            val *= 60;
+            /* fall through */
+        case 's':
+            if (duration + val > INT32_MAX) {
+                syslog(LOG_DEBUG, "%s: maximum duration exceeded in %s",
+                        __func__, str);
+                r = -1;
+                goto done;
+            }
+            duration += val;
+            break;
+        case '\0':
+            syslog(LOG_DEBUG, "%s: missing unit in %s",
+                    __func__, str);
+            r = -1;
+            goto done;
+        default:
+            syslog(LOG_DEBUG, "%s: bad unit '%c' in %s",
+                    __func__, *p, str);
+            r = -1;
+            goto done;
+        }
+
+        p = end + 1;
+
+    }
 
     if (neg) duration = -duration;
     if (out_duration) *out_duration = duration;
 
 done:
-    if (copy) free(copy);
+    free(copy);
     return r;
 }
 

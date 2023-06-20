@@ -438,6 +438,7 @@ static const struct duration_parse_data duration_parse_tests[] = {
 
     { "-1", 0, -1 },
     { "-0", 0, 0 },
+    { "-", -1, 0xdeadbeef },
     { "--1", -1, 0xdeadbeef },
     { "-1s", 0, -1 },
     { "-1m", 0, -60 },
@@ -446,6 +447,14 @@ static const struct duration_parse_data duration_parse_tests[] = {
     { "1h1h", 0, 2 * 60 * 60 }, /* silly, but let it work */
     { "1hh", -1, 0xdeadbeef }, /* bogus, reject it */
     { "1hhh", -1, 0xdeadbeef }, /* bogus, reject it */
+
+    { "2147483647s", 0, INT32_MAX },    /* that's the maximum */
+    { "-2147483647s", 0, -INT32_MAX },  /* that's the minimum */
+    { "2147483648s", -1, 0xdeadbeef },  /* one too high */
+    { "-2147483648s", -1, 0xdeadbeef }, /* one too low */
+
+    { "24855d3h14m7s", 0, INT32_MAX },
+    { "24855d3h14m8s", -1, 0xdeadbeef },
 };
 
 static void test_duration_parse(void)
