@@ -622,7 +622,7 @@ static int imip_send(const char *cal_ownerid, const char *sched_userid,
             /* Updated event */
             json_t *new_jsevent = jmapical_tojmap(sched_data->newical, NULL, NULL);
 
-            patch = jmap_patchobject_create(jsevent, new_jsevent);
+            patch = jmap_patchobject_create(jsevent, new_jsevent, 0/*no_remove*/);
             json_decref(new_jsevent);
         }
         else {

@@ -386,7 +386,7 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
         if (newical) {
             type = "updated";
             json_t *tmp = jmapical_tojmap(newical, NULL, NULL);
-            jpatch = jmap_patchobject_create(jevent, tmp);
+            jpatch = jmap_patchobject_create(jevent, tmp, 0/*no_remove*/);
             json_decref(tmp);
         }
         else type = "destroyed";
