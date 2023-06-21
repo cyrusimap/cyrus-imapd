@@ -2112,7 +2112,7 @@ overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
         }
 
         /* Create override patch */
-        json_t *diff = jmap_patchobject_create(event, ex);
+        json_t *diff = jmap_patchobject_create(event, ex, 0/*no_remove*/);
         json_object_del(diff, "@type");
         json_object_del(diff, "uid");
         json_object_del(diff, "relatedTo");

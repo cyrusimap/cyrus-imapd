@@ -213,7 +213,7 @@ static void jmap_patchobject_set(json_t *diff, struct buf *path,
 }
 
 static void jmap_patchobject_diff(json_t *diff, struct buf *path,
-                                  json_t *src, json_t *dst)
+                                  json_t *src, json_t *dst, int no_remove)
 {
     if (!json_is_object(src) || !json_is_object(dst))
         return;
@@ -228,10 +228,12 @@ static void jmap_patchobject_diff(json_t *diff, struct buf *path,
         }
     }
 
-    // Remove any properties that are set in src but not in dst
-    json_object_foreach(src, key, val) {
-        if (json_object_get(dst, key) == NULL) {
-            jmap_patchobject_set(diff, path, key, json_null());
+    if (!no_remove) {
+        // Remove any properties that are set in src but not in dst
+        json_object_foreach(src, key, val) {
+            if (json_object_get(dst, key) == NULL) {
+                jmap_patchobject_set(diff, path, key, json_null());
+            }
         }
     }
 
@@ -254,19 +256,19 @@ static void jmap_patchobject_diff(json_t *diff, struct buf *path,
             size_t len = buf_len(path);
             if (len) buf_appendcstr(path, "/");
             buf_appendcstr(path, enckey);
-            jmap_patchobject_diff(diff, path, srcval, val);
+            jmap_patchobject_diff(diff, path, srcval, val, no_remove);
             buf_truncate(path, len);
             free(enckey);
         }
     }
 }
 
-EXPORTED json_t *jmap_patchobject_create(json_t *src, json_t *dst)
+EXPORTED json_t *jmap_patchobject_create(json_t *src, json_t *dst, int no_remove)
 {
     json_t *diff = json_object();
     struct buf buf = BUF_INITIALIZER;
 
-    jmap_patchobject_diff(diff, &buf, src, dst);
+    jmap_patchobject_diff(diff, &buf, src, dst, no_remove);
 
     buf_free(&buf);
     return diff;

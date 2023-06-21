@@ -4972,7 +4972,7 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
     json_object_del(new_instance, "recurrenceRules");
     json_object_del(new_instance, "recurrenceOverrides");
     json_object_del(new_instance, "excludedRecurrenceRules");
-    new_override = jmap_patchobject_create(old_event, new_instance);
+    new_override = jmap_patchobject_create(old_event, new_instance, 0/*no_remove*/);
     json_object_del(new_override, "@type");
     json_object_del(new_override, "method");
     json_object_del(new_override, "prodId");
@@ -5122,7 +5122,7 @@ static void updateevent_apply_patch_event(json_t *old_event,
                 continue;
             }
             /* Diff updated override */
-            json_t *new_override = jmap_patchobject_create(new_event, jval);
+            json_t *new_override = jmap_patchobject_create(new_event, jval, 0/*no_remove*/);
             if (!new_override) continue;
             json_object_set_new(new_overrides, recurid, new_override);
         }
@@ -5237,7 +5237,7 @@ static void updateevent_bump_sequence(json_t *old_event,
 
     /* ... a non per-user property got updated */
     int updates_shared_prop = 0;
-    json_t *jpatch = jmap_patchobject_create(old_event, new_event);
+    json_t *jpatch = jmap_patchobject_create(old_event, new_event, 0/*no_remove*/);
     const char *path;
     json_t *jval;
     void *tmp;

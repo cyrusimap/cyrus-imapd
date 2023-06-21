@@ -71,7 +71,7 @@ extern int jmap_readprop_full(json_t *root, const char *prefix, const char *name
 extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch, json_t *invalid);
 
 /* Create a patch-object that transforms src into dst. */
-extern json_t *jmap_patchobject_create(json_t *src, json_t *dst);
+extern json_t *jmap_patchobject_create(json_t *src, json_t *dst, int no_remove);
 
 /* Return non-zero src and its RFC 6901 encoding differ */
 extern int jmap_pointer_needsencode(const char *src);
