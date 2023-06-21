@@ -1200,16 +1200,31 @@ sub start
     }
 
     # arrange for fakesaslauthd to be started by master
-    # XXX make this run as a DAEMON rather than a START
     my $fakesaslauthd_socket = "$self->{basedir}/run/mux";
+    my $fakesaslauthd_isdaemon = 1;
     if ($self->{authdaemon}) {
-        $self->add_start(
-            name => 'fakesaslauthd',
-            argv => [
-                abs_path('utils/fakesaslauthd'),
-                '-p', $fakesaslauthd_socket,
-            ],
-        );
+        my ($maj, $min) = Cassandane::Instance->get_version(
+                            $self->{installation});
+        if ($maj < 3 || ($maj == 3 && $min < 4)) {
+            $self->add_start(
+                name => 'fakesaslauthd',
+                argv => [
+                    abs_path('utils/fakesaslauthd'),
+                    '-p', $fakesaslauthd_socket,
+                ],
+            );
+            $fakesaslauthd_isdaemon = 0;
+        }
+        elsif (not exists $self->{daemons}->{fakesaslauthd}) {
+            $self->add_daemon(
+                name => 'fakesaslauthd',
+                argv => [
+                    abs_path('utils/fakesaslauthd'),
+                    '-p', $fakesaslauthd_socket,
+                ],
+                wait => 'y',
+            );
+        }
     }
 
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
@@ -1243,9 +1258,7 @@ sub start
 
     # give fakesaslauthd a moment (but not more than 2s) to set up its
     # socket before anything starts trying to connect to services
-    # XXX if this were a DAEMON with wait=y, this would be unnecessary,
-    # XXX though those didn't exist until 3.4
-    if ($self->{authdaemon}) {
+    if ($self->{authdaemon} && !$fakesaslauthd_isdaemon) {
         my $tries = 0;
         while (not -S $fakesaslauthd_socket && $tries < 2_000_000) {
             $tries += usleep(10_000); # 10ms as us

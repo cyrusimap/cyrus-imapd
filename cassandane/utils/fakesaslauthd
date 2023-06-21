@@ -3,6 +3,7 @@
 # for any user.  Use me for testing!
 
 use Getopt::Std;
+use IO::Handle;
 use IO::Socket::UNIX;
 use Sys::Syslog qw(:standard :macros);
 
@@ -16,13 +17,22 @@ sub get_counted_string
     return unpack("A$size", $data);
 }
 
+# support running as a DAEMON with wait=y:
+# * if fd 3 is already open, then we will need to write to it later to
+#   indicate we're ready.
+# * we must grab this early, before the number gets used for something
+#   else, otherwise we won't be able to differentiate between the fd 3
+#   we care about or some other thing
+# * if fd 3 was not already open, $status_fd will be undef
+my $status_fd = IO::Handle->new_from_fd(3, 'w');
+
 my %opts;
 
 getopts("C:dp:v", \%opts);
 
 die "need a socket path" if not $opts{p};
 
-openlog('fakesaslauthd', '', LOG_LOCAL6)
+openlog('fakesaslauthd', 'pid', LOG_LOCAL6)
     or die "Cannot openlog";
 
 # ok, we're good. background ourselves
@@ -45,6 +55,13 @@ syslog LOG_INFO, "listening on $opts{p}";
 
 my $shutdown = 0;
 $SIG{HUP} = sub { $shutdown++; };
+
+# okay, now we're ready to accept requests.  inform our parent,
+# if they were waiting to be informed
+if ($ENV{CYRUS_ISDAEMON} && $status_fd) {
+    print $status_fd "ok\r\n";
+    undef $status_fd;
+}
 
 while (my $client = $sock->accept()) {
     my $LoginName = get_counted_string($client);

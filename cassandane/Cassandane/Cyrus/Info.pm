@@ -88,6 +88,11 @@ sub run_cyr_info
     my @res = readline(RESULTS);
     close RESULTS;
 
+    if ($args[0] eq 'proc') {
+        # if we see our fakesaslauthd, no we didn't
+        @res = grep { $_ !~ m/\bfakesaslauthd\b/ } @res;
+    }
+
     return @res;
 }
 
