@@ -1199,16 +1199,19 @@ EXPORTED int vparse_restriction_check(struct vparse_card *card)
     enum { VER_2_1 = 0, VER_3_0, VER_4_0 };
     struct vparse_entry *entry = NULL;
     unsigned counts[NUM_CHECK_PROPS];
-    unsigned i, ver = VER_3_0;
+    strarray_t altids[NUM_CHECK_PROPS];
+    unsigned i, ver = VER_3_0, ret = 1;
 
-    /* Zero property counts */
+    /* Zero property counts and altids */
     memset(counts, 0, NUM_CHECK_PROPS * sizeof(unsigned));
+    memset(altids, 0, NUM_CHECK_PROPS * sizeof(strarray_t));
 
     /* Count interesting properties */
     for (entry = card->properties; entry; entry = entry->next) {
         for (i = 0; i < NUM_CHECK_PROPS; i++) {
             if (!strcasecmpsafe(entry->name, restrictions[i].name)) {
-                counts[i]++;
+                struct vparse_param *param = vparse_get_param(entry, "altid");
+                const char *altid = param ? param->value : "";
 
                 if (i == 0) {
                     /* VERSION */
@@ -1217,17 +1220,25 @@ EXPORTED int vparse_restriction_check(struct vparse_card *card)
                     else if (!strcmp(entry->v.value, "4.0")) ver = VER_4_0;
                     else return 0;
                 }
+
+                /* Like-properties having the same ALTID only get counted once */
+                if (strarray_find(&altids[i], altid, 0) != -1) continue;
+
+                strarray_append(&altids[i], altid);
+                counts[i]++;
             }
         }
     }
 
     /* Check property counts against restrictions */
     for (i = 0; i < NUM_CHECK_PROPS; i++) {
-        if (counts[i] < restrictions[i].version[ver].min) return 0;
-        if (counts[i] > restrictions[i].version[ver].max) return 0;
+        if (counts[i] < restrictions[i].version[ver].min) ret = 0;
+        if (counts[i] > restrictions[i].version[ver].max) ret = 0;
+
+        strarray_fini(&altids[i]);
     }
 
-    return 1;
+    return ret;
 }
 
 #if DEBUG
