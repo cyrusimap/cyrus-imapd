@@ -71,7 +71,7 @@ use Cassandane::Mboxname;
 use Cassandane::Config;
 use Cassandane::Service;
 use Cassandane::ServiceFactory;
-use Cassandane::GenericDaemon;
+use Cassandane::GenericListener;
 use Cassandane::MasterStart;
 use Cassandane::MasterEvent;
 use Cassandane::Cassini;
@@ -104,7 +104,7 @@ sub new
         starts => [],
         services => {},
         events => [],
-        generic_daemons => {},
+        generic_listeners => {},
         re_use_dir => 0,
         setup_mailbox => 1,
         persistent => 0,
@@ -465,24 +465,24 @@ sub add_event
     push(@{$self->{events}}, Cassandane::MasterEvent->new(%params));
 }
 
-sub add_generic_daemon
+sub add_generic_listener
 {
     my ($self, %params) = @_;
 
     my $name = delete $params{name};
     die "Missing parameter 'name'"
         unless defined $name;
-    die "Already have a generic daemon named \"$name\""
-        if defined $self->{generic_daemons}->{$name};
+    die "Already have a generic listener named \"$name\""
+        if defined $self->{generic_listeners}->{$name};
 
-    my $daemon = Cassandane::GenericDaemon->new(
-            name => $name,
-            config => $self->{config},
-            %params
+    my $listener = Cassandane::GenericListener->new(
+        name => $name,
+        config => $self->{config},
+        %params
     );
 
-    $self->{generic_daemons}->{$name} = $daemon;
-    return $daemon;
+    $self->{generic_listeners}->{$name} = $listener;
+    return $listener;
 }
 
 sub set_config
@@ -491,7 +491,7 @@ sub set_config
 
     $self->{config} = $conf;
     map { $_->set_config($conf); } (values %{$self->{services}},
-                                    values %{$self->{generic_daemons}});
+                                    values %{$self->{generic_listeners}});
 }
 
 sub _find_binary
@@ -786,8 +786,6 @@ sub _generate_master_conf
         print MASTER "}\n";
     }
 
-    # $self->{generic_daemons} is daemons *not* managed by master
-
     close MASTER;
 }
 
@@ -837,7 +835,7 @@ sub _add_services_from_cyrus_conf
 
             if ($k eq 'listen')
             {
-                my $aa = Cassandane::GenericDaemon::parse_address($v);
+                my $aa = Cassandane::GenericListener::parse_address($v);
                 $params{host} = $aa->{host};
                 $params{port} = $aa->{port};
             }
@@ -908,7 +906,7 @@ sub _start_master
     # a second set of Cassandane tests on this machine, which is
     # also going to fail miserably.  In any case we want to know.
     foreach my $srv (values %{$self->{services}},
-                     values %{$self->{generic_daemons}})
+                     values %{$self->{generic_listeners}})
     {
         die "Some process is already listening on " . $srv->address()
             if $srv->is_listening();
@@ -941,10 +939,10 @@ sub _start_master
                 description => "the master PID file to exist");
     xlog "_start_master: PID file present and correct";
 
-    # Start any other defined daemons
-    foreach my $daemon (values %{$self->{generic_daemons}})
+    # Start any other defined listeners
+    foreach my $listener (values %{$self->{generic_listeners}})
     {
-        $self->run_command({ cyrus => 0 }, $daemon->get_argv());
+        $self->run_command({ cyrus => 0 }, $listener->get_argv());
     }
 
     # Wait until all the defined services are reported as listening.
@@ -953,7 +951,7 @@ sub _start_master
     # might be a bit slow.
     xlog "_start_master: PID waiting for services";
     foreach my $srv (values %{$self->{services}},
-                     values %{$self->{generic_daemons}})
+                     values %{$self->{generic_listeners}})
     {
         timed_wait(sub
                 {
@@ -1987,11 +1985,11 @@ sub describe
         printf "        ";
         $srv->describe();
     }
-    printf "    generic daemons:\n";
-    foreach my $daemon (values %{$self->{generic_daemons}})
+    printf "    generic listeners:\n";
+    foreach my $listener (values %{$self->{generic_listeners}})
     {
         printf "        ";
-        $daemon->describe();
+        $listener->describe();
     }
 }
 
