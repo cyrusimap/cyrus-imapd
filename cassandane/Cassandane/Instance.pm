@@ -74,6 +74,7 @@ use Cassandane::ServiceFactory;
 use Cassandane::GenericListener;
 use Cassandane::MasterStart;
 use Cassandane::MasterEvent;
+use Cassandane::MasterDaemon;
 use Cassandane::Cassini;
 use Cassandane::PortManager;
 use Cassandane::Net::SMTPServer;
@@ -104,6 +105,7 @@ sub new
         starts => [],
         services => {},
         events => [],
+        daemons => {},
         generic_listeners => {},
         re_use_dir => 0,
         setup_mailbox => 1,
@@ -465,6 +467,19 @@ sub add_event
     push(@{$self->{events}}, Cassandane::MasterEvent->new(%params));
 }
 
+sub add_daemon
+{
+    my ($self, %params) = @_;
+
+    my $name = $params{name};
+    die "Missing parameter 'name'"
+        unless defined $name;
+    die "Already have a daemon named \"$name\""
+        if defined $self->{daemons}->{$name};
+
+    $self->{daemons}->{$name} = Cassandane::MasterDaemon->new(%params);
+}
+
 sub add_generic_listener
 {
     my ($self, %params) = @_;
@@ -786,6 +801,13 @@ sub _generate_master_conf
         print MASTER "}\n";
     }
 
+    if (scalar %{$self->{daemons}})
+    {
+        print MASTER "DAEMON {\n";
+        $self->_emit_master_entry($_) for values %{$self->{daemons}};
+        print MASTER "}\n";
+    }
+
     close MASTER;
 }
 
@@ -803,7 +825,7 @@ sub _add_services_from_cyrus_conf
         chomp;
         s/\s*#.*//;             # strip comments
         next if m/^\s*$/;       # skip empty lines
-        my ($m) = m/^(START|SERVICES|EVENTS)\s*{/;
+        my ($m) = m/^(START|SERVICES|EVENTS|DAEMON)\s*{/;
         if ($m)
         {
             $in = $m;
@@ -1207,6 +1229,10 @@ sub start
     elsif (!scalar $self->{services})
     {
         $self->_add_services_from_cyrus_conf();
+        # XXX START, EVENTS, DAEMON entries will be missed here if reusing
+        # XXX the directory.  Does it matter?  Maybe not, since the master
+        # XXX conf already contains them, so they'll still run, just
+        # XXX cassandane won't know about it.
     }
     $self->setup_syslog_replacement();
     $self->_start_notifyd();
@@ -1217,6 +1243,8 @@ sub start
 
     # give fakesaslauthd a moment (but not more than 2s) to set up its
     # socket before anything starts trying to connect to services
+    # XXX if this were a DAEMON with wait=y, this would be unnecessary,
+    # XXX though those didn't exist until 3.4
     if ($self->{authdaemon}) {
         my $tries = 0;
         while (not -S $fakesaslauthd_socket && $tries < 2_000_000) {
