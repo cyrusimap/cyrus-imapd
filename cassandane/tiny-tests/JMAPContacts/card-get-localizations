@@ -1,0 +1,110 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_card_get_localizations
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    # Sample card from RFC 6350
+    # Second N suffix removed due to vparse bug
+    # PROP-IDs added so we can easily compare the results
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+UID:$id
+DEFLANGUAGE:es
+FN:Gabriel García Márquez
+FN;LANGUAGE=jp:ガブリエル・ガルシア・マルケス
+N;ALTID=n1:Márquez;Gabriel;García;;
+N;ALTID=n1;LANGUAGE=jp:マルケス;ガブリエル;ガルシア;;
+TITLE;ALTID=t1;LANGUAGE=fr:Écrivain
+TITLE;ALTID=t1:Novelista
+TITLE;ALTID=t1;LANGUAGE=en:Novelist
+GRAMGENDER;LANGUAGE=en:masculine
+GRAMGENDER;LANGUAGE=es:neuter
+PRONOUNS;ALTID=k19;LANGUAGE=de:er
+PRONOUNS;ALTID=k19;LANGUAGE=it:lui
+PRONOUNS;ALTID=k19:él
+PRONOUNS;ALTID=k19;LANGUAGE=fr:il
+ADR;ALTID=addr1;LANGUAGE=en:;;;Tokyo;;;
+ADR;ALTID=addr1;LANGUAGE=jp:;;;東京;;;
+ADR;ALTID=addr1:;;;Tokio;;;
+END:VCARD
+EOF
+ 
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['Card/get', {
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('es', $res->[0][1]{list}[0]{'language'});
+    $self->assert_str_equals('Gabriel García Márquez',
+                             $res->[0][1]{list}[0]{'fullName'});
+    $self->assert_deep_equals({
+        'components' => [
+            { 'kind' => 'given', 'value' => 'Gabriel' },
+            { 'kind' => 'middle', 'value' => 'García' },
+            { 'kind' => 'surname', 'value' => 'Márquez' }
+        ]
+    }, $res->[0][1]{list}[0]{name});
+    $self->assert_deep_equals({
+        't1' => {
+            'name' => 'Novelista'
+        }
+    }, $res->[0][1]{list}[0]{titles});
+    $self->assert_deep_equals({
+        'grammaticalGender' => 'neuter',
+        'pronouns' => {
+            'k19' => {
+                'pronouns' => 'él'
+            }
+        }
+    }, $res->[0][1]{list}[0]{speakToAs});
+    $self->assert_deep_equals({
+        'addr1' => {
+            'locality' => 'Tokio'
+        }
+    }, $res->[0][1]{list}[0]{addresses});
+    $self->assert_str_equals('Novelist',
+                             $res->[0][1]{list}[0]{localizations}{en}{'titles/t1/name'});
+    $self->assert_str_equals('masculine',
+                             $res->[0][1]{list}[0]{localizations}{en}{'speakToAs/grammaticalGender'});
+    $self->assert_str_equals('Tokyo',
+                             $res->[0][1]{list}[0]{localizations}{en}{'addresses/addr1/locality'});
+    $self->assert_str_equals('Écrivain',
+                             $res->[0][1]{list}[0]{localizations}{fr}{'titles/t1/name'});
+    $self->assert_str_equals('il',
+                             $res->[0][1]{list}[0]{localizations}{fr}{'speakToAs/pronouns/k19/pronouns'});
+    $self->assert_str_equals('er',
+                             $res->[0][1]{list}[0]{localizations}{de}{'speakToAs/pronouns/k19/pronouns'});
+    $self->assert_str_equals('lui',
+                             $res->[0][1]{list}[0]{localizations}{it}{'speakToAs/pronouns/k19/pronouns'});
+    $self->assert_str_equals('ガブリエル・ガルシア・マルケス',
+                             $res->[0][1]{list}[0]{localizations}{jp}{'fullName'});
+    $self->assert_str_equals('東京',
+                             $res->[0][1]{list}[0]{localizations}{jp}{'addresses/addr1/locality'});
+    $self->assert_deep_equals([
+            { 'kind' => 'given', 'value' => 'ガブリエル' },
+            { 'kind' => 'middle', 'value' => 'ガルシア' },
+            { 'kind' => 'surname', 'value' => 'マルケス' }
+    ], $res->[0][1]{list}[0]{localizations}{jp}{'name/components'});
+}
