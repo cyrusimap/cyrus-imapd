@@ -87,7 +87,6 @@ EOF
     $self->assert_deep_equals({
         'kind' => 'birth',
         'date' => { 'month' => 2, 'day' => 3 }
-
     }, $res->[0][1]{list}[0]{anniversaries}{birth});
     $self->assert_deep_equals({
         'kind' => 'wedding',
