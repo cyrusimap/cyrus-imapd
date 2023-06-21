@@ -60,7 +60,7 @@ sub test_card_set_create_localizations
                     },
                     speakToAs => {
                         '@type' => 'SpeakToAs',
-                        grammaticalGender => 'masculino',
+                        grammaticalGender => 'neuter',
                         pronouns => {
                             k19 => {
                                 '@type' => 'Pronouns',
@@ -158,7 +158,7 @@ sub test_card_set_create_localizations
     $self->assert_matches(qr/ADR;ALTID=addr1;LANGUAGE=en:;;;Tokyo;;;/, $card);
     $self->assert_matches(qr/TITLE;ALTID=t1:Novelista/, $card);
     $self->assert_matches(qr/TITLE;ALTID=t1;LANGUAGE=en:Novelist/, $card);
-    $self->assert_matches(qr/GRAMGENDER:masculino/, $card);
+    $self->assert_matches(qr/GRAMGENDER:NEUTER/, $card);
     $self->assert_matches(qr/GRAMGENDER;LANGUAGE=en:MASCULINE/, $card);
     $self->assert_matches(qr/PRONOUNS;ALTID=k19:/, $card);
     $self->assert_matches(qr/PRONOUNS;ALTID=k19;LANGUAGE=de:er/, $card);
