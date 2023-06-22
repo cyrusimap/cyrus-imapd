@@ -552,4 +552,22 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
     return _prop_decode_value(data, value, content_type, guid);
 }
 
-#endif /* HAVE_LIBICALVCARD */
+EXPORTED const char *vcardproperty_get_xparam_value(vcardproperty *prop,
+                                                    const char *name)
+{
+    vcardparameter *param;
+
+    for (param = vcardproperty_get_first_parameter(prop, VCARD_ANY_PARAMETER);
+         param;
+         param = vcardproperty_get_next_parameter(prop, VCARD_ANY_PARAMETER)) {
+
+        if (strcasecmpsafe(vcardparameter_get_xname(param), name)) {
+            continue;
+        }
+        return vcardparameter_get_xvalue(param);
+    }
+
+    return NULL;
+}
+
+#endif /* HAVE_LIBVCARDVCARD */
