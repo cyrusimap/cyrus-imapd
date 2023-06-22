@@ -84,6 +84,9 @@ extern size_t vcard_prop_decode_value_x(vcardproperty *prop,
                                         char **content_type,
                                         struct message_guid *guid);
 
+extern const char *vcardproperty_get_xparam_value(vcardproperty *prop,
+                                                  const char *name);
+
 #endif /* HAVE_LIBICALVCARD */
 
 #endif /* VCARD_SUPPORT_H */
