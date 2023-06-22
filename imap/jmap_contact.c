@@ -6528,16 +6528,10 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
     case VCARD_N_PROPERTY: {
         vcardstructuredtype *n = vcardproperty_get_n(prop);
-        vcardparameter *ranksp, *sortasp;
-        vcardstructuredtype *ranks = NULL;
+        vcardparameter *sortasp;
         vcardstrarray *sorts = NULL;
         const struct comp_kind *ckind;
         json_t *comps = NULL, *sortas = NULL;
-
-        ranksp = vcardproperty_get_first_parameter(prop, VCARD_RANKS_PARAMETER);
-        if (ranksp) {
-            ranks = vcardparameter_get_ranks(ranksp);
-        }
 
         sortasp = vcardproperty_get_first_parameter(prop,
                                                     VCARD_SORTAS_PARAMETER);
@@ -6546,14 +6540,9 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         }
 
         for (ckind = n_comp_kinds; ckind->name; ckind++) {
-            vcardstrarray *rank = NULL;
             size_t i;
 
             if (ckind->idx >= n->num_fields) continue;
-
-            if (ranks) {
-                rank = ranks->field[ckind->idx];
-            }
 
             for (i = 0; i < vcardstrarray_size(n->field[ckind->idx]); i++) {
                 const char *val =
@@ -6566,14 +6555,6 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
                     if (!comps) comps = json_array();
                     json_array_append_new(comps, comp);
-
-                    if (rank && i < vcardstrarray_size(rank)) {
-                        val = vcardstrarray_element_at(rank, i);
-                        if (*val) {
-                            json_object_set_new(comp, "rank",
-                                                json_integer(atoi(val)));
-                        }
-                    }
 
                     if (sorts && ckind->idx < vcardstrarray_size(sorts)) {
                         val = vcardstrarray_element_at(sorts, ckind->idx);
@@ -6588,10 +6569,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
             }
         }
 
-        /* Remove RANKS & SORT-AS parameters */
-        if (ranksp) {
-            vcardproperty_remove_parameter_by_ref(prop, ranksp);
-        }
+        /* Remove SORT-AS parameter */
         if (sortasp) {
             vcardproperty_remove_parameter_by_ref(prop, sortasp);
         }
@@ -8723,7 +8701,6 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
                                  vcardcomponent *card)
 {
     vcardstructuredtype n = { VCARD_NUM_N_FIELDS, { 0 } };
-    vcardstructuredtype *ranks = NULL;
     vcardstrarray *sortas = NULL;
     vcardproperty *prop = NULL;
     const char *key, *val;
@@ -8784,37 +8761,10 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
         if (!*field) *field = vcardstrarray_new(1);
         vcardstrarray_append(*field, val);
 
-        jsubprop = json_object_get(comp, "rank");
-        if (jsubprop) {
-            int rank = json_integer_value(json_object_get(comp, "rank"));
-            size_t num_names = vcardstrarray_size((*field));
-
-            if (!rank) {
-                jmap_parser_invalid(parser, "rank");
-                break;
-            }
-            if (!ranks) ranks = vcardstructured_new();
-
-            ranks->num_fields = MAX(ranks->num_fields, (unsigned) field_num+1);
-
-            field = &ranks->field[field_num];
-            if (!*field) *field = vcardstrarray_new(1);
-
-            num_names -= vcardstrarray_size(*field) + 1;
-            while (num_names--) {
-                vcardstrarray_append(*field, "");
-            }
-
-            buf_reset(&buf);
-            buf_printf(&buf, "%d", rank);
-            vcardstrarray_append(*field, buf_cstring(&buf));
-
-        }
 
         json_object_del(comp, "@type");
         json_object_del(comp, "kind");
         json_object_del(comp, "value");
-        json_object_del(comp, "rank");
 
         /* Add unknown properties */
         json_object_foreach(comp, key, jsubprop) {
@@ -8878,9 +8828,6 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
                 vcardproperty_add_parameter(prop,
                                             vcardparameter_new_language(l10n->lang));
             }
-        }
-        if (ranks) {
-            vcardproperty_add_parameter(prop, vcardparameter_new_ranks(ranks));
         }
         if (sortas) {
             vcardproperty_add_parameter(prop, vcardparameter_new_sortas(sortas));
