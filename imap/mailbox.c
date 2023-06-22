@@ -3670,9 +3670,26 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         r = carddav_update(carddavdb, cdata, ispinned);
     }
     else {
-        /* Load message containing the resource and parse vcard data */
-        struct vparse_card *vcard = record_to_vcard(mailbox, new);
+        /* Create mapping entry from resource name to UID */
         int ispinned = (new->system_flags & FLAG_FLAGGED) ? 1 : 0;
+
+        cdata->dav.imap_uid = new->uid;
+        cdata->dav.modseq = new->modseq;
+        cdata->dav.createdmodseq = new->createdmodseq;
+        cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
+
+        if (!cdata->dav.creationdate)
+            cdata->dav.creationdate = new->internaldate;
+
+        /* Load message containing the resource and parse vcard data */
+#ifdef HAVE_LIBICALVCARD
+        vcardcomponent *vcard = record_to_vcard_x(mailbox, new);
+
+        r = carddav_writecard_x(carddavdb, cdata, vcard, ispinned);
+
+        vcardcomponent_free(vcard);
+#else
+        struct vparse_card *vcard = record_to_vcard(mailbox, new);
 
         if (!vcard || !vcard->objects) {
             syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
@@ -3682,18 +3699,10 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
             goto done;
         }
 
-        /* Create mapping entry from resource name to UID */
-        cdata->dav.imap_uid = new->uid;
-        cdata->dav.modseq = new->modseq;
-        cdata->dav.createdmodseq = new->createdmodseq;
-        cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
-
-        if (!cdata->dav.creationdate)
-            cdata->dav.creationdate = new->internaldate;
-
         r = carddav_writecard(carddavdb, cdata, vcard->objects, ispinned);
 
         vparse_free_card(vcard);
+#endif
     }
 
 done:
