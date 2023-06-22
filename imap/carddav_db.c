@@ -1325,48 +1325,6 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     return r;
 }
 
-#ifdef HAVE_LIBICALVCARD
-
-EXPORTED int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
-                             const char *resource, modseq_t createdmodseq,
-                             struct entryattlist **annots,
-                             const char *userid, struct auth_state *authstate,
-                             int ignorequota, uint32_t oldsize)
-{
-    vcardtimetype now = vcardtime_current_utc_time();
-    vcardproperty *prop;
-
-    /* set the REVision time */
-    prop = vcardcomponent_get_first_property(vcard, VCARD_REV_PROPERTY);
-    if (prop) {
-        vcardproperty_set_rev(prop, now);
-    }
-    else {
-        prop = vcardproperty_new_rev(now);
-        vcardcomponent_add_property(vcard, prop);
-    }
-
-    /* get important properties */
-    prop = vcardcomponent_get_first_property(vcard, VCARD_UID_PROPERTY);
-    const char *uid = vcardproperty_get_uid(prop);
-
-    prop = vcardcomponent_get_first_property(vcard, VCARD_FN_PROPERTY);
-    const char *fullname = vcardproperty_get_fn(prop);
-
-    /* serialize the card */
-    struct buf *buf = vcard_as_buf_x(vcard);
-
-    int r = _carddav_store(mailbox, buf, uid, fullname,
-                           resource, createdmodseq, NULL, annots,
-                           userid, authstate, ignorequota, oldsize);
-
-    buf_destroy(buf);
-
-    return r;
-}
-
-#endif /* HAVE_LIBICALVCARD */
-
 EXPORTED int carddav_remove(struct mailbox *mailbox,
                             uint32_t olduid, int isreplace, const char *userid)
 {
@@ -1422,3 +1380,148 @@ EXPORTED char *carddav_mboxname(const char *userid, const char *name)
     return res;
 }
 
+#ifdef HAVE_LIBICALVCARD
+
+#include "vcard_support.h"
+
+EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
+                                 struct carddav_data *cdata,
+                                 vcardcomponent *vcard,
+                                 int ispinned)
+{
+    strarray_t emails = STRARRAY_INITIALIZER;
+    strarray_t member_uids = STRARRAY_INITIALIZER;
+    vcardproperty *prop;
+
+    for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
+         prop;
+         prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
+        const char *propval = vcardproperty_get_value_as_string(prop);
+        const char *userid = "";
+
+        switch (vcardproperty_isa(prop)) {
+        case VCARD_UID_PROPERTY:
+            cdata->vcard_uid = propval;
+            break;
+
+        case VCARD_N_PROPERTY:
+            cdata->name = propval;
+            break;
+
+        case VCARD_FN_PROPERTY:
+            cdata->fullname = propval;
+            break;
+
+        case VCARD_NICKNAME_PROPERTY:
+            cdata->nickname = propval;
+            break;
+
+        case VCARD_EMAIL_PROPERTY: {
+            /* XXX - insert if primary */
+            int ispref = 0;
+            vcardparameter *param =
+                vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
+            if (param) {
+                vcardenumarray *types = vcardparameter_get_type(param);
+                size_t i;
+                for (i = 0; i < vcardenumarray_size(types); i++) {
+                    const vcardenumarray_element *type =
+                        vcardenumarray_element_at(types, i);
+                    if (!strcasecmpsafe(type->xvalue, "pref")) {
+                        ispref = 1;
+                        break;
+                    }
+                }
+            }
+            strarray_append(&emails, propval);
+            strarray_append(&emails, ispref ? "1" : "");
+            break;
+        }
+
+        kind:
+        case VCARD_KIND_PROPERTY:
+            if (!strcasecmp(propval, "group"))
+                cdata->kind = CARDDAV_KIND_GROUP;
+            /* default case is CARDDAV_KIND_CONTACT */
+            break;
+
+        member:
+        case VCARD_MEMBER_PROPERTY:
+            if (strncmp(propval, "urn:uuid:", 9)) continue;
+            strarray_append(&member_uids, propval+9);
+            strarray_append(&member_uids, userid);
+            break;
+
+        case VCARD_VERSION_PROPERTY:
+            cdata->version = propval[0] - '0';
+            break;
+
+        case VCARD_X_PROPERTY: {
+            const char *name = vcardproperty_get_property_name(prop);
+            if (!strcasecmp(name, "x-addressbookserver-kind"))
+                goto kind;
+            else if (!strcasecmp(name, "x-addressbookserver-member"))
+                goto member;
+            else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
+                userid = vcardproperty_get_xparam_value(prop, "userid");
+                if (!userid) continue;
+                goto member;
+            }
+            break;
+        }
+
+        default:
+            break;
+        }
+    }
+
+    int r = carddav_write(carddavdb, cdata);
+    if (!r) r = carddav_write_emails(carddavdb,
+                                     cdata->dav.rowid, &emails, ispinned);
+    if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
+
+    strarray_fini(&emails);
+    strarray_fini(&member_uids);
+
+    return r;
+}
+
+EXPORTED int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
+                             const char *resource, modseq_t createdmodseq,
+                             struct entryattlist **annots,
+                             const char *userid, struct auth_state *authstate,
+                             int ignorequota, uint32_t oldsize)
+{
+    vcardtimetype now = vcardtime_current_utc_time();
+    vcardproperty *prop;
+
+    /* set the REVision time */
+    prop = vcardcomponent_get_first_property(vcard, VCARD_REV_PROPERTY);
+    if (prop) {
+        vcardproperty_set_rev(prop, now);
+    }
+    else {
+        prop = vcardproperty_new_rev(now);
+        vcardcomponent_add_property(vcard, prop);
+    }
+
+    /* get important properties */
+    prop = vcardcomponent_get_first_property(vcard, VCARD_UID_PROPERTY);
+    const char *uid = vcardproperty_get_uid(prop);
+
+    prop = vcardcomponent_get_first_property(vcard, VCARD_FN_PROPERTY);
+    const char *fullname = vcardproperty_get_fn(prop);
+
+    /* serialize the card */
+    struct buf *buf = vcard_as_buf_x(vcard);
+
+    int r = _carddav_store(mailbox, buf, uid, fullname,
+                           resource, createdmodseq, NULL, annots,
+                           userid, authstate, ignorequota, oldsize);
+
+    buf_destroy(buf);
+
+    return r;
+}
+
+#endif /* HAVE_LIBICALVCARD */
