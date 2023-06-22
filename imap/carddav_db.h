@@ -198,9 +198,20 @@ int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
                   const char *userid, struct auth_state *authstate,
                   int ignorequota, uint32_t oldsize);
 
+/* delete a carddav entry */
+int carddav_remove(struct mailbox *mailbox,
+                   uint32_t olduid, int isreplace,
+                   const char *userid);
+
+/* calculate a mailbox name */
+char *carddav_mboxname(const char *userid, const char *name);
+
 #ifdef HAVE_LIBICALVCARD
 
 #include "vcard_support.h"
+
+int carddav_writecard_x(struct carddav_db *carddavdb, struct carddav_data *cdata,
+                        vcardcomponent *vcard, int ispinned);
 
 int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
                     const char *resource, modseq_t createdmodseq,
@@ -209,13 +220,5 @@ int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
                     int ignorequota, uint32_t oldsize);
 
 #endif /* HAVE_LIBICALVCARD */
-
-/* delete a carddav entry */
-int carddav_remove(struct mailbox *mailbox,
-                   uint32_t olduid, int isreplace,
-                   const char *userid);
-
-/* calculate a mailbox name */
-char *carddav_mboxname(const char *userid, const char *name);
 
 #endif /* CARDDAV_DB_H */
