@@ -1420,8 +1420,13 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
             /* XXX - insert if primary */
             int ispref = 0;
             vcardparameter *param =
-                vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
+                vcardproperty_get_first_parameter(prop, VCARD_PREF_PARAMETER);
             if (param) {
+                ispref = (vcardparameter_get_pref(param) == 1);
+            }
+            else if ((param =
+                      vcardproperty_get_first_parameter(prop,
+                                                        VCARD_TYPE_PARAMETER))) {
                 vcardenumarray *types = vcardparameter_get_type(param);
                 size_t i;
                 for (i = 0; i < vcardenumarray_size(types); i++) {
