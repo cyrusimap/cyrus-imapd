@@ -180,6 +180,28 @@ EXPORTED unsigned long config_getbitfield(enum imapopt opt)
     return imapopts[opt].val.x;
 }
 
+static inline int accumulate(int *val, int mult, int nextchar,
+                             struct buf *parse_err)
+{
+    int newdigit = 0;
+
+    assert(val != NULL);
+
+    if (cyrus_isdigit(nextchar)) newdigit = nextchar - '0';
+
+    if (*val > INT_MAX / mult
+        || (*val == INT_MAX / mult
+            && newdigit > INT_MAX % mult))
+    {
+        if (parse_err)
+            buf_printf(parse_err, "would overflow at '%c'", nextchar);
+        return -1;
+    }
+
+    *val = *val * mult + newdigit;
+    return 0;
+}
+
 /* Parse a duration value, converted to seconds.
  *
  * defunit is one of 'd', 'h', 'm', 's' and determines how
@@ -198,6 +220,7 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
     const char *p;
     int accum = 0, duration = 0, neg = 0, sawdigit = 0, r = 0;
     char *copy = NULL;
+    struct buf parse_err = BUF_INITIALIZER;
 
     /* the default default unit is seconds */
     if (!defunit) defunit = 's';
@@ -215,35 +238,41 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
     }
     for (; *p; p++) {
         if (cyrus_isdigit(*p)) {
-            accum *= 10;
-            accum += (*p - '0');
+            r = accumulate(&accum, 10, *p, &parse_err);
+            if (r) goto done;
             sawdigit = 1;
         }
         else {
             if (!sawdigit) {
-                syslog(LOG_DEBUG, "%s: no digit before '%c' in '%s'",
-                                  __func__, *p, str);
+                buf_printf(&parse_err, "no digit before '%c'", *p);
                 r = -1;
                 goto done;
             }
             sawdigit = 0;
             switch (*p) {
             case 'd':
-                accum *= 24;
+                r = accumulate(&accum, 24, *p, &parse_err);
+                if (r) goto done;
                 /* fall through */
             case 'h':
-                accum *= 60;
+                r = accumulate(&accum, 60, *p, &parse_err);
+                if (r) goto done;
                 /* fall through */
             case 'm':
-                accum *= 60;
+                r = accumulate(&accum, 60, *p, &parse_err);
+                if (r) goto done;
                 /* fall through */
             case 's':
+                if (duration > INT_MAX - accum) {
+                    buf_printf(&parse_err, "would overflow at '%c'", *p);
+                    r = -1;
+                    goto done;
+                }
                 duration += accum;
                 accum = 0;
                 break;
             default:
-                syslog(LOG_DEBUG, "%s: bad unit '%c' in %s",
-                                  __func__, *p, str);
+                buf_printf(&parse_err, "bad unit '%c'", *p);
                 r = -1;
                 goto done;
             }
@@ -257,7 +286,14 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
     if (out_duration) *out_duration = duration;
 
 done:
-    if (copy) free(copy);
+    if (r) {
+        xsyslog(LOG_ERR, "unable to parse duration from string",
+                         "value=<%s> parse_err=<%s>",
+                         str, buf_cstring_or_empty(&parse_err));
+    }
+
+    buf_free(&parse_err);
+    free(copy);
     return r;
 }
 

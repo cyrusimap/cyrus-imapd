@@ -38,6 +38,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <limits.h>
 #include <unistd.h>
 #include <sysexits.h>
 
@@ -446,6 +447,32 @@ static const struct duration_parse_data duration_parse_tests[] = {
     { "1h1h", 0, 2 * 60 * 60 }, /* silly, but let it work */
     { "1hh", -1, 0xdeadbeef }, /* bogus, reject it */
     { "1hhh", -1, 0xdeadbeef }, /* bogus, reject it */
+
+    /* XXX config_parseduration uses int type and INT_MAX, but these limit
+     * XXX tests use hardcoded strings, which means they'll fail on a platform
+     * XXX where int is something other than 32 bits and has different limits.
+     * XXX I figure we can worry about that later, if/when it ever happens.
+     */
+    /* exercise all the multipliers against overflow */
+    { "2147483647s",   0, INT_MAX },
+    { "2147483648s",  -1, 0xdeadbeef },
+    { "-2147483647s",  0, -INT_MAX },
+    { "-2147483648s", -1, 0xdeadbeef },
+    { "35791394m",     0, 60 * (INT_MAX / 60) },
+    { "35791395m",    -1, 0xdeadbeef },
+    { "-35791394m",    0, -60 * (INT_MAX / 60) },
+    { "-35791395m",   -1, 0xdeadbeef },
+    { "596523h",       0, 3600 * (INT_MAX / 3600) },
+    { "596524h",      -1, 0xdeadbeef },
+    { "-596523h",      0, -3600 * (INT_MAX / 3600) },
+    { "-596524h",     -1, 0xdeadbeef },
+    { "24855d",        0, 86400 * (INT_MAX / 86400) },
+    { "24856d",       -1, 0xdeadbeef },
+    { "-24855d",       0, -86400 * (INT_MAX / 86400) },
+    { "-24856d",      -1, 0xdeadbeef },
+
+    { "24855d3h14m7s", 0, INT_MAX },
+    { "24855d3h14m8s", -1, 0xdeadbeef },
 };
 
 static void test_duration_parse(void)
