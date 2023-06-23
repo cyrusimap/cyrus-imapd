@@ -1236,6 +1236,92 @@ sub test_search_omit_ical
     $self->assert_num_equals(2, scalar @$uids);
 }
 
+sub test_search_omit_vcard
+    :min_version_3_9 :needs_search_xapian
+{
+    my ($self) = @_;
+
+    xlog $self, "Generate and index test messages.";
+
+    $self->make_message("test",
+        mime_type => "multipart/related",
+        mime_boundary => "boundary_1",
+        body => ""
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "txt body"
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/vcard;charset=utf-8\r\n"
+          . "Content-Transfer-Encoding: quoted-printable\r\n"
+          . "\r\n"
+          . "BEGIN:VCARD\r\n"
+          . "VERSION:3.0\r\n"
+          . "UID:1234567890\r\n"
+          . "BDAY:1944-06-07\r\n"
+          . "N:Gump;Forrest;;Mr.\r\n"
+          . "FN:Forrest Gump\r\n"
+          . "ORG;PROP-ID=O1:Bubba Gump Shrimp Co.\r\n"
+          . "TITLE;PROP-ID=T1:Shrimp Man\r\n"
+          . "PHOTO;PROP-ID=P1;ENCODING=b;TYPE=JPEG:c29tZSBwaG90bw==\r\n"
+          . "foo.ADR;PROP-ID=A1:;;1501 Broadway;New York;NY;10036;USA\r\n"
+          . "foo.GEO:40.7571383482188;-73.98695548990568\r\n"
+          . "foo.TZ:-05:00\r\n"
+          . "EMAIL;TYPE=PREF:bgump\@example.com\r\n"
+          . "X-SOCIAL-PROFILE:https://example.com/\@bubba"
+          . "REV:2008-04-24T19:52:43Z\r\n"
+          . "END:VCARD\r\n"
+          . "\r\n--boundary_1--\r\n"
+    ) || die;
+
+    $self->make_message("top",
+        mime_type => "text/vcard",
+        body => ""
+          . "BEGIN:VCARD\r\n"
+          . "VERSION:3.0\r\n"
+          . "UID:1234567890\r\n"
+          . "BDAY:1944-06-07\r\n"
+          . "N:Gump;Forrest;;Mr.\r\n"
+          . "FN:Forrest Gump\r\n"
+          . "ORG;PROP-ID=O1:Bubba Gump Shrimp Co.\r\n"
+          . "TITLE;PROP-ID=T1:Shrimp Man\r\n"
+          . "PHOTO;PROP-ID=P1;ENCODING=b;TYPE=JPEG:c29tZSBwaG90bw==\r\n"
+          . "foo.ADR;PROP-ID=A1:;;1501 Broadway;New York;NY;10036;USA\r\n"
+          . "foo.GEO:40.7571383482188;-73.98695548990568\r\n"
+          . "foo.TZ:-05:00\r\n"
+          . "EMAIL;TYPE=PREF:bgump\@example.com\r\n"
+          . "X-SOCIAL-PROFILE:https://example.com/\@bubba"
+          . "REV:2008-04-24T19:52:43Z\r\n"
+          . "END:VCARD\r\n"
+    ) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    $uids = $talk->search('fuzzy', 'text', '1944') || die;
+    $self->assert_num_equals(0, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'text', 'Forrest') || die;
+    $self->assert_num_equals(2, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'text', 'Mr.') || die;
+    $self->assert_num_equals(2, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'text', 'Shrimp') || die;
+    $self->assert_num_equals(2, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'text', 'example') || die;
+    $self->assert_num_equals(2, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'text', 'https') || die;
+    $self->assert_num_equals(2, scalar @$uids);
+}
+
 sub test_xapian_index_partid
     :min_version_3_0 :needs_search_xapian :needs_component_jmap
 {
