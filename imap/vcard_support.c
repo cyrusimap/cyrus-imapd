@@ -472,7 +472,8 @@ EXPORTED vcardcomponent *record_to_vcard_x(struct mailbox *mailbox,
 
     /* Load message containing the resource and parse vcard data */
     if (!mailbox_map_record(mailbox, record, &buf)) {
-        vcard = vcardparser_parse_string(buf_cstring(&buf) + record->header_size);
+        vcard = vcardcomponent_new_from_string(buf_cstring(&buf) +
+                                               record->header_size);
         buf_free(&buf);
     }
 
