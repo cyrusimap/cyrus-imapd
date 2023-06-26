@@ -233,6 +233,11 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
 
     p = copy;
     if (*p == '-') {
+        if (!cyrus_isdigit(p[1])) {
+            buf_setcstr(&parse_err, "no digit after '-'");
+            r = -1;
+            goto done;
+        }
         neg = 1;
         p++;
     }

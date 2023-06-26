@@ -439,10 +439,14 @@ static const struct duration_parse_data duration_parse_tests[] = {
 
     { "-1", 0, -1 },
     { "-0", 0, 0 },
+    { "-", -1, 0xdeadbeef },
+    { "-s", -1, 0xdeadbeef },
     { "--1", -1, 0xdeadbeef },
     { "-1s", 0, -1 },
     { "-1m", 0, -60 },
     { "1-2m", -1, 0xdeadbeef },
+    { "1m-2s", -1, 0xdeadbeef },
+    { "1m0-2s", -1, 0xdeadbeef },
 
     { "1h1h", 0, 2 * 60 * 60 }, /* silly, but let it work */
     { "1hh", -1, 0xdeadbeef }, /* bogus, reject it */
