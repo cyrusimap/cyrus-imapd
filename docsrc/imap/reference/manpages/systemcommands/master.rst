@@ -113,6 +113,9 @@ The environment variable **CYRUS_VERBOSE** can be set to log additional
 debugging information. Setting the value to 1 results in base level logging.
 Setting it higher results in more log messages being generated.
 
+The :cyrusman:`cyr_info(8)` utility's ``proc`` subcommand can be used to
+list the active processes that **master** is managing.
+
 Files
 =====
 
@@ -125,4 +128,4 @@ See Also
 
 :cyrusman:`cyrus.conf(5)`, :cyrusman:`imapd.conf(5)`, :cyrusman:`imapd(8)`,
 :cyrusman:`pop3d(8)`, :cyrusman:`lmtpd(8)`, :cyrusman:`timsieved(8)`,
-:cyrusman:`idled(8)`
+:cyrusman:`idled(8)`, :cyrusman:`cyr_info(8)`

@@ -66,7 +66,7 @@ configuring Cyrus easier.
 
 .. option:: proc
 
-    Print all currently connected processes in the proc directory
+    Print active processes that :cyrusman:`master(8)` is managing.
 
 Options
 =======
@@ -103,7 +103,7 @@ Examples
 
 ..
 
-        List all the proc files and who they're logged in as.
+        List the active processes that master is managing
 
 .. only:: html
 
@@ -145,4 +145,4 @@ Files
 
 See Also
 ========
-:cyrusman:`imapd.conf(5)`, :cyrusman:`cyrus.conf(5)`
+:cyrusman:`imapd.conf(5)`, :cyrusman:`cyrus.conf(5)`, :cyrusman:`master(8)`
