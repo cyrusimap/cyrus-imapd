@@ -39,8 +39,9 @@
  */
 
 #include <limits.h>
-#include <unistd.h>
+#include <stdint.h>
 #include <sysexits.h>
+#include <unistd.h>
 
 #include "cunit/cyrunit.h"
 
@@ -765,6 +766,24 @@ static const struct bytesize_parse_data bytesize_parse_tests[] = {
     { "12  K",   0, 12LL * 1024 },
     { "12  KB",  0, 12LL * 1024 },
     { "12  KiB", 0, 12LL * 1024 },
+
+    /* overflow tests */
+    { "9223372036854775807 B", 0, INT64_MAX },
+    { "-9223372036854775808 B", 0, INT64_MIN },
+    { "9223372036854775808 B", -1, 0xdeadbeefLL },
+    { "-9223372036854775809 B", -1, 0xdeadbeefLL },
+    { "9007199254740991 K", 0, 1024LL * (INT64_MAX / 1024LL) },
+    { "-9007199254740992 K", 0, 1024LL * (INT64_MIN / 1024LL) },
+    { "9007199254740992 K", -1, 0xdeadbeefLL },
+    { "-9007199254740993 K", -1, 0xdeadbeefLL },
+    { "8796093022207 M", 0, 1048576LL * (INT64_MAX / 1048576LL) },
+    { "-8796093022208 M", 0, 1048576LL * (INT64_MIN / 1048576LL) },
+    { "8796093022208 M", -1, 0xdeadbeefLL },
+    { "-8796093022209 M", -1, 0xdeadbeefLL },
+    { "8589934591 G", 0, 1073741824LL * (INT64_MAX / 1073741824LL) },
+    { "-8589934592 G", 0, 1073741824LL * (INT64_MIN / 1073741824LL) },
+    { "8589934592 G", -1, 0xdeadbeefLL },
+    { "-8589934593 G", -1, 0xdeadbeefLL },
 };
 
 static void test_bytesize_parse(void)

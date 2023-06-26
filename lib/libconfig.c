@@ -345,6 +345,7 @@ EXPORTED int config_parsebytesize(const char *str,
     int64_t bytesize;
     int i_allowed = 0, r = 0;
     char *copy = NULL, *p;
+    struct buf parse_err = BUF_INITIALIZER;
 
     assert(strchr("BKMG", defunit) != NULL); /* n.b. also permits \0 */
 
@@ -361,8 +362,7 @@ EXPORTED int config_parsebytesize(const char *str,
     errno = 0;
     bytesize = strtoll(copy, &p, 10);
     if (errno) {
-        xsyslog(LOG_ERR, "unable to parse byte size from string",
-                         "value=<%s>", str);
+        buf_setcstr(&parse_err, strerror(errno));
         errno = 0;
         r = -1;
         goto done;
@@ -370,17 +370,8 @@ EXPORTED int config_parsebytesize(const char *str,
 
     /* better be some digits */
     if (p == copy) {
-        struct buf msg = BUF_INITIALIZER;
-
-        buf_appendcstr(&msg, "no digit ");
-        if (*p) {
-            buf_printf(&msg, "before '%c' ", *p);
-        }
-        buf_printf(&msg, "in '%s'", str);
-
-        syslog(LOG_DEBUG, "%s: %s", __func__, buf_cstring(&msg));
-        buf_free(&msg);
-
+        buf_setcstr(&parse_err, "no digit");
+        if (*p) buf_printf(&parse_err, " before '%c'", *p);
         r = -1;
         goto done;
     }
@@ -392,14 +383,29 @@ EXPORTED int config_parsebytesize(const char *str,
     switch (*p) {
     case 'g':
     case 'G':
+        if (bytesize > INT64_MAX / 1024 || bytesize < INT64_MIN / 1024) {
+            buf_printf(&parse_err, "would overflow at '%c'", *p);
+            r = -1;
+            goto done;
+        }
         bytesize *= 1024;
         /* fall through */
     case 'm':
     case 'M':
+        if (bytesize > INT64_MAX / 1024 || bytesize < INT64_MIN / 1024) {
+            buf_printf(&parse_err, "would overflow at '%c'", *p);
+            r = -1;
+            goto done;
+        }
         bytesize *= 1024;
         /* fall through */
     case 'k':
     case 'K':
+        if (bytesize > INT64_MAX / 1024 || bytesize < INT64_MIN / 1024) {
+            buf_printf(&parse_err, "would overflow at '%c'", *p);
+            r = -1;
+            goto done;
+        }
         bytesize *= 1024;
         i_allowed = 1;
         p++;
@@ -414,15 +420,22 @@ EXPORTED int config_parsebytesize(const char *str,
 
     /* we'd better be at end of string! */
     if (*p) {
-        syslog(LOG_DEBUG, "%s: bad unit '%c' in %s",
-                          __func__, *p, str);
+        buf_printf(&parse_err, "bad unit '%c'", *p);
         r = -1;
         goto done;
     }
 
 done:
-    if (!r && out_bytesize) *out_bytesize = bytesize;
+    if (r) {
+        xsyslog(LOG_ERR, "unable to parse bytesize from string",
+                         "value=<%s> parse_err=<%s>",
+                         str, buf_cstring_or_empty(&parse_err));
+    }
+    else if (out_bytesize) {
+        *out_bytesize = bytesize;
+    }
 
+    buf_free(&parse_err);
     free(copy);
     return r;
 }
