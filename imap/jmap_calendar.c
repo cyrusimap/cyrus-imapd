@@ -3982,9 +3982,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
             const char *uid = hash_iter_key(iter);
             size_t nseen = json_array_size(get.list) + json_array_size(get.not_found);
             rock.want_eventids = hash_iter_val(iter);
-            struct caldav_jscal_filter jscal_filter = {
-                .ical_uid = xstrdupnull(uid)
-            };
+            struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
+            caldav_jscal_filter_by_ical_uid(&jscal_filter, uid, NULL);
             enum caldav_sort sort[] = {
                 CAL_SORT_MAILBOX, CAL_SORT_IMAP_UID
             };
@@ -4449,9 +4448,8 @@ static int createevent_load_ical(jmap_req_t *req,
                                  struct jmap_parser *parser,
                                  struct createevent *create)
 {
-    struct caldav_jscal_filter jscal_filter = {
-        .ical_uid = xstrdupnull(create->ical_uid),
-    };
+    struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
+    caldav_jscal_filter_by_ical_uid(&jscal_filter, create->ical_uid, NULL);
     struct createevent_load_ical_rock rock = {
         .ical_recurid = create->ical_recurid ? create->ical_recurid : ""
     };
@@ -5341,12 +5339,9 @@ static void remove_itip_messages(struct caldav_db *db,
                                  const char *recurid)
 {
     if (inbox) {
-        struct caldav_jscal_filter jscal_filter = {
-            .ical_uid = xstrdupnull(uid),
-            .ical_recurid = xstrdupnull(recurid)
-        };
-        ptrarray_push(&jscal_filter.mbentries,
-                mboxlist_entry_copy(inbox->mbentry));
+        struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
+        caldav_jscal_filter_by_ical_uid(&jscal_filter, uid, recurid);
+        caldav_jscal_filter_by_mbentry(&jscal_filter, inbox->mbentry);
 
         caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, NULL, 0,
                 &remove_itip_cb, inbox);
@@ -5357,26 +5352,25 @@ static void remove_itip_messages(struct caldav_db *db,
 static int check_eventid_exists(struct jmap_caleventid *eid,
                                 struct caldav_db *db, int *is_standalone)
 {
-    struct caldav_jscal_filter jscal_filter = {
-        .ical_uid = xstrdupnull(eid->ical_uid),
-        .ical_recurid = xstrdupnull(eid->ical_recurid),
-    };
+    struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
+    caldav_jscal_filter_by_ical_uid(&jscal_filter, eid->ical_uid, eid->ical_recurid);
     int r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, NULL, 0,
                                  updateevent_check_exists_cb, NULL);
+    caldav_jscal_filter_fini(&jscal_filter);
     if (r && r != CYRUSDB_DONE)
         goto done;
 
     *is_standalone = (r == CYRUSDB_DONE);
     if (!*is_standalone) {
+        struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
         // if it isn't there must be a main event
-        free(jscal_filter.ical_recurid);
-        jscal_filter.ical_recurid = xstrdupnull("");
+        caldav_jscal_filter_by_ical_uid(&jscal_filter, eid->ical_uid, "");
         r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, NULL, 0,
                                  updateevent_check_exists_cb, NULL);
+        caldav_jscal_filter_fini(&jscal_filter);
     }
 
 done:
-    caldav_jscal_filter_fini(&jscal_filter);
     return (r != CYRUSDB_DONE) ? HTTP_NOT_FOUND : 0;
 }
 
@@ -5799,10 +5793,8 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     // Determine if event is a standalone recurrence instance
     int is_standalone_instance = 0;
     if (eid->ical_recurid) {
-        struct caldav_jscal_filter jscal_filter = {
-            .ical_uid = xstrdupnull(eid->ical_uid),
-            .ical_recurid = xstrdupnull(eid->ical_recurid),
-        };
+        struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
+        caldav_jscal_filter_by_ical_uid(&jscal_filter, eid->ical_uid, eid->ical_recurid);
         r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, NULL, 0,
                 updateevent_check_exists_cb, NULL);
         caldav_jscal_filter_fini(&jscal_filter);
@@ -5812,10 +5804,8 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         is_standalone_instance = r == CYRUSDB_DONE;
         if (!is_standalone_instance) {
             // if it isn't there must be a main event
-            struct caldav_jscal_filter jscal_filter = {
-                .ical_uid = xstrdupnull(eid->ical_uid),
-                .ical_recurid = xstrdupnull(""),
-            };
+            struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
+            caldav_jscal_filter_by_ical_uid(&jscal_filter, eid->ical_uid, "");
             r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, NULL, 0,
                     updateevent_check_exists_cb, NULL);
             caldav_jscal_filter_fini(&jscal_filter);
@@ -6858,11 +6848,10 @@ static int eventquery_textsearch_run(jmap_req_t *req,
         }
 
         /* Fetch the CalDAV db records */ // XXX use linear scan for all MsgData
-        struct caldav_jscal_filter jscal_filter = {
-            .imap_uid = md->uid,
-            .ical_uid = xstrdupnull(wantuid),
-        };
-        ptrarray_push(&jscal_filter.mbentries, mbentry); // takes ownership
+	struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
+        if (wantuid) caldav_jscal_filter_by_ical_uid(&jscal_filter, wantuid, NULL);
+	caldav_jscal_filter_by_imap_uid(&jscal_filter, md->uid);
+	caldav_jscal_filter_by_mbentrym(&jscal_filter, mbentry);
 
         struct eventquery_textsearch_cb_rock rock = {
             req, icalbefore, icalafter, matches, expandrecur, mailbox, is_sharee
@@ -7029,8 +7018,7 @@ static struct caldav_jscal_filter *build_jscal_filter(jmap_req_t *req,
                                                       struct eventquery_args *args,
                                                       int *needs_xapian)
 {
-    struct caldav_jscal_filter *filter =
-        xzmalloc(sizeof(struct caldav_jscal_filter));
+    struct caldav_jscal_filter *filter = caldav_jscal_filter_new();
     const char *s;
 
     if (json_array_size(json_object_get(jfilter, "inCalendars"))) {
@@ -7043,7 +7031,7 @@ static struct caldav_jscal_filter *build_jscal_filter(jmap_req_t *req,
 
             int r = mboxlist_lookup(mboxname, &mbentry, NULL);
             if (!r && jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
-                ptrarray_append(&filter->mbentries, mbentry); // takes ownership
+                caldav_jscal_filter_by_mbentrym(filter, mbentry);
             }
             else if (r != IMAP_MAILBOX_NONEXISTENT) {
                 xsyslog(LOG_WARNING, "could not lookup calendar",
@@ -7063,20 +7051,21 @@ static struct caldav_jscal_filter *build_jscal_filter(jmap_req_t *req,
     }
 
     s = json_string_value(json_object_get(jfilter, "uid"));
-    if (s) filter->ical_uid = xstrdup(s);
+    if (s)
+	caldav_jscal_filter_by_ical_uid(filter, s, NULL);
 
     s = json_string_value(json_object_get(jfilter, "before"));
     if (s) {
         time_t t = eventquery_read_datetime(s, args->zone, caldav_eternity);
         if (t != caldav_eternity)
-            filter->before = xmemdup(&t, sizeof(time_t));
+	    caldav_jscal_filter_by_before(filter, &t);
     }
 
     s = json_string_value(json_object_get(jfilter, "after"));
     if (s) {
         time_t t = eventquery_read_datetime(s, args->zone, caldav_epoch);
         if (t != caldav_epoch)
-            filter->after = xmemdup(&t, sizeof(time_t));
+	    caldav_jscal_filter_by_after(filter, &t);
     }
 
     s = json_string_value(json_object_get(jfilter, "operator"));
@@ -7093,8 +7082,19 @@ static struct caldav_jscal_filter *build_jscal_filter(jmap_req_t *req,
             size_t i;
             json_t *jsub;
             json_array_foreach(json_object_get(jfilter, "conditions"), i, jsub) {
-                ptrarray_append(&filter->subfilters,
-                    build_jscal_filter(req, jsub, args, needs_xapian));
+
+                // Special-handle OR(uid, uid, ...)
+                if (filter->op == CALDAV_JSCAL_OR &&
+                    json_object_size(jfilter) == 2 && // "operator", "conditions"
+                    json_object_size(jsub) == 1 &&   // "uid"
+                    (s = json_string_value(json_object_get(jsub, "uid")))) {
+
+                    caldav_jscal_filter_by_ical_uid(filter, s, NULL);
+                }
+                else {
+                    ptrarray_append(&filter->subfilters,
+                            build_jscal_filter(req, jsub, args, needs_xapian));
+                }
             }
         }
     }
@@ -9432,10 +9432,10 @@ static void principal_getavailability(jmap_req_t *req,
     };
 
     enum caldav_sort sort[] = { CAL_SORT_MAILBOX };
-    struct caldav_jscal_filter jscal_filter = {
-        .after = xmemdup(&tstart, sizeof(time_t)),
-        .before = xmemdup(&tend, sizeof(time_t)),
-    };
+
+    struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
+    caldav_jscal_filter_by_before(&jscal_filter, &tend);
+    caldav_jscal_filter_by_after(&jscal_filter, &tstart);
     int r = caldav_foreach_jscal(db, NULL, &jscal_filter, NULL, sort, 1,
                                  principal_getavailability_cb, &rock);
     caldav_jscal_filter_fini(&jscal_filter);
