@@ -89,6 +89,11 @@ int sqldb_done(void);
 
 #define SQLDB_DEFAULT_TIMEOUT  20000 /* 20 seconds is an eternity */
 
+#define SQLDB_DONE         1
+#define SQLDB_OK           0
+#define SQLDB_ERR_UNKNOWN -1
+#define SQLDB_ERR_LIMIT   -2
+
 sqldb_t *sqldb_open(const char *fname, const char *initsql,
                    int version, const struct sqldb_upgrade *upgradesql,
                    int timeout_ms);

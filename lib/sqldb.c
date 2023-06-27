@@ -70,7 +70,7 @@ EXPORTED int sqldb_init(void)
         assert(!open_sqldbs);
     }
 
-    return 0;
+    return SQLDB_OK;
 }
 
 EXPORTED int sqldb_done(void)
@@ -81,7 +81,7 @@ EXPORTED int sqldb_done(void)
         assert(!open_sqldbs);
     }
 
-    return 0;
+    return SQLDB_OK;
 }
 
 static void _debug(void *fname, const char *sql)
@@ -94,7 +94,7 @@ static int _free_open(sqldb_t *open)
     int rc = sqlite3_close(open->db);
     free(open->fname);
     free(open);
-    int r = (rc == SQLITE_OK ? 0 : -1);
+    int r = (rc == SQLITE_OK ? SQLDB_OK : SQLDB_ERR_UNKNOWN);
     return r;
 }
 
@@ -105,7 +105,7 @@ static int _version_cb(void *rock, int ncol, char **vals, char **names __attribu
         *vptr = atoi(vals[0]);
     else
         abort();
-    return 0;
+    return SQLDB_OK;
 }
 
 /* Open DAV DB corresponding in file */
@@ -314,7 +314,7 @@ out:
     return open;
 }
 
-static sqlite3_stmt *_prepare_stmt(sqldb_t *open, const char *cmd)
+static sqlite3_stmt *_prepare_stmt(sqldb_t *open, const char *cmd, int *rp)
 {
     int i;
     sqlite3_stmt *stmt;
@@ -329,6 +329,15 @@ static sqlite3_stmt *_prepare_stmt(sqldb_t *open, const char *cmd)
         xsyslog(LOG_ERR, "DBERROR: prepare failed",
                          "fname=<%s> cmd=<%s> error=<%s>",
                          open->fname, cmd, sqlite3_errmsg(open->db));
+
+        if (rc == SQLITE_TOOBIG ||
+                // sqlite3 uses generic SQLITE_ERROR for large trees
+                !strncasecmpsafe(sqlite3_errmsg(open->db),
+                    "Expression tree is too large", 28)) {
+            *rp = SQLDB_ERR_LIMIT;
+        }
+        else *rp = SQLDB_ERR_UNKNOWN;
+
         return NULL;
     }
     ptrarray_append(&open->stmts, stmt);
@@ -395,8 +404,8 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
 {
     int rc, r = 0;
     struct sqldb_bindval *bval;
-    sqlite3_stmt *stmt = _prepare_stmt(open, cmd);
-    if (!stmt) return -1;
+    sqlite3_stmt *stmt = _prepare_stmt(open, cmd, &r);
+    if (!stmt) return r;
 
     /* bind values */
     for (bval = bvals; bval && bval->name; bval++) {
@@ -436,7 +445,7 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
                          "fname=<%s> cmd=<%s> error=<%s>",
                 open->fname, buf_cstring(&newcmd), sqlite3_errmsg(open->db));
         buf_free(&newcmd);
-        r = -1;
+        r = SQLDB_ERR_UNKNOWN;
     }
 
     return r;
@@ -498,7 +507,7 @@ EXPORTED int sqldb_writelock(sqldb_t *open)
 
 EXPORTED int sqldb_writecommit(sqldb_t *open)
 {
-    if (!open->writelock) return 0;
+    if (!open->writelock) return SQLDB_OK;
     strarray_truncate(&open->trans, 0);
     int r = sqldb_exec(open, "COMMIT;", NULL, NULL, NULL);
     if (!r) open->writelock = 0;
@@ -507,7 +516,7 @@ EXPORTED int sqldb_writecommit(sqldb_t *open)
 
 EXPORTED int sqldb_writeabort(sqldb_t *open)
 {
-    if (!open->writelock) return 0;
+    if (!open->writelock) return SQLDB_OK;
     strarray_truncate(&open->trans, 0);
     int r = sqldb_exec(open, "ROLLBACK;", NULL, NULL, NULL);
     if (!r) open->writelock = 0;
@@ -529,11 +538,11 @@ EXPORTED int sqldb_close(sqldb_t **dbp)
 {
     sqldb_t *open, *prev = NULL;
 
-    if (!*dbp) return 0;
+    if (!*dbp) return SQLDB_OK;
 
     for (open = open_sqldbs; open; open = open->next) {
         if (*dbp == open) {
-            if (--open->refcount) return 0; /* still in use */
+            if (--open->refcount) return SQLDB_OK; /* still in use */
             if (prev)
                 prev->next = open->next;
             else
@@ -567,7 +576,7 @@ EXPORTED int sqldb_attach(sqldb_t *open, const char *fname)
     int r = sqldb_exec(open, "ATTACH DATABASE :fname AS other;", bval, NULL, NULL);
     if (r) return r;
     open->attached = 1;
-    return 0;
+    return SQLDB_OK;
 }
 
 EXPORTED int sqldb_detach(sqldb_t *open)
@@ -576,5 +585,5 @@ EXPORTED int sqldb_detach(sqldb_t *open)
     int r = sqldb_exec(open, "DETACH DATABASE other;", NULL, NULL, NULL);
     if (r) return r;
     open->attached = 0;
-    return 0;
+    return SQLDB_OK;
 }
