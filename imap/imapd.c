@@ -131,6 +131,7 @@ extern char *optarg;
 
 /* global state */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+static struct proc_handle *proc_handle = NULL;
 
 static int imaps = 0;
 static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
@@ -866,7 +867,7 @@ static void imapd_reset(void)
     /* run delayed commands first before closing anything */
     libcyrus_run_delayed();
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     /* close backend connections */
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
@@ -984,7 +985,7 @@ int service_init(int argc, char **argv, char **envp)
     int opt, events;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -1068,6 +1069,7 @@ int service_main(int argc __attribute__((unused)),
     struct mboxevent *mboxevent = NULL;
     struct io_count *io_count_start = NULL;
     struct io_count *io_count_stop = NULL;
+    int r;
 
     /* fatal/shut_down will adjust these, so we need to set them early */
     prometheus_decrement(CYRUS_IMAP_READY_LISTENERS);
@@ -1118,7 +1120,10 @@ int service_main(int argc __attribute__((unused)),
     imapd_login_disabled = imapd_tls_required ||
         ((extprops_ssf < 2) && !config_getswitch(IMAPOPT_ALLOWPLAINTEXT));
 
-    proc_register(config_ident, imapd_clienthost, NULL, NULL, NULL);
+    r = proc_register(&proc_handle, 0,
+                      config_ident, imapd_clienthost, NULL, NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
+    proc_settitle(config_ident, imapd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     imapd_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
@@ -1227,7 +1232,7 @@ void shut_down(int code)
     /* run delayed commands before we take away all the environment */
     libcyrus_run_delayed();
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
         struct backend *be = ptrarray_nth(&backend_cached, i);
@@ -1311,7 +1316,7 @@ EXPORTED void fatal(const char *s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         if (imapd_out) {
             /* one less active connection */
             prometheus_decrement(CYRUS_IMAP_ACTIVE_CONNECTIONS);
@@ -1414,6 +1419,8 @@ static void cmdloop(void)
     }
 
     for (;;) {
+        int r;
+
         /* Release any held index */
         index_release(imapd_index);
 
@@ -1428,7 +1435,12 @@ static void cmdloop(void)
         if (backend_current) prot_flush(backend_current->out);
 
         /* command no longer running */
-        proc_register(config_ident, imapd_clienthost, imapd_userid, index_mboxname(imapd_index), NULL);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, imapd_clienthost, imapd_userid,
+                          index_mboxname(imapd_index), NULL);
+        if (r) fatal("unable to register process", EX_IOERR);
+        proc_settitle(config_ident, imapd_clienthost, imapd_userid,
+                      index_mboxname(imapd_index), NULL);
 
         /* run any delayed cleanup while a user isn't waiting on a reply */
         libcyrus_run_delayed();
@@ -1497,7 +1509,12 @@ static void cmdloop(void)
         if (config_getswitch(IMAPOPT_CHATTY))
             syslog(LOG_NOTICE, "command: %s %s", tag.s, cmd.s);
 
-        proc_register(config_ident, imapd_clienthost, imapd_userid, index_mboxname(imapd_index), cmd.s);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, imapd_clienthost, imapd_userid,
+                          index_mboxname(imapd_index), cmd.s);
+        if (r) fatal("unable to register process", EX_IOERR);
+        proc_settitle(config_ident, imapd_clienthost, imapd_userid,
+                      index_mboxname(imapd_index), cmd.s);
 
         /* if we need to force a kick, do so */
         if (referral_kick) {

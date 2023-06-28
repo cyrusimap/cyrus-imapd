@@ -52,13 +52,13 @@
 #include <sysexits.h>
 #include <jansson.h>
 
+#include "lib/proc.h"
 #include "lib/util.h"
 #include "lib/xmalloc.h"
 
 #include "imap/conversations.h"
 #include "imap/global.h"
 #include "imap/mailbox.h"
-#include "imap/proc.h"
 #include "imap/statuscache.h"
 #include "imap/zoneinfo_db.h"
 

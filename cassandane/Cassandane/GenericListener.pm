@@ -37,7 +37,7 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::GenericDaemon;
+package Cassandane::GenericListener;
 use strict;
 use warnings;
 
@@ -108,7 +108,7 @@ sub set_port
     $self->{port} = $port;
 }
 
-# Return a hash of parameters for connecting to the daemon.
+# Return a hash of parameters for connecting to the listener.
 # These will ultimately go through to MessageStoreFactory::create.
 sub connection_params
 {

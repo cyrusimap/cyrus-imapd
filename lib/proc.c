@@ -54,7 +54,7 @@
 #include <sys/stat.h>
 
 #include "assert.h"
-#include "global.h"
+#include "libconfig.h"
 #include "proc.h"
 #include "retry.h"
 #include "util.h"
@@ -81,7 +81,11 @@
 
 #define FNAME_PROCDIR "/proc"
 
-static char *procfname = 0;
+/* n.b. setproctitle might come from setproctitle.c, or might come from a
+ * system library
+ */
+extern void setproctitle(const char *fmt, ...)
+                         __attribute__((format(printf, 1, 2)));
 
 static char *proc_getpath(pid_t pid, int isnew)
 {
@@ -121,29 +125,55 @@ static char *proc_getdir(void)
     return proc_getpath(0, 0);
 }
 
-EXPORTED int proc_register(const char *servicename, const char *clienthost,
-                  const char *userid, const char *mailbox, const char *cmd)
+struct proc_handle {
+    pid_t pid;
+    char *fname;
+};
+
+EXPORTED int proc_register(struct proc_handle **handlep,
+                           pid_t pid,
+                           const char *servicename,
+                           const char *clienthost,
+                           const char *userid,
+                           const char *mailbox,
+                           const char *cmd)
 {
-    pid_t pid = getpid();
     FILE *procfile = NULL;
     char *newfname = NULL;
+    struct proc_handle *handle = NULL;
+    int handle_is_new = 0;
 
-    if (!procfname)
-        procfname = proc_getpath(pid, /*isnew*/0);
+    assert(handlep != NULL);
+
+    if (*handlep != NULL) {
+        handle = *handlep;
+        pid = handle->pid;
+    }
+    else {
+        handle = xmalloc(sizeof *handle);
+        handle_is_new = 1;
+        if (!pid) pid = getpid();
+        handle->pid = pid;
+        handle->fname = proc_getpath(pid, /*isnew*/0);
+        *handlep = handle;
+    }
 
     newfname = proc_getpath(pid, /*isnew*/1);
 
     procfile = fopen(newfname, "w+");
     if (!procfile) {
         if (cyrus_mkdir(newfname, 0755) == -1) {
-            fatal("couldn't create proc directory", EX_IOERR);
+            xsyslog(LOG_ERR, "IOERROR: failed to create proc directory",
+                               "fname=<%s>", newfname);
+            goto error;
         }
         else {
             syslog(LOG_NOTICE, "created proc directory");
             procfile = fopen(newfname, "w+");
             if (!procfile) {
-                syslog(LOG_ERR, "IOERROR: creating %s: %m", newfname);
-                fatal("can't write proc file", EX_IOERR);
+                xsyslog(LOG_ERR, "IOERROR: failed to create proc file",
+                                 "fname=<%s>", newfname);
+                goto error;
             }
         }
     }
@@ -153,27 +183,45 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
     if (!userid) userid = "";
     if (!mailbox) mailbox = "";
     if (!cmd) cmd = "";
-    fprintf(procfile, "%s\t%s\t%s\t%s\t%s\n", servicename, clienthost, userid, mailbox, cmd);
+    fprintf(procfile, "%s\t%s\t%s\t%s\t%s\n",
+                      servicename, clienthost, userid, mailbox, cmd);
     fclose(procfile);
 
-    if (rename(newfname, procfname)) {
-        syslog(LOG_ERR, "IOERROR: renaming %s to %s: %m", newfname, procfname);
+    if (rename(newfname, handle->fname)) {
+        xsyslog(LOG_ERR, "IOERROR: rename failed",
+                         "source=<%s> dest=<%s>",
+                         newfname, handle->fname);
         xunlink(newfname);
-        fatal("can't write proc file", EX_IOERR);
+        goto error;
     }
-
-    setproctitle("%s: %s %s %s %s", servicename, clienthost, userid, mailbox, cmd);
 
     free(newfname);
     return 0;
+
+error:
+    if (handle_is_new) {
+        xunlink(handle->fname);
+        free(handle->fname);
+        free(handle);
+        *handlep = NULL;
+    }
+    free(newfname);
+    return -1;
 }
 
-EXPORTED void proc_cleanup(void)
+EXPORTED void proc_cleanup(struct proc_handle **handlep)
 {
-    if (procfname) {
-        xunlink(procfname);
-        free(procfname);
-        procfname = NULL;
+    struct proc_handle *handle;
+
+    assert(handlep != NULL);
+
+    handle = *handlep;
+    *handlep = NULL;
+
+    if (handle) {
+        xunlink(handle->fname);
+        free(handle->fname);
+        free(handle);
     }
 }
 
@@ -408,4 +456,20 @@ EXPORTED void proc_killusercmd(const char *userid, const char *cmd, int sig)
     rock.sig = sig;
 
     proc_foreach(prockill_cb, &rock);
+}
+
+/* n.b. proc_settitle_init() is defined in setproctitle.c */
+
+EXPORTED void proc_settitle(const char *servicename, const char *clienthost,
+                            const char *userid, const char *mailbox,
+                            const char *cmd)
+{
+    if (!servicename) servicename = "";
+    if (!clienthost) clienthost = "";
+    if (!userid) userid = "";
+    if (!mailbox) mailbox = "";
+    if (!cmd) cmd = "";
+
+    setproctitle("%s: %s %s %s %s",
+                 servicename, clienthost, userid, mailbox, cmd);
 }

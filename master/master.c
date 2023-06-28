@@ -95,11 +95,12 @@
 
 #include "assert.h"
 #include "cyr_lock.h"
+#include "proc.h"
 #include "retry.h"
+#include "strarray.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xunlink.h"
-#include "strarray.h"
 
 enum {
     child_table_size = 10000,
@@ -164,6 +165,7 @@ struct centry {
     char *desc;                 /* human readable description for logging */
     struct timeval spawntime;   /* when the centry was allocated */
     time_t sighuptime;          /* when did we send a SIGHUP */
+    struct proc_handle *proc_handle; /* for tracking proc registrations */
     struct centry *next;
 };
 static struct centry *ctable[child_table_size];
@@ -334,6 +336,8 @@ static char *centry_describe(const struct centry *c, pid_t pid)
 /* free a centry */
 static void centry_free(struct centry *c)
 {
+    assert(c->proc_handle == NULL); /* better have cleaned this up already */
+
     free(c->desc);
     free(c);
 }
@@ -1026,6 +1030,14 @@ static void spawn_waitdaemon(struct service *s, int wdi)
         c->si = SERVICE_NONE;
         c->wdi = wdi;
         centry_set_state(c, SERVICE_STATE_READY);
+        r = proc_register(&c->proc_handle, p,
+                          s->name, NULL, NULL, NULL, NULL);
+        if (r) {
+            syslog(LOG_ERR, "ERROR: unable to register process %u"
+                            " for waitdaemon %s/%s",
+                            p, s->name, s->familyname);
+            r = 0; /* don't sweat it */
+        }
         centry_add(c, p);
     }
     else {
@@ -1197,6 +1209,17 @@ static void spawn_service(struct service *s, int si, int wdi)
         c->si = si;
         c->wdi = wdi;
         centry_set_state(c, SERVICE_STATE_READY);
+        if (!s->listen) {
+            /* we only register DAEMONs -- SERVICEs register themselves */
+            r = proc_register(&c->proc_handle, p,
+                              s->name, NULL, NULL, NULL, NULL);
+            if (r) {
+                syslog(LOG_ERR, "ERROR: unable to register process %u"
+                                " for daemon %s/%s",
+                                p, s->name, s->familyname);
+                r = 0; /* don't sweat it */
+            }
+        }
         centry_add(c, p);
         break;
     }
@@ -1228,7 +1251,7 @@ static void schedule_event(struct event *a)
 static void spawn_schedule(struct timeval now)
 {
     struct event *a, *b;
-    int i;
+    int i, r;
     char path[PATH_MAX];
     pid_t p;
     struct centry *c;
@@ -1290,6 +1313,13 @@ static void spawn_schedule(struct timeval now)
                 c = centry_alloc();
                 centry_set_name(c, "EVENT", a->name, path);
                 centry_set_state(c, SERVICE_STATE_READY);
+                r = proc_register(&c->proc_handle, p,
+                                  a->name, NULL, NULL, NULL, NULL);
+                if (r) {
+                    syslog(LOG_ERR, "ERROR: unable to register process %u"
+                                    " for event %s",
+                                    p, a->name);
+                }
                 centry_add(c, p);
                 break;
             }
@@ -1477,6 +1507,8 @@ static void reap_child(void)
                            pid, c->service_state);
                 }
             }
+
+            proc_cleanup(&c->proc_handle);
             centry_set_state(c, SERVICE_STATE_DEAD);
         } else {
             /* Are we multithreaded now? we don't know this child */

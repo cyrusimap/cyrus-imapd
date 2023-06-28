@@ -585,6 +585,8 @@ extern int ignorequota;
 extern int apns_enabled;
 extern int ws_enabled;
 
+extern struct proc_handle *httpd_proc_handle;
+
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
                            const char **errstr);
 extern dynarray_t *parse_accept(const char **hdr);

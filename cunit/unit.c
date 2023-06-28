@@ -71,15 +71,21 @@ int xml_flag = 0;
 int timeouts_flag = 1;
 
 #if HAVE_VALGRIND_VALGRIND_H
-#define log1(fmt, a1) \
-    VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1))
-#define log2(fmt, a1, a2) \
-    VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1), (a2))
+#define log1(fmt, a1) do {                                                  \
+    if (RUNNING_ON_VALGRIND) VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1));      \
+    else fprintf(stderr, "\nunit: "fmt"\n", (a1));                          \
+} while (0)
+#define log2(fmt, a1, a2) do {                                              \
+    if (RUNNING_ON_VALGRIND) VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1), (a2));\
+    else fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2));                    \
+} while (0)
 #else
-#define log1(fmt, a1) \
-    fprintf(stderr, "\nunit: "fmt"\n", (a1))
-#define log2(fmt, a1, a2) \
-    fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2))
+#define log1(fmt, a1) do {                                                  \
+    fprintf(stderr, "\nunit: "fmt"\n", (a1));                               \
+} while (0)
+#define log2(fmt, a1, a2) do {                                              \
+    fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2));                         \
+} while (0)
 #endif
 
 jmp_buf fatal_jbuf;

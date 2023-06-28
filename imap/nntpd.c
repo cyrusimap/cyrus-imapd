@@ -151,6 +151,7 @@ static int allowanonymous = 0;
 static int singleinstance = 1;  /* attempt single instance store */
 
 static struct stagemsg *stage = NULL;
+static struct proc_handle *proc_handle = NULL;
 
 /* Bitmasks for NNTP modes */
 enum {
@@ -316,7 +317,7 @@ static void nntp_reset(void)
 {
     int i;
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     /* close local mailbox */
     if (group_state)
@@ -399,7 +400,7 @@ int service_init(int argc __attribute__((unused)),
     initialize_nntp_error_table();
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -574,7 +575,7 @@ void shut_down(int code)
 
     libcyrus_run_delayed();
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     /* close local mailbox */
     if (group_state)
@@ -628,7 +629,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         exit(recurse_code);
     }
     recurse_code = code;
@@ -729,7 +730,12 @@ static void cmdloop(void)
 
         signals_poll();
 
-        proc_register(config_ident, nntp_clienthost, nntp_userid, index_mboxname(group_state), NULL);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, nntp_clienthost, nntp_userid,
+                          index_mboxname(group_state), NULL);
+        if (r) fatal("unable to register process", EX_IOERR);
+        proc_settitle(config_ident, nntp_clienthost, nntp_userid,
+                      index_mboxname(group_state), NULL);
 
         libcyrus_run_delayed();
 
@@ -774,7 +780,12 @@ static void cmdloop(void)
             if (Uisupper(*p)) *p = tolower((unsigned char) *p);
         }
 
-        proc_register(config_ident, nntp_clienthost, nntp_userid, index_mboxname(group_state), cmd.s);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, nntp_clienthost, nntp_userid,
+                          index_mboxname(group_state), cmd.s);
+        if (r) fatal("unable to register process", EX_IOERR);
+        proc_settitle(config_ident, nntp_clienthost, nntp_userid,
+                      index_mboxname(group_state), cmd.s);
 
         /* Ihave/Takethis only allowed for feeders */
         if (!(nntp_capa & MODE_FEED) &&

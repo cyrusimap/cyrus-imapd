@@ -53,6 +53,7 @@ use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
 use Cassandane::Generator;
+use Cassandane::GenericListener;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
 use Cassandane::PortManager;
@@ -1026,7 +1027,7 @@ sub post_tear_down
     }
 
     die "Found some stray processes"
-        if (Cassandane::GenericDaemon::kill_processes_on_ports(
+        if (Cassandane::GenericListener::kill_processes_on_ports(
                     Cassandane::PortManager::free_all()));
 }
 

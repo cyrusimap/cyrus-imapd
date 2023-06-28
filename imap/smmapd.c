@@ -175,8 +175,7 @@ int service_init(int argc, char **argv, char **envp)
     int r;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     signals_set_shutdown(&shut_down);
     signal(SIGPIPE, SIG_IGN);

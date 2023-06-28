@@ -845,7 +845,7 @@ sub test_maxforkrate
                               }, $self->lemming_census());
 }
 
-sub XXXtest_periodic_event
+sub test_periodic_event_slow
 {
     my ($self) = @_;
 
@@ -860,8 +860,8 @@ sub XXXtest_periodic_event
 
     xlog $self, "periodic events run immediately";
 
-    xlog $self, "waiting 5 mins for events to fire";
-    sleep(5*60);
+    xlog $self, "waiting 5 mins for events to fire, plus some slop";
+    sleep(5*60 + 5);
 
     $self->assert_deep_equals({
                                 B => { live => 0, dead => 6 },

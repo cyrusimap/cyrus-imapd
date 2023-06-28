@@ -78,14 +78,14 @@ sub start_my_instances
 {
     my ($self) = @_;
 
-    $self->{instance}->add_generic_daemon(
+    $self->{instance}->add_generic_listener(
         name => 'annotator',
         port => $self->{instance}->{config}->get('annotation_callout'),
         argv => sub {
-            my ($daemon) = @_;
+            my ($listener) = @_;
             return (
                 abs_path('utils/annotator.pl'),
-                '--port', $daemon->port(),
+                '--port', $listener->port(),
                 '--pidfile', '@basedir@/run/annotator.pid',
                 );
         });

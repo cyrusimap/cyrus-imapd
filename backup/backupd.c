@@ -56,6 +56,7 @@
 #include "lib/bsearch.h"
 #include "lib/imparse.h"
 #include "lib/map.h"
+#include "lib/proc.h"
 #include "lib/signals.h"
 #include "lib/strarray.h"
 #include "lib/util.h"
@@ -63,7 +64,6 @@
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
-#include "imap/proc.h"
 #include "imap/sync_support.h"
 #include "imap/telemetry.h"
 #include "imap/tls.h"
@@ -84,6 +84,7 @@ static sasl_conn_t *backupd_saslconn = NULL;
 static int backupd_starttls_done = 0;
 static int backupd_compress_done = 0;
 static int backupd_logfd = -1;
+static struct proc_handle *proc_handle = NULL;
 
 struct open_backup {
     char *name;
@@ -159,7 +160,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         exit(recurse_code);
     }
     recurse_code = code;
@@ -184,7 +185,7 @@ EXPORTED int service_init(int argc __attribute__((unused)),
 {
     // FIXME should this be calling fatal? fatal exits directly
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -222,7 +223,7 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 {
     const char *localip, *remoteip;
     sasl_security_properties_t *secprops = NULL;
-    int timeout;
+    int r, timeout;
 
     signals_poll();
 
@@ -268,7 +269,10 @@ EXPORTED int service_main(int argc __attribute__((unused)),
         tcp_disable_nagle(1); /* XXX magic fd */
     }
 
-    proc_register(config_ident, backupd_clienthost, NULL, NULL, NULL);
+    r = proc_register(&proc_handle, 0,
+                      config_ident, backupd_clienthost, NULL, NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
+    proc_settitle(config_ident, backupd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
@@ -295,7 +299,7 @@ static void backupd_reset(void)
 {
     open_backups_list_close(&backupd_open_backups, 0);
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     if (backupd_in) {
         prot_NONBLOCK(backupd_in);
@@ -823,7 +827,11 @@ static void cmd_authenticate(char *mech, char *resp)
     }
 
     backupd_userid = xstrdup((const char *) val);
-    proc_register(config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
+    r = proc_register(&proc_handle, 0,
+                      config_ident, backupd_clienthost, backupd_userid,
+                      NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
+    proc_settitle(config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", backupd_clienthost, backupd_userid,
            mech, backupd_starttls_done ? "+TLS" : "", "User logged in");

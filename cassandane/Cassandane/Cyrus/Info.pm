@@ -40,7 +40,9 @@
 package Cassandane::Cyrus::Info;
 use strict;
 use warnings;
+use Cwd qw(realpath);
 use Data::Dumper;
+use Date::Format qw(time2str);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -85,6 +87,11 @@ sub run_cyr_info
         or die "Cannot open $filename for reading: $!";
     my @res = readline(RESULTS);
     close RESULTS;
+
+    if ($args[0] eq 'proc') {
+        # if we see our fakesaslauthd, no we didn't
+        @res = grep { $_ !~ m/\bfakesaslauthd\b/ } @res;
+    }
 
     return @res;
 }
@@ -209,6 +216,184 @@ sub test_info_lint_partitions
         ) ],
         [ sort @output ]
     );
+}
+
+sub test_proc_services
+{
+    my ($self) = @_;
+
+    # no clients => no service daemons => no processes
+    my @output = $self->run_cyr_info('proc');
+    $self->assert_num_equals(0, scalar @output);
+
+    # master spawns service processes when clients connect to them
+    my $imap_svc = $self->{instance}->get_service('imap');
+    my @clients;
+    foreach (1..5) {
+        # five concurrent connections for a single user is normal,
+        # e.g. thunderbird does this
+        my $store = $imap_svc->create_store(username => 'cassandane');
+        my $imaptalk = $store->get_client();
+        push @clients, $imaptalk if $imaptalk;
+    }
+
+    # better have got some clients from that!
+    $self->assert_num_gte(1, scalar @clients);
+
+    # five clients => five service daemons => five processes
+    @output = $self->run_cyr_info('proc');
+    $self->assert_num_equals(scalar @clients, scalar @output);
+
+    # log clients out one at a time, expect proc count to decrease
+    while (scalar @clients) {
+        my $old = shift @clients;
+        $old->logout();
+
+        @output = $self->run_cyr_info('proc');
+        $self->assert_num_equals(scalar @clients, scalar @output);
+    }
+}
+
+sub test_proc_starts
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    # we used to recommend starting idled from START, and it will
+    # still work like that, so using it here saves me mocking something
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    # entries listed in START run to completion before master fully
+    # starts up.  if they fork themselves and hang around (like idled
+    # does) then that's their business, but master can't and doesn't
+    # track them
+    my @output = $self->run_cyr_info('proc');
+
+    $self->assert_num_equals(0, scalar @output);
+}
+
+sub test_proc_periodic_events_slow
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $sleeper_time = 10; # seconds
+
+    # periodic events first fire immediately at startup, and then every
+    # 'period' minutes thereafter. the fastest we can schedule them is
+    # every 1 minute, so this test must run for at least several real
+    # minutes
+    $self->{instance}->add_event(
+        name => 'sleeper',
+        argv => [ realpath('utils/sleeper'), $sleeper_time ],
+        period => 1,
+    );
+    $self->{instance}->start();
+
+    sleep 2; # offset our checks a little to avoid races
+
+    # observe for three cycles
+    my $observations = 3;
+    while ($observations > 0) {
+        # event should have fired and be running
+        my @output = $self->run_cyr_info('proc');
+        $self->assert_num_equals(1, scalar @output);
+
+        # wait for it to finish and check again
+        sleep $sleeper_time;
+        @output = $self->run_cyr_info('proc');
+        $self->assert_num_equals(0, scalar @output);
+
+        # skip final wait if we're done
+        $observations--;
+        last if $observations == 0;
+
+        # wait until next period
+        sleep 60 - $sleeper_time;
+    }
+}
+
+sub test_proc_scheduled_events
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $sleeper_time = 10;
+
+    # schedule an event to fire at the next minute boundary that is at
+    # least ten seconds away
+    my $at = time + 70;
+    $at -= ($at % 60);
+    my $at_hm = time2str('%H%M', $at);
+    xlog $self, "scheduling event to run at $at_hm ($at)";
+    $self->{instance}->add_event(
+        name => 'sleeper',
+        argv => [ realpath('utils/sleeper'), $sleeper_time ],
+        at => $at_hm,
+    );
+    $self->{instance}->start();
+
+    # event process should not be running at startup
+    my @output = $self->run_cyr_info('proc');
+    $self->assert_num_equals(0, scalar @output);
+
+    # should be running at the scheduled time (with a little slop)
+    sleep 2 + $at - time;
+    @output = $self->run_cyr_info('proc');
+    $self->assert_num_equals(1, scalar @output);
+
+    # should not be running after we expect it to have finished
+    sleep $sleeper_time;
+    @output = $self->run_cyr_info('proc');
+    $self->assert_num_equals(0, scalar @output);
+}
+
+sub test_proc_daemons
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $sleeper_time = 10; # seconds
+    my $daemons = 3;
+
+    for my $i (1 .. $daemons) {
+        # you wouldn't usually run a daemon that exits and needs to be
+        # restarted every ten seconds, but it's useful for testing
+        # that cyr_info proc notices the pid changing
+        $self->{instance}->add_daemon(
+            name => "sleeper$i",
+            argv => [ realpath('utils/sleeper'), $sleeper_time ],
+        );
+    }
+    $self->{instance}->start();
+
+    sleep 2; # offset our checks a little to avoid races
+
+    my $observations = 3;
+    my %lastpid = map {; "sleeper$_" => 0 } (1 .. $daemons);
+    while ($observations > 0) {
+        my @output = $self->run_cyr_info('proc');
+
+        # always exactly one process per daemon
+        $self->assert_num_equals($daemons, scalar @output);
+
+        # expect a new pid for each daemon each time
+        foreach my $line (@output) {
+            my ($pid, $servicename, $host, $user, $mailbox, $cmd)
+                = split /\s/, $line, 6;
+            $self->assert_num_not_equals($lastpid{$servicename}, $pid);
+            $lastpid{$servicename} = $pid;
+        }
+
+        # skip final wait if we're done
+        $observations--;
+        last if $observations == 0;
+
+        # wait for next restart
+        sleep $sleeper_time;
+    }
 }
 
 1;

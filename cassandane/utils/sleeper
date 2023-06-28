@@ -1,0 +1,31 @@
+#!/usr/bin/perl
+# like /bin/sleep except ignoring Cyrus-style -C, -M arguments
+
+use warnings;
+use strict;
+
+use Sys::Syslog qw(:standard :macros);
+
+sub usage
+{
+    die "usage: $0 [-C imapd.conf] [-M cyrus.conf] seconds\n";
+}
+
+my $arg;
+
+while (scalar @ARGV > 1) {
+    $arg = shift @ARGV;
+    if ($arg eq '-C' || $arg eq '-M') {
+        # ignore argument intended for cyrus processes
+        shift @ARGV;
+    }
+}
+usage() if scalar @ARGV != 1;
+
+$arg = shift @ARGV;
+usage() if $arg !~ m/^\d+$/;
+
+openlog('sleeper', 'pid', LOG_LOCAL6) or die "Cannot openlog";
+syslog(LOG_INFO, "sleeping for $arg seconds...");
+sleep $arg;
+syslog(LOG_INFO, "finished");

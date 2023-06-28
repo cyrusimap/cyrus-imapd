@@ -71,9 +71,10 @@ use Cassandane::Mboxname;
 use Cassandane::Config;
 use Cassandane::Service;
 use Cassandane::ServiceFactory;
-use Cassandane::GenericDaemon;
+use Cassandane::GenericListener;
 use Cassandane::MasterStart;
 use Cassandane::MasterEvent;
+use Cassandane::MasterDaemon;
 use Cassandane::Cassini;
 use Cassandane::PortManager;
 use Cassandane::Net::SMTPServer;
@@ -104,7 +105,8 @@ sub new
         starts => [],
         services => {},
         events => [],
-        generic_daemons => {},
+        daemons => {},
+        generic_listeners => {},
         re_use_dir => 0,
         setup_mailbox => 1,
         persistent => 0,
@@ -465,24 +467,37 @@ sub add_event
     push(@{$self->{events}}, Cassandane::MasterEvent->new(%params));
 }
 
-sub add_generic_daemon
+sub add_daemon
+{
+    my ($self, %params) = @_;
+
+    my $name = $params{name};
+    die "Missing parameter 'name'"
+        unless defined $name;
+    die "Already have a daemon named \"$name\""
+        if defined $self->{daemons}->{$name};
+
+    $self->{daemons}->{$name} = Cassandane::MasterDaemon->new(%params);
+}
+
+sub add_generic_listener
 {
     my ($self, %params) = @_;
 
     my $name = delete $params{name};
     die "Missing parameter 'name'"
         unless defined $name;
-    die "Already have a generic daemon named \"$name\""
-        if defined $self->{generic_daemons}->{$name};
+    die "Already have a generic listener named \"$name\""
+        if defined $self->{generic_listeners}->{$name};
 
-    my $daemon = Cassandane::GenericDaemon->new(
-            name => $name,
-            config => $self->{config},
-            %params
+    my $listener = Cassandane::GenericListener->new(
+        name => $name,
+        config => $self->{config},
+        %params
     );
 
-    $self->{generic_daemons}->{$name} = $daemon;
-    return $daemon;
+    $self->{generic_listeners}->{$name} = $listener;
+    return $listener;
 }
 
 sub set_config
@@ -491,7 +506,7 @@ sub set_config
 
     $self->{config} = $conf;
     map { $_->set_config($conf); } (values %{$self->{services}},
-                                    values %{$self->{generic_daemons}});
+                                    values %{$self->{generic_listeners}});
 }
 
 sub _find_binary
@@ -786,7 +801,12 @@ sub _generate_master_conf
         print MASTER "}\n";
     }
 
-    # $self->{generic_daemons} is daemons *not* managed by master
+    if (scalar %{$self->{daemons}})
+    {
+        print MASTER "DAEMON {\n";
+        $self->_emit_master_entry($_) for values %{$self->{daemons}};
+        print MASTER "}\n";
+    }
 
     close MASTER;
 }
@@ -805,7 +825,7 @@ sub _add_services_from_cyrus_conf
         chomp;
         s/\s*#.*//;             # strip comments
         next if m/^\s*$/;       # skip empty lines
-        my ($m) = m/^(START|SERVICES|EVENTS)\s*{/;
+        my ($m) = m/^(START|SERVICES|EVENTS|DAEMON)\s*{/;
         if ($m)
         {
             $in = $m;
@@ -837,7 +857,7 @@ sub _add_services_from_cyrus_conf
 
             if ($k eq 'listen')
             {
-                my $aa = Cassandane::GenericDaemon::parse_address($v);
+                my $aa = Cassandane::GenericListener::parse_address($v);
                 $params{host} = $aa->{host};
                 $params{port} = $aa->{port};
             }
@@ -908,7 +928,7 @@ sub _start_master
     # a second set of Cassandane tests on this machine, which is
     # also going to fail miserably.  In any case we want to know.
     foreach my $srv (values %{$self->{services}},
-                     values %{$self->{generic_daemons}})
+                     values %{$self->{generic_listeners}})
     {
         die "Some process is already listening on " . $srv->address()
             if $srv->is_listening();
@@ -941,10 +961,10 @@ sub _start_master
                 description => "the master PID file to exist");
     xlog "_start_master: PID file present and correct";
 
-    # Start any other defined daemons
-    foreach my $daemon (values %{$self->{generic_daemons}})
+    # Start any other defined listeners
+    foreach my $listener (values %{$self->{generic_listeners}})
     {
-        $self->run_command({ cyrus => 0 }, $daemon->get_argv());
+        $self->run_command({ cyrus => 0 }, $listener->get_argv());
     }
 
     # Wait until all the defined services are reported as listening.
@@ -953,7 +973,7 @@ sub _start_master
     # might be a bit slow.
     xlog "_start_master: PID waiting for services";
     foreach my $srv (values %{$self->{services}},
-                     values %{$self->{generic_daemons}})
+                     values %{$self->{generic_listeners}})
     {
         timed_wait(sub
                 {
@@ -1180,16 +1200,31 @@ sub start
     }
 
     # arrange for fakesaslauthd to be started by master
-    # XXX make this run as a DAEMON rather than a START
     my $fakesaslauthd_socket = "$self->{basedir}/run/mux";
+    my $fakesaslauthd_isdaemon = 1;
     if ($self->{authdaemon}) {
-        $self->add_start(
-            name => 'fakesaslauthd',
-            argv => [
-                abs_path('utils/fakesaslauthd'),
-                '-p', $fakesaslauthd_socket,
-            ],
-        );
+        my ($maj, $min) = Cassandane::Instance->get_version(
+                            $self->{installation});
+        if ($maj < 3 || ($maj == 3 && $min < 4)) {
+            $self->add_start(
+                name => 'fakesaslauthd',
+                argv => [
+                    abs_path('utils/fakesaslauthd'),
+                    '-p', $fakesaslauthd_socket,
+                ],
+            );
+            $fakesaslauthd_isdaemon = 0;
+        }
+        elsif (not exists $self->{daemons}->{fakesaslauthd}) {
+            $self->add_daemon(
+                name => 'fakesaslauthd',
+                argv => [
+                    abs_path('utils/fakesaslauthd'),
+                    '-p', $fakesaslauthd_socket,
+                ],
+                wait => 'y',
+            );
+        }
     }
 
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
@@ -1209,6 +1244,10 @@ sub start
     elsif (!scalar $self->{services})
     {
         $self->_add_services_from_cyrus_conf();
+        # XXX START, EVENTS, DAEMON entries will be missed here if reusing
+        # XXX the directory.  Does it matter?  Maybe not, since the master
+        # XXX conf already contains them, so they'll still run, just
+        # XXX cassandane won't know about it.
     }
     $self->setup_syslog_replacement();
     $self->_start_notifyd();
@@ -1219,7 +1258,7 @@ sub start
 
     # give fakesaslauthd a moment (but not more than 2s) to set up its
     # socket before anything starts trying to connect to services
-    if ($self->{authdaemon}) {
+    if ($self->{authdaemon} && !$fakesaslauthd_isdaemon) {
         my $tries = 0;
         while (not -S $fakesaslauthd_socket && $tries < 2_000_000) {
             $tries += usleep(10_000); # 10ms as us
@@ -1987,11 +2026,11 @@ sub describe
         printf "        ";
         $srv->describe();
     }
-    printf "    generic daemons:\n";
-    foreach my $daemon (values %{$self->{generic_daemons}})
+    printf "    generic listeners:\n";
+    foreach my $listener (values %{$self->{generic_listeners}})
     {
         printf "        ";
-        $daemon->describe();
+        $listener->describe();
     }
 }
 
