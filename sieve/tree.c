@@ -324,6 +324,10 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         capability = "vnd.cyrus.imip";
         supported = parse_script->support & SIEVE_CAPA_IMIP;
         break;
+
+    case B_IKEEP_TARGET:
+        capability = "vnd.cyrus.implicit_keep_target";
+        supported = parse_script->support & SIEVE_CAPA_IKEEP_TARGET;
     }
 
     if (!supported) {
@@ -440,11 +444,16 @@ void free_test(test_t *t)
     free(t);
 }
 
+static void free_target_mailbox(struct TargetMailbox *t)
+{
+    free(t->folder);
+    free(t->specialuse);
+    free(t->mailboxid);
+}
+
 static void free_fileinto(struct Fileinto *f)
 {
-    free(f->folder);
-    free(f->specialuse);
-    free(f->mailboxid);
+    free_target_mailbox(&f->t);
     strarray_free(f->flags);
 }
 
@@ -553,6 +562,10 @@ void free_tree(commandlist_t *cl)
             free(cl->u.imip.calendarid);
             free(cl->u.imip.outcome_var);
             free(cl->u.imip.errstr_var);
+            break;
+
+        case B_IKEEP_TARGET:
+            free_target_mailbox(&cl->u.ikt);
             break;
         }
 

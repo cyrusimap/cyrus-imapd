@@ -139,6 +139,8 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (i->imip &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMIP))
             buf_appendcstr(&buf, " vnd.cyrus.imip");
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET)
+            buf_appendcstr(&buf, " vnd.cyrus.implicit_keep_target");
 
         /* add tests */
         if (i->getenvelope &&
@@ -556,6 +558,9 @@ static const struct sieve_capa_t {
     /* iMIP - vnd.cyrus.imip */
     { "vnd.cyrus.imip", SIEVE_CAPA_IMIP },
 
+    /* vnd.cyrus.implicit_keep_target */
+    { "vnd.cyrus.implicit_keep_target", SIEVE_CAPA_IKEEP_TARGET },
+
     { NULL, 0 }
 };
     
@@ -758,6 +763,11 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
     case SIEVE_CAPA_IMIP:
         if (!(interp->imip &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMIP))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_IKEEP_TARGET:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET))
+            capa = 0;
         break;
 
     default:

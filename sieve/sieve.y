@@ -120,6 +120,8 @@ static commandlist_t *build_log(sieve_script_t*, char *text);
 static commandlist_t *build_snooze(sieve_script_t *sscript,
                                    commandlist_t *c, arrayu64_t *times);
 static commandlist_t *build_imip(sieve_script_t *sscript, commandlist_t *t);
+static commandlist_t *build_ikeep_target(sieve_script_t*,
+                                         commandlist_t *c, char *folder);
 
 /* construct/canonicalize test commands */
 static test_t *build_anyof(sieve_script_t*, testlist_t *tl);
@@ -349,6 +351,10 @@ extern void sieverestart(FILE *f);
 %token OUTCOME ERRSTR
 %type <cl> imiptags
 
+/* vnd.cyrus.implicit_keep_target */
+%token IKEEP_TARGET
+%type <cl> ikttags
+
 
 %%
 
@@ -526,6 +532,9 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | LOG string             { $$ = build_log(sscript, $2); }
         | SNOOZE sntags timelist { $$ = build_snooze(sscript, $2, $3); }
         | PROCESSIMIP imiptags   { $$ = build_imip(sscript, $2); }
+
+        | IKEEP_TARGET ikttags string
+                                 { $$ = build_ikeep_target(sscript, $2, $3); }
         ;
 
 
@@ -564,8 +573,8 @@ ftags: /* empty */               {
                                      copy = &($$->u.f.copy);
                                      flags = &($$->u.f.flags);
                                      create = &($$->u.f.create);
-                                     specialuse = &($$->u.f.specialuse);
-                                     mailboxid = &($$->u.f.mailboxid);
+                                     specialuse = &($$->u.f.t.specialuse);
+                                     mailboxid = &($$->u.f.t.mailboxid);
                                  }
         | ftags copy
         | ftags flags
@@ -884,9 +893,9 @@ vtags: /* empty */               {
                                      $$ = new_command(B_VACATION, sscript);
                                      flags = &($$->u.v.fcc.flags);
                                      create = &($$->u.v.fcc.create);
-                                     specialuse = &($$->u.v.fcc.specialuse);
-                                     mailboxid = &($$->u.v.fcc.mailboxid);
-                                     fccfolder = &($$->u.v.fcc.folder);
+                                     specialuse = &($$->u.v.fcc.t.specialuse);
+                                     mailboxid = &($$->u.v.fcc.t.mailboxid);
+                                     fccfolder = &($$->u.v.fcc.t.folder);
                                  }
         | vtags DAYS NUMBER      {
                                      if ($$->u.v.seconds != -1) {
@@ -1059,9 +1068,9 @@ ntags: /* empty */               {
                                      $$ = new_command(B_ENOTIFY, sscript);
                                      flags = &($$->u.n.fcc.flags);
                                      create = &($$->u.n.fcc.create);
-                                     specialuse = &($$->u.n.fcc.specialuse);
-                                     mailboxid = &($$->u.n.fcc.mailboxid);
-                                     fccfolder = &($$->u.n.fcc.folder);
+                                     specialuse = &($$->u.n.fcc.t.specialuse);
+                                     mailboxid = &($$->u.n.fcc.t.mailboxid);
+                                     fccfolder = &($$->u.n.fcc.t.folder);
                                  }
 
         /* enotify-only tagged arguments */
@@ -1179,18 +1188,18 @@ dtags: /* empty */               {
 sntags: /* empty */              {
                                      $$ = new_command(B_SNOOZE, sscript);
                                      create = &($$->u.sn.f.create);
-                                     specialuse = &($$->u.sn.f.specialuse);
-                                     mailboxid = &($$->u.sn.f.mailboxid);
+                                     specialuse = &($$->u.sn.f.t.specialuse);
+                                     mailboxid = &($$->u.sn.f.t.mailboxid);
                                  }
         | sntags MAILBOX string  {
-                                     if ($$->u.sn.f.folder != NULL) {
+                                     if ($$->u.sn.f.t.folder != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":mailbox");
-                                         free($$->u.sn.f.folder);
+                                         free($$->u.sn.f.t.folder);
                                      }
 
-                                     $$->u.sn.f.folder = $3;
+                                     $$->u.sn.f.t.folder = $3;
                                  }
         | sntags create
         | sntags specialuse
@@ -1396,6 +1405,17 @@ imiptags: /* empty */            { $$ = new_command(B_PROCESSIMIP, sscript); }
 
                                      $$->u.imip.errstr_var = $3;
                                  }
+        ;
+
+
+/* IKEEP_TARGET tagged arguments */
+ikttags: /* empty */             {
+                                     $$ = new_command(B_IKEEP_TARGET, sscript);
+                                     specialuse = &($$->u.ikt.specialuse);
+                                     mailboxid = &($$->u.ikt.mailboxid);
+                                 }
+        | ikttags specialuse
+        | ikttags mailboxid
         ;
 
 
@@ -2470,15 +2490,15 @@ static commandlist_t *build_fileinto(sieve_script_t *sscript,
         strarray_add(c->u.f.flags, "");
     }
     verify_mailbox(sscript, folder);
-    c->u.f.folder = folder;
+    c->u.f.t.folder = folder;
 
     c->nargs = bc_precompile(c->args, "ssiSis",
-                             c->u.f.mailboxid,
-                             c->u.f.specialuse,
+                             c->u.f.t.mailboxid,
+                             c->u.f.t.specialuse,
                              c->u.f.create,
                              c->u.f.flags,
                              c->u.f.copy,
-                             c->u.f.folder);
+                             c->u.f.t.folder);
 
     return c;
 }
@@ -2613,14 +2633,14 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
         verify_utf8(sscript, message);
         c->u.v.mime = 0;
     }
-    if (c->u.v.fcc.folder) {
-        verify_mailbox(sscript, c->u.v.fcc.folder);
+    if (c->u.v.fcc.t.folder) {
+        verify_mailbox(sscript, c->u.v.fcc.t.folder);
         if (c->u.v.fcc.flags && !_verify_flaglist(c->u.v.fcc.flags)) {
             strarray_add(c->u.v.fcc.flags, "");
         }
     }
     else if (c->u.v.fcc.create || c->u.v.fcc.flags ||
-             c->u.v.fcc.specialuse || c->u.v.fcc.mailboxid) {
+             c->u.v.fcc.t.specialuse || c->u.v.fcc.t.mailboxid) {
         sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
     }
 
@@ -2631,7 +2651,7 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
     if (c->u.v.seconds > max) c->u.v.seconds = max;
 
     c->nargs = bc_precompile(c->args,
-                             c->u.v.fcc.folder ? "SssiisssiSss" : "Sssiisss",
+                             c->u.v.fcc.t.folder ? "SssiisssiSss" : "Sssiisss",
                              c->u.v.addresses,
                              c->u.v.subject,
                              c->u.v.message,
@@ -2639,11 +2659,11 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
                              c->u.v.mime,
                              c->u.v.from,
                              c->u.v.handle,
-                             c->u.v.fcc.folder,
+                             c->u.v.fcc.t.folder,
                              c->u.v.fcc.create,
                              c->u.v.fcc.flags,
-                             c->u.v.fcc.specialuse,
-                             c->u.v.fcc.mailboxid);
+                             c->u.v.fcc.t.specialuse,
+                             c->u.v.fcc.t.mailboxid);
 
     return c;
 }
@@ -2756,7 +2776,7 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
 {
     assert(c && c->type == B_SNOOZE);
 
-    if (c->u.sn.f.folder) verify_mailbox(sscript, c->u.sn.f.folder);
+    if (c->u.sn.f.t.folder) verify_mailbox(sscript, c->u.sn.f.t.folder);
     if (c->u.sn.addflags && !_verify_flaglist(c->u.sn.addflags)) {
         strarray_add(c->u.sn.addflags, "");
     }
@@ -2770,9 +2790,9 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
     c->u.sn.times = times;
 
     c->nargs = bc_precompile(c->args, "sssiSSisU",
-                             c->u.sn.f.folder,
-                             c->u.sn.f.mailboxid,
-                             c->u.sn.f.specialuse,
+                             c->u.sn.f.t.folder,
+                             c->u.sn.f.t.mailboxid,
+                             c->u.sn.f.t.specialuse,
                              c->u.sn.f.create,
                              c->u.sn.addflags,
                              c->u.sn.removeflags,
@@ -2815,14 +2835,14 @@ static commandlist_t *build_notify(sieve_script_t *sscript, int t,
         if (c->u.n.method != NULL) {
             sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":method");
         }
-        if (c->u.n.fcc.folder) {
-            verify_mailbox(sscript, c->u.n.fcc.folder);
+        if (c->u.n.fcc.t.folder) {
+            verify_mailbox(sscript, c->u.n.fcc.t.folder);
             if (c->u.n.fcc.flags && !_verify_flaglist(c->u.n.fcc.flags)) {
                 strarray_add(c->u.n.fcc.flags, "");
             }
         }
         else if (c->u.n.fcc.create || c->u.n.fcc.flags ||
-                 c->u.n.fcc.specialuse || c->u.n.fcc.mailboxid) {
+                 c->u.n.fcc.t.specialuse || c->u.n.fcc.t.mailboxid) {
             sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
         }
 
@@ -2835,7 +2855,7 @@ static commandlist_t *build_notify(sieve_script_t *sscript, int t,
         if (c->u.n.from != NULL) {
             sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":from");
         }
-        if (c->u.n.fcc.folder != NULL) {
+        if (c->u.n.fcc.t.folder != NULL) {
             sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":fcc");
         }
         if (c->u.n.fcc.create != 0) {
@@ -2844,7 +2864,7 @@ static commandlist_t *build_notify(sieve_script_t *sscript, int t,
         if (c->u.n.fcc.flags != NULL) {
             sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":flags");
         }
-        if (c->u.n.fcc.specialuse != NULL) {
+        if (c->u.n.fcc.t.specialuse != NULL) {
             sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":specialuse");
         }
 
@@ -2945,6 +2965,22 @@ static commandlist_t *build_imip(sieve_script_t *sscript, commandlist_t *c)
                              c->u.imip.calendarid,
                              c->u.imip.outcome_var,
                              c->u.imip.errstr_var);
+
+    return c;
+}
+
+static commandlist_t *build_ikeep_target(sieve_script_t *sscript,
+                                         commandlist_t *c, char *folder)
+{
+    assert(c && c->type == B_IKEEP_TARGET);
+
+    verify_mailbox(sscript, folder);
+    c->u.ikt.folder = folder;
+
+    c->nargs = bc_precompile(c->args, "sss",
+                             c->u.ikt.mailboxid,
+                             c->u.ikt.specialuse,
+                             c->u.ikt.folder);
 
     return c;
 }

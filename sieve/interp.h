@@ -90,8 +90,14 @@ struct sieve_interp {
     /* time when allocated */
     time_t time;
 
-    /* have we addedd/deleted any headers? */
+    /* have we added/deleted any headers? */
     unsigned edited_headers : 1;
+
+    struct {
+        const char *folder;
+        const char *mailboxid;
+        const char *specialuse;
+    } ikeep;
 };
 
 
@@ -219,6 +225,9 @@ enum sieve_capa_flag {
 
     /* iMIP - vnd.cyrus.imip */
     SIEVE_CAPA_IMIP         = 1LL<<50,
+
+    /* vnd.cyrus.implicit_keep_target */
+    SIEVE_CAPA_IKEEP_TARGET = 1LL<<51,
 };
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
@@ -271,6 +280,7 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_JMAPQUERY    \
                         | SIEVE_CAPA_SNOOZE       \
                         | SIEVE_CAPA_IMIP         \
+                        | SIEVE_CAPA_IKEEP_TARGET \
                         )
 
 #define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODED_CHAR | SIEVE_CAPA_VARIABLES)
