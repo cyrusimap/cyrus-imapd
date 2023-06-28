@@ -7119,7 +7119,7 @@ static int eventquery_run(jmap_req_t *req,
 {
     time_t before = caldav_eternity;
     time_t after = caldav_epoch;
-    int r = HTTP_NOT_IMPLEMENTED;
+    int r = 0, r_db = 0;
     enum caldav_sort *sort = NULL;
     struct buf buf = BUF_INITIALIZER;
     size_t nsort = 0;
@@ -7176,7 +7176,7 @@ static int eventquery_run(jmap_req_t *req,
         struct eventquery_fastpath_rock rock = {
             req, query, is_sharee, BUF_INITIALIZER
         };
-        r = caldav_foreach_jscal(db, req->userid, jscal_filter, NULL,
+        r_db = caldav_foreach_jscal(db, req->userid, jscal_filter, NULL,
                 sort, nsort, eventquery_fastpath_cb, &rock);
         buf_free(&rock.buf);
         is_fastpath = 1;
@@ -7197,11 +7197,12 @@ static int eventquery_run(jmap_req_t *req,
         };
 
         enum caldav_sort mboxsort = CAL_SORT_MAILBOX;
-        r = caldav_foreach_jscal(db, req->userid, jscal_filter, NULL,
+        r_db = caldav_foreach_jscal(db, req->userid, jscal_filter, NULL,
                                      args.expandrecur ? &mboxsort : sort,
                                      args.expandrecur ? 1 : nsort,
                                      eventquery_cb, &rock);
         jmap_closembox(req, &rock.mailbox);
+        if (r_db) goto done;
     }
 
     if (args.expandrecur) {
@@ -7300,6 +7301,12 @@ static int eventquery_run(jmap_req_t *req,
     }
 
 done:
+    if (r_db == SQLDB_ERR_LIMIT && !*err) {
+        *err = json_pack("{s:s}", "type", "unsupportedFilter");
+    }
+    else if (r_db) {
+        r = HTTP_SERVER_ERROR;
+    }
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION) && !*err) {
         *debug = json_pack("{s:b}", "isFastPath", is_fastpath);
     }
