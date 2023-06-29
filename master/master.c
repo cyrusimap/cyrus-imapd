@@ -2131,7 +2131,7 @@ static void add_daemon(const char *name, struct entry *e, void *rock)
 
     if (waitdaemon) {
         add_waitdaemon(name, e, rock);
-        return;
+        goto done;
     }
 
     if (maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
@@ -2222,7 +2222,6 @@ static void add_daemon(const char *name, struct entry *e, void *rock)
 
 done:
     free(cmd);
-    return;
 }
 
 static void add_service(const char *name, struct entry *e, void *rock)
