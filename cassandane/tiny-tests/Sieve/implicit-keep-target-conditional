@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_implicit_keep_target_conditional
+    :min_version_3_9 :needs_component_sieve :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $folder1 = "INBOX.foo";
+    my $folder2 = "INBOX.bar";
+
+    xlog $self, "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder1)
+        or die "Cannot create $folder1: $@";
+    $imaptalk->create($folder2)
+        or die "Cannot create $folder2: $@";
+
+    xlog $self, "Install a script";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["vnd.cyrus.implicit_keep_target", "ihave"];
+implicit_keep_target "$folder1";
+if header :comparator "i;ascii-casemap" :is "Subject" "bar" {
+   # special implicit keep target
+   implicit_keep_target "$folder2";
+}
+elsif header :comparator "i;ascii-casemap" :is "Subject" "keep" {
+   # explicit keep
+   keep;
+}
+elsif header :comparator "i;ascii-casemap" :is "Subject" "error" {
+   # force runtime error
+   error "XXX";
+}
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+    $msg1->set_attribute(uid => 1);
+
+    xlog $self, "Check that the message made it to $folder1";
+    $self->{store}->set_folder($folder1);
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog $self, "Deliver a message";
+    my $msg2 = $self->{gen}->generate(subject => "bar");
+    $self->{instance}->deliver($msg2);
+    $msg2->set_attribute(uid => 1);
+
+    xlog $self, "Check that the message made it to $folder2";
+    $self->{store}->set_folder($folder2);
+    $self->check_messages({ 1 => $msg2 }, check_guid => 0);
+
+    xlog $self, "Deliver a message";
+    $msg1 = $self->{gen}->generate(subject => "keep");
+    $self->{instance}->deliver($msg1);
+    $msg1->set_attribute(uid => 1);
+
+    xlog $self, "Deliver a message";
+    $msg2 = $self->{gen}->generate(subject => "error");
+    $self->{instance}->deliver($msg2);
+    $msg2->set_attribute(uid => 2);
+
+    xlog $self, "Check that the messages made it to INBOX";
+    $self->{store}->set_folder("INBOX");
+    $self->check_messages({ 1 => $msg1, 2 => $msg2 }, check_guid => 0);
+}
