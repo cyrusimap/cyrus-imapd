@@ -1746,7 +1746,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 
             if (i->edited_headers) i->getheadersection(m, &headers);
 
-            res = do_keep(i, sc, actions, actionflags, headers);
+            res = do_keep(i, sc, 0 /*implicit*/, actions, actionflags, headers);
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Keep can not be used with Reject";
             else
@@ -1798,6 +1798,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             const char *mailboxid = cmd.u.f.t.mailboxid;
             const char *specialuse = cmd.u.f.t.specialuse;
             struct buf *headers = NULL;
+            unsigned flags = 0;
+
+            if (!cmd.u.f.copy) flags |= CANCEL_KEEP;
+            if (cmd.u.f.create) flags |= CREATE_MAILBOX;
 
             if (requires & BFE_VARIABLES) {
                 folder = parse_string(folder, variables);
@@ -1816,8 +1820,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             if (i->edited_headers) i->getheadersection(m, &headers);
 
             res = do_fileinto(i, sc, actions, folder, specialuse,
-                              !cmd.u.f.copy, cmd.u.f.create, mailboxid,
-                              actionflags, headers);
+                              flags, mailboxid, actionflags, headers);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Fileinto can not be used with Reject";
@@ -2164,8 +2167,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             sieve_fileinto_context_t fcc = {
                 cmd.u.v.fcc.t.folder,
                 cmd.u.v.fcc.t.specialuse,
-                NULL,
+                /*imapflags*/NULL,
                 cmd.u.v.fcc.create,
+                /*implicit keep target*/0,
                 cmd.u.v.fcc.t.mailboxid,
                 /*headers*/NULL,
                 /*resolved_mailbox*/NULL
@@ -2575,11 +2579,11 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 
         if (i->ikeep.folder) {
             res = do_fileinto(i, sc, actions, i->ikeep.folder,
-                              i->ikeep.specialuse, 1, 0, i->ikeep.mailboxid,
-                              actionflags, headers);
+                              i->ikeep.specialuse, IMPLICIT_KEEP | CANCEL_KEEP,
+                              i->ikeep.mailboxid, actionflags, headers);
         }
         else {
-            res = do_keep(i, sc, actions, actionflags, headers);
+            res = do_keep(i, sc, IMPLICIT_KEEP, actions, actionflags, headers);
         }
 
         implicit_keep = 0;

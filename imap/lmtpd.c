@@ -489,6 +489,7 @@ int deliver_mailbox(FILE *f,
                     char *id,
                     const char *user,
                     char *notifyheader,
+                    unsigned mode,
                     const char *mailboxname,
                     char *date,
                     time_t savedate,
@@ -597,8 +598,34 @@ int deliver_mailbox(FILE *f,
             if (!r) {
                 /* dupelim after commit, but while mailbox is still
                  * locked to avoid race condition */
-                syslog(LOG_INFO, "Delivered: %s to mailbox: %s",
-                       id, mailboxname);
+                const char *action = "no-sieve", *target = "default";
+
+                switch (mode & ACTION_MASK) {
+                case ACTION_SIEVE_ERROR:
+                    action = "sieve-error";
+                    break;
+                case ACTION_IMPLICIT:
+                    action = "implicit";
+                    break;
+                case ACTION_KEEP:
+                    action = "keep";
+                    break;
+                case ACTION_FILEINTO:
+                    action = "fileinto";
+                    break;
+                case ACTION_SNOOZE:
+                    action = "snooze";
+                    break;
+                }
+                if (mode & TARGET_PLUS_ADDR) target = "plus-addr";
+                else if (mode & TARGET_FUZZY) target = "fuzzy";
+                else if (mode & TARGET_SET) target = "set";
+
+                syslog(LOG_INFO, "Delivered: sessionid=<%s>"
+                       " action=<%s> target=<%s>"
+                       " messageid=%s userid=<%s> mailbox=<%s> uniqueid=<%s>",
+                       session_id(), action, target, id, user,
+                       mailbox_name(mailbox), mailbox_uniqueid(mailbox));
                 if (dupelim && id)
                     duplicate_mark(&dkey, time(NULL), as.baseuid);
             }
@@ -722,6 +749,7 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
 {
     message_data_t *md = mydata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
+    unsigned mode = ACTION_NO_SIEVE;
     int ret = 1;
 
     /* case 1: shared mailbox request */
@@ -730,32 +758,29 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
                                md->size, imap4flags, NULL,
                                mydata->authuser, mydata->authstate, md->id,
                                NULL, mydata->notifyheader,
-                               mbname_intname(origmbname), md->date,
+                               mode, mbname_intname(origmbname), md->date,
                                0 /*savedate*/, quotaoverride, 0);
     }
 
     mbname_t *mbname = mbname_dup(origmbname);
 
     if (strarray_size(mbname_boxes(mbname))) {
+        ret = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+        if (!ret) mode |= TARGET_PLUS_ADDR;
+        else if (ret == IMAP_MAILBOX_NONEXISTENT &&
+                 config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
+                 fuzzy_match(mbname)) {
+            /* try delivery to a fuzzy matched mailbox */
+            ret = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+            if (!ret) mode |= TARGET_FUZZY;
+        }
+
         ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
                               md->size, imap4flags, NULL,
                               mydata->authuser, mydata->authstate, md->id,
                               mbname_userid(mbname), mydata->notifyheader,
-                              mbname_intname(mbname), md->date,
+                              mode, mbname_intname(mbname), md->date,
                               0 /*savedate*/, quotaoverride, 0);
-
-        if (ret == IMAP_MAILBOX_NONEXISTENT &&
-            config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH)) {
-            if (fuzzy_match(mbname)) {
-                /* try delivery to a fuzzy matched mailbox */
-                ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                                      md->size, imap4flags, NULL,
-                                      mydata->authuser, mydata->authstate, md->id,
-                                      mbname_userid(mbname), mydata->notifyheader,
-                                      mbname_intname(mbname), md->date,
-                                      0 /*savedate*/, quotaoverride, 0);
-            }
-        }
     }
 
     if (ret) {
@@ -763,11 +788,12 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
         mbname_truncate_boxes(mbname, 0);
         struct auth_state *authstate = auth_newstate(mbname_userid(mbname));
 
+        mode &= ACTION_MASK;
         ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
                               md->size, imap4flags, NULL,
                               mbname_userid(mbname), authstate, md->id,
                               mbname_userid(mbname), mydata->notifyheader,
-                              mbname_intname(mbname), md->date,
+                              mode, mbname_intname(mbname), md->date,
                               0 /*savedate*/, quotaoverride, 1);
 
         if (authstate) auth_freestate(authstate);

@@ -165,7 +165,7 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, const char *awaken_mbox
  */
 int do_fileinto(sieve_interp_t *i, void *sc,
                 action_list_t *a, const char *mbox, const char *specialuse,
-                int cancel_keep, int do_create, const char *mailboxid,
+                unsigned flags, const char *mailboxid,
                 strarray_t *imapflags, struct buf *headers)
 {
     action_list_t *new, *b = NULL;
@@ -176,11 +176,12 @@ int do_fileinto(sieve_interp_t *i, void *sc,
 
     new = new_action_list();
     new->a = ACTION_FILEINTO;
-    new->cancel_keep |= cancel_keep;
+    new->cancel_keep |= (flags & CANCEL_KEEP);
     new->u.fil.mailbox = mbox;
     new->u.fil.specialuse = specialuse;
     new->u.fil.imapflags = imapflags;
-    new->u.fil.do_create = do_create;
+    new->u.fil.do_create = !!(flags & CREATE_MAILBOX);
+    new->u.fil.ikeep_target = !!(flags & IMPLICIT_KEEP);
     new->u.fil.mailboxid = mailboxid;
     new->u.fil.headers = headers;
     new->u.fil.resolved_mailbox = NULL;
@@ -272,7 +273,7 @@ int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
  *
  * incompatible with: [e]reject
  */
-int do_keep(sieve_interp_t *i, void *sc,
+int do_keep(sieve_interp_t *i, void *sc, unsigned flags,
             action_list_t *a, strarray_t *imapflags, struct buf *headers)
 {
     action_list_t *new, *b = NULL;
@@ -282,6 +283,7 @@ int do_keep(sieve_interp_t *i, void *sc,
     new = new_action_list();
     new->a = ACTION_KEEP;
     new->cancel_keep = 1;
+    new->u.keep.implicit = !!(flags & IMPLICIT_KEEP);
     new->u.keep.imapflags = imapflags;
     new->u.keep.headers = headers;
     new->u.keep.resolved_mailbox = NULL;

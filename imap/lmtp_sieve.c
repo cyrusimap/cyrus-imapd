@@ -1134,6 +1134,9 @@ static int sieve_fileinto(void *ac,
     message_data_t *md = mdata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
     struct imap4flags imap4flags = { fc->imapflags, sd->authstate };
+    unsigned mode = ACTION_FILEINTO;
+
+    if (fc->ikeep_target) mode = ACTION_IMPLICIT | TARGET_SET;
 
     if (fc->headers) {
         mdata = setup_special_delivery(mdata, fc->headers);
@@ -1146,7 +1149,7 @@ static int sieve_fileinto(void *ac,
 
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                           &imap4flags, NULL, userid, sd->authstate, md->id,
-                          userid, mdata->notifyheader,
+                          userid, mdata->notifyheader, mode,
                           intname, md->date, 0 /*savedate*/, quotaoverride, 0);
 
     if (ret == IMAP_MAILBOX_NONEXISTENT) {
@@ -1170,7 +1173,7 @@ static int sieve_fileinto(void *ac,
 
             ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                                   &imap4flags, NULL, userid, sd->authstate, md->id,
-                                  userid, mdata->notifyheader,
+                                  userid, mdata->notifyheader, mode,
                                   intname, md->date, 0 /*savedate*/, quotaoverride, 0);
         }
     }
@@ -1383,7 +1386,7 @@ static int sieve_snooze(void *ac,
     struct imap4flags imap4flags = { imapflags, sd->authstate };
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                           &imap4flags, annots, userid, sd->authstate, md->id,
-                          userid, mdata->notifyheader,
+                          userid, mdata->notifyheader, ACTION_SNOOZE,
                           intname, md->date, until, quotaoverride, 0);
 
     strarray_free(imapflags);
@@ -1707,6 +1710,7 @@ static int sieve_keep(void *ac,
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;
     int ret = IMAP_MAILBOX_NONEXISTENT;
+    static unsigned mode = ACTION_KEEP;
 
     const char *userid = mbname_userid(sd->mbname);
     char *intname = NULL;
@@ -1715,6 +1719,8 @@ static int sieve_keep(void *ac,
         intname = xstrdup(kc->resolved_mailbox);
     }
     else {
+        mode = kc->implicit ? ACTION_IMPLICIT : ACTION_KEEP;
+
         if (!userid) {
             /* shared mailbox request */
             ret = mboxlist_lookup(mbname_intname(sd->mbname), NULL, NULL);
@@ -1725,11 +1731,13 @@ static int sieve_keep(void *ac,
 
             if (strarray_size(mbname_boxes(mbname))) {
                 ret = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
-                if (ret &&
-                    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
-                    fuzzy_match(mbname)) {
+                if (!ret) mode |= TARGET_PLUS_ADDR;
+                else if (ret == IMAP_MAILBOX_NONEXISTENT &&
+                         config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
+                         fuzzy_match(mbname)) {
                     /* try delivery to a fuzzy matched mailbox */
                     ret = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+                    if (!ret) mode |= TARGET_FUZZY;
                 }
             }
             if (ret) {
@@ -1779,7 +1787,7 @@ static int sieve_keep(void *ac,
 
     ret = deliver_mailbox(md->f, mydata->content, mydata->stage, md->size,
                           &imap4flags, NULL, authuser, authstate, md->id,
-                          userid, mydata->notifyheader, intname, md->date,
+                          userid, mydata->notifyheader, mode, intname, md->date,
                           0 /*savedate*/, quotaoverride, acloverride);
 
     if (freeme) auth_freestate(freeme);
