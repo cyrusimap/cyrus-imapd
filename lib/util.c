@@ -1120,6 +1120,24 @@ EXPORTED const char *buf_cstring(const struct buf *buf)
     return buf->s;
 }
 
+EXPORTED const char *buf_cstringnull(const struct buf *buf)
+{
+    if (!buf->s) return NULL;
+    return buf_cstring(buf);
+}
+
+EXPORTED const char *buf_cstringnull_ifempty(const struct buf *buf)
+{
+    if (!buf->len) return NULL;
+    return buf_cstring(buf);
+}
+
+EXPORTED const char *buf_cstring_or_empty(const struct buf *buf)
+{
+    if (!buf->s) return "";
+    return buf_cstring(buf);
+}
+
 EXPORTED char *buf_newcstring(struct buf *buf)
 {
     char *ret = xstrdup(buf_cstring(buf));
@@ -1134,18 +1152,6 @@ EXPORTED char *buf_release(struct buf *buf)
     buf->s = NULL;
     buf_free(buf);
     return ret;
-}
-
-EXPORTED const char *buf_cstringnull(const struct buf *buf)
-{
-    if (!buf->s) return NULL;
-    return buf_cstring(buf);
-}
-
-EXPORTED const char *buf_cstringnull_ifempty(const struct buf *buf)
-{
-    if (!buf->len) return NULL;
-    return buf_cstring(buf);
 }
 
 EXPORTED char *buf_releasenull(struct buf *buf)
