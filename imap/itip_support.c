@@ -517,6 +517,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
             /* Lookup RECURRENCE-ID in RDATE hash table */
             if (!hash_lookup(icaltime_as_ical_string(recurid), &rdate_table)) {
                 int i, valid = 0, size = ptrarray_size(&rrules);
+                icaltimetype this;
 
                 /* Does it correspond to an occurrence of an RRULE? */
                 for (i = 0; !valid && i < size; i++) {
@@ -524,9 +525,14 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                     icalrecur_iterator *ritr =
                         icalrecur_iterator_new(*rrule, dtstart);
 
-                    icalrecur_iterator_set_start(ritr, recurid);
-                    valid = !icaltime_compare(recurid,
-                                              icalrecur_iterator_next(ritr));
+                    for (this = icalrecur_iterator_next(ritr);
+                         !icaltime_is_null_time(this);
+                         this = icalrecur_iterator_next(ritr)) {
+                        int diff = icaltime_compare(recurid, this);
+                        if (diff > 0) continue;
+                        if (!diff) valid = 1;
+                        break;
+                    }
                     icalrecur_iterator_free(ritr);
                 }
 
