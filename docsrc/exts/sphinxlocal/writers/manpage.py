@@ -38,7 +38,7 @@ class CyrusManualPageWriter(ManualPageWriter):
         self.builder = builder
 
     def translate(self):
-        visitor = CyrusManualPageTranslator(self.builder, self.document)
+        visitor = CyrusManualPageTranslator(self.document, self.builder)
         self.visitor = visitor
         self.document.walkabout(visitor)
         self.output = visitor.astext()
@@ -49,8 +49,8 @@ class CyrusManualPageTranslator(BaseTranslator):
     Custom translator.
     """
 
-    def __init__(self, builder, *args, **kwds):
-        BaseTranslator.__init__(self, builder, *args, **kwds)
+    def __init__(self, document, builder, *args, **kwds):
+        BaseTranslator.__init__(self, document, builder, *args, **kwds)
         self.builder = builder
 
         self.in_productionlist = 0
