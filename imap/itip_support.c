@@ -525,11 +525,13 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                     icalrecur_iterator *ritr =
                         icalrecur_iterator_new(*rrule, dtstart);
 
-                    icalrecur_iterator_set_start(ritr, recurid);
                     for (this = icalrecur_iterator_next(ritr);
-                         !valid && !icaltime_is_null_time(this); 
+                         !icaltime_is_null_time(this);
                          this = icalrecur_iterator_next(ritr)) {
-                        valid = !icaltime_compare(recurid, this);
+                        int diff = icaltime_compare(recurid, this);
+                        if (diff > 0) continue;
+                        if (!diff) valid = 1;
+                        break;
                     }
                     icalrecur_iterator_free(ritr);
                 }
