@@ -38,8 +38,10 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <unistd.h>
+#include <limits.h>
+#include <stdint.h>
 #include <sysexits.h>
+#include <unistd.h>
 
 #include "cunit/cyrunit.h"
 
@@ -438,14 +440,44 @@ static const struct duration_parse_data duration_parse_tests[] = {
 
     { "-1", 0, -1 },
     { "-0", 0, 0 },
+    { "-", -1, 0xdeadbeef },
+    { "-s", -1, 0xdeadbeef },
     { "--1", -1, 0xdeadbeef },
     { "-1s", 0, -1 },
     { "-1m", 0, -60 },
     { "1-2m", -1, 0xdeadbeef },
+    { "1m-2s", -1, 0xdeadbeef },
+    { "1m0-2s", -1, 0xdeadbeef },
 
     { "1h1h", 0, 2 * 60 * 60 }, /* silly, but let it work */
     { "1hh", -1, 0xdeadbeef }, /* bogus, reject it */
     { "1hhh", -1, 0xdeadbeef }, /* bogus, reject it */
+
+    /* XXX config_parseduration uses int type and INT_MAX, but these limit
+     * XXX tests use hardcoded strings, which means they'll fail on a platform
+     * XXX where int is something other than 32 bits and has different limits.
+     * XXX I figure we can worry about that later, if/when it ever happens.
+     */
+    /* exercise all the multipliers against overflow */
+    { "2147483647s",   0, INT_MAX },
+    { "2147483648s",  -1, 0xdeadbeef },
+    { "-2147483647s",  0, -INT_MAX },
+    { "-2147483648s", -1, 0xdeadbeef },
+    { "35791394m",     0, 60 * (INT_MAX / 60) },
+    { "35791395m",    -1, 0xdeadbeef },
+    { "-35791394m",    0, -60 * (INT_MAX / 60) },
+    { "-35791395m",   -1, 0xdeadbeef },
+    { "596523h",       0, 3600 * (INT_MAX / 3600) },
+    { "596524h",      -1, 0xdeadbeef },
+    { "-596523h",      0, -3600 * (INT_MAX / 3600) },
+    { "-596524h",     -1, 0xdeadbeef },
+    { "24855d",        0, 86400 * (INT_MAX / 86400) },
+    { "24856d",       -1, 0xdeadbeef },
+    { "-24855d",       0, -86400 * (INT_MAX / 86400) },
+    { "-24856d",      -1, 0xdeadbeef },
+
+    { "24855d3h14m7s", 0, INT_MAX },
+    { "24855d3h14m8s", -1, 0xdeadbeef },
 };
 
 static void test_duration_parse(void)
@@ -734,6 +766,24 @@ static const struct bytesize_parse_data bytesize_parse_tests[] = {
     { "12  K",   0, 12LL * 1024 },
     { "12  KB",  0, 12LL * 1024 },
     { "12  KiB", 0, 12LL * 1024 },
+
+    /* overflow tests */
+    { "9223372036854775807 B", 0, INT64_MAX },
+    { "-9223372036854775808 B", 0, INT64_MIN },
+    { "9223372036854775808 B", -1, 0xdeadbeefLL },
+    { "-9223372036854775809 B", -1, 0xdeadbeefLL },
+    { "9007199254740991 K", 0, 1024LL * (INT64_MAX / 1024LL) },
+    { "-9007199254740992 K", 0, 1024LL * (INT64_MIN / 1024LL) },
+    { "9007199254740992 K", -1, 0xdeadbeefLL },
+    { "-9007199254740993 K", -1, 0xdeadbeefLL },
+    { "8796093022207 M", 0, 1048576LL * (INT64_MAX / 1048576LL) },
+    { "-8796093022208 M", 0, 1048576LL * (INT64_MIN / 1048576LL) },
+    { "8796093022208 M", -1, 0xdeadbeefLL },
+    { "-8796093022209 M", -1, 0xdeadbeefLL },
+    { "8589934591 G", 0, 1073741824LL * (INT64_MAX / 1073741824LL) },
+    { "-8589934592 G", 0, 1073741824LL * (INT64_MIN / 1073741824LL) },
+    { "8589934592 G", -1, 0xdeadbeefLL },
+    { "-8589934593 G", -1, 0xdeadbeefLL },
 };
 
 static void test_bytesize_parse(void)

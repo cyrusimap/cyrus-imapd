@@ -180,6 +180,28 @@ EXPORTED unsigned long config_getbitfield(enum imapopt opt)
     return imapopts[opt].val.x;
 }
 
+static inline int accumulate(int *val, int mult, int nextchar,
+                             struct buf *parse_err)
+{
+    int newdigit = 0;
+
+    assert(val != NULL);
+
+    if (cyrus_isdigit(nextchar)) newdigit = nextchar - '0';
+
+    if (*val > INT_MAX / mult
+        || (*val == INT_MAX / mult
+            && newdigit > INT_MAX % mult))
+    {
+        if (parse_err)
+            buf_printf(parse_err, "would overflow at '%c'", nextchar);
+        return -1;
+    }
+
+    *val = *val * mult + newdigit;
+    return 0;
+}
+
 /* Parse a duration value, converted to seconds.
  *
  * defunit is one of 'd', 'h', 'm', 's' and determines how
@@ -198,6 +220,7 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
     const char *p;
     int accum = 0, duration = 0, neg = 0, sawdigit = 0, r = 0;
     char *copy = NULL;
+    struct buf parse_err = BUF_INITIALIZER;
 
     /* the default default unit is seconds */
     if (!defunit) defunit = 's';
@@ -210,40 +233,51 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
 
     p = copy;
     if (*p == '-') {
+        if (!cyrus_isdigit(p[1])) {
+            buf_setcstr(&parse_err, "no digit after '-'");
+            r = -1;
+            goto done;
+        }
         neg = 1;
         p++;
     }
     for (; *p; p++) {
         if (cyrus_isdigit(*p)) {
-            accum *= 10;
-            accum += (*p - '0');
+            r = accumulate(&accum, 10, *p, &parse_err);
+            if (r) goto done;
             sawdigit = 1;
         }
         else {
             if (!sawdigit) {
-                syslog(LOG_DEBUG, "%s: no digit before '%c' in '%s'",
-                                  __func__, *p, str);
+                buf_printf(&parse_err, "no digit before '%c'", *p);
                 r = -1;
                 goto done;
             }
             sawdigit = 0;
             switch (*p) {
             case 'd':
-                accum *= 24;
+                r = accumulate(&accum, 24, *p, &parse_err);
+                if (r) goto done;
                 /* fall through */
             case 'h':
-                accum *= 60;
+                r = accumulate(&accum, 60, *p, &parse_err);
+                if (r) goto done;
                 /* fall through */
             case 'm':
-                accum *= 60;
+                r = accumulate(&accum, 60, *p, &parse_err);
+                if (r) goto done;
                 /* fall through */
             case 's':
+                if (duration > INT_MAX - accum) {
+                    buf_printf(&parse_err, "would overflow at '%c'", *p);
+                    r = -1;
+                    goto done;
+                }
                 duration += accum;
                 accum = 0;
                 break;
             default:
-                syslog(LOG_DEBUG, "%s: bad unit '%c' in %s",
-                                  __func__, *p, str);
+                buf_printf(&parse_err, "bad unit '%c'", *p);
                 r = -1;
                 goto done;
             }
@@ -257,7 +291,14 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
     if (out_duration) *out_duration = duration;
 
 done:
-    if (copy) free(copy);
+    if (r) {
+        xsyslog(LOG_ERR, "unable to parse duration from string",
+                         "value=<%s> parse_err=<%s>",
+                         str, buf_cstring_or_empty(&parse_err));
+    }
+
+    buf_free(&parse_err);
+    free(copy);
     return r;
 }
 
@@ -304,6 +345,7 @@ EXPORTED int config_parsebytesize(const char *str,
     int64_t bytesize;
     int i_allowed = 0, r = 0;
     char *copy = NULL, *p;
+    struct buf parse_err = BUF_INITIALIZER;
 
     assert(strchr("BKMG", defunit) != NULL); /* n.b. also permits \0 */
 
@@ -320,8 +362,7 @@ EXPORTED int config_parsebytesize(const char *str,
     errno = 0;
     bytesize = strtoll(copy, &p, 10);
     if (errno) {
-        xsyslog(LOG_ERR, "unable to parse byte size from string",
-                         "value=<%s>", str);
+        buf_setcstr(&parse_err, strerror(errno));
         errno = 0;
         r = -1;
         goto done;
@@ -329,17 +370,8 @@ EXPORTED int config_parsebytesize(const char *str,
 
     /* better be some digits */
     if (p == copy) {
-        struct buf msg = BUF_INITIALIZER;
-
-        buf_appendcstr(&msg, "no digit ");
-        if (*p) {
-            buf_printf(&msg, "before '%c' ", *p);
-        }
-        buf_printf(&msg, "in '%s'", str);
-
-        syslog(LOG_DEBUG, "%s: %s", __func__, buf_cstring(&msg));
-        buf_free(&msg);
-
+        buf_setcstr(&parse_err, "no digit");
+        if (*p) buf_printf(&parse_err, " before '%c'", *p);
         r = -1;
         goto done;
     }
@@ -351,14 +383,29 @@ EXPORTED int config_parsebytesize(const char *str,
     switch (*p) {
     case 'g':
     case 'G':
+        if (bytesize > INT64_MAX / 1024 || bytesize < INT64_MIN / 1024) {
+            buf_printf(&parse_err, "would overflow at '%c'", *p);
+            r = -1;
+            goto done;
+        }
         bytesize *= 1024;
         /* fall through */
     case 'm':
     case 'M':
+        if (bytesize > INT64_MAX / 1024 || bytesize < INT64_MIN / 1024) {
+            buf_printf(&parse_err, "would overflow at '%c'", *p);
+            r = -1;
+            goto done;
+        }
         bytesize *= 1024;
         /* fall through */
     case 'k':
     case 'K':
+        if (bytesize > INT64_MAX / 1024 || bytesize < INT64_MIN / 1024) {
+            buf_printf(&parse_err, "would overflow at '%c'", *p);
+            r = -1;
+            goto done;
+        }
         bytesize *= 1024;
         i_allowed = 1;
         p++;
@@ -373,15 +420,22 @@ EXPORTED int config_parsebytesize(const char *str,
 
     /* we'd better be at end of string! */
     if (*p) {
-        syslog(LOG_DEBUG, "%s: bad unit '%c' in %s",
-                          __func__, *p, str);
+        buf_printf(&parse_err, "bad unit '%c'", *p);
         r = -1;
         goto done;
     }
 
 done:
-    if (!r && out_bytesize) *out_bytesize = bytesize;
+    if (r) {
+        xsyslog(LOG_ERR, "unable to parse bytesize from string",
+                         "value=<%s> parse_err=<%s>",
+                         str, buf_cstring_or_empty(&parse_err));
+    }
+    else if (out_bytesize) {
+        *out_bytesize = bytesize;
+    }
 
+    buf_free(&parse_err);
     free(copy);
     return r;
 }
