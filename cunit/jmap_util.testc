@@ -13,7 +13,7 @@ static void test_patchobject_create(void)
         json_t *jdst = json_loads(dst, JSON_DECODE_ANY, NULL); \
         \
         json_t *jwant = json_loads(want, JSON_DECODE_ANY, NULL); \
-        json_t *jdiff = jmap_patchobject_create(jsrc, jdst); \
+        json_t *jdiff = jmap_patchobject_create(jsrc, jdst, 0); \
         CU_ASSERT_PTR_NOT_NULL(jdiff); \
         \
         char *swant = json_dumps(jwant, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
