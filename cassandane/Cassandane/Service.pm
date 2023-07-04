@@ -57,13 +57,19 @@ sub new
         if (exists $params{host});
     my $port = delete $params{port};
     my $type = delete $params{type} || 'unknown';
+    my $instance = delete $params{instance};
 
     my $self = $class->SUPER::new(%params);
+
+    # GenericListener is a bit different from MasterEntry et al, and must
+    # always have a config specified, so pass through the default explicitly
+    my $listener_config = $params{config} || $instance->{config};
 
     $self->{_listener} = Cassandane::GenericListener->new(
                             name => $params{name},
                             host => $host,
-                            port => $port);
+                            port => $port,
+                            config => $listener_config);
     $self->{type} = $type;
 
     return $self;

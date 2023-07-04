@@ -87,7 +87,7 @@ sub master_params
 {
     my ($self) = @_;
     my $params = {};
-    foreach my $a ('name', 'argv', $self->_otherparams())
+    foreach my $a ('name', 'argv', 'config', $self->_otherparams())
     {
         $params->{$a} = $self->{$a}
             if defined $self->{$a};
@@ -99,7 +99,7 @@ sub set_master_param
 {
     my ($self, $param, $value) = @_;
 
-    foreach my $a ('name', 'argv', $self->_otherparams())
+    foreach my $a ('name', 'argv', 'config', $self->_otherparams())
     {
         $self->{$a} = $value
             if ($a eq $param);

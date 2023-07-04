@@ -40,7 +40,9 @@
 package Cassandane::Cyrus::Autocreate;
 use strict;
 use warnings;
+use Cwd qw(getcwd);
 use Data::Dumper;
+use File::Temp qw(tempdir);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -163,6 +165,57 @@ sub test_autocreate_acl
         my $res = $talk->getacl($folder);
         $self->assert_deep_equals($folder_acls{$folder}, $res);
     }
+}
+
+sub test_legacymb_already_exists
+    :NoStartInstances :NoAltNamespace
+{
+    my ($self) = @_;
+
+    # want a separate IMAP service with separate config containing
+    # the defaults (no autocreate!) plus mailbox_legacy_dirs: yes
+    my $leg_conf = Cassandane::Config->default()->clone();
+    $leg_conf->set(mailbox_legacy_dirs => 'yes');
+
+    my $leg_svc = $self->{instance}->add_service(
+        name => 'imaplegacymb',
+        config => $leg_conf,
+    );
+
+    # now actually start everything
+    $self->_start_instances();
+
+    # create some mailboxes for user foo under legacy storage
+    my $leg_store = $leg_svc->create_store(username => 'admin',
+                                           type => 'imap');
+    my $leg_talk = $leg_store->get_client();
+
+    $leg_talk->create('user.foo') or die;
+    $leg_talk->setacl('user.foo', foo => 'lrswipkxtecdn') or die;
+    $leg_talk->create('user.foo.bar') or die;
+    $leg_talk->setacl('user.foo.bar', foo => 'lrswipkxtecdn') or die;
+
+    $leg_talk->logout();
+
+    # those mailboxes had better be under legacy storage
+    foreach my $mailbox (qw(user.foo user.foo.bar)) {
+        my $mbpath = $self->{instance}->run_mbpath($mailbox);
+        $self->assert_does_not_match(qr{/uuid/}, $mbpath->{data});
+    }
+
+    # now log in as user foo -- better not get the default
+    # autocreate set!
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store(username => 'foo');
+    my $talk = $store->get_client();
+
+    my $data = $talk->list("", "*");
+
+    $self->assert_mailbox_structure($data, '.', {
+        'INBOX' => '\\HasChildren',
+        'INBOX.bar' => '\\HasNoChildren',
+    });
 }
 
 1;

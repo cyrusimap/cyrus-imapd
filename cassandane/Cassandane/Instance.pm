@@ -431,9 +431,8 @@ sub add_service
         }
     }
 
-    my $srv = Cassandane::ServiceFactory->create(%params);
+    my $srv = Cassandane::ServiceFactory->create(instance => $self, %params);
     $self->{services}->{$name} = $srv;
-    $srv->set_config($self->{config});
     return $srv;
 }
 
@@ -490,9 +489,10 @@ sub add_generic_listener
     die "Already have a generic listener named \"$name\""
         if defined $self->{generic_listeners}->{$name};
 
+    $params{config} //= $self->{config};
+
     my $listener = Cassandane::GenericListener->new(
         name => $name,
-        config => $self->{config},
         %params
     );
 
@@ -505,8 +505,6 @@ sub set_config
     my ($self, $conf) = @_;
 
     $self->{config} = $conf;
-    map { $_->set_config($conf); } (values %{$self->{services}},
-                                    values %{$self->{generic_listeners}});
 }
 
 sub _find_binary
@@ -594,9 +592,11 @@ sub _binary
 
 sub _imapd_conf
 {
-    my ($self) = @_;
+    my ($self, $prefix) = @_;
 
-    return $self->{basedir} . '/conf/imapd.conf';
+    my $fname = $prefix ? "$prefix-imapd.conf" : 'imapd.conf';
+
+    return $self->{basedir} . "/conf/$fname";
 }
 
 sub _master_conf
@@ -680,14 +680,14 @@ sub _build_skeleton
 
 sub _generate_imapd_conf
 {
-    my ($self) = @_;
+    my ($self, $config, $prefix) = @_;
 
     if (defined $self->{services}->{http}) {
         my $davhost = $self->{services}->{http}->host;
         if (defined $self->{services}->{http}->port) {
             $davhost .= ':' . $self->{services}->{http}->port;
         }
-        $self->{config}->set(
+        $config->set(
             webdav_attachments_baseurl => "http://$davhost"
         );
     }
@@ -695,32 +695,31 @@ sub _generate_imapd_conf
     my ($cyrus_major_version, $cyrus_minor_version) =
         Cassandane::Instance->get_version($self->{installation});
 
-    $self->{config}->set_variables(
+    $config->set_variables(
         name => $self->{name},
         basedir => $self->{basedir},
         cyrus_prefix => $self->{cyrus_prefix},
         prefix => getcwd(),
     );
-    $self->{config}->set(
+    $config->set(
         sasl_pwcheck_method => 'saslauthd',
         sasl_saslauthd_path => "$self->{basedir}/run/mux",
         notifysocket => "dlist:$self->{basedir}/run/notify",
         event_notifier => 'pusher',
     );
     if ($cyrus_major_version >= 3) {
-        $self->{config}->set(imipnotifier => 'imip');
-        $self->{config}->set_bits('event_groups',
-                                  'mailbox message flags calendar');
+        $config->set(imipnotifier => 'imip');
+        $config->set_bits('event_groups', 'mailbox message flags calendar');
 
         if ($cyrus_major_version > 3 || $cyrus_minor_version >= 1) {
-            $self->{config}->set(
+            $config->set(
                 smtp_backend => 'host',
                 smtp_host => $self->{smtphost},
             );
         }
     }
     else {
-        $self->{config}->set_bits('event_groups', 'mailbox message flags');
+        $config->set_bits('event_groups', 'mailbox message flags');
     }
     if ($self->{buildinfo}->get('search', 'xapian')) {
         my %xapian_defaults = (
@@ -733,12 +732,13 @@ sub _generate_imapd_conf
             't3searchpartition-default' => "$self->{basedir}/search3",
         );
         while (my ($k, $v) = each %xapian_defaults) {
-            if (not defined $self->{config}->get($k)) {
-                $self->{config}->set($k => $v);
+            if (not defined $config->get($k)) {
+                $config->set($k => $v);
             }
         }
     }
-    $self->{config}->generate($self->_imapd_conf());
+
+    $config->generate($self->_imapd_conf($prefix));
 }
 
 sub _emit_master_entry
@@ -747,6 +747,10 @@ sub _emit_master_entry
 
     my $params = $entry->master_params();
     my $name = delete $params->{name};
+    my $config = delete $params->{config};
+
+    # if this master entry has its own confix, it will have a prefixed name
+    my $imapd_conf = $self->_imapd_conf($config ? $name : undef);
 
     # Convert ->{argv} to ->{cmd}
     my $argv = delete $params->{argv};
@@ -757,7 +761,7 @@ sub _emit_master_entry
     my $bin = shift @args;
     $params->{cmd} = join(' ',
         $self->_binary($bin),
-        '-C', $self->_imapd_conf(),
+        '-C', $imapd_conf,
         @args
     );
 
@@ -776,7 +780,6 @@ sub _generate_master_conf
     my ($self) = @_;
 
     my $filename = $self->_master_conf();
-    my $conf = $self->_imapd_conf();
     open MASTER,'>',$filename
         or die "Cannot open $filename for writing: $!";
 
@@ -873,7 +876,7 @@ sub _add_services_from_cyrus_conf
         }
         if ($in eq 'SERVICES')
         {
-            $self->add_service(name => $name, %params);
+            $self->add_service(instance => $self, name => $name, %params);
         }
     }
 
@@ -1236,7 +1239,21 @@ sub start
         # TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
         $self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
                                                         $self->{cyrus_prefix});
-        $self->_generate_imapd_conf();
+
+        # the main imapd.conf
+        $self->_generate_imapd_conf($self->{config});
+
+        # individual prefix-imapd.conf for master entries that want one
+        foreach my $me (values %{$self->{services}},
+                        values %{$self->{daemons}},
+                        @{$self->{starts}},
+                        @{$self->{events}})
+        {
+            if ($me->{config}) {
+                $self->_generate_imapd_conf($me->{config}, $me->{name});
+            }
+        }
+
         $self->_generate_master_conf();
         $self->install_certificates() if $self->{install_certificates};
         $self->_fix_ownership();
