@@ -41,10 +41,13 @@ package Cassandane::Cyrus::CyrAlarmq;
 use strict;
 use warnings;
 use Data::Dumper;
+use File::Temp qw(tempfile);
+use JSON::XS;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 use charnames ':full';
 
@@ -79,6 +82,23 @@ sub set_up
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
     ]);
+}
+
+sub run_cyr_alarmq
+{
+    my ($instance, @args) = @_;
+
+    my (undef, $filename) = tempfile('cyr_alarmq.XXXXXX',
+                                     OPEN => 0,
+                                     DIR => $instance->get_basedir());
+    $instance->run_command({
+        cyrus => 1,
+        redirects => {
+            stdout => $filename,
+        },
+    }, 'cyr_alarmq', '--json', @args);
+
+    return decode_json(slurp_file($filename));
 }
 
 sub test_cyr_alarmq_json
@@ -191,9 +211,85 @@ sub test_cyr_alarmq_json
     $self->{instance}->set_smtpd();
 
     xlog $self, "XXX running cyr_alarmq...";
-    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_alarmq',
-        '--json',
-    );
+    my $json = run_cyr_alarmq($self->{instance});
+    xlog $self, "XXX json: " . Dumper $json;
+}
+
+sub test_recurring_calendar_alarms
+    :min_version_3_7 :needs_component_calalarmd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 10));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%SZ');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 15));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%SZ');
+
+    # set the trigger to notify us at the start of the event
+    my $trigger = 'PT0S';
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+DTEND:$end
+TRANSP:OPAQUE
+SUMMARY:Simple
+DTSTART:$start
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+RRULE:FREQ=DAILY
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+BEGIN:VALARM
+TRIGGER:$trigger
+ACTION:EMAIL
+SUMMARY: My alarm cassandane
+DESCRIPTION:My alarm has triggered
+ATTENDEE:MAILTO:cassandane\@example.com
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # offset checks a little to avoid races
+    sleep 2;
+
+    # run cyr_alarmq before the first alarms would fire
+    # expect two records -- the next upcoming recurrence of each alarm
+    my $json = run_cyr_alarmq($self->{instance});
+    $self->assert_num_equals(2, scalar @{$json});
+
+    # run again after the first alarms should have fired, but without
+    # having run calalarmd in between
+    # expect four records -- the original two, which are now overdue,
+    # plus the two for the next upcoming recurrence
+    sleep 10;
+    $json = run_cyr_alarmq($self->{instance});
+    $self->assert_num_equals(4, scalar @{$json});
 }
 
 1;
