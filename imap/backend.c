@@ -1255,10 +1255,14 @@ EXPORTED void backend_disconnect(struct backend *s)
     }
 
 #ifdef HAVE_SSL
-    /* Free tlsconn */
+    /* Free tlsconn and tlssess */
     if (s->tlsconn) {
         tls_reset_servertls(&s->tlsconn);
         s->tlsconn = NULL;
+    }
+    if (s->tlssess) {
+        SSL_SESSION_free(s->tlssess);
+        s->tlssess = NULL;
     }
 #endif /* HAVE_SSL */
 
