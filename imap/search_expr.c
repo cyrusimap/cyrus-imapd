@@ -2596,7 +2596,7 @@ static int search_seen_match(message_t *m,
 
 /* ====================================================================== */
 
-static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
+HIDDEN hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
 static int search_attr_initialized = 0;
 
