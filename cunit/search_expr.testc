@@ -18,6 +18,8 @@ static const char *userid = "fred";
 static struct auth_state *authstate = NULL;
 static int isadmin = 0;
 
+extern hash_table attrs_by_name; /* expose some search_expr internals */
+
 #define DATE1_RFC3501   "8-Dec-2012"
 #define DATE1_BEGIN     "1354885200"
 #define DATE1_MID       "1354928400"
@@ -1365,6 +1367,7 @@ static int set_up(void)
 {
     int r;
 
+    /* n.b. initalising like this skips the on-shutdown cleanup... */
     search_attr_init();
 
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
@@ -1384,6 +1387,15 @@ static int set_up(void)
 static int tear_down(void)
 {
     int r;
+
+    /* ... so we need to reach in deep and clean up ourselves */
+    hash_iter *iter = hash_table_iter(&attrs_by_name);
+    while (hash_iter_next(iter)) {
+        struct search_attr *attr = hash_iter_val(iter);
+        if (attr->freeattr) attr->freeattr(&attr);
+    }
+    hash_iter_free(&iter);
+    free_hash_table(&attrs_by_name, NULL);
 
     config_reset();
     restore_tz();
