@@ -401,6 +401,8 @@ static void test_load_factor_warning(void)
     }
     CU_ASSERT_EQUAL(n_words, hash_numrecords(&ht));
     CU_ASSERT_SYSLOG(syslog_index, 2);
+
+    free_hash_table(&ht, NULL);
 }
 
 /* vim: set ft=c: */
