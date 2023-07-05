@@ -2184,6 +2184,8 @@ struct list_one_calendar_icalcomp_rock {
     struct caldav_alarm_data *data;
     const mbname_t *mbname;
     list_calendar_proc proc;
+    time_t lastrun;
+    icaltimezone *floatingtz;
     void *rock;
 };
 
@@ -2202,6 +2204,7 @@ static int list_one_calendar_icalcomp_cb(
     icalproperty *prop;
     icalvalue *val;
     const char *intname, *userid;
+    int listed_future = 0, listed_past = 0;
 
     intname = mbname_intname(lrock->mbname);
     userid = mbname_userid(lrock->mbname);
@@ -2260,8 +2263,7 @@ static int list_one_calendar_icalcomp_cb(
         struct icaltriggertype trigger = icalvalue_get_trigger(val);
         /* XXX validate trigger */
 
-        icaltimetype alarmtime = icaltime_null_time();
-        /* XXX do we want alarmtime? */ (void) alarmtime;
+        icaltimetype tmp = icaltime_null_time();
         unsigned is_duration = (icalvalue_isa(val) == ICAL_DURATION_VALUE);
         if (is_duration) {
             icalparameter *param =
@@ -2271,24 +2273,68 @@ static int list_one_calendar_icalcomp_cb(
                 base = end;
             }
             base.is_date = 0; /* need an actual time for triggers */
-            alarmtime = icaltime_add(base, trigger.duration);
+            tmp = icaltime_add(base, trigger.duration);
         }
         else {
             /* absolute */
-            alarmtime = trigger.time;
+            tmp = trigger.time;
         }
-        alarmtime.is_date = 0;
+        tmp.is_date = 0;
 
-//        send_alarm(data, comp, alarm, start, end, recurid, is_standalone, alarmtime);
-//    FILL_STRING_PARAM(event, EVENT_CALENDAR_ALARM_TIME,
-//                      xstrdup(icaltime_as_ical_string(alarmtime)));
+        time_t alarmtime = icaltime_to_timet(tmp, lrock->floatingtz);
 
-        /* XXX what other fields are useful here? alarmtime? */
+        /* skip already sent alarms */
+        if (alarmtime <= lrock->lastrun) {
+            continue;
+        }
+
+        /* XXX which fields are useful for calendar alarms?
+         * mbname, imap_uid -> as expected
+         * nextcheck -> alarm time
+         * num_rcpts -> can we count how many recipients an EMAIL alarm has?
+         * num_retries -> ???
+         * last_run -> ???
+         * last_err -> ???
+         *
+         * other fields needed here: action (display or email)
+         *
+         * most of the values in lrock->data will be irrelevant here, we need
+         * to use values from the ical data instead
+         *
+         * for EMAIL alarms, calalarmd __does not send an email__.  it posts
+         * an mboxevent with the details of the email to be sent, and the
+         * notify handler handles them however it's set up to.  so passing
+         * the alarm's attendees as num_rcpts could be misleading here, since
+         * calalarmd wouldn't be sending an email
+         */
         lrock->proc(lrock->mbname, lrock->data->imap_uid,
-                    lrock->data->nextcheck, lrock->data->num_rcpts,
+                    alarmtime, lrock->data->num_rcpts,
                     lrock->data->num_retries, lrock->data->last_run,
                     lrock->data->last_err,
                     lrock->rock);
+
+        if (alarmtime > time(NULL)) {
+            listed_future++;
+        }
+        else {
+            listed_past++;
+        }
+
+        if (!is_duration) {
+            /* XXX this feels wrong -- if this recurrence has multiple alarms
+             * XXX and the first one has an absolute trigger, the other ones
+             * XXX will fail to fire because we didn't finish this alarm loop?
+             */
+            /* alarms with absolute triggers can only fire once,
+               so stop recurrence expansion */
+            return 0;
+        }
+    }
+
+    if (listed_future && !listed_past) {
+        /* all of this recurrence's alarms were in the future, so we're
+         * finished listing */
+        return 0;
     }
 
     return 1; /* keep going */
@@ -2308,7 +2354,7 @@ static void list_one_calendar(const mbname_t *mbname,
     struct index_record record = {0};
     struct caldav_db *db = NULL;
     struct caldav_data *cdata = NULL;
-    struct icalperiodtype null_period = icalperiodtype_null_period();
+    struct lastalarm_data lastalarm_data = {0};
     int r;
 
     assert(data->type == ALARM_CALENDAR);
@@ -2373,11 +2419,21 @@ static void list_one_calendar(const mbname_t *mbname,
     /* XXX add default alarms to ical so they can be handled as part of
      * XXX the foreach */
 
-    /* loop over valarms and call caller's proc */
+    /* when did we last send an alarm for the event in this ical file? */
+    if (read_lastalarm(mailbox, &record, &lastalarm_data))
+        lastalarm_data.lastrun = record.internaldate;
+
+    /* expand recurrences and call caller's proc on the contained alarms */
     struct list_one_calendar_icalcomp_rock another_rock = {
-        data, mbname, proc, rock
+        data, mbname, proc, lastalarm_data.lastrun, floatingtz, rock
     };
-    icalcomponent_myforeach(ical, null_period, floatingtz,
+    struct icalperiodtype range = icalperiodtype_null_period();
+    range.start = icaltime_from_timet_with_zone(MIN(lastalarm_data.lastrun,
+                                                    data->nextcheck),
+                                                0 /* is_date */,
+                                                floatingtz /* XXX ? */);
+    range.duration = icaldurationtype_from_int(60 * 60 * 24 * 14); /* 2 weeks */
+    icalcomponent_myforeach(ical, range, floatingtz,
                             list_one_calendar_icalcomp_cb, &another_rock);
 
     /* XXX end of process_alarms() analogue */
@@ -2515,8 +2571,10 @@ EXPORTED int caldav_alarm_list(time_t runtime,
     struct alarm_read_rock alarm_read_rock = {
         PTRARRAY_INITIALIZER,
         runtime,
-        runtime + lookahead,
+        runtime + lookahead, /* n.b. this field ignored if runtime zero */
     };
+
+    /* XXX non-zero runtime not fully thought out wrt calendars */
 
     struct sqldb_bindval bval[] = {
         { ":before",    SQLITE_INTEGER, { .i = alarm_read_rock.next } },
