@@ -665,8 +665,6 @@ static void test_delete(void)
     int r;
     annotate_state_t *astate = NULL;
     struct mboxlist_entry mbentry;
-    strarray_t entries = STRARRAY_INITIALIZER;
-    strarray_t attribs = STRARRAY_INITIALIZER;
     struct entryattlist *ealist = NULL;
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
@@ -686,8 +684,6 @@ static void test_delete(void)
     mbentry.mbtype = 0;
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
-    strarray_append(&entries, COMMENT);
-    strarray_append(&attribs, VALUE_SHARED);
 
     /* set some values */
 
@@ -755,6 +751,7 @@ static void test_delete(void)
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path)), 0);
     mailbox_close(&mailbox);
     buf_free(&val);
+    buf_free(&path);
 }
 
 static void test_rename(void)
