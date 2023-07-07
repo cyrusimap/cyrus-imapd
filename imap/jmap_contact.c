@@ -6667,36 +6667,6 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     }
 
         /* Communications Properties */
-    case VCARD_CONTACTBY_PROPERTY: {
-        const char *key = NULL;
-
-        switch (vcardproperty_get_contactby(prop)) {
-        case VCARD_CONTACTBY_ADR:
-            key = "addresses";
-            break;
-        case VCARD_CONTACTBY_EMAIL:
-            key = "emails";
-            break;
-        case VCARD_CONTACTBY_IMPP:
-            key = "onlineServices";
-            break;
-        case VCARD_CONTACTBY_TEL:
-            key = "phones";
-            break;
-        default:
-            goto unmapped;
-        }
-            
-        json_t *channels = json_object_get_vanew(obj, "contactBy", "{}");
-
-        param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM;
-
-        jprop = json_object();
-
-        json_object_set_new(channels, key, jprop);
-        break;
-    }
-
     case VCARD_EMAIL_PROPERTY: {
         json_t *emails = json_object_get_vanew(obj, "emails", "{}");
 
@@ -9296,39 +9266,6 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
     return prop;
 }
 
-static vcardproperty *_jscontactby_to_card(struct jmap_parser *parser __attribute__((unused)),
-                                           json_t *obj, const char *id,
-                                           vcardcomponent *card __attribute__((unused)),
-                                           void *rock __attribute__((unused)))
-{
-    static vcardproperty_contact_by channel;
-
-    if (obj) {
-        return vcardproperty_new_contactby(channel);
-    }
-
-    /* Convert 'id' to a vCard communication channel value */
-    if (!strcmp("addresses", id)) {
-        channel = VCARD_CONTACTBY_ADR;
-    }
-    else if (!strcmp("emails", id)) {
-        channel = VCARD_CONTACTBY_EMAIL;
-    }
-    else if (!strcmp("onlineServices", id)) {
-        channel = VCARD_CONTACTBY_IMPP;
-    }
-    else if (!strcmp("phones", id)) {
-        channel = VCARD_CONTACTBY_TEL;
-    }
-    else {
-        /* Unknown channel -- fail */
-        return NULL;
-    }
-
-    /* Known channel -- success */
-    return (void *) 1;
-}
-
 static vcardproperty *_jspreflang_to_card(struct jmap_parser *parser __attribute__((unused)),
                                           json_t *obj, const char *id,
                                           vcardcomponent *card __attribute__((unused)),
@@ -10332,12 +10269,6 @@ static int _jscard_to_vcard(struct jmap_req *req,
                                                       WANT_PROPID_FLAG,
                                                       phone_param_props, &l10n,
                                                       card, &crock);
-        }
-        else if (!strcmp(mykey, "contactBy")) {
-            record_is_dirty |= _jspreference_to_card(&parser, jval,
-                                                     mykey, "ContactBy",
-                                                     &_jscontactby_to_card,
-                                                     card);
         }
         else if (!strcmp(mykey, "preferredLanguages")) {
             record_is_dirty |= _jspreference_to_card(&parser, jval,
