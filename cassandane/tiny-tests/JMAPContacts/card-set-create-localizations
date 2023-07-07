@@ -28,7 +28,7 @@ sub test_card_set_create_localizations
             create => {
                 "1" => {
                     '@type' => 'Card',
-                    '@version' => '1.0',
+                    version => '1.0',
                     uid => $id,
                     language => 'es',
                     fullName => 'Gabriel García Márquez',

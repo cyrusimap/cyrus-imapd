@@ -27,7 +27,7 @@ sub test_card_set_create_titles_org
             create => {
                 "1" => {
                     '@type' => 'Card',
-                    '@version' => '1.0',
+                    version => '1.0',
                     uid => $id,
                     fullName => 'Jane Doe',
                     titles => {

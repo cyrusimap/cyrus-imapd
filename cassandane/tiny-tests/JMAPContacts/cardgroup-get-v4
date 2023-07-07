@@ -43,7 +43,7 @@ EOF
     ]);
 
     $self->assert_str_equals('Card', $res->[0][1]{list}[0]{'@type'});
-    $self->assert_str_equals('1.0', $res->[0][1]{list}[0]{'@version'});
+    $self->assert_str_equals('1.0', $res->[0][1]{list}[0]{version});
     $self->assert_str_equals('Default', $res->[0][1]{list}[0]{addressBookId});
     $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
     $self->assert_str_equals($id, $res->[0][1]{list}[0]{uid});
