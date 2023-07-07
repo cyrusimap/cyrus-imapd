@@ -56,7 +56,7 @@ EOF
     ], $res->[0][1]{parsed}{$blobId}{vCardProps});
     $self->assert_str_equals('Forrest Gump', $res->[0][1]{parsed}{$blobId}{fullName});
 
-    $self->assert_null($res->[0][1]{parsed}{$blobId}{'@version'});
+    $self->assert_null($res->[0][1]{parsed}{$blobId}{version});
     $self->assert_null($res->[0][1]{parsed}{$blobId}{updated});
     $self->assert_null($res->[0][1]{parsed}{$blobId}{name});
     $self->assert_null($res->[0][1]{parsed}{$blobId}{anniversaries});

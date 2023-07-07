@@ -48,7 +48,7 @@ EOF
     ]);
 
     $self->assert_str_equals('Card', $res->[0][1]{list}[0]{'@type'});
-    $self->assert_str_equals('1.0', $res->[0][1]{list}[0]{'@version'});
+    $self->assert_str_equals('1.0', $res->[0][1]{list}[0]{version});
     $self->assert_str_equals('Default', $res->[0][1]{list}[0]{addressBookId});
     $self->assert_str_equals($carddav->fullpath() . $href,
                              $res->[0][1]{list}[0]{'cyrusimap.org:href'});
