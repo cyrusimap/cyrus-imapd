@@ -17,7 +17,7 @@ sub test_card_set_state
             create => {
                 "1" => {
                     '@type' => 'Card',
-                    '@version' => '1.0',
+                    version => '1.0',
                     uid => $id,
                     fullName => $name
                 }

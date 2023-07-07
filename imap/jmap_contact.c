@@ -5722,7 +5722,7 @@ static const jmap_property_t card_props[] = {
         0
     },
     {
-        "@version",
+        "version",
         NULL,
         0
     },
@@ -7168,7 +7168,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
                                     struct index_record *record,
                                     unsigned flags)
 {
-    json_t *jcard = json_pack("{s:s s:s}", "@type", "Card", "@version", "1.0");
+    json_t *jcard = json_pack("{s:s s:s}", "@type", "Card", "version", "1.0");
     vcardproperty_version version = VCARD_VERSION_NONE;
     hash_table props_by_name = HASH_TABLE_INITIALIZER;
     hash_table labels = HASH_TABLE_INITIALIZER;
@@ -10141,9 +10141,9 @@ static int _jscard_to_vcard(struct jmap_req *req,
                 jmap_parser_invalid(&parser, "@type");
             }
         }
-        else if (!strcmp(mykey, "@version")) {
+        else if (!strcmp(mykey, "version")) {
             if (strcmpsafe("1.0", json_string_value(jval))) {
-                jmap_parser_invalid(&parser, "@version");
+                jmap_parser_invalid(&parser, "version");
             }
         }
         else if (!strcmp(mykey, "created")) {
