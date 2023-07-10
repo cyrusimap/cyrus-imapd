@@ -75,7 +75,7 @@ sub test_card_copy
 
     my $card =  {
         "addressBookId" => "Default",
-        "fullName"=> "foo bar",
+        name => { full => "foo bar" },
 #        "avatar" => {
 #            "blobId" => $blobid,
 #            "size" => 10,
@@ -116,7 +116,7 @@ sub test_card_copy
             ids => [$cardId],
         }, 'R2'],
     ]);
-    $self->assert_str_equals('foo bar', $res->[0][1]{list}[0]{fullName});
+    $self->assert_str_equals('foo bar', $res->[0][1]{list}[0]{name}{full});
 #    my $blob = $jmap->Download({ accept => 'image/jpeg' },
 #                               'other', $res->[0][1]{list}[0]{avatar}{blobId});
 #    $self->assert_str_equals('image/jpeg',
@@ -124,7 +124,7 @@ sub test_card_copy
 #    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
 #    $self->assert_equals($data, $blob->{content});
 
-    $self->assert_str_equals('foo bar', $res->[1][1]{list}[0]{fullName});
+    $self->assert_str_equals('foo bar', $res->[1][1]{list}[0]{name}{full});
 #    $blob = $jmap->Download({ accept => 'image/jpeg' },
 #                            'cassandane', $res->[1][1]{list}[0]{avatar}{blobId});
 #    $self->assert_str_equals('image/jpeg',
@@ -159,7 +159,7 @@ sub test_card_copy
             ids => [$cardId],
         }, 'R2'],
     ]);
-    $self->assert_str_equals('foo bar', $res->[0][1]{list}[0]{fullName});
+    $self->assert_str_equals('foo bar', $res->[0][1]{list}[0]{name}{full});
     $self->assert_str_equals('xxxxx', $res->[0][1]{list}[0]{nickNames}{n1}{name});
 #    $self->assert_null($res->[0][1]{list}[0]{avatar});
 return;

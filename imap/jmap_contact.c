@@ -5767,11 +5767,6 @@ static const jmap_property_t card_props[] = {
         0
     },
     {
-        "fullName",
-        NULL,
-        0
-    },
-    {
         "name",
         NULL,
         0
@@ -6523,7 +6518,8 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
     case VCARD_FN_PROPERTY:
         prop_value = vcardproperty_get_fn(prop);
-        json_object_set_new(obj, "fullName", jmap_utf8string(prop_value));
+        json_object_set_new(json_object_get_vanew(obj, "name", "{}"),
+                            "full", jmap_utf8string(prop_value));
         break;
 
     case VCARD_N_PROPERTY: {
@@ -6575,10 +6571,12 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         }
 
         if (comps) {
-            jprop = json_pack("{s:o* s:o*}",
-                              "components", comps, "sortAs", sortas);
-            
-            json_object_set_new(obj, "name", jprop);
+            jprop = json_object_get_vanew(obj, "name", "{}");
+            json_object_set_new(jprop, "components", comps);
+
+            if (sortas) {
+                json_object_set_new(jprop, "sortAs", sortas);
+            }
         }
         break;
     }
@@ -7463,12 +7461,6 @@ static void *card_filter_parse(json_t *arg)
     }
 
     /* fullName */
-    if (JNOTNULL(json_object_get(arg, "fullName"))) {
-        const char *s = NULL;
-        if (jmap_readprop(arg, "fullName", 0, NULL, "s", &s) > 0) {
-            f->fullName = contact_textfilter_new(s);
-        }
-    }
     if (JNOTNULL(json_object_get(arg, "name"))) {
         const char *s = NULL;
         if (jmap_readprop(arg, "name", 0, NULL, "s", &s) > 0) {
@@ -7675,7 +7667,7 @@ static int card_comparator_validate(jmap_req_t *req __attribute__((unused)),
         return 0;
     }
     if (!strcmp(comp->property, "uid") ||
-        !strcmp(comp->property, "fullName") ||
+        !strcmp(comp->property, "name") ||
         !strcmp(comp->property, "name/given") ||
         !strcmp(comp->property, "name/surname") ||
         !strcmp(comp->property, "nickName") ||
@@ -7696,7 +7688,7 @@ static void cardgroup_filter_validate(jmap_req_t *req __attribute__((unused)),
     json_t *arg;
 
     json_object_foreach(filter, field, arg) {
-        if (!strcmp(field, "fullName") ||
+        if (!strcmp(field, "name") ||
             !strcmp(field, "member") ||
             !strcmp(field, "text") ||
             !strcmp(field, "uid")) {
@@ -7720,7 +7712,7 @@ static int cardgroup_comparator_validate(jmap_req_t *req __attribute__((unused))
         return 0;
     }
     if (!strcmp(comp->property, "uid") ||
-        !strcmp(comp->property, "fullName")) {
+        !strcmp(comp->property, "name")) {
         return 1;
     }
     return 0;
@@ -7811,6 +7803,29 @@ static const char *jsname_comp(json_t *name, const char *compname,
     }
 
     return buf_cstringnull_ifempty(buf);
+}
+
+static int card_filter_match_fullname(json_t *jentry,
+                                      struct contact_textfilter *propfilter,
+                                      struct contact_textfilter *textfilter,
+                                      ptrarray_t *cached_termsets)
+{
+    /* Skip matching if possible */
+    if (!propfilter &&
+        (!textfilter || contact_textfilter_matched_all(textfilter))) {
+        return 1;
+    }
+
+    /* Combine name component values into text buffer */
+    json_t *name = json_object_get(jentry, "name");
+    const char *val = json_string_value(json_object_get(name, "full"));
+    if (propfilter && !val) return 0;
+
+    /* Evaluate search on text buffer */
+    hash_table *termset = getorset_termset(cached_termsets, "name");
+    int ret = card_filter_match_textval(val, propfilter, textfilter, termset);
+
+    return ret;
 }
 
 static int card_filter_match_namecomp(json_t *jentry, const char *compname,
@@ -7922,7 +7937,7 @@ static int card_filter_match(void *vf, void *rock)
 
     /* Match text filters */
     if (f->text) contact_textfilter_reset(f->text);
-    if (!card_filter_match_textprop(card, "fullName", f->fullName,
+    if (!card_filter_match_fullname(card, f->fullName,
                                     f->text, &cfrock->cached_termsets) ||
         !card_filter_match_namecomp(card, "prefix", f->prefix,
                                     f->text, &cfrock->cached_termsets) ||
@@ -8131,7 +8146,7 @@ static enum contactsquery_sort *cardquery_buildsort(json_t *jsort)
         else if (!strcmp(prop, "organization"))
             sort[i] = CONTACTS_SORT_COMPANY;
         /* Comparators for CardGroup */
-        else if (!strcmp(prop, "fullName"))
+        else if (!strcmp(prop, "name"))
             sort[i] = CONTACTS_SORT_NAME;
 
         if (json_object_get(jcomp, "isAscending") == json_false())
@@ -8216,8 +8231,8 @@ static int cardquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
                 valb = jsorg_sortas(jb, &bufb);
                 break;
             case CONTACTS_SORT_NAME:
-                vala = json_string_value(json_object_get(ja, "fullName"));
-                valb = json_string_value(json_object_get(jb, "fullName"));
+                vala = json_string_value(json_object_get(json_object_get(ja, "name"), "full"));
+                valb = json_string_value(json_object_get(json_object_get(jb, "name"), "full"));
                 break;
         }
 
@@ -8675,8 +8690,8 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
     vcardproperty *prop = NULL;
     const char *key, *val;
     struct buf buf = BUF_INITIALIZER;
-    json_t *jprop, *jsubprop;
-    size_t i, size;
+    json_t *full, *jprop, *jsubprop;
+    size_t i, size = 0;
     int r = 0;
 
     if (!json_is_object(jval)) {
@@ -8692,13 +8707,27 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
         goto done;
     }
 
+    full = json_object_get(jval, "full");
+    if (json_is_string(full)) {
+        prop = vcardproperty_new_fn(json_string_value(full));
+        vcardcomponent_add_property(card, prop);
+
+        if (l10n->lang && *l10n->lang) {
+            vcardproperty_add_parameter(prop,
+                                        vcardparameter_new_language(l10n->lang));
+        }
+    }
+    else if (full) {
+        jmap_parser_invalid(parser, "full");
+        goto done;
+    }
+
     jprop = json_object_get(jval, "components");
-    if (!jprop || !json_is_array(jprop)) {
+    if (!(jprop || full) || (jprop && !(size = json_array_size(jprop)))) {
         jmap_parser_invalid(parser, "components");
         goto done;
     }
 
-    size = json_array_size(jprop);
     for (i = 0; i < size; i++) {
         json_t *comp = json_array_get(jprop, i);
         vcardstrarray **field;
@@ -8782,6 +8811,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
     }
 
     json_object_del(jval, "@type");
+    json_object_del(jval, "full");
     json_object_del(jval, "components");
     json_object_del(jval, "sortAs");
 
@@ -10201,12 +10231,6 @@ static int _jscard_to_vcard(struct jmap_req *req,
         }
 
         /* Name and Organization properties */
-        else if (!strcmp(mykey, "fullName")) {
-            record_is_dirty |= jssimple_to_vcard(&parser, mykey, l10n.lang,
-                                                 jval, card,
-                                                 VCARD_FN_PROPERTY,
-                                                 VCARD_TEXT_VALUE);
-        }
         else if (!strcmp(mykey, "name")) {
             if (!l10n.lang && has_localized_name) {
                 l10n.lang = "";
@@ -10643,7 +10667,8 @@ static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
     const char *logfmt = NULL;
 
     if (kind == CARDDAV_KIND_GROUP) {
-        jmap_readprop(jcard, "fullName", 0, invalid, "s", &name);
+        jmap_readprop(json_object_get(jcard, "name"),
+                      "full", 0, invalid, "s", &name);
         logfmt = "jmap: create group %s/%s/%s (%s)";
     }
     else {
