@@ -46,7 +46,7 @@ sub test_card_set_create_basic
                     prodId => $prodid,
                     kind => 'individual',
                     created => $created,
-                    fullName => $name
+                    name => { full => $name }
                 }
             }
         }, 'R1']

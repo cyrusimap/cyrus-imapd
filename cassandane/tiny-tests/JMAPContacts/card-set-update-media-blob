@@ -29,7 +29,7 @@ sub test_card_set_update_media_blob
                     '@type' => 'Card',
                     version => '1.0',
                     uid => $id,
-                    fullName => 'Jane Doe',
+                    name => { full => 'Jane Doe' },
                     media => {
                         res1 => {
                             '@type' => 'MediaResource',

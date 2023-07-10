@@ -44,7 +44,7 @@ EOF
     my $res = $jmap->CallMethods([
         ['Card/parse', {
             blobIds => [ $blobId ],
-            properties => [ "\@type", "uid", "fullName", "media", "vCardProps" ]
+            properties => [ "\@type", "uid", "name", "media", "vCardProps" ]
         }, 'R1']
     ]);
 
@@ -54,11 +54,10 @@ EOF
     $self->assert_deep_equals([
         [ 'version', {}, 'text', '3.0' ]
     ], $res->[0][1]{parsed}{$blobId}{vCardProps});
-    $self->assert_str_equals('Forrest Gump', $res->[0][1]{parsed}{$blobId}{fullName});
+    $self->assert_str_equals('Forrest Gump', $res->[0][1]{parsed}{$blobId}{name}{full});
 
     $self->assert_null($res->[0][1]{parsed}{$blobId}{version});
     $self->assert_null($res->[0][1]{parsed}{$blobId}{updated});
-    $self->assert_null($res->[0][1]{parsed}{$blobId}{name});
     $self->assert_null($res->[0][1]{parsed}{$blobId}{anniversaries});
     $self->assert_null($res->[0][1]{parsed}{$blobId}{organizations});
     $self->assert_null($res->[0][1]{parsed}{$blobId}{titles});

@@ -58,14 +58,12 @@ EOF
     $self->assert_deep_equals([
         [ 'version', {}, 'text', '3.0' ]
     ], $res->[0][1]{list}[0]{vCardProps});
-    $self->assert_str_equals('Forrest Gump', $res->[0][1]{list}[0]{fullName});
-    $self->assert_deep_equals({
-        'components' => [
-            { 'kind' => 'prefix',  'value' => 'Mr.' },
-            { 'kind' => 'given',   'value' => 'Forrest' },
-            { 'kind' => 'surname', 'value' => 'Gump' }
-        ]
-    }, $res->[0][1]{list}[0]{name});
+    $self->assert_str_equals('Forrest Gump', $res->[0][1]{list}[0]{name}{full});
+    $self->assert_deep_equals([
+        { 'kind' => 'prefix',  'value' => 'Mr.' },
+        { 'kind' => 'given',   'value' => 'Forrest' },
+        { 'kind' => 'surname', 'value' => 'Gump' }
+    ], $res->[0][1]{list}[0]{name}{components});
     $self->assert_deep_equals({
         'kind' => 'birth',
         'date' => { 'year' => 1944, 'month' => 6, 'day' => 7 }

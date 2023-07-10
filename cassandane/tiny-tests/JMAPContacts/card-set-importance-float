@@ -11,7 +11,7 @@ sub test_card_set_importance_float
         ['Card/set', {
             create => {
                 c1 => {
-                    fullName => 'John Doe',
+                    name => { full => 'John Doe' },
                     'cyrusimap.org:importance' => -122.129545321514,
                 },
             },
