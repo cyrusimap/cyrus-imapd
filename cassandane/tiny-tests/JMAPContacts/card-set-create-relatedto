@@ -29,7 +29,7 @@ sub test_card_set_create_relatedto
                     '@type' => 'Card',
                     version => '1.0',
                     uid => $id,
-                    fullName => 'John Doe',
+                    name => { full => 'John Doe' },
                     relatedTo => {
                         'urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6' => {
                             '@type' => 'Relation',

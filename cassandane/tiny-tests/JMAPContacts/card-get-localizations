@@ -58,14 +58,12 @@ EOF
     ]);
     $self->assert_str_equals('es', $res->[0][1]{list}[0]{'language'});
     $self->assert_str_equals('Gabriel García Márquez',
-                             $res->[0][1]{list}[0]{'fullName'});
-    $self->assert_deep_equals({
-        'components' => [
-            { 'kind' => 'given', 'value' => 'Gabriel' },
-            { 'kind' => 'middle', 'value' => 'García' },
-            { 'kind' => 'surname', 'value' => 'Márquez' }
-        ]
-    }, $res->[0][1]{list}[0]{name});
+                             $res->[0][1]{list}[0]{'name'}{'full'});
+    $self->assert_deep_equals([
+        { 'kind' => 'given', 'value' => 'Gabriel' },
+        { 'kind' => 'middle', 'value' => 'García' },
+        { 'kind' => 'surname', 'value' => 'Márquez' }
+    ], $res->[0][1]{list}[0]{name}{components});
     $self->assert_deep_equals({
         't1' => {
             'name' => 'Novelista'
@@ -99,7 +97,7 @@ EOF
     $self->assert_str_equals('lui',
                              $res->[0][1]{list}[0]{localizations}{it}{'speakToAs/pronouns/k19/pronouns'});
     $self->assert_str_equals('ガブリエル・ガルシア・マルケス',
-                             $res->[0][1]{list}[0]{localizations}{jp}{'fullName'});
+                             $res->[0][1]{list}[0]{localizations}{jp}{'name/full'});
     $self->assert_str_equals('東京',
                              $res->[0][1]{list}[0]{localizations}{jp}{'addresses/addr1/locality'});
     $self->assert_deep_equals([

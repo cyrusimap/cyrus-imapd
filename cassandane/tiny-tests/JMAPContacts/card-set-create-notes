@@ -29,7 +29,7 @@ sub test_card_set_create_notes
                     '@type' => 'Card',
                     version => '1.0',
                     uid => $id,
-                    fullName => 'Jane Doe',
+                    name => { full => 'Jane Doe' },
                     notes => {
                         'NOTE-1'  => {
                             '@type' => 'Note',

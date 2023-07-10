@@ -10,7 +10,7 @@ sub test_card_set_importance_zero_byself
 
     xlog $self, "create with no importance";
     my $res = $jmap->CallMethods([['Card/set',
-                                   {create => {"1" => {fullName => "John Doe",
+                                   {create => {"1" => {name => { full => "John Doe" },
                                                        "cyrusimap.org:importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Card/set', $res->[0][0]);
@@ -21,7 +21,7 @@ sub test_card_set_importance_zero_byself
     $self->assert_not_null($fetch);
     $self->assert_str_equals('Card/get', $fetch->[0][0]);
     $self->assert_str_equals('R2', $fetch->[0][2]);
-    $self->assert_str_equals('John Doe', $fetch->[0][1]{list}[0]{fullName});
+    $self->assert_str_equals('John Doe', $fetch->[0][1]{list}[0]{name}{full]);
     $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"cyrusimap.org:importance"});
 
     $res = $jmap->CallMethods([['Card/set',
@@ -35,6 +35,6 @@ sub test_card_set_importance_zero_byself
     $self->assert_not_null($fetch);
     $self->assert_str_equals('Card/get', $fetch->[0][0]);
     $self->assert_str_equals('R4', $fetch->[0][2]);
-    $self->assert_str_equals('John Doe', $fetch->[0][1]{list}[0]{fullName});
+    $self->assert_str_equals('John Doe', $fetch->[0][1]{list}[0]{name}{full});
     $self->assert_num_equals(0, $fetch->[0][1]{list}[0]{"cyrusimap.org:importance"});
 }

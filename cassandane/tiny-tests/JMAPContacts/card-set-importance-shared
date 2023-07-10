@@ -33,7 +33,7 @@ sub test_card_set_importance_shared
     xlog $self, "create contact";
     my $res = $jmap->CallMethods([['Card/set', {
                     accountId => 'manifold',
-                    create => {"1" => {fullName => "John Doe"}}
+                    create => {"1" => {name => { full => "John Doe" }}}
     }, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Card/set', $res->[0][0]);

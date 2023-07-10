@@ -51,7 +51,7 @@ EOF
     $self->assert_deep_equals([
         [ 'version', {}, 'text', '4.0' ]
     ], $res->[0][1]{list}[0]{vCardProps});
-    $self->assert_str_equals('The Doe Family', $res->[0][1]{list}[0]{fullName});
+    $self->assert_str_equals('The Doe Family', $res->[0][1]{list}[0]{name}{full});
     $self->assert_equals(JSON::true,
                          $res->[0][1]{list}[0]{members}{"$member1"});
     $self->assert_equals(JSON::true,

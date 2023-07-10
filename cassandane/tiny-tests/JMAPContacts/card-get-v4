@@ -76,14 +76,12 @@ EOF
         [ 'version', {}, 'text', '4.0' ],
         [ 'gender',  {}, 'text', 'M'   ]
     ], $res->[0][1]{list}[0]{vCardProps});
-    $self->assert_str_equals('Simon Perreault', $res->[0][1]{list}[0]{fullName});
-    $self->assert_deep_equals({
-        'components' => [
-            { 'kind' => 'given', 'value' => 'Simon' },
-            { 'kind' => 'surname', 'value' => 'Perreault' },
-            { 'kind' => 'suffix', 'value' => 'ing. jr' }
-        ]
-    }, $res->[0][1]{list}[0]{name});
+    $self->assert_str_equals('Simon Perreault', $res->[0][1]{list}[0]{name}{full});
+    $self->assert_deep_equals([
+        { 'kind' => 'given', 'value' => 'Simon' },
+        { 'kind' => 'surname', 'value' => 'Perreault' },
+        { 'kind' => 'suffix', 'value' => 'ing. jr' }
+    ], $res->[0][1]{list}[0]{name}{components});
     $self->assert_deep_equals({
         'kind' => 'birth',
         'date' => { 'month' => 2, 'day' => 3 }
