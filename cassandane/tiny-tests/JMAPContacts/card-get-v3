@@ -47,51 +47,79 @@ EOF
         }, 'R1']
     ]);
 
-    $self->assert_str_equals('Card', $res->[0][1]{list}[0]{'@type'});
-    $self->assert_str_equals('1.0', $res->[0][1]{list}[0]{version});
-    $self->assert_str_equals('Default', $res->[0][1]{list}[0]{addressBookId});
-    $self->assert_str_equals($carddav->fullpath() . $href,
-                             $res->[0][1]{list}[0]{'cyrusimap.org:href'});
-    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
-    $self->assert_str_equals($id, $res->[0][1]{list}[0]{uid});
-    $self->assert_str_equals('2008-04-24T19:52:43Z', $res->[0][1]{list}[0]{updated});
-    $self->assert_deep_equals([
-        [ 'version', {}, 'text', '3.0' ]
-    ], $res->[0][1]{list}[0]{vCardProps});
-    $self->assert_str_equals('Forrest Gump', $res->[0][1]{list}[0]{name}{full});
-    $self->assert_deep_equals([
-        { 'kind' => 'prefix',  'value' => 'Mr.' },
-        { 'kind' => 'given',   'value' => 'Forrest' },
-        { 'kind' => 'surname', 'value' => 'Gump' }
-    ], $res->[0][1]{list}[0]{name}{components});
-    $self->assert_deep_equals({
-        'kind' => 'birth',
-        'date' => { 'year' => 1944, 'month' => 6, 'day' => 7 }
-    }, $res->[0][1]{list}[0]{anniversaries}{birth});
-    $self->assert_deep_equals({
-        'name' => 'Bubba Gump Shrimp Co.'
-    }, $res->[0][1]{list}[0]{organizations}{O1});
-    $self->assert_deep_equals({
-        'name' => 'Shrimp Man'
-    }, $res->[0][1]{list}[0]{titles}{T1});
-    $self->assert_deep_equals({
-        'street' => [
-            { 'kind' => 'name', 'value' => '1501 Broadway' }
+    my $want_jscard = {
+        '@type' => 'Card',
+        version => '1.0',
+        addressBookId => 'Default',
+        'cyrusimap.org:href' => $carddav->fullpath() . $href,
+        id => $id,
+        uid => $id,
+        updated => '2008-04-24T19:52:43Z',
+        vCardProps => [
+            [ 'version', {}, 'text', '3.0' ]
         ],
-        'locality' => 'New York',
-        'region' => 'NY',
-        'postcode' => '10036',
-        'country' => 'USA',
-        'coordinates' => 'geo:40.7571383482188,-73.98695548990568',
-        'timeZone' => 'Etc/GMT+5'
-    }, $res->[0][1]{list}[0]{addresses}{A1});
-    $self->assert_str_equals('photo',
-                             $res->[0][1]{list}[0]{media}{P1}{kind});
-    $self->assert_str_equals('image/jpeg',
-                             $res->[0][1]{list}[0]{media}{P1}{mediaType});
+        name => {
+            full => 'Forrest Gump',
+            components => [
+                { 'kind' => 'prefix',  'value' => 'Mr.' },
+                { 'kind' => 'given',   'value' => 'Forrest' },
+                { 'kind' => 'surname', 'value' => 'Gump' }
+            ]
+        },
+        anniversaries => {
+            birth => {
+                'kind' => 'birth',
+                'date' => { 'year' => 1944, 'month' => 6, 'day' => 7 }
+            }
+        },
+        organizations => {
+            O1 => {
+                'name' => 'Bubba Gump Shrimp Co.'
+            }
+        },
+        titles => {
+            T1 => {
+                'name' => 'Shrimp Man'
+            }
+        },
+        addresses => {
+            A1 => {
+                'street' => [
+                    { 'kind' => 'name', 'value' => '1501 Broadway' }
+                ],
+                'locality' => 'New York',
+                'region' => 'NY',
+                'postcode' => '10036',
+                'country' => 'USA',
+                'coordinates' => 'geo:40.7571383482188,-73.98695548990568',
+                'timeZone' => 'Etc/GMT+5'
+            }
+        },
+        media => {
+            P1 => {
+                kind => 'photo',
+                mediaType => 'image/jpeg'
+            }
+        }
+    };
 
+    
+    my $have_jscard = $res->[0][1]{list}[0];
+
+    # Get media blob id before we delete it
     my $blobid = $res->[0][1]{list}[0]{media}{P1}{blobId};
     $self->assert_not_null($blobid);
+
+    # Delete generated fields
+    delete $have_jscard->{blobId};
+    delete $have_jscard->{media}{P1}{blobId};
+    delete $have_jscard->{'cyrusimap.org:blobId'};
+    delete $have_jscard->{'cyrusimap.org:size'};
+
+    # Normalize and compare cards
+    normalize_jscard($want_jscard);
+    normalize_jscard($have_jscard);
+    $self->assert_deep_equals($want_jscard, $have_jscard);
 
     $res = $jmap->Download('cassandane', $blobid);
 

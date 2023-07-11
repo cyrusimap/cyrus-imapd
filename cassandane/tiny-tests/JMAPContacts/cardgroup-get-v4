@@ -42,18 +42,36 @@ EOF
         }, 'R1']
     ]);
 
-    $self->assert_str_equals('Card', $res->[0][1]{list}[0]{'@type'});
-    $self->assert_str_equals('1.0', $res->[0][1]{list}[0]{version});
-    $self->assert_str_equals('Default', $res->[0][1]{list}[0]{addressBookId});
-    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
-    $self->assert_str_equals($id, $res->[0][1]{list}[0]{uid});
-    $self->assert_str_equals('group', $res->[0][1]{list}[0]{kind});
-    $self->assert_deep_equals([
-        [ 'version', {}, 'text', '4.0' ]
-    ], $res->[0][1]{list}[0]{vCardProps});
-    $self->assert_str_equals('The Doe Family', $res->[0][1]{list}[0]{name}{full});
-    $self->assert_equals(JSON::true,
-                         $res->[0][1]{list}[0]{members}{"$member1"});
-    $self->assert_equals(JSON::true,
-                         $res->[0][1]{list}[0]{members}{"$member2"});
+    my $want_jscard = {
+        '@type' => 'Card',
+        version => '1.0',
+        addressBookId => 'Default',
+        'cyrusimap.org:href' => $carddav->fullpath() . $href,
+        id => $id,
+        uid => $id,
+        kind => 'group',
+        vCardProps => [
+            [ 'version', {}, 'text', '4.0' ]
+        ],
+        name => {
+            full => 'The Doe Family'
+        },
+        members => {
+            $member1 => JSON::true,
+            $member2 => JSON::true
+        }
+    };
+
+    
+    my $have_jscard = $res->[0][1]{list}[0];
+
+    # Delete generated fields
+    delete $have_jscard->{blobId};
+    delete $have_jscard->{'cyrusimap.org:blobId'};
+    delete $have_jscard->{'cyrusimap.org:size'};
+
+    # Normalize and compare cards
+    normalize_jscard($want_jscard);
+    normalize_jscard($have_jscard);
+    $self->assert_deep_equals($want_jscard, $have_jscard);
 }

@@ -56,6 +56,88 @@ EOF
         ['Card/get', {
         }, 'R1']
     ]);
+
+    my $want_jscard = {
+        '@type' => 'Card',
+        version => '1.0',
+        addressBookId => 'Default',
+        'cyrusimap.org:href' => $carddav->fullpath() . $href,
+        id => $id,
+        uid => $id,
+        kind => 'individual',
+        language => 'es',    
+        vCardProps => [
+            [ 'version', {}, 'text', '4.0' ]
+        ],
+        name => {
+            full => 'Gabriel García Márquez',
+            components => [
+                { 'kind' => 'given', 'value' => 'Gabriel' },
+                { 'kind' => 'middle', 'value' => 'García' },
+                { 'kind' => 'surname', 'value' => 'Márquez' }
+            ],
+        },
+        titles => {
+            t1 => {
+                'name' => 'Novelista'
+            }
+        },
+        speakToAs => {
+            grammaticalGender => 'neuter',
+            pronouns => {
+                k19 => {
+                    pronouns => 'él'
+                }
+            }
+        },
+        addresses => {
+            addr1 => {
+                locality => 'Tokio'
+            }
+        },
+        localizations => {
+            en => {
+                'titles/t1/name' => 'Novelist',
+                'speakToAs/grammaticalGender' => 'masculine',
+                'addresses/addr1/locality' => 'Tokyo'
+            },
+            fr => {
+                'titles/t1/name' => 'Écrivain',
+                'speakToAs/pronouns/k19/pronouns' => 'il'
+            },
+            de => {
+                'speakToAs/pronouns/k19/pronouns' => 'er'
+            },
+            it => {
+                'speakToAs/pronouns/k19/pronouns' => 'lui'
+            },
+            jp => {
+                'name/full' => 'ガブリエル・ガルシア・マルケス',
+                'name/components' => [
+                    { 'kind' => 'given', 'value' => 'ガブリエル' },
+                    { 'kind' => 'middle', 'value' => 'ガルシア' },
+                    { 'kind' => 'surname', 'value' => 'マルケス' }
+                ],
+                'addresses/addr1/locality' => '東京'
+            }
+        }
+    };
+
+    
+    my $have_jscard = $res->[0][1]{list}[0];
+
+    # Delete generated fields
+    delete $have_jscard->{blobId};
+    delete $have_jscard->{'cyrusimap.org:blobId'};
+    delete $have_jscard->{'cyrusimap.org:size'};
+
+    # Normalize and compare cards
+    normalize_jscard($want_jscard);
+    normalize_jscard($have_jscard);
+warn Dumper($want_jscard);
+warn Dumper($have_jscard);
+    $self->assert_deep_equals($want_jscard, $have_jscard);
+return;    
     $self->assert_str_equals('es', $res->[0][1]{list}[0]{'language'});
     $self->assert_str_equals('Gabriel García Márquez',
                              $res->[0][1]{list}[0]{'name'}{'full'});
