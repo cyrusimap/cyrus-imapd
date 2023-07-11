@@ -674,7 +674,7 @@ cunit_TESTS += cunit/ical_support.testc
 endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
-		imap/mutex_fake.c imap/spool.c
+		imap/mutex_fake.c imap/spool.c imap/search_expr.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
 CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)

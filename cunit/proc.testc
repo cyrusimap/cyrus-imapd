@@ -315,6 +315,7 @@ static void test_proc_foreach(void)
         /* better not see anything higher than those we created */
         CU_ASSERT((unsigned) found_pid < n_tests);
     }
+    strarray_free(keys);
 
     /* reset results */
     free_hash_table(&results, &free_procdata_fields);
@@ -371,6 +372,7 @@ static void test_proc_foreach(void)
         /* better not see anything higher than those we created */
         CU_ASSERT((unsigned) found_pid < n_tests);
     }
+    strarray_free(keys);
 
     /* reset results */
     free_hash_table(&results, &free_procdata_fields);
