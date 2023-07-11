@@ -88,6 +88,29 @@ sub set_up
     ]);
 }
 
+sub normalize_jscard
+{
+    my ($jscard) = @_;
+
+    if ($jscard->{vCardProps}) {
+        my @sorted = sort { $a->[0] cmp $b->[0] } @{$jscard->{vCardProps}};
+        $jscard->{vCardProps} = \@sorted;
+    }
+
+    if ($jscard->{name}{components}) {
+        my @sorted = sort { $a->{kind} cmp $b->{kind} } @{$jscard->{name}{components}};
+        $jscard->{name}{components} = \@sorted;
+    }
+
+    if (not exists $jscard->{kind}) {
+        $jscard->{kind} = 'individual';
+    }
+
+    if (not exists $jscard->{'cyrusimap.org:importance'}) {
+        $jscard->{'cyrusimap.org:importance'} = '0';
+    }
+}
+
 sub test_contact_set_multicontact
     :min_version_3_1 :needs_component_jmap
 {
