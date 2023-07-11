@@ -63,101 +63,144 @@ EOF
         }, 'R1']
     ]);
 
-    $self->assert_str_equals('Card', $res->[0][1]{list}[0]{'@type'});
-    $self->assert_str_equals('1.0', $res->[0][1]{list}[0]{version});
-    $self->assert_str_equals('Default', $res->[0][1]{list}[0]{addressBookId});
-    $self->assert_str_equals($carddav->fullpath() . $href,
-                             $res->[0][1]{list}[0]{'cyrusimap.org:href'});
-    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
-    $self->assert_str_equals($id, $res->[0][1]{list}[0]{uid});
-    $self->assert_str_equals('individual', $res->[0][1]{list}[0]{kind});
-    $self->assert_str_equals('2023-04-22T19:46:39Z', $res->[0][1]{list}[0]{updated});
-    $self->assert_deep_equals([
-        [ 'version', {}, 'text', '4.0' ],
-        [ 'gender',  {}, 'text', 'M'   ]
-    ], $res->[0][1]{list}[0]{vCardProps});
-    $self->assert_str_equals('Simon Perreault', $res->[0][1]{list}[0]{name}{full});
-    $self->assert_deep_equals([
-        { 'kind' => 'given', 'value' => 'Simon' },
-        { 'kind' => 'surname', 'value' => 'Perreault' },
-        { 'kind' => 'suffix', 'value' => 'ing. jr' }
-    ], $res->[0][1]{list}[0]{name}{components});
-    $self->assert_deep_equals({
-        'kind' => 'birth',
-        'date' => { 'month' => 2, 'day' => 3 }
-    }, $res->[0][1]{list}[0]{anniversaries}{birth});
-    $self->assert_deep_equals({
-        'kind' => 'wedding',
-        'date' => { '@type' => 'Timestamp', 'utc' => '2009-08-08T19:30:00Z' }
-    }, $res->[0][1]{list}[0]{anniversaries}{wedding});
-    $self->assert_deep_equals({
-        'pref' => 1
-    }, $res->[0][1]{list}[0]{preferredLanguages}{fr});
-    $self->assert_deep_equals({
-        'name' => 'Viagenie'
-    }, $res->[0][1]{list}[0]{organizations}{O1});
-    $self->assert_deep_equals({
-        'street' => [
-            { 'kind' => 'name',      'value' => '2875 Laurier' },
-            { 'kind' => 'extension', 'value' => 'Suite D2-630' }
+    my $want_jscard = {
+        '@type' => 'Card',
+        version => '1.0',
+        addressBookId => 'Default',
+        'cyrusimap.org:href' => $carddav->fullpath() . $href,
+        id => $id,
+        uid => $id,
+        kind => 'individual',
+        updated => '2023-04-22T19:46:39Z',
+        vCardProps => [
+            [ 'version', {}, 'text', '4.0' ],
+            [ 'gender',  {}, 'text', 'M'   ],
         ],
-        'locality' => 'Quebec',
-        'region' => 'QC',
-        'postcode' => 'G1V 2M2',
-        'country' => 'Canada',
-        'contexts' => { 'work' => JSON::true },
-        'coordinates' => 'geo:46.772673,-71.282945',
-        'timeZone' => 'America/Montreal'
-    }, $res->[0][1]{list}[0]{addresses}{A1});
-    $self->assert_deep_equals({
-        'number' => 'tel:+1-418-262-6501',
-        'contexts' => { 'work' => JSON::true },
-        'features' => { 'cell'  => JSON::true, 'voice' => JSON::true,
-                        'video' => JSON::true, 'text'  => JSON::true
-        }
-    }, $res->[0][1]{list}[0]{phones}{P2});
-    $self->assert_deep_equals({
-        'E1' => {
-            'address' => 'simon.perreault@viagenie.ca',
-            'contexts' => { 'work' => JSON::true }
-        }
-    }, $res->[0][1]{list}[0]{emails});
-    $self->assert_deep_equals({
-        'K1' => {
-            'uri' => 'http://www.viagenie.ca/simon.perreault/simon.asc',
-            'contexts' => { 'work' => JSON::true }
-        }
-    }, $res->[0][1]{list}[0]{cryptoKeys});
-    $self->assert_deep_equals({
-        'L1' => {
-            'uri' => 'http://nomis80.org',
-            'contexts' => { 'private' => JSON::true }
-        }
-    }, $res->[0][1]{list}[0]{links});
-    $self->assert_deep_equals({
-        'OS1' => {
-            'uri' => 'xmpp:simon@example.com',
-            'vCardName' => 'impp',
-            'pref' => 1
+        name => {
+            full => 'Simon Perreault',
+            components => [
+                { 'kind' => 'given', 'value' => 'Simon' },
+                { 'kind' => 'surname', 'value' => 'Perreault' },
+                { 'kind' => 'suffix', 'value' => 'ing. jr' },
+            ],
         },
-        'OS2' => {
-            'user' => 'Simon P.',
-            'uri' => 'https://example.com/@simon',
-            'service' => 'Mastodon'
-        }
-    }, $res->[0][1]{list}[0]{onlineServices});
-    $self->assert_deep_equals({
-        'kind' => 'logo',
-        'mediaType' => 'image/png',
-        'uri' => 'http://example.org/logo.png'
-    }, $res->[0][1]{list}[0]{media}{L1});
-    $self->assert_str_equals('photo',
-                             $res->[0][1]{list}[0]{media}{P1}{kind});
-    $self->assert_str_equals('image/jpeg',
-                             $res->[0][1]{list}[0]{media}{P1}{mediaType});
+        anniversaries => {
+            birth => {
+                'kind' => 'birth',
+                'date' => { 'month' => 2, 'day' => 3 }
+            },
+            wedding => {
+                'kind' => 'wedding',
+                'date' => { '@type' => 'Timestamp', 'utc' => '2009-08-08T19:30:00Z' }
+            },
+        },
+        preferredLanguages => {
+            en => {
+                'pref' => 2
+            },
+            fr => {
+                'pref' => 1
+            },
+        },
+        organizations => {
+            O1 => {
+                'name' => 'Viagenie'
+            }
+        },
+        addresses => {
+            A1 => {
+                'street' => [
+                    { 'kind' => 'name',      'value' => '2875 Laurier' },
+                    { 'kind' => 'extension', 'value' => 'Suite D2-630' }
+                ],
+                'locality' => 'Quebec',
+                'region' => 'QC',
+                'postcode' => 'G1V 2M2',
+                'country' => 'Canada',
+                'contexts' => { 'work' => JSON::true },
+                'coordinates' => 'geo:46.772673,-71.282945',
+                'timeZone' => 'America/Montreal'
+            },
+        },
+        phones => {
+              P1 => {
+                number => "tel:+1-418-656-9254;ext=102",
+                contexts => {
+                  work => JSON::true
+                },
+                features => {
+                  voice => JSON::true
+                },
+                pref => 1
+              },
+            P2 => {
+                'number' => 'tel:+1-418-262-6501',
+                'contexts' => { 'work' => JSON::true },
+                'features' => { 'cell'  => JSON::true, 'voice' => JSON::true,
+                    'video' => JSON::true, 'text'  => JSON::true
+                }
+            },
+        },
+        emails => {
+            E1 => {
+                'address' => 'simon.perreault@viagenie.ca',
+                'contexts' => { 'work' => JSON::true }
+            },
+        },
+        cryptoKeys => {
+            K1 => {
+                'uri' => 'http://www.viagenie.ca/simon.perreault/simon.asc',
+                'contexts' => { 'work' => JSON::true }
+            },
+        },
+        links => {
+            L1 => {
+                'uri' => 'http://nomis80.org',
+                'contexts' => { 'private' => JSON::true }
+            },
+        },
+        onlineServices => {
+            'OS1' => {
+                'uri' => 'xmpp:simon@example.com',
+                'vCardName' => 'impp',
+                'pref' => 1
+            },
+            'OS2' => {
+                'user' => 'Simon P.',
+                'uri' => 'https://example.com/@simon',
+                'service' => 'Mastodon'
+            }
+        },
+        media => {
+            L1 => {
+                'kind' => 'logo',
+                'mediaType' => 'image/png',
+                'uri' => 'http://example.org/logo.png'
+            },
+            P1 => {
+                kind => 'photo',
+                mediaType => 'image/jpeg',
+            },
+        },
+    };
 
-    my $blobid = $res->[0][1]{list}[0]{media}{P1}{blobId};
+
+    my $have_jscard = $res->[0][1]{list}[0];
+
+    # Get media blob id before we delete it
+    my $blobid = $have_jscard->{media}{P1}{blobId};
     $self->assert_not_null($blobid);
+
+    # Delete generated fields
+    delete $have_jscard->{blobId};
+    delete $have_jscard->{media}{P1}{blobId};
+    delete $have_jscard->{'cyrusimap.org:blobId'};
+    delete $have_jscard->{'cyrusimap.org:size'};
+
+    # Normalize and compare cards
+    normalize_jscard($want_jscard);
+    normalize_jscard($have_jscard);
+    $self->assert_deep_equals($want_jscard, $have_jscard);
 
     $res = $jmap->Download('cassandane', $blobid);
 
