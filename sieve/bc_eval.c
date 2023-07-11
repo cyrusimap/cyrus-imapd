@@ -320,9 +320,9 @@ static int regcomp_flags(int comparator, int requires)
 {
     int cflags = REG_EXTENDED;
 
-#ifdef HAVE_PCREPOSIX_H
+#ifdef HAVE_PCRE2POSIX_H
     /* support UTF8 comparisons */
-    cflags |= REG_UTF8;
+    cflags |= REG_UTF;
 #endif
 
     if (comparator == B_ASCIICASEMAP) {

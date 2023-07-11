@@ -2199,9 +2199,9 @@ static int verify_regexlist(sieve_script_t *sscript,
     regex_t reg;
     int cflags = REG_EXTENDED | REG_NOSUB;
 
-#ifdef HAVE_PCREPOSIX_H
+#ifdef HAVE_PCRE2POSIX_H
     /* support UTF8 comparisons */
-    cflags |= REG_UTF8;
+    cflags |= REG_UTF;
 #endif
 
     if (collation == B_ASCIICASEMAP) {

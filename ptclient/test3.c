@@ -1,6 +1,6 @@
 /*
  * test ptsmodule_standard_root_dn
- * gcc -lz -lpcreposix -I.. -I ../lib ../lib/.libs/util.o ../lib/.libs/xmalloc.o ../lib/.libs/map_shared.o ../lib/.libs/retry.o ../lib/.libs/assert.o test3.c
+ * gcc -I.. -I ../lib ../lib/.libs/util.o ../lib/.libs/xmalloc.o ../lib/.libs/map_shared.o ../lib/.libs/retry.o ../lib/.libs/assert.o test3.c -lz -lpcre2-posix
  */
 #include <assert.h>
 #include <stdio.h>

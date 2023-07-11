@@ -193,10 +193,10 @@ static json_t *buildinfo()
 #else
     json_object_set_new(dependency, "jansson", json_false());
 #endif
-#if defined(ENABLE_REGEX) && defined(HAVE_PCREPOSIX_H)
-    json_object_set_new(dependency, "pcre", json_true());
+#if defined(ENABLE_REGEX) && defined(HAVE_PCRE2POSIX_H)
+    json_object_set_new(dependency, "pcre2", json_true());
 #else
-    json_object_set_new(dependency, "pcre", json_false());
+    json_object_set_new(dependency, "pcre2", json_false());
 #endif
 #ifdef HAVE_CLAMAV
     json_object_set_new(dependency, "clamav", json_true());
