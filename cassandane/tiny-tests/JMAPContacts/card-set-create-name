@@ -45,7 +45,7 @@ sub test_card_set_create_name
                             },
                             {
                                 '@type' => 'NameComponent',
-                                kind => 'surname',
+                                kind => 'surname2',
                                 value => 'Chang'
                             }
                         ],
