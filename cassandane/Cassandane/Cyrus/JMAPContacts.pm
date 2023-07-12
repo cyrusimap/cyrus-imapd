@@ -97,11 +97,6 @@ sub normalize_jscard
         $jscard->{vCardProps} = \@sorted;
     }
 
-    if ($jscard->{name}{components}) {
-        my @sorted = sort { $a->{kind} cmp $b->{kind} } @{$jscard->{name}{components}};
-        $jscard->{name}{components} = \@sorted;
-    }
-
     if (not exists $jscard->{kind}) {
         $jscard->{kind} = 'individual';
     }
