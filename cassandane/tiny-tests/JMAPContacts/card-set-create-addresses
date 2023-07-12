@@ -36,49 +36,67 @@ sub test_card_set_create_addresses
                             contexts => {
                                 work => JSON::true
                             },
-                            fullAddress =>
-                                '54321 Oak St\nReston\nVA\n20190\nUSA',
-                            street => [
+                            full => '54321 Oak St\nReston\nVA\n20190\nUSA',
+                            components => [
                                 {
-                                    '@type' => 'StreetComponent',
+                                    kind => 'number',
+                                    value => '54321'
+                                },
+                                {
                                     kind => 'name',
                                     value => 'Oak St'
                                 },
                                 {
-                                    '@type' => 'StreetComponent',
-                                    kind => 'number',
-                                    value => '54321'
+                                    kind => 'locality',
+                                    value => 'Reston'
+                                },
+                                {
+                                    kind => 'region',
+                                    value => 'VA'
+                                },
+                                {
+                                    kind => 'postalCode',
+                                    value => '20190'
+                                },
+                                {
+                                    kind => 'country',
+                                    value => 'USA'
                                 }
                             ],
-                            locality => 'Reston',
-                            region => 'VA',
-                            country => 'USA',
-                            postcode => '20190',
                             countryCode => 'US'
                         },
                         k24 => {
-                            '@type' => 'Address',
                             contexts => {
                                 private => JSON::true
                             },
-                            fullAddress =>
-                                '12345 Elm St\nReston\nVA\n20190\nUSA',
-                            street => [
+                            full => '12345 Elm St\nReston\nVA\n20190\nUSA',
+                            components => [
                                 {
-                                    '@type' => 'StreetComponent',
+                                    kind => 'number',
+                                    value => '12345'
+                                },
+                                {
+                                    '@type' => 'AddressComponent',
                                     kind => 'name',
                                     value => 'Elm St'
                                 },
                                 {
-                                    '@type' => 'StreetComponent',
-                                    kind => 'number',
-                                    value => '12345'
+                                    kind => 'locality',
+                                    value => 'Reston'
+                                },
+                                {
+                                    kind => 'region',
+                                    value => 'VA'
+                                },
+                                {
+                                    kind => 'postalCode',
+                                    value => '20190'
+                                }
+                                {
+                                    kind => 'country',
+                                    value => 'USA'
                                 }
                             ],
-                            locality => 'Reston',
-                            region => 'VA',
-                            country => 'USA',
-                            postcode => '20190',
                             countryCode => 'US',
                             timeZone => 'America/New_York'    
                         }

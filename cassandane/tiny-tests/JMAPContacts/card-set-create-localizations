@@ -55,7 +55,9 @@ sub test_card_set_create_localizations
                     addresses => {
                         addr1 => {
                             '@type' => 'Address',
-                            locality => 'Tokio'
+                            components => [
+                                { kind => 'locality', value => 'Tokio' }
+                            ]
                         }
                     },
                     speakToAs => {
@@ -76,7 +78,9 @@ sub test_card_set_create_localizations
                                     name => 'Novelist'
                                 }
                             },
-                            'addresses/addr1/locality' => 'Tokyo',
+                            'addresses/addr1/components' => [
+                                { kind => 'locality', value => 'Tokyo' }
+                            ],
                             'speakToAs/grammaticalGender' => 'masculine'
                         },
                         de => {
@@ -132,7 +136,9 @@ sub test_card_set_create_localizations
                                     }
                                 ]
                             },
-                            'addresses/addr1/locality' => '東京'
+                            'addresses/addr1/components' => [
+                                { kind => 'locality', value => '東京' }
+                            ]
                         }
                     }
                 }

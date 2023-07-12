@@ -5920,36 +5920,54 @@ static const jmap_property_t card_props[] = {
 struct comp_kind {
     const char *name;
     unsigned idx;
-    unsigned to_js : 1;
+    unsigned flags;
 };
+
+#define N_COMP_FROM_JS_ONLY (1<<0)
 
 /* vCard N fields: Ordered for vCard -> JSContact */
 static const struct comp_kind n_comp_kinds[] = {
-    { "title",      VCARD_N_HONORIFIC_PREFIX, 1 },
-    { "given",      VCARD_N_GIVEN,            1 },
-    { "middle",     VCARD_N_ADDITIONAL,       1 },
-    { "surname",    VCARD_N_FAMILY,           1 },
-    { "generation", VCARD_N_HONORIFIC_SUFFIX, 1 },
-    { "surname2",   VCARD_N_FAMILY,           0 },
-    { "credential", VCARD_N_HONORIFIC_SUFFIX, 0 },
-    { NULL,         -1,                       0 }
+    { "title",         VCARD_N_PREFIX,          0 },
+    { "given",         VCARD_N_GIVEN,           0 },
+    { "middle",        VCARD_N_ADDITIONAL,      0 },
+    { "surname",       VCARD_N_FAMILY,          0 },
+    { "generation",    VCARD_N_SUFFIX,          0 },
+    { "surname2",      VCARD_N_FAMILY,          N_COMP_FROM_JS_ONLY },
+    { "credential",    VCARD_N_SUFFIX,          N_COMP_FROM_JS_ONLY },
+    { NULL,         -1,                         0 }
 };
 
 /* vCard ADR fields:
    PO Box, Extension, Street, Locality, Region, Postal Code, Country Name */
 static const struct comp_kind adr_comp_kinds[] = {
-    { "locality", VCARD_ADR_LOCALITY,    1 },
-    { "region",   VCARD_ADR_REGION,      1 },
-    { "postcode", VCARD_ADR_POSTAL_CODE, 1 },
-    { "country",  VCARD_ADR_COUNTRY,     1 },
-    { NULL,      -1,                     0 }
+    { "postOfficeBox", VCARD_ADR_PO_BOX,        0 },
+    { "apartment",     VCARD_ADR_EXTENDED,      0 },
+    { "name",          VCARD_ADR_STREET,        0 },
+    { "locality",      VCARD_ADR_LOCALITY,      0 },
+    { "region",        VCARD_ADR_REGION,        0 },
+    { "postcode",      VCARD_ADR_POSTAL_CODE,   0 },
+    { "country",       VCARD_ADR_COUNTRY,       0 },
+    { NULL,            -1,                      0 }
 };
 
-static const struct comp_kind street_comp_kinds[] = {
-    { "postOfficeBox", VCARD_ADR_PO_BOX,   1 },
-    { "name",          VCARD_ADR_STREET,   1 },
-    { "extension",     VCARD_ADR_EXTENDED, 1 },
-    { NULL,           -1,                  0 }
+static const struct comp_kind ext_adr_comp_kinds[] = {
+    { "postOfficeBox", VCARD_ADR_PO_BOX,        0 },
+    { "locality",      VCARD_ADR_LOCALITY,      0 },
+    { "region",        VCARD_ADR_REGION,        0 },
+    { "postcode",      VCARD_ADR_POSTAL_CODE,   0 },
+    { "country",       VCARD_ADR_COUNTRY,       0 },
+    { "room",          VCARD_ADR_ROOM,          0 },
+    { "apartment",     VCARD_ADR_APARTMENT,     0 },
+    { "floor",         VCARD_ADR_FLOOR,         0 },
+    { "name",          VCARD_ADR_STREET_NAME,   0 },
+    { "number",        VCARD_ADR_STREET_NUMBER, 0 },
+    { "building",      VCARD_ADR_BUILDING,      0 },
+    { "block",         VCARD_ADR_BLOCK,         0 },
+    { "subdistrict",   VCARD_ADR_SUBDISTRICT,   0 },
+    { "district",      VCARD_ADR_DISTRICT,      0 },
+    { "direction",     VCARD_ADR_DIRECTION,     0 },
+    { "landmark",      VCARD_ADR_LANDMARK,      0 },
+    { NULL,            -1,                      0 }
 };
 
 #define ALLOW_CALSCALE_PARAM      (1<<0)
@@ -6472,7 +6490,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     case VCARD_DEATHPLACE_PROPERTY: {
         if (!kind) kind = "death";
 
-        const char *comp = "fullAddress";
+        const char *comp = "full";
             
         param = vcardproperty_get_first_parameter(prop, VCARD_VALUE_PARAMETER);
         if (param && vcardparameter_get_value(param) == VCARD_VALUE_URI) {
@@ -6536,14 +6554,15 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         for (ckind = n_comp_kinds; ckind->name; ckind++) {
             size_t i;
 
-            if (!ckind->to_js || ckind->idx >= n->num_fields) continue;
+            if (ckind->flags & N_COMP_FROM_JS_ONLY) continue;
+            if (ckind->idx >= n->num_fields) continue;
 
             for (i = 0; i < vcardstrarray_size(n->field[ckind->idx]); i++) {
                 const char *val =
                     vcardstrarray_element_at(n->field[ckind->idx], i);
 
-                kind =
-                    (i && ckind->idx == VCARD_N_FAMILY) ? "surname2" : ckind->name;
+                kind = (i && ckind->idx == VCARD_N_FAMILY) ?
+                    "surname2" : ckind->name;
 
                 if (*val) {
                     json_t *comp = json_pack("{s:s s:o}",
@@ -6629,7 +6648,8 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     case VCARD_ADR_PROPERTY: {
         vcardstructuredtype *adr = vcardproperty_get_n(prop);
         json_t *addrs = json_object_get_vanew(obj, "addresses", "{}");
-        const struct comp_kind *ckind;
+        const struct comp_kind *ckind = adr->num_fields > VCARD_ADR_ROOM ?
+            ext_adr_comp_kinds : adr_comp_kinds;
         const char *val;
 
         param_flags = ALLOW_TYPE_PARAM |
@@ -6637,31 +6657,20 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
         jprop = json_object_get_vanew(addrs, prop_id, "{}");
 
-        for (ckind = street_comp_kinds; ckind->name; ckind++) {
+        for (; ckind->name; ckind++) {
             if (ckind->idx >= adr->num_fields) continue;
 
             val = vcardstrarray_element_at(adr->field[ckind->idx], 0);
 
             if (*val) {
-                json_t *street = json_object_get_vanew(jprop, "street", "[]");
+                json_t *comps = json_object_get_vanew(jprop, "components", "[]");
 
-                json_array_append_new(street,
+                json_array_append_new(comps,
                                       json_pack("{s:s s:o}",
                                                 "kind", ckind->name,
                                                 "value", jmap_utf8string(val)));
             }
         }
-
-        for (ckind = adr_comp_kinds; ckind->name; ckind++) {
-            if (ckind->idx >= adr->num_fields) continue;
-
-            val = vcardstrarray_element_at(adr->field[ckind->idx], 0);
-
-            if (*val) {
-                json_object_set_new(jprop, ckind->name, jmap_utf8string(val));
-            }
-        }
-
         break;
     }
 
@@ -7855,11 +7864,7 @@ static int card_filter_match_namecomp(json_t *jentry, const char *compname,
     return ret;
 }
 
-static const char *address_vals[] = {
-    "street", "locality", "region", "postcode", "country", "countryCode", NULL
-};
-
-static int card_filter_match_address(json_t *jentry, const char *compname,
+static int card_filter_match_address(json_t *jentry,
                                      struct contact_textfilter *propfilter,
                                      struct contact_textfilter *textfilter,
                                      ptrarray_t *cached_termsets)
@@ -7877,37 +7882,29 @@ static int card_filter_match_address(json_t *jentry, const char *compname,
     json_t *jinfo;
 
     json_object_foreach(jlist, id, jinfo) {
-        const char *val, **val_keys;
+        const char *val;
 
-        val = json_string_value(json_object_get(jinfo, "fullAddress"));
-        if (val && !compname) {
+        val = json_string_value(json_object_get(jinfo, "full"));
+        if (val) {
             if (buf_len(&buf)) buf_putc(&buf, ' ');
             buf_appendcstr(&buf, val);
             continue;
         }
 
-        for (val_keys = address_vals; *val_keys; val_keys++) {
-            if (!compname || !strcmp(*val_keys, compname)) {
-                json_t *jcomp = json_object_get(jinfo, *val_keys);
-
-                if (!strcmp(*val_keys, "street"))
-                    jcomp = json_object_get(json_array_get(jcomp, 0), "value");
-
-                val = json_string_value(jcomp);
-                if (val) {
-                    if (buf_len(&buf)) buf_putc(&buf, ' ');
-                    buf_appendcstr(&buf, val);
-                }
-
-                if (compname) break;
+        json_t *jcomp, *jcomps = json_object_get(jinfo, "components");
+        size_t i;
+        json_array_foreach(jcomps, i, jcomp) {
+            val = json_string_value(json_object_get(jcomp, "value"));
+            if (val) {
+                if (buf_len(&buf)) buf_putc(&buf, ' ');
+                buf_appendcstr(&buf, val);
             }
         }
     }
     if (propfilter && !buf_len(&buf)) return 0;
 
     /* Evaluate search on text buffer */
-    hash_table *termset = getorset_termset(cached_termsets,
-                                           compname ? compname : "address");
+    hash_table *termset = getorset_termset(cached_termsets, "address");
     int ret = card_filter_match_textval(buf_cstring(&buf),
                                         propfilter, textfilter, termset);
     buf_free(&buf);
@@ -7986,7 +7983,7 @@ static int card_filter_match(void *vf, void *rock)
         !card_filter_match_listprop(card, "members", NULL,
                                     NULL, f->member,
                                     f->text, &cfrock->cached_termsets) ||
-        !card_filter_match_address(card, NULL, f->address,
+        !card_filter_match_address(card, f->address,
                                    f->text, &cfrock->cached_termsets)) {
         return 0;
     }
@@ -9560,26 +9557,15 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
     return prop;
 }
 
-static const struct comp_kind split_street_comp_kinds[] = {
-    { "number",    VCARD_ADR_STREET,   0 },
-    { "direction", VCARD_ADR_STREET,   0 },
-    { "building",  VCARD_ADR_EXTENDED, 0 },
-    { "floor",     VCARD_ADR_EXTENDED, 0 },
-    { "room",      VCARD_ADR_EXTENDED, 0 },
-    { "apartment", VCARD_ADR_EXTENDED, 0 },
-    { NULL,        -1,                 0 }
-};
-
 static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser, json_t *obj,
                                        const char *id __attribute__((unused)),
                                        vcardcomponent *card,
                                        void *rock __attribute__((unused)))
 {
     vcardstructuredtype adr = { VCARD_NUM_ADR_FIELDS, { 0 } };
-    const struct comp_kind *comp;
     json_t *jprop = NULL;
 
-    jprop = json_object_get(obj, "street");
+    jprop = json_object_get(obj, "components");
     if (json_is_array(jprop)) {
         size_t i, size = json_array_size(jprop);
 
@@ -9590,20 +9576,17 @@ static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser, json_t *obj,
             json_t *jsubprop;
             int field_num;
 
-            jmap_parser_push_index(parser, "street", i, NULL);
+            jmap_parser_push_index(parser, "components", i, NULL);
 
             jsubprop = json_object_get(comp, "@type");
             if (jsubprop &&
-                strcmpsafe("StreetComponent", json_string_value(jsubprop))) {
+                strcmpsafe("AddressComponent", json_string_value(jsubprop))) {
                 jmap_parser_invalid(parser, "@type");
                 break;
             }
 
             val = json_string_value(json_object_get(comp, "kind"));
-            field_num = _field_name_to_index(val, street_comp_kinds);
-            if (field_num < 0) {
-                field_num = _field_name_to_index(val, split_street_comp_kinds);
-            }
+            field_num = _field_name_to_index(val, ext_adr_comp_kinds);
             if (field_num < 0) {
                 jmap_parser_invalid(parser, "kind");
                 break;
@@ -9616,9 +9599,14 @@ static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser, json_t *obj,
             }
 
             field = &adr.field[field_num];
-
             if (!*field) *field = vcardstrarray_new(1);
             vcardstrarray_append(*field, val);
+
+            if (field_num >= VCARD_ADR_ROOM) {
+                field = &adr.field[VCARD_ADR_STREET];
+                if (!*field) *field = vcardstrarray_new(1);
+                vcardstrarray_append(*field, val);
+            }
 
             json_object_del(comp, "@type");
             json_object_del(comp, "kind");
@@ -9638,27 +9626,11 @@ static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser, json_t *obj,
         }
     }
     else if (jprop) {
-        jmap_parser_invalid(parser, "street");
+        jmap_parser_invalid(parser, "components");
         goto fail;
     }
 
-    for (comp = adr_comp_kinds; comp->name; comp++) {
-        jprop = json_object_get(obj, comp->name);
-        if (json_is_string(jprop)) {
-            vcardstrarray **field = &adr.field[comp->idx];
-
-            *field = vcardstrarray_new(1);
-            vcardstrarray_append(*field, json_string_value(jprop));
-        }
-        else if (jprop) {
-            jmap_parser_invalid(parser, comp->name);
-            goto fail;
-        }
-
-        json_object_del(obj, comp->name);
-    }
-
-    json_object_del(obj, "street");
+    json_object_del(obj, "components");
 
     return vcardproperty_new_adr(&adr);
 
@@ -9814,7 +9786,7 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
                 const char *val_kind = NULL;
 
                 if ((val =
-                     json_string_value(json_object_get(jprop, "fullAddress")))) {
+                     json_string_value(json_object_get(jprop, "full")))) {
                     val_kind = "TEXT";
                 }
                 else if ((val =
@@ -9839,7 +9811,7 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
                 }
 
                 json_object_del(jprop, "@type");
-                json_object_del(jprop, "fullAddress");
+                json_object_del(jprop, "full");
                 json_object_del(jprop, "coordinates");
 
                 /* Add unknown properties */
@@ -10363,7 +10335,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
                 { "timeZone",    VCARD_TZ_PARAMETER    },
                 { "countryCode", VCARD_CC_PARAMETER    },
                 { "coordinates", VCARD_GEO_PARAMETER   },
-                { "fullAddress", VCARD_LABEL_PARAMETER },
+                { "full",        VCARD_LABEL_PARAMETER },
                 { NULL,          0                     }
             };
 
