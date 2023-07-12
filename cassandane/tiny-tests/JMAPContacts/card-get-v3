@@ -61,7 +61,7 @@ EOF
         name => {
             full => 'Forrest Gump',
             components => [
-                { 'kind' => 'prefix',  'value' => 'Mr.' },
+                { 'kind' => 'title',  'value' => 'Mr.' },
                 { 'kind' => 'given',   'value' => 'Forrest' },
                 { 'kind' => 'surname', 'value' => 'Gump' }
             ]
