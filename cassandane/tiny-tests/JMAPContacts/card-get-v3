@@ -84,13 +84,13 @@ EOF
         },
         addresses => {
             A1 => {
-                'street' => [
-                    { 'kind' => 'name', 'value' => '1501 Broadway' }
+                'components' => [
+                    { kind => 'name',     value => '1501 Broadway' },
+                    { kind => 'locality', value => 'New York' },
+                    { kind => 'region',   value => 'NY' },
+                    { kind => 'postcode', value => '10036' },
+                    { kind => 'country',  value => 'USA' }
                 ],
-                'locality' => 'New York',
-                'region' => 'NY',
-                'postcode' => '10036',
-                'country' => 'USA',
                 'coordinates' => 'geo:40.7571383482188,-73.98695548990568',
                 'timeZone' => 'Etc/GMT+5'
             }

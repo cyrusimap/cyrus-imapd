@@ -109,14 +109,14 @@ EOF
         },
         addresses => {
             A1 => {
-                'street' => [
-                    { 'kind' => 'name',      'value' => '2875 Laurier' },
-                    { 'kind' => 'extension', 'value' => 'Suite D2-630' }
+                'components' => [
+                    { kind => 'apartment', value => 'Suite D2-630' },
+                    { kind => 'name',      value => '2875 Laurier' },
+                    { kind => 'locality',  value => 'Quebec' },
+                    { kind => 'region',    value => 'QC' },
+                    { kind => 'postcode',  value => 'G1V 2M2' },
+                    { kind => 'country',   value => 'Canada' }
                 ],
-                'locality' => 'Quebec',
-                'region' => 'QC',
-                'postcode' => 'G1V 2M2',
-                'country' => 'Canada',
                 'contexts' => { 'work' => JSON::true },
                 'coordinates' => 'geo:46.772673,-71.282945',
                 'timeZone' => 'America/Montreal'

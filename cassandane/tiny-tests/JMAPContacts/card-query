@@ -79,7 +79,7 @@ sub test_card_query
                         contexts => {
                             private => JSON::true
                         },
-                        street => [
+                        components => [
                             {
                                 kind => "name",
                                 value => "Some Lane"
@@ -87,11 +87,20 @@ sub test_card_query
                             {
                                 kind => "number",
                                 value => "24"
+                            },
+                            {
+                                kind => "locality",
+                                value => "SomeWhere City"
+                            },
+                            {
+                                kind => "region",
+                                value => ""
+                            },
+                            {
+                                kind => "postcode",
+                                value => "1234"
                             }
-                        ],
-                        locality => "SomeWhere City",
-                        region => "",
-                        postcode => "1234",
+                        ]
                     }
                 }
             },
@@ -113,7 +122,7 @@ sub test_card_query
                         contexts => {
                             private => JSON::true
                         },
-                        street => [
+                        components => [
                             {
                                 kind => "name",
                                 value => "Some Lane"
@@ -121,12 +130,24 @@ sub test_card_query
                             {
                                 kind => "number",
                                 value => "24"
+                            },
+                            {
+                                kind => "locality",
+                                value => "SomeWhere City"
+                            },
+                            {
+                                kind => "region",
+                                value => ""
+                            },
+                            {
+                                kind => "postcode",
+                                value => "1234"
+                            },
+                            {
+                                kind => "country",
+                                value => "Someinistan"
                             }
-                        ],
-                        locality => "SomeWhere City",
-                        region => "",
-                        postcode => "1234",
-                        country => "Someinistan"
+                        ]
                     }
                 },
                 personalInfo => {
