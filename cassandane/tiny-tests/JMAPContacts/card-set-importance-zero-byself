@@ -21,7 +21,7 @@ sub test_card_set_importance_zero_byself
     $self->assert_not_null($fetch);
     $self->assert_str_equals('Card/get', $fetch->[0][0]);
     $self->assert_str_equals('R2', $fetch->[0][2]);
-    $self->assert_str_equals('John Doe', $fetch->[0][1]{list}[0]{name}{full]);
+    $self->assert_str_equals('John Doe', $fetch->[0][1]{list}[0]{name}{full});
     $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"cyrusimap.org:importance"});
 
     $res = $jmap->CallMethods([['Card/set',
