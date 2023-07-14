@@ -49,6 +49,7 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::NetString;
+use Cassandane::Util::Slurp;
 
 
 sub new
@@ -67,19 +68,6 @@ sub tear_down
 {
     my ($self) = @_;
     $self->SUPER::tear_down();
-}
-
-sub slurp_file
-{
-    my ($filename) = @_;
-
-    local $/;
-    open my $f, '<', $filename
-        or die "Cannot open $filename for reading: $!\n";
-    my $str = <$f>;
-    close $f;
-
-    return $str;
 }
 
 sub _set_quotaroot
@@ -1158,10 +1146,7 @@ sub test_quota_f_no_improved_mboxlist_sort
         },
     }, 'quota', '-f', '-d', 'example.com');
 
-    open(FH, "<", $outfile);
-    local $/ = undef;
-    my $str = <FH>;
-    close(FH);
+    my $str = slurp_file($outfile);
     xlog $self, $str;
 
     #example.com!user.user1.Junk: quota root example.com!user.user1 --> (none)
@@ -1195,10 +1180,7 @@ sub test_quota_f_unixhs
         redirects => { stdout => $self->{instance}{basedir} . '/quota.out' },
     }, 'quota', '-f');
 
-    open(FH, "<", $self->{instance}{basedir} . '/quota.out');
-    local $/ = undef;
-    my $str = <FH>;
-    close(FH);
+    my $str = slurp_file($self->{instance}{basedir} . '/quota.out');
 
     $self->assert_matches(qr{STORAGE user/cassandane}, $str);
 }
