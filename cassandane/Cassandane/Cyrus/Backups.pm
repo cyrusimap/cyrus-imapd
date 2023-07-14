@@ -46,6 +46,7 @@ use JSON::XS;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Instance;
 
 $Data::Dumper::Sortkeys = 1;
@@ -171,13 +172,7 @@ sub cyr_backup_json
         'cyr_backup', $mode, $backup, 'json', $subcommand, @args
     );
 
-    local $/;
-    open my $fh, '<', $out
-        or die "Cannot open $out for reading: $!";
-    my $data = JSON::decode_json(<$fh>);
-    close $fh;
-
-    return $data;
+    return JSON::decode_json(slurp_file($out));
 }
 
 sub backup_exists
@@ -449,13 +444,7 @@ sub test_locks
         qw(ctl_backups -vvv lock -u cassandane -x ), "/bin/echo locked",
     );
 
-    {
-        local $/;
-        open my $fh, '<', $errfile
-            or die "Cannot open $errfile for reading: $!";
-        $output = <$fh>;
-        close $fh;
-    }
+    $output = slurp_file($errfile);
 
     # clean up after the sleeper
     $self->{backups}->reap_command($sleeper);
