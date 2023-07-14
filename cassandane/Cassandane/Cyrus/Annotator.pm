@@ -45,6 +45,7 @@ use Cwd qw(abs_path);
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Util::Wait;
 
 sub new
@@ -225,14 +226,8 @@ sub test_reconstruct_after_delivery
         }, 'reconstruct', '-u', 'cassandane');
 
     # check the output
-    {
-        local $/;
-        open my $fh, '<', $out
-            or die "Cannot open $out for reading: $!";
-        $out = <$fh>;
-        close $fh;
-        xlog $self, $out;
-    }
+    $out = slurp_file($out);
+    xlog $self, $out;
 
     $self->assert_does_not_match(qr/ updating /, $out);
 }
