@@ -22,11 +22,7 @@ sub test_email_query_attachmentname
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     # create an email with an attachment
-    my $logofile = abs_path('data/logo.gif');
-    open(FH, "<$logofile");
-    local $/ = undef;
-    my $binary = <FH>;
-    close(FH);
+    my $binary = slurp_file(abs_path('data/logo.gif'));
     my $data = $jmap->Upload($binary, "image/gif");
 
     $res = $jmap->CallMethods([

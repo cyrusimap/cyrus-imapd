@@ -15,11 +15,7 @@ sub test_email_bimi_blob_as_contact_avatar
     push @using, 'https://cyrusimap.org/ns/jmap/contacts';
     $jmap->DefaultUsing(\@using);
 
-    my $bimifile = abs_path('data/FM_BIMI.svg');
-    open(FH, "<$bimifile");
-    local $/ = undef;
-    my $binary = <FH>;
-    close(FH);
+    my $binary = slurp_file(abs_path('data/FM_BIMI.svg'));
 
     $self->make_message("foo",
         mime_type => 'text/plain',
