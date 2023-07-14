@@ -66,6 +66,7 @@ use List::Util qw(uniqstr);
 use lib '.';
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Util::Wait;
 use Cassandane::Mboxname;
 use Cassandane::Config;
@@ -2525,12 +2526,8 @@ sub run_mbpath
             stdout => $filename,
         },
     }, 'mbpath', '-j', @args);
-    open(FH, "<$filename") || return;
-    local $/ = undef;
-    my $str = <FH>;
-    close(FH);
 
-    return decode_json($str);
+    return decode_json(slurp_file($filename));
 }
 
 sub _mkastring
@@ -2706,12 +2703,7 @@ sub read_mailboxes_db
         },
     }, 'ctl_mboxlist', '-d');
 
-    local $/;
-    open my $fh, '<', $outfile or die "$outfile: $!";
-    my $json_data = <$fh>;
-    close $fh;
-
-    return JSON::decode_json($json_data);
+    return JSON::decode_json(slurp_file($outfile));
 }
 
 1;
