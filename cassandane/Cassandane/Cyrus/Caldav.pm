@@ -48,6 +48,7 @@ use Data::Dumper;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 my $MELBOURNE = <<EOF;
 BEGIN:VCALENDAR
@@ -3762,11 +3763,8 @@ sub slurp {
     my $testdir = shift;
     my $name = shift;
     my $ext = shift;
-    open(FH, "<$testdir/$name.$ext") || return;
-    local $/ = undef;
-    my $data = <FH>;
-    close(FH);
-    return $data;
+
+    return slurp_file("$testdir/$name.$ext");
 }
 
 sub _safeeq {
