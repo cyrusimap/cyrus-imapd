@@ -46,6 +46,7 @@ use DateTime;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Service;
 use Cassandane::Config;
 
@@ -1331,19 +1332,6 @@ EOF
 
     $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname, 1);
     $self->assert_sieve_noactive($self->{replica}, $user, $scriptname);
-}
-
-sub slurp_file
-{
-    my ($filename) = @_;
-
-    local $/;
-    open my $f, '<', $filename
-        or die "Cannot open $filename for reading: $!\n";
-    my $str = <$f>;
-    close $f;
-
-    return $str;
 }
 
 # this test is too tricky to get working on uuid mailboxes
