@@ -55,6 +55,7 @@ use URI::Escape;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 use charnames ':full';
 
