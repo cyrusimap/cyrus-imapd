@@ -8,6 +8,7 @@ use Net::Server::PreForkSimple;
 use lib ".";
 use Net::XmtpServer;
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use JSON;
 
 use base qw(Net::XmtpServer Net::Server::PreForkSimple);
@@ -21,10 +22,7 @@ sub override {
     my $Self = shift;
     my $stage = shift;
     if ($Self->{server}{control_file} and -e $Self->{server}{control_file}) {
-        local $/ = undef;
-        open(FH, "<$Self->{server}{control_file}");
-        my $data = decode_json(<FH>);
-        close(FH);
+        my $data = decode_json(slurp_file($Self->{server}{control_file}));
         if ($data->{$stage}) {
             $Self->send_client_resp(@{$data->{$stage}});
             return 1;
