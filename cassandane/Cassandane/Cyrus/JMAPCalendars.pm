@@ -57,6 +57,7 @@ use MIME::Base64 qw(encode_base64url decode_base64url);
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 use charnames ':full';
 
@@ -456,10 +457,8 @@ sub icalfile
 
     my $path = abs_path("data/icalendar/$name.ics");
     $self->assert(-f $path);
-    open(FH, "<$path");
-    local $/ = undef;
-    my $data = <FH>;
-    close(FH);
+    my $data = slurp_file($path);
+
     my ($id) = ($data =~ m/^UID:(\S+)\r?$/m);
     $self->assert($id);
     return ($id, $data);
