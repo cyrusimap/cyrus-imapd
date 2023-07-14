@@ -51,6 +51,7 @@ use File::Path qw(rmtree);
 use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Util::Words;
 use Cassandane::Generator;
 use Cassandane::GenericListener;
@@ -1339,11 +1340,7 @@ sub check_conversations
         redirects => {stdout => $filename},
     }, 'ctl_conversationsdb', '-A', '-r', '-v');
 
-    local $/;
-    open FH, '<', $filename
-        or die "Cannot open $filename for reading: $!";
-    my $str = <FH>;
-    close(FH);
+    my $str = slurp_file($filename);
 
     xlog $self, "RESULT: $str";
     $self->assert_matches(qr/is OK/, $str);
