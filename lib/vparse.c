@@ -892,8 +892,8 @@ static void _key_to_tgt(const char *key, struct vparse_target *tgt)
 
 static int _needsquote(const char *p)
 {
-    while (*p++) {
-        switch (*p) {
+    while (*p) {
+        switch (*p++) {
         case '"':
         case ',':
         case ':':
