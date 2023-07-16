@@ -54,6 +54,7 @@ use Cwd qw(abs_path getcwd);
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 use charnames ':full';
 
@@ -912,11 +913,7 @@ sub test_blob_upload_repair_acl
 
     $jmap->Upload("hello", "application/data");
 
-    my $file = abs_path('data/mime/repair_acl.eml');
-    open(my $fh, '<', $file);
-    local $/;
-    my $binary = <$fh>;
-    close($fh);
+    my $binary = slurp_file(abs_path('data/mime/repair_acl.eml'));
 
     xlog "Assert that uploading duplicates does not fail";
     $admin->setacl("user.cassandane.#jmap", "cassandane", "lrswkcni") or die;

@@ -46,6 +46,7 @@ use Data::Dumper;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Instance;
 
 sub new
@@ -122,13 +123,7 @@ sub test_dump_undump
         },
     }, 'ctl_mboxlist', '-u');
 
-    my $errors;
-    {
-        local $/;
-        open my $fh, '<', $errfile or die "$errfile: $!";
-        $errors = <$fh>;
-        close $fh;
-    }
+    my $errors = slurp_file($errfile);
 
     # should be no errors reported by the undump
     $self->assert_str_equals(q{}, $errors);

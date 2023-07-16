@@ -46,6 +46,7 @@ use Data::Dumper;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Instance;
 
 $Data::Dumper::Sortkeys = 1;
@@ -146,14 +147,9 @@ sub test_remove_infected_slow
     # check the output
     # user.cassandane                       1  UNREAD  Eicar-Test-Signature
     # shared.folder                         1  UNREAD  Eicar-Test-Signature
-    {
-        local $/;
-        open my $fh, '<', $out
-            or die "Cannot open $out for reading: $!";
-        $out = <$fh>;
-        close $fh;
-        xlog $self, $out;
-    }
+    $out = slurp_file($out);
+    xlog $self, $out;
+
     # XXX is there a better way than hard coding UID:1 ?
     my ($v) = Cassandane::Instance->get_version();
     if ($v >= 3) {

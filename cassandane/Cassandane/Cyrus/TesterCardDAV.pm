@@ -48,6 +48,7 @@ use JSON::XS;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Cassini;
 
 my $basedir;
@@ -273,12 +274,10 @@ sub run_test
     # XXX - make the config file!
     my $configfile = "$rundir/serverinfo.xml";
     {
-        open(FH, "<", abs_path("data/caldavtester-serverinfo-template.xml"));
-        local $/ = undef;
-        my $config = <FH>;
+        my $config = slurp_file(abs_path("data/caldavtester-serverinfo-template.xml"));
         $config =~ s/SERVICE_HOST/$params->{host}/g;
         $config =~ s/SERVICE_PORT/$params->{port}/g;
-        close(FH);
+
         open(FH, ">", $configfile);
         print FH $config;
         close(FH);
@@ -305,23 +304,12 @@ sub run_test
         @verbose,
         $testname);
 
-    my $json;
-    {
-        open(FH, '<', $outfile) or die "Cannot open $outfile for reading $!";
-        local $/ = undef;
-        my $output = <FH>;
-        $json = decode_json($output);
-        close(FH);
-    }
+    my $json = decode_json(slurp_file($outfile));
 
     if (0 && (!$status || get_verbose)) {
         foreach my $file ($errfile) {
             next unless -f $file;
-            open FH, '<', $file
-                or die "Cannot open $file for reading: $!";
-            local $/ = undef;
-            xlog $self, <FH>;
-            close FH;
+            xlog $self, slurp_file($file);
         }
     }
 
