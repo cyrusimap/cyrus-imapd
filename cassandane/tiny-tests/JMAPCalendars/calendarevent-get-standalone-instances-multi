@@ -11,7 +11,6 @@ sub test_calendarevent_get_standalone_instances_multi
     my $now = DateTime->now();
     $now->set_time_zone('Etc/UTC');
     my $dtstamp = $now->strftime('%Y%m%dT%H%M%SZ');
-    $now->set_time_zone('Australia/Sydney');
 
     my $n = 700;
 
@@ -24,15 +23,15 @@ EOF
     for (my $i = 0; $i < $n; $i++) {
         my $t = $now->clone();
         $t->add(DateTime::Duration->new(days => $i));
-        my $recurid = $t->strftime('%Y%m%dT%H%M%S');
+        my $recurid = $t->strftime('%Y%m%dT%H%M%SZ');
 
         $ical .= <<EOF;
 BEGIN:VEVENT
-RECURRENCE-ID;TZID=Australia/Sydney:$recurid
+RECURRENCE-ID:$recurid
 UID:6de280c9-edff-4019-8ebd-cfebc73f8201
 DURATION:PT1H
 SUMMARY:event$i
-DTSTART;TZID=Australia/Sydney:$recurid
+DTSTART:$recurid
 CREATED:$dtstamp
 DTSTAMP:$dtstamp
 END:VEVENT
