@@ -1553,7 +1553,7 @@ sub assert_user_sub_exists
 
     xlog $self, "Looking for subscriptions file $subs";
 
-    $self->assert(( -f $subs ));
+    $self->assert_file_test($subs, '-f');
 }
 
 sub assert_user_sub_not_exists
@@ -1564,7 +1564,7 @@ sub assert_user_sub_not_exists
 
     xlog $self, "Looking for subscriptions file $subs";
 
-    $self->assert(( ! -f $subs ));
+    $self->assert_not_file_test($subs, '-f');
 }
 
 sub test_subscriptions
@@ -2338,12 +2338,12 @@ sub test_toarchive
 
     foreach my $id (1..6) {
         if ($id > 3) {
-            $self->assert(-f "$mdatadir/$id.");
-            $self->assert(! -f "$marchivedir/$id.");
+            $self->assert_file_test("$mdatadir/$id.", '-f');
+            $self->assert_not_file_test("$marchivedir/$id.", '-f');
         }
         else {
-            $self->assert(! -f "$mdatadir/$id.");
-            $self->assert(-f "$marchivedir/$id.");
+            $self->assert_not_file_test("$mdatadir/$id.", '-f');
+            $self->assert_file_test("$marchivedir/$id.", '-f');
         }
     }
 
@@ -2380,12 +2380,12 @@ sub test_toarchive
 
     foreach my $id (1..6) {
         if ($id > 3) {
-            $self->assert(-f "$rdatadir/$id.");
-            $self->assert(! -f "$rarchivedir/$id.");
+            $self->assert_file_test("$rdatadir/$id.", '-f');
+            $self->assert_not_file_test("$rarchivedir/$id.", '-f');
         }
         else {
-            $self->assert(! -f "$rdatadir/$id.");
-            $self->assert(-f "$rarchivedir/$id.");
+            $self->assert_not_file_test("$rdatadir/$id.", '-f');
+            $self->assert_file_test("$rarchivedir/$id.", '-f');
         }
     }
 }
@@ -2441,7 +2441,7 @@ sub test_toarchive_noarchive
 
     # all messages in same place
     foreach my $id (1..6) {
-        $self->assert(-f "$mdatadir/$id.");
+        $self->assert_file_test("$mdatadir/$id.", '-f');
     }
 
     $self->{replica}->getsyslog(); # discard setup noise
@@ -2480,11 +2480,11 @@ sub test_toarchive_noarchive
 
     # all messages in same place
     foreach my $id (1..6) {
-        $self->assert(-f "$rdatadir/$id.");
+        $self->assert_file_test("$rdatadir/$id.", '-f');
     }
 
     foreach my $id (1..6) {
-        $self->assert(-f "$rdatadir/$id.");
+        $self->assert_file_test("$rdatadir/$id.", '-f');
     }
 }
 
