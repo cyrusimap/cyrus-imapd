@@ -1646,7 +1646,7 @@ static int identity_int(int i) {
 
 static json_t* relatedto_from_ical(icalcomponent*);
 
-static int is_reserved_jicalprop(icalcomponent_kind kind, const char *name)
+static int is_reserved_xpropname(icalcomponent_kind kind, const char *name)
 {
     // all IANA property names are reserved
     if (strncasecmpsafe(name, "X-", 2))
@@ -1673,17 +1673,33 @@ static int is_reserved_jicalprop(icalcomponent_kind kind, const char *name)
     return 0;
 }
 
-static json_t *jicalprops_from_ical(icalcomponent *comp)
+static json_t *jicalprops_from_ical(icalcomponent *comp,
+                                    icalproperty_kind *iana_kinds,
+                                    size_t iana_kinds_count)
 {
-    icalcomponent_kind kind = icalcomponent_isa(comp);
+    icalcomponent_kind comp_kind = icalcomponent_isa(comp);
     json_t *jiprops = json_array();
+    struct buf buf = BUF_INITIALIZER;
 
     json_t *jcal = icalcomponent_as_jcal_array(comp);
     size_t i;
     json_t *jprop;
     json_array_foreach(json_array_get(jcal, 1), i, jprop) {
         const char *name = json_string_value(json_array_get(jprop, 0));
-        if (name && !is_reserved_jicalprop(kind, name)) {
+        buf_setcstr(&buf, name);
+        buf_ucase(&buf);
+        icalproperty_kind prop_kind =
+            icalproperty_string_to_kind(buf_cstring(&buf));
+
+        if (prop_kind != ICAL_X_PROPERTY) {
+            for (size_t j = 0; j < iana_kinds_count; j++) {
+                if (iana_kinds[j] == prop_kind) {
+                    json_array_append(jiprops, jprop);
+                    break;
+                }
+            }
+        }
+        else if (!is_reserved_xpropname(comp_kind, name)) {
             json_array_append(jiprops, jprop);
         }
     }
@@ -1694,6 +1710,7 @@ static json_t *jicalprops_from_ical(icalcomponent *comp)
         jiprops = NULL;
     }
 
+    buf_free(&buf);
     return jiprops;
 }
 
@@ -2953,7 +2970,10 @@ alerts_from_ical(icalcomponent *comp, struct jmapical_ctx *jmapctx)
         if (alert) {
             /* internal only: iCalProps -- convert x-properties */
             if (jmapctx && jmapctx->from_ical.want_icalprops) {
-                json_t *jiprops = jicalprops_from_ical(alarm);
+                json_t *jiprops = jicalprops_from_ical(alarm,
+                        // preserve UID in iCalProps
+                        (icalproperty_kind[]){ ICAL_UID_PROPERTY }, 1);
+
                 if (JNOTNULL(jiprops)) {
                     json_object_set_new(alert, JMAPICAL_JSPROP_ICALPROPS, jiprops);
                 }
@@ -4014,7 +4034,7 @@ calendarevent_from_ical(icalcomponent *comp,
 
     /* internal only: iCalProps -- convert x-properties */
     if (jmapctx && jmapctx->from_ical.want_icalprops) {
-        json_t *jiprops = jicalprops_from_ical(comp);
+        json_t *jiprops = jicalprops_from_ical(comp, NULL, 0);
         if (JNOTNULL(jiprops)) {
             json_object_set_new(event, JMAPICAL_JSPROP_ICALPROPS, jiprops);
         }
@@ -4230,7 +4250,9 @@ static void relatedto_to_ical(icalcomponent *, struct jmap_parser *, json_t *);
 
 static void jicalprops_to_ical(icalcomponent *comp,
                                struct jmap_parser *parser,
-                               json_t *jicalprops)
+                               json_t *jicalprops,
+                               icalproperty_kind iana_kinds[],
+                               size_t iana_kinds_count)
 {
     if (JNULL(jicalprops))
         return;
@@ -4247,9 +4269,22 @@ static void jicalprops_to_ical(icalcomponent *comp,
                 prop; prop = nextprop) {
 
             nextprop = icalcomponent_get_next_property(mycomp, ICAL_ANY_PROPERTY);
+            icalproperty_kind prop_kind = icalproperty_isa(prop);
+            int want_prop = 0;
+            if (prop_kind != ICAL_X_PROPERTY) {
+                for (size_t i = 0; i < iana_kinds_count; i++) {
+                    if (iana_kinds[i] == prop_kind) {
+                        want_prop = 1;
+                        break;
+                    }
+                }
+            }
+            else {
+                want_prop = !is_reserved_xpropname(kind,
+                        icalproperty_get_property_name(prop));
+            }
 
-            const char *name = icalproperty_get_property_name(prop);
-            if (!is_reserved_jicalprop(kind, name)) {
+            if (want_prop) {
                 icalcomponent_remove_property(mycomp, prop);
                 icalcomponent_add_property(comp, prop);
             }
@@ -5705,9 +5740,49 @@ description_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *jse
     if (desc && *desc) icalcomponent_set_description(comp, desc);
 }
 
+static const char *ical_uid_from_jmap_id(const char *id, struct buf *tmp)
+{
+    const char *uid = NULL;
+
+    size_t len = strlen(id);
+
+    // Reuse UUID
+    size_t i;
+    for (i = 0; i < len && i < 36; i++) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            if (id[i] != '-')
+                break;
+        }
+        else if (!isdigit(id[i]) && (id[i] < 'a' || id[i] > 'f'))
+            break;
+    }
+    if (i == 36 && !id[36]) {
+        uid = id;
+        goto done;
+    }
+
+    // Reuse SHA1
+    for (i = 0; i < len && i < 40; i++) {
+        if (!isdigit(id[i]) && (id[i] < 'a' || id[i] > 'f'))
+            break;
+    }
+    if (i == 40 && !id[40]) {
+        uid = id;
+        goto done;
+    }
+
+done:
+    if (!uid) {
+        buf_setcstr(tmp, makeuuid());
+        uid = buf_cstring(tmp);
+    }
+
+    return uid;
+}
+
 HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
                                              struct jmap_parser *parser,
-                                             const char *alert_uid,
+                                             const char *alert_jmap_id,
                                              const char *summary,
                                              const char *description,
                                              const char *email_recipient)
@@ -5720,8 +5795,37 @@ HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
 
     validate_type(parser, alert, "Alert");
 
+    /* JMAP id */
+    prop = icalproperty_new_x(alert_jmap_id);
+    icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
+    icalcomponent_add_property(alarm, prop);
+
     /* uid */
-    icalcomponent_set_uid(alarm, alert_uid ? alert_uid : makeuuid());
+    {
+        struct buf myuid = BUF_INITIALIZER;
+        const char *uid = NULL;
+
+        json_t *jicalprops = json_object_get(alert, JMAPICAL_JSPROP_ICALPROPS);
+        if (JNOTNULL(jicalprops)) {
+            // Preserve iCalProps UID
+            size_t i;
+            json_t *jcal;
+            json_array_foreach(jicalprops, i, jcal) {
+                const char *name = json_string_value(json_array_get(jcal, 0));
+                if (!strcmpsafe("uid", name)) {
+                    uid = json_string_value(json_array_get(jcal, 3));
+                }
+            }
+        }
+
+        if (!uid) {
+            // Generate UID
+            uid = ical_uid_from_jmap_id(alert_jmap_id, &myuid);
+        }
+
+        icalcomponent_set_uid(alarm, uid);
+        buf_free(&myuid);
+    }
 
     /* trigger */
     struct icaltriggertype trigger = {
@@ -5869,7 +5973,7 @@ HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
     /* internal only: iCalProps -- convert x-properties */
     json_t *jprop = json_object_get(alert, JMAPICAL_JSPROP_ICALPROPS);
     if (json_array_size(jprop)) {
-        jicalprops_to_ical(alarm, parser, jprop);
+        jicalprops_to_ical(alarm, parser, jprop, NULL, 0);
     }
 
     return alarm;
@@ -7826,7 +7930,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     /* internal only: iCalProps -- convert x-properties */
     jprop = json_object_get(event, JMAPICAL_JSPROP_ICALPROPS);
     if (json_array_size(jprop)) {
-        jicalprops_to_ical(comp, parser, jprop);
+        jicalprops_to_ical(comp, parser, jprop, NULL, 0);
     }
 
     /* recurrenceOverrides - must be last to apply patches */

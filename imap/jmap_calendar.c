@@ -1226,8 +1226,8 @@ static void setcalendar_parsealerts(struct jmap_parser *parser,
         json_object_foreach(jprop, id, jalert) {
             jmap_parser_push(parser, id);
             icalcomponent *valarm =
-                jmapical_alert_to_ical(jalert, parser, id, NULL, NULL,
-                                       emailrecipient);
+                jmapical_alert_to_ical(jalert, parser, id,
+                        NULL, NULL, emailrecipient);
             if (valarm) {
                 icalcomponent_add_component(alarms, valarm);
             }
