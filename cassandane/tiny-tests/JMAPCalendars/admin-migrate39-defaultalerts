@@ -128,18 +128,15 @@ EOF
             Default => undef,
         }, $state->{migrateResponse}{migrated}{cassandane});
 
-=pod
         # Migration rewrites default alert UID, if none was set
-        my $defaultAlert = (values %$calendarADefaultAlerts)[0];
-        $self->assert_str_not_equals($defaultAlert->{uid},
-            $state->{calendarA}{defaultAlert}{uid});
-=cut
+        $self->assert_matches(qr/UID:[0-9A-Za-z-]+/,
+            $self->get_jmap_defaultalerts_annotation($state->{calendarA}{id}));
 
         # JMAP annotation is set on both calendars
-        $self->assert_not_null($self->get_jmap_datetime_annotation(
+        $self->assert_not_null($self->get_jmap_defaultalerts_annotation(
                 $state->{calendarA}{id}));
 
-        $self->assert_not_null($self->get_jmap_datetime_annotation(
+        $self->assert_not_null($self->get_jmap_defaultalerts_annotation(
                 $state->{calendarB}{id}));
 
         # CalDAV default alarms annotation got removed
@@ -422,7 +419,7 @@ sub get_vevent
     return ($vevent, $res->{headers}{etag});
 }
 
-sub get_jmap_datetime_annotation
+sub get_jmap_defaultalerts_annotation
 {
     my ($self, $calendarId) = @_;
     my $imap = $self->{store}->get_client();
