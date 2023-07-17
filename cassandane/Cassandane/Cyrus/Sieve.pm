@@ -124,9 +124,9 @@ sub compile_sievec
 
     xlog $self, "Checking preconditions for compiling sieve script $name";
 
-    $self->assert(( ! -f "$basedir/$name.script" ));
-    $self->assert(( ! -f "$basedir/$name.bc" ));
-    $self->assert(( ! -f "$basedir/$name.errors" ));
+    $self->assert_not_file_test("$basedir/$name.script", '-f');
+    $self->assert_not_file_test("$basedir/$name.bc", '-f');
+    $self->assert_not_file_test("$basedir/$name.errors", '-f');
 
     open(FH, '>', "$basedir/$name.script")
         or die "Cannot open $basedir/$name.script for writing: $!";
@@ -151,14 +151,14 @@ sub compile_sievec
     if ($result eq 'success')
     {
         xlog $self, "Checking that sievec wrote the output .bc file";
-        $self->assert(( -f "$basedir/$name.bc" ));
+        $self->assert_file_test("$basedir/$name.bc", '-f');
         xlog $self, "Checking that sievec didn't write anything to stderr";
         $self->assert_equals(0, scalar(@errors));
     }
     elsif ($result eq 'failure')
     {
         xlog $self, "Checking that sievec didn't write the output .bc file";
-        $self->assert(( ! -f "$basedir/$name.bc" ));
+        $self->assert_not_file_test("$basedir/$name.bc", '-f');
     }
 
     return ($result, join("\n", @errors));
@@ -175,8 +175,8 @@ sub compile_timsieved
 
     xlog $self, "Checking preconditions for compiling sieve script $name";
 
-    $self->assert(( ! -f "$basedir/$name.script" ));
-    $self->assert(( ! -f "$basedir/$name.errors" ));
+    $self->assert_not_file_test("$basedir/$name.script", '-f');
+    $self->assert_not_file_test("$basedir/$name.errors", '-f');
 
     open(FH, '>', "$basedir/$name.script")
         or die "Cannot open $basedir/$name.script for writing: $!";
@@ -3575,7 +3575,7 @@ EOF
     $instance->deliver($msg1);
 
     xlog "Assert that extractor did NOT get called";
-    $self->assert(not -e $filename);
+    $self->assert_not_file_test($filename);
 
     xlog "Assert that message got moved into INBOX.matches";
     $self->{store}->set_folder('INBOX.matches');
