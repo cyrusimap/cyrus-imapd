@@ -2905,46 +2905,46 @@ sub test_cvt_cyrusdb
     my $format = $self->{instance}->{config}->get('annotation_db');
     $format = $format // 'twoskip';
 
-    $self->assert(( ! -f $global_flat ));
+    $self->assert_not_file_test($global_flat, '-f');
     $self->{instance}->run_command({ cyrus => 1 },
                                    'cvt_cyrusdb',
                                    $global_db, $format,
                                    $global_flat, 'flat');
-    $self->assert(( -f $global_flat ));
+    $self->assert_file_test($global_flat, '-f');
 
     xlog $self, "Convert the mailbox annotation db to flat";
     my $datapath = $self->{instance}->folder_to_directory('user.cassandane');
     my $mailbox_db = "$datapath/cyrus.annotations";
     my $mailbox_flat = "$basedir/xcassann.txt";
 
-    $self->assert(( ! -f $mailbox_flat ));
+    $self->assert_not_file_test($mailbox_flat, '-f');
     $self->{instance}->run_command({ cyrus => 1 },
                                    'cvt_cyrusdb',
                                    $mailbox_db, $format,
                                    $mailbox_flat, 'flat');
-    $self->assert(( -f $mailbox_flat ));
+    $self->assert_file_test($mailbox_flat, '-f');
 
     xlog $self, "Move aside the original annotation dbs";
     rename($global_db, "$global_db.NOT")
         or die "Cannot rename $global_db to $global_db.NOT: $!";
     rename($mailbox_db, "$mailbox_db.NOT")
         or die "Cannot rename $mailbox_db to $mailbox_db.NOT: $!";
-    $self->assert(( ! -f $global_db ));
-    $self->assert(( ! -f $mailbox_db ));
+    $self->assert_not_file_test($global_db, '-f');
+    $self->assert_not_file_test($mailbox_db, '-f');
 
     xlog $self, "restore the global annotation db from flat";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'cvt_cyrusdb',
                                    $global_flat, 'flat',
                                    $global_db, $format);
-    $self->assert(( -f $global_db ));
+    $self->assert_file_test($global_db, '-f');
 
     xlog $self, "restore the mailbox annotation db from flat";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'cvt_cyrusdb',
                                    $mailbox_flat, 'flat',
                                    $mailbox_db, $format);
-    $self->assert(( -f $mailbox_db ));
+    $self->assert_file_test($mailbox_db, '-f');
 
     xlog $self, "Start the instance up again and reconnect";
     $self->{instance}->start();
