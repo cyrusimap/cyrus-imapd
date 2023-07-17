@@ -81,7 +81,7 @@ EOF
             components => [
                 { 'kind' => 'given', 'value' => 'Simon' },
                 { 'kind' => 'surname', 'value' => 'Perreault' },
-                { 'kind' => 'generation', 'value' => 'ing. jr' },
+                { 'kind' => 'credential', 'value' => 'ing. jr' },
             ],
         },
         anniversaries => {

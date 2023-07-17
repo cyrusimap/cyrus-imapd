@@ -34,19 +34,20 @@ sub test_card_set_create_localizations
                     name => {
                         '@type' => 'Name',
                         full => 'Gabriel García Márquez',
+                        isOrdered => JSON::false,
                         components => [
                             {
-                                '@type' => 'NameComponent',
+                                '@type' => 'Name',
                                 kind => 'given',
                                 value => 'Gabriel'
                             },
                             {
-                                '@type' => 'NameComponent',
+                                '@type' => 'Name',
                                 kind => 'middle',
                                 value => 'García'
                             },
                             {
-                                '@type' => 'NameComponent',
+                                '@type' => 'Name',
                                 kind => 'surname',
                                 value => 'Márquez'
                             }
@@ -119,19 +120,20 @@ sub test_card_set_create_localizations
                             name => {
                                 '@type' => 'Name',
                                 full => 'ガブリエル・ガルシア・マルケス',
+                                isOrdered => JSON::false,
                                 components => [
                                     {
-                                        '@type' => 'NameComponent',
+                                        '@type' => 'Name',
                                         kind => 'given',
                                         value => 'ガブリエル'
                                     },
                                     {
-                                        '@type' => 'NameComponent',
+                                        '@type' => 'Name',
                                         kind => 'middle',
                                         value => 'ガルシア'
                                     },
                                     {
-                                        '@type' => 'NameComponent',
+                                        '@type' => 'Name',
                                         kind => 'surname',
                                         value => 'マルケス'
                                     }
