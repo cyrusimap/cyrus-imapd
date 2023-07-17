@@ -394,7 +394,7 @@ static int compare_valarm(const void **va, const void **vb)
         return is_default_a - is_default_b;
 
     // Break ties by UID
-    return strcmp(icalcomponent_get_uid(a), icalcomponent_get_uid(b));
+    return strcmpsafe(icalcomponent_get_uid(a), icalcomponent_get_uid(b));
 }
 
 static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
