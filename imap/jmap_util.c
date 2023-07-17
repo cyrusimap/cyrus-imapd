@@ -494,6 +494,11 @@ HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
         jmap_parser_pop(parser);
 }
 
+HIDDEN void jmap_parser_invalid_path(struct jmap_parser *parser, const char *path)
+{
+    json_array_append_new(parser->invalid, json_string(path));
+}
+
 HIDDEN void jmap_parser_serverset(struct jmap_parser *parser,
                                   const char *prop, json_t *val)
 {

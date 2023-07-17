@@ -3243,6 +3243,51 @@ static void _icalcomponent_free_cb(void *val)
     icalcomponent_free((icalcomponent*)val);
 }
 
+static void remove_jsicalprops(json_t *jsobj, struct jmap_parser *parser)
+{
+    static size_t icalprops_len = 0;
+    if (!icalprops_len) {
+        icalprops_len = strlen(JMAPICAL_JSPROP_ICALPROPS);
+    }
+
+    const char *name;
+    json_t *jval;
+    void *tmp;
+    json_object_foreach_safe(jsobj, tmp, name, jval) {
+
+        if (json_is_object(jval)) {
+            if (parser) jmap_parser_push(parser, name);
+            remove_jsicalprops(jval, parser);
+            if (parser) jmap_parser_pop(parser);
+        }
+        else if (json_is_array(jval)) {
+            size_t i;
+            json_t *jval2;
+            json_array_foreach(jval, i, jval2) {
+                if (json_is_object(jval2)) {
+                    if (parser) jmap_parser_push_index(parser, name, i, NULL);
+                    remove_jsicalprops(jval, parser);
+                    if (parser) jmap_parser_pop(parser);
+                }
+            }
+        }
+
+        // Remove iCalProps patches
+        const char *s = strstr(name, JMAPICAL_JSPROP_ICALPROPS);
+        if (s && (s == name || (s[-1] == '/')) &&
+                (!s[icalprops_len] || s[icalprops_len] == '/')) {
+            if (parser) jmap_parser_invalid_path(parser, name);
+            json_object_del(jsobj, name);
+        }
+    }
+
+    // Remove iCalProps property
+    if (json_object_del(jsobj, JMAPICAL_JSPROP_ICALPROPS) == 0) {
+        if (parser) jmap_parser_invalid(parser, JMAPICAL_JSPROP_ICALPROPS);
+    }
+
+}
+
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct getcalendarevents_rock *rock = vrock;
@@ -3506,6 +3551,7 @@ gotevent:
     if (!jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_del(jsevent, "blobId");
         json_object_del(jsevent, "debugBlobId");
+        remove_jsicalprops(jsevent, NULL);
     }
 
     /* Process recurrenceOverrides[Before,After] */
@@ -3883,6 +3929,11 @@ static const jmap_property_t event_props[] = {
         JMAP_DEBUG_EXTENSION,
         JMAP_PROP_SERVER_SET
     },
+    {
+        JMAPICAL_JSPROP_ICALPROPS,
+        JMAP_CALENDARS_EXTENSION,
+        JMAP_PROP_SERVER_SET|JMAP_PROP_SKIP_GET
+    },
     { NULL, NULL, 0 }
 };
 
@@ -3968,6 +4019,11 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     if (err) {
         jmap_error(req, err);
         goto done;
+    }
+
+    /* Only include iCalProps if asked for */
+    if (get.props && jmap_wantprop(get.props, JMAPICAL_JSPROP_ICALPROPS)) {
+        rock.jmapctx->from_ical.want_icalprops = 1;
     }
 
     if (!has_calendars(req)) {
@@ -4702,13 +4758,16 @@ static void setcalendarevents_create(jmap_req_t *req,
                                      json_t **errptr)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    int r;
+    int r = 0;
 
     struct createevent create = {
-        .jsevent = jsevent,
+        .jsevent = json_deep_copy(jsevent),
         .db = db,
         .serverset = serverset
     };
+
+    remove_jsicalprops(create.jsevent, &parser);
+    if (json_array_size(parser.invalid)) goto done;
 
     r = createevent_lookup_calendar(req, &parser, &create);
     if (r || json_array_size(parser.invalid)) goto done;
@@ -4754,6 +4813,7 @@ done:
     free(create.ical_uid);
     free(create.ical_recurid);
     free(create.resourcename);
+    json_decref(create.jsevent);
     strarray_fini(&create.schedule_addresses);
     jmap_parser_fini(&parser);
 }
@@ -5427,10 +5487,13 @@ static void setcalendarevents_update(jmap_req_t *req,
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
 
     struct updateevent update = {
-        .event_patch = event_patch,
+        .event_patch = json_deep_copy(event_patch),
         .eid = eid,
         .serverset = serverset,
     };
+
+    remove_jsicalprops(update.event_patch, &parser);
+    if (json_array_size(parser.invalid)) goto done;
 
     static int64_t icalendar_max_size = -1;
     if (icalendar_max_size < 0) {
@@ -5751,6 +5814,7 @@ done:
     if (update.oldical)
         icalcomponent_free(update.oldical);
     json_decref(update.old_event);
+    json_decref(update.event_patch);
     jstimezones_free(&update.jstzones);
 
     if (mbox) jmap_closembox(req, &mbox);
