@@ -55,6 +55,7 @@ sub test_card_set_create_localizations
                     addresses => {
                         addr1 => {
                             '@type' => 'Address',
+                            isOrdered => JSON::false,
                             components => [
                                 { kind => 'locality', value => 'Tokio' }
                             ]
@@ -155,8 +156,8 @@ sub test_card_set_create_localizations
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
     $card =~ s/\\,/,/gs;         # unescape commas
 
-#    $self->assert_matches(qr/FN:Gabriel/, $card);
-#    $self->assert_matches(qr/FN;LANGUAGE=jp:/, $card);
+    $self->assert_matches(qr/FN:Gabriel/, $card);
+    $self->assert_matches(qr/FN;LANGUAGE=jp:/, $card);
     $self->assert_matches(qr/N;ALTID=n1:M/, $card);
     $self->assert_matches(qr/N;ALTID=n1;LANGUAGE=jp:/, $card);
     $self->assert_matches(qr/ADR;ALTID=addr1:;;;Tokio;;;/, $card);

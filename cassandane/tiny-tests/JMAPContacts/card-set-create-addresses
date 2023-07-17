@@ -36,11 +36,17 @@ sub test_card_set_create_addresses
                             contexts => {
                                 work => JSON::true
                             },
-                            full => '54321 Oak St\nReston\nVA\n20190\nUSA',
+                            full => "54321 Oak St\nReston\nVA\n20190\nUSA",
+                            isOrdered => JSON::true,
+                            defaultSeparator => "\n",
                             components => [
                                 {
                                     kind => 'number',
                                     value => '54321'
+                                },
+                                {
+                                    kind => 'separator',
+                                    value => " "
                                 },
                                 {
                                     kind => 'name',
@@ -51,11 +57,15 @@ sub test_card_set_create_addresses
                                     value => 'Reston'
                                 },
                                 {
+                                    kind => 'separator',
+                                    value => ', '
+                                },
+                                {
                                     kind => 'region',
                                     value => 'VA'
                                 },
                                 {
-                                    kind => 'postalCode',
+                                    kind => 'postcode',
                                     value => '20190'
                                 },
                                 {
@@ -69,7 +79,8 @@ sub test_card_set_create_addresses
                             contexts => {
                                 private => JSON::true
                             },
-                            full => '12345 Elm St\nReston\nVA\n20190\nUSA',
+                            full => "12345 Elm St\nReston\nVA\n20190\nUSA",
+                            isOrdered => JSON::false,
                             components => [
                                 {
                                     kind => 'number',
@@ -89,9 +100,9 @@ sub test_card_set_create_addresses
                                     value => 'VA'
                                 },
                                 {
-                                    kind => 'postalCode',
+                                    kind => 'postcode',
                                     value => '20190'
-                                }
+                                },
                                 {
                                     kind => 'country',
                                     value => 'USA'
@@ -114,9 +125,13 @@ sub test_card_set_create_addresses
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
     $card =~ s/\\,/,/gs;         # unescape commas
-    $card =~ s/\^/\\/gs;         # replace ^ (is this a vparse artifact?)
+    $card =~ s/\^/\\/gs;         # unescape unsafe chars
 
-    $self->assert_matches(qr/ADR;PROP-ID=k23;TYPE=WORK;CC=US;LABEL="54321 Oak St\\nReston\\nVA\\n20190\\nUSA":;;Oak St,54321;Reston;VA;20190;USA/, $card);
-    $self->assert_matches(qr/ADR;PROP-ID=k24;TYPE=HOME;TZ=America\/New_York;CC=US;LABEL="12345 Elm St\\nReston\\nVA\\n20190\\nUSA":;;Elm St,12345;Reston;VA;20190;USA/, $card);
+    # NOTE: vparse.c doesn't understand multi-valued structured props/params
+    # and [un]escapes incorrectly.
+    # The expected results will have to change when CardDAV uses libicalvcard
+
+    $self->assert_matches(qr/ADR;JSCOMPS="s,\\n;11;s, ;10;3;s,, ;4;5;6";PROP-ID=k23;TYPE=WORK;CC=US;LABEL="54321 Oak St\\nReston\\nVA\\n20190\\nUSA":;;54321,Oak St;Reston;VA;20190;USA;;;;Oak St;54321;;;;;;/, $card);
+    $self->assert_matches(qr/ADR;PROP-ID=k24;TYPE=HOME;TZ=America\/New_York;CC=US;LABEL="12345 Elm St\\nReston\\nVA\\n20190\\nUSA":;;12345,Elm St;Reston;VA;20190;USA;;;;Elm St;12345;;;;;;/, $card);
     $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
 }
