@@ -87,7 +87,7 @@ sub test_card_set_create_addresses
                                     value => '12345'
                                 },
                                 {
-                                    '@type' => 'AddressComponent',
+                                    '@type' => 'Address',
                                     kind => 'name',
                                     value => 'Elm St'
                                 },
