@@ -10719,6 +10719,8 @@ static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
         logfmt = "jmap: create contact %s/%s (%s)";
     }
 
+    syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name ? name : "");
+
     r = _jscard_to_vcard(req, NULL, mboxname, card,
                          jcard, &annots, &blobs, errors);
 
@@ -10726,7 +10728,6 @@ static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
         goto done;
     }
 
-    syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name ? name : "");
     r = carddav_store_x(*mailbox, card, resourcename, 0, &annots,
                         req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
