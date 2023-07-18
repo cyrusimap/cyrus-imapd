@@ -32,7 +32,7 @@ FN:Forrest Gump
 ORG;PROP-ID=O1:Bubba Gump Shrimp Co.
 TITLE;PROP-ID=T1:Shrimp Man
 PHOTO;PROP-ID=P1;ENCODING=b;TYPE=JPEG:c29tZSBwaG90bw==
-foo.ADR;PROP-ID=A1:;;1501 Broadway;New York;NY;10036;USA
+foo.ADR;PROP-ID=A1;JSCOMPS="s, ;2;3;4;5;6":;;1501 Broadway;New York;NY;10036;USA
 foo.GEO:40.7571383482188;-73.98695548990568
 foo.TZ:-05:00
 REV:2008-04-24T19:52:43Z
@@ -84,6 +84,7 @@ EOF
         },
         addresses => {
             A1 => {
+                'isOrdered' => JSON::true,
                 'components' => [
                     { kind => 'name',     value => '1501 Broadway' },
                     { kind => 'locality', value => 'New York' },
