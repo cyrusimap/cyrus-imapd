@@ -2642,7 +2642,7 @@ sub test_reconstruct
     xlog $self, "Moving the cyrus.index file out of the way";
     my $datadir = $self->{instance}->folder_to_directory('user.cassandane');
     my $cyrus_index = "$datadir/cyrus.index";
-    $self->assert(( -f $cyrus_index ));
+    $self->assert_file_test($cyrus_index, '-f');
     rename($cyrus_index, $cyrus_index . '.NOT')
         or die "Cannot rename $cyrus_index: $!";
 
@@ -2769,7 +2769,7 @@ sub test_reconstruct_orphans
     xlog $self, "Moving the cyrus.index file out of the way";
     my $datadir = $self->{instance}->folder_to_directory('user.cassandane');
     my $cyrus_index = "$datadir/cyrus.index";
-    $self->assert(( -f $cyrus_index ));
+    $self->assert_file_test($cyrus_index, '-f');
     rename($cyrus_index, $cyrus_index . '.NOT')
         or die "Cannot rename $cyrus_index: $!";
 

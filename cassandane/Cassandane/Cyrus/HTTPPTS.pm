@@ -142,8 +142,8 @@ sub test_alternate_ptscache_db_path
         $admintalk->get_last_completion_response());
 
     my $confdir = $self->{instance}->{basedir} . "/conf";
-    $self->assert(-e $confdir . "/non-default-ptscache.db");
-    $self->assert(not -e $confdir . "/ptclient/ptscache.db");
+    $self->assert_file_test($confdir . "/non-default-ptscache.db");
+    $self->assert_not_file_test($confdir . "/ptclient/ptscache.db");
 }
 
 sub test_setacl_groupid
