@@ -5920,52 +5920,52 @@ static const jmap_property_t card_props[] = {
 struct comp_kind {
     const char *name;
     unsigned idx;
-    unsigned back_idx;
+    unsigned alt_idx;
+    unsigned backward : 1;
 };
 
-/* vCard N fields: Ordered for vCard -> JSContact */
+/* vCard N fields and JSContact Name components */
 static const struct comp_kind n_comp_kinds[] = {
-    { "title",         VCARD_N_PREFIX,          VCARD_N_PREFIX        },
-    { "given",         VCARD_N_GIVEN,           VCARD_N_GIVEN         },
-    { "middle",        VCARD_N_ADDITIONAL,      VCARD_N_ADDITIONAL    },
-    { "surname",       VCARD_N_FAMILY,          VCARD_N_FAMILY        },
-    { "surname2",      VCARD_N_SECONDARY,       VCARD_N_FAMILY        },
-    { "generation",    VCARD_N_GENERATION,      VCARD_N_SUFFIX        },
-    { "credential",    VCARD_N_SUFFIX,          VCARD_N_SUFFIX        },
-    { NULL,            0,                       0,                    }
+    { "title",         VCARD_N_PREFIX,          VCARD_N_PREFIX,        0 },
+    { "given",         VCARD_N_GIVEN,           VCARD_N_GIVEN,         0 },
+    { "middle",        VCARD_N_ADDITIONAL,      VCARD_N_ADDITIONAL,    0 },
+    { "surname",       VCARD_N_FAMILY,          VCARD_N_SECONDARY,     0 },
+    { "surname2",      VCARD_N_SECONDARY,       VCARD_N_FAMILY,        1 },
+    { "generation",    VCARD_N_GENERATION,      VCARD_N_SUFFIX,        1 },
+    { "credential",    VCARD_N_SUFFIX,          VCARD_N_GENERATION,    0 },
+    { NULL,            0,                       0,                     0 }
 };
 
-/* vCard ADR fields:
-   PO Box, Extension, Street, Locality, Region, Postal Code, Country Name */
+/* vCard ADR fields and JSContact Address components */
 static const struct comp_kind adr_comp_kinds[] = {
-    { "postOfficeBox", VCARD_ADR_PO_BOX,        VCARD_ADR_PO_BOX      },
-    { "apartment",     VCARD_ADR_EXTENDED,      VCARD_ADR_EXTENDED    },
-    { "name",          VCARD_ADR_STREET,        VCARD_ADR_STREET      },
-    { "locality",      VCARD_ADR_LOCALITY,      VCARD_ADR_LOCALITY    },
-    { "region",        VCARD_ADR_REGION,        VCARD_ADR_REGION      },
-    { "postcode",      VCARD_ADR_POSTAL_CODE,   VCARD_ADR_POSTAL_CODE },
-    { "country",       VCARD_ADR_COUNTRY,       VCARD_ADR_COUNTRY     },
-    { NULL,            0,                       0,                    }
+    { "postOfficeBox", VCARD_ADR_PO_BOX,        VCARD_ADR_PO_BOX,      0 },
+    { "apartment",     VCARD_ADR_EXTENDED,      VCARD_ADR_EXTENDED,    0 },
+    { "name",          VCARD_ADR_STREET,        VCARD_ADR_STREET,      0 },
+    { "locality",      VCARD_ADR_LOCALITY,      VCARD_ADR_LOCALITY,    0 },
+    { "region",        VCARD_ADR_REGION,        VCARD_ADR_REGION,      0 },
+    { "postcode",      VCARD_ADR_POSTAL_CODE,   VCARD_ADR_POSTAL_CODE, 0 },
+    { "country",       VCARD_ADR_COUNTRY,       VCARD_ADR_COUNTRY,     0 },
+    { NULL,            0,                       0,                     0 }
 };
 
 static const struct comp_kind ext_adr_comp_kinds[] = {
-    { "postOfficeBox", VCARD_ADR_PO_BOX,        VCARD_ADR_PO_BOX      },
-    { "locality",      VCARD_ADR_LOCALITY,      VCARD_ADR_LOCALITY    },
-    { "region",        VCARD_ADR_REGION,        VCARD_ADR_REGION      },
-    { "postcode",      VCARD_ADR_POSTAL_CODE,   VCARD_ADR_POSTAL_CODE },
-    { "country",       VCARD_ADR_COUNTRY,       VCARD_ADR_COUNTRY     },
-    { "room",          VCARD_ADR_ROOM,          VCARD_ADR_STREET      },
-    { "apartment",     VCARD_ADR_APARTMENT,     VCARD_ADR_STREET      },
-    { "floor",         VCARD_ADR_FLOOR,         VCARD_ADR_STREET      },
-    { "name",          VCARD_ADR_STREET_NAME,   VCARD_ADR_STREET      },
-    { "number",        VCARD_ADR_STREET_NUMBER, VCARD_ADR_STREET      },
-    { "building",      VCARD_ADR_BUILDING,      VCARD_ADR_STREET      },
-    { "block",         VCARD_ADR_BLOCK,         VCARD_ADR_STREET      },
-    { "subdistrict",   VCARD_ADR_SUBDISTRICT,   VCARD_ADR_STREET      },
-    { "district",      VCARD_ADR_DISTRICT,      VCARD_ADR_STREET      },
-    { "direction",     VCARD_ADR_DIRECTION,     VCARD_ADR_STREET      },
-    { "landmark",      VCARD_ADR_LANDMARK,      VCARD_ADR_STREET      },
-    { NULL,            0,                       0,                    }
+    { "postOfficeBox", VCARD_ADR_PO_BOX,        VCARD_ADR_PO_BOX,      0 },
+    { "locality",      VCARD_ADR_LOCALITY,      VCARD_ADR_LOCALITY,    0 },
+    { "region",        VCARD_ADR_REGION,        VCARD_ADR_REGION,      0 },
+    { "postcode",      VCARD_ADR_POSTAL_CODE,   VCARD_ADR_POSTAL_CODE, 0 },
+    { "country",       VCARD_ADR_COUNTRY,       VCARD_ADR_COUNTRY,     0 },
+    { "room",          VCARD_ADR_ROOM,          VCARD_ADR_STREET,      1 },
+    { "apartment",     VCARD_ADR_APARTMENT,     VCARD_ADR_STREET,      1 },
+    { "floor",         VCARD_ADR_FLOOR,         VCARD_ADR_STREET,      1 },
+    { "name",          VCARD_ADR_STREET_NAME,   VCARD_ADR_STREET,      1 },
+    { "number",        VCARD_ADR_STREET_NUMBER, VCARD_ADR_STREET,      1 },
+    { "building",      VCARD_ADR_BUILDING,      VCARD_ADR_STREET,      1 },
+    { "block",         VCARD_ADR_BLOCK,         VCARD_ADR_STREET,      1 },
+    { "subdistrict",   VCARD_ADR_SUBDISTRICT,   VCARD_ADR_STREET,      1 },
+    { "district",      VCARD_ADR_DISTRICT,      VCARD_ADR_STREET,      1 },
+    { "direction",     VCARD_ADR_DIRECTION,     VCARD_ADR_STREET,      1 },
+    { "landmark",      VCARD_ADR_LANDMARK,      VCARD_ADR_STREET,      1 },
+    { NULL,            0,                       0,                     0 }
 };
 
 #define ALLOW_CALSCALE_PARAM      (1<<0)
@@ -6373,6 +6373,95 @@ struct card_rock {
     struct buf *buf;
 };
 
+static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
+                               vcardstructuredtype *st,
+                               const struct comp_kind *comp_kinds)
+{
+    vcardparameter *param =
+        vcardproperty_get_first_parameter(prop, VCARD_JSCOMPS_PARAMETER);
+    vcardstrarray *sa;
+    const char *val;
+    size_t i;
+
+    if (param) {
+        /* Order components per JSCOMPS */
+        vcardstructuredtype *jscomps = vcardparameter_get_jscomps(param);
+
+        json_object_set_new(obj, "isOrdered", json_true());
+
+        sa = jscomps->field[0];
+        if (sa) {
+            /* add default separator, if not " " */
+            val = vcardstrarray_element_at(sa, 1);
+            if (strcmpsafe(" ", val)) {
+                json_object_set_new(obj, "defaultSeparator", json_string(val));
+            }
+        }
+
+        for (i = 1; i < jscomps->num_fields; i++) {
+            const char *kind;
+
+            sa = jscomps->field[i];
+            val = vcardstrarray_element_at(sa, 0);
+            if (*val == 's') {
+                kind = "separator";
+                val = vcardstrarray_element_at(sa, 1);
+            }
+            else {
+                int field_idx = atoi(val);
+                int val_idx = 0;
+
+                if (field_idx >= (int) st->num_fields) continue;
+
+                kind = comp_kinds[field_idx].name;
+
+                if (vcardstrarray_size(sa) > 1)
+                    val_idx = atoi(vcardstrarray_element_at(sa, 1));
+
+                val = vcardstrarray_element_at(st->field[field_idx], val_idx);
+            }
+
+            if (*val) {
+                json_array_append_new(json_object_get_vanew(obj,
+                                                            "components", "[]"),
+                                      json_pack("{s:s s:o}",
+                                                "kind", kind,
+                                                "value", jmap_utf8string(val)));
+            }
+        }
+
+        /* Remove JSCOMPS parameter */
+        vcardproperty_remove_parameter_by_ref(prop, param);
+        return;
+    }
+
+    /* Iterate through all components and values */
+    for (const struct comp_kind *ckind = comp_kinds; ckind->name; ckind++) {
+        if (ckind->idx >= st->num_fields) continue;
+
+        sa = st->field[ckind->idx];
+        for (i = 0; sa && i < vcardstrarray_size(sa); i++) {
+            val = vcardstrarray_element_at(sa, i);
+
+            if (*val) {
+                /* Skip values that appear in other fields */
+                if (!ckind->backward && ckind->alt_idx != ckind->idx) {
+                    sa = st->field[ckind->alt_idx];
+                    if (sa && vcardstrarray_find(sa, val) >= 0)
+                        continue;
+                }
+
+                json_array_append_new(json_object_get_vanew(obj,
+                                                            "components", "[]"),
+                                      json_pack("{s:s s:o}",
+                                                "kind", ckind->name,
+                                                "value",
+                                                jmap_utf8string(val)));
+            }
+        }
+    }
+}
+
 static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                               const char *prop_id, struct card_rock *crock)
 {
@@ -6538,72 +6627,33 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
     case VCARD_N_PROPERTY: {
         vcardstructuredtype *n = vcardproperty_get_n(prop);
-        vcardparameter *sortasp;
-        vcardstrarray *sorts = NULL;
-        const struct comp_kind *ckind;
-        json_t *comps = NULL, *sortas = NULL;
 
-        sortasp = vcardproperty_get_first_parameter(prop,
-                                                    VCARD_SORTAS_PARAMETER);
-        if (sortasp) {
-            sorts = vcardparameter_get_sortas(sortasp);
-        }
+        jprop = json_object_get_vanew(obj, "name", "{}");
 
-        for (ckind = n_comp_kinds; ckind->name; ckind++) {
-            vcardstrarray *vals;
-            size_t i;
+        jscomps_from_vcard(jprop, prop, n, n_comp_kinds);
 
-            if (ckind->idx >= n->num_fields) continue;
+        param = vcardproperty_get_first_parameter(prop, VCARD_SORTAS_PARAMETER);
+        if (param) {
+            vcardstrarray *sorts = vcardparameter_get_sortas(param);
+            json_t *sortas = json_object();
+            const struct comp_kind *ckind;
 
-            vals = n->field[ckind->idx];
-            for (i = 0; vals && i < vcardstrarray_size(vals); i++) {
-                const char *val = vcardstrarray_element_at(vals, i);
+            for (ckind = n_comp_kinds; ckind->name; ckind++) {
+                if (ckind->idx < vcardstrarray_size(sorts)) {
+                    const char *val =
+                        vcardstrarray_element_at(sorts, ckind->idx);
 
-                /* Skip values that appear in other fields */
-                if (ckind->idx == VCARD_N_FAMILY) {
-                    vals = n->field[VCARD_N_SECONDARY];
-                    if (vals && vcardstrarray_find(vals, val) >= 0)
-                        continue;
-                }
-                else if (ckind->idx == VCARD_N_SUFFIX) {
-                    vals = n->field[VCARD_N_GENERATION];
-                    if (vals && vcardstrarray_find(vals, val) >= 0)
-                        continue;
-                }
-
-                if (*val) {
-                    json_t *comp = json_pack("{s:s s:o}",
-                                             "kind", ckind->name,
-                                             "value", jmap_utf8string(val));
-
-                    if (!comps) comps = json_array();
-                    json_array_append_new(comps, comp);
-
-                    if (sorts && ckind->idx < vcardstrarray_size(sorts)) {
-                        val = vcardstrarray_element_at(sorts, ckind->idx);
-                        if (*val) {
-                            if (!sortas) sortas = json_object();
-                            json_object_set_new(sortas,
-                                                ckind->name,
-                                                jmap_utf8string(val));
-                        }
+                    if (*val) {
+                        json_object_set_new(sortas,
+                                            ckind->name, jmap_utf8string(val));
                     }
                 }
             }
-        }
 
-        /* Remove SORT-AS parameter */
-        if (sortasp) {
-            vcardproperty_remove_parameter_by_ref(prop, sortasp);
-        }
+            json_object_set_new(jprop, "sortAs", sortas);
 
-        if (comps) {
-            jprop = json_object_get_vanew(obj, "name", "{}");
-            json_object_set_new(jprop, "components", comps);
-
-            if (sortas) {
-                json_object_set_new(jprop, "sortAs", sortas);
-            }
+            /* Remove SORT-AS parameter */
+            vcardproperty_remove_parameter_by_ref(prop, param);
         }
         break;
     }
@@ -6653,31 +6703,20 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
         /* Delivery Addressing Properties */
     case VCARD_ADR_PROPERTY: {
-        vcardstructuredtype *adr = vcardproperty_get_n(prop);
+        vcardstructuredtype *adr = vcardproperty_get_adr(prop);
         json_t *addrs = json_object_get_vanew(obj, "addresses", "{}");
-        const struct comp_kind *ckind = adr->num_fields > VCARD_ADR_COUNTRY + 1 ?
-            ext_adr_comp_kinds : adr_comp_kinds;
-        const char *val;
+        const struct comp_kind *comp_kinds = adr_comp_kinds;
 
         param_flags = ALLOW_TYPE_PARAM |
             ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
 
         jprop = json_object_get_vanew(addrs, prop_id, "{}");
 
-        for (; ckind->name; ckind++) {
-            if (ckind->idx >= adr->num_fields) continue;
-
-            val = vcardstrarray_element_at(adr->field[ckind->idx], 0);
-
-            if (*val) {
-                json_t *comps = json_object_get_vanew(jprop, "components", "[]");
-
-                json_array_append_new(comps,
-                                      json_pack("{s:s s:o}",
-                                                "kind", ckind->name,
-                                                "value", jmap_utf8string(val)));
-            }
+        if (adr->num_fields > VCARD_ADR_COUNTRY + 1) {
+            comp_kinds = ext_adr_comp_kinds;
         }
+
+        jscomps_from_vcard(jprop, prop, adr, comp_kinds);
         break;
     }
 
@@ -8814,8 +8853,8 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
             }
 
             /* Also add values from ext fields to backward-compat fields */
-            if (ckind->back_idx != ckind->idx) {
-                field = &st->field[ckind->back_idx];
+            if (ckind->backward) {
+                field = &st->field[ckind->alt_idx];
                 if (!*field) *field = vcardstrarray_new(1);
                 vcardstrarray_append(*field, val);
             }
