@@ -73,7 +73,7 @@ EOF
             full => 'Gabriel García Márquez',
             components => [
                 { 'kind' => 'given', 'value' => 'Gabriel' },
-                { 'kind' => 'middle', 'value' => 'García' },
+                { 'kind' => 'given2', 'value' => 'García' },
                 { 'kind' => 'surname', 'value' => 'Márquez' }
             ],
         },
@@ -119,7 +119,7 @@ EOF
                 'name/full' => 'ガブリエル・ガルシア・マルケス',
                 'name/components' => [
                     { 'kind' => 'given', 'value' => 'ガブリエル' },
-                    { 'kind' => 'middle', 'value' => 'ガルシア' },
+                    { 'kind' => 'given2', 'value' => 'ガルシア' },
                     { 'kind' => 'surname', 'value' => 'マルケス' }
                 ],
                 'addresses/addr1/components' => [
@@ -149,7 +149,7 @@ return;
                              $res->[0][1]{list}[0]{'name'}{'full'});
     $self->assert_deep_equals([
         { 'kind' => 'given', 'value' => 'Gabriel' },
-        { 'kind' => 'middle', 'value' => 'García' },
+        { 'kind' => 'given2', 'value' => 'García' },
         { 'kind' => 'surname', 'value' => 'Márquez' }
     ], $res->[0][1]{list}[0]{name}{components});
     $self->assert_deep_equals({
@@ -190,7 +190,7 @@ return;
                              $res->[0][1]{list}[0]{localizations}{jp}{'addresses/addr1/locality'});
     $self->assert_deep_equals([
             { 'kind' => 'given', 'value' => 'ガブリエル' },
-            { 'kind' => 'middle', 'value' => 'ガルシア' },
+            { 'kind' => 'given2', 'value' => 'ガルシア' },
             { 'kind' => 'surname', 'value' => 'マルケス' }
     ], $res->[0][1]{list}[0]{localizations}{jp}{'name/components'});
 }
