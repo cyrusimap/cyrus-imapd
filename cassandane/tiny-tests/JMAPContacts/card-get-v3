@@ -29,7 +29,7 @@ UID:$id
 BDAY:1944-06-07
 N:Gump;Forrest;;Mr.
 FN:Forrest Gump
-ORG;PROP-ID=O1:Bubba Gump Shrimp Co.
+ORG;PROP-ID=O1:Bubba Gump Shrimp Co.;foo
 TITLE;PROP-ID=T1:Shrimp Man
 PHOTO;PROP-ID=P1;ENCODING=b;TYPE=JPEG:c29tZSBwaG90bw==
 foo.ADR;PROP-ID=A1;JSCOMPS="s, ;2;3;4;5;6":;;1501 Broadway;New York;NY;10036;USA
@@ -74,7 +74,10 @@ EOF
         },
         organizations => {
             O1 => {
-                'name' => 'Bubba Gump Shrimp Co.'
+                name => 'Bubba Gump Shrimp Co.',
+                units => [
+                    { name => 'foo' }
+                ]
             }
         },
         titles => {
