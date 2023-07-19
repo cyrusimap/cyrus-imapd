@@ -37,7 +37,7 @@ sub test_card_set_create_name
                                 value => 'Robert'
                             },
                             {
-                                kind => 'middle',
+                                kind => 'given2',
                                 value => 'Pau'
                             },
                             {

@@ -43,7 +43,7 @@ sub test_card_set_create_localizations
                             },
                             {
                                 '@type' => 'Name',
-                                kind => 'middle',
+                                kind => 'given2',
                                 value => 'García'
                             },
                             {
@@ -129,7 +129,7 @@ sub test_card_set_create_localizations
                                     },
                                     {
                                         '@type' => 'Name',
-                                        kind => 'middle',
+                                        kind => 'given2',
                                         value => 'ガルシア'
                                     },
                                     {

@@ -5798,7 +5798,7 @@ struct comp_kind {
 static const struct comp_kind n_comp_kinds[] = {
     { "title",         VCARD_N_PREFIX,          VCARD_N_PREFIX,        0 },
     { "given",         VCARD_N_GIVEN,           VCARD_N_GIVEN,         0 },
-    { "middle",        VCARD_N_ADDITIONAL,      VCARD_N_ADDITIONAL,    0 },
+    { "given2",        VCARD_N_ADDITIONAL,      VCARD_N_ADDITIONAL,    0 },
     { "surname",       VCARD_N_FAMILY,          VCARD_N_SECONDARY,     0 },
     { "surname2",      VCARD_N_SECONDARY,       VCARD_N_FAMILY,        1 },
     { "generation",    VCARD_N_GENERATION,      VCARD_N_SUFFIX,        1 },
@@ -7857,7 +7857,7 @@ static int card_filter_match(void *vf, void *rock)
                                     f->text, &cfrock->cached_termsets) ||
         !card_filter_match_namecomp(card, "given", f->given,
                                     f->text, &cfrock->cached_termsets) ||
-        !card_filter_match_namecomp(card, "middle", f->middle,
+        !card_filter_match_namecomp(card, "given2", f->middle,
                                     f->text, &cfrock->cached_termsets) ||
         !card_filter_match_namecomp(card, "surname", f->surname,
                                     f->text, &cfrock->cached_termsets) ||
