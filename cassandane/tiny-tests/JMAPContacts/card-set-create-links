@@ -57,5 +57,5 @@ sub test_card_set_create_links
 
     $self->assert_matches(qr|URL;PROP-ID=LINK-1:https://example.org/restaurant.french/~chezchic.html|, $card);
     $self->assert_matches(qr|CONTACT-URI;PROP-ID=CONTACT-1;PREF=1:mailto:contact\@example.com|, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }

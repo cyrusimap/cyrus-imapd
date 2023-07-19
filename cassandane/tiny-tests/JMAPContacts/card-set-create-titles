@@ -57,5 +57,5 @@ sub test_card_set_create_titles
 
     $self->assert_matches(qr/ROLE;PROP-ID=TITLE-2:Research Scientist/, $card);
     $self->assert_matches(qr/TITLE;PROP-ID=TITLE-1:Project Leader/, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }

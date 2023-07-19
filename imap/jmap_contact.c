@@ -8318,9 +8318,9 @@ static void _jsunknown_to_vcard(struct jmap_parser *parser,
     const char *ptr = jmap_parser_path(parser, &parser->buf);
     char *val = json_dumps(jval, JSON_COMPACT|JSON_ENCODE_ANY);
     vcardproperty *prop =
-        vcardproperty_vanew_jscontactprop(val,
-                                          vcardparameter_new_jsptr(ptr),
-                                          0);
+        vcardproperty_vanew_jsprop(val,
+                                   vcardparameter_new_jsptr(ptr),
+                                   0);
 
     vcardcomponent_add_property(card, prop);
     

@@ -50,5 +50,5 @@ sub test_card_set_create_nicknames
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
     $self->assert_matches(qr/NICKNAME;PROP-ID=k391:Johnny/, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }

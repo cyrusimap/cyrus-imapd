@@ -73,5 +73,5 @@ sub test_card_set_create_calendars
     $self->assert_matches(qr|CALURI;PROP-ID=CAL-2;MEDIATYPE=text/calendar:https://ftp.example.com/calA.ics|, $card);
     $self->assert_matches(qr|FBURL;PROP-ID=FBURL-1;PREF=1:https://www.example.com/busy/janedoe|, $card);
     $self->assert_matches(qr|FBURL;PROP-ID=FBURL-2;MEDIATYPE=text/calendar:https://example.com/busy/project-a.ifb|, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }

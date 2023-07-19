@@ -51,7 +51,7 @@ sub test_card_set_update_media_blob
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
     $self->assert_matches(qr|PHOTO;PROP-ID=res1:data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=|, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 
     xlog $self, "upload photo";
     my $res = $jmap->Upload("some photo", "image/jpeg");
@@ -78,7 +78,7 @@ sub test_card_set_update_media_blob
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
     $self->assert_matches(qr|PHOTO;PROP-ID=res1:data:image/jpeg;base64,c29tZSBwaG90bw==|, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 
     $res = $jmap->Download('cassandane', $blobId);
 

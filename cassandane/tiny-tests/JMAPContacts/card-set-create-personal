@@ -94,5 +94,5 @@ sub test_card_set_create_personal
     $self->assert_matches(qr|HOBBY;PROP-ID=PERSINFO-4;LEVEL=EXPERT;INDEX=2:sewing|, $card);
     $self->assert_matches(qr|INTEREST;PROP-ID=PERSINFO-5;LEVEL=FALSE;INDEX=1:r&b music|, $card);
     $self->assert_matches(qr|INTEREST;PROP-ID=PERSINFO-6;LEVEL=EXPERT;INDEX=2:rock&roll music|, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }

@@ -66,5 +66,5 @@ sub test_card_set_create_directories
     $self->assert_matches(qr|ORG-DIRECTORY;PROP-ID=DIRECTORY-1;INDEX=1:https://directory.mycompany.example.com|, $card);
     $self->assert_matches(qr|ORG-DIRECTORY;PROP-ID=DIRECTORY-2;PREF=1:ldap://ldap.tech.example/o=Tech,ou=Engineering|, $card);
     $self->assert_matches(qr|SOURCE;PROP-ID=ENTRY-1:https://dir.example.com/addrbook/jdoe/Jean%20Dupont.vcf|, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }
