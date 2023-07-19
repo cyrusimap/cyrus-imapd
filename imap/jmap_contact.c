@@ -8733,7 +8733,7 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
 {
     json_t *comps = json_object_get(obj, "components");
 
-    if (!comps) return 1;
+    if (!comps) return -1;
 
     if (!json_array_size(comps)) {
         jmap_parser_invalid(parser, "components");
@@ -8945,52 +8945,11 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
         goto done;
     }
 
-    if (!_jscomps_to_vcard(parser, jval, "Name", &n, n_comp_kinds, card,
-                           !fullName ? &buf : NULL, &jscomps)) {
-        goto done;
-    }
+    r = _jscomps_to_vcard(parser, jval, "Name", &n, n_comp_kinds, card,
+                          !fullName ? &buf : NULL, &jscomps);
+    if (!r) goto done;
 
-    jprop = json_object_get(jval, "sortAs");
-    if (jprop) {
-        const char *fields[VCARD_NUM_N_FIELDS] = { 0 };
-        unsigned last_field = 0;
-        void *tmp;
-
-        if (!json_is_object(jprop)) {
-            jmap_parser_invalid(parser, "sortAs");
-            goto done;
-        }
-
-        jmap_parser_push(parser, "sortAs");
-
-        json_object_foreach_safe(jprop, tmp, key, jsubprop) {
-            const struct comp_kind *ckind = _field_name_to_kind(key, n_comp_kinds);
-            if (!ckind) {
-                _jsunknown_to_vcard(parser, key, jsubprop, card);
-            }
-
-            fields[ckind->idx] = json_string_value(jsubprop);
-            last_field = MAX(last_field, ckind->idx);
-        }
-
-        sortas = vcardstrarray_new(1);
-
-        for (i = 0; i <= (size_t) last_field; i++) {
-            vcardstrarray_append(sortas, fields[i] ? fields[i] : "");
-        }
-
-        jmap_parser_pop(parser);
-    }
-
-    json_object_del(jval, "@type");
-    json_object_del(jval, "full");
-    json_object_del(jval, "sortAs");
-
-    /* Add unknown properties */
-    json_object_foreach(jval, key, jprop) {
-        _jsunknown_to_vcard(parser, key, jprop, card);
-    }
-
+    /* Add FN property */
     prop = vcardproperty_vanew_fn(
         buf_cstring(&buf),
         !fullName ? vcardparameter_new_derived(VCARD_DERIVED_TRUE) : 0,
@@ -9002,21 +8961,71 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
     }
     vcardcomponent_add_property(card, prop);
 
-    prop = vcardproperty_vanew_n(&n, jscomps, NULL);
+    if (r == 1) {
+        /* Add N property */
+        prop = vcardproperty_vanew_n(&n, jscomps, NULL);
 
-    if (l10n->lang) {
-        vcardproperty_add_parameter(prop, vcardparameter_new_altid("n1"));
-        if (*l10n->lang) {
-            vcardproperty_add_parameter(prop,
-                                        vcardparameter_new_language(l10n->lang));
+        if (l10n->lang) {
+            vcardproperty_add_parameter(prop, vcardparameter_new_altid("n1"));
+            if (*l10n->lang) {
+                vcardproperty_add_parameter(prop,
+                                            vcardparameter_new_language(l10n->lang));
+            }
+        }
+        vcardcomponent_add_property(card, prop);
+
+        jprop = json_object_get(jval, "sortAs");
+        if (jprop) {
+            const char *fields[VCARD_NUM_N_FIELDS] = { 0 };
+            unsigned last_field = 0;
+            void *tmp;
+
+            if (!json_is_object(jprop)) {
+                jmap_parser_invalid(parser, "sortAs");
+                r = 0;
+                goto done;
+            }
+
+            jmap_parser_push(parser, "sortAs");
+
+            json_object_foreach_safe(jprop, tmp, key, jsubprop) {
+                const struct comp_kind *ckind =
+                    _field_name_to_kind(key, n_comp_kinds);
+
+                if (!ckind) {
+                    _jsunknown_to_vcard(parser, key, jsubprop, card);
+                }
+
+                fields[ckind->idx] = json_string_value(jsubprop);
+                last_field = MAX(last_field, ckind->idx);
+            }
+
+            sortas = vcardstrarray_new(1);
+
+            for (i = 0; i <= (size_t) last_field; i++) {
+                vcardstrarray_append(sortas, fields[i] ? fields[i] : "");
+            }
+
+            /* Add SORT-AS parameter */
+            vcardproperty_add_parameter(prop, vcardparameter_new_sortas(sortas));
+
+            jmap_parser_pop(parser);
         }
     }
-    if (sortas) {
-        vcardproperty_add_parameter(prop, vcardparameter_new_sortas(sortas));
+    else if (json_object_get(jval, "sortAs")) {
+        jmap_parser_invalid(parser, "sortAs");
+        r = 0;
+        goto done;
     }
 
-    vcardcomponent_add_property(card, prop);
-    r = 1;
+    json_object_del(jval, "@type");
+    json_object_del(jval, "full");
+    json_object_del(jval, "sortAs");
+
+    /* Add unknown properties */
+    json_object_foreach(jval, key, jprop) {
+        _jsunknown_to_vcard(parser, key, jprop, card);
+    }
 
   done:
     jmap_parser_pop(parser);
