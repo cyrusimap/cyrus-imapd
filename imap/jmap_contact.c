@@ -6783,7 +6783,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                 sort = NULL;
             }
             json_array_append_new(units,
-                                  json_pack("{s:s s:s*}",
+                                  json_pack("{s:o s:s*}",
                                             "name", jmap_utf8string(name),
                                             "sortAs", sort));
         }
