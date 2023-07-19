@@ -9019,12 +9019,6 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
   done:
     jmap_parser_pop(parser);
     buf_free(&buf);
-    if (!r) {
-        for (i = 0; i < n.num_fields; i++) {
-            if (n.field[i]) vcardstrarray_free(n.field[i]);
-        }
-    }
-
     return r;
 }
 
