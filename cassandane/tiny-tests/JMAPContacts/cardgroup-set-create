@@ -58,4 +58,5 @@ sub test_cardgroup_set_create
     $self->assert_matches(qr/FN:$name/, $card);
     $self->assert_matches(qr/MEMBER:urn:uuid:$member1/, $card);
     $self->assert_matches(qr/MEMBER:urn:uuid:$member2/, $card);
+    $self->assert_does_not_match(qr/N:;/, $card);
 }
