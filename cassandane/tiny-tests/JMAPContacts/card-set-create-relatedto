@@ -64,5 +64,5 @@ sub test_card_set_create_relatedto
     $self->assert_matches(qr|RELATED;TYPE=FRIEND:urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6|, $card);
     $self->assert_matches(qr|RELATED;TYPE=CONTACT:https://example.com/directory/john.vcf|, $card);
     $self->assert_matches(qr|RELATED;VALUE=TEXT:Please contact my deputy John for any inquiries.|, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }

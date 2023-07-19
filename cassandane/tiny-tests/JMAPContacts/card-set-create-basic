@@ -69,5 +69,5 @@ sub test_card_set_create_basic
     $self->assert_matches(qr/PRODID:$prodid/, $card);
     $self->assert_matches(qr/CREATED:$created/, $card);
     $self->assert_matches(qr/FN:$name/, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }

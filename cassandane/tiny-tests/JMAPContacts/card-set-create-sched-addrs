@@ -53,5 +53,5 @@ sub test_card_set_create_schedaddrs
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
     $self->assert_matches(qr/CALADRURI;PROP-ID=sched1;TYPE=HOME:mailto:janedoe\@example.com/, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }

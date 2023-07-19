@@ -62,5 +62,5 @@ sub test_card_set_create_organizations
     $card =~ s/\\,/,/gs;         # unescape commas
 
     $self->assert_matches(qr/ORG;SORT-AS=ABC;PROP-ID=o1:ABC, Inc.;North American Division;Marketing/, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }

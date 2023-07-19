@@ -84,5 +84,5 @@ sub test_card_set_create_anniversaries
     $self->assert_matches(qr|DEATHDATE;VALUE=TIMESTAMP;PROP-ID=k9:20191015T231000Z|, $card);
     $self->assert_matches(qr|DEATHPLACE;PROP-ID=k9:4445 Tree Street\\nNew England\\, ND 58647\\nUSA|, $card);
     $self->assert_matches(qr|ANNIVERSARY;VALUE=DATE;PROP-ID=k10:1975|, $card);
-    $self->assert_matches(qr|JSCONTACT-PROP;JSPTR=anniversaries/k10/place:|, $card);
+    $self->assert_matches(qr|JSPROP;JSPTR=anniversaries/k10/place:|, $card);
 }
