@@ -2774,136 +2774,6 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     return obj;
 }
 
-static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
-{
-    struct mailbox *mailbox = NULL;
-    struct vparse_card *vcard = NULL;
-    char *mboxid = NULL, *prop = NULL, *mediatype = NULL;
-    uint32_t uid;
-    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
-    int res = HTTP_OK;
-    mbentry_t *freeme = NULL;
-    int r;
-
-    if (ctx->blobid[0] != 'V') return 0;
-
-    if (!jmap_decode_rawdata_blobid(ctx->blobid, &mboxid, &uid,
-                                    NULL, NULL, &prop, &guid)) {
-        res = HTTP_BAD_REQUEST;
-        goto done;
-    }
-
-    if (!prop && ctx->accept_mime) {
-        /* Make sure client can handle blob type. */
-        if (strcmp(ctx->accept_mime, "application/octet-stream") &&
-            strcmp(ctx->accept_mime, "text/vcard")) {
-            res = HTTP_NOT_ACCEPTABLE;
-            goto done;
-        }
-        buf_setcstr(&ctx->content_type, ctx->accept_mime);
-    }
-
-    const mbentry_t *mbentry;
-    if (ctx->from_accountid) {
-        mboxlist_lookup_by_uniqueid(mboxid, &freeme, NULL);
-        mbentry = freeme;
-    }
-    else {
-        mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
-    }
-    if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
-        res = HTTP_NOT_FOUND;
-        goto done;
-    }
-
-    /* Open mailbox, we need it now */
-    if ((r = jmap_openmbox(req, mbentry->name, &mailbox, 0))) {
-        ctx->errstr = error_message(r);
-        res = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
-    /* Load vCard data */
-    struct index_record record;
-    r = mailbox_find_index_record(mailbox, uid, &record);
-    if (r == IMAP_NOTFOUND) {
-        res = HTTP_NOT_FOUND;
-        goto done;
-    }
-
-    if (!r) {
-        vcard = record_to_vcard(mailbox, &record);
-    }
-    if (!vcard) {
-        ctx->errstr = "failed to load record";
-        res = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
-    if (prop) {
-        /* Fetching a particular property as a blob */
-        struct vparse_entry *entry = vparse_get_entry(vcard->objects, NULL, prop);
-        struct message_guid prop_guid = MESSAGE_GUID_INITIALIZER;
-
-        if (!entry ||
-            !vcard_prop_decode_value(entry, &ctx->blob, &mediatype, &prop_guid) ||
-            message_guid_cmp(&guid, &prop_guid)) {
-            res = HTTP_NOT_FOUND;
-            goto done;
-        }
-        else if (ctx->accept_mime) {
-            if (strcmp(ctx->accept_mime, "application/octet-stream") &&
-                strcmp(ctx->accept_mime, mediatype)) {
-                res = HTTP_NOT_ACCEPTABLE;
-                goto done;
-            }
-            buf_setcstr(&ctx->content_type, ctx->accept_mime);
-        }
-        else if (mediatype) {
-            buf_setcstr(&ctx->content_type, mediatype);
-        }
-        else buf_reset(&ctx->content_type);
-
-        buf_setcstr(&ctx->encoding, "BINARY");
-    }
-    else {
-        if (!ctx->accept_mime || !strcmp(ctx->accept_mime, "text/vcard")) {
-            struct vparse_entry *entry =
-                vparse_get_entry(vcard->objects, NULL, "VERSION");
-
-            buf_setcstr(&ctx->content_type, "text/vcard");
-            if (entry)
-                buf_printf(&ctx->content_type, "; version=%s", entry->v.value);
-        }
-
-        buf_setcstr(&ctx->encoding, "8BIT");
-        vparse_tobuf(vcard, &ctx->blob);
-    }
-
-done:
-    if (res != HTTP_OK && !ctx->errstr) {
-        const char *desc = NULL;
-        switch (res) {
-            case HTTP_BAD_REQUEST:
-                desc = "invalid contact blobid";
-                break;
-            case HTTP_NOT_FOUND:
-                desc = "failed to find blob by contact blobid";
-                break;
-            default:
-                desc = error_message(res);
-        }
-        ctx->errstr = desc;
-    }
-    if (vcard) vparse_free_card(vcard);
-    if (mailbox) jmap_closembox(req, &mailbox);
-    mboxlist_entry_free(&freeme);
-    free(mboxid);
-    free(prop);
-    free(mediatype);
-    return res;
-}
-
 static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 {
     struct cards_rock *crock = (struct cards_rock *) rock;
@@ -11270,6 +11140,270 @@ static int jmap_cardgroup_set(struct jmap_req *req)
                   &_card_set_create, &_card_set_update);
 
     return 0;
+}
+
+static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
+{
+    struct mailbox *mailbox = NULL;
+    vcardcomponent *vcard = NULL;
+    char *mboxid = NULL, *propname = NULL, *mediatype = NULL;
+    uint32_t uid;
+    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+    int res = HTTP_OK;
+    mbentry_t *freeme = NULL;
+    int r;
+
+    if (ctx->blobid[0] != 'V') return 0;
+
+    if (!jmap_decode_rawdata_blobid(ctx->blobid, &mboxid, &uid,
+                                    NULL, NULL, &propname, &guid)) {
+        res = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    if (!propname && ctx->accept_mime) {
+        /* Make sure client can handle blob type. */
+        if (strcmp(ctx->accept_mime, "application/octet-stream") &&
+            strcmp(ctx->accept_mime, "text/vcard")) {
+            res = HTTP_NOT_ACCEPTABLE;
+            goto done;
+        }
+        buf_setcstr(&ctx->content_type, ctx->accept_mime);
+    }
+
+    const mbentry_t *mbentry;
+    if (ctx->from_accountid) {
+        mboxlist_lookup_by_uniqueid(mboxid, &freeme, NULL);
+        mbentry = freeme;
+    }
+    else {
+        mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+    }
+    if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+        res = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    /* Open mailbox, we need it now */
+    if ((r = jmap_openmbox(req, mbentry->name, &mailbox, 0))) {
+        ctx->errstr = error_message(r);
+        res = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Load vCard data */
+    struct index_record record;
+    r = mailbox_find_index_record(mailbox, uid, &record);
+    if (r == IMAP_NOTFOUND) {
+        res = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    if (!r) {
+        vcard = record_to_vcard_x(mailbox, &record);
+    }
+    if (!vcard) {
+        ctx->errstr = "failed to load record";
+        res = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    if (propname) {
+        /* Fetching a particular property as a blob */
+        vcardproperty_kind kind = vcardproperty_string_to_kind(propname);
+        vcardproperty *prop = vcardcomponent_get_first_property(vcard, kind);
+        struct message_guid prop_guid = MESSAGE_GUID_INITIALIZER;
+
+        if (!prop ||
+            !vcard_prop_decode_value_x(prop, &ctx->blob, &mediatype, &prop_guid) ||
+            message_guid_cmp(&guid, &prop_guid)) {
+            res = HTTP_NOT_FOUND;
+            goto done;
+        }
+        else if (ctx->accept_mime) {
+            if (strcmp(ctx->accept_mime, "application/octet-stream") &&
+                strcmp(ctx->accept_mime, mediatype)) {
+                res = HTTP_NOT_ACCEPTABLE;
+                goto done;
+            }
+            buf_setcstr(&ctx->content_type, ctx->accept_mime);
+        }
+        else if (mediatype) {
+            buf_setcstr(&ctx->content_type, mediatype);
+        }
+        else buf_reset(&ctx->content_type);
+
+        buf_setcstr(&ctx->encoding, "BINARY");
+    }
+    else {
+        if (!ctx->accept_mime || !strcmp(ctx->accept_mime, "text/vcard")) {
+            enum vcardproperty_version version =
+                vcardcomponent_get_version(vcard);
+
+            buf_setcstr(&ctx->content_type, "text/vcard");
+            if (version != VCARD_VERSION_NONE)
+                buf_printf(&ctx->content_type, "; version=%s",
+                           vcardproperty_enum_to_string(version));
+        }
+
+        buf_setcstr(&ctx->encoding, "8BIT");
+        buf_initmcstr(&ctx->blob, vcardcomponent_as_vcard_string_r(vcard));
+    }
+
+done:
+    if (res != HTTP_OK && !ctx->errstr) {
+        const char *desc = NULL;
+        switch (res) {
+            case HTTP_BAD_REQUEST:
+                desc = "invalid contact blobid";
+                break;
+            case HTTP_NOT_FOUND:
+                desc = "failed to find blob by contact blobid";
+                break;
+            default:
+                desc = error_message(res);
+        }
+        ctx->errstr = desc;
+    }
+    if (vcard) vcardcomponent_free(vcard);
+    if (mailbox) jmap_closembox(req, &mailbox);
+    mboxlist_entry_free(&freeme);
+    free(mboxid);
+    free(propname);
+    free(mediatype);
+    return res;
+}
+
+#else /* !HAVE_LIBICALVCARD */
+
+static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
+{
+    struct mailbox *mailbox = NULL;
+    struct vparse_card *vcard = NULL;
+    char *mboxid = NULL, *prop = NULL, *mediatype = NULL;
+    uint32_t uid;
+    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+    int res = HTTP_OK;
+    mbentry_t *freeme = NULL;
+    int r;
+
+    if (ctx->blobid[0] != 'V') return 0;
+
+    if (!jmap_decode_rawdata_blobid(ctx->blobid, &mboxid, &uid,
+                                    NULL, NULL, &prop, &guid)) {
+        res = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    if (!prop && ctx->accept_mime) {
+        /* Make sure client can handle blob type. */
+        if (strcmp(ctx->accept_mime, "application/octet-stream") &&
+            strcmp(ctx->accept_mime, "text/vcard")) {
+            res = HTTP_NOT_ACCEPTABLE;
+            goto done;
+        }
+        buf_setcstr(&ctx->content_type, ctx->accept_mime);
+    }
+
+    const mbentry_t *mbentry;
+    if (ctx->from_accountid) {
+        mboxlist_lookup_by_uniqueid(mboxid, &freeme, NULL);
+        mbentry = freeme;
+    }
+    else {
+        mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+    }
+    if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+        res = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    /* Open mailbox, we need it now */
+    if ((r = jmap_openmbox(req, mbentry->name, &mailbox, 0))) {
+        ctx->errstr = error_message(r);
+        res = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Load vCard data */
+    struct index_record record;
+    r = mailbox_find_index_record(mailbox, uid, &record);
+    if (r == IMAP_NOTFOUND) {
+        res = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    if (!r) {
+        vcard = record_to_vcard(mailbox, &record);
+    }
+    if (!vcard) {
+        ctx->errstr = "failed to load record";
+        res = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    if (prop) {
+        /* Fetching a particular property as a blob */
+        struct vparse_entry *entry = vparse_get_entry(vcard->objects, NULL, prop);
+        struct message_guid prop_guid = MESSAGE_GUID_INITIALIZER;
+
+        if (!entry ||
+            !vcard_prop_decode_value(entry, &ctx->blob, &mediatype, &prop_guid) ||
+            message_guid_cmp(&guid, &prop_guid)) {
+            res = HTTP_NOT_FOUND;
+            goto done;
+        }
+        else if (ctx->accept_mime) {
+            if (strcmp(ctx->accept_mime, "application/octet-stream") &&
+                strcmp(ctx->accept_mime, mediatype)) {
+                res = HTTP_NOT_ACCEPTABLE;
+                goto done;
+            }
+            buf_setcstr(&ctx->content_type, ctx->accept_mime);
+        }
+        else if (mediatype) {
+            buf_setcstr(&ctx->content_type, mediatype);
+        }
+        else buf_reset(&ctx->content_type);
+
+        buf_setcstr(&ctx->encoding, "BINARY");
+    }
+    else {
+        if (!ctx->accept_mime || !strcmp(ctx->accept_mime, "text/vcard")) {
+            struct vparse_entry *entry =
+                vparse_get_entry(vcard->objects, NULL, "VERSION");
+
+            buf_setcstr(&ctx->content_type, "text/vcard");
+            if (entry)
+                buf_printf(&ctx->content_type, "; version=%s", entry->v.value);
+        }
+
+        buf_setcstr(&ctx->encoding, "8BIT");
+        vparse_tobuf(vcard, &ctx->blob);
+    }
+
+done:
+    if (res != HTTP_OK && !ctx->errstr) {
+        const char *desc = NULL;
+        switch (res) {
+            case HTTP_BAD_REQUEST:
+                desc = "invalid contact blobid";
+                break;
+            case HTTP_NOT_FOUND:
+                desc = "failed to find blob by contact blobid";
+                break;
+            default:
+                desc = error_message(res);
+        }
+        ctx->errstr = desc;
+    }
+    if (vcard) vparse_free_card(vcard);
+    if (mailbox) jmap_closembox(req, &mailbox);
+    mboxlist_entry_free(&freeme);
+    free(mboxid);
+    free(prop);
+    free(mediatype);
+    return res;
 }
 
 #endif /* HAVE_LIBICALVCARD */
