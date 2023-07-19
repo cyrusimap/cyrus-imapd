@@ -13,7 +13,6 @@ sub test_cardgroup_query
         create => {
             "1" => {
                 name => {
-                    isOrdered => JSON::false,
                     components => [
                         {
                             kind => "given",
@@ -50,7 +49,6 @@ sub test_cardgroup_query
             },
             "2" => {
                 name => {
-                    isOrdered => JSON::false,
                     components => [
                         {
                             kind => "given",
@@ -81,7 +79,6 @@ sub test_cardgroup_query
                         contexts => {
                             private => JSON::true
                         },
-                        isOrdered => JSON::false,
                         components => [
                             {
                                 kind => "name",
@@ -109,7 +106,6 @@ sub test_cardgroup_query
             },
             "3" => {
                 name => {
-                    isOrdered => JSON::false,
                     components => [
                         {
                             kind => "given",
@@ -126,7 +122,6 @@ sub test_cardgroup_query
                         contexts => {
                             private => JSON::true
                         },
-                        isOrdered => JSON::false,
                         components => [
                             {
                                 kind => "name",
@@ -160,7 +155,6 @@ sub test_cardgroup_query
             },
             "4" => {
                 name => {
-                    isOrdered => JSON::false,
                     components => [
                         {
                             kind => "given",
