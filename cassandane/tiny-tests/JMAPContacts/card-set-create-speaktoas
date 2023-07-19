@@ -61,5 +61,5 @@ sub test_card_set_create_speaktoas
     $self->assert_matches(qr|GRAMGENDER:NEUTER|, $card);
     $self->assert_matches(qr|PRONOUNS;PROP-ID=k19;PREF=2:they/them|, $card);
     $self->assert_matches(qr|PRONOUNS;PROP-ID=k32;PREF=1:xe/xir|, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }

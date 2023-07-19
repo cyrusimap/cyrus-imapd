@@ -66,5 +66,5 @@ sub test_card_set_create_preferred_languages
     $self->assert_matches(qr/LANG;PREF=1;TYPE=WORK:en/, $card);
     $self->assert_matches(qr/LANG;PREF=2;TYPE=WORK:fr/, $card);
     $self->assert_matches(qr/LANG;TYPE=HOME:fr/, $card);
-    $self->assert_does_not_match(qr/JSCONTACT-PROP/, $card);
+    $self->assert_does_not_match(qr/JSPROP/, $card);
 }

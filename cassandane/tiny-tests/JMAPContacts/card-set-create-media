@@ -65,7 +65,7 @@ sub test_card_set_create_media
     $self->assert_matches(qr|LOGO;PROP-ID=res47:https://www.example.com/pub/logos/abccorp.jpg|, $card);
     $self->assert_matches(qr|SOUND;PROP-ID=res45:CID:JOHNQ.part8.19960229T080000.xyzMail\@example.com|, $card);
     $self->assert_matches(qr|PHOTO;PROP-ID=res1:data:image/jpeg;base64,c29tZSBwaG90bw==|, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 
     $res = $jmap->Download('cassandane', $blobId);
 

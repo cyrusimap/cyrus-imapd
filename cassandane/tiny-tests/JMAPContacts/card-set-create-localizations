@@ -172,5 +172,5 @@ sub test_card_set_create_localizations
     $self->assert_matches(qr/PRONOUNS;ALTID=k19:/, $card);
     $self->assert_matches(qr/PRONOUNS;ALTID=k19;LANGUAGE=de:er/, $card);
     $self->assert_matches(qr/PRONOUNS;ALTID=k19;LANGUAGE=it:lui/, $card);
-    $self->assert_does_not_match(qr/JSCONTACT-PROP/, $card);
+    $self->assert_does_not_match(qr/JSPROP/, $card);
 }

@@ -67,7 +67,7 @@ sub test_card_set_update
 
     $self->assert_matches(qr/NICKNAME;PROP-ID=foo:Doey/, $card);
     $self->assert_matches(qr/NICKNAME;PROP-ID=k391:Johnny Boy/, $card);
-    $self->assert_does_not_match(qr/JSCONTACT-PROP/, $card);
+    $self->assert_does_not_match(qr/JSPROP/, $card);
 
     $res = $jmap->CallMethods([
         ['Card/set', {
@@ -89,7 +89,7 @@ sub test_card_set_update
 
     $self->assert_matches(qr/NICKNAME;PROP-ID=foo:Doey/, $card);
     $self->assert_does_not_match(qr/NICKNAME;PROP-ID=k391:Johnny Boy/, $card);
-    $self->assert_does_not_match(qr/JSCONTACT-PROP/, $card);
+    $self->assert_does_not_match(qr/JSPROP/, $card);
 
     $res = $jmap->CallMethods([
         ['Card/set', {
@@ -124,7 +124,7 @@ sub test_card_set_update
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
     $self->assert_matches(qr/CATEGORIES:foo/, $card);
-    $self->assert_does_not_match(qr/JSCONTACT-PROP/, $card);
+    $self->assert_does_not_match(qr/JSPROP/, $card);
 
     xlog $self, "create alternate addressbook";
     $res = $jmap->CallMethods([

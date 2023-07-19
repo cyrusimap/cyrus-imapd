@@ -57,5 +57,5 @@ sub test_card_set_create_cryptokeys
 
     $self->assert_matches(qr|KEY;PROP-ID=mykey1:https://www.example.com/keys/jdoe.cer|, $card);
     $self->assert_matches(qr|KEY;PROP-ID=mykey2:data:,|, $card);
-    $self->assert_does_not_match(qr|JSCONTACT-PROP|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
 }
