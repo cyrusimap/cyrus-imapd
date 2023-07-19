@@ -5454,7 +5454,6 @@ static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
     int r = 0;
     struct buf buf = BUF_INITIALIZER;
 
-syslog(LOG_INFO, "XXXXXXXX  extract_vcardbuf()");
     /* Parse the message into a vcard object */
     const struct buf *vcardbuf = NULL;
     if (encoding || strcasecmp(charset_canon_name(charset), "utf-8")) {
@@ -5468,7 +5467,6 @@ syslog(LOG_INFO, "XXXXXXXX  extract_vcardbuf()");
         vcardbuf = raw;
     }
 
-syslog(LOG_INFO, "XXXXXXXX  new_from_string()");
     vcard = vcardcomponent_new_from_string(buf_cstring(vcardbuf));
     if (!vcard) {
         r = IMAP_INTERNAL;
@@ -5477,7 +5475,6 @@ syslog(LOG_INFO, "XXXXXXXX  new_from_string()");
 
     buf_reset(&buf);
 
-syslog(LOG_INFO, "XXXXXXXX  iterate");
     // these are all the things that we think might be interesting
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
