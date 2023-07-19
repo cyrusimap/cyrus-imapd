@@ -8746,15 +8746,17 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
     struct buf buf = BUF_INITIALIZER;
     vcardstrarray *entry;
     json_t *jprop;
-    int isordered;
+    int isordered = 0;
 
     jprop = json_object_get(obj, "isOrdered");
-    if (!jprop || !json_is_boolean(jprop)) {
-        jmap_parser_invalid(parser, "isOrdered");
-        goto fail;
-    }
+    if (jprop) {
+        if (!json_is_boolean(jprop)) {
+            jmap_parser_invalid(parser, "isOrdered");
+            goto fail;
+        }
 
-    isordered = json_boolean_value(jprop);
+        isordered = json_boolean_value(jprop);
+    }
 
     if (isordered) {
         jscomps = xzmalloc(sizeof(vcardstructuredtype));
