@@ -31,24 +31,22 @@ sub test_card_set_create_preferred_languages
                     uid => $id,
                     name => { full => 'Jane Doe' },
                     preferredLanguages => {
-                        en => [
-                            {
-                                '@type' => 'LanguagePreference',
-                                contexts => { work => JSON::true },
-                                pref => 1
-                            }
-                        ],
-                        fr => [
-                            {
-                                '@type' => 'LanguagePreference',
-                                contexts => { work => JSON::true },
-                                pref => 2
-                            },
-                            {
-                                '@type' => 'LanguagePreference',
-                                contexts => { private => JSON::true }
-                            }
-                        ]
+                        l1 => {
+                            '@type' => 'LanguagePref',
+                            language => 'en',
+                            contexts => { work => JSON::true },
+                            pref => 1
+                        },
+                        l2 => {
+                            '@type' => 'LanguagePref',
+                            language => 'fr',
+                            contexts => { work => JSON::true },
+                            pref => 2
+                        },
+                        l3 => {
+                            language => 'fr',
+                            contexts => { private => JSON::true }
+                        }
                     }
                 }
             }
@@ -63,8 +61,8 @@ sub test_card_set_create_preferred_languages
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
-    $self->assert_matches(qr/LANG;PREF=1;TYPE=WORK:en/, $card);
-    $self->assert_matches(qr/LANG;PREF=2;TYPE=WORK:fr/, $card);
-    $self->assert_matches(qr/LANG;TYPE=HOME:fr/, $card);
+    $self->assert_matches(qr/LANG;PROP-ID=l1;PREF=1;TYPE=WORK:en/, $card);
+    $self->assert_matches(qr/LANG;PROP-ID=l2;PREF=2;TYPE=WORK:fr/, $card);
+    $self->assert_matches(qr/LANG;PROP-ID=l3;TYPE=HOME:fr/, $card);
     $self->assert_does_not_match(qr/JSPROP/, $card);
 }
