@@ -8653,26 +8653,41 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
 
     for (i = 0; i < size; i++) {
         json_t *comp = json_array_get(comps, i);
-        const char *key, *val;
+        const char *key, *kind = NULL, *val = NULL;
         json_t *jsubprop;
 
         jmap_parser_push_index(parser, "components", i, NULL);
 
-        jsubprop = json_object_get(comp, "@type");
-        if (jsubprop &&
-            strcmpsafe(comp_type, json_string_value(jsubprop))) {
-            jmap_parser_invalid(parser, "@type");
-            break;
+        json_object_foreach(comp, key, jsubprop) {
+            if (!strcmp("@type", key)) {
+                if (strcmpsafe(comp_type, json_string_value(jsubprop))) {
+                    jmap_parser_invalid(parser, "@type");
+                    break;
+                }
+            }
+            else if (!strcmp("kind", key)) {
+                kind = json_string_value(jsubprop);
+            }
+            else if (!strcmp("value", key)) {
+                val = json_string_value(jsubprop);
+            }
+            else {
+                jmap_parser_pop(parser);
+                _jsunknown_to_vcard(parser, "components", comps, card);
+                goto fail;
+            }
         }
 
-        val = json_string_value(json_object_get(comp, "value"));
         if (!val) {
             jmap_parser_invalid(parser, "value");
             break;
         }
 
-        key = json_string_value(json_object_get(comp, "kind"));
-        if (!strcmp(key, "separator")) {
+        if (!kind) {
+            jmap_parser_invalid(parser, "kind");
+            break;
+        }
+        else if (!strcmp(kind, "separator")) {
             if (isordered) {
                 /* Add separator entry to JSCOMPS */
                 sep = val;
@@ -8690,12 +8705,14 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
             }
         }
         else {
-            const struct comp_kind *ckind = _field_name_to_kind(key, comp_kinds);
+            const struct comp_kind *ckind =
+                _field_name_to_kind(kind, comp_kinds);
             vcardstrarray **field;
 
             if (!ckind) {
-                jmap_parser_invalid(parser, "kind");
-                break;
+                jmap_parser_pop(parser);
+                _jsunknown_to_vcard(parser, "components", comps, card);
+                goto fail;
             }
 
             /* Add value to proper field */
@@ -8730,15 +8747,6 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                 if (!*field) *field = vcardstrarray_new(1);
                 vcardstrarray_append(*field, val);
             }
-        }
-
-        json_object_del(comp, "@type");
-        json_object_del(comp, "kind");
-        json_object_del(comp, "value");
-
-        /* Add unknown properties */
-        json_object_foreach(comp, key, jsubprop) {
-            _jsunknown_to_vcard(parser, key, jsubprop, card);
         }
 
         jmap_parser_pop(parser);
