@@ -34,8 +34,8 @@ N:Perreault;Simon;;;ing. jr
 BDAY;PROP-ID=A1:--0203
 ANNIVERSARY:20090808T1430-0500
 GENDER:M
-LANG;PREF=1:fr
-LANG;PREF=2:en
+LANG;PROP-ID=L1;PREF=1:fr
+LANG;PROP-ID=L2;PREF=2:en
 ORG;PROP-ID=O1;TYPE=work:Viagenie
 foo.ADR;PROP-ID=A1;TYPE=work:;Suite D2-630;2875 Laurier;
  Quebec;QC;G1V 2M2;Canada
@@ -95,10 +95,12 @@ EOF
             },
         },
         preferredLanguages => {
-            en => {
+            L2 => {
+                'language' => 'en',
                 'pref' => 2
             },
-            fr => {
+            L1 => {
+                'language' => 'fr',
                 'pref' => 1
             },
         },

@@ -6641,9 +6641,9 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
         param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM;
 
-        jprop = json_object();
+        jprop = json_pack("{s:o}", "language", jmap_utf8string(prop_value));
 
-        json_object_set_new(langs, prop_value, jprop);
+        json_object_set_new(langs, prop_id, jprop);
         break;
     }
 
@@ -9359,72 +9359,25 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
     return prop;
 }
 
-static vcardproperty *_jspreflang_to_card(struct jmap_parser *parser __attribute__((unused)),
-                                          json_t *obj, const char *id,
-                                          vcardcomponent *card __attribute__((unused)),
-                                          void *rock __attribute__((unused)))
+static vcardproperty *_jspreflang_to_vcard(struct jmap_parser *parser,
+                                           json_t *obj,
+                                           const char *id __attribute__((unused)),
+                                           vcardcomponent *card __attribute__((unused)),
+                                           void *rock __attribute__((unused)))
 {
-    if (obj) {
-        return vcardproperty_new_lang(id);
+    const char *lang = json_string_value(json_object_get(obj, "language"));
+    vcardproperty *prop = NULL;
+
+    if (!lang) {
+        jmap_parser_invalid(parser, "language");
+    }
+    else {
+        prop = vcardproperty_new_lang(lang);
+
+        json_object_del(obj, "language");
     }
 
-    /* Nothing to check -- success */
-    return (void *) 1;
-}
-
-static unsigned _jspreference_to_card(struct jmap_parser *parser, json_t *jval,
-                                      const char *key, const char *type,
-                                      prop_cb_t prop_cb, vcardcomponent *card)
-
-{
-    const char *id;
-    json_t *array;
-    void *tmp;
-    int r = 0;
-
-    if (!json_is_object(jval)) {
-        jmap_parser_invalid(parser, key);
-        return 0;
-    }
-
-    jmap_parser_push(parser, key);
-
-    json_object_foreach_safe(jval, tmp, id, array) {
-        size_t i;
-
-        if (!json_is_array(array) || !prop_cb(parser, NULL, id, card, NULL)) {
-            jmap_parser_invalid(parser, id);
-            break;
-        }
-
-        for (i = 0; i < json_array_size(array); i++) {
-            json_t *obj = json_array_get(array, i);
-            int r1;
-
-            jmap_parser_push_index(parser, id, i, NULL);
-
-            r |= (r1 = _jsobject_to_card(parser, obj, id, type, prop_cb,
-                                         pref_param_props, 0 /* no flags */,
-                                         NULL /* no l10n */, card, NULL));
-
-
-            jmap_parser_pop(parser);
-
-            if (!r1) break;
-        }
-
-        json_object_del(jval, id);
-        jmap_parser_pop(parser);
-    }
-
-    if (json_object_size(jval)) {
-        /* Errored out of loop */
-        jmap_parser_pop(parser);
-    }
-
-    jmap_parser_pop(parser);
-
-    return r;
+    return prop;
 }
 
 struct resource_map {
@@ -10259,10 +10212,12 @@ static int _jscard_to_vcard(struct jmap_req *req,
                                                       card, &crock);
         }
         else if (!strcmp(mykey, "preferredLanguages")) {
-            record_is_dirty |= _jspreference_to_card(&parser, jval,
-                                                     mykey, "LanguagePreference",
-                                                     &_jspreflang_to_card,
-                                                     card);
+            record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
+                                                      mykey, "LanguagePref",
+                                                      &_jspreflang_to_vcard,
+                                                      WANT_PROPID_FLAG,
+                                                      pref_param_props, &l10n,
+                                                      card, NULL);
         }
 
         /* Calendaring and Scheduling properties*/
