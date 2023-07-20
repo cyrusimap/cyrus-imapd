@@ -6234,6 +6234,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
 
 struct card_rock {
     json_t *card;
+    json_t *patch;
     const char *deflang;
     hash_table *labels;
     hash_table *adrs;
@@ -6961,6 +6962,21 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         break;
     }
 
+        /* Custom JSContact Properties */
+    case VCARD_JSPROP_PROPERTY: {
+        json_t *val = json_loads(vcardproperty_get_jsprop(prop),
+                                 JSON_DECODE_ANY, NULL);
+        if (val) {
+            param = vcardproperty_get_first_parameter(prop,
+                                                      VCARD_JSPTR_PARAMETER);
+
+            if (!crock->patch) crock->patch = json_object();
+            json_object_set_new(crock->patch,
+                                vcardparameter_get_jsptr(param), val);
+        }
+        break;
+    }
+
         /* Unmapped Properties (jCard-encoded) */
     unmapped:
     default: {
@@ -7107,7 +7123,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
     hash_table adrs = HASH_TABLE_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct card_rock crock = {
-        jcard, NULL, &labels, &adrs, mailbox, record, flags, &buf
+        jcard, NULL, NULL, &labels, &adrs, mailbox, record, flags, &buf
     };
     vcardproperty *prop;
     vcardparameter *param;
@@ -7189,6 +7205,14 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
     /* Translate vCard props to JS props */
     hash_enumerate(&props_by_name, &props_by_name_cb, &crock);
+
+    if (crock.patch) {
+        json_t *patched = jmap_patchobject_apply(jcard, crock.patch, NULL);
+
+        json_decref(crock.patch);
+        json_decref(jcard);
+        jcard = patched;
+    }
 
     /* Record properties */
     if (record) {
