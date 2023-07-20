@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_create_name_bad_type
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+
+    my $res = $jmap->CallMethods([
+        ['Card/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid => $id,
+                    name => {
+                        isOrdered => JSON::true,
+                        components => [
+                            {
+                                kind => 'given',
+                                value => 'Robert'
+                            },
+                            {
+                                kind => 'given2',
+                                value => 'Pau'
+                            },
+                            {
+                                kind => 'surname',
+                                value => 'Shou'
+                            },
+                            {
+                                '@type' => 'Foo',
+                                kind => 'surname2',
+                                value => 'Chang'
+                            }
+                        ],
+                        sortAs => {
+                            surname => 'Pau Shou Chang',
+                            given => 'Robert'
+                        }
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{notCreated}{1});
+    $self->assert_equals("name/components[3]/\@type",
+                         $res->[0][1]{notCreated}{1}{properties}[0]);
+}
