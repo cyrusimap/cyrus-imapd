@@ -37,6 +37,7 @@ GENDER:M
 LANG;PROP-ID=L1;PREF=1:fr
 LANG;PROP-ID=L2;PREF=2:en
 ORG;PROP-ID=O1;TYPE=work:Viagenie
+ADR;PROP-ID=A2;LABEL=Somewhere:;;;;;;;;;;;;;;;;;
 foo.ADR;PROP-ID=A1;TYPE=work:;Suite D2-630;2875 Laurier;
  Quebec;QC;G1V 2M2;Canada
 TEL;PROP-ID=P1;VALUE=uri;TYPE="work,voice";PREF=1:tel:+1-418-656-9254;ext=102
@@ -52,6 +53,10 @@ LOGO;PROP-ID=L1;MEDIATYPE=image/png:http://example.org/logo.png
 IMPP;PROP-ID=OS1;PREF=1:xmpp:simon\@example.com
 SOCIALPROFILE;PROP-ID=OS2;SERVICE-TYPE=Mastodon;USERNAME="Simon P.":https://example.com/\@simon
 REV:20230422T194639Z
+JSPROP;JSPTR=name/foo:"bar"
+JSPROP;JSPTR=organizations/O1/foo:{}
+JSPROP;JSPTR=phones/P1/features/foo:true
+JSPROP;JSPTR=addresses/A2/components:[{"kind":"foo"\,"value":"bar"}]
 END:VCARD
 EOF
 
@@ -83,6 +88,7 @@ EOF
                 { 'kind' => 'surname', 'value' => 'Perreault' },
                 { 'kind' => 'credential', 'value' => 'ing. jr' },
             ],
+            foo => 'bar'
         },
         anniversaries => {
             birth => {
@@ -106,7 +112,8 @@ EOF
         },
         organizations => {
             O1 => {
-                'name' => 'Viagenie'
+                'name' => 'Viagenie',
+                foo => {}
             }
         },
         addresses => {
@@ -123,15 +130,22 @@ EOF
                 'coordinates' => 'geo:46.772673,-71.282945',
                 'timeZone' => 'America/Montreal'
             },
+            A2 => {
+                full => 'Somewhere',
+                components => [
+                    { kind => 'foo', value => 'bar' }
+                ]
+            }
         },
         phones => {
               P1 => {
                 number => "tel:+1-418-656-9254;ext=102",
                 contexts => {
-                  work => JSON::true
+                    work => JSON::true
                 },
                 features => {
-                  voice => JSON::true
+                    voice => JSON::true,
+                    foo => JSON::true
                 },
                 pref => 1
               },
