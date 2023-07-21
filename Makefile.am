@@ -1457,12 +1457,14 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 %_err.h %_err.c: %_err.et $(COMPILE_ET_DEP)
 	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
 
+if HAVE_XXD
 # xxd cannot have path details in its input filename, otherwise it junks up
 # the variable names in the output file.  so do a tricky directory change.
 # the /dev/null redirection on cd is to prevent shell environments with
 # CDPATH echoing the path change on stdout and consequently into the .h file
 %_js.h: %.js
-	$(AM_V_GEN)(cd $(<D) > /dev/null && xxd -i $(<F)) > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)(cd $(<D) > /dev/null && $(XXD) -i $(<F)) > $@.NEW && mv $@.NEW $@
+endif
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
