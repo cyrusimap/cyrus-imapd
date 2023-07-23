@@ -6656,7 +6656,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         break;
     }
 
-    case VCARD_DEFLANGUAGE_PROPERTY:
+    case VCARD_LANGUAGE_PROPERTY:
         json_object_set_new(obj, "language", jmap_utf8string(prop_value));
         break;
 
@@ -7169,8 +7169,8 @@ static json_t *jmap_card_from_vcard(const char *userid,
         if (prop_kind == VCARD_VERSION_PROPERTY) {
             version = vcardproperty_get_version(prop);
         }
-        else if (prop_kind == VCARD_DEFLANGUAGE_PROPERTY) {
-            crock.deflang = vcardproperty_get_deflanguage(prop);
+        else if (prop_kind == VCARD_LANGUAGE_PROPERTY) {
+            crock.deflang = vcardproperty_get_language(prop);
         }
         else if (prop_kind == VCARD_ADR_PROPERTY) {
             strarray_t *ids = hash_lookup(group ? group : "", &adrs);
@@ -10140,7 +10140,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
         else if (!strcmp(mykey, "language")) {
             record_is_dirty |= jssimple_to_vcard(&parser, mykey, l10n.lang,
                                                  jval, card,
-                                                 VCARD_DEFLANGUAGE_PROPERTY,
+                                                 VCARD_LANGUAGE_PROPERTY,
                                                  VCARD_TEXT_VALUE);
         }
         else if (!strcmp(mykey, "members")) {
