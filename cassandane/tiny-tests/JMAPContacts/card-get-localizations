@@ -29,7 +29,7 @@ sub test_card_get_localizations
 BEGIN:VCARD
 VERSION:4.0
 UID:$id
-DEFLANGUAGE:es
+LANGUAGE:es
 FN:Gabriel García Márquez
 FN;LANGUAGE=jp:ガブリエル・ガルシア・マルケス
 N;ALTID=n1:Márquez;Gabriel;García;;
