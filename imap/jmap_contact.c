@@ -6577,10 +6577,18 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         json_t *addrs = json_object_get_vanew(obj, "addresses", "{}");
         const struct comp_kind *comp_kinds = adr_comp_kinds;
 
-        param_flags = ALLOW_TYPE_PARAM |
-            ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
+        param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM;
 
         jprop = json_object_get_vanew(addrs, prop_id, "{}");
+
+        param = vcardproperty_get_first_parameter(prop, VCARD_LABEL_PARAMETER);
+        if (param) {
+            json_object_set_new(jprop, "full",
+                                jmap_utf8string(vcardparameter_get_label(param)));
+
+            /* Remove LABEL parameter */
+            vcardproperty_remove_parameter_by_ref(prop, param);
+        }
 
         if (adr->num_fields > VCARD_ADR_COUNTRY + 1) {
             comp_kinds = ext_adr_comp_kinds;
