@@ -1601,6 +1601,13 @@ if test "x$enable_murder" = "xyes"; then
 fi
 
 dnl
+dnl See if we have an xxd available
+dnl
+AC_ARG_VAR([XXD], [Location of xxd])
+AC_PATH_PROG([XXD],[xxd])
+AM_CONDITIONAL([HAVE_XXD], [test -n "$XXD"])
+
+dnl
 dnl see if we're compiling with HTTP support
 dnl
 AC_ARG_ENABLE(http,
@@ -1619,6 +1626,8 @@ dnl
             use_sqlite="yes"
             AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?])
         fi
+
+        AS_IF([test -z "$XXD"], [AC_MSG_ERROR([Need xxd for http])])
 
         PKG_CHECK_MODULES([XML2], [libxml-2.0], [
                 AC_DEFINE(HAVE_XML2, [], [Build with libxml support])
@@ -2588,4 +2597,5 @@ Build info:
    ldflags:            $LDFLAGS
    libm:               $LIBM
    unit tests (cunit): $enable_unit_tests
+   xxd:                $XXD
 "

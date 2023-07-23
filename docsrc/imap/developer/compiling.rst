@@ -97,8 +97,6 @@ and included in the release, and do not normally need to be re-built.
     doc/legacy/netnews.png). One day it should be merged into the current
     documentation, cause then we can get rid of it: `issues/1769`_."
     `valgrind`_, valgrind, valgrind, "no", "Performance and memory testing."
-    `xxd`_,vim-common,vim-common, "no", "Needed for the _js.h files, for CalDAV
-    and CardDAV support."
 
 SASL Authentication
 ###################
@@ -162,6 +160,8 @@ CalDAV, CardDAV, or JMAP (httpd subsystem)
     `wslay`_, libwslay-dev, wslay-devel, "no", "It provides WebSockets support
     in httpd. Only used with **JMAP**, otherwise not needed. Version 1.1.1 or
     higher is required when using it."
+    `xxd`_, xxd, vim-common, "yes", "Needed for the _js.h files, for CalDAV
+    and CardDAV support."
     `zlib`_, zlib1g-dev, zlib-devel, "no", "It provides gzip compression
     support for http communications."
 
