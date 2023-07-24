@@ -51,7 +51,9 @@ use Cassandane::Util::Log;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({adminstore => 1}, @_);
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(conversations => 'on');
+    return $class->SUPER::new({adminstore => 1, config => $config}, @_);
 }
 
 sub set_up
@@ -723,6 +725,36 @@ EOF
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_num_equals(1, scalar keys %{$res});
     $self->assert_str_equals('6', $res->{'3'}->{uid});
+}
+
+sub test_uidsearch_empty
+    :min_version_3_9
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    $imap->create('INBOX.test');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @results;
+    my %handlers =
+    (
+        esearch => sub
+        {
+            my (undef, $esearch) = @_;
+            push(@results, $esearch);
+        },
+    );
+
+    $imap->select('INBOX.test');
+    $imap->_imap_cmd('UID', 0, \%handlers,
+        'SEARCH', 'RETURN', '(ALL SAVE COUNT) UID 1:*');
+    $self->assert_num_equals(1, scalar @results);
+    $self->assert_str_equals('UID', $results[0][1]);
+    $self->assert_str_equals('COUNT', $results[0][2]);
+    $self->assert_str_equals('0', $results[0][3]);
 }
 
 1;

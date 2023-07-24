@@ -2084,7 +2084,8 @@ EXPORTED int index_search(struct index_state *state,
                  * COUNT result option(s), the "$" marker would always contain
                  * all messages found by the SEARCH or UID SEARCH command.
                  */
-                seq = search_folder_get_seqset(folder);
+                seq = folder ? search_folder_get_seqset(folder) :
+                               seqset_init(1, SEQ_SPARSE);
             }
             else if (nmsg) {
                 /* RFC 5182: 2.4

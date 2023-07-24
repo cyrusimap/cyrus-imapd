@@ -1926,5 +1926,4 @@ sub test_reindex_mb_uniqueid
     $self->assert_num_equals(1, scalar @mboxrows);
 }
 
-
 1;
