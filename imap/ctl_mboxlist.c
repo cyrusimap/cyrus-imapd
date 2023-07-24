@@ -695,10 +695,16 @@ static void do_undump_legacy(void)
     while (fgets(buf, sizeof(buf), stdin)) {
         mbentry_t *newmbentry = mboxlist_entry_create();
         int fields;
+#ifndef HAVE_SSCANF_M_MODIFIER
+        /* XXX fix all these sizes! */
+        char name[1024] = "", partition[1024] = "", acl[1024] = "";
+        char uniqueid[1024] = "" legacy_specialuse[1024] = "";
+#endif
 
         line++;
 
         errno = 0;
+#ifdef HAVE_SSCANF_M_MODIFIER
         fields = sscanf(buf, "%m[^\t]\t%d %ms %m[^>]>%ms " TIME_T_FMT
                              " %" SCNu32 " %llu %llu %m[^\n]\n",
                              &newmbentry->name,
@@ -711,6 +717,20 @@ static void do_undump_legacy(void)
                              &newmbentry->foldermodseq,
                              &newmbentry->createdmodseq,
                              &newmbentry->legacy_specialuse);
+#else
+        fields = sscanf(buf, "%1023[^\t]\t%d %1023s %1023[^>]>%1023s " TIME_T_FMT
+                             " %" SCNu32 " %llu %llu %1023[^\n]\n",
+                             &name,
+                             &newmbentry->mbtype,
+                             &partition,
+                             &acl,
+                             &uniqueid,
+                             &newmbentry->mtime,
+                             &newmbentry->uidvalidity,
+                             &newmbentry->foldermodseq,
+                             &newmbentry->createdmodseq,
+                             &legacy_specialuse);
+#endif
 
         if (fields <= 0) {
             fprintf(stderr, "line %d: parse error", line);
@@ -722,6 +742,16 @@ static void do_undump_legacy(void)
             mboxlist_entry_free(&newmbentry);
             continue;
         }
+
+#ifndef HAVE_SSCANF_M_MODIFIER
+        /* XXX we don't have an xstrdupfoo() for this particular use case */
+        newmbentry->name = name[0] ? xstrdup(name) : NULL;
+        newmbentry->partition = partition[0] ? xstrdup(partition) : NULL;
+        newmbentry->acl = acl[0] ? xstrdup(acl) : NULL;
+        newmbentry->uniqueid = uniqueid[0] ? xstrdup(uniqueid) : NULL;
+        newmbentry->legacy_specialuse = legacy_specialuse[0]
+                                      ? xstrdup(legacy_specialuse) : NULL;
+#endif
 
         if (!newmbentry->acl) {
            /*
@@ -736,8 +766,9 @@ static void do_undump_legacy(void)
             newmbentry = mboxlist_entry_create();
 
             errno = 0;
-            fields = sscanf(buf, "%m[^\t]\t%d %ms >%ms " TIME_T_FMT " %" SCNu32
-                                 " %llu %llu %m[^\n]\n",
+#ifdef HAVE_SSCANF_M_MODIFIER
+            fields = sscanf(buf, "%m[^\t]\t%d %ms >%ms " TIME_T_FMT
+                                 " %" SCNu32 " %llu %llu %m[^\n]\n",
                                  &newmbentry->name,
                                  &newmbentry->mbtype,
                                  &newmbentry->partition,
@@ -747,6 +778,19 @@ static void do_undump_legacy(void)
                                  &newmbentry->foldermodseq,
                                  &newmbentry->createdmodseq,
                                  &newmbentry->legacy_specialuse);
+#else
+            fields = sscanf(buf, "%1023[^\t]\t%d %1023s >%1023s " TIME_T_FMT
+                                 " %" SCNu32 " %llu %llu %1023[^\n]\n",
+                                 &name,
+                                 &newmbentry->mbtype,
+                                 &partition,
+                                 &uniqueid,
+                                 &newmbentry->mtime,
+                                 &newmbentry->uidvalidity,
+                                 &newmbentry->foldermodseq,
+                                 &newmbentry->createdmodseq,
+                                 &legacy_specialuse);
+#endif
 
             if (fields <= 0) {
                 fprintf(stderr, "line %d: parse error", line);
@@ -758,6 +802,15 @@ static void do_undump_legacy(void)
                 mboxlist_entry_free(&newmbentry);
                 continue;
             }
+
+#ifndef HAVE_SSCANF_M_MODIFIER
+            /* XXX we don't have an xstrdupfoo() for this particular use case */
+            newmbentry->name = name[0] ? xstrdup(name) : NULL;
+            newmbentry->partition = partition[0] ? xstrdup(partition) : NULL;
+            newmbentry->uniqueid = uniqueid[0] ? xstrdup(uniqueid) : NULL;
+            newmbentry->legacy_specialuse = legacy_specialuse[0]
+                                          ? xstrdup(legacy_specialuse) : NULL;
+#endif
         }
 
         if (!newmbentry->partition) {
