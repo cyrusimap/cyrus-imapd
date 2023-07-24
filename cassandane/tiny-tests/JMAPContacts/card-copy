@@ -85,14 +85,14 @@ sub test_card_copy
     };
 
     xlog $self, "create card";
-    $res = $jmap->CallMethods([['Card/set',{
+    $res = $jmap->CallMethods([['ContactCard/set',{
         create => {"1" => $card}},
     "R1"]]);
     $self->assert_not_null($res->[0][1]{created});
     my $cardId = $res->[0][1]{created}{"1"}{id};
 
     xlog $self, "copy card $cardId w/o changes";
-    $res = $jmap->CallMethods([['Card/copy', {
+    $res = $jmap->CallMethods([['ContactCard/copy', {
         fromAccountId => 'cassandane',
         accountId => 'other',
         create => {
@@ -107,11 +107,11 @@ sub test_card_copy
     my $copiedCardId = $res->[0][1]{created}{"1"}{id};
 
     $res = $jmap->CallMethods([
-        ['Card/get', {
+        ['ContactCard/get', {
             accountId => 'other',
             ids => [$copiedCardId],
         }, 'R1'],
-        ['Card/get', {
+        ['ContactCard/get', {
             accountId => undef,
             ids => [$cardId],
         }, 'R2'],
@@ -133,7 +133,7 @@ sub test_card_copy
 #    $self->assert_equals($data, $blob->{content});
 
     xlog $self, "move card $cardId with changes";
-    $res = $jmap->CallMethods([['Card/copy', {
+    $res = $jmap->CallMethods([['ContactCard/copy', {
         fromAccountId => 'cassandane',
         accountId => 'other2',
         create => {
@@ -150,11 +150,11 @@ sub test_card_copy
     $copiedCardId = $res->[0][1]{created}{"1"}{id};
 
     $res = $jmap->CallMethods([
-        ['Card/get', {
+        ['ContactCard/get', {
             accountId => 'other2',
             ids => [$copiedCardId],
         }, 'R1'],
-        ['Card/get', {
+        ['ContactCard/get', {
             accountId => undef,
             ids => [$cardId],
         }, 'R2'],

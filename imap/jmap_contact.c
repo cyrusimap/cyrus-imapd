@@ -87,11 +87,6 @@ static int jmap_card_querychanges(struct jmap_req *req);
 static int jmap_card_set(struct jmap_req *req);
 static int jmap_card_copy(struct jmap_req *req);
 static int jmap_card_parse(jmap_req_t *req);
-static int jmap_cardgroup_get(struct jmap_req *req);
-static int jmap_cardgroup_changes(struct jmap_req *req);
-static int jmap_cardgroup_query(struct jmap_req *req);
-static int jmap_cardgroup_querychanges(struct jmap_req *req);
-static int jmap_cardgroup_set(struct jmap_req *req);
 #endif /* HAVE_LIBICALVCARD */
 
 static int jmap_contactgroup_get(struct jmap_req *req);
@@ -151,76 +146,46 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
-        "Card/get",
+        "ContactCard/get",
         JMAP_URN_CONTACTS,
         &jmap_card_get,
         JMAP_NEED_CSTATE
     },
     {
-        "Card/changes",
+        "ContactCard/changes",
         JMAP_URN_CONTACTS,
         &jmap_card_changes,
         JMAP_NEED_CSTATE
     },
     {
-        "Card/query",
+        "ContactCard/query",
         JMAP_URN_CONTACTS,
         &jmap_card_query,
         JMAP_NEED_CSTATE
     },
     {
-        "Card/queryChanges",
+        "ContactCard/queryChanges",
         JMAP_URN_CONTACTS,
         &jmap_card_querychanges,
         JMAP_NEED_CSTATE
     },
     {
-        "Card/set",
+        "ContactCard/set",
         JMAP_URN_CONTACTS,
         &jmap_card_set,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
-        "Card/copy",
+        "ContactCard/copy",
         JMAP_URN_CONTACTS,
         &jmap_card_copy,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
-        "Card/parse",
+        "ContactCard/parse",
         JMAP_CONTACTS_EXTENSION,
         &jmap_card_parse,
         JMAP_NEED_CSTATE
-    },
-    {
-        "CardGroup/get",
-        JMAP_URN_CONTACTS,
-        &jmap_cardgroup_get,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CardGroup/changes",
-        JMAP_URN_CONTACTS,
-        &jmap_cardgroup_changes,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CardGroup/query",
-        JMAP_URN_CONTACTS,
-        &jmap_cardgroup_query,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CardGroup/queryChanges",
-        JMAP_URN_CONTACTS,
-        &jmap_cardgroup_querychanges,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "CardGroup/set",
-        JMAP_URN_CONTACTS,
-        &jmap_cardgroup_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
 #endif /* HAVE_LIBICALVCARD */
     { NULL, NULL, NULL, 0}
@@ -2210,7 +2175,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         r = carddav_lookup_uid(db, uid, &cdata);
 
         /* is it a valid contact? */
-        if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != kind) {
+        if (r || !cdata || !cdata->dav.imap_uid ||
+            (cdata->kind != kind && kind != CARDDAV_KIND_ANY)) {
             r = 0;
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(set.not_destroyed, uid, err);
@@ -3875,7 +3841,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req, &parser, NULL, NULL,
-                     _filter_validate, NULL,
+                     _filter_validate, &kind,
                      _comparator_validate, NULL,
                      &query, &err);
     if (err) {
@@ -5519,7 +5485,7 @@ static int _contacts_copy(struct jmap_req *req,
     /* Destroy originals, if requested */
     if (copy.on_success_destroy_original && json_array_size(destroy_cards)) {
         const char *submethod = !strcmp(req->method, "Contact/copy") ?
-            "Contact/set" : "Card/set";
+            "Contact/set" : "ContactCard/set";
         json_t *subargs = json_object();
         json_object_set(subargs, "destroy", destroy_cards);
         json_object_set_new(subargs, "accountId", json_string(copy.from_account_id));
@@ -5572,7 +5538,7 @@ static int jmap_contact_copy(struct jmap_req *req)
 #ifdef HAVE_LIBICALVCARD
 
 /*****************************************************************************
- * JMAP Card[Group] API
+ * JMAP ContactCard API
  ****************************************************************************/
 
 static const jmap_property_t card_props[] = {
@@ -7116,7 +7082,12 @@ static json_t *jmap_card_from_vcard(const char *userid,
                                     struct index_record *record,
                                     unsigned flags)
 {
-    json_t *jcard = json_pack("{s:s s:s}", "@type", "Card", "version", "1.0");
+    /* Default to kind:individual for /query.
+       Will be overwritten by KIND propertym if present. */
+    json_t *jcard = json_pack("{s:s s:s s:s}",
+                              "@type", "Card",
+                              "version", "1.0",
+                              "kind", "individual");
     vcardproperty_version version = VCARD_VERSION_NONE;
     hash_table props_by_name = HASH_TABLE_INITIALIZER;
     hash_table labels = HASH_TABLE_INITIALIZER;
@@ -7331,7 +7302,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 }
 
 /*
- * Card[Group]/query
+ * ContactCard/query
  */
 
 #define card_filter_match_textval   contact_filter_match_textval
@@ -7360,6 +7331,7 @@ struct card_filter {
     struct contact_textfilter *note;
     struct contact_textfilter *text;
     struct contact_textfilter *member;
+    struct contact_textfilter *kind;
 };
 
 /* Free the memory allocated by this card filter. */
@@ -7391,10 +7363,11 @@ static void card_filter_free(void *vf)
     contact_textfilter_free(f->note);
     contact_textfilter_free(f->text);
     contact_textfilter_free(f->member);
+    contact_textfilter_free(f->kind);
     free(f);
 }
 
-/* Parse the JMAP Card FilterCondition in arg.
+/* Parse the JMAP ContactCard FilterCondition in arg.
  * Report any invalid properties in invalid, prefixed by prefix.
  * Return NULL on error. */
 static void *card_filter_parse(json_t *arg)
@@ -7551,11 +7524,18 @@ static void *card_filter_parse(json_t *arg)
             f->text = contact_textfilter_new(s);
         }
     }
-    /* member */
-    if (JNOTNULL(json_object_get(arg, "member"))) {
+    /* hasMember */
+    if (JNOTNULL(json_object_get(arg, "hasMember"))) {
         const char *s = NULL;
-        if (jmap_readprop(arg, "member", 0, NULL, "s", &s) > 0) {
+        if (jmap_readprop(arg, "hasMember", 0, NULL, "s", &s) > 0) {
             f->member = contact_textfilter_new(s);
+        }
+    }
+    /* kind */
+    if (JNOTNULL(json_object_get(arg, "kind"))) {
+        const char *s = NULL;
+        if (jmap_readprop(arg, "kind", 0, NULL, "s", &s) > 0) {
+            f->kind = contact_textfilter_new(s);
         }
     }
     /* uid */
@@ -7570,13 +7550,14 @@ static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
                                  struct jmap_parser *parser,
                                  json_t *filter,
                                  json_t *unsupported __attribute__((unused)),
-                                 void *rock __attribute__((unused)),
+                                 void *rock,
                                  json_t **err __attribute__((unused)))
 {
     const char *field;
     json_t *arg;
+    void *tmp;
 
-    json_object_foreach(filter, field, arg) {
+    json_object_foreach_safe(filter, tmp, field, arg) {
         if (!strcmp(field, "name") ||
             !strcmp(field, "name/prefix") ||
             !strcmp(field, "name/given") ||
@@ -7596,9 +7577,26 @@ static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
             !strcmp(field, "interest") ||
             !strcmp(field, "note") ||
             !strcmp(field, "text") ||
+            !strcmp(field, "kind") ||
+            !strcmp(field, "hasMember") ||
             !strcmp(field, "uid")) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
+            }
+
+            if (*field == 'k') {
+                int *kind = (int *) rock;
+
+                if (!strcmp("group", json_string_value(arg))) {
+                    *kind = CARDDAV_KIND_GROUP;
+
+                    /* Group vs non-group is filtered by a flag in carddav.db.
+                       Remove property so we don't text match against it. */
+                    json_object_del(filter, "kind");
+                }
+                else {
+                    *kind = CARDDAV_KIND_CONTACT;
+                }
             }
         }
         else if (!strcmp(field, "inCardGroup")) {
@@ -7630,47 +7628,6 @@ static int card_comparator_validate(jmap_req_t *req __attribute__((unused)),
         !strcmp(comp->property, "name/surname") ||
         !strcmp(comp->property, "nickName") ||
         !strcmp(comp->property, "organization")) {
-        return 1;
-    }
-    return 0;
-}
-
-static void cardgroup_filter_validate(jmap_req_t *req __attribute__((unused)),
-                                      struct jmap_parser *parser,
-                                      json_t *filter,
-                                      json_t *unsupported __attribute__((unused)),
-                                      void *rock __attribute__((unused)),
-                                      json_t **err __attribute__((unused)))
-{
-    const char *field;
-    json_t *arg;
-
-    json_object_foreach(filter, field, arg) {
-        if (!strcmp(field, "name") ||
-            !strcmp(field, "member") ||
-            !strcmp(field, "text") ||
-            !strcmp(field, "uid")) {
-            if (!json_is_string(arg)) {
-                jmap_parser_invalid(parser, field);
-            }
-        }
-        else {
-            jmap_parser_invalid(parser, field);
-        }
-    }
-}
-
-static int cardgroup_comparator_validate(jmap_req_t *req __attribute__((unused)),
-                                    struct jmap_comparator *comp,
-                                    void *rock __attribute__((unused)),
-                                    json_t **err __attribute__((unused)))
-{
-    /* Reject any collation */
-    if (comp->collation) {
-        return 0;
-    }
-    if (!strcmp(comp->property, "uid") ||
-        !strcmp(comp->property, "name")) {
         return 1;
     }
     return 0;
@@ -7931,6 +7888,8 @@ static int card_filter_match(void *vf, void *rock)
         !card_filter_match_listprop(card, "members", NULL,
                                     NULL, f->member,
                                     f->text, &cfrock->cached_termsets) ||
+        !card_filter_match_textprop(card, "kind", f->kind,
+                                    f->text, &cfrock->cached_termsets) ||
         !card_filter_match_address(card, f->address,
                                    f->text, &cfrock->cached_termsets)) {
         return 0;
@@ -7980,7 +7939,7 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
     }
 
     /* Ignore anything but the requested kind. */
-    if (cdata->kind != crock->kind) {
+    if (cdata->kind != crock->kind && crock->kind != CARDDAV_KIND_ANY) {
         return 0;
     }
 
@@ -10452,9 +10411,10 @@ static int _jscard_to_vcard(struct jmap_req *req,
     return r;
 }
 
-static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
-                            struct mailbox **mailbox, json_t *item,
-                            jmap_contact_errors_t *errors)
+static int _card_set_create(jmap_req_t *req,
+                            unsigned kind __attribute__((unused)),
+                            json_t *jcard, struct mailbox **mailbox,
+                            json_t *item, jmap_contact_errors_t *errors)
 {
     json_t *invalid = errors->invalid;
     struct entryattlist *annots = NULL;
@@ -10578,18 +10538,11 @@ static int _card_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
     keys = json_deep_copy(json_object_get(jcard, "cryptoKeys"));
 
     const char *name = NULL;
-    const char *logfmt = NULL;
+    jmap_readprop(json_object_get(jcard, "name"),
+                  "full", 0, invalid, "s", &name);
 
-    if (kind == CARDDAV_KIND_GROUP) {
-        jmap_readprop(json_object_get(jcard, "name"),
-                      "full", 0, invalid, "s", &name);
-        logfmt = "jmap: create group %s/%s/%s (%s)";
-    }
-    else {
-        logfmt = "jmap: create contact %s/%s (%s)";
-    }
-
-    syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name ? name : "");
+    syslog(LOG_NOTICE, "jmap: create card %s/%s/%s (%s)",
+           req->accountid, mboxname, uid, name ? name : "");
 
     r = _jscard_to_vcard(req, NULL, mboxname, card,
                          jcard, &annots, &blobs, errors);
@@ -10688,9 +10641,20 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
 
     /* is it a valid contact? */
     r = carddav_lookup_uid(db, uid, &cdata);
-    if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != kind) {
+    if (r || !cdata || !cdata->dav.imap_uid) {
         r = HTTP_NOT_FOUND;
         goto done;
+    }
+
+    json_t *jkind = json_object_get(jcard, "kind");
+    if (jkind) {
+        kind = !strcmpsafe("group", json_string_value(jkind)) ?
+            CARDDAV_KIND_GROUP : CARDDAV_KIND_CONTACT;
+
+        if (cdata->kind != kind) {
+            json_array_append_new(invalid, json_string("kind"));
+            goto done;
+        }
     }
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
@@ -10920,17 +10884,17 @@ static json_t *_card_from_record(jmap_req_t *req, struct mailbox *mailbox,
 
 static int jmap_card_get(struct jmap_req *req)
 {
-    return _contacts_get(req, &getcards_cb, CARDDAV_KIND_CONTACT, card_props);
+    return _contacts_get(req, &getcards_cb, CARDDAV_KIND_ANY, card_props);
 }
 
 static int jmap_card_changes(struct jmap_req *req)
 {
-    return _contacts_changes(req, CARDDAV_KIND_CONTACT);
+    return _contacts_changes(req, CARDDAV_KIND_ANY);
 }
 
 static int jmap_card_query(struct jmap_req *req)
 {
-    return _contactsquery(req, CARDDAV_KIND_CONTACT,
+    return _contactsquery(req, CARDDAV_KIND_ANY,
                           &card_filter_parse, &card_filter_free,
                           &card_filter_validate,
                           &card_comparator_validate, &_cardquery_cb,
@@ -10961,7 +10925,7 @@ done:
 
 static int jmap_card_set(struct jmap_req *req)
 {
-    _contacts_set(req, CARDDAV_KIND_CONTACT, card_props,
+    _contacts_set(req, CARDDAV_KIND_ANY, card_props,
                   &_card_set_create, &_card_set_update);
 
     return 0;
@@ -11085,55 +11049,6 @@ done:
     jmap_parse_fini(&parse);
     free_hash_table(props, NULL);
     free(props);
-    return 0;
-}
-
-static int jmap_cardgroup_get(struct jmap_req *req)
-{
-    return _contacts_get(req, &getcards_cb, CARDDAV_KIND_GROUP, card_props);
-}
-
-static int jmap_cardgroup_changes(struct jmap_req *req)
-{
-    return _contacts_changes(req, CARDDAV_KIND_GROUP);
-}
-
-static int jmap_cardgroup_query(struct jmap_req *req)
-{
-    return _contactsquery(req, CARDDAV_KIND_GROUP,
-                          &card_filter_parse, &card_filter_free,
-                          &cardgroup_filter_validate,
-                          &cardgroup_comparator_validate, &_cardquery_cb,
-                          &cardquery_buildsort, &cardquery_cmp);
-}
-
-static int jmap_cardgroup_querychanges(jmap_req_t *req)
-{
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_querychanges query;
-
-    json_t *err = NULL;
-    jmap_querychanges_parse(req, &parser, NULL, NULL,
-                            &cardgroup_filter_validate, NULL,
-                            &cardgroup_comparator_validate, NULL,
-                            &query, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
-    }
-    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
-
-done:
-    jmap_querychanges_fini(&query);
-    jmap_parser_fini(&parser);
-    return 0;
-}
-
-static int jmap_cardgroup_set(struct jmap_req *req)
-{
-    _contacts_set(req, CARDDAV_KIND_GROUP, card_props,
-                  &_card_set_create, &_card_set_update);
-
     return 0;
 }
 

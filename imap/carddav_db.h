@@ -59,6 +59,8 @@ struct carddav_db;
 
 #define CARDDAV_KIND_CONTACT 0
 #define CARDDAV_KIND_GROUP 1
+#define CARDDAV_KIND_ANY 255
+
 struct carddav_data {
     struct dav_data dav;  /* MUST be first so we can typecast */
     unsigned version;

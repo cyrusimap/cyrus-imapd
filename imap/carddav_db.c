@@ -1027,7 +1027,9 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
     struct buf sqlbuf = BUF_INITIALIZER;
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS_JMAP);
-    buf_appendcstr(&sqlbuf, " WHERE alive = 1 AND kind = :kind");
+    buf_appendcstr(&sqlbuf, " WHERE alive = 1");
+    if (kind != CARDDAV_KIND_ANY)
+        buf_appendcstr(&sqlbuf, " AND kind = :kind");
     if (mailbox)
         buf_appendcstr(&sqlbuf, " AND mailbox = :mailbox");
     if (vcard_uid)
@@ -1076,8 +1078,7 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
     if (mailbox) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
-    if (kind >= 0) {
-        /* Use a negative value to signal that we accept ALL card types */
+    if (kind != CARDDAV_KIND_ANY) {
         buf_appendcstr(&sqlbuf, " kind = :kind AND");
     }
     if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");

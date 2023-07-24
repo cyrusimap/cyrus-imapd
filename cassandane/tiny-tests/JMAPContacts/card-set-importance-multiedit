@@ -9,32 +9,32 @@ sub test_card_set_importance_multiedit
     my $jmap = $self->{jmap};
 
     xlog $self, "create with no importance";
-    my $res = $jmap->CallMethods([['Card/set',
+    my $res = $jmap->CallMethods([['ContactCard/set',
                                    {create => {"1" => {name => { full => "John Doe" },
                                    "cyrusimap.org:importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Card/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    my $fetch = $jmap->CallMethods([['Card/get', {ids => [$id]}, "R2"]]);
+    my $fetch = $jmap->CallMethods([['ContactCard/get', {ids => [$id]}, "R2"]]);
     $self->assert_not_null($fetch);
-    $self->assert_str_equals('Card/get', $fetch->[0][0]);
+    $self->assert_str_equals('ContactCard/get', $fetch->[0][0]);
     $self->assert_str_equals('R2', $fetch->[0][2]);
     $self->assert_str_equals('John Doe', $fetch->[0][1]{list}[0]{name}{full});
     $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"cyrusimap.org:importance"});
 
-    $res = $jmap->CallMethods([['Card/set',
+    $res = $jmap->CallMethods([['ContactCard/set',
                                 {update => {$id => {"name" => { full => "Jane Doe" },
                                                     "cyrusimap.org:importance" => -0.2}}}, "R3"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Card/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R3', $res->[0][2]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    $fetch = $jmap->CallMethods([['Card/get', {ids => [$id]}, "R4"]]);
+    $fetch = $jmap->CallMethods([['ContactCard/get', {ids => [$id]}, "R4"]]);
     $self->assert_not_null($fetch);
-    $self->assert_str_equals('Card/get', $fetch->[0][0]);
+    $self->assert_str_equals('ContactCard/get', $fetch->[0][0]);
     $self->assert_str_equals('R4', $fetch->[0][2]);
     $self->assert_str_equals('Jane Doe', $fetch->[0][1]{list}[0]{name}{full});
     $self->assert_num_equals(-0.2, $fetch->[0][1]{list}[0]{"cyrusimap.org:importance"});

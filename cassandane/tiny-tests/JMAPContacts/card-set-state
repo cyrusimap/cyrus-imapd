@@ -13,7 +13,7 @@ sub test_card_set_state
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
 
     my $res = $jmap->CallMethods([
-        ['Card/set', {
+        ['ContactCard/set', {
             create => {
                 "1" => {
                     '@type' => 'Card',
@@ -25,21 +25,21 @@ sub test_card_set_state
         }, 'R1']
     ]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Card/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id = $res->[0][1]{created}{"1"}{id};
     my $state = $res->[0][1]{newState};
 
     xlog $self, "get contact $id";
-    $res = $jmap->CallMethods([['Card/get', {}, "R2"]]);
+    $res = $jmap->CallMethods([['ContactCard/get', {}, "R2"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Card/get', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/get', $res->[0][0]);
     $self->assert_str_equals('R2', $res->[0][2]);
     $self->assert_str_equals($name, $res->[0][1]{list}[0]{name}{full});
     $self->assert_str_equals($state, $res->[0][1]{state});
 
     xlog $self, "update $id with state token $state";
-    $res = $jmap->CallMethods([['Card/set', {
+    $res = $jmap->CallMethods([['ContactCard/set', {
                     ifInState => $state,
                     update => {$id =>
                         {name => { full => $name }}
@@ -51,7 +51,7 @@ sub test_card_set_state
     $state = $res->[0][1]{newState};
 
     xlog $self, "update $id with expired state token $oldState";
-    $res = $jmap->CallMethods([['Card/set', {
+    $res = $jmap->CallMethods([['ContactCard/set', {
                     ifInState => $oldState,
                     update => {$id =>
                         {name => { full => $name }}
@@ -64,7 +64,7 @@ sub test_card_set_state
     $self->assert_str_equals($state, $res->[0][1]{state});
 
     xlog $self, "destroy $id with expired state token $oldState";
-    $res = $jmap->CallMethods([['Card/set', {
+    $res = $jmap->CallMethods([['ContactCard/set', {
                     ifInState => $oldState,
                     destroy => [$id]
                 }, "R1"]]);
@@ -73,7 +73,7 @@ sub test_card_set_state
 
     xlog $self, "destroy contact $id with current state";
     $res = $jmap->CallMethods([
-            ['Card/set', {
+            ['ContactCard/set', {
                     ifInState => $state,
                     destroy => [$id]
             }, "R1"]

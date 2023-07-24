@@ -27,7 +27,7 @@ sub test_card_set_importance_peruser
         "manifold" => 'lrswipkxtecdn') or die;
 
     my $res = $jmap->CallMethods([
-        ['Card/set', {
+        ['ContactCard/set', {
             create => {
                 c1 => {
                     name => { full => 'John Doe' },
@@ -35,7 +35,7 @@ sub test_card_set_importance_peruser
                 },
             },
         }, 'R1'],
-        ['Card/get', {
+        ['ContactCard/get', {
             ids => ['#c1'],
             properties => ['cyrusimap.org:importance'],
         }, 'R2'],
@@ -45,12 +45,12 @@ sub test_card_set_importance_peruser
     $self->assert_equals(1.0, $res->[1][1]{list}[0]{'cyrusimap.org:importance'});
 
     $res = $manjmap->CallMethods([
-        ['Card/get', {
+        ['ContactCard/get', {
             accountId => 'cassandane',
             ids => [$contactId],
             properties => ['cyrusimap.org:importance'],
         }, 'R1'],
-        ['Card/set', {
+        ['ContactCard/set', {
             accountId => 'cassandane',
             update => {
                 $contactId => {
@@ -58,7 +58,7 @@ sub test_card_set_importance_peruser
                 },
             },
         }, 'R2'],
-        ['Card/get', {
+        ['ContactCard/get', {
             accountId => 'cassandane',
             ids => [$contactId],
             properties => ['cyrusimap.org:importance'],
@@ -70,7 +70,7 @@ sub test_card_set_importance_peruser
     $self->assert_equals(2.0, $res->[2][1]{list}[0]{'cyrusimap.org:importance'});
 
     $res = $jmap->CallMethods([
-        ['Card/get', {
+        ['ContactCard/get', {
             ids => ['#c1'],
             properties => ['cyrusimap.org:importance'],
         }, 'R1'],

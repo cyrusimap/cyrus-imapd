@@ -24,7 +24,7 @@ sub test_card_set_create_cryptokeys
     my $key = 'data:,-----BEGIN RSA PUBLIC KEY-----\nMIIBCgKCAQEA+xGZ/wcz9ugFpP07Nspo6U17l0YhFiFpxxU4pTk3Lifz9R3zsIsu\nERwta7+fWIfxOo208ett/jhskiVodSEt3QBGh4XBipyWopKwZ93HHaDVZAALi/2A\n+xTBtWdEo7XGUujKDvC2/aZKukfjpOiUI8AhLAfjmlcD/UZ1QPh0mHsglRNCmpCw\nmwSXA9VNmhz+PiB+Dml4WWnKW/VHo2ujTXxq7+efMU4H2fny3Se3KYOsFPFGZ1TN\nQSYlFuShWrHPtiLmUdPoP6CV2mML1tk+l7DIIqXrQhLUKDACeM5roMx0kLhUWB8P\n+0uj1CNlNN4JRZlC7xFfqiMbFRU9Z4N6YwIDAQAB\n-----END RSA PUBLIC KEY-----';
 
     my $res = $jmap->CallMethods([
-        ['Card/set', {
+        ['ContactCard/set', {
             create => {
                 "1" => {
                     '@type' => 'Card',
