@@ -9,7 +9,7 @@ sub test_card_query
     my $jmap = $self->{jmap};
 
     xlog $self, "create cards";
-    my $res = $jmap->CallMethods([['Card/set', {
+    my $res = $jmap->CallMethods([['ContactCard/set', {
         create => {
             "1" => {
                 name => {
@@ -186,12 +186,18 @@ sub test_card_query
                         note => "hello"
                     }
                 }
+            },
+            "5" => {
+                kind => 'org',
+                name => {
+                    full => 'My Org'
+                }
             }
         }
     }, "R1"]]);
 
     $self->assert_not_null($res);
-    $self->assert_str_equals('Card/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
     my $id2 = $res->[0][1]{created}{"2"}{id};
@@ -199,7 +205,7 @@ sub test_card_query
     my $id4 = $res->[0][1]{created}{"4"}{id};
 
     xlog $self, "create card groups";
-    $res = $jmap->CallMethods([['CardGroup/set', {create => {
+    $res = $jmap->CallMethods([['ContactCard/set', {create => {
         "1" => { kind => 'group',
                  name => { full => "group1" },
                  members => { $id1 => JSON::true, $id2 => JSON::true }
@@ -215,20 +221,36 @@ sub test_card_query
     }}, "R1"]]);
 
     $self->assert_not_null($res);
-    $self->assert_str_equals('CardGroup/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $group1 = $res->[0][1]{created}{"1"}{id};
     my $group2 = $res->[0][1]{created}{"2"}{id};
     my $group3 = $res->[0][1]{created}{"3"}{id};
 
     xlog $self, "get unfiltered card list";
-    $res = $jmap->CallMethods([ ['Card/query', { }, "R1"] ]);
+    $res = $jmap->CallMethods([ ['ContactCard/query', { }, "R1"] ]);
+
+    $self->assert_num_equals(8, $res->[0][1]{total});
+    $self->assert_num_equals(8, scalar @{$res->[0][1]{ids}});
+
+    xlog $self, "filter by kind";
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
+                    filter => { kind => 'individual'}
+                }, "R1"] ]);
 
     $self->assert_num_equals(4, $res->[0][1]{total});
     $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
+    xlog $self, "filter by kind";
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
+                    filter => { kind => 'org'}
+                }, "R1"] ]);
+
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+
     xlog $self, "filter by name (fullName)";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { name => "foo" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
@@ -236,14 +258,14 @@ sub test_card_query
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
     xlog $self, "filter by name (fullName)";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { name => "last" }
                 }, "R1"] ]);
     $self->assert_num_equals(4, $res->[0][1]{total});
     $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "filter by name/given";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { 'name/given' => "foo" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
@@ -251,14 +273,14 @@ sub test_card_query
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
     xlog $self, "filter by name/surname";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { 'name/surname' => "last" }
                 }, "R1"] ]);
     $self->assert_num_equals(4, $res->[0][1]{total});
     $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "filter by name/given and name/surname (one filter)";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { 'name/given' => "bam", 'name/surname' => "last" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
@@ -266,7 +288,7 @@ sub test_card_query
     $self->assert_str_equals($id4, $res->[0][1]{ids}[0]);
 
     xlog $self, "filter by name/given and name/surname (AND filter)";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { operator => "AND", conditions => [{
                                 'name/surname' => "last"
                             }, {
@@ -278,7 +300,7 @@ sub test_card_query
     $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
 
     xlog $self, "filter by name/given (OR filter)";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { operator => "OR", conditions => [{
                                 'name/given' => "bar"
                             }, {
@@ -289,14 +311,14 @@ sub test_card_query
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "filter by text";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { text => "some" }
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "filter by nickName";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { nickName => "foo" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
@@ -304,34 +326,34 @@ sub test_card_query
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
     xlog $self, "filter by email";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { email => "example.com" }
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "filter by hobby";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { hobby => "reading" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "filter by note";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { note => "hello" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "filter by inCardGroup";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { inCardGroup => [$group1, $group3] }
                 }, "R1"] ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "filter by inCardGroup and name/given";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
                     filter => { inCardGroup => [$group1, $group3],
                                 'name/given' => "foo" }
                 }, "R1"] ]);
@@ -339,7 +361,8 @@ sub test_card_query
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
     xlog $self, "sort by name/given";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
+                    filter => { kind => 'individual'},
                     sort => [ { property => "name/given" } ]
                 }, "R1"] ]);
     $self->assert_num_equals(4, $res->[0][1]{total});
@@ -350,7 +373,8 @@ sub test_card_query
     $self->assert_str_equals($id1, $res->[0][1]{ids}[3]);
 
     xlog $self, "sort by name/surname";
-    $res = $jmap->CallMethods([ ['Card/query', {
+    $res = $jmap->CallMethods([ ['ContactCard/query', {
+                    filter => { kind => 'individual'},
                     sort => [ { property => "name/surname" } ]
                 }, "R1"] ]);
     $self->assert_num_equals(4, $res->[0][1]{total});

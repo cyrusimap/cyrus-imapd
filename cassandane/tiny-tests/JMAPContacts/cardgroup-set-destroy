@@ -38,7 +38,7 @@ EOF
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
     my $res = $jmap->CallMethods([
-        ['CardGroup/set', {
+        ['ContactCard/set', {
             destroy => [$id]
         }, 'R1']
     ]);
@@ -46,7 +46,7 @@ EOF
     $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
 
     $res = $jmap->CallMethods([
-        ['CardGroup/get', {
+        ['ContactCard/get', {
         }, 'R1']
     ]);
 

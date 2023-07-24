@@ -29,13 +29,13 @@ sub test_card_changes_shared
     xlog $self, "share to user";
     $admintalk->setacl("user.manifold.#addressbooks.Default", "cassandane" => 'lrswipkxtecdn') or die;
 
-# Update to Card/[get|set] once implemented
+# Update to ContactCard/[get|set] once implemented
     xlog $self, "get contacts";
     my $res = $jmap->CallMethods([['Contact/get', { accountId => 'manifold' }, "R2"]]);
     my $state = $res->[0][1]{state};
 
     xlog $self, "get contact updates";
-    $res = $jmap->CallMethods([['Card/changes', {
+    $res = $jmap->CallMethods([['ContactCard/changes', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);
@@ -54,7 +54,7 @@ sub test_card_changes_shared
     my $id1 = $res->[0][1]{created}{"1"}{id};
 
     xlog $self, "get contact updates";
-    $res = $jmap->CallMethods([['Card/changes', {
+    $res = $jmap->CallMethods([['ContactCard/changes', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);
@@ -80,7 +80,7 @@ sub test_card_changes_shared
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
     xlog $self, "get contact updates (since last change)";
-    $res = $jmap->CallMethods([['Card/changes', {
+    $res = $jmap->CallMethods([['ContactCard/changes', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);
@@ -94,7 +94,7 @@ sub test_card_changes_shared
     $state = $res->[0][1]{newState};
 
     xlog $self, "get contact updates (in bulk)";
-    $res = $jmap->CallMethods([['Card/changes', {
+    $res = $jmap->CallMethods([['ContactCard/changes', {
                     accountId => 'manifold',
                     sinceState => $oldState
                 }, "R2"]]);
@@ -106,7 +106,7 @@ sub test_card_changes_shared
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
 
     xlog $self, "get contact updates from initial state (maxChanges=1)";
-    $res = $jmap->CallMethods([['Card/changes', {
+    $res = $jmap->CallMethods([['ContactCard/changes', {
                     accountId => 'manifold',
                     sinceState => $oldState,
                     maxChanges => 1
@@ -121,7 +121,7 @@ sub test_card_changes_shared
     my $interimState = $res->[0][1]{newState};
 
     xlog $self, "get contact updates from interim state (maxChanges=10)";
-    $res = $jmap->CallMethods([['Card/changes', {
+    $res = $jmap->CallMethods([['ContactCard/changes', {
                     accountId => 'manifold',
                     sinceState => $interimState,
                     maxChanges => 10
@@ -146,7 +146,7 @@ sub test_card_changes_shared
     $self->assert_str_equals('R1', $res->[0][2]);
 
     xlog $self, "get contact updates";
-    $res = $jmap->CallMethods([['Card/changes', {
+    $res = $jmap->CallMethods([['ContactCard/changes', {
                     accountId => 'manifold',
                     sinceState => $state
                 }, "R2"]]);

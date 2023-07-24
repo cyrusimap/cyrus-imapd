@@ -36,7 +36,7 @@ sub test_card_set_create_basic
     my $href = "$abookid/$id.vcf";
 
     my $res = $jmap->CallMethods([
-        ['Card/set', {
+        ['ContactCard/set', {
             create => {
                 "1" => {
                     '@type' => 'Card',

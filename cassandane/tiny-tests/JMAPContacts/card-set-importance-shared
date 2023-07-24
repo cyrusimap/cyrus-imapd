@@ -31,12 +31,12 @@ sub test_card_set_importance_shared
                        "cassandane" => 'lrswipkxtecdn') or die;
 
     xlog $self, "create contact";
-    my $res = $jmap->CallMethods([['Card/set', {
+    my $res = $jmap->CallMethods([['ContactCard/set', {
                     accountId => 'manifold',
                     create => {"1" => {name => { full => "John Doe" }}}
     }, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Card/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
@@ -44,12 +44,12 @@ sub test_card_set_importance_shared
                        "cassandane" => 'lrsn') or die;
 
     xlog $self, "update importance";
-    $res = $jmap->CallMethods([['Card/set', {
+    $res = $jmap->CallMethods([['ContactCard/set', {
                     accountId => 'manifold',
                     update => {$id => {"cyrusimap.org:importance" => -0.1}}
     }, "R2"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Card/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R2', $res->[0][2]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 }

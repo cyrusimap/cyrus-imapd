@@ -23,7 +23,7 @@ sub test_card_set_create_calendars
     my $href = "Default/$id.vcf";
 
     my $res = $jmap->CallMethods([
-        ['Card/set', {
+        ['ContactCard/set', {
             create => {
                 "1" => {
                     '@type' => 'Card',

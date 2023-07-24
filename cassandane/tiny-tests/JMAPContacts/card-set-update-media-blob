@@ -23,7 +23,7 @@ sub test_card_set_update_media_blob
     my $href = "Default/$id.vcf";
 
     my $res = $jmap->CallMethods([
-        ['Card/set', {
+        ['ContactCard/set', {
             create => {
                 "1" => {
                     '@type' => 'Card',
@@ -58,7 +58,7 @@ sub test_card_set_update_media_blob
     my $blobId = $res->{blobId};
 
     $res = $jmap->CallMethods([
-        ['Card/set', {
+        ['ContactCard/set', {
             update => {
                 $id => {
                     'media/res1/blobId' => $blobId
