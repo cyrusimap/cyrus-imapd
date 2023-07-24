@@ -26,7 +26,7 @@ sub test_cardgroup_set_update
     my $href = "Default/$id.vcf";
 
     my $res = $jmap->CallMethods([
-        ['CardGroup/set', {
+        ['ContactCard/set', {
             create => {
                 "1" => {
                     '@type' => 'Card',
@@ -54,7 +54,7 @@ sub test_cardgroup_set_update
     $self->assert_matches(qr/MEMBER:urn:uuid:$member1/, $card);
 
     $res = $jmap->CallMethods([
-        ['CardGroup/set', {
+        ['ContactCard/set', {
             update => {
                 $id => {
                     "members/$member2" => JSON::true
@@ -75,7 +75,7 @@ sub test_cardgroup_set_update
     $self->assert_matches(qr/MEMBER:urn:uuid:$member1/, $card);
 
     $res = $jmap->CallMethods([
-        ['CardGroup/set', {
+        ['ContactCard/set', {
             update => {
                 $id => {
                     "members/$member1" => JSON::null
@@ -94,4 +94,20 @@ sub test_cardgroup_set_update
 
     $self->assert_matches(qr/MEMBER:urn:uuid:$member2/, $card);
     $self->assert_does_not_match(qr/MEMBER:urn:uuid:$member1/, $card);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    kind => 'individual'
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+    $self->assert_str_equals("invalidProperties",
+                             $res->[0][1]{notUpdated}{$id}{type});
+    $self->assert_str_equals("kind",
+                             $res->[0][1]{notUpdated}{$id}{properties}[0]);
 }

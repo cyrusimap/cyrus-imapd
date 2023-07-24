@@ -42,7 +42,7 @@ EOF
     my $blobId = $res->{blobId};
 
     my $res = $jmap->CallMethods([
-        ['Card/parse', {
+        ['ContactCard/parse', {
             blobIds => [ $blobId ],
             properties => [ "\@type", "uid", "name", "media", "vCardProps" ]
         }, 'R1']

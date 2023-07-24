@@ -32,7 +32,7 @@ EOF
         ['AddressBook/set', {
             destroy => [$abookId],
         }, 'R1'],
-# XXX  Change to Card/get once implemented
+# XXX  Change to ContactCard/get once implemented
         ['Contact/get', {
             ids => [$cardId],
             properties => ['id'],

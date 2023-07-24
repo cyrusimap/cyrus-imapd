@@ -39,7 +39,7 @@ EOF
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
     my $res = $jmap->CallMethods([
-        ['CardGroup/get', {
+        ['ContactCard/get', {
         }, 'R1']
     ]);
 
