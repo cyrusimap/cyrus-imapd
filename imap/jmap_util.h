@@ -70,8 +70,11 @@ extern int jmap_readprop_full(json_t *root, const char *prefix, const char *name
  * the erroneous path in patch is appended as JSON string */
 extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch, json_t *invalid);
 
+#define PATCH_NO_REMOVE   (1<<0)
+#define PATCH_ALLOW_ARRAY (1<<1)
+
 /* Create a patch-object that transforms src into dst. */
-extern json_t *jmap_patchobject_create(json_t *src, json_t *dst, int no_remove);
+extern json_t *jmap_patchobject_create(json_t *src, json_t *dst, unsigned flags);
 
 /* Return non-zero src and its RFC 6901 encoding differ */
 extern int jmap_pointer_needsencode(const char *src);
