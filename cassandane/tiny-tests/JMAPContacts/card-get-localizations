@@ -101,9 +101,7 @@ EOF
             en => {
                 'titles/t1/name' => 'Novelist',
                 'speakToAs/grammaticalGender' => 'masculine',
-                'addresses/addr1/components' => [
-                    { kind => 'locality', value => 'Tokyo' }
-                ]
+                'addresses/addr1/components/0/value' => 'Tokyo'
             },
             fr => {
                 'titles/t1/name' => 'Écrivain',
@@ -117,14 +115,10 @@ EOF
             },
             jp => {
                 'name/full' => 'ガブリエル・ガルシア・マルケス',
-                'name/components' => [
-                    { 'kind' => 'given', 'value' => 'ガブリエル' },
-                    { 'kind' => 'given2', 'value' => 'ガルシア' },
-                    { 'kind' => 'surname', 'value' => 'マルケス' }
-                ],
-                'addresses/addr1/components' => [
-                    { kind => 'locality', value => '東京' }
-                ]
+                'name/components/0/value' => 'ガブリエル',
+                'name/components/1/value' => 'ガルシア',
+                'name/components/2/value' => 'マルケス',
+                'addresses/addr1/components/0/value' => '東京'
             }
         }
     };
