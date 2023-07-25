@@ -5750,7 +5750,7 @@ static const jmap_property_t card_props[] = {
 
 
 /*
- * Card[Group}/get
+ * ContactCard/get
  */
 
 struct comp_kind {
@@ -7059,7 +7059,9 @@ static void props_by_altid_cb(const char *altid, void *val, void *rock)
 
             jsprop_from_vcard(prop, tmp, prop_id, crock);
             json_object_update_new(json_object_get_vanew(l10n, lang, "{}"),
-                                   jmap_patchobject_create(crock->card, tmp, 1));
+                                   jmap_patchobject_create(crock->card, tmp,
+                                                           PATCH_NO_REMOVE |
+                                                           PATCH_ALLOW_ARRAY));
             json_decref(tmp);
         }
         else {
@@ -8155,19 +8157,13 @@ static int cardquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
 }
 
 /*
- * Card[Group]/set
+ * ContactCard/set
  */
 
 struct l10n_by_id_t {
     const char *deflang;
     const char *lang;
     hash_table *patches;
-};
-
-struct l10n_patch_t {
-    const char *lang;
-    const char *path;
-    json_t *obj;
 };
 
 static void _jsunknown_to_vcard(struct jmap_parser *parser,
@@ -8481,40 +8477,34 @@ static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
     jmap_parser_push(parser, key);
 
     json_object_foreach_safe(jval, tmp, id, obj) {
-        ptrarray_t *patches =
-            l10n->patches ? hash_del(id, l10n->patches) : NULL;
-        const char *lang;
+        json_t *patches = l10n->patches ? hash_del(id, l10n->patches) : NULL;
         int r1;
 
         jmap_parser_push(parser, id);
 
         if (patches) {
-            /* Apply localization patches and add new objectes to Card */
-            struct l10n_patch_t *lpatch;
+            /* Apply localization patches and add new objects to Card */
+            json_t *jpatch;
+            const char *lang;
 
-            while ((lpatch = ptrarray_pop(patches))) {
-                json_t *jpatch = json_pack("{s:O}", lpatch->path, lpatch->obj);
+            json_object_foreach(patches, lang, jpatch) {
                 json_t *altobj =
                     jmap_patchobject_apply(obj, jpatch, parser->invalid);
 
-                json_decref(jpatch);
-
                 if (altobj) {
-                    lang = strcasecmp(l10n->deflang, lpatch->lang) ?
-                        lpatch->lang : NULL;
+                    const char *this_lang =
+                        strcasecmp(l10n->deflang, lang) ? lang : NULL;
 
                     flags = WANT_ALTID_FLAG;
 
                     r |= (r1 = _jsobject_to_card(parser, altobj, id, type,
                                                  prop_cb, param_props,
-                                                 flags, lang, card, rock));
+                                                 flags, this_lang, card, rock));
                     json_decref(altobj);
                 }
-
-                free(lpatch);
             }
 
-            ptrarray_free(patches);
+            json_decref(patches);
         }
 
         if (l10n->lang) {
@@ -8787,7 +8777,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
     vcardparameter *jscomps = NULL;
     const char *key, *fullName = NULL;
     struct buf buf = BUF_INITIALIZER;
-    json_t *jprop, *jsubprop;
+    json_t *patches, *jprop, *jsubprop;
     size_t i;
     int r = 0;
 
@@ -8798,6 +8788,27 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
 
     jmap_parser_push(parser, "name");
 
+    patches = l10n->patches ? hash_del("", l10n->patches) : NULL;
+    if (patches) {
+        /* Apply localization patches and add new objects to Card */
+        const char *lang;
+        json_t *jpatch;
+        
+        json_object_foreach(patches, lang, jpatch) {
+            json_t *altname =
+                jmap_patchobject_apply(jval, jpatch, parser->invalid);
+
+            if (altname) {
+                struct l10n_by_id_t my_l10n = { l10n->deflang, lang, NULL };
+                _jsname_to_vcard(parser, altname, &my_l10n, card);
+                json_decref(altname);
+            }
+        }
+
+        json_decref(patches);
+    }
+
+    /* Add base object to Card */
     jprop = json_object_get(jval, "@type");
     if (jprop && strcmpsafe("Name", json_string_value(jprop))) {
         jmap_parser_invalid(parser, "@type");
@@ -9078,10 +9089,8 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
                                   json_t *jval, struct l10n_by_id_t *l10n,
                                   vcardcomponent *card)
 {
-    ptrarray_t *patches;
-    struct l10n_patch_t *lpatch;
+    json_t *patches, *jprop;
     const char *key;
-    json_t *jprop;
     int r = 0;
 
     if (!json_is_object(jval)) {
@@ -9091,6 +9100,27 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
 
     jmap_parser_push(parser, "speakToAs");
 
+    patches = l10n->patches ? hash_del("", l10n->patches) : NULL;
+    if (patches) {
+        /* Apply localization patches and add new objects to Card */
+        const char *lang;
+        json_t *jpatch;
+        
+        json_object_foreach(patches, lang, jpatch) {
+            json_t *altobj =
+                jmap_patchobject_apply(jval, jpatch, parser->invalid);
+
+            if (altobj) {
+                struct l10n_by_id_t my_l10n = { l10n->deflang, lang, NULL };
+                _jsspeak_to_vcard(parser, altobj, &my_l10n, card);
+                json_decref(altobj);
+            }
+        }
+
+        json_decref(patches);
+    }
+
+    /* Add base object to Card */
     jprop = json_object_get(jval, "@type");
     if (jprop && strcmpsafe("SpeakToAs", json_string_value(jprop))) {
         jmap_parser_invalid(parser, "@type");
@@ -9099,26 +9129,6 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
 
     jprop = json_object_get(jval, "grammaticalGender");
     if (jprop) {
-        patches = l10n->patches ?
-            hash_del("grammaticalGender", l10n->patches) : NULL;
-
-        if (patches) {
-            /* Apply localization patches and add new objects to Card */
-            while ((lpatch = ptrarray_pop(patches))) {
-                if (jssimple_to_vcard(parser, "grammaticalGender",
-                                      lpatch->lang, lpatch->obj,
-                                      card, VCARD_GRAMGENDER_PROPERTY,
-                                      VCARD_GRAMGENDER_VALUE)) {
-                    r = 1;
-                }
-
-                free(lpatch);
-            }
-
-            ptrarray_free(patches);
-        }
-
-        /* Add base object to Card */
         if (jssimple_to_vcard(parser, "grammaticalGender", l10n->lang, jprop,
                               card, VCARD_GRAMGENDER_PROPERTY,
                               VCARD_GRAMGENDER_VALUE)) {
@@ -9131,36 +9141,6 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
 
     jprop = json_object_get(jval, "pronouns");
     if (jprop) {
-        patches = l10n->patches ?
-            hash_del("pronouns", l10n->patches) : NULL;
-
-        if (patches) {
-            /* Apply localization patches and add new objects to Card */
-            struct buf buf = BUF_INITIALIZER;
-
-            while ((lpatch = ptrarray_pop(patches))) {
-                const char *p = strchr(lpatch->path, '/'), *id;
-                ptrarray_t *mypatches;
-
-                buf_setmap(&buf, lpatch->path, p - lpatch->path);
-                id = buf_cstring(&buf);
-
-                mypatches = hash_lookup(id, l10n->patches);
-                if (!mypatches) {
-                    mypatches = ptrarray_new();
-                    hash_insert(id, mypatches, l10n->patches);
-                }
-
-                lpatch->path = ++p;
-
-                ptrarray_append(mypatches, lpatch);
-            }
-
-            ptrarray_free(patches);
-            buf_free(&buf);
-        }
-
-        /* Add base object to Card */
         r |= _jsmultiobject_to_card(parser, jprop, "pronouns", "Pronouns",
                                     &_jspronoun_to_vcard, WANT_PROPID_FLAG,
                                     pref_param_props, l10n, card, NULL);
@@ -9880,24 +9860,26 @@ struct bad_patch_rock {
 static void _invalid_l10n_patches_by_id(const char *id, void *val, void *rock)
 {
     struct bad_patch_rock *brock = rock;
-    struct l10n_patch_t *lpatch;
-    ptrarray_t *patches = val;
+    json_t *patches = val, *jpatch;
+    const char *lang;
 
-    while ((lpatch = ptrarray_pop(patches))) {
-        jmap_parser_push(brock->parser, lpatch->lang);
+    json_object_foreach(patches, lang, jpatch) {
+        const char *path;
+
+        jmap_parser_push(brock->parser, lang);
         jmap_parser_push(brock->parser, brock->key);
         jmap_parser_push(brock->parser, id);
 
-        jmap_parser_invalid(brock->parser, lpatch->path);
+        json_object_foreach(jpatch, path, val) {
+            jmap_parser_invalid(brock->parser, path);
+        }
 
         jmap_parser_pop(brock->parser);
         jmap_parser_pop(brock->parser);
         jmap_parser_pop(brock->parser);
-
-        free(lpatch);
     }
 
-    ptrarray_free(patches);
+    json_decref(patches);
 }
 
 static void _invalid_l10n_patches_by_key(const char *key, void *val, void *rock)
@@ -9971,13 +9953,11 @@ static int _jscard_to_vcard(struct jmap_req *req,
                 /* Localization patch:
                  *
                  * Patches are stored in a hash table (by property key)
-                 * of hash tables (by object id) of ptrarrays.
+                 * of hash tables (by object id) of JSON patches (by lang).
                  */
-                struct l10n_patch_t *local =
-                    xzmalloc(sizeof(struct l10n_patch_t));
                 hash_table *patches_by_id;
-                ptrarray_t *patches;
-                const char *prop_key, *id = p+1;
+                const char *prop_key, *id = p+1, *path = NULL;
+                json_t *patches_by_lang, *patch;
 
                 buf_setmap(&buf, key, p - key);
                 prop_key = buf_cstring(&buf);
@@ -9988,23 +9968,33 @@ static int _jscard_to_vcard(struct jmap_req *req,
                     hash_insert(prop_key, patches_by_id, &l10n_by_key);
                 }
 
-                p = strchr(id, '/');
-                if (p) {
-                    buf_setmap(&buf, id, p - id);
-                    id = buf_cstring(&buf);
-                    local->path = ++p;
+                if (!strcmp(prop_key, "name") ||
+                    !strcmp(prop_key, "speakToAs")) {
+                    path = id;
+                    id = "";
+                }
+                else {
+                    p = strchr(id, '/');
+                    if (p) {
+                        buf_setmap(&buf, id, p - id);
+                        id = buf_cstring(&buf);
+                        path = ++p;
+                    }
                 }
 
-                patches = hash_lookup(id, patches_by_id);
-                if (!patches) {
-                    patches = ptrarray_new();
-                    hash_insert(id, patches, patches_by_id);
+                patches_by_lang = hash_lookup(id, patches_by_id);
+                if (!patches_by_lang) {
+                    patches_by_lang = json_object();
+                    hash_insert(id, patches_by_lang, patches_by_id);
                 }
 
-                local->lang = lang;
-                local->obj = jsubval;
+                patch = json_object_get(patches_by_lang, lang);
+                if (!patch) {
+                    patch = json_object();
+                    json_object_set_new(patches_by_lang, lang, patch);
+                }
 
-                ptrarray_append(patches, local);
+                json_object_set(patch, path, jsubval);
             }
             else {
                 /* Localization object:
@@ -10070,6 +10060,10 @@ static int _jscard_to_vcard(struct jmap_req *req,
         else {
             /* Fetch any localization patches for this property */
             l10n.patches = hash_lookup(key, &l10n_by_key);
+            if (l10n.patches) {
+                /* Force ALTID parameter */
+                l10n.lang = "";
+            }
             mykey = key;
         }
 
