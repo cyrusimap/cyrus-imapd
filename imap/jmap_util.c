@@ -175,7 +175,12 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val, json_t *patch, json_t *inva
         /* Find path in object tree */
         while ((top = strchr(base, '/'))) {
             char *name = jmap_pointer_decode(base, top-base);
-            it = json_object_get(it, name);
+            if (json_is_array(it)) {
+                it = json_array_get(it, atoi(name));
+            }
+            else {
+                it = json_object_get(it, name);
+            }
             free(name);
             base = top + 1;
         }
@@ -213,7 +218,7 @@ static void jmap_patchobject_set(json_t *diff, struct buf *path,
 }
 
 static void jmap_patchobject_diff(json_t *diff, struct buf *path,
-                                  json_t *src, json_t *dst, int no_remove)
+                                  json_t *src, json_t *dst, unsigned flags)
 {
     if (!json_is_object(src) || !json_is_object(dst))
         return;
@@ -228,7 +233,7 @@ static void jmap_patchobject_diff(json_t *diff, struct buf *path,
         }
     }
 
-    if (!no_remove) {
+    if (!(flags & PATCH_NO_REMOVE)) {
         // Remove any properties that are set in src but not in dst
         json_object_foreach(src, key, val) {
             if (json_object_get(dst, key) == NULL) {
@@ -241,6 +246,24 @@ static void jmap_patchobject_diff(json_t *diff, struct buf *path,
     json_object_foreach(dst, key, val) {
         json_t *srcval = json_object_get(src, key);
         if (!srcval) {
+            continue;
+        }
+        if ((flags & PATCH_ALLOW_ARRAY) &&
+            json_is_array(val) && json_is_array(srcval) &&
+            json_array_size(val) == json_array_size(srcval)) {
+            json_t *subval;
+            size_t i;
+
+            json_array_foreach(val, i, subval) {
+                json_t *srcsubval = json_array_get(srcval, i);
+                char *enckey = jmap_pointer_encode(key);
+                size_t len = buf_len(path);
+                if (len) buf_appendcstr(path, "/");
+                buf_printf(path, "%s/%zu", enckey, i);
+                jmap_patchobject_diff(diff, path, srcsubval, subval, flags);
+                buf_truncate(path, len);
+                free(enckey);
+            }
             continue;
         }
         if (json_typeof(val) != JSON_OBJECT) {
@@ -256,19 +279,19 @@ static void jmap_patchobject_diff(json_t *diff, struct buf *path,
             size_t len = buf_len(path);
             if (len) buf_appendcstr(path, "/");
             buf_appendcstr(path, enckey);
-            jmap_patchobject_diff(diff, path, srcval, val, no_remove);
+            jmap_patchobject_diff(diff, path, srcval, val, flags);
             buf_truncate(path, len);
             free(enckey);
         }
     }
 }
 
-EXPORTED json_t *jmap_patchobject_create(json_t *src, json_t *dst, int no_remove)
+EXPORTED json_t *jmap_patchobject_create(json_t *src, json_t *dst, unsigned flags)
 {
     json_t *diff = json_object();
     struct buf buf = BUF_INITIALIZER;
 
-    jmap_patchobject_diff(diff, &buf, src, dst, no_remove);
+    jmap_patchobject_diff(diff, &buf, src, dst, flags);
 
     buf_free(&buf);
     return diff;
