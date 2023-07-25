@@ -878,10 +878,8 @@ EXPORTED int icalsupport_decode_personal_data(const struct buf *value,
     if (!data->vpatch)
         goto done;
 
-    if (!dlist_getatom(dl, "USEDEFAULTALERTS", &sval))
-        goto done;
-
-    data->usedefaultalerts = !strcmpsafe(sval, "YES");
+    data->usedefaultalerts =
+        dlist_getatom(dl, "USEDEFAULTALERTS", &sval) && !strcmpsafe(sval, "YES");
 
     is_valid = 1;
 
