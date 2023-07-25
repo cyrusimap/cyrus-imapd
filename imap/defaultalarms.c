@@ -944,15 +944,22 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
         struct caldav_data *cdata;
         r = caldav_lookup_imapuid(caldav_db, mbentry, record->uid, &cdata, 1);
         if (r) {
-            xsyslog(LOG_ERR, "can not load entry in caldav.db",
-                    "mboxname=<%s> imap_uid=<%d> err=<%s>",
-                    mailbox_name(mbox), record->uid, cyrusdb_strerror(r));
-            free_hash_table(&peruser, free);
+            if (r == CYRUSDB_NOTFOUND) {
+                xsyslog(LOG_INFO, "ignoring annotation tombstone in caldav.db",
+                        "mboxname=<%s> imap_uid=<%d>",
+                        mailbox_name(mbox), record->uid);
+            }
+            else {
+                xsyslog(LOG_ERR, "can not load entry from caldav.db",
+                        "mboxname=<%s> imap_uid=<%d> err=<%s>",
+                        mailbox_name(mbox), record->uid, cyrusdb_strerror(r));
+                free_hash_table(&peruser, free);
 
-            buf_reset(&buf);
-            buf_printf(&buf, "%d", record->uid);
-            json_object_set_new(sharee_err, buf_cstring(&buf),
-                    jmap_server_error(r));
+                buf_reset(&buf);
+                buf_printf(&buf, "%d", record->uid);
+                json_object_set_new(sharee_err, buf_cstring(&buf),
+                        jmap_server_error(r));
+            }
             continue;
         }
 
