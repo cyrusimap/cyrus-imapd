@@ -1772,9 +1772,6 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
 
     if (!(contents && contents[0])) return(0);
 
-    if (index_check(state, 0))
-        return 0;
-
     if (state->exists <= 0) return 0;
 
     length = strlen(contents);

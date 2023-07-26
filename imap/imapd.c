@@ -13582,8 +13582,10 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
 
         if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index))) {
             /* currently selected mailbox */
-            if (!index_scan(imapd_index, listargs->scan))
+            if (index_refresh(imapd_index) ||
+                !index_scan(imapd_index, listargs->scan)) {
                 return; /* no matching messages */
+            }
         }
         else {
             /* other local mailbox */
@@ -13595,13 +13597,14 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
             init.userid = imapd_userid;
             init.authstate = imapd_authstate;
             init.out = imapd_out;
+            init.examine_mode = 1;
 
             r = index_open(mbentry->name, &init, &state);
 
             if (!r)
                 doclose = 1;
 
-            if (!r && index_hasrights(state, ACL_READ)) {
+            if (!r && !index_hasrights(state, ACL_READ)) {
                 r = (imapd_userisadmin || index_hasrights(state, ACL_LOOKUP)) ?
                     IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
             }
