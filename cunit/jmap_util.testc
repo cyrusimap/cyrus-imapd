@@ -18,7 +18,7 @@ static void test_patchobject(void)
         char *swant = json_dumps(jwant, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
         char *sdiff = json_dumps(jdiff, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
         CU_ASSERT_STRING_EQUAL(swant, sdiff); \
-        json_t *jback = jmap_patchobject_apply(jfrom, jdiff, NULL); \
+        json_t *jback = jmap_patchobject_apply(jfrom, jdiff, NULL, myflags); \
         char *sback = json_dumps(jback, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
         char *sdest = json_dumps(jdest, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
         CU_ASSERT_STRING_EQUAL(sdest, sback); \
@@ -178,6 +178,117 @@ static void test_patchobject(void)
     "  \"a/1/val\": \"baz\""
     "}";
     TESTCASE(from, dest, want, PATCH_ALLOW_ARRAY);
+
+#undef TESTCASE
+}
+
+static void test_patchobject_invalid(void)
+{
+#define TESTCASE(_from, _patch, _want_invalid, _flags) \
+    { \
+        unsigned myflags = (_flags); \
+        json_t *jfrom = json_loads((_from), JSON_DECODE_ANY, NULL); \
+        json_t *jpatch = json_loads((_patch), JSON_DECODE_ANY, NULL); \
+        json_t *jwant_invalid = json_loads((_want_invalid), JSON_DECODE_ANY, NULL); \
+        json_t *jhave_invalid = json_array(); \
+        json_t *jhave = jmap_patchobject_apply(jfrom, jpatch, jhave_invalid, myflags); \
+        CU_ASSERT_PTR_NULL(jhave); \
+        char *want_invalid = json_dumps(jwant_invalid, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
+        char *have_invalid = json_dumps(jhave_invalid, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
+        CU_ASSERT_STRING_EQUAL(want_invalid, have_invalid); \
+        free(have_invalid); \
+        free(want_invalid); \
+        json_decref(jhave_invalid); \
+        json_decref(jwant_invalid); \
+        json_decref(jpatch); \
+        json_decref(jfrom); \
+    }
+
+    const char *from, *patch, *want_invalid;
+
+    /* Set non-existent member */
+    from = "{"
+    "  \"a\": \"foo\""
+    "}";
+    patch = "{"
+    "  \"x/y\": \"bar\""
+    "}";
+    want_invalid = "["
+    "\"x/y\""
+    "]";
+    TESTCASE(from, patch, want_invalid, 0);
+
+    /* Remove non-existent member */
+    from = "{"
+    "  \"a\": \"foo\""
+    "}";
+    patch = "{"
+    "  \"x/y\": null"
+    "}";
+    want_invalid = "["
+    "\"x/y\""
+    "]";
+    TESTCASE(from, patch, want_invalid, 0);
+
+    /* Patch inside array - but no PATCH_ALLOW_ARRAY flag */
+    from = "{"
+    "  \"a\": ["
+    "    \"foo\","
+    "    \"bar\""
+    "  ]"
+    "}";
+    patch = "{"
+    "  \"a/1\": \"bam\""
+    "}";
+    want_invalid = "["
+    "  \"a/1\" "
+    "]";
+    TESTCASE(from, patch, want_invalid, 0);
+
+    /* Delete from array */
+    from = "{"
+    "  \"a\": ["
+    "    \"foo\","
+    "    \"bar\""
+    "  ]"
+    "}";
+    patch = "{"
+    "  \"a/1\": null"
+    "}";
+    want_invalid = "["
+    "  \"a/1\" "
+    "]";
+    TESTCASE(from, patch, want_invalid, PATCH_ALLOW_ARRAY);
+
+    /* Patch non-existent array entry */
+    from = "{"
+    "  \"a\": ["
+    "    \"foo\","
+    "    \"bar\""
+    "  ]"
+    "}";
+    patch = "{"
+    "  \"a/2\": \"bam\""
+    "}";
+    want_invalid = "["
+    "  \"a/2\" "
+    "]";
+    TESTCASE(from, patch, want_invalid, PATCH_ALLOW_ARRAY);
+
+    /* Patch with special JSON pointer '-' */
+    from = "{"
+    "  \"a\": ["
+    "    \"foo\","
+    "    \"bar\""
+    "  ]"
+    "}";
+    patch = "{"
+    "  \"a/-\": \"bam\""
+    "}";
+    want_invalid = "["
+    "  \"a/-\" "
+    "]";
+    TESTCASE(from, patch, want_invalid, PATCH_ALLOW_ARRAY);
 
 #undef TESTCASE
 }
