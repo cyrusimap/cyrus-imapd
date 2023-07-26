@@ -99,6 +99,7 @@
 #include "tok.h"
 #include "wildmat.h"
 #include "md5.h"
+#include "attachextract.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -707,7 +708,7 @@ static void httpd_reset(struct http_connection *conn)
     }
     ptrarray_fini(&backend_cached);
 
-    index_text_extractor_destroy();
+    attachextract_destroy();
 
     if (httpd_in) {
         prot_NONBLOCK(httpd_in);
@@ -1065,7 +1066,7 @@ int service_main(int argc __attribute__((unused)),
         }
     }
 
-    index_text_extractor_init(httpd_in);
+    attachextract_init(httpd_in);
 
     /* count the connection, now that it's established */
     prometheus_increment(CYRUS_HTTP_CONNECTIONS_TOTAL);
@@ -1149,7 +1150,7 @@ void shut_down(int code)
     }
     ptrarray_fini(&backend_cached);
 
-    index_text_extractor_destroy();
+    attachextract_destroy();
 
     annotatemore_close();
 

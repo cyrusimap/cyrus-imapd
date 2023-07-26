@@ -63,6 +63,10 @@ void strarray_fini(strarray_t *);
 strarray_t *strarray_new(void);
 void strarray_free(strarray_t *);
 
+#define strarray_appendv(sa, s) strarray_nth((sa), strarray_append((sa), (s)))
+#define strarray_addv(sa, s) strarray_nth((sa), strarray_add((sa), (s)))
+#define strarray_add_casev(sa, s) strarray_nth((sa), strarray_add_case((sa), (s)))
+
 int strarray_append(strarray_t *, const char *);
 int strarray_add(strarray_t *, const char *);
 int strarray_add_case(strarray_t *, const char *);

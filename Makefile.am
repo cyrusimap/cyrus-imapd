@@ -639,6 +639,7 @@ cunit_TESTS = \
 	cunit/mboxname.testc \
 	cunit/md5.testc \
 	cunit/message.testc \
+	cunit/message_guid.testc \
 	cunit/msgid.testc \
 	cunit/parseaddr.testc \
 	cunit/parse.testc \
@@ -1011,6 +1012,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/annotate.h \
 	imap/append.c \
 	imap/append.h \
+	imap/attachextract.c \
+	imap/attachextract.h \
 	imap/backend.c \
 	imap/backend.h \
 	imap/conversations.c \

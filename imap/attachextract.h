@@ -1,6 +1,6 @@
-/* dynarray.h -- an expanding array of same-size members
+/* attachextract.h -- Routines for extracting text from attachments
  *
- * Copyright (c) 1994-2020 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,33 +38,55 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
  */
 
-#ifndef __CYRUS_DYNARRAY_H__
-#define __CYRUS_DYNARRAY_H__
+#ifndef INCLUDED_ATTACHEXTRACT_H
+#define INCLUDED_ATTACHEXTRACT_H
 
-typedef struct dynarray {
-    size_t membsize;
-    int count;
-    int alloc;
-    void *data;
-} dynarray_t;
+#include "prot.h"
 
-#define DYNARRAY_INITIALIZER(membsize) { (membsize), 0, 0, NULL }
+/**
+ * Initialize the attachextract backend.
+ *
+ * clientin is an optional protocol stream to wait for timeouts.
+ */
+extern void attachextract_init(struct protstream *clientin);
 
-extern void dynarray_init(struct dynarray *da, size_t membsize);
-extern void dynarray_fini(struct dynarray *da);
+/**
+ * Destroy the attachextract backend.
+ */
+extern void attachextract_destroy(void);
 
-extern struct dynarray *dynarray_new(size_t membsize);
-extern void dynarray_free(struct dynarray **dap);
+/**
+ * Identifies the content type of attachment data.
+ */
+struct attachextract_record {
+    const char *type;          // MIME content type
+    const char *subtype;       // MIME subtype
+    struct message_guid guid;  // content guid of undecoded data
+};
 
-extern void dynarray_append(struct dynarray *da, void *memb);
-extern void dynarray_set(struct dynarray *, int idx, void *memb);
-extern void *dynarray_nth(const struct dynarray *da, int idx);
-extern int dynarray_size(struct dynarray *da);
-extern void dynarray_truncate(struct dynarray *da, int newlen);
-extern void dynarray_sort(struct dynarray *da,
-                          int (*compare)(const void *, const void *));
+/**
+ * Extracts text from attachment data.
+ *
+ * Data may be encoded with one of the charset ENCODING enums.
+ *
+ * Returns 0 on success or an IMAP error.
+ */
+extern int attachextract_extract(const struct attachextract_record *record,
+                                 const struct buf *data, int encoding,
+                                 struct buf *text);
 
-#endif /* __CYRUS_DYNARRAY_H__ */
+/**
+ * Sets or gets where to read and cache extract in.
+ */
+extern void attachextract_set_cachedir(const char *cachedir);
+extern const char *attachextract_get_cachedir(void);
+
+/**
+ * Sets or gets if extracted text may only read from the cache.
+ */
+extern void attachextract_set_cacheonly(int cacheonly);
+extern int attachextract_get_cacheonly(void);
+
+#endif

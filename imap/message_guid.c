@@ -100,6 +100,19 @@ EXPORTED void message_guid_copy(struct message_guid *dst, const struct message_g
     memcpy(dst, src, sizeof(struct message_guid));
 }
 
+/* message_guid_clone() **************************************************
+ *
+ * Copy GUID and return copy
+ *
+ ************************************************************************/
+
+EXPORTED struct message_guid message_guid_clone(const struct message_guid *src)
+{
+    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+    message_guid_copy(&guid, src);
+    return guid;
+}
+
 /* message_guid_equal() **************************************************
  *
  * Compare a pair of GUIDs: Returns 1 => match.
