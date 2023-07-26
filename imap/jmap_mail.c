@@ -11963,7 +11963,7 @@ static int _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarr
                         json_t *aggregated_keywords = _email_bulkupdate_aggregate_keywords(bulk,
                                 uidrec->email_id, &seenseq_by_mbox_id);
                         update->full_keywords = jmap_patchobject_apply(aggregated_keywords,
-                                update->keywords, NULL);
+                                update->keywords, NULL, 0);
                         json_decref(aggregated_keywords);
                     }
                     else {
@@ -12005,7 +12005,7 @@ static int _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarr
             _email_keywords_fini(&keywords);
             json_t *new_keywords;
             if (update->patch_keywords) {
-                new_keywords = jmap_patchobject_apply(current_keywords, update->keywords, NULL);
+                new_keywords = jmap_patchobject_apply(current_keywords, update->keywords, NULL, 0);
             }
             else {
                 new_keywords = json_incref(update->keywords);
@@ -12084,7 +12084,7 @@ static int  _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                                            update->snoozed_uidrec->uid);
                     json_t *patch = update->snoozed;
                   
-                    update->snoozed = jmap_patchobject_apply(orig, patch, NULL);
+                    update->snoozed = jmap_patchobject_apply(orig, patch, NULL, 0);
                     json_decref(orig);
                     json_decref(patch);
                 }
@@ -12976,7 +12976,7 @@ static void _email_update_bulk(jmap_req_t *req,
                         json_pack("{s:s}", "type", "notFound"));
             }
             else {
-                json_t *new = jmap_patchobject_apply(cur, update->mailboxids, NULL);
+                json_t *new = jmap_patchobject_apply(cur, update->mailboxids, NULL, 0);
                 if (!json_object_size(new)) {
                     jmap_parser_invalid(&parser, "mailboxIds");
                 }

@@ -5182,7 +5182,7 @@ static int _contact_set_update(jmap_req_t *req, unsigned kind,
                     r = HTTP_UNPROCESSABLE;
                     goto done;
                 }
-                jupdated = jmap_patchobject_apply(jcurrent, jcard, NULL);
+                jupdated = jmap_patchobject_apply(jcurrent, jcard, NULL, 0);
                 json_decref(jcurrent);
                 if (JNOTNULL(jupdated)) {
                     json_object_del(jupdated, "addressbookId");
@@ -5379,7 +5379,7 @@ static void _contact_copy(jmap_req_t *req,
         goto done;
     }
 
-    dst_card = jmap_patchobject_apply(src_card, jcard, NULL);
+    dst_card = jmap_patchobject_apply(src_card, jcard, NULL, 0);
     json_object_del(dst_card, "id");  // immutable and WILL change
     json_decref(src_card);
 
@@ -7180,7 +7180,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
     hash_enumerate(&props_by_name, &props_by_name_cb, &crock);
 
     if (crock.patch) {
-        json_t *patched = jmap_patchobject_apply(jcard, crock.patch, NULL);
+        json_t *patched = jmap_patchobject_apply(jcard, crock.patch, NULL, 0);
 
         json_decref(crock.patch);
         json_decref(jcard);
@@ -8489,7 +8489,8 @@ static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
 
             json_object_foreach(patches, lang, jpatch) {
                 json_t *altobj =
-                    jmap_patchobject_apply(obj, jpatch, parser->invalid);
+                  jmap_patchobject_apply(obj, jpatch,
+                                         parser->invalid, PATCH_ALLOW_ARRAY);
 
                 if (altobj) {
                     const char *this_lang =
@@ -8796,7 +8797,8 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
         
         json_object_foreach(patches, lang, jpatch) {
             json_t *altname =
-                jmap_patchobject_apply(jval, jpatch, parser->invalid);
+                jmap_patchobject_apply(jval, jpatch,
+                                       parser->invalid, PATCH_ALLOW_ARRAY);
 
             if (altname) {
                 struct l10n_by_id_t my_l10n = { l10n->deflang, lang, NULL };
@@ -9108,7 +9110,8 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
         
         json_object_foreach(patches, lang, jpatch) {
             json_t *altobj =
-                jmap_patchobject_apply(jval, jpatch, parser->invalid);
+                jmap_patchobject_apply(jval, jpatch,
+                                       parser->invalid, PATCH_ALLOW_ARRAY);
 
             if (altobj) {
                 struct l10n_by_id_t my_l10n = { l10n->deflang, lang, NULL };
@@ -10749,7 +10752,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     vcardcomponent_free(vcard);
 
     /* Apply the patch as provided */
-    json_t *new_obj = jmap_patchobject_apply(old_obj, jcard, invalid);
+    json_t *new_obj = jmap_patchobject_apply(old_obj, jcard, invalid, 0);
 
     json_decref(old_obj);
     if (!new_obj) {
