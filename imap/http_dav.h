@@ -273,6 +273,7 @@ struct propfind_ctx {
     struct fctx_flags_t flags;          /* Return flags for this propfind */
     struct buf buf;                     /* Working buffer */
     xmlBufferPtr xmlbuf;                /* Buffer for dumping XML nodes */
+    hash_table per_prop_data;           /* Callback data by prop name */
 };
 
 /* Context for patching (writing) properties */
@@ -634,7 +635,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
                     xmlNodePtr root, int depth);
 
 int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx);
-void free_entry_list(struct propfind_entry_list *elist);
+void free_entry_list(struct propfind_ctx *fctx);
 
 void dav_precond_as_string(struct buf *buf, struct error_t *err);
 
@@ -809,6 +810,8 @@ int propfind_pushkey(const xmlChar *name, xmlNsPtr ns,
 /* PROPPATCH callbacks */
 int proppatch_todb(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
                    struct propstat propstat[], void *rock);
+int proppatch_todb_nomask(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
+                          struct propstat propstat[], void *rock);
 int proppatch_restype(xmlNodePtr prop, unsigned set, struct proppatch_ctx *pctx,
                       struct propstat propstat[], void *rock);
 

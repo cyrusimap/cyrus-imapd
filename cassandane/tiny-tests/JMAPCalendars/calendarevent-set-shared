@@ -9,6 +9,7 @@ sub test_calendarevent_set_shared
     my $caldav = $self->{caldav};
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");
+    my ($maj, $min) = Cassandane::Instance->get_version();
 
     xlog $self, "create shared account";
     $admintalk->create("user.manifold");
@@ -50,7 +51,7 @@ sub test_calendarevent_set_shared
         "freeBusyStatus"=> "busy",
         "participants" => undef,
         "alerts" => {
-            'foo' => {
+            'a465d37a-0041-4119-a1e0-0177aabcdf4a' => {
                 '@type' => 'Alert',
                 trigger => {
                     '@type' => 'OffsetTrigger',
@@ -62,7 +63,7 @@ sub test_calendarevent_set_shared
         }
     };
 
-    my $event2 =  {
+    my $updatedEvent =  {
         calendarIds => {
             $CalendarId1 => JSON::true,
         },
@@ -79,7 +80,7 @@ sub test_calendarevent_set_shared
         "freeBusyStatus"=> "busy",
         "participants" => undef,
         "alerts" => {
-            'foo' => {
+            'a465d37a-0041-4119-a1e0-0177aabcdf4a' => {
                 trigger => {
                     '@type' => 'OffsetTrigger',
                     relativeTo => "start",
@@ -135,7 +136,7 @@ sub test_calendarevent_set_shared
                     ids => [$id]},
     "R1"]]);
     $ret = $res->[0][1]{list}[0];
-    $self->assert_normalized_event_equals($event2, $ret);
+    $self->assert_normalized_event_equals($updatedEvent, $ret);
 
     xlog $self, "share $CalendarId1 read-only to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lr') or die;

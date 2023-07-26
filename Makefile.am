@@ -1157,6 +1157,8 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/carddav_db.h \
 	imap/dav_util.c \
 	imap/dav_util.h \
+	imap/defaultalarms.c \
+	imap/defaultalarms.h \
 	imap/ical_support.c \
 	imap/ical_support.h \
 	imap/icu_wrap.h \
@@ -1219,7 +1221,7 @@ if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c \
                       imap/zoneinfo_db.c
 if HTTPD
-imap_lmtpd_SOURCES += imap/caldav_util.c imap/itip_support.c
+imap_lmtpd_SOURCES += imap/caldav_util.c imap/defaultalarms.c imap/itip_support.c
 
 if JMAP
 imap_lmtpd_SOURCES += \
@@ -1334,6 +1336,8 @@ BUILT_SOURCES += \
 	imap/jmap_err.h
 
 imap_httpd_SOURCES += \
+	imap/defaultalarms.c \
+	imap/defaultalarms.h \
 	imap/http_jmap.c \
 	imap/http_jmap.h \
 	imap/jmap_admin.c \

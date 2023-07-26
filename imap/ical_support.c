@@ -48,6 +48,7 @@
 #include <syslog.h>
 
 #include "assert.h"
+#include "bsearch.h"
 #include "caldav_db.h"
 #include "css3_color.h"
 #include "global.h"
@@ -58,10 +59,13 @@
 #include "stristr.h"
 #include "util.h"
 #include "icu_wrap.h"
+#include "xsha1.h"
 
 #ifdef WITH_JMAP
 #include "jmap_ical.h"
 #endif
+
+#include "imap/imap_err.h"
 
 #ifdef HAVE_ICAL
 
@@ -801,6 +805,96 @@ EXPORTED icalcomponent *record_to_ical(struct mailbox *mailbox,
     return ical;
 }
 
+EXPORTED void icalcomponent_add_personal_data_from_dl(icalcomponent *ical, struct dlist *dl)
+{
+    const char *icalstr;
+    icalcomponent *vpatch;
+
+    /* Parse the value and fetch the patch */
+    dlist_getatom(dl, "VPATCH", &icalstr);
+    vpatch = icalparser_parse_string(icalstr);
+
+    /* Apply the patch to the "base" resource */
+    icalcomponent_apply_vpatch(ical, vpatch, NULL, NULL);
+
+    icalcomponent_free(vpatch);
+}
+
+EXPORTED void icalcomponent_add_personal_data(icalcomponent *ical, struct buf *userdata)
+{
+    struct dlist *dl;
+    dlist_parsemap(&dl, 1, 0, buf_base(userdata), buf_len(userdata));
+    icalcomponent_add_personal_data_from_dl(ical, dl);
+    dlist_free(&dl);
+}
+
+EXPORTED int icalsupport_encode_personal_data(struct buf *value,
+                                              struct icalsupport_personal_data *data)
+{
+    struct dlist *dl = dlist_newkvlist(NULL, "CALDATA");
+    dlist_setdate(dl, "LASTMOD", data->lastmod);
+    dlist_setnum64(dl, "MODSEQ", data->modseq);
+
+    const char *icalstr = icalcomponent_as_ical_string(data->vpatch);
+    message_guid_generate(&data->guid, icalstr, strlen(icalstr));
+    dlist_setguid(dl, "GUID", &data->guid);
+    dlist_setatom(dl, "VPATCH", icalstr);
+
+    dlist_setatom(dl, "USEDEFAULTALERTS", data->usedefaultalerts ? "YES" : "NO");
+
+    dlist_printbuf(dl, 1, value);
+    dlist_free(&dl);
+    return 0;
+}
+
+EXPORTED int icalsupport_decode_personal_data(const struct buf *value,
+                                              struct icalsupport_personal_data *data)
+{
+    if (!value || !buf_len(value))
+        return -1;
+
+    struct dlist *dl;
+    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    if (!dl) return -1;
+
+    int is_valid = 0;
+
+    if (!dlist_getdate(dl, "LASTMOD", &data->lastmod))
+        goto done;
+
+    if (!dlist_getnum64(dl, "MODSEQ", &data->modseq))
+        goto done;
+
+    struct message_guid *guidp;
+    if (!dlist_getguid(dl, "GUID", &guidp))
+        goto done;
+    message_guid_copy(&data->guid, guidp);
+
+    const char *sval;
+    if (!dlist_getatom(dl, "VPATCH", &sval))
+        goto done;
+
+    data->vpatch = icalparser_parse_string(sval);
+    if (!data->vpatch)
+        goto done;
+
+    data->usedefaultalerts =
+        dlist_getatom(dl, "USEDEFAULTALERTS", &sval) && !strcmpsafe(sval, "YES");
+
+    is_valid = 1;
+
+done:
+    dlist_free(&dl);
+    if (!is_valid) icalsupport_personal_data_fini(data);
+    return is_valid ? 0 : -1;
+}
+
+EXPORTED void icalsupport_personal_data_fini(struct icalsupport_personal_data *data)
+{
+    if (data->vpatch) icalcomponent_free(data->vpatch);
+    memset(data, 0, sizeof(struct icalsupport_personal_data));
+}
+
 EXPORTED const char *get_icalcomponent_errstr(icalcomponent *ical)
 {
     icalcomponent *comp;
@@ -846,6 +940,84 @@ EXPORTED const char *get_icalcomponent_errstr(icalcomponent *ical)
     return NULL;
 }
 
+EXPORTED int icalcomponent_get_usedefaultalerts(icalcomponent *comp)
+{
+    icalcomponent *ical = NULL;
+    icalcomponent_kind kind = ICAL_NO_COMPONENT;
+    int use_defaultalerts = 0;
+
+    if (icalcomponent_isa(comp) == ICAL_VCALENDAR_COMPONENT) {
+        ical = comp;
+        comp = icalcomponent_get_first_real_component(ical);
+        kind = icalcomponent_isa(comp);
+    }
+    do {
+        int x_apple = 0;
+        icalproperty *prop;
+        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+             prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
+            const char *propname = icalproperty_get_x_name(prop);
+
+            if (!strcasecmp(propname, "X-JMAP-USEDEFAULTALERTS")) {
+                const char *val = icalproperty_get_value_as_string(prop);
+                use_defaultalerts = !strcasecmpsafe(val, "TRUE");
+            }
+
+            if (!strcasecmp(propname, "X-APPLE-DEFAULT-ALARM")) {
+                // We set X-APPLE-DEFAULT-ALARM on the VEVENT to indicate
+                // useDefaultAlerts=true on a JSCalendar event, but this
+                // was wrong. Keep reading it for iCalendar data that we
+                // already wrote with it.
+                const char *val = icalproperty_get_value_as_string(prop);
+                x_apple = !strcasecmpsafe(val, "TRUE");
+                continue;
+            }
+        }
+
+        if (use_defaultalerts > 0 || x_apple > 0)
+            return 1;
+
+        if (ical) comp = icalcomponent_get_next_component(ical, kind);
+    } while (ical && comp);
+
+    return use_defaultalerts;
+}
+
+EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use, const char *atag)
+{
+    icalcomponent *ical = NULL;
+    icalcomponent_kind kind = ICAL_NO_COMPONENT;
+
+    if (icalcomponent_isa(comp) == ICAL_VCALENDAR_COMPONENT) {
+        ical = comp;
+        comp = icalcomponent_get_first_real_component(ical);
+        kind = icalcomponent_isa(comp);
+    }
+    do {
+        icalproperty *prop, *nextprop;
+        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+             prop = nextprop) {
+
+            nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+            // Remove existing properties, including the X-APPLE we used for a while.
+            if (!strcasecmp(icalproperty_get_x_name(prop), "X-JMAP-USEDEFAULTALERTS") ||
+                !strcasecmp(icalproperty_get_x_name(prop), "X-APPLE-DEFAULT-ALARM")) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+                continue;
+            }
+        }
+
+        icalproperty *xprop = icalproperty_new(ICAL_X_PROPERTY);
+        icalproperty_set_x_name(xprop, "X-JMAP-USEDEFAULTALERTS");
+        icalproperty_set_value(xprop, icalvalue_new_boolean(use));
+        if (atag) icalproperty_set_xparam(xprop, "X-JMAP-ATAG", atag, 0);
+        icalcomponent_add_property(comp, xprop);
+
+        if (ical) comp = icalcomponent_get_next_component(ical, kind);
+    } while (ical && comp);
+}
 
 EXPORTED void icalcomponent_remove_invitee(icalcomponent *comp,
                                            icalproperty *prop)
@@ -936,6 +1108,24 @@ EXPORTED icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
          prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY));
 
     return prop;
+}
+
+
+EXPORTED void icalcomponent_remove_x_property_by_name(icalcomponent *comp,
+                                                      const char *name)
+{
+    icalproperty *prop, *nextprop;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+            prop; prop = nextprop) {
+
+        nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+        if (!strcmpsafe(icalproperty_get_x_name(prop), name)) {
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+        }
+    }
 }
 
 EXPORTED icaltimetype icaltime_convert_to_utc(const struct icaltimetype tt,
@@ -2176,141 +2366,6 @@ EXPORTED const char *icalproperty_get_xparam_value(icalproperty *prop,
     return NULL;
 }
 
-EXPORTED int icalcomponent_read_usedefaultalerts(icalcomponent *comp)
-{
-    icalcomponent *ical = NULL;
-    icalcomponent_kind kind = ICAL_NO_COMPONENT;
-
-    if (icalcomponent_isa(comp) == ICAL_VCALENDAR_COMPONENT) {
-        ical = comp;
-        comp = icalcomponent_get_first_real_component(ical);
-        kind = icalcomponent_isa(comp);
-    }
-    do {
-        icalproperty *prop;
-        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
-             prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
-            const char *propname = icalproperty_get_x_name(prop);
-            if (!strcasecmp(propname, "X-APPLE-DEFAULT-ALARM")) {
-                const char *val = icalproperty_get_value_as_string(prop);
-                return !strcasecmpsafe(val, "TRUE");
-            }
-        }
-        if (ical) comp = icalcomponent_get_next_component(ical, kind);
-    } while (ical && comp);
-
-    return -1;
-}
-
-EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp)
-{
-    icalcomponent *ical = NULL;
-    icalcomponent_kind kind = ICAL_NO_COMPONENT;
-
-    if (icalcomponent_isa(comp) == ICAL_VCALENDAR_COMPONENT) {
-        ical = comp;
-        comp = icalcomponent_get_first_real_component(ical);
-        kind = icalcomponent_isa(comp);
-    }
-    do {
-        int has_usedefaultalerts = 0;
-
-        icalproperty *prop, *nextprop;
-        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
-             prop = nextprop) {
-
-            nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
-
-            if (strcasecmp(icalproperty_get_x_name(prop), "X-APPLE-DEFAULT-ALARM"))
-                continue;
-
-            const char *val = icalproperty_get_value_as_string(prop);
-            if (strcasecmpsafe(val, "TRUE") || has_usedefaultalerts) {
-                // Remove conflicting or duplicate entries
-                icalcomponent_remove_property(comp, prop);
-                icalproperty_free(prop);
-            }
-            else has_usedefaultalerts = 1;
-        }
-
-        if (!has_usedefaultalerts) {
-            prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, "X-APPLE-DEFAULT-ALARM");
-            icalproperty_set_value(prop, icalvalue_new_boolean(1));
-            icalcomponent_add_property(comp, prop);
-        }
-
-        if (ical) comp = icalcomponent_get_next_component(ical, kind);
-    } while (ical && comp);
-}
-
-EXPORTED void icalcomponent_add_defaultalerts(icalcomponent *ical,
-                                              icalcomponent *withtime,
-                                              icalcomponent *withdate,
-                                              int force)
-{
-    if (!withtime && !withdate)
-        return;
-
-    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-    icalcomponent_kind kind = icalcomponent_isa(comp);
-    if (kind != ICAL_VEVENT_COMPONENT && kind != ICAL_VTODO_COMPONENT)
-        return;
-
-    /* Add default alarms */
-    for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
-        if (force || icalcomponent_read_usedefaultalerts(comp) > 0) {
-
-            /* Determine which default alarms to add */
-            int is_date;
-            if (kind == ICAL_VTODO_COMPONENT) {
-                if (icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))
-                    is_date = icalcomponent_get_dtstart(comp).is_date;
-                else if (icalcomponent_get_first_property(comp, ICAL_DUE_PROPERTY))
-                    is_date = icalcomponent_get_due(comp).is_date;
-                else
-                    is_date = 1;
-            }
-            else is_date = icalcomponent_get_dtstart(comp).is_date;
-
-            icalcomponent *alerts = is_date ?  withdate : withtime;
-
-            /* Remove VALARMs in component */
-            icalcomponent *curr, *next = NULL;
-            for (curr = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
-                    curr; curr = next) {
-                next = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT);
-                icalcomponent_remove_component(comp, curr);
-                icalcomponent_free(curr);
-            }
-
-            /* Add default VALARMs */
-            for (curr = icalcomponent_get_first_component(alerts, ICAL_VALARM_COMPONENT);
-                 curr;
-                 curr = icalcomponent_get_next_component(alerts, ICAL_VALARM_COMPONENT)) {
-
-                icalcomponent *alarm = icalcomponent_clone(curr);
-
-                /* Replace default description with component summary */
-                const char *desc = icalcomponent_get_summary(comp);
-                if (desc && *desc != '\0') {
-                    icalproperty *prop =
-                        icalcomponent_get_first_property(alarm, ICAL_DESCRIPTION_PROPERTY);
-                    if (prop) {
-                        icalcomponent_remove_property(alarm, prop);
-                        icalproperty_free(prop);
-                    }
-                    prop = icalproperty_new_description(desc);
-                    icalcomponent_add_property(alarm, prop);
-                }
-
-                /* Add alarm */
-                icalcomponent_add_component(comp, alarm);
-            }
-        }
-    }
-}
-
 static void check_tombstone(struct observance *tombstone,
                             struct observance *obs)
 {
@@ -3029,5 +3084,40 @@ EXPORTED void icalcomponent_normalize_x(icalcomponent *ical)
     }
 #endif
 }
+
+
+#ifdef WITH_JMAP
+EXPORTED const char *icalcomponent_get_jmapid(icalcomponent *comp)
+{
+    icalproperty *prop =
+        icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_ID);
+    if (!prop) return NULL;
+
+    return icalproperty_get_value_as_string(prop);
+}
+
+EXPORTED void icalcomponent_set_jmapid(icalcomponent *comp, const char *id)
+{
+    icalproperty *prop, *next;
+    icalproperty_kind kind = ICAL_X_PROPERTY;
+
+    for (prop = icalcomponent_get_first_property(comp, kind);
+         prop;
+         prop = next) {
+
+        next = icalcomponent_get_next_property(comp, kind);
+
+        if (strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID))
+            continue;
+
+        icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
+    }
+
+    prop = icalproperty_new_x(id);
+    icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
+    icalcomponent_add_property(comp, prop);
+}
+#endif
 
 #endif /* HAVE_ICAL */

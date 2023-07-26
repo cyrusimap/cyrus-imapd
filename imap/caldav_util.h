@@ -65,10 +65,6 @@ extern void replace_tzid_aliases(icalcomponent *ical,
 
 extern void strip_vtimezones(icalcomponent *ical);
 
-extern void add_personal_data(icalcomponent *ical, struct buf *userdata);
-
-extern void add_personal_data_from_dl(icalcomponent *ical, struct dlist *dl);
-
 extern int caldav_is_personalized(struct mailbox *mailbox,
                                   const struct caldav_data *cdata,
                                   const char *userid,
@@ -133,26 +129,6 @@ extern void caldav_rewrite_attachprop_to_url(struct webdav_db *webdavdb,
                                              struct buf *baseurl,
                                              struct buf *bufs);
 
-#define CALDAV_DEFAULTALARMS_ANNOT_WITHTIME \
-    DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-datetime"
-
-#define CALDAV_DEFAULTALARMS_ANNOT_WITHDATE \
-    DAV_ANNOT_NS "<" XML_NS_CALDAV ">default-alarm-vevent-date"
-
-/* Read the default alarms for mailbox mboxname and userid as
- * icalcomponent. The VALARMs are wrapped inside a libical
- * XROOT component */
-extern icalcomponent *caldav_read_calendar_icalalarms(const char *mboxname,
-                                                      const char *userid,
-                                                      const char *annot);
-
-/* Write the default alarms in ical to annot, or delete if ical is NULL.
- * The alarms MUST be wrapped in either a XROOT or VCALENDAR component. */
-extern int caldav_write_defaultalarms(struct mailbox *mailbox,
-                                      const char *userid,
-                                      const char *annot,
-                                      icalcomponent *ical);
-
 /* Bump the modseq of all records in mailbox that contain iCalendar
  * components with enabled default alarms. Also forces calalarmd to
  * recalculate the alarms for these records.
@@ -162,13 +138,16 @@ extern int caldav_write_defaultalarms(struct mailbox *mailbox,
  * and rescoped to messages. */
 extern int caldav_bump_defaultalarms(struct mailbox *mailbox);
 
-extern void caldav_format_defaultalarms_annot(struct buf *dst, const char *icalstr);
+extern int caldav_get_usedefaultalerts(struct dlist *dl,
+                                       struct mailbox *mailbox,
+                                       const struct index_record *record,
+                                       icalcomponent **icalp);
 
-extern int caldav_read_usedefaultalerts(struct dlist *dl,
-                                        struct mailbox *mailbox,
-                                        const struct index_record *record,
-                                        icalcomponent **icalp);
 
 extern int caldav_is_secretarymode(const char *mboxname);
+
+#ifdef WITH_JMAP
+extern int caldav_init_jmapcalendar(const char *userid, struct mailbox *mailbox);
+#endif
 
 #endif /* HTTP_CALDAV_H */

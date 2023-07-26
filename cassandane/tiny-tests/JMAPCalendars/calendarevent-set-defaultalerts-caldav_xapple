@@ -1,16 +1,16 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendarevent_set_defaultalerts_description
+sub test_calendarevent_set_defaultalerts_caldav_xapple
     :min_version_3_9 :needs_component_jmap
 {
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
-    my $CalDAV = $self->{caldav};
+    my $caldav = $self->{caldav};
 
-    xlog "Set default alerts on calendar and event";
-    my $res = $jmap->CallMethods([
+    xlog "Update default alerts on calendar";
+    $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
                 Default => {
@@ -28,9 +28,15 @@ sub test_calendarevent_set_defaultalerts_description
                 }
             }
         }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+
+    xlog "Create event with default alerts";
+    $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
-                1 => {
+                event1 => {
                     uid => 'eventuid1local',
                     calendarIds => {
                         Default => JSON::true,
@@ -42,13 +48,22 @@ sub test_calendarevent_set_defaultalerts_description
                     useDefaultAlerts => JSON::true,
                 },
             },
-        }, 'R2'],
+        }, 'R1'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
-    my $event1Href = $res->[1][1]{created}{1}{'x-href'};
+    my $event1Href = $res->[0][1]{created}{event1}{'x-href'};
     $self->assert_not_null($event1Href);
 
-    my $CaldavResponse = $CalDAV->Request('GET', $event1Href);
-    my $icaldata = $CaldavResponse->{content};
-    $self->assert($icaldata =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:event1[\s\S]+END:VALARM/g);
+    xlog "Get event via CalDAV";
+    $res = $caldav->Request('GET', $event1Href);
+
+    $ical = Data::ICal->new(data => $res->{content});
+    my $vevent = (grep { $_->ical_entry_type() eq 'VEVENT' } @{$ical->entries()})[0];
+    $self->assert_not_null($vevent);
+
+    my $valarm = (grep { $_->ical_entry_type() eq 'VALARM' } @{$vevent->entries()})[0];
+    $self->assert_not_null($valarm);
+
+    xlog "Assert X-JMAP-DEFAULT-ALARM is set on VALARM";
+    my $xprop = $valarm->property('x-jmap-default-alarm')->[0];
+    $self->assert_str_equals('TRUE', $xprop->value());
 }

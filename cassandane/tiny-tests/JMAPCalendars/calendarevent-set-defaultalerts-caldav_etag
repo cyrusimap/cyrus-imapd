@@ -1,21 +1,21 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendarevent_set_defaultalerts_etag
+sub test_calendarevent_set_defaultalerts_caldav_etag
     :min_version_3_9 :needs_component_jmap
 {
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
-    my $CalDAV = $self->{caldav};
+    my $caldav = $self->{caldav};
 
-    xlog "Set default alerts on calendar and event";
-    my $res = $jmap->CallMethods([
+    xlog "Update default alerts on calendar";
+    $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
                 Default => {
                     defaultAlertsWithTime => {
-                        alert1 => {
+                        '4c7086e0-6114-4a71-b6ab-4b237c66f079' => {
                             '@type' => 'Alert',
                             trigger => {
                                 '@type' => 'OffsetTrigger',
@@ -28,69 +28,70 @@ sub test_calendarevent_set_defaultalerts_etag
                 }
             }
         }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Create events with and without default alerts";
+    $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
-                1 => {
-                    uid => 'eventuid1local',
+                event1 => {
+                    uid => '0b610a32-82ca-48b0-a01e-a77bcf932242',
                     calendarIds => {
                         Default => JSON::true,
                     },
-                    title => "event1",
+                    title => "event2",
                     start => "2020-01-19T11:00:00",
                     duration => "PT1H",
                     timeZone => "Australia/Melbourne",
                     useDefaultAlerts => JSON::true,
                 },
-                2 => {
-                    uid => 'eventuid2local',
+                event2 => {
+                    uid => '9c908bf3-f69e-4fc3-8c0f-1986342f1fe5',
                     calendarIds => {
                         Default => JSON::true,
                     },
-                    title => "event1",
-                    start => "2020-01-21T11:00:00",
+                    title => "event2",
+                    start => "2020-01-19T11:00:00",
                     duration => "PT1H",
                     timeZone => "Australia/Melbourne",
-                    useDefaultAlerts => JSON::false,
                 },
             },
-        }, 'R2'],
+        }, 'R1'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
-    my $event1Href = $res->[1][1]{created}{1}{'x-href'};
+    my $event1Href = $res->[0][1]{created}{event1}{'x-href'};
     $self->assert_not_null($event1Href);
-    my $event2Href = $res->[1][1]{created}{2}{'x-href'};
+    my $event2Href = $res->[0][1]{created}{event2}{'x-href'};
     $self->assert_not_null($event2Href);
 
-    xlog "Get ETags of events";
-    my %Headers;
-    if ($CalDAV->{user}) {
-        $Headers{'Authorization'} = $CalDAV->auth_header();
-    }
-    my $event1URI = $CalDAV->request_url($event1Href);
-    my $Response = $CalDAV->{ua}->request('HEAD', $event1URI, {
-            headers => \%Headers,
+    my %Headers = (
+        'Authorization' => $caldav->auth_header(),
+    );
+
+    xlog "Get ETags for events";
+    $res = $caldav->{ua}->request('HEAD', $caldav->request_url($event1Href), {
+        headers => \%Headers,
     });
-    my $event1ETag = $Response->{headers}{etag};
+    my $event1ETag = $res->{headers}{etag};
     $self->assert_not_null($event1ETag);
-    my $event2URI = $CalDAV->request_url($event2Href);
-    $Response = $CalDAV->{ua}->request('HEAD', $event2URI, {
-            headers => \%Headers,
+    $res = $caldav->{ua}->request('HEAD', $caldav->request_url($event2Href), {
+        headers => \%Headers,
     });
-    my $event2ETag = $Response->{headers}{etag};
+    my $event2ETag = $res->{headers}{etag};
     $self->assert_not_null($event2ETag);
 
-    xlog "Update default alerts";
+    xlog "Update default alerts on calendar";
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
                 Default => {
                     defaultAlertsWithTime => {
-                        alert2 => {
+                        '56bd7c39-e618-41c9-91cb-fd2f2674e674' => {
                             '@type' => 'Alert',
                             trigger => {
                                 '@type' => 'OffsetTrigger',
                                 relativeTo => 'start',
-                                offset => '-PT10M',
+                                offset => '-PT5M',
                             },
                             action => 'display',
                         },
@@ -101,15 +102,16 @@ sub test_calendarevent_set_defaultalerts_etag
     ]);
     $self->assert(exists $res->[0][1]{updated}{Default});
 
-    xlog "Refetch ETags of events";
-    $Response = $CalDAV->{ua}->request('HEAD', $event1URI, {
-            headers => \%Headers,
+    xlog "ETag for event with useDefaultAlerts must not match former ETag";
+    $res = $caldav->{ua}->request('HEAD', $caldav->request_url($event1Href), {
+        headers => \%Headers,
     });
-    $self->assert_not_null($Response->{headers}{etag});
-    $self->assert_str_not_equals($event1ETag, $Response->{headers}{etag});
-    $Response = $CalDAV->{ua}->request('HEAD', $event2URI, {
-            headers => \%Headers,
+    $self->assert_str_not_equals($event1ETag, $res->{headers}{etag});
+
+    xlog "ETag for event without useDefaultAlerts must match former ETag";
+    $res = $caldav->{ua}->request('HEAD', $caldav->request_url($event2Href), {
+        headers => \%Headers,
     });
-    $self->assert_not_null($Response->{headers}{etag});
-    $self->assert_str_equals($event2ETag, $Response->{headers}{etag});
+    $self->assert_str_equals($event2ETag, $res->{headers}{etag});
+
 }

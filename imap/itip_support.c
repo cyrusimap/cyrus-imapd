@@ -49,6 +49,7 @@
 #include "itip_support.h"
 #include "caldav_db.h"
 #include "caldav_util.h"
+#include "defaultalarms.h"
 #include "http_dav.h"
 #include "httpd.h"
 #include "ical_support.h"
@@ -1450,20 +1451,14 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             }
         }
 
-        icalcomponent_set_usedefaultalerts(ical);
+        icalcomponent_set_usedefaultalerts(ical, 1, NULL);
 
-        /* Inject default alerts as VALARMS. */
-        icalcomponent *alarms_withtime =
-            caldav_read_calendar_icalalarms(mailbox_name(mailbox), userid,
-                    CALDAV_DEFAULTALARMS_ANNOT_WITHTIME);
-        icalcomponent *alarms_withdate =
-            caldav_read_calendar_icalalarms(mailbox_name(mailbox), userid,
-                    CALDAV_DEFAULTALARMS_ANNOT_WITHDATE);
-
-        icalcomponent_add_defaultalerts(ical, alarms_withtime, alarms_withdate, 1);
-
-        if (alarms_withtime) icalcomponent_free(alarms_withtime);
-        if (alarms_withdate) icalcomponent_free(alarms_withdate);
+        /* Inject default alarms */
+        struct defaultalarms defalarms = DEFAULTALARMS_INITIALIZER;
+        if (!defaultalarms_load(mailbox_name(mailbox), userid, &defalarms)) {
+            defaultalarms_insert(&defalarms, ical);
+        }
+        defaultalarms_fini(&defalarms);
     }
 
     /* Set SENT-BY property */

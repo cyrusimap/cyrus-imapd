@@ -55,6 +55,7 @@
 
 #define IMAP_ANNOT_NS           "/vendor/cmu/cyrus-imapd/"
 #define DAV_ANNOT_NS            "/vendor/cmu/cyrus-httpd/"
+#define JMAP_ANNOT_NS           "/vendor/cmu/cyrus-jmap/"
 
 /* List of strings, for fetch and search argument blocks */
 struct strlist {

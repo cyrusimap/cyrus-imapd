@@ -327,22 +327,6 @@ static int validate_request(struct transaction_t *txn, const json_t *req,
     return 0;
 }
 
-HIDDEN int jmap_is_valid_id(const char *id)
-{
-    if (!id || *id == '\0') return 0;
-    const char *p;
-    for (p = id; *p; p++) {
-        if (('0' <= *p && *p <= '9'))
-            continue;
-        if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z'))
-            continue;
-        if ((*p == '-') || (*p == '_'))
-            continue;
-        return 0;
-    }
-    return 1;
-}
-
 static void _make_created_ids(const char *creation_id, void *val, void *rock)
 {
     json_t *jcreatedIds = rock;

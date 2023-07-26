@@ -53,6 +53,7 @@
 #define icalerror_warn(message) \
 {syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s", __FUNCTION__, __FILE__, __LINE__, message);}
 
+#include "dav_util.h"
 #include "mailbox.h"
 
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
@@ -87,18 +88,52 @@ extern void icalproperty_set_xparam(icalproperty *prop,
 extern const char *icalproperty_get_xparam_value(icalproperty *prop,
                                                  const char *name);
 
-/* Returns if default alerts are explicitly enabled (1) or disabled (0).
-   Returns -1 otherwise. */
-extern int icalcomponent_read_usedefaultalerts(icalcomponent *comp);
 
-extern void icalcomponent_set_usedefaultalerts(icalcomponent *comp);
+/* Strip per-user data to personalize iCalendar resource.
+ *
+ * COLOR and CATEGORIES properties are not stripped.
+ * Instead, they are added to the per-user VPATCH when the
+ * user overwrites them in their copy of the resource.
+ */
+#define ICAL_PERSONAL_DATA_INITIALIZER         \
+    "CALDATA %(VPATCH {324+}\r\n"         \
+    "BEGIN:VPATCH\r\n"                    \
+    "VERSION:1\r\n"                       \
+    "DTSTAMP:19760401T005545Z\r\n"        \
+    "UID:strip-owner-cal-data\r\n"        \
+    "BEGIN:PATCH\r\n"                     \
+    "PATCH-TARGET:/VCALENDAR/ANY\r\n"     \
+    "PATCH-DELETE:/VALARM\r\n"            \
+    "PATCH-DELETE:#TRANSP\r\n"            \
+    "PATCH-DELETE:#X-MOZ-LASTACK\r\n"     \
+    "PATCH-DELETE:#X-MOZ-SNOOZE-TIME\r\n" \
+    "PATCH-DELETE:#X-APPLE-DEFAULT-ALARM\r\n" \
+    "PATCH-DELETE:#X-JMAP-USEDEFAULTALERTS\r\n" \
+    "END:PATCH\r\n"                       \
+    "END:VPATCH\r\n)"
 
-/* Adds default alerts to ical, if either the X-USE-DEFAULTALERTS property
- * is set to TRUE, or force is non-zero. */
-extern void icalcomponent_add_defaultalerts(icalcomponent *ical,
-                                            icalcomponent *alarms_withtime,
-                                            icalcomponent *alarms_withdate,
-                                            int force);
+extern void icalcomponent_add_personal_data(icalcomponent *ical, struct buf *userdata);
+extern void icalcomponent_add_personal_data_from_dl(icalcomponent *ical, struct dlist *dl);
+
+struct icalsupport_personal_data {
+    time_t lastmod;
+    modseq_t modseq;
+    int usedefaultalerts;
+    icalcomponent *vpatch;
+    struct message_guid guid; // read-only
+};
+
+extern int icalsupport_encode_personal_data(struct buf *value,
+                                            struct icalsupport_personal_data *data);
+
+extern int icalsupport_decode_personal_data(const struct buf *value,
+                                            struct icalsupport_personal_data *data);
+
+extern void icalsupport_personal_data_fini(struct icalsupport_personal_data *data);
+
+extern int icalcomponent_get_usedefaultalerts(icalcomponent *comp);
+extern void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use, const char *atag);
+
 
 /* If range is a NULL period, callback() is executed for ALL occurrences,
    otherwise callback() is only executed for occurrences that overlap the range.
@@ -143,6 +178,9 @@ extern icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *c);
 
 extern icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
                                                           const char *name);
+
+extern void icalcomponent_remove_x_property_by_name(icalcomponent *comp,
+                                                    const char *name);
 
 extern struct icalperiodtype icalcomponent_get_utc_timespan(icalcomponent *comp,
                                                             icalcomponent_kind kind,
@@ -193,6 +231,11 @@ extern int ical_categories_is_color(icalproperty *cprop);
 
 /* Normalizes both standard and cyrus-extensions */
 extern void icalcomponent_normalize_x(icalcomponent *ical);
+
+#ifdef WITH_JMAP
+extern const char *icalcomponent_get_jmapid(icalcomponent *comp);
+extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
+#endif
 
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory

@@ -5868,4 +5868,167 @@ sub test_calendaradmin_get
     $self->assert_str_equals('200', $res->{status});
 }
 
+sub test_put_usedefaultalerts_no_etag
+    :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "PROPPATCH default alarms on the calendar";
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+<C:default-alarm-vevent-datetime>
+BEGIN:VALARM
+UID:alert1
+TRIGGER:-PT1H
+ACTION:DISPLAY
+DESCRIPTION:alarm
+END:VALARM
+</C:default-alarm-vevent-datetime>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/calendars/user/cassandane/Default",
+        $proppatchXml, 'Content-Type' => 'text/xml');
+
+    my %Headers = (
+        'Content-Type' => 'text/calendar',
+        'Authorization' => $caldav->auth_header(),
+    );
+
+    xlog "PUT event with useDefaultAlerts set";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DURATION:PT1H
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:test1
+LAST-MODIFIED:20150928T132434Z
+X-JMAP-USEDEFAULTALERTS;VALUE=BOOLEAN:TRUE
+END:VEVENT
+END:VCALENDAR
+EOF
+    my $href = $caldav->request_url('/dav/calendars/user/cassandane/Default/test1.ics');
+    my $res = $caldav->{ua}->request('PUT', $href, {
+        content => $ical, headers => \%Headers,
+    });
+
+    xlog "Assert no ETag is returned";
+    $self->assert_null($res->{headers}{etag});
+
+    xlog "Assert ETag is returned for HEAD";
+    $res = $caldav->{ua}->request('HEAD', $href, {
+        headers => \%Headers,
+    });
+    $self->assert_not_null($res->{headers}{etag});
+
+    xlog "PUT event without useDefaultAlerts set";
+    $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DURATION:PT1H
+UID:a0d80e97-746d-4443-9a13-7f7cd8af9f81
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:test1
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $href = $caldav->request_url('/dav/calendars/user/cassandane/Default/test2.ics');
+    $res = $caldav->{ua}->request('PUT', $href, {
+        content => $ical, headers => \%Headers,
+    });
+
+    xlog "Assert ETag is returned";
+    my $etag = $res->{headers}{etag};
+    $self->assert_not_null($etag);
+
+    xlog "Assert ETag matches for HEAD";
+    $res = $caldav->{ua}->request('HEAD', $href, {
+        headers => \%Headers,
+    });
+    $self->assert_str_equals($etag, $res->{headers}{etag});
+}
+
+sub test_get_legacy_defaultalarm_no_uid
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "Pretend as if JMAP default alarm migration never happened";
+    $imap->setmetadata("#calendars.Default",
+        '/private/vendor/cmu/cyrus-jmap/defaultalerts', '');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    xlog $self, "Create event with a VALARM having no UID and default alerts enabled";
+    my $eventUid = '4c9aff9c-91df-4859-8026-772a82f52094';
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20230909T160000Z
+DURATION:PT1H
+UID:$eventUid
+SUMMARY:test
+X-JMAP-USEDEFAULTALERTS:TRUE
+BEGIN:VALARM
+DESCRIPTION:useralert
+ACTION:DISPLAY
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+    my $res = $caldav->Request('PUT',
+        "/dav/calendars/user/cassandane/Default/test.ics",
+        $ical, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Set CalDAV default alarms with VALARM having no UID";
+    $imap->setmetadata("#calendars.Default",
+        '/shared/vendor/cmu/cyrus-httpd/' .
+        '<urn:ietf:params:xml:ns:caldav>default-alarm-vevent-datetime',
+        <<EOF
+BEGIN:VALARM\r
+TRIGGER:-PT1H\r
+ACTION:DISPLAY\r
+DESCRIPTION:defaultalert\r
+END:VALARM\r
+EOF
+);
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    xlog $self, "Assert VALARM in event has UID";
+    $res = $caldav->Request('GET',
+        "/dav/calendars/user/cassandane/Default/test.ics");
+
+    my $vcal = Text::VCardFast::vcard2hash($res->{content});
+    my @valarms = grep { $_->{type} eq 'valarm' }
+        @{$vcal->{objects}[0]->{objects}[0]->{objects}};
+    $self->assert_num_equals(1, scalar @valarms);
+    $self->assert_not_null($valarms[0]{properties}{uid});
+}
+
 1;

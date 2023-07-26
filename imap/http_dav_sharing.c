@@ -1781,7 +1781,7 @@ HIDDEN int propfind_csnotify_collection(struct propfind_ctx *fctx,
     mboxlist_entry_free(&tgt.mbentry);
 
     /* Free the entry list */
-    free_entry_list(my_fctx.elist);
+    free_entry_list(&my_fctx);
 
     buf_free(&my_fctx.buf);
 

@@ -49,10 +49,33 @@ EOF
         $ical, 'Content-Type' => 'text/calendar');
 
     $res = $jmap->CallMethods([
-        ['CalendarEvent/get', { }, 'R1']
+        ['CalendarEvent/get', {
+            properties => [
+                'cyrusimap.org:iCalProps',
+                'alerts',
+                'recurrenceOverrides'
+            ],
+        }, 'R1']
     ]);
     my $eventId = $res->[0][1]{list}[0]{id};
     $self->assert_not_null($eventId);
+
+    xlog $self, "Assert iCalProps property";
+    $self->assert_str_equals('x-mainevent-prop',
+        $res->[0][1]{list}[0]{'cyrusimap.org:iCalProps'}[0][0]);
+
+    my @alarmIcalProps = sort { $_->[0] cmp $_->[1] } @{
+        $res->[0][1]{list}[0]{alerts
+            }{'E576FA39-51B6-45FA-AAF3-7CCE1F21802E'
+            }{'cyrusimap.org:iCalProps'}};
+    $self->assert_num_equals(2, scalar @alarmIcalProps);
+    $self->assert_str_equals('uid', $alarmIcalProps[0][0]);
+    $self->assert_str_equals('x-alarm-prop', $alarmIcalProps[1][0]);
+
+    $self->assert_str_equals('x-recurevent-prop',
+        $res->[0][1]{list}[0]{recurrenceOverrides}{'2023-03-10T16:00:00'
+            }{'cyrusimap.org:iCalProps'}[0][0]);
+
 
     xlog $self, "Update some event property via JMAP";
     $res = $jmap->CallMethods([
@@ -63,26 +86,94 @@ EOF
                 },
             },
         }, 'R1'],
+        ['CalendarEvent/get', {
+            properties => [
+                'cyrusimap.org:iCalProps',
+                'alerts',
+                'recurrenceOverrides'
+            ],
+        }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
 
-    xlog $self, "Assert iCalendar still contains x-properties";
+    xlog $self, "Assert iCalProps property";
+    $self->assert_str_equals('x-mainevent-prop',
+        $res->[1][1]{list}[0]{'cyrusimap.org:iCalProps'}[0][0]);
 
-    $res = $caldav->Request('GET', 'Default/test.ics');
-    $ical = Data::ICal->new(data => $res->{content});
+    my @alarmIcalProps = sort { $_->[0] cmp $_->[1] } @{
+        $res->[1][1]{list}[0]{alerts
+            }{'E576FA39-51B6-45FA-AAF3-7CCE1F21802E'
+            }{'cyrusimap.org:iCalProps'}};
+    $self->assert_num_equals(2, scalar @alarmIcalProps);
+    $self->assert_str_equals('uid', $alarmIcalProps[0][0]);
+    $self->assert_str_equals('x-alarm-prop', $alarmIcalProps[1][0]);
 
-    my $mainevent = (grep {
-            ($_->ical_entry_type() eq 'VEVENT') and (scalar $_->property('RRULE'))
-    } @{$ical->entries()})[0];
-    $self->assert_matches(qr/$mainevent_xprop/, $mainevent->as_string());
+    $self->assert_str_equals('x-recurevent-prop',
+        $res->[1][1]{list}[0]{recurrenceOverrides}{'2023-03-10T16:00:00'
+            }{'cyrusimap.org:iCalProps'}[0][0]);
 
-    my $valarm = (grep {
-            ($_->ical_entry_type() eq 'VALARM')
-    } @{$mainevent->entries()})[0];
-    $self->assert_matches(qr/$alarm_xprop/, $valarm->as_string());
+    xlog $self, "Can not update iCalProps";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'cyrusimap.org:iCalProps' => [
+                        ['x-mainevent-prop', {}, 'text', 'newval'],
+                    ],
+                    'alerts/E576FA39-51B6-45FA-AAF3-7CCE1F21802E/cyrusimap.org:iCalProps' => [
+                        ['x-alarm-prop', {}, 'text', 'newalarmval'],
+                    ],
+                    'recurrenceOverrides/2023-03-10T16:00:00/cyrusimap.org:iCalProps/0/3' => [
+                        ['x-recurevent-prop', {}, 'text', 'newrecurval'],
+                    ],
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            properties => [
+                'cyrusimap.org:iCalProps',
+                'alerts',
+                'recurrenceOverrides'
+            ],
+        }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$eventId});
 
-    my $recurevent = (grep {
-            ($_->ical_entry_type() eq 'VEVENT') and (scalar $_->property('RECURRENCE-ID'))
-    } @{$ical->entries()})[0];
-    $self->assert_matches(qr/$recurevent_xprop/, $recurevent->as_string());
+    xlog $self, "Assert iCalProps property";
+    $self->assert_str_equals('x-mainevent-prop',
+        $res->[1][1]{list}[0]{'cyrusimap.org:iCalProps'}[0][0]);
+
+    my @alarmIcalProps = sort { $_->[0] cmp $_->[1] } @{
+        $res->[1][1]{list}[0]{alerts
+            }{'E576FA39-51B6-45FA-AAF3-7CCE1F21802E'
+            }{'cyrusimap.org:iCalProps'}};
+    $self->assert_num_equals(2, scalar @alarmIcalProps);
+    $self->assert_str_equals('uid', $alarmIcalProps[0][0]);
+    $self->assert_str_equals('x-alarm-prop', $alarmIcalProps[1][0]);
+
+    $self->assert_str_equals('x-recurevent-prop',
+        $res->[1][1]{list}[0]{recurrenceOverrides}{'2023-03-10T16:00:00'
+            }{'cyrusimap.org:iCalProps'}[0][0]);
+
+    xlog $self, "Can not create iCalProps";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event2 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => 'event2',
+                    start => '2023-08-03T17:45:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    'cyrusimap.org:iCalProps' => [
+                        ['x-prop', {}, 'text', 'foo'],
+                    ]
+                }
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{notCreated}{event2});
+
 }

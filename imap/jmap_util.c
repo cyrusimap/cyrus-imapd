@@ -494,6 +494,11 @@ HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
         jmap_parser_pop(parser);
 }
 
+HIDDEN void jmap_parser_invalid_path(struct jmap_parser *parser, const char *path)
+{
+    json_array_append_new(parser->invalid, json_string(path));
+}
+
 HIDDEN void jmap_parser_serverset(struct jmap_parser *parser,
                                   const char *prop, json_t *val)
 {
@@ -1379,7 +1384,23 @@ EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, s
 EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
 {
     buf_reset(idbuf);
-    const char *id = icalcomponent_get_uid(valarm);
+    const char *id = NULL;
+
+    icalproperty *prop;
+    for (prop = icalcomponent_get_first_property(valarm, ICAL_X_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(valarm, ICAL_X_PROPERTY)) {
+
+        if (!strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID)) {
+            id = icalproperty_get_value_as_string(prop);
+            break;
+        }
+    }
+
+    if (!id) {
+        id = icalcomponent_get_uid(valarm);
+    }
+
     char keybuf[2*SHA1_DIGEST_LENGTH+1];
     if (!id) {
         unsigned char dest[SHA1_DIGEST_LENGTH];
@@ -1389,6 +1410,25 @@ EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
         keybuf[2*SHA1_DIGEST_LENGTH] = '\0';
         id = keybuf;
     }
+
     buf_setcstr(idbuf, id);
 }
+
 #endif /* HAVE_ICAL */
+
+EXPORTED int jmap_is_valid_id(const char *id)
+{
+    if (!id || *id == '\0') return 0;
+    const char *p;
+    for (p = id; *p; p++) {
+        if (('0' <= *p && *p <= '9'))
+            continue;
+        if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z'))
+            continue;
+        if ((*p == '-') || (*p == '_'))
+            continue;
+        return 0;
+    }
+    return 1;
+}
+

@@ -52,6 +52,7 @@
 #include "caldav_alarm.h"
 #include "caldav_db.h"
 #include "cyrusdb.h"
+#include "defaultalarms.h"
 #include "dynarray.h"
 #include "hashset.h"
 #include "httpd.h"
@@ -1412,7 +1413,7 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
          comp = icalcomponent_get_next_component(ical, kind)) {
 
         cdata->comp_flags.defaultalerts =
-            icalcomponent_read_usedefaultalerts(comp) > 0;
+            icalcomponent_get_usedefaultalerts(comp);
     }
 
     /* Read JMAP fields mayInviteSelf and mayInviteOthers */

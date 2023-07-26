@@ -7,6 +7,7 @@ sub test_calendarevent_set_peruser
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
+    my ($maj, $min) = Cassandane::Instance->get_version();
 
     # These properties are set per-user.
     my $proplist = [
@@ -83,7 +84,7 @@ sub test_calendarevent_set_peruser
         },
         useDefaultAlerts => JSON::true,
         alerts => {
-            alert1 => {
+            '639d8761-81ee-404c-84cd-3e419ab6f883' => {
                 '@type' => 'Alert',
                 trigger => {
                     '@type' => 'OffsetTrigger',
@@ -94,6 +95,7 @@ sub test_calendarevent_set_peruser
             },
         },
     };
+
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -142,7 +144,7 @@ sub test_calendarevent_set_peruser
         freeBusyStatus => 'free',
         useDefaultAlerts => JSON::true,
         alerts => {
-            alert2 => {
+            'ae3ce02e-8ad6-4250-b075-5449c2717c93' => {
                 '@type' => 'Alert',
                 trigger => {
                     '@type' => 'AbsoluteTrigger',
@@ -152,6 +154,7 @@ sub test_calendarevent_set_peruser
             },
         },
     };
+
     $res = $otherJMAPTalk->CallMethods([
         ['CalendarEvent/set', {
             accountId => 'cassandane',
@@ -188,7 +191,7 @@ sub test_calendarevent_set_peruser
         freeBusyStatus => 'free',
         useDefaultAlerts => JSON::true,
         alerts => {
-            alert2 => {
+            'ae3ce02e-8ad6-4250-b075-5449c2717c93' => {
                 '@type' => 'Alert',
                 trigger => {
                     '@type' => 'AbsoluteTrigger',
@@ -198,6 +201,7 @@ sub test_calendarevent_set_peruser
             },
         },
     };
+
     $res = $otherJMAPTalk->CallMethods([
         ['CalendarEvent/set', {
             accountId => 'cassandane',

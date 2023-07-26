@@ -54,6 +54,7 @@
 
 #include "bsearch.h"
 #include "caldav_util.h"
+#include "defaultalarms.h"
 #include "hash.h"
 #include "http_caldav_sched.h"
 #include "http_jmap.h"
@@ -65,12 +66,19 @@
 #include "imap/imap_err.h"
 
 static int jmap_admin_rewrite_calevent_privacy(jmap_req_t *req);
+static int jmap_admin_migrate_defaultalarms(jmap_req_t *req);
 
 static jmap_method_t jmap_admin_methods_nonstandard[] = {
     {
         "Admin/rewriteCalendarEventPrivacy",
         JMAP_ADMIN_EXTENSION,
         &jmap_admin_rewrite_calevent_privacy,
+        /*flags*/0
+    },
+    {
+        "Admin/migrateCalendarDefaultAlarms",
+        JMAP_ADMIN_EXTENSION,
+        &jmap_admin_migrate_defaultalarms,
         /*flags*/0
     },
     { NULL, NULL, NULL, 0}
@@ -398,6 +406,174 @@ static int jmap_admin_rewrite_calevent_privacy(jmap_req_t *req)
     json_decref(rock.not_rewritten);
 
 done:
+    jmap_parser_fini(&parser);
+    return 0;
+}
+
+static int collect_userids(const char *userid, void *rock)
+{
+    strarray_append((strarray_t*)rock, userid);
+    return 0;
+}
+
+struct migrate_defaultalarms_rock {
+    const char *userid;
+    json_t *migrated;
+    int keep_caldav_alarms;
+};
+
+static int migrate_defaultalarms(const mbentry_t *mbentry, void *vrock)
+{
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    struct migrate_defaultalarms_rock *rock = vrock;
+
+    if (mbentry->mbtype != MBTYPE_CALENDAR)
+        goto done;
+
+    if (!mboxname_iscalendarmailbox(mbname_intname(mbname), 0))
+        goto done;
+
+    const strarray_t *boxes = mbname_boxes(mbname);
+    if (strarray_size(boxes) < 2)
+        goto done;
+
+    const char *collname = strarray_nth(boxes, strarray_size(boxes) - 1);
+    if (!strncmpsafe(collname, SCHED_INBOX, strlen(SCHED_INBOX)-1) ||
+        !strncmpsafe(collname, SCHED_OUTBOX, strlen(SCHED_OUTBOX)-1) ||
+        !strncmpsafe(collname, MANAGED_ATTACH, strlen(MANAGED_ATTACH)-1)) {
+        goto done;
+    }
+
+    const char *id = strarray_nth(boxes, boxes->count-1);
+
+    json_t *jerr = NULL;
+    enum defaultalarms_migrate39_flags flags = rock->keep_caldav_alarms ?
+        DEFAULTALARMS_MIGRATE_KEEP_CALDAV_ALARMS :
+        DEFAULTALARMS_MIGRATE_NOFLAG;
+    defaultalarms_migrate39(mbentry, flags, &jerr);
+
+    json_object_set_new(rock->migrated, id, jerr ? jerr : json_null());
+
+done:
+    mbname_free(&mbname);
+    return 0;
+}
+
+static int jmap_admin_migrate_defaultalarms(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    json_t *migrated_userids = json_object();
+    json_t *not_migrated_userids = json_object();
+    strarray_t userids = STRARRAY_INITIALIZER;
+    int keep_caldav_alarms = 0;
+
+    if (!httpd_userisadmin) {
+        jmap_error(req, json_pack("{s:s}", "type", "forbidden"));
+        goto done;
+    }
+
+    // Validate arguments
+
+    const char *arg;
+    json_t *jarg;
+    json_object_foreach(req->args, arg, jarg) {
+        if (!strcmp(arg, "userIds")) {
+            if (json_is_array(jarg)) {
+                size_t i;
+                json_t *jval;
+                json_array_foreach(jarg, i, jval) {
+                    if (!json_is_string(jval)) {
+                        jmap_parser_push_index(&parser, "userIds", i, NULL);
+                        jmap_parser_invalid(&parser, NULL);
+                        jmap_parser_pop(&parser);
+                    }
+                }
+            }
+            else {
+                jmap_parser_invalid(&parser, "userIds");
+            }
+        }
+        else if (!strcmp(arg, "keepCaldavAlarms")) {
+            if (json_is_boolean(jarg)) {
+                keep_caldav_alarms = json_boolean_value(jarg);
+            }
+            else {
+                jmap_parser_invalid(&parser, "keepCaldavAlarms");
+            }
+        }
+        else {
+            jmap_parser_invalid(&parser, arg);
+        }
+    }
+
+    if (json_array_size(parser.invalid)) {
+        json_t *err = json_pack("{s:s s:O}",
+                "type", "invalidArguments",
+                "arguments", parser.invalid);
+        jmap_error(req, err);
+        goto done;
+    }
+
+    // Collect user ids
+    json_t *juserids = json_object_get(req->args, "userIds");
+    if (json_is_array(juserids)) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(juserids, i, jval) {
+            strarray_append(&userids, json_string_value(jval));
+        }
+    }
+    else {
+        mboxlist_alluser(collect_userids, &userids);
+    }
+    strarray_sort(&userids, cmpstringp_raw);
+
+    // Process users
+    for (int i = 0; i < strarray_size(&userids); i++) {
+        const char *userid = strarray_nth(&userids, i);
+
+        struct mboxlock *namespacelock = user_namespacelock(userid);
+        if (!namespacelock) {
+            json_t *err = jmap_server_error(IMAP_INTERNAL);
+            json_object_set_new(err, "description",
+                    json_string("can not lock namespace"));
+            json_object_set_new(not_migrated_userids, userid, err);
+            continue;
+        }
+
+        struct migrate_defaultalarms_rock rock = {
+            .userid = userid,
+            .migrated = json_object(),
+            .keep_caldav_alarms = keep_caldav_alarms
+        };
+
+        char *calhomename = caldav_mboxname(userid, NULL);
+        mboxlist_mboxtree(calhomename,
+                migrate_defaultalarms, &rock, MBOXTREE_SKIP_ROOT);
+        xzfree(calhomename);
+
+        json_object_set(migrated_userids, userid,
+                json_object_size(rock.migrated) ?
+                rock.migrated : json_null());
+
+        json_decref(rock.migrated);
+
+        mboxname_release(&namespacelock);
+    }
+
+    // Create response
+    json_t *res = json_object();
+    json_object_set(res, "migrated", migrated_userids);
+    if (json_object_size(not_migrated_userids)) {
+        json_object_set(res, "notMigrated", not_migrated_userids);
+    }
+    jmap_ok(req, res);
+
+    json_decref(migrated_userids);
+    json_decref(not_migrated_userids);
+
+done:
+    strarray_fini(&userids);
     jmap_parser_fini(&parser);
     return 0;
 }

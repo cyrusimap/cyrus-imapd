@@ -9,6 +9,15 @@ sub test_calendarpreferences_set
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
+    # omit debug properties, so don't use debug extension
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'urn:ietf:params:jmap:calendars:preferences',
+        'https://cyrusimap.org/ns/jmap/calendars'
+    ];
+
     xlog "Create calendar";
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
@@ -18,7 +27,7 @@ sub test_calendarpreferences_set
                 },
             }
         }, 'R1'],
-    ]);
+    ], $using);
     my $calendarId = $res->[0][1]{created}{calendar}{id};
     $self->assert_not_null($calendarId);
 
@@ -26,7 +35,7 @@ sub test_calendarpreferences_set
     $res = $jmap->CallMethods([
         ['ParticipantIdentity/get', {
         }, 'R1'],
-    ]);
+    ], $using);
     my $participantId = $res->[0][1]{list}[0]{id};
     $self->assert_not_null($participantId);
 
@@ -34,7 +43,7 @@ sub test_calendarpreferences_set
     $res = $jmap->CallMethods([
         ['CalendarPreferences/get', {
         }, 'R1'],
-    ]);
+    ], $using);
     $self->assert_deep_equals([{
         id => 'singleton',
         defaultCalendarId => undef,
@@ -52,7 +61,7 @@ sub test_calendarpreferences_set
                 },
             },
         }, 'R1'],
-    ]);
+    ], $using);
     $self->assert(exists $res->[0][1]{updated}{singleton});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
@@ -62,7 +71,7 @@ sub test_calendarpreferences_set
         ['CalendarPreferences/get', {
             ids => ['singleton'],
         }, 'R1'],
-    ]);
+    ], $using);
     $self->assert_deep_equals([{
         id => 'singleton',
         defaultCalendarId => $calendarId,
@@ -82,7 +91,7 @@ sub test_calendarpreferences_set
         ['CalendarPreferences/get', {
             ids => ['singleton'],
         }, 'R2'],
-    ]);
+    ], $using);
     xlog "Setting defaultCalendarId to null assigns a new default calendar";
     $self->assert_not_null($res->[0][1]{updated}{singleton}{defaultCalendarId});
     $self->assert_deep_equals([{

@@ -1576,7 +1576,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
     const char *data = NULL;
     size_t datalen = 0;
 
-    if (!fctx) {
+    if (!prop) {
         /* Cleanup "property" request - free partial property array */
         strarray_fini(partial);
 

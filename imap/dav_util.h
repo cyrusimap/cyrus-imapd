@@ -62,6 +62,7 @@
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
 #define XML_NS_DAVMOUNT "http://purl.org/NET/webdav/mount/"
 #define XML_NS_JMAPCAL  "urn:ietf:params:jmap:calendars"
+#define XML_NS_CYRUS    "http://cyrusimap.org/ns/"
 
 /* Index into preconditions array */
 enum {
