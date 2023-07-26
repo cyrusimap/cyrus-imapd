@@ -27,6 +27,9 @@ jobs:
         git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
         echo "building cyrus version" $(./tools/git-version.sh)
         ./tools/build-with-cyruslibs.sh
+    - name: report cyrus version
+      shell: bash
+      run: /usr/cyrus/libexec/master -V
     - name: update jmap test suite
       working-directory: /srv/JMAP-TestSuite.git
       shell: bash
