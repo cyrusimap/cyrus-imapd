@@ -1,0 +1,57 @@
+Description:
+
+Rewrites JMAP calendar default alarms to a non-DAV mailbox annotation.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Installations that use the experimental JMAP calendars API need run a
+migration tool to separate CalDAV default alarm annotations from
+JMAP annotations.
+
+Currently, JMAP default alarms are stored on a calendar mailbox
+in the following annotations:
+
+- {urn:ietf:params:xml:ns:caldav}default-alarm-vevent-datetime
+- {urn:ietf:params:xml:ns:caldav}default-alarm-vevent-date
+
+After migration, these annotations are removed from the calendar
+mailbox and their contents moved to the Cyrus-internal annotation
+
+- /vendor/cmu/cyrus-jmap/defaulalerts
+
+CalDAV annotations on the calendar home are left as-is and are not
+migrated. Typically, Apple CalDAV clients store default alarms at
+this location.
+
+To migrate, call the following JMAP method as an admin user:
+
+# Admin/migrateCalendarDefaultAlarms
+
+This method has the following arguments:
+
+- userIds: Id[]|null (default: null): the list of users for which to
+  migrate default alarms. If null, then alarms are migrated for all users.
+
+- keepCaldavAlarms: Boolean (default: false): If true, the DAV annotations
+  are migrated but not removed from the calendar mailbox. There should be
+  no need to keep them, except if installations or their CalDAV clients
+  made use of these CalDAV annotations themselves.
+
+The method response contains:
+
+- migrated: Id[String[SetError|null]]: For each userid, this is a map of
+  calendar id to either null on success, or an error.
+
+- notMigrated: Id[SetError]: For each userid, contains an error that
+  prevented migrating this users default alarms.
+
+
+GitHub issue:
+
+None.
