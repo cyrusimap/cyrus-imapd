@@ -162,7 +162,10 @@ EXPORTED char *jmap_pointer_decode(const char *src, size_t len)
     return buf_release(&buf);
 }
 
-EXPORTED json_t* jmap_patchobject_apply(json_t *val, json_t *patch, json_t *invalid)
+EXPORTED json_t* jmap_patchobject_apply(json_t *val,
+                                        json_t *patch,
+                                        json_t *invalid,
+                                        unsigned flags)
 {
     const char *path;
     json_t *newval, *dst;
@@ -173,33 +176,57 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val, json_t *patch, json_t *inva
         json_t *it = dst;
         const char *base = path, *top;
         /* Find path in object tree */
-        while ((top = strchr(base, '/'))) {
-            char *name = jmap_pointer_decode(base, top-base);
-            if (json_is_array(it)) {
-                it = json_array_get(it, atoi(name));
+        while (it && (top = strchr(base, '/'))) {
+            char *ref = jmap_pointer_decode(base, top-base);
+            if (json_is_array(it) && (flags & PATCH_ALLOW_ARRAY)) {
+                const char *err = NULL;
+                bit64 idx;
+                if (!parsenum(ref, &err, 0, &idx) && !*err &&
+                        idx < json_array_size(it)) {
+                    it = json_array_get(it, idx);
+                }
+                else it = NULL;
             }
             else {
-                it = json_object_get(it, name);
+                it = json_object_get(it, ref);
             }
-            free(name);
+            free(ref);
             base = top + 1;
         }
-        if (!it) {
-            /* No such path in 'val' */
-            if (invalid) {
-                json_array_append_new(invalid, json_string(path));
+
+        /* Set value at path */
+        int is_valid = 0;
+
+        if (it) {
+            char *ref = jmap_pointer_decode(base, strlen(base));
+
+            if (json_is_object(it)) {
+                is_valid = 1;
+                if (newval == json_null()) {
+                    json_object_del(it, ref);
+                } else {
+                    json_object_set(it, ref, newval);
+                }
             }
+            else if (json_is_array(it) && !json_is_null(newval) &&
+                    (flags & PATCH_ALLOW_ARRAY)) {
+                const char *err = NULL;
+                bit64 idx;
+                if (!parsenum(ref, &err, 0, &idx) && !*err &&
+                        idx < json_array_size(it)) {
+                    is_valid = 1;
+                    json_array_set(it, idx, newval);
+                }
+            }
+
+            free(ref);
+        }
+
+        if (!is_valid) {
+            if (invalid) json_array_append_new(invalid, json_string(path));
             json_decref(dst);
             return NULL;
         }
-        /* Replace value at path */
-        char *name = jmap_pointer_decode(base, strlen(base));
-        if (newval == json_null()) {
-            json_object_del(it, name);
-        } else {
-            json_object_set(it, name, newval);
-        }
-        free(name);
     }
 
     return dst;
