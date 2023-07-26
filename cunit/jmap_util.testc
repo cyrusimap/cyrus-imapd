@@ -5,104 +5,109 @@
 #include "hash.h"
 #include "imap/jmap_util.h"
 
-static void test_patchobject_create(void)
+static void test_patchobject(void)
 {
-#define TESTCASE(src, dst, want) \
+#define TESTCASE(_from, _dest, _want, _flags) \
     { \
-        json_t *jsrc = json_loads(src, JSON_DECODE_ANY, NULL); \
-        json_t *jdst = json_loads(dst, JSON_DECODE_ANY, NULL); \
-        \
-        json_t *jwant = json_loads(want, JSON_DECODE_ANY, NULL); \
-        json_t *jdiff = jmap_patchobject_create(jsrc, jdst, 0); \
+        unsigned myflags = (_flags); \
+        json_t *jfrom = json_loads((_from), JSON_DECODE_ANY, NULL); \
+        json_t *jdest = json_loads((_dest), JSON_DECODE_ANY, NULL); \
+        json_t *jwant = json_loads((_want), JSON_DECODE_ANY, NULL); \
+        json_t *jdiff = jmap_patchobject_create(jfrom, jdest, myflags); \
         CU_ASSERT_PTR_NOT_NULL(jdiff); \
-        \
         char *swant = json_dumps(jwant, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
         char *sdiff = json_dumps(jdiff, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
         CU_ASSERT_STRING_EQUAL(swant, sdiff); \
-        \
+        json_t *jback = jmap_patchobject_apply(jfrom, jdiff, NULL); \
+        char *sback = json_dumps(jback, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
+        char *sdest = json_dumps(jdest, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
+        CU_ASSERT_STRING_EQUAL(sdest, sback); \
+        free(sdest); \
+        free(sback); \
+        json_decref(jback); \
         free(sdiff); \
         free(swant); \
         json_decref(jdiff); \
         json_decref(jwant); \
-        json_decref(jdst); \
-        json_decref(jsrc); \
+        json_decref(jdest); \
+        json_decref(jfrom); \
     }
 
-    const char *src, *dst, *want;
+    const char *from, *dest, *want;
 
     /* Remove one property at top-level */
-    src = "{"
+    from = "{"
     "  \"a\": 1,"
     "  \"b\": 1"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": 1"
     "}";
     want = "{"
     "  \"b\": null"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Add one property at top-level */
-    src = "{"
+    from = "{"
     "  \"a\": 1"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": 1,"
     "  \"b\": 1"
     "}";
     want = "{"
     "  \"b\": 1"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Replace one scalar property at top-level with another */
-    src = "{"
+    from = "{"
     "  \"a\": 1"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": 2"
     "}";
     want = "{"
     "  \"a\": 2"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Replace one object property at top-level with a scalar */
-    src = "{"
+    from = "{"
     "  \"a\": {"
     "    \"b\": 1"
     "  }"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": 2"
     "}";
     want = "{"
     "  \"a\": 2"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Replace one scalar property at top-level with an object */
-    src = "{"
+    from = "{"
     "  \"a\": {"
     "    \"b\": 1"
     "  }"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": 2"
     "}";
     want = "{"
     "  \"a\": 2"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Add a nested property */
-    src = "{"
+    from = "{"
     "  \"a\": {"
     "    \"b\": 1"
     "  }"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": {"
     "    \"b\": 1,"
     "    \"c\": 2"
@@ -111,16 +116,16 @@ static void test_patchobject_create(void)
     want = "{"
     "  \"a/c\": 2"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Remove a nested property */
-    src = "{"
+    from = "{"
     "  \"a\": {"
     "    \"b\": 1,"
     "    \"c\": 2"
     "  }"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": {"
     "    \"b\": 1"
     "  }"
@@ -128,7 +133,7 @@ static void test_patchobject_create(void)
     want = "{"
     "  \"a/c\": null"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
 
 #undef TESTCASE
