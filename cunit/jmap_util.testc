@@ -135,6 +135,49 @@ static void test_patchobject(void)
     "}";
     TESTCASE(from, dest, want, 0);
 
+    /* Changing array member replaces array */
+    from = "{"
+    "  \"a\": [{"
+    "    \"val\": \"foo\""
+    "  }, {"
+    "    \"val\": \"bar\""
+    "  }]"
+    "}";
+    dest = "{"
+    "  \"a\": [{"
+    "    \"val\": \"foo\""
+    "  }, {"
+    "    \"val\": \"baz\""
+    "  }]"
+    "}";
+    want = "{"
+    "  \"a\": [{"
+    "    \"val\": \"foo\""
+    "  }, {"
+    "    \"val\": \"baz\""
+    "  }]"
+    "}";
+    TESTCASE(from, dest, want, 0);
+
+    /* PATCH_ALLOW_ARRAY: replaces array member */
+    from = "{"
+    "  \"a\": [{"
+    "    \"val\": \"foo\""
+    "  }, {"
+    "    \"val\": \"bar\""
+    "  }]"
+    "}";
+    dest = "{"
+    "  \"a\": [{"
+    "    \"val\": \"foo\""
+    "  }, {"
+    "    \"val\": \"baz\""
+    "  }]"
+    "}";
+    want = "{"
+    "  \"a/1/val\": \"baz\""
+    "}";
+    TESTCASE(from, dest, want, PATCH_ALLOW_ARRAY);
 
 #undef TESTCASE
 }
