@@ -1262,7 +1262,7 @@ static void patch_current_defaultalerts_into_args(json_t *arg,
         json_t *cur = json_object();  /* Container for current defaultAlerts */
         json_object_set(cur, propname, cur_alerts);
 
-        json_t *new = jmap_patchobject_apply(cur, patches, parser->invalid);
+        json_t *new = jmap_patchobject_apply(cur, patches, parser->invalid, 0);
 
         /* Add patched defaultAlerts to /set args */
         json_object_foreach(new, field, jval) {
@@ -2967,7 +2967,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
         if (override) {
             if (json_object_get(override, "excluded") != json_true()) {
                 /* Instance is a recurrence override */
-                json_t *myevent = jmap_patchobject_apply(jsevent, override, NULL);
+              json_t *myevent = jmap_patchobject_apply(jsevent, override, NULL, 0);
                 getcalendarevents_filterinstance(myevent, props, eid->raw, cdata->ical_uid);
                 if (json_object_get(override, "start") == NULL) {
                     json_object_set_new(myevent, "start", json_string(jscalrecurid));
@@ -4937,14 +4937,14 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
     json_t *new_override = NULL;
     if (old_override) {
         /* Patch an existing override */
-        json_t *old_instance = jmap_patchobject_apply(old_event, old_override, NULL);
-        new_instance = jmap_patchobject_apply(old_instance, event_patch, invalid);
+        json_t *old_instance = jmap_patchobject_apply(old_event, old_override, NULL, 0);
+        new_instance = jmap_patchobject_apply(old_instance, event_patch, invalid, 0);
         updateevent_validate_ids(old_instance, new_instance, invalid);
         json_decref(old_instance);
     }
     else {
         /* Create a new override */
-        new_instance = jmap_patchobject_apply(old_event, event_patch, invalid);
+        new_instance = jmap_patchobject_apply(old_event, event_patch, invalid, 0);
         updateevent_validate_ids(old_event, new_instance, invalid);
     }
     if (!new_instance) {
@@ -5063,7 +5063,7 @@ static void updateevent_apply_patch_event(json_t *old_event,
         /* Apply patch to main event */
         json_t *old_mainevent = json_deep_copy(old_event);
         json_object_del(old_mainevent, "recurrenceOverrides");
-        new_event = jmap_patchobject_apply(old_mainevent, mainevent_patch, invalid);
+        new_event = jmap_patchobject_apply(old_mainevent, mainevent_patch, invalid, 0);
         if (!new_event) {
             *err = json_pack("{s:s}", "type", "invalidPatch");
             json_decref(old_mainevent);
@@ -5080,7 +5080,7 @@ static void updateevent_apply_patch_event(json_t *old_event,
                 json_object_set(old_exp_overrides, recurid, old_override);
                 continue;
             }
-            json_t *override = jmap_patchobject_apply(new_event, old_override, NULL);
+            json_t *override = jmap_patchobject_apply(new_event, old_override, NULL, 0);
             if (override) {
                 json_object_set_new(old_exp_overrides, recurid, override);
             }
@@ -5094,7 +5094,7 @@ static void updateevent_apply_patch_event(json_t *old_event,
         json_t *new_exp_overrides = NULL;
         if (json_object_size(old_exp_overrides)) {
             json_t *old_wrapper = json_pack("{s:O}", "recurrenceOverrides", old_exp_overrides);
-            json_t *new_wrapper = jmap_patchobject_apply(old_wrapper, overrides_patch, invalid);
+            json_t *new_wrapper = jmap_patchobject_apply(old_wrapper, overrides_patch, invalid, 0);
             if (!new_wrapper) {
                 *err = json_pack("{s:s}", "type", "invalidPatch");
                 json_decref(old_wrapper);
@@ -5143,7 +5143,7 @@ static void updateevent_apply_patch_event(json_t *old_event,
     }
     else {
         /* Apply the patch as provided */
-        new_event = jmap_patchobject_apply(old_event, event_patch, invalid);
+        new_event = jmap_patchobject_apply(old_event, event_patch, invalid, 0);
         if (!new_event) {
             *err = json_pack("{s:s}", "type", "invalidPatch");
             goto done;
@@ -7681,7 +7681,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     context_begin_cdata(jmapctx, mbentry, cdata);
     json_t *src_event = jmapical_tojmap(src_ical, NULL, jmapctx);
     if (src_event) {
-        dst_event = jmap_patchobject_apply(src_event, jevent, NULL);
+        dst_event = jmap_patchobject_apply(src_event, jevent, NULL, 0);
     }
     json_decref(src_event);
     if (!dst_event) {
@@ -9353,7 +9353,7 @@ static int principal_getavailability_ical_cb(icalcomponent *comp,
             json_t *jval;
             json_object_foreach(joverrides, recurid, jval) {
                 if (!strcmpsafe(recurid, buf_cstring(rock->buf))) {
-                    jevent = jmap_patchobject_apply(rock->jevent, jval, NULL);
+                    jevent = jmap_patchobject_apply(rock->jevent, jval, NULL, 0);
                     break;
                 }
             }

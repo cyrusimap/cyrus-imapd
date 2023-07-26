@@ -752,7 +752,7 @@ static void _notes_update_cb(const char *id, message_t *msg,
                    id, error_message(r));
         }
         else {
-            json_t *new_note = jmap_patchobject_apply(note, patch, NULL);
+          json_t *new_note = jmap_patchobject_apply(note, patch, NULL, 0);
 
             if (new_note) {
                 r = _note_create(msg_mailbox(msg), new_note, &updated_note);
