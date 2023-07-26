@@ -42,9 +42,19 @@ There are various annotations that **cyr_expire** respects:
   messages
 - ``/vendor/cmu/cyrus-imapd/delete`` which controls the deletion of
   messages
+- ``/vendor/cmu/cyrus-imapd/noexpire_until`` which disables the expire
+  and delete operations per user
 
-These mailbox annotations specify the age(in days) of messages in the
-given mailbox that should be expired/archived/deleted.
+The first three mailbox annotations specify the age of messages in the
+given mailbox that should be expired/archived/deleted. The
+age is specified as a duration, the default unit are days.
+The duration format is defined in :cyrusman:`imapd.conf(5)`.
+
+The last mailbox annotation specifies the UNIX epoch time in seconds
+until which expiring messages or removing deleted mailboxes is blocked.
+The zero epoch time represents infinity. This annotation has precedence
+over any of the other annotations or command line flags. It must only
+be set on the user inbox and applies to all mailboxes of that user.
 
 The value of the ``/vendor/cmu/cyrus-imapd/expire`` annotation is
 inherited by all children of the mailbox on which it is set, so an
@@ -92,6 +102,8 @@ Options
     ``archivepartition-*`` has been set in your config.
     This value is only used for entries which do not have a
     corresponding ``/vendonr/cmu/cyrus-imapd/archive`` mailbox annotation.
+    The duration format is defined in :cyrusman:`imapd.conf(5)`. The default
+    unit are days.
 
     |v3-new-feature|
 
@@ -99,25 +111,25 @@ Options
 
     Remove previously deleted mailboxes older than *delete-duration*
     (when using the "delayed" delete mode).
-    The value can be a floating point number, and may have a suffix to
-    specify the unit of time.  If no suffix, the value is number of days.
-    Valid suffixes are **d** (days), **h** (hours), **m** (minutes) and
-    **s** (seconds).
     This value is only used for entries which do not have a
     corresponding ``/verdor/cmu/cyrus-imapd/delete`` mailbox annotation.
+    The duration format is defined in :cyrusman:`imapd.conf(5)`. The default
+    unit are days.
 
 .. option:: -E expire-duration, --expire-duration=expire-duration
 
     Prune the duplicate database of entries older than *expire-duration*.
     This value is only used for entries which do not have a corresponding
     ``/vendor/cmu/cyrus-imapd/expire`` mailbox annotation.
-    Format is the same as delete-duration.
+    The duration format is defined in :cyrusman:`imapd.conf(5)`. The default
+    unit are days.
 
 .. option:: -X expunge-duration, --expunge-duration=expunge-duration
 
     Expunge previously deleted messages older than *expunge-duration*
     (when using the "delayed" expunge mode).
-    Format is the same as delete-duration.
+    The duration format is defined in :cyrusman:`imapd.conf(5)`. The default
+    unit are days.
 
 .. option:: -c, --no-conversations
 

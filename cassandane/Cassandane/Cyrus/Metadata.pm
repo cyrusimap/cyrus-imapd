@@ -363,6 +363,12 @@ sub test_shared
     if ($maj > 3 or ($maj == 3 and $min >= 3)) {
         $specific_entries{'/shared/vendor/cmu/cyrus-imapd/search-fuzzy-always'} = undef;
     }
+
+    # We introduced vendor/cmu/cyrus-imapd/noexpire_until in 3.9.0
+    if ($maj > 3 or ($maj == 3 and $min >= 9)) {
+        $specific_entries{'/shared/vendor/cmu/cyrus-imapd/noexpire_until'} = undef;
+    }
+
     $self->assert_deep_equals(\%specific_entries, $r);
 
     # individual item fetch:
@@ -1123,6 +1129,12 @@ sub test_private
     if ($maj > 3 or ($maj == 3 and $min >= 3)) {
         $specific_entries{'/private/vendor/cmu/cyrus-imapd/search-fuzzy-always'} = undef;
     }
+
+    # We introduced vendor/cmu/cyrus-imapd/noexpire_until in 3.9.0
+    if ($maj > 3 or ($maj == 3 and $min >= 9)) {
+        $specific_entries{'/private/vendor/cmu/cyrus-imapd/noexpire_until'} = undef;
+    }
+
     $self->assert_deep_equals(\%specific_entries, $r);
 
     $imaptalk->setmetadata('INBOX', "/private/comment", "This is a comment");

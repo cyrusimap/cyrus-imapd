@@ -89,6 +89,7 @@
 /* global state */
 static int verbose = 0;
 static const char *progname = NULL;
+static time_t progtime = 0;
 static struct namespace expire_namespace; /* current namespace */
 
 /* command line arguments */
@@ -235,91 +236,114 @@ static void usage(void)
 }
 
 /*
- * Parse a non-negative duration string as seconds.
- *
- * Convert "23.5m" to fractional days.  Accepts the suffixes "d" (day),
- * (day), "h" (hour), "m" (minute) and "s" (second).  If no suffix, assume
- * days.
- * Returns 1 if successful and *secondsp is filled in, or 0 if the suffix
- * is unknown or on error.
- */
-static int parse_duration(const char *s, int *secondsp)
-{
-    char *end = NULL;
-    double val;
-    int multiplier = SECS_IN_A_DAY; /* default is days */
-
-    /* no negative or empty numbers please */
-    if (!*s || *s == '-')
-        return 0;
-
-    val = strtod(s, &end);
-    /* Allow 'd', 'h', 'm' and 's' as end, else return error. */
-    if (*end) {
-        if (end[1]) return 0; /* trailing extra junk */
-
-        switch (*end) {
-        case 'd':
-            /* already the default */
-            break;
-        case 'h':
-            multiplier = SECS_IN_AN_HR;
-            break;
-        case 'm':
-            multiplier = SECS_IN_A_MIN;
-            break;
-        case 's':
-            multiplier = 1;
-            break;
-        default:
-            return 0;
-        }
-    }
-
-    *secondsp = multiplier * val;
-
-    return 1;
-}
-
-/*
- * Given an annotation, reads it, and converts it into 'seconds',
- * using `parse_duration`.
+ * Given an annotation, reads it from the mailbox or any of its
+ * parents if iterate is true.
  *
  * On Success: Returns 1
  * On Failure: Returns 0
  */
-static int get_annotation_value(const mbentry_t *mbentry,
+static int get_annotation_value(const char *mboxname,
                                 const char *annot_entry,
-                                int *secondsp, bool iterate)
+                                struct buf *annot_value,
+                                bool iterate)
 {
-    struct buf attrib = BUF_INITIALIZER;
     int ret = 0;
     /* mboxname needs to be copied since `mboxname_make_parent`
      * runs a strrchr() on it.
      */
-    char *buf = xstrdup(mbentry->name);
+    char *buf = xstrdup(mboxname);
 
     /*
      * Mailboxes inherit /vendo/cmu/cyrus-imapd/{expire, archive, delete},
      * so we need to iterate all the way up to "" (server entry).
      */
     do {
-        buf_free(&attrib);
-        ret = annotatemore_lookup_mbe(mbentry, annot_entry, "", &attrib);
+        buf_reset(annot_value);
+        ret = annotatemore_lookup(buf, annot_entry, "", annot_value);
         if (ret ||              /* error */
-            attrib.s)           /* found an entry */
+            buf_len(annot_value))           /* found an entry */
             break;
     } while (mboxname_make_parent(buf) && iterate);
 
-    if (attrib.s && parse_duration(attrib.s, secondsp))
-        ret = 1;
-    else
-        ret = 0;
-
-    buf_free(&attrib);
     free(buf);
 
-    syslog(LOG_DEBUG, "get_annotation_value: ret(%d):secondsp(%d)", ret, *secondsp);
+    return buf_len(annot_value) ? 1 : 0;
+}
+
+static int get_duration_annotation(const char *mboxname,
+                                   const char *annot_entry,
+                                   int *secondsp, bool iterate)
+{
+    struct buf attrib = BUF_INITIALIZER;
+    int ret = 0;
+
+    if (get_annotation_value(mboxname, annot_entry, &attrib, iterate) &&
+            !config_parseduration(buf_cstring(&attrib), 'd', secondsp))
+        ret = 1;
+
+    buf_free(&attrib);
+    return ret;
+}
+
+static int get_time_annotation(const char *mboxname,
+                               const char *annot_entry,
+                               time_t *timep, bool iterate)
+{
+    struct buf attrib = BUF_INITIALIZER;
+    int ret = 0;
+
+    if (get_annotation_value(mboxname, annot_entry, &attrib, iterate)) {
+        const char *end = NULL;
+        bit64 v64 = 0;
+        if (!parsenum(buf_cstring(&attrib), &end, 0, &v64) && !*end) {
+            *timep = v64;
+            ret = 1;
+        }
+    }
+
+    buf_free(&attrib);
+    return ret;
+}
+
+static int noexpire_mailbox(const mbentry_t *mbentry)
+{
+    int ret = 0;
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+
+    if (mbname_userid(mbname)) {
+        // Cache result for the last seen userid
+        static struct {
+            struct buf userid;
+            int has_noexpire;
+        } last_seen = { BUF_INITIALIZER, -1 };
+
+        if (!strcmp(mbname_userid(mbname), buf_cstring(&last_seen.userid))) {
+            ret = last_seen.has_noexpire;
+            goto done;
+        }
+
+        // Determine user inbox name
+        if (mbname_isdeleted(mbname)) {
+            mbname_t *tmp = mbname_from_userid(mbname_userid(mbname));
+            mbname_free(&mbname);
+            mbname = tmp;
+        }
+        mbname_truncate_boxes(mbname, 0);
+
+        // Lookup annotation, ignoring any pre-epoch timestamps
+        time_t until;
+        if (get_time_annotation(mbname_intname(mbname),
+                    IMAP_ANNOT_NS "noexpire_until", &until, false))
+            ret = !until || (until > 0 && progtime < until);
+
+        // Update cache
+        buf_setcstr(&last_seen.userid, mbname_userid(mbname));
+        last_seen.has_noexpire = ret;
+    }
+
+done:
+    if (ret) verbosep("(noexpire) %s", mbname_intname(mbname));
+    mbname_free(&mbname);
     return ret;
 }
 
@@ -379,7 +403,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
 
     /* check /vendor/cmu/cyrus-imapd/archive */
     if (!arock->skip_annotate &&
-        get_annotation_value(mbentry, IMAP_ANNOT_NS "archive",
+        get_duration_annotation(mbentry->name, IMAP_ANNOT_NS "archive",
                              &archive_seconds, false)) {
         arock->archive_mark = archive_seconds ?
             time(0) - archive_seconds : 0;
@@ -463,12 +487,16 @@ static int expire(const mbentry_t *mbentry, void *rock)
         goto done;
     }
 
+    /* see if this mailbox should be ignored */
+    if (noexpire_mailbox(mbentry))
+        goto done;
+
     /* see if we need to expire messages.
      * since mailboxes inherit /vendor/cmu/cyrus-imapd/expire,
      * we need to iterate all the way up to "" (server entry)
      */
     if (!erock->skip_annotate &&
-        get_annotation_value(mbentry, IMAP_ANNOT_NS "expire",
+        get_duration_annotation(mbentry->name, IMAP_ANNOT_NS "expire",
                              &expire_seconds, true)) {
         /* add mailbox to table */
         erock->expire_mark = expire_seconds ?
@@ -540,9 +568,13 @@ static int delete(const mbentry_t *mbentry, void *rock)
     if (!mboxname_isdeletedmailbox(mbentry->name, &timestamp))
         goto done;
 
+    /* see if this mailbox should be ignored */
+    if (noexpire_mailbox(mbentry))
+        goto done;
+
     /* check /vendor/cmu/cyrus-imapd/delete */
     if (!drock->skip_annotate &&
-        get_annotation_value(mbentry, IMAP_ANNOT_NS "delete",
+        get_duration_annotation(mbentry->name, IMAP_ANNOT_NS "delete",
                              &delete_seconds, false)) {
         drock->delete_mark = delete_seconds ?
             time(0) - delete_seconds: 0;
@@ -798,7 +830,8 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
     {
         switch (opt) {
         case 'A':
-            if (!parse_duration(optarg, &args->archive_seconds)) usage();
+            if (config_parseduration(optarg, 'd', &args->archive_seconds) < 0)
+                usage();
             break;
 
         case 'C':
@@ -806,17 +839,17 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
             break;
 
         case 'D':
-            if (!parse_duration(optarg, &args->delete_seconds))
+            if (config_parseduration(optarg, 'd', &args->delete_seconds) < 0)
                 usage();
             break;
 
         case 'E':
-            if (!parse_duration(optarg, &args->expire_seconds))
+            if (config_parseduration(optarg, 'd', &args->expire_seconds) < 0)
                 usage();
             break;
 
         case 'X':
-            if (!parse_duration(optarg, &args->expunge_seconds))
+            if (config_parseduration(optarg, 'd', &args->expunge_seconds) < 0)
                 usage();
             break;
 
@@ -887,6 +920,7 @@ int main(int argc, char *argv[])
     int r = 0;
 
     progname = basename(argv[0]);
+    progtime = time(NULL);
 
     if (parse_args(argc, argv, &ctx.args) != 0)
         exit(EXIT_FAILURE);

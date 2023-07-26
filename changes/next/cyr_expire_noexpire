@@ -1,0 +1,19 @@
+Description:
+
+Supports non-day durations in the archive/delete/expire annotations.
+Removes support for fractional durations in cyr_expire arguments.
+Adds the 'noexpire_until' annotation to disable cyr_expire per user.
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+Installations that passed fractional durations such as "1.5d" to any of the
+-E, -X, -D, or -A arguments must adapt these to only use integer durations
+such as "1d12h".
+
+GitHub issue:
+
+If theres a github issue number for this, put it here.
