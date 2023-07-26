@@ -52,7 +52,7 @@
 struct sqldb_bindval {
     const char *name;
     int type;
-    union {
+    union sqldb_sqlval {
         sqlite3_int64 i;
         const char *s;
         struct buf b;
@@ -88,6 +88,11 @@ int sqldb_init(void);
 int sqldb_done(void);
 
 #define SQLDB_DEFAULT_TIMEOUT  20000 /* 20 seconds is an eternity */
+
+#define SQLDB_DONE         1
+#define SQLDB_OK           0
+#define SQLDB_ERR_UNKNOWN -1
+#define SQLDB_ERR_LIMIT   -2
 
 sqldb_t *sqldb_open(const char *fname, const char *initsql,
                    int version, const struct sqldb_upgrade *upgradesql,
