@@ -33,6 +33,9 @@ To migrate, call the following JMAP method as an admin user:
 
 # Admin/migrateCalendarDefaultAlarms
 
+JMAP clients need to use the `https://cyrusimap.org/ns/jmap/admin`
+capability for this method.
+
 This method has the following arguments:
 
 - userIds: Id[]|null (default: null): the list of users for which to
