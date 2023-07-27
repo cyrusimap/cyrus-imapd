@@ -10091,7 +10091,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
 
             /* If language tag == deflang,
                don't add LANGUAGE parameter, but still force ALTID parameter */
-            l10n.lang = strcasecmp(lang, l10n.deflang) ? lang : "";
+            l10n.lang = strcasecmpsafe(lang, l10n.deflang) ? lang : "";
 
             jmap_parser_push(&parser, "localizations");
             jmap_parser_push(&parser, lang);
