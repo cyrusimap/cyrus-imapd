@@ -134,57 +134,6 @@ EOF
     # Normalize and compare cards
     normalize_jscard($want_jscard);
     normalize_jscard($have_jscard);
-warn Dumper($want_jscard);
-warn Dumper($have_jscard);
+
     $self->assert_deep_equals($want_jscard, $have_jscard);
-return;    
-    $self->assert_str_equals('es', $res->[0][1]{list}[0]{'language'});
-    $self->assert_str_equals('Gabriel García Márquez',
-                             $res->[0][1]{list}[0]{'name'}{'full'});
-    $self->assert_deep_equals([
-        { 'kind' => 'given', 'value' => 'Gabriel' },
-        { 'kind' => 'given2', 'value' => 'García' },
-        { 'kind' => 'surname', 'value' => 'Márquez' }
-    ], $res->[0][1]{list}[0]{name}{components});
-    $self->assert_deep_equals({
-        't1' => {
-            'name' => 'Novelista'
-        }
-    }, $res->[0][1]{list}[0]{titles});
-    $self->assert_deep_equals({
-        'grammaticalGender' => 'neuter',
-        'pronouns' => {
-            'k19' => {
-                'pronouns' => 'él'
-            }
-        }
-    }, $res->[0][1]{list}[0]{speakToAs});
-    $self->assert_deep_equals({
-        'addr1' => {
-            'locality' => 'Tokio'
-        }
-    }, $res->[0][1]{list}[0]{addresses});
-    $self->assert_str_equals('Novelist',
-                             $res->[0][1]{list}[0]{localizations}{en}{'titles/t1/name'});
-    $self->assert_str_equals('masculine',
-                             $res->[0][1]{list}[0]{localizations}{en}{'speakToAs/grammaticalGender'});
-    $self->assert_str_equals('Tokyo',
-                             $res->[0][1]{list}[0]{localizations}{en}{'addresses/addr1/locality'});
-    $self->assert_str_equals('Écrivain',
-                             $res->[0][1]{list}[0]{localizations}{fr}{'titles/t1/name'});
-    $self->assert_str_equals('il',
-                             $res->[0][1]{list}[0]{localizations}{fr}{'speakToAs/pronouns/k19/pronouns'});
-    $self->assert_str_equals('er',
-                             $res->[0][1]{list}[0]{localizations}{de}{'speakToAs/pronouns/k19/pronouns'});
-    $self->assert_str_equals('lui',
-                             $res->[0][1]{list}[0]{localizations}{it}{'speakToAs/pronouns/k19/pronouns'});
-    $self->assert_str_equals('ガブリエル・ガルシア・マルケス',
-                             $res->[0][1]{list}[0]{localizations}{jp}{'name/full'});
-    $self->assert_str_equals('東京',
-                             $res->[0][1]{list}[0]{localizations}{jp}{'addresses/addr1/locality'});
-    $self->assert_deep_equals([
-            { 'kind' => 'given', 'value' => 'ガブリエル' },
-            { 'kind' => 'given2', 'value' => 'ガルシア' },
-            { 'kind' => 'surname', 'value' => 'マルケス' }
-    ], $res->[0][1]{list}[0]{localizations}{jp}{'name/components'});
 }
