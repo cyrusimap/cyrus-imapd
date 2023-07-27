@@ -47,6 +47,7 @@ use Net::DAVTalk::XMLParser;
 use File::Basename;
 use Data::Dumper;
 use Text::VCardFast;
+use Cwd qw(abs_path);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -6029,6 +6030,46 @@ EOF
         @{$vcal->{objects}[0]->{objects}[0]->{objects}};
     $self->assert_num_equals(1, scalar @valarms);
     $self->assert_not_null($valarms[0]{properties}{uid});
+}
+
+sub test_freebusy_overrides
+    :min_version_3_9 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+RECURRENCE-ID:20230909T160000Z
+DTSTART:20230101T160000Z
+DURATION:PT1H
+UID:40ce7797-98ed-4185-a364-a95bb01ea2fe
+SUMMARY:recur1
+END:VEVENT
+BEGIN:VEVENT
+RECURRENCE-ID:20231231T160000Z
+DTSTART:20231231T160000Z
+DURATION:PT2H
+UID:40ce7797-98ed-4185-a364-a95bb01ea2fe
+SUMMARY:recur2
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    my ($data, $errors) = $CalDAV->GetFreeBusy('Default');
+    $self->assert_str_equals('2023-01-01T16:00:00', $data->[0]{start});
+    $self->assert_str_equals('PT1H', $data->[0]{duration});
+    $self->assert_str_equals('2023-12-31T16:00:00', $data->[1]{start});
+    $self->assert_str_equals('PT2H', $data->[1]{duration});
+    $self->assert_num_equals(2, scalar @$data);
 }
 
 1;

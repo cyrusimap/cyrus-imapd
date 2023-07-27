@@ -1342,6 +1342,7 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
     struct icalperiodtype span;
     icalcomponent *comp = icalcomponent_get_first_component(ical, kind);
     unsigned recurring = 0;
+    unsigned n_recurid = 0;
 
     /* Initialize span to be nothing */
     span.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
@@ -1426,6 +1427,10 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
             ptrarray_fini(&detached_rrules);
         }
 
+        /* Count recurrence-ids */
+        if (icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY))
+            if (n_recurid < UINT_MAX) n_recurid++;
+
         /* Check our dtstart and dtend against span */
         if (icaltime_compare(period.start, span.start) < 0)
             memcpy(&span.start, &period.start, sizeof(struct icaltimetype));
@@ -1437,6 +1442,10 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
         if (comp_cb) comp_cb(comp, cb_rock);
 
     } while ((comp = icalcomponent_get_next_component(ical, kind)));
+
+    /* There might be more than one recurrence override without main component */
+    if (!recurring && n_recurid >= 2)
+        recurring = 1;
 
     if (is_recurring) *is_recurring = recurring;
 
