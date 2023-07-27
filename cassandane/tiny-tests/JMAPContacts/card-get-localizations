@@ -134,7 +134,6 @@ EOF
     # Normalize and compare cards
     normalize_jscard($want_jscard);
     normalize_jscard($have_jscard);
-warn Dumper($want_jscard);
-warn Dumper($have_jscard);
+
     $self->assert_deep_equals($want_jscard, $have_jscard);
 }
