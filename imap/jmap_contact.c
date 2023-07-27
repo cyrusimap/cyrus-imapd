@@ -5762,13 +5762,13 @@ struct comp_kind {
 
 /* vCard N fields and JSContact Name components */
 static const struct comp_kind n_comp_kinds[] = {
-    { "title",         VCARD_N_PREFIX,          VCARD_N_PREFIX,        0 },
+    { "surname",       VCARD_N_FAMILY,          VCARD_N_SECONDARY,     0 },
     { "given",         VCARD_N_GIVEN,           VCARD_N_GIVEN,         0 },
     { "given2",        VCARD_N_ADDITIONAL,      VCARD_N_ADDITIONAL,    0 },
-    { "surname",       VCARD_N_FAMILY,          VCARD_N_SECONDARY,     0 },
+    { "title",         VCARD_N_PREFIX,          VCARD_N_PREFIX,        0 },
+    { "credential",    VCARD_N_SUFFIX,          VCARD_N_GENERATION,    0 },
     { "surname2",      VCARD_N_SECONDARY,       VCARD_N_FAMILY,        1 },
     { "generation",    VCARD_N_GENERATION,      VCARD_N_SUFFIX,        1 },
-    { "credential",    VCARD_N_SUFFIX,          VCARD_N_GENERATION,    0 },
     { NULL,            0,                       0,                     0 }
 };
 

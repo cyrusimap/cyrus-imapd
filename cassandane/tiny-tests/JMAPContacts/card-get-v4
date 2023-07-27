@@ -84,8 +84,8 @@ EOF
         name => {
             full => 'Simon Perreault',
             components => [
-                { 'kind' => 'given', 'value' => 'Simon' },
                 { 'kind' => 'surname', 'value' => 'Perreault' },
+                { 'kind' => 'given', 'value' => 'Simon' },
                 { 'kind' => 'credential', 'value' => 'ing. jr' },
             ],
             foo => 'bar'

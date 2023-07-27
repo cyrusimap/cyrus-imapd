@@ -72,9 +72,9 @@ EOF
         name => {
             full => 'Gabriel García Márquez',
             components => [
+                { 'kind' => 'surname', 'value' => 'Márquez' },
                 { 'kind' => 'given', 'value' => 'Gabriel' },
                 { 'kind' => 'given2', 'value' => 'García' },
-                { 'kind' => 'surname', 'value' => 'Márquez' }
             ],
         },
         titles => {
@@ -115,9 +115,9 @@ EOF
             },
             jp => {
                 'name/full' => 'ガブリエル・ガルシア・マルケス',
-                'name/components/0/value' => 'ガブリエル',
-                'name/components/1/value' => 'ガルシア',
-                'name/components/2/value' => 'マルケス',
+                'name/components/0/value' => 'マルケス',
+                'name/components/1/value' => 'ガブリエル',
+                'name/components/2/value' => 'ガルシア',
                 'addresses/addr1/components/0/value' => '東京'
             }
         }
@@ -134,6 +134,7 @@ EOF
     # Normalize and compare cards
     normalize_jscard($want_jscard);
     normalize_jscard($have_jscard);
-
+warn Dumper($want_jscard);
+warn Dumper($have_jscard);
     $self->assert_deep_equals($want_jscard, $have_jscard);
 }
