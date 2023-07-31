@@ -8512,7 +8512,7 @@ static unsigned _jsl10n_to_vcard(struct jmap_parser *parser, json_t *obj,
             }
             else {
                 json_t *path;
-                int len, i;
+                size_t len, i;
 
                 buf_printf(&buf, "localizations/%s/", lang);
                 if (id) buf_printf(&buf, "%s/", id);
