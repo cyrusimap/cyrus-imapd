@@ -5950,6 +5950,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
                               const char *label, unsigned param_flags)
 {
     vcardproperty_kind prop_kind = vcardproperty_isa(prop);
+    struct buf buf = BUF_INITIALIZER;
     vcardparameter *param;
 
     for (param = vcardproperty_get_first_parameter(prop, VCARD_ANY_PARAMETER);
@@ -6158,9 +6159,18 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
                     if (type) {
                         json_t *jprop = json_object_get_vanew(obj, type, "{}");
 
-                        json_object_set_new(jprop,
-                                            val ? val : lcase(param_value),
-                                            json_true());
+                        if (!val) {
+                            if (e->xvalue) {
+                                val = e->xvalue;
+                            }
+                            else {
+                                buf_setcstr(&buf,
+                                            vcardparameter_enum_to_string(e->val));
+                                val = buf_lcase(&buf);
+                            }
+                        }
+
+                        json_object_set_new(jprop, val, json_true());
                     }
                     else {
                         /* Unknown/unexpected TYPE */
@@ -6191,6 +6201,8 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
         /* Unknown/unexpected parameter [value]*/
         _unmapped_param(obj, param_kind, param_value);
     }
+
+    buf_free(&buf);
 
     if (label) json_object_set_new(obj, "label", jmap_utf8string(label));
 }
