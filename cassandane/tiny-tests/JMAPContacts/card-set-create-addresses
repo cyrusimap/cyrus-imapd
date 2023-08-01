@@ -124,14 +124,8 @@ sub test_card_set_create_addresses
 
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $card =~ s/\\,/,/gs;         # unescape commas
-    $card =~ s/\^/\\/gs;         # unescape unsafe chars
 
-    # NOTE: vparse.c doesn't understand multi-valued structured props/params
-    # and [un]escapes incorrectly.
-    # The expected results will have to change when CardDAV uses libicalvcard
-
-    $self->assert_matches(qr/ADR;JSCOMPS="s,\\n;11;s, ;10;3;s,, ;4;5;6";PROP-ID=k23;TYPE=WORK;CC=US;LABEL="54321 Oak St\\nReston\\nVA\\n20190\\nUSA":;;54321,Oak St;Reston;VA;20190;USA;;;;Oak St;54321;;;;;;/, $card);
-    $self->assert_matches(qr/ADR;PROP-ID=k24;TYPE=HOME;TZ=America\/New_York;CC=US;LABEL="12345 Elm St\\nReston\\nVA\\n20190\\nUSA":;;12345,Elm St;Reston;VA;20190;USA;;;;Elm St;12345;;;;;;/, $card);
+    $self->assert_matches(qr/ADR;JSCOMPS="s,\^n;11;s, ;10;3;s,\\, ;4;5;6";PROP-ID=k23;TYPE=WORK;CC=US;LABEL=54321 Oak St\^nReston\^nVA\^n20190\^nUSA:;;54321,Oak St;Reston;VA;20190;USA;;;;Oak St;54321;;;;;;/, $card);
+    $self->assert_matches(qr/ADR;PROP-ID=k24;TYPE=HOME;TZ=America\/New_York;CC=US;LABEL=12345 Elm St\^nReston\^nVA\^n20190\^nUSA:;;12345,Elm St;Reston;VA;20190;USA;;;;Elm St;12345;;;;;;/, $card);
     $self->assert_does_not_match(qr|JSPROP|, $card);
 }

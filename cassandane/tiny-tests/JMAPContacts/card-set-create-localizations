@@ -134,7 +134,6 @@ sub test_card_set_create_localizations
 
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $card =~ s/\\,/,/gs;         # unescape commas
 
     $self->assert_matches(qr/FN:Gabriel/, $card);
     $self->assert_matches(qr/FN;LANGUAGE=jp:/, $card);

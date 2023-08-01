@@ -50,7 +50,6 @@ sub test_cardgroup_set_create
 
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $card =~ s/\\,/,/gs;         # unescape commas
 
     $self->assert_matches(qr/VERSION:4.0/, $card);
     $self->assert_matches(qr/KIND:GROUP/, $card);

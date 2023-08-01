@@ -77,8 +77,6 @@ sub test_card_set_create_anniversaries
 
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $card =~ s/\\;/;/gs;         # unescape semi-colon in URI
-                                 # (is this a libicalvcard bug?)
 
     $self->assert_matches(qr|BDAY;VALUE=DATE;PROP-ID=k8:19530415|, $card);
     $self->assert_matches(qr|DEATHDATE;VALUE=TIMESTAMP;PROP-ID=k9:20191015T231000Z|, $card);

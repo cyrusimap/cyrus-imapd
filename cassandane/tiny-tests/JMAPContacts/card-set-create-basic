@@ -59,7 +59,8 @@ sub test_card_set_create_basic
 
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $card =~ s/\\,/,/gs;         # unescape commas
+
+    $name =~ s/,/\\\\,/gs;       # escape commas
 
     $created = $now->strftime('%Y%m%dT%H%M%SZ'); # vCard doesn't use separators
 
