@@ -6226,12 +6226,43 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
                                vcardstructuredtype *st,
                                const struct comp_kind *comp_kinds)
 {
-    vcardparameter *param =
-        vcardproperty_get_first_parameter(prop, VCARD_JSCOMPS_PARAMETER);
+    vcardparameter *param;
     vcardstrarray *sa;
-    const char *val;
+    const char *val, *val_prop_name = "value";
     size_t i;
 
+    param = vcardproperty_get_first_parameter(prop, VCARD_PHONETIC_PARAMETER);
+    if (param) {
+        vcardparameter_phonetic phonetic = vcardparameter_get_phonetic(param);
+        struct buf buf = BUF_INITIALIZER;
+
+        if (phonetic == VCARD_PHONETIC_X) {
+            buf_setcstr(&buf, vcardparameter_get_xvalue(param));
+        }
+        else {
+            buf_setcstr(&buf, vcardparameter_enum_to_string(phonetic));
+            buf_lcase(&buf);
+        }
+        json_object_set_new(obj, "phoneticSystem",
+                            json_string(buf_cstring(&buf)));
+        buf_free(&buf);
+
+        val_prop_name = "phonetic";
+
+        /* Remove PHONETIC parameter */
+        vcardproperty_remove_parameter_by_ref(prop, param);
+    }
+
+    param = vcardproperty_get_first_parameter(prop, VCARD_SCRIPT_PARAMETER);
+    if (param) {
+        json_object_set_new(obj, "phoneticScript",
+                            json_string(vcardparameter_get_script(param)));
+
+        /* Remove SCRIPT parameter */
+        vcardproperty_remove_parameter_by_ref(prop, param);
+    }
+
+    param = vcardproperty_get_first_parameter(prop, VCARD_JSCOMPS_PARAMETER);
     if (param) {
         /* Order components per JSCOMPS */
         vcardstructuredtype *jscomps = vcardparameter_get_jscomps(param);
@@ -6275,7 +6306,8 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
                                                             "components", "[]"),
                                       json_pack("{s:s s:o}",
                                                 "kind", kind,
-                                                "value", jmap_utf8string(val)));
+                                                val_prop_name,
+                                                jmap_utf8string(val)));
             }
         }
 
@@ -6304,7 +6336,7 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
                                                             "components", "[]"),
                                       json_pack("{s:s s:o}",
                                                 "kind", ckind->name,
-                                                "value",
+                                                val_prop_name,
                                                 jmap_utf8string(val)));
             }
         }

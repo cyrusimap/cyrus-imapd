@@ -1,0 +1,89 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_card_get_phonetics
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+UID:$id
+LANGUAGE:zho-Hant
+FN:孫中山文逸仙
+N;ALTID=1;LANGUAGE=zho-Hant:孫;中山;文,逸仙;;
+N;ALTID=1;PHONETIC=jyut;SCRIPT=Latn;LANGUAGE=yue:
+ syun1;zung1saan1;man4,jat6sin1;;
+END:VCARD
+EOF
+ 
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+        }, 'R1']
+    ]);
+
+    my $want_jscard = {
+        '@type' => 'Card',
+        version => '1.0',
+        addressBookId => 'Default',
+        'cyrusimap.org:href' => $carddav->fullpath() . $href,
+        id => $id,
+        uid => $id,
+        language => 'zho-Hant',    
+        vCardProps => [
+            [ 'version', {}, 'text', '4.0' ]
+        ],
+        name => {
+            full => '孫中山文逸仙',
+            components => [
+                { kind => 'surname', value => '孫' },
+                { kind => 'given',   value => '中山' },
+                { kind => 'given2',  value => '文' },
+                { kind => 'given2',  value => '逸仙' }
+            ]
+        },
+        localizations => {
+            yue => {
+                "name/phoneticSystem" => "jyut",
+                "name/phoneticScript" => "Latn",
+                "name/components/0/phonetic" => "syun1",
+                "name/components/1/phonetic" => "zung1saan1",
+                "name/components/2/phonetic" => "man4",
+                "name/components/3/phonetic" => "jat6sin1"
+            }
+        }
+    };
+
+    my $have_jscard = $res->[0][1]{list}[0];
+
+    # Delete generated fields
+    delete $have_jscard->{blobId};
+    delete $have_jscard->{'cyrusimap.org:blobId'};
+    delete $have_jscard->{'cyrusimap.org:size'};
+
+    # Normalize and compare cards
+    normalize_jscard($want_jscard);
+    normalize_jscard($have_jscard);
+
+    $self->assert_deep_equals($want_jscard, $have_jscard);
+}
