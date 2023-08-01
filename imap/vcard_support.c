@@ -553,6 +553,248 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
     return _prop_decode_value(data, value, content_type, guid);
 }
 
+EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
+{
+    vcardproperty *prop, *next;
+    struct buf buf = BUF_INITIALIZER;
+
+    for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
+         prop; prop = next) {
+        const char *propval = vcardproperty_get_value_as_string(prop);
+        const char *key = NULL;
+        vcardproperty *new;
+        vcardparameter *param;
+
+        next = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY);
+
+        switch (vcardproperty_isa(prop)) {
+        case VCARD_VERSION_PROPERTY:
+            /* Set proper VERSION */
+            vcardproperty_set_version(prop, VCARD_VERSION_30);
+            break;
+
+        case VCARD_UID_PROPERTY:
+            /* Rewrite UID property */
+            param = vcardproperty_get_first_parameter(prop,
+                                                      VCARD_VALUE_PARAMETER);
+            if (param && vcardparameter_get_value(param) == VCARD_VALUE_TEXT) {
+                /* text -> text (default) */
+                vcardproperty_remove_parameter_by_ref(prop, param);
+            }
+            else if (!strncmp(propval, "urn:uuid:", 9)) {
+                /* uuid URN -> text */
+                buf_setcstr(&buf, propval+9);
+                vcardproperty_set_uid(prop, buf_cstring(&buf));
+            }
+            else {
+                /* uri (default) -> uri */
+                vcardproperty_set_parameter(prop,
+                                            vcardparameter_new_value(VCARD_VALUE_URI));
+            }
+            break;
+
+        case VCARD_KEY_PROPERTY:
+        case VCARD_LOGO_PROPERTY:
+        case VCARD_PHOTO_PROPERTY:
+        case VCARD_SOUND_PROPERTY:
+            /* Rewrite KEY, LOGO, PHOTO, SOUND properties */
+            if (!strncmp(propval, "data:", 5)) {
+                /* Rewrite data: URI as 'b' encoded value */
+                const char *type = propval + 5;
+                const char *base64 = strstr(type, ";base64,");
+                const char *data = NULL;
+                size_t typelen = 0;
+
+                if (base64) {
+                    vcardproperty_add_parameter(prop,
+                                                vcardparameter_new_encoding(VCARD_ENCODING_B));
+
+                    data = base64 + 7;
+                    typelen = base64 - type;
+                }
+                else if ((data = strchr(type, ','))) {
+                    typelen = data - type;
+                }
+
+                if (typelen) {
+                    const char *subtype;
+
+                    buf_setmap(&buf, type, typelen);
+                    subtype = strchr(buf_ucase(&buf), '/');
+                    if (subtype) {
+                        vcardenumarray *array = vcardenumarray_new(1);
+                        vcardenumarray_element e =
+                            {  VCARD_TYPE_X, subtype+1 };
+
+                        vcardenumarray_append(array, &e);
+                        vcardproperty_add_parameter(prop,
+                                                    vcardparameter_new_type(array));
+                    }
+                }
+
+                buf_setcstr(&buf, data ? data+1 : "");
+                vcardproperty_set_value_from_string(prop,
+                                                    buf_cstring(&buf), "NO");
+            }
+            else if ((param =
+                      vcardproperty_get_first_parameter(prop,
+                                                        VCARD_MEDIATYPE_PARAMETER))) {
+                /* Rename MEDIATYPE parameter */
+                vcardenumarray *array = vcardenumarray_new(1);
+                vcardenumarray_element e =
+                    { VCARD_TYPE_X, vcardparameter_get_mediatype(param) };
+
+                vcardenumarray_append(array, &e);
+                vcardproperty_add_parameter(prop,
+                                            vcardparameter_new_type(array));
+                vcardproperty_remove_parameter_by_ref(prop, param);
+            }
+            break;
+
+        case VCARD_KIND_PROPERTY:
+            /* Rename KIND, MEMBER properties */
+            key = "X-ADDRESSBOOKSERVER-KIND";
+
+            GCC_FALLTHROUGH
+
+        case VCARD_MEMBER_PROPERTY:
+            if (!key) key = "X-ADDRESSBOOKSERVER-MEMBER";
+
+            new = vcardproperty_new_x(propval);
+            vcardproperty_set_x_name(new, key);
+            vcardcomponent_add_property(vcard, new);
+            vcardcomponent_remove_property(vcard, prop);
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    buf_free(&buf);
+}
+
+EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
+{
+    vcardproperty *prop, *next;
+    struct buf buf = BUF_INITIALIZER;
+
+    for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
+         prop; prop = next) {
+        const char *propval = vcardproperty_get_value_as_string(prop);
+        const char *str = NULL;
+        vcardparameter *param;
+
+        next = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY);
+
+        switch (vcardproperty_isa(prop)) {
+        case VCARD_VERSION_PROPERTY:
+            /* Set proper VERSION */
+            vcardproperty_set_version(prop, VCARD_VERSION_40);
+            break;
+
+        case VCARD_UID_PROPERTY:
+            /* Rewrite UID property */
+            param = vcardproperty_get_first_parameter(prop,
+                                                      VCARD_VALUE_PARAMETER);
+            if (param && vcardparameter_get_value(param) == VCARD_VALUE_URI) {
+                /* uri -> uri (default) */
+                vcardproperty_remove_parameter_by_ref(prop, param);
+            }
+            else if (strncmp(propval, "urn:uuid:", 9)) {
+                /* text (default) -> uuid URN */
+                buf_setcstr(&buf, "urn:uuid:");
+                buf_appendcstr(&buf, propval);
+                vcardproperty_set_uid(prop, buf_cstring(&buf));
+            }
+            break;
+
+        case VCARD_KEY_PROPERTY:
+            /* Rewrite KEY, LOGO, PHOTO, SOUND properties */
+            str = "";
+
+            GCC_FALLTHROUGH
+
+        case VCARD_LOGO_PROPERTY:
+        case VCARD_PHOTO_PROPERTY:
+            if (!str) str = "image/";
+
+            GCC_FALLTHROUGH
+
+        case VCARD_SOUND_PROPERTY:
+            if (!str) str = "audio/";
+
+            param = vcardproperty_get_first_parameter(prop,
+                                                      VCARD_VALUE_PARAMETER);
+            if (!param || vcardparameter_get_value(param) != VCARD_VALUE_URI) {
+                /* Rewrite 'b' encoded value as data: URI */
+                buf_setcstr(&buf, "data:");
+
+                param = vcardproperty_get_first_parameter(prop,
+                                                          VCARD_TYPE_PARAMETER);
+                if (param) {
+                    vcardenumarray *array = vcardparameter_get_type(param);
+                    const vcardenumarray_element *e =
+                        vcardenumarray_element_at(array, 0);
+
+                    if (e->xvalue) {
+                        buf_appendcstr(&buf, str);
+                        buf_appendcstr(&buf, e->xvalue);
+                        buf_lcase(&buf);
+                    }
+
+                    vcardproperty_remove_parameter_by_ref(prop, param);
+                }
+
+                param = vcardproperty_get_first_parameter(prop,
+                                                          VCARD_ENCODING_PARAMETER);
+                if (param) {
+                    if (vcardparameter_get_encoding(param) == VCARD_ENCODING_B) {
+                        buf_appendcstr(&buf, ";base64");
+                    }
+
+                    vcardproperty_remove_parameter_by_ref(prop, param);
+                }
+
+                buf_printf(&buf, ",%s", propval);
+                vcardproperty_set_value_from_string(prop,
+                                                    buf_cstring(&buf), "NO");
+            }
+            else if ((param =
+                      vcardproperty_get_first_parameter(prop,
+                                                        VCARD_TYPE_PARAMETER))) {
+                /* Rename TYPE parameter */
+                vcardenumarray *array = vcardparameter_get_type(param);
+                const vcardenumarray_element *e =
+                    vcardenumarray_element_at(array, 0);
+
+                if (e->xvalue) {
+                    buf_setcstr(&buf, e->xvalue);
+                    vcardproperty_add_parameter(prop,
+                                                vcardparameter_new_mediatype(buf_ucase(&buf)));
+                    vcardproperty_remove_parameter_by_ref(prop, param);
+                }
+            }
+            break;
+
+        case VCARD_X_PROPERTY:
+            str = vcardproperty_get_x_name(prop);
+
+            if (!strncasecmp(str, "x-addressbookserver-", 20)) {
+                /* Rename X-ADDRESSBOOKSERVER-* properties */
+                buf_setcstr(&buf, str+20);
+                vcardproperty_set_x_name(prop, buf_cstring(&buf));
+            }
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    buf_free(&buf);
+}
+
 EXPORTED const char *vcardproperty_get_xparam_value(vcardproperty *prop,
                                                     const char *name)
 {

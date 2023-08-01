@@ -84,6 +84,9 @@ extern size_t vcard_prop_decode_value_x(vcardproperty *prop,
                                         char **content_type,
                                         struct message_guid *guid);
 
+extern void vcard_to_v3_x(vcardcomponent *vcard);
+extern void vcard_to_v4_x(vcardcomponent *vcard);
+
 extern const char *vcardproperty_get_xparam_value(vcardproperty *prop,
                                                   const char *name);
 
