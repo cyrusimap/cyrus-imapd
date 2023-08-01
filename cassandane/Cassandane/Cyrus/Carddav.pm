@@ -47,6 +47,7 @@ use Net::CardDAVTalk 0.05;
 use Net::CardDAVTalk::VCard;
 use Data::Dumper;
 use XML::Spice;
+use XML::Simple;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -858,7 +859,7 @@ EOF
     $newcard = $response->{content};
     $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
     $self->assert_matches(qr/UID:$uid/, $newcard);
-    $self->assert_matches(qr/PHOTO;ENCODING=b;TYPE=GIF:$image/, $newcard);
+    $self->assert_matches(qr/PHOTO;ENCODING=B;TYPE=GIF:$image/, $newcard);
 
     xlog $self, "PUT vCard v3 with text UID";
     $card =~ s/VERSION:4.0/VERSION:3.0/;
@@ -930,6 +931,82 @@ sub test_addressbook_default_name
     );
     $self->assert_str_equals('Default', $res->{'{DAV:}response'}[0]{
         '{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}displayname'}{content});
+}
+
+sub test_bulk_import_export
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+
+    my $uid1 = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+    my $uid2 = "addr1\@example.com";
+    my $uid3 = "addr2\@example.com";
+
+    my $single = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$uid1
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    my $multiple = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+NICKNAME:me
+UID:$uid2
+FN:Cyrus Daboo
+EMAIL:cdaboo\@example.com
+END:VCARD
+BEGIN:VCARD
+VERSION:4.0
+NICKNAME:eric
+UID:$uid3
+FN:Eric York
+END:VCARD
+EOF
+
+    my %Headers = (
+      'Content-Type' => 'text/vcard',
+      'Authorization' => $CardDAV->auth_header(),
+    );
+
+    xlog $self, "Import a single vCard";
+    my $res = $CardDAV->{ua}->request('POST', $CardDAV->request_url($Id), {
+        content => $single,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(207, $res->{status});
+
+    my $xml = XMLin($res->{content});
+    $self->assert_str_equals($uid1, $xml->{'D:response'}{'D:propstat'}{'D:prop'}{'CS:uid'});
+
+    xlog $self, "Import multiple vCards";
+    $res = $CardDAV->{ua}->request('POST', $CardDAV->request_url($Id), {
+        content => $multiple,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(207, $res->{status});
+
+    $xml = XMLin($res->{content});
+    $self->assert_str_equals($uid2, $xml->{'D:response'}[0]{'D:propstat'}{'D:prop'}{'CS:uid'});
+    $self->assert_str_equals($uid3, $xml->{'D:response'}[1]{'D:propstat'}{'D:prop'}{'CS:uid'});
+
+    xlog $self, "Export the vCards";
+    $res = $CardDAV->{ua}->request('GET', $CardDAV->request_url($Id), {
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(200, $res->{status});
+    $self->assert_matches(qr/UID:$uid1\r\nN:Gump/, $res->{content});
+    $self->assert_matches(qr/UID:$uid2\r\nFN:Cyrus Daboo/, $res->{content});
+    $self->assert_matches(qr/UID:$uid3\r\nFN:Eric York/, $res->{content});
 }
 
 1;

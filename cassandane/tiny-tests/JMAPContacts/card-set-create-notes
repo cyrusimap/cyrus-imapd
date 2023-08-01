@@ -53,8 +53,7 @@ sub test_card_set_create_notes
 
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $card =~ s/\\,/,/gs;         # unescape commas
 
-    $self->assert_matches(qr|NOTE;AUTHOR-NAME=John;PROP-ID=NOTE-1;CREATED=20221123T150132Z:Office hours are from 0800 to 1715 EST, Mon-Fri.|, $card);
+    $self->assert_matches(qr|NOTE;AUTHOR-NAME=John;PROP-ID=NOTE-1;CREATED=20221123T150132Z:Office hours are from 0800 to 1715 EST\\, Mon-Fri.|, $card);
     $self->assert_does_not_match(qr|JSPROP|, $card);
 }

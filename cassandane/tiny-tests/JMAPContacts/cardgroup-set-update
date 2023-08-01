@@ -49,7 +49,6 @@ sub test_cardgroup_set_update
 
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $card =~ s/\\,/,/gs;         # unescape commas
 
     $self->assert_matches(qr/MEMBER:urn:uuid:$member1/, $card);
 

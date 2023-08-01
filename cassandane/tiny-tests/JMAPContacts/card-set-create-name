@@ -67,9 +67,8 @@ sub test_card_set_create_name
 
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $card =~ s/\\,/,/gs;         # unescape commas
 
-    $self->assert_matches(qr/N;JSCOMPS=";1;2;0;5";SORT-AS="Pau Shou Chang,Robert":Shou,Chang;Robert;Pau;;;Chang;/, $card);
+    $self->assert_matches(qr/N;JSCOMPS=";1;2;0;5";SORT-AS=Pau Shou Chang,Robert:Shou,Chang;Robert;Pau;;;Chang;/, $card);
     $self->assert_matches(qr/FN;DERIVED=TRUE:Robert Pau Shou Chang/, $card);
     $self->assert_does_not_match(qr|JSPROP|, $card);
 }

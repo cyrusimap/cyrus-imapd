@@ -61,7 +61,6 @@ sub test_card_set_create_directories
 
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $card =~ s/\\,/,/gs;         # unescape commas
 
     $self->assert_matches(qr|ORG-DIRECTORY;PROP-ID=DIRECTORY-1;INDEX=1:https://directory.mycompany.example.com|, $card);
     $self->assert_matches(qr|ORG-DIRECTORY;PROP-ID=DIRECTORY-2;PREF=1:ldap://ldap.tech.example/o=Tech,ou=Engineering|, $card);

@@ -86,7 +86,6 @@ sub test_card_set_create_personal
 
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $card =~ s/\\,/,/gs;         # unescape commas
 
     $self->assert_matches(qr|EXPERTISE;PROP-ID=PERSINFO-1;LEVEL=TRUE;INDEX=2:chinese literature|, $card);
     $self->assert_matches(qr|EXPERTISE;PROP-ID=PERSINFO-2;LEVEL=EXPERT;INDEX=1:chemistry|, $card);
