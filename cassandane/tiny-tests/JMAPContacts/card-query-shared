@@ -50,7 +50,7 @@ sub test_card_query_shared
                         surname => 'aaa'
                     }
                 },
-                nickNames => {
+                nicknames => {
                     'n1' => {
                         name => "foo"
                     }
@@ -198,7 +198,7 @@ sub test_card_query_shared
                         },
                     ]
                 },
-                nickNames => {
+                nicknames => {
                     'n1' => {
                         name => "bam"
                     }

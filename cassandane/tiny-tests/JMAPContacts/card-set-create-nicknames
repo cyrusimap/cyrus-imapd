@@ -30,9 +30,9 @@ sub test_card_set_create_nicknames
                     version => '1.0',
                     uid => $id,
                     name => { full => 'John Doe' },
-                    nickNames => {
+                    nicknames => {
                         k391 => {
-                            '@type' => 'NickName',
+                            '@type' => 'Nickname',
                             name => 'Johnny'
                         }
                     }
