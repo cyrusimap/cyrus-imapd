@@ -2343,7 +2343,6 @@ sub test_scan
 
     xlog $self, "listing...";
     my $res = $imaptalk->list("", "*");
-warn Dumper($res);
 
     $self->assert_mailbox_structure($res, '.', {
         'INBOX'      => [qw( \\HasChildren )],
