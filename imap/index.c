@@ -1760,22 +1760,21 @@ static int index_scan_work(const char *s, unsigned long len,
  */
 EXPORTED int index_scan(struct index_state *state, const char *contents)
 {
-    unsigned *msgno_list;
+    unsigned *msgno_list = NULL;
     uint32_t msgno;
     int n = 0;
     int listindex;
     int listcount;
-    struct searchargs searchargs;
+    struct searchargs searchargs = {0};
     unsigned long length;
     struct mailbox *mailbox = state->mailbox;
     charset_t ascii = charset_lookupname("US-ASCII");
 
-    if (!(contents && contents[0])) return(0);
+    if (!(contents && contents[0]))
+        goto done;
 
-    if (index_check(state, 0))
-        return 0;
-
-    if (state->exists <= 0) return 0;
+    if (state->exists <= 0)
+        goto done;
 
     length = strlen(contents);
 
@@ -1811,6 +1810,7 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
         buf_free(&buf);
     }
 
+done:
     charset_free(&ascii);
     search_expr_free(searchargs.root);
     free(msgno_list);
