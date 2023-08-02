@@ -5608,7 +5608,7 @@ static const jmap_property_t card_props[] = {
         0
     },
     {
-        "nickNames",
+        "nicknames",
         NULL,
         0
     },
@@ -6540,7 +6540,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     }
 
     case VCARD_NICKNAME_PROPERTY: {
-        json_t *nicks = json_object_get_vanew(obj, "nickNames", "{}");
+        json_t *nicks = json_object_get_vanew(obj, "nicknames", "{}");
         vcardstrarray *names = vcardproperty_get_nickname(prop);
         size_t i;
 
@@ -7898,7 +7898,7 @@ static int card_filter_match(void *vf, void *rock)
                                     f->text, &cfrock->cached_termsets) ||
         !card_filter_match_namecomp(card, "suffix", f->suffix,
                                     f->text, &cfrock->cached_termsets) ||
-        !card_filter_match_listprop(card, "nickNames", NULL,
+        !card_filter_match_listprop(card, "nicknames", NULL,
                                     name_vals, f->nickName,
                                     f->text, &cfrock->cached_termsets) ||
         !card_filter_match_listprop(card, "titles", "title",
@@ -10222,9 +10222,9 @@ static int _jscard_to_vcard(struct jmap_req *req,
             }
             record_is_dirty |= _jsname_to_vcard(&parser, jval, &l10n, card);
         }
-        else if (!strcmp(mykey, "nickNames")) {
+        else if (!strcmp(mykey, "nicknames")) {
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      mykey, "NickName",
+                                                      mykey, "Nickname",
                                                       &_jsnickname_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       pref_param_props, &l10n,

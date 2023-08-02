@@ -30,9 +30,9 @@ sub test_card_set_update
                     version => '1.0',
                     uid => $id,
                     name => { full => 'John Doe' },
-                    nickNames => {
+                    nicknames => {
                         k391 => {
-                            '@type' => 'NickName',
+                            '@type' => 'Nickname',
                             name => 'Johnny'
                         }
                     }
@@ -47,9 +47,9 @@ sub test_card_set_update
         ['ContactCard/set', {
             update => {
                 $id => {
-                    'nickNames/k391/name' => 'Johnny Boy',
-                    'nickNames/foo' => {
-                        '@type' => 'NickName',
+                    'nicknames/k391/name' => 'Johnny Boy',
+                    'nicknames/foo' => {
+                        '@type' => 'Nickname',
                         name => 'Doey'
                     }
                 }
@@ -73,7 +73,7 @@ sub test_card_set_update
         ['ContactCard/set', {
             update => {
                 $id => {
-                    'nickNames/k391' => JSON::null
+                    'nicknames/k391' => JSON::null
                 }
             }
          }, "R2"]

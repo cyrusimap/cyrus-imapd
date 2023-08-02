@@ -28,7 +28,7 @@ sub test_card_query
                         surname => 'aaa'
                     }
                 },
-                nickNames => {
+                nicknames => {
                     'n1' => {
                         name => "foo"
                     }
@@ -176,7 +176,7 @@ sub test_card_query
                         },
                     ]
                 },
-                nickNames => {
+                nicknames => {
                     'n1' => {
                         name => "bam"
                     }

@@ -141,7 +141,7 @@ sub test_card_copy
                 id => $cardId,
                 addressBookId => "Default",
 #                avatar => JSON::null,
-                nickNames => { n1 => { '@type' => 'NickName', name => "xxxxx" } }
+                nicknames => { n1 => { '@type' => 'Nickname', name => "xxxxx" } }
             },
         }
     },
@@ -160,7 +160,7 @@ sub test_card_copy
         }, 'R2'],
     ]);
     $self->assert_str_equals('foo bar', $res->[0][1]{list}[0]{name}{full});
-    $self->assert_str_equals('xxxxx', $res->[0][1]{list}[0]{nickNames}{n1}{name});
+    $self->assert_str_equals('xxxxx', $res->[0][1]{list}[0]{nicknames}{n1}{name});
 #    $self->assert_null($res->[0][1]{list}[0]{avatar});
 return;
     my $other3Jmap = Mail::JMAPTalk->new(
