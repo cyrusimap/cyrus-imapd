@@ -1906,7 +1906,12 @@ static int _add_group_entries(struct jmap_req *req,
             buf_reset(&buf);
             continue;
         }
-        buf_setcstr(&buf, "urn:uuid:");
+
+        buf_reset(&buf);
+        if (strncmpsafe("urn:uuid:", uid, 9)) {
+            buf_setcstr(&buf, "urn:uuid:");
+        }
+
         buf_appendcstr(&buf, uid);
         vparse_add_entry(card, NULL, group_propname, buf_cstring(&buf));
         buf_reset(&buf);
@@ -1936,7 +1941,12 @@ static int _add_othergroup_entries(struct jmap_req *req,
                 buf_reset(&buf);
                 continue;
             }
-            buf_setcstr(&buf, "urn:uuid:");
+
+            buf_reset(&buf);
+            if (strncmpsafe("urn:uuid:", uid, 9)) {
+                buf_setcstr(&buf, "urn:uuid:");
+            }
+
             buf_appendcstr(&buf, uid);
             struct vparse_entry *entry =
                 vparse_add_entry(card, NULL,
@@ -8311,7 +8321,11 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
             vcardproperty_set_value(prop, vcardvalue_new_textlist(text));
         }
         else if (pkind == VCARD_MEMBER_PROPERTY) {
-            buf_setcstr(&buf, "urn:uuid:");
+            buf_reset(&buf);
+            if (strncmpsafe("urn:uuid:", id, 9)) {
+                buf_setcstr(&buf, "urn:uuid:");
+            }
+
             buf_appendcstr(&buf, id);
             vcardproperty_set_value_from_string(prop, buf_cstring(&buf), "NO");
         }
