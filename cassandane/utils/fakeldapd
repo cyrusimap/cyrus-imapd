@@ -130,10 +130,20 @@ package main;
 
 use Data::Dumper;
 use Getopt::Std;
+use IO::Handle;
 use IO::Select;
 use IO::Socket;
 use Net::LDAP::LDIF;
 use Net::LDAP::Util qw(canonical_dn);
+
+# support running as a DAEMON with wait=y:
+# * if fd 3 is already open, then we will need to write to it later to
+#   indicate we're ready.
+# * we must grab this early, before the number gets used for something
+#   else, otherwise we won't be able to differentiate between the fd 3
+#   we care about or some other thing
+# * if fd 3 was not already open, $status_fd will be undef
+my $status_fd = IO::Handle->new_from_fd(3, 'w');
 
 my %opts;
 my %data;
@@ -151,7 +161,7 @@ while (not $ldif->eof()) {
 }
 die "ldif file contained no entries" if not scalar keys %data;
 
-# ok, we're good. background ourselves
+# ok, we're good. background ourselves if necessary
 if (not $opts{d} and not $ENV{CYRUS_ISDAEMON}) {
     my $pid = fork;
     die "unable to fork: $!" if not defined $pid;
@@ -167,6 +177,13 @@ my %handlers;
 my $shutdown = 0;
 
 $SIG{HUP} = sub { $shutdown++; };
+
+# okay, now we're ready to accept requests.  inform our parent,
+# if they were waiting to be informed
+if ($ENV{CYRUS_ISDAEMON} && $status_fd) {
+    print $status_fd "ok\r\n";
+    undef $status_fd;
+}
 
 while (my @ready = $select->can_read()) {
     foreach my $fh (@ready) {

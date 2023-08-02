@@ -89,8 +89,11 @@ sub run_cyr_info
     close RESULTS;
 
     if ($args[0] eq 'proc') {
-        # if we see our fakesaslauthd, no we didn't
-        @res = grep { $_ !~ m/\bfakesaslauthd\b/ } @res;
+        # if we see any of our fake daemons, no we didn't
+        my @fakedaemons = qw(fakesaslauthd fakeldapd);
+        my $pattern = q{\b(?:} . join(q{|}, @fakedaemons) . q{)\b};
+        my $re = qr{$pattern};
+        @res = grep { $_ !~ m/$re/ } @res;
     }
 
     return @res;

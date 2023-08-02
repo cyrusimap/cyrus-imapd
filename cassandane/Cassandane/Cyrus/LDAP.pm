@@ -91,17 +91,30 @@ sub set_up
     );
 
     # arrange for the fakeldapd to be started
-    # XXX make this run as a DAEMON rather than a START
-    $self->{instance}->add_start(
-        name => 'fakeldapd',
-        argv => [
-            realpath('utils/fakeldapd'),
-            '-p', $self->{ldapport},
-            '-l', realpath('data/directory.ldif'),
-        ],
-    );
-    $self->_start_instances();
+    my ($maj, $min) = Cassandane::Instance->get_version($self->{installation});
+    if ($maj < 3 || ($maj == 3 && $min < 4)) {
+        $self->{instance}->add_start(
+            name => 'fakeldapd',
+            argv => [
+                realpath('utils/fakeldapd'),
+                '-p', $self->{ldapport},
+                '-l', realpath('data/directory.ldif'),
+            ],
+        );
+    }
+    elsif (not exists $self->{daemons}->{fakeldapd}) {
+        $self->{instance}->add_daemon(
+            name => 'fakeldapd',
+            argv => [
+                realpath('utils/fakeldapd'),
+                '-p', $self->{ldapport},
+                '-l', realpath('data/directory.ldif'),
+            ],
+            wait => 'y',
+        );
+    }
 
+    $self->_start_instances();
     $self->{instance}->create_user("otheruser");
 }
 
