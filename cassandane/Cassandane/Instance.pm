@@ -423,11 +423,7 @@ sub add_service
     # Add a hardcoded recover START if we're doing an actual IMAP test.
     if ($name =~ m/imap/)
     {
-        if (!grep { $_->{name} eq 'recover'; } @{$self->{starts}})
-        {
-            $self->add_start(name => 'recover',
-                             argv => [ qw(ctl_cyrusdb -r) ]);
-        }
+        $self->add_recover();
     }
 
     my $srv = Cassandane::ServiceFactory->create(%params);
@@ -458,6 +454,23 @@ sub add_start
 {
     my ($self, %params) = @_;
     push(@{$self->{starts}}, Cassandane::MasterStart->new(%params));
+}
+
+sub remove_start
+{
+    my ($self, $name) = @_;
+    $self->{starts} = [ grep { $_->{name} ne $name } @{$self->{starts}} ];
+}
+
+sub add_recover
+{
+    my ($self) = @_;
+
+    if (!grep { $_->{name} eq 'recover'; } @{$self->{starts}})
+    {
+        $self->add_start(name => 'recover',
+                         argv => [ qw(ctl_cyrusdb -r) ]);
+    }
 }
 
 sub add_event
