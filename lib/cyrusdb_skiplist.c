@@ -250,7 +250,7 @@ static int myinit(const char *dbdir, int myflags)
 
         if (r != -1) r = ftruncate(fd, 0);
         net32_time = htonl(global_recovery);
-        if (r != -1) r = write(fd, &net32_time, 4);
+        if (r != -1) r = retry_write(fd, &net32_time, 4);
         xclose(fd);
 
         if (r == -1) {
@@ -262,19 +262,31 @@ static int myinit(const char *dbdir, int myflags)
     } else {
 normal:
         /* read the global recovery timestamp */
+        errno = 0;
 
-        fd = open(sfile, O_RDONLY, 0644);
-        if (fd == -1) r = -1;
-        if (r != -1) r = read(fd, &net32_time, 4);
-        xclose(fd);
+        r = fd = open(sfile, O_RDONLY, 0644);
+        if (r == -1 && errno == ENOENT) {
+            /* tell the admin what they need to do! */
+            xsyslog(LOG_INFO, "skipstamp is missing, have you run `ctl_cyrusdb -r`?",
+                              "filename=<%s>", sfile);
+        }
+
+        if (r != -1) r = retry_read(fd, &net32_time, 4);
 
         if (r == -1) {
-            xsyslog(LOG_ERR, "DBERROR: read failed, assuming the worst",
+            xsyslog(LOG_ERR, "DBERROR: skipstamp unreadable, assuming the worst",
                              "filename=<%s>", sfile);
+            /* "assuming the worst" means recovery will run for every skiplist
+             * database every time it's opened, because we can't determine that
+             * it doesn't need it.
+             */
             global_recovery = 0;
         } else {
             global_recovery = ntohl(net32_time);
         }
+
+        xclose(fd);
+        errno = 0;
     }
 
     srand(time(NULL) * getpid());
