@@ -72,7 +72,6 @@ enum cyrusdb_dbflags {
 
 enum cyrusdb_openflags {
     CYRUSDB_CREATE    = 0x01,    /* Create the database if not existant */
-    CYRUSDB_MBOXSORT  = 0x02,    /* Use mailbox sort order ('.' sorts 1st) */
     CYRUSDB_CONVERT   = 0x04,    /* Convert to the named format if not already */
     CYRUSDB_NOCOMPACT = 0x08,    /* Don't run any database compaction routines */
     CYRUSDB_SHARED    = 0x10,    /* Open in shared lock mode */
@@ -221,8 +220,7 @@ struct cyrusdb_backend {
     int (*dump)(struct dbengine *db, int detail);
     int (*consistent)(struct dbengine *db);
     int (*repack)(struct dbengine *db);
-    int (*compar)(struct dbengine *db, const char *s1, int l1,
-                  const char *s2, int l2);
+    int (*compar)(const char *s1, int l1, const char *s2, int l2);
 };
 
 extern int cyrusdb_copyfile(const char *srcname, const char *dstname);

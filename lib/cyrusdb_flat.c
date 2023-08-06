@@ -852,14 +852,6 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
     return r;
 }
 
-/* flat database is always mbox sort order */
-static int mycompar(struct dbengine *db __attribute__((unused)),
-                    const char *a, int alen,
-                    const char *b, int blen)
-{
-    return bsearch_ncompare_mbox(a, alen, b, blen);
-}
-
 EXPORTED struct cyrusdb_backend cyrusdb_flat =
 {
     "flat",                     /* name */
@@ -888,5 +880,5 @@ EXPORTED struct cyrusdb_backend cyrusdb_flat =
     NULL,
     NULL,
     NULL,
-    &mycompar
+    &bsearch_ncompare_mbox
 };

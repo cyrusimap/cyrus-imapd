@@ -108,7 +108,6 @@ static int fixquota_dopass(char *domain, char **roots, int nroots,
                            mboxlist_cb *pass, int isuser);
 static int fixquota_fixroot(struct mailbox *mailbox, const char *root);
 static int fixquota_finish(int thisquota);
-static int (*compar)(const char *s1, const char *s2);
 
 #define QUOTAGROW 300
 
@@ -200,8 +199,6 @@ int main(int argc,char **argv)
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
-
-    compar = strcmp;
 
     /*
      * Lock mailbox list to prevent mailbox creation/deletion
@@ -450,7 +447,7 @@ static int findroot(const char *name, int *thisquota)
 
         /* have we already passed the name, then there can
          * be no further matches */
-        if (compar(root, name) > 0)
+        if (strcmp(root, name) > 0)
             break;
 
         /* is the mailbox within this root? */

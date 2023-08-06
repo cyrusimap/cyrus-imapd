@@ -377,7 +377,7 @@ EXPORTED int cyrusdb_compar(struct db *db,
                    const char *a, int alen,
                    const char *b, int blen)
 {
-    return db->backend->compar(db->engine, a, alen, b, blen);
+    return db->backend->compar(a, alen, b, blen);
 }
 
 /**********************************************/

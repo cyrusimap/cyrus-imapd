@@ -108,8 +108,6 @@ sub default
             delete_mode => 'delayed',
             # for debugging - see cassandane.ini.example
             debug_command => '@prefix@/utils/gdbtramp %s %d',
-            # everyone should be running this
-            improved_mboxlist_sort => 'yes',
             # default changed, we want to be explicit about it
             unixhierarchysep => 'no',
             # let's hear all about it
