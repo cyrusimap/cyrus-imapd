@@ -275,11 +275,10 @@ int main(int argc, char *argv[])
     struct txn **tidp = NULL;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:MTcnt";
+    static const char short_options[] = "C:Tcnt";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "improved-mboxlist-sort", no_argument, NULL, 'M' },
         { "use-transaction", no_argument, NULL, 'T' },
         { "convert", no_argument, NULL, 'c' }, /* XXX undocumented */
         { "create", no_argument, NULL, 'n' },
@@ -296,9 +295,6 @@ int main(int argc, char *argv[])
             break;
         case 'c':
             db_flags |= CYRUSDB_CONVERT;
-            break;
-        case 'M': /* use "improved_mboxlist_sort" */
-            db_flags |= CYRUSDB_MBOXSORT;
             break;
         case 'n': /* create new */
             db_flags |= CYRUSDB_CREATE;

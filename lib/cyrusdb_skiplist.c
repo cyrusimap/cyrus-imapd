@@ -176,9 +176,6 @@ struct dbengine {
     int open_flags;
     struct txn *current_txn;
     struct timeval starttime;
-
-    /* comparator function to use for sorting */
-    int (*compar) (const char *s1, int l1, const char *s2, int l2);
 };
 
 struct db_list {
@@ -880,7 +877,6 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
     db->fd = -1;
     db->fname = xstrdup(fname);
-    db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare_mbox : compare_signed;
     db->open_flags = (flags & ~CYRUSDB_CREATE);
 
     db->fd = open(fname, O_RDWR, 0644);
@@ -1052,7 +1048,7 @@ static const char *find_node(struct dbengine *db,
 
     for (i = db->curlevel - 1; i >= 0; i--) {
         while ((offset = FORWARD(ptr, i)) &&
-               db->compar(KEY(db->map_base + offset), KEYLEN(db->map_base + offset),
+               compare_signed(KEY(db->map_base + offset), KEYLEN(db->map_base + offset),
                        key, keylen) < 0) {
             /* move forward at level 'i' */
             ptr = db->map_base + offset;
@@ -1101,7 +1097,7 @@ static int myfetch(struct dbengine *db,
 
     ptr = find_node(db, key, keylen, 0);
 
-    if (ptr == db->map_base || db->compar(KEY(ptr), KEYLEN(ptr), key, keylen)) {
+    if (ptr == db->map_base || compare_signed(KEY(ptr), KEYLEN(ptr), key, keylen)) {
         /* failed to find key/keylen */
         r = CYRUSDB_NOTFOUND;
     } else {
@@ -1166,7 +1162,7 @@ static int myforeach(struct dbengine *db,
     while (ptr != db->map_base) {
         /* does it match prefix? */
         if (KEYLEN(ptr) < (uint32_t) prefixlen) break;
-        if (prefixlen && db->compar(KEY(ptr), prefixlen, prefix, prefixlen)) break;
+        if (prefixlen && compare_signed(KEY(ptr), prefixlen, prefix, prefixlen)) break;
 
         if (!goodp ||
             goodp(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr))) {
@@ -1307,7 +1303,7 @@ static int mystore(struct dbengine *db,
     newoffset = tid->logend;
     ptr = find_node(db, key, keylen, updateoffsets);
     if (ptr != db->map_base &&
-        !db->compar(KEY(ptr), KEYLEN(ptr), key, keylen)) {
+        !compare_signed(KEY(ptr), KEYLEN(ptr), key, keylen)) {
 
         if (!overwrite) {
             myabort(db, tid);   /* releases lock */
@@ -1458,7 +1454,7 @@ static int mydelete(struct dbengine *db,
 
     ptr = find_node(db, key, keylen, updateoffsets);
     if (ptr != db->map_base &&
-        !db->compar(KEY(ptr), KEYLEN(ptr), key, keylen)) {
+        !compare_signed(KEY(ptr), KEYLEN(ptr), key, keylen)) {
         /* gotcha */
         offset = ptr - db->map_base;
 
@@ -2022,11 +2018,11 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
                 const char *q = db->map_base + offset;
                 int cmp;
 
-                cmp = db->compar(KEY(ptr), KEYLEN(ptr), KEY(q), KEYLEN(q));
+                cmp = compare_signed(KEY(ptr), KEYLEN(ptr), KEY(q), KEYLEN(q));
                 if (cmp >= 0) {
                     syslog(LOG_ERR,
                             "skiplist inconsistent: %04X: ptr %d is %04X; "
-                            "db->compar() = %d",
+                            "compare_signed() = %d",
                             (unsigned int) (ptr - db->map_base),
                             i,
                             offset, cmp);
@@ -2281,7 +2277,7 @@ static int recovery(struct dbengine *db, int flags)
         if (TYPE(ptr) == ADD) {
             keyptr = find_node(db, KEY(ptr), KEYLEN(ptr), updateoffsets);
             if (keyptr == db->map_base ||
-                db->compar(KEY(ptr), KEYLEN(ptr), KEY(keyptr), KEYLEN(keyptr))) {
+                compare_signed(KEY(ptr), KEYLEN(ptr), KEY(keyptr), KEYLEN(keyptr))) {
                 /* didn't find exactly this node */
                 keyptr = NULL;
             }
@@ -2292,7 +2288,7 @@ static int recovery(struct dbengine *db, int flags)
             p = db->map_base + myoff;
             keyptr = find_node(db, KEY(p), KEYLEN(p), updateoffsets);
             if (keyptr == db->map_base ||
-                db->compar(KEY(p), KEYLEN(p), KEY(keyptr), KEYLEN(keyptr))) {
+                compare_signed(KEY(p), KEYLEN(p), KEY(keyptr), KEYLEN(keyptr))) {
                 /* didn't find exactly this node */
                 keyptr = NULL;
             }
@@ -2464,14 +2460,6 @@ static int recovery(struct dbengine *db, int flags)
     return r;
 }
 
-/* skiplist compar function is set at open */
-static int mycompar(struct dbengine *db, const char *a, int alen,
-                    const char *b, int blen)
-{
-    return db->compar(a, alen, b, blen);
-}
-
-
 EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
 {
     "skiplist",                 /* name */
@@ -2500,5 +2488,5 @@ EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
     &dump,
     &consistent,
     &mycheckpoint,
-    &mycompar
+    &compare_signed
 };
