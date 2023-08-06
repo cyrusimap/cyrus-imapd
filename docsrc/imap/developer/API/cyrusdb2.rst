@@ -143,7 +143,6 @@ returns an opaque database structure
 Flags:
 
 -  CYRUSDB\_CREATE - create the database if it doesn't exist
--  CYRUSDB\_MBOXSORT - sort '.' first, so folder listing is correct
 
 Errors:
 

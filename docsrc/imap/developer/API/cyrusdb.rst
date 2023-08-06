@@ -196,13 +196,6 @@ Accepted flags:
 CYRUSDB_CREATE - if the named database doesn't exist, create a blank
 database.
 
-CYRUSDB_MBOXSORT - use the abomination called improved_mboxlist_sort
-which re-orders a couple of characters to allow "foo.bar" to sort
-before "foo bar", for perfectly good reasons, but we're going to fix it
-a better way. Not every engine supports arbitrary collation, and if
-many engines corrupt horribly if the same database is opened with
-different choices for this flag. Ouch.
-
 CYRUSDB_CONVERT - if set and the database fails to open, attempt a
 magic detection on the file content and try to convert the database to
 the requested backend type before opening it. In-place upgrades! If
@@ -487,7 +480,6 @@ returns an opaque database structure
 Flags:
 
 -  CYRUSDB\_CREATE - create the database if it doesn't exist
--  CYRUSDB\_MBOXSORT - sort '.' first, so folder listing is correct
 
 Errors:
 
