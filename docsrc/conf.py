@@ -45,7 +45,6 @@ extensions = [
     'sphinx.ext.intersphinx',
 ]
 
-extensions.append('sphinxlocal.builders.manpage')
 extensions.append('sphinxlocal.roles.cyrusman')
 extensions.append('sphinxlocal.builders.gitstamp')
 
