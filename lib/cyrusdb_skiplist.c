@@ -229,14 +229,21 @@ static int myinit(const char *dbdir, int myflags)
         struct stat sbuf;
         char cleanfile[1024];
 
+        /* n.b. nothing in cyrus creates this file, but presumably some
+         * init.d or systemd script does
+         */
         snprintf(cleanfile, sizeof(cleanfile), "%s/skipcleanshutdown", dbdir);
 
         /* if we had a clean shutdown, we don't need to run recovery on
-         * everything */
+         * everything, unless we've never previously run it */
         if (stat(cleanfile, &sbuf) == 0) {
-            syslog(LOG_NOTICE, "skiplist: clean shutdown detected, starting normally");
             unlink(cleanfile);
-            goto normal;
+
+            if (stat(sfile, &sbuf) == 0) {
+                syslog(LOG_NOTICE, "skiplist: clean shutdown detected,"
+                                   " starting normally");
+                goto normal;
+            }
         }
 
         syslog(LOG_NOTICE, "skiplist: clean shutdown file missing, updating recovery stamp");
