@@ -637,9 +637,12 @@ sub test_recurring_absolute_trigger
     my $end = $enddt->strftime('%Y%m%dT%H%M%SZ');
 
     # set the trigger to notify us at the start of the event
-    my $triggerdt = $startdt->clone();
-    $triggerdt->add(DateTime::Duration->new(seconds => 0 - $now->offset()));
-    my $trigger = $triggerdt->strftime('%Y%m%dT%H%M%SZ');
+    my $trigger = $startdt->strftime('%Y%m%dT%H%M%SZ');
+
+    # calculate start time for second instance
+    my $recuriddt = $startdt->clone();
+    $recuriddt->add(DateTime::Duration->new(days => 1));
+    my $recurid = $recuriddt->strftime('%Y%m%dT%H%M%SZ');
 
     my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
     my $href = "$CalendarId/$uuid.ics";
@@ -657,10 +660,16 @@ SUMMARY:Simple
 DTSTART:$start
 DTSTAMP:20150806T234327Z
 SEQUENCE:0
-RRULE:FREQ=DAILY
+RRULE:FREQ=DAILY;COUNT=3
 BEGIN:VALARM
 TRIGGER;VALUE=DATE-TIME:$trigger
 ACTION:DISPLAY
+SUMMARY: My alarm
+DESCRIPTION:My alarm has triggered
+END:VALARM
+BEGIN:VALARM
+TRIGGER:PT0S
+ACTION:EMAIL
 SUMMARY: My alarm
 DESCRIPTION:My alarm has triggered
 END:VALARM
@@ -673,13 +682,23 @@ EOF
     # clean notification cache
     $self->{instance}->getnotify();
 
+    # adjust now to UTC
+    $now->add(DateTime::Duration->new(seconds => $now->offset()));
+
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() - 60 );
 
     $self->assert_alarms();
 
+    # fire alarms for first instance
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
 
-    $self->assert_alarms({summary => 'Simple', start => $start});
+    $self->assert_alarms({summary => 'Simple', start => $start, action => 'display'},
+                         {summary => 'Simple', start => $start, action => 'email'});
+
+    # fire alarm for second instance
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 86400 + 60 );
+
+    $self->assert_alarms({summary => 'Simple', start => $recurid, action => 'email'});
 }
 
 sub test_simple_reconstruct
