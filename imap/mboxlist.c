@@ -2380,7 +2380,11 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 
     /* Lock the mailbox if it isn't a remote mailbox */
     if (!isremote) {
-        r = mailbox_open_iwl(name, &mailbox);
+        if (force) {
+            /* Allow deleting moved (XFERed) mailboxes */
+            mbentry->mbtype &= ~MBTYPE_MOVING;
+        }
+        r = mailbox_open_from_mbe(mbentry, &mailbox);
         if (!r) mailbox->silentchanges = silent;
     }
     if (r && !force) goto done;
@@ -2409,7 +2413,8 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         int haschildren = mboxlist_haschildren(name);
         mbentry_t *newmbentry = mboxlist_entry_create();
         newmbentry->name = xstrdupnull(name);
-        newmbentry->mbtype |= haschildren ? MBTYPE_INTERMEDIATE : MBTYPE_DELETED;
+        newmbentry->mbtype = mbentry->mbtype |
+            (haschildren ? MBTYPE_INTERMEDIATE : MBTYPE_DELETED);
         if (mailbox) {
             newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
             newmbentry->uidvalidity = mailbox->i.uidvalidity;
