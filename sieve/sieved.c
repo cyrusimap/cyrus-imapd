@@ -604,16 +604,16 @@ static void dump2(bytecode_input_t *d, int bc_len)
                         printf("\n\tCREATE(%d)", cmd.u.f.create);
 
                         if (cmd.type >= B_FILEINTO_SPECIALUSE) {
-                            print_string(" SPECIALUSE", cmd.u.f.specialuse);
+                            print_string(" SPECIALUSE", cmd.u.f.t.specialuse);
 
                             if (cmd.type >= B_FILEINTO) {
-                                print_string(" MAILBOXID", cmd.u.f.mailboxid);
+                                print_string(" MAILBOXID", cmd.u.f.t.mailboxid);
                             }
                         }
                     }
                 }
             }
-            print_string(" FOLDER", cmd.u.f.folder);
+            print_string(" FOLDER", cmd.u.f.t.folder);
             break;
 
 
@@ -732,19 +732,19 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 print_string(" HANDLE", cmd.u.v.handle);
 
                 if (cmd.type >= B_VACATION_FCC_ORIG) {
-                    print_string("\n\tFCC", cmd.u.v.fcc.folder);
+                    print_string("\n\tFCC", cmd.u.v.fcc.t.folder);
 
-                    if (cmd.u.v.fcc.folder) {
+                    if (cmd.u.v.fcc.t.folder) {
                         printf(" CREATE(%d)", cmd.u.v.fcc.create);
                         print_stringlist(" FLAGS", cmd.u.v.fcc.flags);
 
                         if (cmd.type >= B_VACATION_FCC_SPLUSE) {
                             print_string("\n\tSPECIALUSE",
-                                         cmd.u.v.fcc.specialuse);
+                                         cmd.u.v.fcc.t.specialuse);
 
                             if (cmd.type >= B_VACATION) {
                                 print_string(" MAILBOXID",
-                                             cmd.u.v.fcc.mailboxid);
+                                             cmd.u.v.fcc.t.mailboxid);
                             }
                         }
                     }
@@ -823,14 +823,14 @@ static void dump2(bytecode_input_t *d, int bc_len)
             printf("SNOOZE");
             if (cmd.type >= B_SNOOZE_TZID) {
                 if (cmd.type >= B_SNOOZE) {
-                    print_string(" MAILBOX", cmd.u.sn.f.folder);
-                    print_string(" MAILBOXID", cmd.u.sn.f.mailboxid);
-                    print_string(" SPECIALUSE", cmd.u.sn.f.specialuse);
+                    print_string(" MAILBOX", cmd.u.sn.f.t.folder);
+                    print_string(" MAILBOXID", cmd.u.sn.f.t.mailboxid);
+                    print_string(" SPECIALUSE", cmd.u.sn.f.t.specialuse);
                     printf(" CREATE(%d)", cmd.u.sn.f.create);
                 }
                 else {
                     print_string(cmd.u.sn.is_mboxid ? " MAILBOXID" : " MAILBOX",
-                                 cmd.u.sn.f.folder);
+                                 cmd.u.sn.f.t.folder);
                 }
 
                 print_string(" TZID", cmd.u.sn.tzid);
@@ -859,6 +859,15 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_string(" OUTCOME", cmd.u.imip.outcome_var);
             print_string(" ERRSTR", cmd.u.imip.errstr_var);
             break;
+
+
+        case B_IKEEP_TARGET:
+            printf("IMPLICIT_KEEP_TARGET");
+            print_string(" MAILBOXID", cmd.u.ikt.mailboxid);
+            print_string(" SPECIALUSE", cmd.u.ikt.specialuse);
+            print_string(" FOLDER", cmd.u.ikt.folder);
+            break;
+
 
         default:
             printf("%d (NOT AN OP)\n", cmd.type);
@@ -1055,22 +1064,22 @@ static void generate_fileinto(struct Fileinto *f,
 {
     if (is_fcc) {
         /* Put :fcc first */
-        generate_string(":fcc", f->folder, buf);
+        generate_string(":fcc", f->t.folder, buf);
         *requires |= SIEVE_CAPA_FCC;
     }
     generate_switch_capa(":copy", f->copy,
                          SIEVE_CAPA_COPY, requires, buf);
     generate_switch_capa(":create", f->create,
                          SIEVE_CAPA_MAILBOX, requires, buf);
-    generate_string_capa(":specialuse", f->specialuse,
+    generate_string_capa(":specialuse", f->t.specialuse,
                          SIEVE_CAPA_SPECIAL_USE, requires, buf);
-    generate_string_capa(":mailboxid", f->mailboxid,
+    generate_string_capa(":mailboxid", f->t.mailboxid,
                          SIEVE_CAPA_MAILBOXID, requires, buf);
     generate_stringlist_capa(":flags", f->flags,
                              SIEVE_CAPA_IMAP4FLAGS, requires, buf);
     if (!is_fcc) {
         /* folder is positional and MUST be last for fileinto */
-        generate_string(NULL, f->folder, buf);
+        generate_string(NULL, f->t.folder, buf);
     }
 }
 
@@ -1538,7 +1547,7 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             generate_string(":from", cmd.u.v.from, buf);
             generate_string(":handle", cmd.u.v.handle, buf);
             generate_stringlist(":addresses", cmd.u.v.addresses, buf);
-            if (cmd.u.v.fcc.folder) {
+            if (cmd.u.v.fcc.t.folder) {
                 INSERT_FOLD(indent + 4, buf);
                 generate_fileinto(&cmd.u.v.fcc, 1, requires, buf);
             }
@@ -1615,15 +1624,15 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
         case B_SNOOZE:
             *requires |= SIEVE_CAPA_SNOOZE;
             if (cmd.u.sn.is_mboxid) {
-                cmd.u.sn.f.mailboxid = cmd.u.sn.f.folder;
-                cmd.u.sn.f.folder = NULL;
+                cmd.u.sn.f.t.mailboxid = cmd.u.sn.f.t.folder;
+                cmd.u.sn.f.t.folder = NULL;
             }
 
             generate_token("snooze", indent, buf);
-            generate_string(":mailbox", cmd.u.sn.f.folder, buf);
-            generate_string_capa(":mailboxid", cmd.u.sn.f.mailboxid,
+            generate_string(":mailbox", cmd.u.sn.f.t.folder, buf);
+            generate_string_capa(":mailboxid", cmd.u.sn.f.t.mailboxid,
                                  SIEVE_CAPA_MAILBOXID, requires, buf);
-            generate_string_capa(":specialuse", cmd.u.sn.f.specialuse,
+            generate_string_capa(":specialuse", cmd.u.sn.f.t.specialuse,
                                  SIEVE_CAPA_SPECIAL_USE, requires, buf);
             generate_switch_capa(":create", cmd.u.sn.f.create,
                                  SIEVE_CAPA_MAILBOX, requires, buf);
@@ -1658,6 +1667,16 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             generate_string(":calendarid", cmd.u.imip.calendarid, buf);
             generate_string(":outcome", cmd.u.imip.outcome_var, buf);
             generate_string(":errstr", cmd.u.imip.errstr_var, buf);
+            break;
+
+        case B_IKEEP_TARGET:
+            *requires |= SIEVE_CAPA_IKEEP_TARGET;
+            generate_token("implicit_keep_target", indent, buf);
+            generate_string_capa(":mailboxid", cmd.u.ikt.mailboxid,
+                         SIEVE_CAPA_MAILBOXID, requires, buf);
+            generate_string_capa(":specialuse", cmd.u.ikt.specialuse,
+                                 SIEVE_CAPA_SPECIAL_USE, requires, buf);
+            generate_string(NULL, cmd.u.ikt.folder, buf);
             break;
 
         default:

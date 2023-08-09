@@ -159,13 +159,17 @@ struct Testlist {
     testlist_t *next;
 };
 
-struct Fileinto {
-    strarray_t *flags;
+struct TargetMailbox {
     char *folder;
     char *specialuse;
+    char *mailboxid;
+};
+
+struct Fileinto {
+    struct TargetMailbox t;
+    strarray_t *flags;
     int copy;
     int create;
-    char *mailboxid;
 };
 
 struct Commandlist {
@@ -262,6 +266,7 @@ struct Commandlist {
             char *outcome_var;
             char *errstr_var;
         } imip;
+        struct TargetMailbox ikt; /* it's an implicit keep target */
     } u;
     struct Commandlist *next;
 

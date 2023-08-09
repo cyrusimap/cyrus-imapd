@@ -7460,4 +7460,6 @@ EOF
     $self->check_messages({ 1 => $msg }, check_guid => 0);
 }
 
+use Cassandane::Tiny::Loader 'tiny-tests/Sieve';
+
 1;

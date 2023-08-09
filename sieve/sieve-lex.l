@@ -397,6 +397,11 @@ ws              [ \t]+
 <INITIAL>:outcome             return OUTCOME;
 <INITIAL>:errstr              return ERRSTR;
 
+    /* vnd.cyrus.implicit_keep_target */
+<INITIAL>implicit_keep_target  return IKEEP_TARGET;
+    /*   :mailboxid            defined in 'mailboxid'   */
+    /*   :specialuse           defined in 'special-use' */
+
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
 <INITIAL>[ \t\n\r] ;          /* ignore whitespace */

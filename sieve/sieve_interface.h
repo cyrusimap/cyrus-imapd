@@ -153,7 +153,7 @@ typedef struct sieve_snooze_context {
     const char *awaken_mbox;
     const char *awaken_mboxid;
     const char *awaken_spluse;
-    int do_create : 1;
+    unsigned do_create : 1;
     strarray_t *imapflags;
     strarray_t *addflags;
     strarray_t *removeflags;
@@ -167,13 +167,15 @@ typedef struct sieve_fileinto_context {
     const char *mailbox;
     const char *specialuse;
     strarray_t *imapflags;
-    int do_create :1;
+    unsigned do_create : 1;
+    unsigned ikeep_target : 1;
     const char *mailboxid;
     struct buf *headers;
     char *resolved_mailbox;
 } sieve_fileinto_context_t;
 
 typedef struct sieve_keep_context {
+    unsigned implicit : 1;
     strarray_t *imapflags;
     struct buf *headers;
     char *resolved_mailbox;

@@ -144,8 +144,9 @@ typedef union
  *                      and Fcc per draft-ietf-extra-sieve-mailboxid-01
  * version 0x1E scripts store [current]date :zone argument as a string
  * version 0x1F scripts implemented vnd.cyrus.imip
- */
-#define BYTECODE_VERSION 0x1F
+ * version 0x20 scripts implemented vnd.cyrus.implicit_keep_target
+*/
+#define BYTECODE_VERSION 0x20
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -433,6 +434,12 @@ enum bytecode {
                                    <calendar-id: string>
                                    <outcome-var: string>
                                    <errstr-var: string>                        */
+
+    B_IKEEP_TARGET,             /* require ["vnd.cyrus.implicit_keep_target",
+                                            "special-use", "mailboxid"]
+
+                                   <mailbox-id: string> <special-use: string>
+                                   <mailbox: string>                           */
 
     /*****  insert new actions above this line  *****/
     B_ILLEGAL_VALUE             /* any value >= this code is illegal */
