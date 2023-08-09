@@ -593,6 +593,12 @@ static int process_alarm_cb(icalcomponent *comp,
         if (check <= data->last) {
             continue;
         }
+        else if (!is_duration &&
+                 icaltime_compare(recurid, icalcomponent_get_dtstart(comp)) > 0) {
+            /* alarms with absolute triggers can only fire once */
+            syslog(LOG_DEBUG, "XXX  absolute trigger - skipping recurrence");
+            continue;
+        }
 
         if (check <= data->now && !data->dryrun) {
             prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
@@ -629,12 +635,6 @@ static int process_alarm_cb(icalcomponent *comp,
             time_t next = data->now + 86400*30;
             if (!data->nextcheck || next < data->nextcheck)
                 data->nextcheck = next;
-            return 0;
-        }
-        else if (!is_duration) {
-            /* alarms with absolute triggers can only fire once,
-               so stop recurrence expansion */
-            syslog(LOG_DEBUG, "XXX  absolute trigger - stop recurrence expansion");
             return 0;
         }
     }
