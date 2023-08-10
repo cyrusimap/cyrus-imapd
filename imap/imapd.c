@@ -3423,7 +3423,10 @@ static void cmd_id(char *tag)
                 buf_printf(&logbuf, "\"%s\"", val);
         }
 
-        syslog(LOG_INFO, "client id sessionid=<%s>:%s", session_id(), buf_cstring(&logbuf));
+        syslog(LOG_INFO, "client id sessionid=<%s> userid=<%s>:%s",
+                         session_id(),
+                         imapd_userid ? imapd_userid : "",
+                         buf_cstring(&logbuf));
         buf_free(&logbuf);
     }
 
