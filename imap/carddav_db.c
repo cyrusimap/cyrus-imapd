@@ -1498,25 +1498,9 @@ EXPORTED int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
                              const char *userid, struct auth_state *authstate,
                              int ignorequota, uint32_t oldsize)
 {
-    vcardtimetype now = vcardtime_current_utc_time();
-    vcardproperty *prop;
-
-    /* set the REVision time */
-    prop = vcardcomponent_get_first_property(vcard, VCARD_REV_PROPERTY);
-    if (prop) {
-        vcardproperty_set_rev(prop, now);
-    }
-    else {
-        prop = vcardproperty_new_rev(now);
-        vcardcomponent_add_property(vcard, prop);
-    }
-
     /* get important properties */
-    prop = vcardcomponent_get_first_property(vcard, VCARD_UID_PROPERTY);
-    const char *uid = vcardproperty_get_uid(prop);
-
-    prop = vcardcomponent_get_first_property(vcard, VCARD_FN_PROPERTY);
-    const char *fullname = vcardproperty_get_fn(prop);
+    const char *uid = vcardcomponent_get_uid(vcard);
+    const char *fullname = vcardcomponent_get_fn(vcard);
 
     /* serialize the card */
     struct buf *buf = vcard_as_buf_x(vcard);
