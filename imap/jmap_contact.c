@@ -10628,6 +10628,17 @@ static int _card_set_create(jmap_req_t *req,
     media = json_deep_copy(json_object_get(jcard, "media"));
     keys = json_deep_copy(json_object_get(jcard, "cryptoKeys"));
 
+    if (!json_object_get(jcard, "created")) {
+        /* set the CREATED time */
+        char datestr[ISO8601_DATETIME_MAX+1] = "";
+        time_t now = time(NULL);
+
+        time_to_iso8601(now, datestr, sizeof(datestr), 1);
+
+        json_object_set_new(jcard, "created", json_string(datestr));
+        json_object_set_new(item, "created", json_string(datestr));
+    }
+
     const char *name = NULL;
     jmap_readprop(json_object_get(jcard, "name"),
                   "full", 0, invalid, "s", &name);
@@ -10845,6 +10856,9 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                                            IGNORE_VCARD_VERSION | IGNORE_DERIVED_PROPS);
     vcardcomponent_free(vcard);
 
+    /* Remove old "updated" */
+    json_object_del(old_obj, "updated");
+
     /* Apply the patch as provided */
     json_t *new_obj = jmap_patchobject_apply(old_obj, jcard, invalid, 0);
 
@@ -10865,6 +10879,17 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                                  0);
 
     *item = json_object();
+
+    if (!json_object_get(new_obj, "updated")) {
+        /* set the REVision time */
+        char datestr[ISO8601_DATETIME_MAX+1] = "";
+        time_t now = time(NULL);
+
+        time_to_iso8601(now, datestr, sizeof(datestr), 1);
+
+        json_object_set_new(new_obj, "updated", json_string(datestr));
+        json_object_set_new(*item, "updated", json_string(datestr));
+    }
 
     r = _jscard_to_vcard(req, cdata, mailbox_name(*mailbox), vcard,
                          new_obj, &annots, &blobs, errors);

@@ -53,6 +53,7 @@ sub test_card_set_create_basic
     ]);
 
     $self->assert_not_null($res->[0][1]{created}{1});
+    $self->assert_not_null($res->[0][1]{created}{1}{id});
 
     $res = $carddav->Request('GET', $href, '',
                              'Accept' => 'text/vcard; version=4.0');
