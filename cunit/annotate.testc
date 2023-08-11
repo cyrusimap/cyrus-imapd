@@ -2151,6 +2151,8 @@ static void test_canon_value(void)
         ealist = NULL;
     }
 
+    buf_free(&val);
+
     annotate_state_abort(&astate);
     mailbox_close(&mailbox);
     annotatemore_close();
