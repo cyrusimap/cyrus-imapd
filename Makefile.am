@@ -702,7 +702,11 @@ cunit/registers.h: $(CUNIT_PROJECT)
 	$(AM_V_GEN)$(CUNIT_PL) --generate-register-function $@
 
 # To run under Valgrind, do: make VG=1 check
-VALGRIND = libtool --mode=execute valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp
+VALGRIND = libtool --mode=execute valgrind \
+            --tool=memcheck \
+            --leak-check=full \
+            --suppressions=vg.supp \
+            --error-exitcode=75
 
 check-local:
 	@echo "Running unit tests"
@@ -729,7 +733,7 @@ check-local:
 check-discrete: cunit/unit
 	@echo "Running unit tests, one at a time"
 	@vg= ; \
-		test -z "$$VG" || vg="$(VALGRIND) --quiet --error-exitcode=75 --log-fd=3" ; \
+		test -z "$$VG" || vg="$(VALGRIND) --quiet --log-fd=3" ; \
 		cd cunit ; \
 		fails=0 ; \
 		tests=0 ; \
