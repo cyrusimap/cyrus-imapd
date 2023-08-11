@@ -8396,14 +8396,16 @@ static void _jsparam_to_vcard(struct jmap_parser *parser,
         if (json_is_string(jprop)) {
             const char *val = json_string_value(jprop);
 
-            if (!strcasecmp("low", val)) {
-                val = "beginner";
-            }
-            else if (!strcasecmp("medium", val)) {
-                val = "average";
-            }
-            else if (!strcasecmp("high", val)) {
-                val = "expert";
+            if (vcardproperty_isa(prop) == VCARD_EXPERTISE_PROPERTY) {
+                if (!strcasecmp("low", val)) {
+                    val = "beginner";
+                }
+                else if (!strcasecmp("medium", val)) {
+                    val = "average";
+                }
+                else if (!strcasecmp("high", val)) {
+                    val = "expert";
+                }
             }
 
             param = new = vcardparameter_new(VCARD_LEVEL_PARAMETER);

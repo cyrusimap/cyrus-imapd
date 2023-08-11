@@ -49,7 +49,7 @@ sub test_card_set_create_personal
                             '@type' => 'PersonalInfo',
                             kind => 'hobby',
                             value => 'reading',
-                            level => 'high',
+                            level => 'low',
                             listAs => 1
                         },
                         'PERSINFO-4'  => {
@@ -87,11 +87,11 @@ sub test_card_set_create_personal
     my $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
-    $self->assert_matches(qr|EXPERTISE;PROP-ID=PERSINFO-1;LEVEL=TRUE;INDEX=2:chinese literature|, $card);
+    $self->assert_matches(qr|EXPERTISE;PROP-ID=PERSINFO-1;LEVEL=BEGINNER;INDEX=2:chinese literature|, $card);
     $self->assert_matches(qr|EXPERTISE;PROP-ID=PERSINFO-2;LEVEL=EXPERT;INDEX=1:chemistry|, $card);
-    $self->assert_matches(qr|HOBBY;PROP-ID=PERSINFO-3;LEVEL=EXPERT;INDEX=1:reading|, $card);
-    $self->assert_matches(qr|HOBBY;PROP-ID=PERSINFO-4;LEVEL=EXPERT;INDEX=2:sewing|, $card);
-    $self->assert_matches(qr|INTEREST;PROP-ID=PERSINFO-5;LEVEL=FALSE;INDEX=1:r&b music|, $card);
-    $self->assert_matches(qr|INTEREST;PROP-ID=PERSINFO-6;LEVEL=EXPERT;INDEX=2:rock&roll music|, $card);
+    $self->assert_matches(qr|HOBBY;PROP-ID=PERSINFO-3;LEVEL=LOW;INDEX=1:reading|, $card);
+    $self->assert_matches(qr|HOBBY;PROP-ID=PERSINFO-4;LEVEL=HIGH;INDEX=2:sewing|, $card);
+    $self->assert_matches(qr|INTEREST;PROP-ID=PERSINFO-5;LEVEL=MEDIUM;INDEX=1:r&b music|, $card);
+    $self->assert_matches(qr|INTEREST;PROP-ID=PERSINFO-6;LEVEL=HIGH;INDEX=2:rock&roll music|, $card);
     $self->assert_does_not_match(qr|JSPROP|, $card);
 }
