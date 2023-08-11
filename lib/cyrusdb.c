@@ -395,9 +395,16 @@ EXPORTED void cyrusdb_init(void)
     char dbdir[1024];
     const char *confdir = libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
     int initflags = libcyrus_config_getint(CYRUSOPT_DB_INIT_FLAGS);
+    struct stat statbuf;
 
     strcpy(dbdir, confdir);
     strcat(dbdir, FNAME_DBDIR);
+
+    if (stat(dbdir, &statbuf)) {
+        char *path = strconcat(dbdir, "/dummy", NULL);
+        cyrus_mkdir(path, 0755 /* n.b. mode is unused */);
+        free(path);
+    }
 
     for (i=0; _backends[i]; i++) {
         r = (_backends[i])->init(dbdir, initflags);
