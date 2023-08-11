@@ -8353,10 +8353,12 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
 static void _jsparam_to_vcard(struct jmap_parser *parser,
                               const char *key, json_t *jval,
                               vcardproperty *prop,
-                              vcardparameter_kind pkind)
+                              vcardparameter_kind pkind,
+                              unsigned *groupnum)
 {
     json_t *jprop = json_object_get(jval, key);
     vcardparameter *new = NULL, *param = NULL;
+    static struct buf buf = BUF_INITIALIZER;
 
     if (!jprop) return;
 
@@ -8413,6 +8415,26 @@ static void _jsparam_to_vcard(struct jmap_parser *parser,
         }
         break;
 
+    case VCARD_X_PARAMETER:
+        /* label translates to a grouped X-ABLabel property */
+        if (json_is_string(jprop)) {
+            vcardproperty *label = vcardproperty_new_x(json_string_value(jprop));
+            const char *group;
+
+            vcardproperty_set_x_name(label, VCARD_APPLE_LABEL_PROPERTY);
+            vcardcomponent_add_property(vcardproperty_get_parent(prop), label);
+
+            buf_setcstr(&buf, vcardproperty_get_property_name(prop));
+            buf_truncate(&buf, MIN(5, buf_len(&buf)));
+            buf_printf(&buf, "%u", (*groupnum)++);
+            group = buf_lcase(&buf);
+
+            vcardproperty_set_group(label, group);
+            vcardproperty_set_group(prop, group);
+            jprop = NULL;
+        }
+        break;
+
     default:
         if (json_is_string(jprop)) {
             param = new = vcardparameter_new(pkind);
@@ -8439,7 +8461,7 @@ struct param_prop_t {
 
 struct param_prop_t phone_param_props[] = {
     { "features", VCARD_TYPE_PARAMETER  },
-    { "label",    VCARD_LABEL_PARAMETER },
+    { "label",    VCARD_X_PARAMETER     },
     { "pref",     VCARD_PREF_PARAMETER  },
     { "contexts", VCARD_TYPE_PARAMETER  },
     { NULL,       0                     }
@@ -8452,7 +8474,7 @@ struct param_prop_t phone_param_props[] = {
 struct param_prop_t directories_param_props[] = {
     { "listAs",    VCARD_INDEX_PARAMETER     },
     { "mediaType", VCARD_MEDIATYPE_PARAMETER },
-    { "label",     VCARD_LABEL_PARAMETER     },
+    { "label",     VCARD_X_PARAMETER         },
     { "pref",      VCARD_PREF_PARAMETER      },
     { "contexts",  VCARD_TYPE_PARAMETER      },
     { NULL,       0                          }
@@ -8471,7 +8493,8 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
                                   const char *id, const char *type, prop_cb_t cb,
                                   struct param_prop_t param_props[],
                                   unsigned flags, const char *lang,
-                                  vcardcomponent *card, void *rock)
+                                  vcardcomponent *card, void *rock,
+                                  unsigned *groupnum)
 {
     vcardproperty *prop = NULL;
     const char *key;
@@ -8490,6 +8513,8 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
     if (prop) {
         struct param_prop_t *pprop;
 
+        vcardcomponent_add_property(card, prop);
+
         if (flags & WANT_PROPID_FLAG) {
             vcardproperty_add_parameter(prop, vcardparameter_new_propid(id));
         }
@@ -8501,10 +8526,9 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
         }
 
         for (pprop = param_props; pprop && pprop->key; pprop++) {
-            _jsparam_to_vcard(parser, pprop->key, obj, prop, pprop->kind);
+            _jsparam_to_vcard(parser, pprop->key, obj, prop, pprop->kind, groupnum);
         }
 
-        vcardcomponent_add_property(card, prop);
         r = 1;
     }
 
@@ -8518,6 +8542,7 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
 
 struct l10n_rock {
     unsigned is_multi: 1;
+    unsigned *groupnum;
     union {
         unsigned (*prop_cb)(struct jmap_parser *, json_t *,
                             struct l10n_by_id_t *, vcardcomponent *);
@@ -8561,7 +8586,8 @@ static unsigned _jsl10n_to_vcard(struct jmap_parser *parser, json_t *obj,
                                            rock->u.multi.param_props,
                                            WANT_ALTID_FLAG,
                                            this_lang, card,
-                                           rock->u.multi.rock);
+                                           rock->u.multi.rock,
+                                           rock->groupnum);
                 }
                 else {
                     struct l10n_by_id_t my_l10n = { l10n->deflang, lang, NULL };
@@ -8603,10 +8629,10 @@ static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
                                        struct param_prop_t param_props[],
                                        struct l10n_by_id_t *l10n,
                                        vcardcomponent *card, void *rock)
-
 {
+    unsigned groupnum = 0;
     struct l10n_rock lrock =
-        { 1, { .multi = { type, prop_cb, param_props, rock}} };
+        { 1, &groupnum, { .multi = { type, prop_cb, param_props, rock}} };
     const char *id;
     json_t *obj;
     void *tmp;
@@ -8633,7 +8659,7 @@ static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
         /* Add base object to Card */
         r |= (r1 = _jsobject_to_card(parser, obj, id, type, prop_cb,
                                      param_props, flags, l10n->lang,
-                                     card, rock));
+                                     card, rock, &groupnum));
 
         json_object_del(jval, id);
         jmap_parser_pop(parser);
@@ -8890,7 +8916,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
                                  struct l10n_by_id_t *l10n,
                                  vcardcomponent *card)
 {
-    struct l10n_rock lrock = { 0, { .prop_cb = &_jsname_to_vcard } };
+    struct l10n_rock lrock = { 0, NULL, { .prop_cb = &_jsname_to_vcard } };
     vcardstructuredtype n = { VCARD_NUM_N_FIELDS, { 0 } };
     vcardstrarray *sortas = NULL;
     vcardproperty *prop = NULL;
@@ -9191,7 +9217,7 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
                                   json_t *jval, struct l10n_by_id_t *l10n,
                                   vcardcomponent *card)
 {
-    struct l10n_rock lrock = { 0, { .prop_cb = &_jsspeak_to_vcard } };
+    struct l10n_rock lrock = { 0, NULL, { .prop_cb = &_jsspeak_to_vcard } };
     json_t *jprop;
     const char *key;
     int r = 0;
@@ -10456,7 +10482,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
         }
         else if (!strcmp(mykey, "personalInfo")) {
             struct param_prop_t personal_props[] = {
-                { "label",  VCARD_LABEL_PARAMETER },
+                { "label",  VCARD_X_PARAMETER     },
                 { "level",  VCARD_LEVEL_PARAMETER },
                 { "listAs", VCARD_INDEX_PARAMETER },
                 { NULL,     0                     }
