@@ -9392,6 +9392,18 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
         user = NULL;
     }
 
+    jprop = json_object_get(obj, "vCardName");
+    if (json_is_string(jprop)) {
+        kind = vcardproperty_string_to_kind(json_string_value(jprop));
+
+        if (kind == VCARD_NO_PROPERTY) {
+            jmap_parser_invalid(parser, "vCardName");
+        }
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "vCardName");
+    }
+
     if (val) {
         prop = vcardproperty_new(kind);
         vcardproperty_set_value_from_string(prop, val, val_kind);
@@ -9408,6 +9420,7 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
     json_object_del(obj, "service");
     json_object_del(obj, "user");
     json_object_del(obj, "uri");
+    json_object_del(obj, "vCardName");
 
     return prop;
 }
