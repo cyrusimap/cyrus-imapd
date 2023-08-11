@@ -663,7 +663,6 @@ sub _build_skeleton
         'conf',
         'conf/certs',
         'conf/cores',
-        'conf/db',
         'conf/sieve',
         'conf/socket',
         'conf/proc',
