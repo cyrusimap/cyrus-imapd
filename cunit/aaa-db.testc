@@ -1579,7 +1579,6 @@ static int set_up(void)
 {
     char buf[PATH_MAX];
     static const char * const reldirs[] = {
-        "db",
         "conf",
         "conf/lock/",
         "conf/lock/user",
