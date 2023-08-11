@@ -65,6 +65,7 @@ sub test_card_set_create_phones
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
     $self->assert_matches(qr/TEL;VALUE=URI;PROP-ID=tel0;TYPE=VOICE,HOME;PREF=1:tel:\+1-555-555-5555;ext=55/, $card);
-    $self->assert_matches(qr/TEL;VALUE=URI;PROP-ID=tel3;LABEL=foo;TYPE=WORK:tel:\+1-201-555-0123/, $card);
+    $self->assert_matches(qr/tel0.TEL;VALUE=URI;PROP-ID=tel3;TYPE=WORK:tel:\+1-201-555-0123/, $card);
+    $self->assert_matches(qr/tel0.X-ABLabel:foo/, $card);
     $self->assert_does_not_match(qr|JSPROP|, $card);
 }
