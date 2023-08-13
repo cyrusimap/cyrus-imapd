@@ -96,22 +96,16 @@ struct db {
 
 static struct cyrusdb_backend *cyrusdb_fromname(const char *name)
 {
-    int i;
-    struct cyrusdb_backend *db = NULL;
-
-    for (i = 0; _backends[i]; i++) {
+    for (int i = 0; _backends[i]; i++) {
         if (!strcmp(_backends[i]->name, name)) {
-            db = _backends[i]; break;
+            return _backends[i];
         }
     }
-    if (!db) {
-        char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
-                 "cyrusdb backend %s not supported", name);
-        fatal(errbuf, EX_CONFIG);
-    }
 
-    return db;
+    char errbuf[1024];
+    snprintf(errbuf, sizeof(errbuf),
+             "cyrusdb backend %s not supported", name);
+    fatal(errbuf, EX_CONFIG);
 }
 
 static int _myopen(const char *backend, const char *fname,
