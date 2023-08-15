@@ -8776,6 +8776,39 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
             goto fail;
         }
     }
+    else {
+        /* Bubble sort the components by kind
+           (for building backward-compat fields) */
+        size_t j;
+
+        for (i = 0; i < size - 1; i++) {
+            int swap = 0;
+
+            for (j = 0; j < size - i - 1; j++) {
+                json_t *comp1 = json_array_get(comps, j);
+                json_t *comp2 = json_array_get(comps, j+1);
+                const char *kind1 =
+                    json_string_value(json_object_get(comp1, "kind"));
+                const char *kind2 =
+                    json_string_value(json_object_get(comp2, "kind"));
+                const struct comp_kind *ckind1 =
+                    kind1 ? _field_name_to_kind(kind1, comp_kinds) : NULL;
+                const struct comp_kind *ckind2 =
+                    kind2 ? _field_name_to_kind(kind2, comp_kinds) : NULL;
+
+                if (!ckind1 || !ckind2) break;
+
+                if (ckind1 > ckind2) {
+                    json_t *tmp = json_copy(comp1);
+                    json_array_set(comps, j, comp2);
+                    json_array_set_new(comps, j+1, tmp);
+                    swap = 1;
+                }
+            }
+
+            if (!swap) break;
+        }
+    }
 
     for (i = 0; i < size; i++) {
         json_t *comp = json_array_get(comps, i);
