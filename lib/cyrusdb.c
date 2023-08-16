@@ -388,8 +388,6 @@ EXPORTED int cyrusdb_compar(struct db *db,
                    const char *a, int alen,
                    const char *b, int blen)
 {
-    if (!db->backend->compar)
-        return bsearch_ncompare_raw(a, alen, b, blen);
     return db->backend->compar(db->engine, a, alen, b, blen);
 }
 
