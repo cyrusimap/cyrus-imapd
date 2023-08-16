@@ -1726,6 +1726,8 @@ static void test_appendv(void)
     s = strarray_appendv(&sa, "ipsum");
     CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 1));
     CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    strarray_fini(&sa);
 }
 
 static void test_addv(void)
@@ -1744,6 +1746,8 @@ static void test_addv(void)
     s = strarray_addv(&sa, "lorem");
     CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
     CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    strarray_fini(&sa);
 }
 
 static void test_add_casev(void)
@@ -1762,6 +1766,8 @@ static void test_add_casev(void)
     s = strarray_add_casev(&sa, "lOREm");
     CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
     CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    strarray_fini(&sa);
 }
 
 /* vim: set ft=c: */
