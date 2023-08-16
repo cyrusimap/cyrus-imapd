@@ -8309,6 +8309,7 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
                                     vcardproperty_kind pkind)
 {
     struct buf buf = BUF_INITIALIZER;
+    vcardstrarray *text = NULL;
     const char *id;
     json_t *obj;
     int r = 0;
@@ -8326,39 +8327,37 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
 
         if (!json_is_true(obj)) {
             jmap_parser_invalid(parser, id);
-            break;
         }
-
-        vcardproperty *prop = vcardproperty_new(pkind);
-
-        if (vcardproperty_is_multivalued(pkind)) {
-            vcardstrarray *text = vcardstrarray_new(1);
-
+        else if (vcardproperty_is_multivalued(pkind)) {
+            if (!text) text = vcardstrarray_new(1);
             vcardstrarray_append(text, id);
-            vcardproperty_set_value(prop, vcardvalue_new_textlist(text));
         }
-        else if (pkind == VCARD_MEMBER_PROPERTY) {
+        else {
+            vcardproperty *prop = vcardproperty_new(pkind);
+
             buf_reset(&buf);
-            if (strncmpsafe("urn:uuid:", id, 9)) {
+
+            if (pkind == VCARD_MEMBER_PROPERTY &&
+                strncmpsafe("urn:uuid:", id, 9)) {
                 buf_setcstr(&buf, "urn:uuid:");
             }
 
             buf_appendcstr(&buf, id);
             vcardproperty_set_value_from_string(prop, buf_cstring(&buf), "NO");
-        }
-        else {
-            vcardproperty_set_value_from_string(prop, id, "NO");
-        }
 
-        vcardcomponent_add_property(card, prop);
-        r = 1;
+            vcardcomponent_add_property(card, prop);
+            r = 1;
+        }
 
         jmap_parser_pop(parser);
     }
 
-    if (json_object_size(jval)) {
-        /* Errored out of loop */
-        jmap_parser_pop(parser);
+    if (text) {
+        vcardproperty *prop = vcardproperty_new(pkind);
+
+        vcardproperty_set_value(prop, vcardvalue_new_textlist(text));
+        vcardcomponent_add_property(card, prop);
+        r = 1;
     }
 
     jmap_parser_pop(parser);
