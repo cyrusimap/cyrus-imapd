@@ -8518,7 +8518,7 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
         if (flags & WANT_PROPID_FLAG) {
             vcardproperty_add_parameter(prop, vcardparameter_new_propid(id));
         }
-        else if (flags & WANT_ALTID_FLAG) {
+        if (flags & WANT_ALTID_FLAG) {
             vcardproperty_add_parameter(prop, vcardparameter_new_altid(id));
         }
         if (lang && *lang) {
@@ -8578,13 +8578,13 @@ static unsigned _jsl10n_to_vcard(struct jmap_parser *parser, json_t *obj,
             if (altobj) {
                 if (rock->is_multi) {
                     const char *this_lang =
-                        strcasecmp(l10n->deflang, lang) ? lang : NULL;
+                        strcasecmpsafe(l10n->deflang, lang) ? lang : NULL;
 
                     r |= _jsobject_to_card(parser, altobj, id,
                                            rock->u.multi.type,
                                            rock->u.multi.prop_cb,
                                            rock->u.multi.param_props,
-                                           WANT_ALTID_FLAG,
+                                           WANT_PROPID_FLAG | WANT_ALTID_FLAG,
                                            this_lang, card,
                                            rock->u.multi.rock,
                                            rock->groupnum);
@@ -8653,7 +8653,7 @@ static unsigned _jsmultiobject_to_card(struct jmap_parser *parser, json_t *jval,
         r |= _jsl10n_to_vcard(parser, obj, key, id, l10n, card, &lrock);
 
         if (l10n->lang) {
-            flags = WANT_ALTID_FLAG;
+            flags |= WANT_ALTID_FLAG;
         }
 
         /* Add base object to Card */
