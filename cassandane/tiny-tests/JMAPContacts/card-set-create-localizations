@@ -139,16 +139,16 @@ sub test_card_set_create_localizations
     $self->assert_matches(qr/FN;LANGUAGE=jp:/, $card);
     $self->assert_matches(qr/N;ALTID=n1:M/, $card);
     $self->assert_matches(qr/N;ALTID=n1;LANGUAGE=jp:/, $card);
-    $self->assert_matches(qr/ADR;ALTID=addr1:;;;Tokio;;;/, $card);
-    $self->assert_matches(qr/ADR;ALTID=addr1;LANGUAGE=jp:/, $card);
-    $self->assert_matches(qr/ADR;ALTID=addr1;LANGUAGE=en:;;;Tokyo;;;/, $card);
-    $self->assert_matches(qr/TITLE;ALTID=t1:Novelista/, $card);
-    $self->assert_matches(qr/TITLE;ALTID=t1;LANGUAGE=en:Novelist/, $card);
+    $self->assert_matches(qr/ADR;PROP-ID=addr1;ALTID=addr1:;;;Tokio;;;/, $card);
+    $self->assert_matches(qr/ADR;PROP-ID=addr1;ALTID=addr1;LANGUAGE=jp:/, $card);
+    $self->assert_matches(qr/ADR;PROP-ID=addr1;ALTID=addr1;LANGUAGE=en:;;;Tokyo;;;/, $card);
+    $self->assert_matches(qr/TITLE;PROP-ID=t1;ALTID=t1:Novelista/, $card);
+    $self->assert_matches(qr/TITLE;PROP-ID=t1;ALTID=t1;LANGUAGE=en:Novelist/, $card);
     $self->assert_matches(qr/GRAMGENDER:NEUTER/, $card);
     $self->assert_matches(qr/GRAMGENDER;LANGUAGE=en:MASCULINE/, $card);
-    $self->assert_matches(qr/PRONOUNS;ALTID=k19:/, $card);
-    $self->assert_matches(qr/PRONOUNS;ALTID=k19;LANGUAGE=fr:il/, $card);
-    $self->assert_matches(qr/PRONOUNS;ALTID=k19;LANGUAGE=de:er/, $card);
-    $self->assert_matches(qr/PRONOUNS;ALTID=k19;LANGUAGE=it:lui/, $card);
+    $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19:/, $card);
+    $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19;LANGUAGE=fr:il/, $card);
+    $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19;LANGUAGE=de:er/, $card);
+    $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19;LANGUAGE=it:lui/, $card);
     $self->assert_does_not_match(qr/JSPROP/, $card);
 }
