@@ -8572,8 +8572,12 @@ static unsigned _jsl10n_to_vcard(struct jmap_parser *parser, json_t *obj,
         
         json_object_foreach(patches, lang, jpatch) {
             json_t *invalid = json_array();
-            json_t *altobj =
-                jmap_patchobject_apply(obj, jpatch, invalid, PATCH_ALLOW_ARRAY);
+            json_t *altobj = json_object_get(jpatch, "");
+
+            if (!altobj) {
+                altobj = jmap_patchobject_apply(obj, jpatch,
+                                                invalid, PATCH_ALLOW_ARRAY);
+            }
 
             if (altobj) {
                 if (rock->is_multi) {
@@ -10199,7 +10203,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
                  * of hash tables (by object id) of JSON patches (by lang).
                  */
                 hash_table *patches_by_id;
-                const char *prop_key, *id = p+1, *path = NULL;
+                const char *prop_key, *id = p+1, *path = "";
                 json_t *patches_by_lang, *patch;
 
                 buf_setmap(&buf, key, p - key);
