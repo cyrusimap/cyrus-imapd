@@ -5755,6 +5755,13 @@ static const jmap_property_t card_props[] = {
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     },
 
+    /* Allow unknown properties */
+    {
+        "*",
+        NULL,
+        0
+    },
+
     { NULL, NULL, 0 }
 };
 
@@ -10732,7 +10739,18 @@ static int _jscard_to_vcard(struct jmap_req *req,
         }
 
         else {
-            _jsunknown_to_vcard(&parser, mykey, jval, NULL, card);
+            int i;
+
+            /* Known property with wrong case is invalid */
+            for (i = 0; card_props[i].name; i++) {
+                if (!strcasecmp(mykey, card_props[i].name)) {
+                    jmap_parser_invalid(&parser, mykey);
+                }
+            }
+
+            if (!card_props[i].name) {
+                _jsunknown_to_vcard(&parser, mykey, jval, NULL, card);
+            }
         }
 
         if (l10n.lang) {
