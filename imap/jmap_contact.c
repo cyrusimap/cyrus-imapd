@@ -8222,9 +8222,19 @@ struct l10n_by_id_t {
 
 static void _jsunknown_to_vcard(struct jmap_parser *parser,
                                 const char *key, json_t *jval,
+                                const char *known_props[],
                                 vcardcomponent *card)
 {
-    if (key) jmap_parser_push(parser, key);
+    if (key) {
+        for (int i = 0; known_props && known_props[i]; i++) {
+            if (!strcasecmp(key, known_props[i])) {
+                jmap_parser_invalid(parser, key);
+                return;
+            }
+        }
+
+        jmap_parser_push(parser, key);
+    }
 
     const char *ptr = jmap_parser_path(parser, &parser->buf);
     char *val = json_dumps(jval, JSON_COMPACT|JSON_ENCODE_ANY);
@@ -8527,6 +8537,7 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
                                   unsigned *groupnum)
 {
     vcardproperty *prop = NULL;
+    const char *myprops[] = { "@type", NULL };
     const char *key;
     json_t *jprop;
     int r = 0;
@@ -8572,7 +8583,7 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
 
     /* Add unknown properties */
     json_object_foreach(obj, key, jprop) {
-        _jsunknown_to_vcard(parser, key, jprop, card);
+        _jsunknown_to_vcard(parser, key, jprop, myprops, card);
     }
 
     return r;
@@ -8841,6 +8852,7 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
     for (i = 0; i < size; i++) {
         json_t *comp = json_array_get(comps, i);
         const char *key, *kind = NULL, *val = NULL, *phonetic = NULL;
+        const char *myprops[] = { "@type", "kind", "value", "phonetic", NULL };
         json_t *jsubprop;
 
         jmap_parser_push_index(parser, "components", i, NULL);
@@ -8868,7 +8880,7 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
             }
             else {
                 jmap_parser_pop(parser);
-                _jsunknown_to_vcard(parser, "components", comps, card);
+                _jsunknown_to_vcard(parser, "components", comps, myprops, card);
                 goto fail;
             }
         }
@@ -8906,7 +8918,7 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
 
             if (!ckind) {
                 jmap_parser_pop(parser);
-                _jsunknown_to_vcard(parser, "components", comps, card);
+                _jsunknown_to_vcard(parser, "components", comps, myprops, card);
                 goto fail;
             }
 
@@ -9029,6 +9041,10 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
         &vcardproperty_vanew_n, VCARD_NUM_N_FIELDS,
         "n1", "Name", n_comp_kinds, NULL
     };
+    const char *myprops[] = {
+        "@type", "full", "sortAs",
+        "phoneticSystem", "isOrdered", "defaultSeparator", "components", NULL
+    };
     vcardstrarray *sortas = NULL;
     vcardproperty *prop = NULL;
     const char *key, *fullName = NULL;
@@ -9103,7 +9119,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
                     _field_name_to_kind(key, n_comp_kinds);
 
                 if (!ckind) {
-                    _jsunknown_to_vcard(parser, key, jsubprop, card);
+                    _jsunknown_to_vcard(parser, key, jsubprop, myprops, card);
                 }
 
                 fields[ckind->idx] = json_string_value(jsubprop);
@@ -9143,7 +9159,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
 
     /* Add unknown properties */
     json_object_foreach(jval, key, jprop) {
-        _jsunknown_to_vcard(parser, key, jprop, card);
+        _jsunknown_to_vcard(parser, key, jprop, myprops, card);
     }
 
     r = 1;
@@ -9218,8 +9234,9 @@ static vcardproperty *_jsorg_to_vcard(struct jmap_parser *parser, json_t *obj,
             vcardstrarray_append(units, "");
         }
 
-        for (i = 0; i < size; i++) {
-            json_t *unit = json_array_get(jprop, i);
+        for (i = 0; i < size; i++) { 
+            const char *myprops[] = { "@type", "name", "sortAs", NULL };
+           json_t *unit = json_array_get(jprop, i);
             const char *key, *val;
             json_t *jsubprop;
 
@@ -9265,7 +9282,7 @@ static vcardproperty *_jsorg_to_vcard(struct jmap_parser *parser, json_t *obj,
 
             /* Add unknown properties */
             json_object_foreach(unit, key, jsubprop) {
-                _jsunknown_to_vcard(parser, key, jsubprop, card);
+                _jsunknown_to_vcard(parser, key, jsubprop, myprops, card);
             }
 
             jmap_parser_pop(parser);
@@ -9331,6 +9348,7 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
                                   vcardcomponent *card)
 {
     struct l10n_rock lrock = { 0, NULL, { .prop_cb = &_jsspeak_to_vcard } };
+    const char *myprops[] = { "@type", "grammaticalGender", "pronouns", NULL };
     json_t *jprop;
     const char *key;
     int r = 0;
@@ -9375,7 +9393,7 @@ static unsigned _jsspeak_to_vcard(struct jmap_parser *parser,
 
     /* Add unknown properties */
     json_object_foreach(jval, key, jprop) {
-        _jsunknown_to_vcard(parser, key, jprop, card);
+        _jsunknown_to_vcard(parser, key, jprop, myprops, card);
     }
 
   done:
@@ -9826,7 +9844,7 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
         date_kind = VCARD_ANNIVERSARY_PROPERTY;
     }
     else {
-        _jsunknown_to_vcard(parser, NULL, anniv, card);
+        _jsunknown_to_vcard(parser, NULL, anniv, NULL, card);
         return NULL;
     }
 
@@ -9834,6 +9852,9 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
 
     jprop = json_object_get(anniv, "date");
     if (json_is_object(jprop)) {
+        const char *myprops[] = {
+            "@type", "year", "month", "day", "calendarScale", "utc", NULL
+        };
         const char *calscale = NULL;
         vcardvalue *value = NULL;
         vcardtimetype tt;
@@ -9919,7 +9940,7 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
 
         /* Add unknown properties */
         json_object_foreach(jprop, key, jsubprop) {
-            _jsunknown_to_vcard(parser, key, jsubprop, card);
+            _jsunknown_to_vcard(parser, key, jsubprop, myprops, card);
         }
 
         json_object_del(anniv, "date");
@@ -9934,6 +9955,7 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
     jprop = json_object_get(anniv, "place");
     if (json_is_object(jprop)) {
         if (place_kind != VCARD_NO_PROPERTY) {
+            const char *myprops[] = { "@type", "full", "coordinates", NULL };
 
             jmap_parser_push(parser, "place");
 
@@ -9975,14 +9997,14 @@ static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
 
                 /* Add unknown properties */
                 json_object_foreach(jprop, key, jsubprop) {
-                    _jsunknown_to_vcard(parser, key, jsubprop, card);
+                    _jsunknown_to_vcard(parser, key, jsubprop, myprops, card);
                 }
             }
 
             jmap_parser_pop(parser);
         }
         else {
-            _jsunknown_to_vcard(parser, "place", jprop, card);
+            _jsunknown_to_vcard(parser, "place", jprop, NULL, card);
         }
 
         json_object_del(anniv, "place");
@@ -10015,6 +10037,7 @@ static vcardproperty *_jsnote_to_vcard(struct jmap_parser *parser,
 
     jprop = json_object_get(obj, "author");
     if (json_is_object(jprop)) {
+        const char *myprops[] = { "@type", "name", "uri", NULL };
         json_t *jsubprop;
         const char *key;
 
@@ -10053,7 +10076,7 @@ static vcardproperty *_jsnote_to_vcard(struct jmap_parser *parser,
 
         /* Add unknown properties */
         json_object_foreach(jprop, key, jsubprop) {
-            _jsunknown_to_vcard(parser, key, jsubprop, card);
+            _jsunknown_to_vcard(parser, key, jsubprop, myprops, card);
         }
 
         json_object_del(obj, "author");
@@ -10709,7 +10732,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
         }
 
         else {
-            _jsunknown_to_vcard(&parser, mykey, jval, card);
+            _jsunknown_to_vcard(&parser, mykey, jval, NULL, card);
         }
 
         if (l10n.lang) {
