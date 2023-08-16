@@ -1663,11 +1663,11 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             buf_reset(&buf);
             if (*pobox) {
                 buf_appendcstr(&buf, pobox);
-                if (extended || street) buf_putc(&buf, '\n');
+                if (*extended || *street) buf_putc(&buf, '\n');
             }
             if (*extended) {
                 buf_appendcstr(&buf, extended);
-                if (street) buf_putc(&buf, '\n');
+                if (*street) buf_putc(&buf, '\n');
             }
             if (*street) {
                 buf_appendcstr(&buf, street);
