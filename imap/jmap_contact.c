@@ -8795,39 +8795,6 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
             goto fail;
         }
     }
-    else {
-        /* Bubble sort the components by kind
-           (for building backward-compat fields) */
-        size_t j;
-
-        for (i = 0; i < size - 1; i++) {
-            int swap = 0;
-
-            for (j = 0; j < size - i - 1; j++) {
-                json_t *comp1 = json_array_get(comps, j);
-                json_t *comp2 = json_array_get(comps, j+1);
-                const char *kind1 =
-                    json_string_value(json_object_get(comp1, "kind"));
-                const char *kind2 =
-                    json_string_value(json_object_get(comp2, "kind"));
-                const struct comp_kind *ckind1 =
-                    kind1 ? _field_name_to_kind(kind1, args->comp_kinds) : NULL;
-                const struct comp_kind *ckind2 =
-                    kind2 ? _field_name_to_kind(kind2, args->comp_kinds) : NULL;
-
-                if (!ckind1 || !ckind2) break;
-
-                if (ckind1 > ckind2) {
-                    json_t *tmp = json_copy(comp1);
-                    json_array_set(comps, j, comp2);
-                    json_array_set_new(comps, j+1, tmp);
-                    swap = 1;
-                }
-            }
-
-            if (!swap) break;
-        }
-    }
 
     for (i = 0; i < size; i++) {
         json_t *comp = json_array_get(comps, i);
@@ -9755,6 +9722,41 @@ static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser, json_t *obj,
         &vcardproperty_vanew_adr, VCARD_NUM_ADR_FIELDS,
         id, "Address", ext_adr_comp_kinds, NULL
     };
+    json_t *comps = json_object_get(obj, "components");
+
+    if (comps && !json_boolean_value(json_object_get(obj, "isOrdered"))) {
+        /* Bubble sort the components by kind
+           (for building extended/street fields) */
+        size_t i, j, size = json_array_size(comps);
+
+        for (i = 0; i < size - 1; i++) {
+            int swap = 0;
+
+            for (j = 0; j < size - i - 1; j++) {
+                json_t *comp1 = json_array_get(comps, j);
+                json_t *comp2 = json_array_get(comps, j+1);
+                const char *kind1 =
+                    json_string_value(json_object_get(comp1, "kind"));
+                const char *kind2 =
+                    json_string_value(json_object_get(comp2, "kind"));
+                const struct comp_kind *ckind1 =
+                    kind1 ? _field_name_to_kind(kind1, ext_adr_comp_kinds) : NULL;
+                const struct comp_kind *ckind2 =
+                    kind2 ? _field_name_to_kind(kind2, ext_adr_comp_kinds) : NULL;
+
+                if (!ckind1 || !ckind2) break;
+
+                if (ckind1 > ckind2) {
+                    json_t *tmp = json_copy(comp1);
+                    json_array_set(comps, j, comp2);
+                    json_array_set_new(comps, j+1, tmp);
+                    swap = 1;
+                }
+            }
+
+            if (!swap) break;
+        }
+    }
 
     return _jscomps_to_vcard(parser, obj, card, &args);
 }
