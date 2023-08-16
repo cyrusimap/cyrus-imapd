@@ -8489,6 +8489,36 @@ typedef vcardproperty* (*prop_cb_t)(struct jmap_parser *parser, json_t *obj,
                                     const char *id, vcardcomponent *card,
                                     void *rock);
 
+static void _vcardparams_to_prop(json_t *jparams, vcardproperty *prop)
+{
+    const char *name;
+    json_t *jval;
+
+    json_object_foreach(jparams, name, jval) {
+        vcardparameter *param;
+
+        if (!strcmp(name, "group")) {
+            vcardproperty_set_group(prop, json_string_value(jval));
+            continue;
+        }
+
+        if (json_is_string(jval)) {
+            param = vcardparameter_new_iana(json_string_value(jval));
+        }
+        else if (json_is_boolean(jval)) {
+            param = vcardparameter_new_iana(json_boolean_value(jval) ?
+                                            "TRUE" : "FALSE");
+        }
+        else {
+            char *val = json_dumps(jval, JSON_COMPACT);
+            param = vcardparameter_new_iana(val);
+            free(val);
+        }
+        vcardparameter_set_iana_name(param, name);
+        vcardproperty_add_parameter(prop, param);
+    }
+}
+
 static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
                                   const char *id, const char *type, prop_cb_t cb,
                                   struct param_prop_t param_props[],
@@ -8532,27 +8562,7 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
 
         jprop = json_object_get(obj, "vCardParams");
         if (json_is_object(jprop)) {
-            const char *key;
-            json_t *jval;
-
-            json_object_foreach(jprop, key, jval) {
-                vcardparameter *param;
-
-                if (json_is_string(jval)) {
-                    param = vcardparameter_new_iana(json_string_value(jval));
-                }
-                else if (json_is_boolean(jval)) {
-                    param = vcardparameter_new_iana(json_boolean_value(jval) ?
-                                                    "TRUE" : "FALSE");
-                }
-                else {
-                    char *val = json_dumps(jval, JSON_COMPACT);
-                    param = vcardparameter_new_iana(val);
-                    free(val);
-                }
-                vcardparameter_set_iana_name(param, key);
-                vcardproperty_add_parameter(prop, param);
-            }
+            _vcardparams_to_prop(jprop, prop);
 
             json_object_del(obj, "vCardParams");
         }
@@ -10188,6 +10198,60 @@ static void _jscard_set_importance(struct jmap_req *req,
     }
 }
 
+static unsigned _vcardprops_to_card(struct jmap_parser *parser, json_t *jval,
+                                    vcardcomponent *card)
+{
+    size_t i;
+    json_t *jcard;
+    struct buf buf = BUF_INITIALIZER;
+    int r = 0;
+
+    if (!json_is_array(jval)) {
+        jmap_parser_invalid(parser, "vCardProps");
+        return 0;
+    }
+
+    jmap_parser_push(parser, "vCardProps");
+
+    json_array_foreach(jval, i, jcard) {
+        const char *name, *val_type, *val;
+        json_t *params;
+        vcardproperty *prop;
+
+        if (json_array_size(jcard) != 4) {
+            buf_reset(&buf);
+            buf_printf(&buf, "%zu", i);
+            jmap_parser_invalid(parser, buf_cstring(&buf));
+            break;
+        }
+
+        name = json_string_value(json_array_get(jcard, 0));
+        params = json_array_get(jcard, 1);
+        val_type = json_string_value(json_array_get(jcard, 2));
+        val = json_string_value(json_array_get(jcard, 3));
+        prop = vcardproperty_new_x(val);
+
+        buf_setcstr(&buf, name);
+        vcardproperty_set_x_name(prop, buf_ucase(&buf));
+        vcardcomponent_add_property(card, prop);
+
+        if (strcmp(val_type, "unknown")) {
+            vcardparameter_value type = vcardparameter_string_to_enum(val_type);;
+
+            vcardproperty_add_parameter(prop, vcardparameter_new_value(type));
+        }
+
+        _vcardparams_to_prop(params, prop);
+
+        r = 1;
+    }
+
+    jmap_parser_pop(parser);
+    buf_free(&buf);
+
+    return r;
+}
+
 #define PROP_LANG_TAG_PREFIX      "cyrusimap.org:lang:"
 #define PROP_LANG_TAG_PREFIX_LEN  19
 
@@ -10631,6 +10695,11 @@ static int _jscard_to_vcard(struct jmap_req *req,
                                                       WANT_PROPID_FLAG,
                                                       personal_props, &l10n,
                                                       card, NULL);
+        }
+
+        /* Unmapped vCard properties */
+        else if (!strcmp(mykey, "vCardProps")) {
+            record_is_dirty |= _vcardprops_to_card(&parser, jval, card);
         }
 
         /* Cyrus-specific properties */
