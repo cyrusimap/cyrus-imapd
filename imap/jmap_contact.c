@@ -8721,28 +8721,47 @@ static const struct comp_kind *_field_name_to_kind(const char *name,
     return NULL;
 }
 
-static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
-                             const char *comp_type, vcardstructuredtype *st,
-                             const struct comp_kind comp_kinds[],
-                             vcardcomponent *card, struct buf *derived,
-                             vcardparameter **jscomps_param)
+struct jscomps_args {
+    vcardproperty *(*vanew_prop)(vcardstructuredtype*, ...);
+    unsigned num_comps;
+    const char *id;
+    const char *comp_type;
+    const struct comp_kind *comp_kinds;
+    struct buf *derived;
+};
+
+static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
+                                        vcardcomponent *card,
+                                        struct jscomps_args *args)
 {
     json_t *comps = json_object_get(obj, "components");
 
-    if (!comps) return -1;
+    if (!comps) return NULL;
 
     if (!json_array_size(comps)) {
         jmap_parser_invalid(parser, "components");
         return 0;
     }
 
+    vcardstructuredtype vals = { args->num_comps, { 0 } };
+    vcardstructuredtype ph = { args->num_comps, { 0 } };
     size_t i, size = json_array_size(comps);
     vcardstructuredtype *jscomps = NULL;
-    const char *defsep = " ", *sep = NULL;
+    vcardproperty *prop = NULL;
+    const char *defsep = " ", *sep = NULL, *ph_system = NULL;;
     struct buf buf = BUF_INITIALIZER;
     vcardstrarray *entry;
     json_t *jprop;
     int isordered = 0;
+
+    jprop = json_object_get(obj, "phoneticSystem");
+    if (json_is_string(jprop)) {
+        ph_system = json_string_value(jprop);
+    }
+    else if (jprop) {
+        jmap_parser_invalid(parser, "phoneticSystem");
+        goto fail;
+    }
 
     jprop = json_object_get(obj, "isOrdered");
     if (jprop) {
@@ -8792,9 +8811,9 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                 const char *kind2 =
                     json_string_value(json_object_get(comp2, "kind"));
                 const struct comp_kind *ckind1 =
-                    kind1 ? _field_name_to_kind(kind1, comp_kinds) : NULL;
+                    kind1 ? _field_name_to_kind(kind1, args->comp_kinds) : NULL;
                 const struct comp_kind *ckind2 =
-                    kind2 ? _field_name_to_kind(kind2, comp_kinds) : NULL;
+                    kind2 ? _field_name_to_kind(kind2, args->comp_kinds) : NULL;
 
                 if (!ckind1 || !ckind2) break;
 
@@ -8812,14 +8831,14 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
 
     for (i = 0; i < size; i++) {
         json_t *comp = json_array_get(comps, i);
-        const char *key, *kind = NULL, *val = NULL;
+        const char *key, *kind = NULL, *val = NULL, *phonetic = NULL;
         json_t *jsubprop;
 
         jmap_parser_push_index(parser, "components", i, NULL);
 
         json_object_foreach(comp, key, jsubprop) {
             if (!strcmp("@type", key)) {
-                if (strcmpsafe(comp_type, json_string_value(jsubprop))) {
+                if (strcmpsafe(args->comp_type, json_string_value(jsubprop))) {
                     jmap_parser_invalid(parser, "@type");
                     break;
                 }
@@ -8829,6 +8848,14 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
             }
             else if (!strcmp("value", key)) {
                 val = json_string_value(jsubprop);
+            }
+            else if (!strcmp("phonetic", key)) {
+                if (!ph_system || !json_is_string(jsubprop)) {
+                    jmap_parser_invalid(parser, "phonetic");
+                    break;
+                }
+
+                phonetic = json_string_value(jsubprop);
             }
             else {
                 jmap_parser_pop(parser);
@@ -8865,7 +8892,7 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
         }
         else {
             const struct comp_kind *ckind =
-                _field_name_to_kind(kind, comp_kinds);
+                _field_name_to_kind(kind, args->comp_kinds);
             vcardstrarray **field;
 
             if (!ckind) {
@@ -8874,8 +8901,15 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                 goto fail;
             }
 
+            /* Add phonetic to proper field */
+            if (phonetic) {
+                field = &ph.field[ckind->idx];
+                if (!*field) *field = vcardstrarray_new(1);
+                vcardstrarray_append(*field, phonetic);
+            }
+
             /* Add value to proper field */
-            field = &st->field[ckind->idx];
+            field = &vals.field[ckind->idx];
             if (!*field) *field = vcardstrarray_new(1);
             vcardstrarray_append(*field, val);
 
@@ -8893,16 +8927,16 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                 jscomps->field[jscomps->num_fields++] = entry;
             }
 
-            if (derived) {
+            if (args->derived) {
                 /* Create derived value from fields */
-                if (i) buf_appendcstr(derived, sep ? sep : defsep);
-                buf_appendcstr(derived, val);
+                if (i) buf_appendcstr(args->derived, sep ? sep : defsep);
+                buf_appendcstr(args->derived, val);
                 sep = NULL;
             }
 
             /* Also add values from ext fields to backward-compat fields */
             if (ckind->backward) {
-                field = &st->field[ckind->alt_idx];
+                field = &vals.field[ckind->alt_idx];
                 if (!*field) *field = vcardstrarray_new(1);
                 vcardstrarray_append(*field, val);
             }
@@ -8916,21 +8950,45 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
         goto fail;
     }
 
+    prop = args->vanew_prop(&vals,
+                            jscomps ? vcardparameter_new_jscomps(jscomps) : NULL,
+                            NULL);
+
+    if (ph_system) {
+        vcardproperty_add_parameter(prop, vcardparameter_new_altid(args->id));
+
+        /* Add alternate property */
+        vcardparameter *param = vcardparameter_new(VCARD_PHONETIC_PARAMETER);
+
+        vcardparameter_set_value_from_string(param, ph_system);
+        vcardcomponent_add_property(card,
+                                    args->vanew_prop(&ph,
+                                                     vcardparameter_new_altid(args->id),
+                                                     param,
+                                                     NULL));
+    }
+
     json_object_del(obj, "components");
     json_object_del(obj, "isOrdered");
+    json_object_del(obj, "phoneticSystem");
     json_object_del(obj, "defaultSeparator");
 
     buf_free(&buf);
 
-    if (jscomps) *jscomps_param = vcardparameter_new_jscomps(jscomps);
-
-    return 1;
+    return prop;
 
   fail:
-    for (unsigned i = 0; i < st->num_fields; i++) {
-        vcardstrarray *sa = st->field[i];
+    for (unsigned i = 0; i < vals.num_fields; i++) {
+        vcardstrarray *sa = vals.field[i];
 
         if (sa) vcardstrarray_free(sa);
+    }
+    if (ph_system) {
+        for (unsigned i = 0; i < ph.num_fields; i++) {
+            vcardstrarray *sa = ph.field[i];
+
+            if (sa) vcardstrarray_free(sa);
+        }
     }
     if (jscomps) {
         for (unsigned i = 0; i < jscomps->num_fields; i++) {
@@ -8940,9 +8998,17 @@ static int _jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
         }
         free(jscomps);
     }
+    if (args->derived) {
+        buf_reset(args->derived);
+    }
     buf_free(&buf);
 
-    return 0;
+    json_object_del(obj, "components");
+    json_object_del(obj, "isOrdered");
+    json_object_del(obj, "phoneticSystem");
+    json_object_del(obj, "defaultSeparator");
+
+    return NULL;
 }
 
 static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
@@ -8950,10 +9016,12 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
                                  vcardcomponent *card)
 {
     struct l10n_rock lrock = { 0, NULL, { .prop_cb = &_jsname_to_vcard } };
-    vcardstructuredtype n = { VCARD_NUM_N_FIELDS, { 0 } };
+    struct jscomps_args args = {
+        &vcardproperty_vanew_n, VCARD_NUM_N_FIELDS,
+        "n1", "Name", n_comp_kinds, NULL
+    };
     vcardstrarray *sortas = NULL;
     vcardproperty *prop = NULL;
-    vcardparameter *jscomps = NULL;
     const char *key, *fullName = NULL;
     struct buf buf = BUF_INITIALIZER;
     json_t *jprop, *jsubprop;
@@ -8986,34 +9054,27 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
         goto done;
     }
 
-    r = _jscomps_to_vcard(parser, jval, "Name", &n, n_comp_kinds, card,
-                          !fullName ? &buf : NULL, &jscomps);
-    if (!r) goto done;
-
-    /* Add FN property */
-    prop = vcardproperty_vanew_fn(
-        buf_cstring(&buf),
-        !fullName ? vcardparameter_new_derived(VCARD_DERIVED_TRUE) : 0,
-        0);
-
-    if (l10n->lang && *l10n->lang) {
-        vcardproperty_add_parameter(prop,
-                                    vcardparameter_new_language(l10n->lang));
+    if (json_object_get(jval, "sortAs") &&
+        !json_object_get(jval, "components")) {
+        jmap_parser_invalid(parser, "sortAs");
+        goto done;
     }
-    vcardcomponent_add_property(card, prop);
 
-    if (r == 1) {
-        /* Add N property */
-        prop = vcardproperty_vanew_n(&n, jscomps, NULL);
+    if (!fullName) args.derived = &buf;
+
+    prop = _jscomps_to_vcard(parser, jval, card, &args);
+
+    if (prop) {
+        vcardcomponent_add_property(card, prop);
 
         if (l10n->lang) {
             vcardproperty_add_parameter(prop, vcardparameter_new_altid("n1"));
+
             if (*l10n->lang) {
                 vcardproperty_add_parameter(prop,
                                             vcardparameter_new_language(l10n->lang));
             }
         }
-        vcardcomponent_add_property(card, prop);
 
         jprop = json_object_get(jval, "sortAs");
         if (jprop) {
@@ -9023,7 +9084,6 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
 
             if (!json_is_object(jprop)) {
                 jmap_parser_invalid(parser, "sortAs");
-                r = 0;
                 goto done;
             }
 
@@ -9053,10 +9113,19 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
             jmap_parser_pop(parser);
         }
     }
-    else if (json_object_get(jval, "sortAs")) {
-        jmap_parser_invalid(parser, "sortAs");
-        r = 0;
-        goto done;
+
+    if (buf_len(&buf)) {
+        /* Add FN property */
+        prop = vcardproperty_vanew_fn(
+            buf_cstring(&buf),
+            !fullName ? vcardparameter_new_derived(VCARD_DERIVED_TRUE) : 0,
+            0);
+        vcardcomponent_add_property(card, prop);
+
+        if (l10n->lang && *l10n->lang) {
+            vcardproperty_add_parameter(prop,
+                                        vcardparameter_new_language(l10n->lang));
+        }
     }
 
     json_object_del(jval, "@type");
@@ -9067,6 +9136,8 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
     json_object_foreach(jval, key, jprop) {
         _jsunknown_to_vcard(parser, key, jprop, card);
     }
+
+    r = 1;
 
   done:
     jmap_parser_pop(parser);
@@ -9677,16 +9748,15 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
 }
 
 static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser, json_t *obj,
-                                       const char *id __attribute__((unused)),
-                                       vcardcomponent *card,
+                                       const char *id, vcardcomponent *card,
                                        void *rock __attribute__((unused)))
 {
-    vcardstructuredtype adr = { VCARD_NUM_ADR_FIELDS, { 0 } };
-    vcardparameter *jscomps = NULL;
+    struct jscomps_args args = {
+        &vcardproperty_vanew_adr, VCARD_NUM_ADR_FIELDS,
+        id, "Address", ext_adr_comp_kinds, NULL
+    };
 
-    return _jscomps_to_vcard(parser, obj, "Address",
-                             &adr, ext_adr_comp_kinds, card, NULL, &jscomps) ?
-        vcardproperty_vanew_adr(&adr, jscomps, NULL) : NULL;
+    return _jscomps_to_vcard(parser, obj, card, &args);
 }
 
 static vcardproperty *_jsanniv_to_vcard(struct jmap_parser *parser,
