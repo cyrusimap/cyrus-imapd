@@ -125,6 +125,7 @@ struct conv_thread {
     struct message_guid guid;
     uint32_t exists;
     time_t internaldate;
+    modseq_t createdmodseq;
 };
 
 struct conv_folder {
