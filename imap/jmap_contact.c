@@ -8512,6 +8512,7 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
 
     if (prop) {
         struct param_prop_t *pprop;
+        json_t *jprop;
 
         vcardcomponent_add_property(card, prop);
 
@@ -8527,6 +8528,33 @@ static unsigned _jsobject_to_card(struct jmap_parser *parser, json_t *obj,
 
         for (pprop = param_props; pprop && pprop->key; pprop++) {
             _jsparam_to_vcard(parser, pprop->key, obj, prop, pprop->kind, groupnum);
+        }
+
+        jprop = json_object_get(obj, "vCardParams");
+        if (json_is_object(jprop)) {
+            const char *key;
+            json_t *jval;
+
+            json_object_foreach(jprop, key, jval) {
+                vcardparameter *param;
+
+                if (json_is_string(jval)) {
+                    param = vcardparameter_new_iana(json_string_value(jval));
+                }
+                else if (json_is_boolean(jval)) {
+                    param = vcardparameter_new_iana(json_boolean_value(jval) ?
+                                                    "TRUE" : "FALSE");
+                }
+                else {
+                    char *val = json_dumps(jval, JSON_COMPACT);
+                    param = vcardparameter_new_iana(val);
+                    free(val);
+                }
+                vcardparameter_set_iana_name(param, key);
+                vcardproperty_add_parameter(prop, param);
+            }
+
+            json_object_del(obj, "vCardParams");
         }
 
         r = 1;
