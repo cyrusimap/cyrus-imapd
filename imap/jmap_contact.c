@@ -10173,11 +10173,13 @@ static void _invalid_l10n_patches_by_id(const char *id, void *val, void *rock)
 
             jmap_parser_push(brock->parser, id);
             jmap_parser_path(brock->parser, &buf);
-            buf_putc(&buf, '/');
             len = buf_len(&buf);
 
             json_object_foreach(jpatch, path, val) {
-                buf_appendcstr(&buf, path);
+                if (*path) {
+                    buf_putc(&buf, '/');
+                    buf_appendcstr(&buf, path);
+                }
                 jmap_parser_invalid_path(brock->parser, buf_cstring(&buf));
                 buf_truncate(&buf, len);
             }
