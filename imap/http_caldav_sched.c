@@ -1396,14 +1396,13 @@ void sched_deliver(const char *cal_ownerid, const char *sched_userid,
         r = sched_deliver_local(sched_userid, sender, recipient, NULL, &sparam,
                                 sched_data, authstate, &attendee, &ical);
 
-        /* XXX  Should this be a config option? - it might have perf implications */
         if (r == 1 && SCHED_IS_REPLY(sched_data)) {
             /* Send updates to attendees - skipping sender of reply */
             icalcomponent *comp = icalcomponent_get_first_real_component(ical);
             if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
                 sched_pollstatus(cal_ownerid, sched_userid,
                                  recipient, &sparam, ical, attendee);
-            else
+            else if (config_getswitch(IMAPOPT_CALDAV_SEND_PARTSTAT_UPDATES))
                 sched_request(cal_ownerid, sched_userid, NULL, recipient,
                               NULL, ical, sched_data->mech); // oldical?
         }

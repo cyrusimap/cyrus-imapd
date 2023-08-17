@@ -623,6 +623,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    If not set (the default), the value of the "servername" option will
    be used.*/
 
+{ "caldav_send_partstat_updates", 1, SWITCH, "UNRELEASED" }
+/* If enabled, when an attendee replies to the organizer with their
+   participation status, an updated invite will be sent to all other
+   attendees. */
+
 { "calendarprefix", "#calendars", STRING, "2.5.0" }
 /* The prefix for the calendar mailboxes hierarchies.  The hierarchy
    delimiter will be automatically appended.  The public calendar
