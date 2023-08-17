@@ -7603,7 +7603,7 @@ static int jmap_email_parse(jmap_req_t *req)
 
         struct buf *inmem = hash_lookup(blobid, req->inmemory_blobs);
         if (inmem) {
-            r = _email_from_buf(req, &getargs, inmem, part->encoding, &email);
+            r = _email_from_buf(req, &getargs, inmem, NULL, &email);
             if (r) {
                 syslog(LOG_ERR, "jmap: Email/parse(%s): %s", blobid, error_message(r));
             }
