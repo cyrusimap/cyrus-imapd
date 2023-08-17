@@ -144,21 +144,26 @@ sub test_calendarevent_participantreply_simple
     $self->assert($ical =~ "SEQUENCE:1");
     $self->assert($ical =~ "PARTSTAT=ACCEPTED");
 
-    xlog $self, "verify updated request sent from organizer to attendee";
-    $imip = $imips[1];
-    $self->assert_not_null($imip);
+    # sending updated requests was removed in 3.9
+    my ($maj, $min) = Cassandane::Instance->get_version();
 
-    $payload = decode_json($imip->{MESSAGE});
-    $ical = $payload->{ical};
+    if ($maj < 4 && $min < 9) {
+        xlog $self, "verify updated request sent from organizer to attendee";
+        $imip = $imips[1];
+        $self->assert_not_null($imip);
 
-    $self->assert_str_equals("CalendarEvent/participantReply",
-                             $payload->{schedulingMechanism});
-    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
-    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
-    $self->assert_num_equals(1, $payload->{jsevent}{sequence});
-    $self->assert($ical =~ "METHOD:REQUEST");
-    $self->assert($ical =~ "SEQUENCE:1");
-    $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+        $payload = decode_json($imip->{MESSAGE});
+        $ical = $payload->{ical};
+
+        $self->assert_str_equals("CalendarEvent/participantReply",
+                                 $payload->{schedulingMechanism});
+        $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+        $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
+        $self->assert_num_equals(1, $payload->{jsevent}{sequence});
+        $self->assert($ical =~ "METHOD:REQUEST");
+        $self->assert($ical =~ "SEQUENCE:1");
+        $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+    }
 
     xlog $self, "set attendee status on override";
     my $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
@@ -188,19 +193,21 @@ sub test_calendarevent_participantreply_simple
     $self->assert($ical =~ "SEQUENCE:1");
     $self->assert($ical =~ "PARTSTAT=DECLINED");
 
-    xlog $self, "verify updated request sent from organizer to attendee";
-    $imip = $imips[1];
-    $self->assert_not_null($imip);
+    if ($maj < 4 && $min < 9) {
+        xlog $self, "verify updated request sent from organizer to attendee";
+        $imip = $imips[1];
+        $self->assert_not_null($imip);
 
-    $payload = decode_json($imip->{MESSAGE});
-    $ical = $payload->{ical};
+        $payload = decode_json($imip->{MESSAGE});
+        $ical = $payload->{ical};
 
-    $self->assert_str_equals("CalendarEvent/participantReply",
-                             $payload->{schedulingMechanism});
-    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
-    $self->assert_str_equals("rr\@looneytunes.com", $payload->{recipient});
-    $self->assert_num_equals(1, $payload->{jsevent}{sequence});
-    $self->assert($ical =~ "METHOD:REQUEST");
-    $self->assert($ical =~ "SEQUENCE:1");
-    $self->assert($ical =~ "PARTSTAT=DECLINED");
+        $self->assert_str_equals("CalendarEvent/participantReply",
+                                 $payload->{schedulingMechanism});
+        $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+        $self->assert_str_equals("rr\@looneytunes.com", $payload->{recipient});
+        $self->assert_num_equals(1, $payload->{jsevent}{sequence});
+        $self->assert($ical =~ "METHOD:REQUEST");
+        $self->assert($ical =~ "SEQUENCE:1");
+        $self->assert($ical =~ "PARTSTAT=DECLINED");
+    }
 }

@@ -107,15 +107,20 @@ sub test_calendarevent_participantreply_standalone
     $self->assert($ical =~ "METHOD:REPLY");
     $self->assert($ical =~ "PARTSTAT=ACCEPTED");
 
-    xlog $self, "verify updated request sent from organizer to attendee";
-    $imip = $imips[1];
-    $self->assert_not_null($imip);
+    # sending updated requests was removed in 3.9
+    my ($maj, $min) = Cassandane::Instance->get_version();
 
-    $payload = decode_json($imip->{MESSAGE});
-    $ical = $payload->{ical};
+    if ($maj < 4 && $min < 9) {
+        xlog $self, "verify updated request sent from organizer to attendee";
+        $imip = $imips[1];
+        $self->assert_not_null($imip);
 
-    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
-    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
-    $self->assert($ical =~ "METHOD:REQUEST");
-    $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+        $payload = decode_json($imip->{MESSAGE});
+        $ical = $payload->{ical};
+
+        $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+        $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
+        $self->assert($ical =~ "METHOD:REQUEST");
+        $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+    }
 }
