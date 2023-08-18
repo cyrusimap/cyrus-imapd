@@ -2063,7 +2063,7 @@ sub test_rolling_retry_wait_limit
     # get a rolling sync_client started, which won't be able to connect
     # XXX can't just run_replication bc it expects sync_client to finish
     my $errfile = "$self->{instance}->{basedir}/stderr.out";
-    my @cmd = qw( sync_client -v -v -o -R );
+    my @cmd = qw( sync_client -v -v -R );
     my $sync_client_pid = $self->{instance}->run_command(
         {
             cyrus => 1,
