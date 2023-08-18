@@ -1181,8 +1181,8 @@ static int imclient_authenticate_sub(struct imclient *imclient,
   if (secprops==NULL) return 1;
 
   saslresult=sasl_setprop(imclient->saslconn, SASL_SEC_PROPS, secprops);
-  if (saslresult!=SASL_OK) return 1;
   free(secprops);
+  if (saslresult!=SASL_OK) return 1;
 
   addrsize=sizeof(struct sockaddr_storage);
   if (getpeername(imclient->fd,(struct sockaddr *)&saddr_r,&addrsize)!=0)
