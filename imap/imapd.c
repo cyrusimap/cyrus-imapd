@@ -15056,6 +15056,12 @@ static void cmd_compress(char *tag, char *alg)
         prot_printf(imapd_out,
                     "%s OK %s active\r\n", tag, alg);
 
+        xsyslog(LOG_INFO, "compression enabled",
+                          "sessionid=<%s> userid=<%s> algorithm=<%s>",
+                          session_id(),
+                          imapd_userid ? imapd_userid : "",
+                          alg);
+
         /* enable (de)compression for the prot layer */
         prot_setcompress(imapd_in);
         prot_setcompress(imapd_out);
