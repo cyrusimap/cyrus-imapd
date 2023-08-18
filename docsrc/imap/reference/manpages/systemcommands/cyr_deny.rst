@@ -27,7 +27,8 @@ The first synopsis denies user *user* access to Cyrus services, the
 second synopsis allows access again.  **cyr_deny** works by adding an
 entry to the Cyrus ``user_deny.db`` database; the third synopsis lists
 the entries in the database.  The service names to be matched are those
-as used in :cyrusman:`cyrus.conf(5)`.
+as used in :cyrusman:`cyrus.conf(5)`.  The smmapd service ignores
+``user_deny.db``.
 
 **cyr_deny** |default-conf-text|
 

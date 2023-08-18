@@ -100,12 +100,12 @@ Patching mailer/cyrusv2.m4
    
    _DEFIFNOT(`_DEF_CYRUSV2_MAILER_FLAGS', `lsDFMnqXz')
   -_DEFIFNOT(`CYRUSV2_MAILER_FLAGS', `A@/:|m')
-  +_DEFIFNOT(`CYRUSV2_MAILER_FLAGS', `8m')
+  +_DEFIFNOT(`CYRUSV2_MAILER_FLAGS', `m')
    ifdef(`CYRUSV2_MAILER_ARGS',, `define(`CYRUSV2_MAILER_ARGS', `FILE /var/imap/socket/lmtp')')
    define(`_CYRUSV2_QGRP', `ifelse(defn(`CYRUSV2_MAILER_QGRP'),`',`', ` Q=CYRUSV2_MAILER_QGRP,')')dnl
  
 
-The `8` flag means, that Cyrus LMTPd can accept 8bit data and sendmail will not convert 8bit data to 7bit before passing it to Cyrus IMAP.  The `A@/:|` functionality will be performed by the `local` mailer, before the `cyrusv2` mailer is called.  The `cyrus2v` mailer is used only to pass data to Cyrus IMAP, after it is verified, that Cyrus IMAP hosts a particular mailbox.  Thus the `cyrus2v` mailer does not call the `localaddr=5` rule set in order to avoid loops. (If the `cyrusv2` mailer calls the `localaddr=5` ruleset and the `localaddr=5` ruleset calls the `cyrusv2` mailer, there is an endless loop).
+The `A@/:|` functionality will be performed by the `local` mailer, before the `cyrusv2` mailer is called.  The `cyrus2v` mailer is used only to pass data to Cyrus IMAP, after it is verified, that Cyrus IMAP hosts a particular mailbox.  Thus the `cyrus2v` mailer does not call the `localaddr=5` rule set in order to avoid loops. (If the `cyrusv2` mailer calls the `localaddr=5` ruleset and the `localaddr=5` ruleset calls the `cyrusv2` mailer, there is an endless loop).
 
 The patch to `m4/proto.m4` also requires a mailer, which does not call the `localaddr=5` ruleset.  Because of this, substituting the `local` mailer by `define(\`confLOCAL_MAILER', \`cyrusv2')dnl` will not work.  The proposed setup needs one mailer calling the `localaddr=5` ruleset (here the `local` mailer) and one mailer not calling the `localaddr=5` ruleset (the `cyrusv2` mailer).
 
@@ -145,5 +145,9 @@ and recompile them, e.g. by calling `make file.cf` to convert `file.mc` to `file
 
   # for an address, which exists in Cyrus IMAP, and is not overwritten in virtusertable.
   # domain1.org belongs to class VirtHost and does not belong to class w.
-  $ sendmail -C sendmail-mail.cf -bv zzz@domain1.org
+  $ sendmail -C file.cf -bv zzz@domain1.org
   zzz@domain1.org... deliverable: mailer cyrusv2, user zzz@domain1.org
+
+Disable LMTP Delivery
+#####################
+The `smmapd` service ignores the `userdeny` database.  To disable delivery over LMTP to an existing Cyrus IMAP mailbox, while allowing ie CalDAV access to the account, create an alias/virtusertable entry to a non-existent mailbox: `user1@domain1.org: deleted_address123`.
