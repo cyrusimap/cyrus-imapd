@@ -272,7 +272,7 @@ static void replica_connect(void)
 
     for (wait = 15;; wait *= 2) {
         int r = sync_connect(&sync_cs);
-        if (r != IMAP_AGAIN) break;
+        if (r != IMAP_AGAIN || connect_once) break;
 
         signals_poll();
 
