@@ -99,8 +99,11 @@ Options
 
 .. option:: -o, --connect-once
 
-    Only attempt to connect to the backend server once rather than
-    waiting up to 1000 seconds before giving up.
+    Only attempt to connect to the backend server once.
+
+    Without this option, **sync_client** will retry failed connections
+    indefinitely, waiting up to ``sync_reconnect_maxwait`` (default: 20m)
+    between attempts.
 
 .. option:: -O, --no-copyback
 
