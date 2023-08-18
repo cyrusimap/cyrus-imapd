@@ -427,6 +427,13 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
         }
     }
 
+    const char *comment = icalcomponent_get_comment(comp);
+    if (comment) {
+            buf_setcstr(&tmpbuf, comment);
+            buf_replace_all(&tmpbuf, "\n", "\r\n" TEXT_INDENT);
+            buf_printf(&plainbuf, "Comment: %s\r\n", buf_cstring(&tmpbuf));
+    }
+
     mimebody = charset_qpencode_mimebody(buf_base(&plainbuf),
                                          buf_len(&plainbuf), 0, &outlen);
 
@@ -495,6 +502,10 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
             HTMLencode(&tmpbuf, descrip);
             buf_printf(&msgbuf, HTML_ROW, "Description", buf_cstring(&tmpbuf));
         }
+    }
+    if (comment) {
+        HTMLencode(&tmpbuf, comment);
+        buf_printf(&msgbuf, HTML_ROW, "Comment", buf_cstring(&tmpbuf));
     }
     buf_printf(&msgbuf, "</table></body></html>\r\n");
 
