@@ -161,8 +161,8 @@ These are referred to as *negative rights*.
 Special Strings
 ===============
 
-The ACL may be combined of the special strings none, read (lrs), post (lrsp), append (lrsip), write(lrswipkxte), delete (lrxte), or all (lrswipkxte), or any combinations of the ACL codes when using the setacl methods 
-:ref:`imap-reference-manpages-systemcommands-cyradm-setaclmailbox`
+The ACL may be combined of the special strings none, read (``lrs``), post (``lrsp``), append (``lrsip``), write(``lrswipkxte``), delete (``lrxte``), or all (``lrswipkxte``), or any combinations of the ACL codes when using the setacl methods :ref:`imap-reference-manpages-systemcommands-cyradm-setaclmailbox`.
+The annotate Access Right ``n`` is not part of the special strings. 
 
 Calculating a Users' Rights
 ===========================
