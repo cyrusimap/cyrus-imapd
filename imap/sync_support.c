@@ -3932,10 +3932,10 @@ int sync_apply_seen(struct dlist *kin,
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "SEENUIDS", &seenuids))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    sd.seenuids = xstrdup(seenuids);
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) return r;
+    sd.seenuids = xstrdup(seenuids);
 
     r = seen_write(seendb, uniqueid, &sd);
     seen_close(&seendb);
