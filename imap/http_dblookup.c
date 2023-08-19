@@ -146,7 +146,6 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     }
 
     mboxname = mboxname_abook(userid, mailbox);
-    if (!mboxname) goto done;
 
     mboxlist_lookup(mboxname, &mbentry, NULL);
     if (!mbentry) goto done;
@@ -202,7 +201,6 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
     }
 
     mboxname = mboxname_abook(userid, mailbox);
-    if (!mboxname) goto done;
 
     mboxlist_lookup(mboxname, &mbentry, NULL);
     if (!mbentry) goto done;
@@ -266,7 +264,6 @@ static int get_uid2groups(struct transaction_t *txn,
     }
 
     mboxname = mboxname_abook(userid, mailbox);
-    if (!mboxname) goto done;
 
     mboxlist_lookup(mboxname, &mbentry, NULL);
     if (!mbentry) goto done;

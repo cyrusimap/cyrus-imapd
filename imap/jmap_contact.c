@@ -1066,7 +1066,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
 
         json_t *abookid = json_object_get(arg, "addressbookId");
         if (abookid && json_string_value(abookid)) {
-            const char *mboxname =
+            char *mboxname =
                 mboxname_abook(req->accountid, json_string_value(abookid));
             if (mbentry && strcmp(mboxname, mbentry->name)) {
                 /* move */
@@ -1076,16 +1076,19 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                                             "properties", "addressbookId");
                     json_object_set_new(set.not_updated, uid, err);
                     mboxlist_entry_free(&mbentry);
+                    free(mboxname);
                     continue;
                 }
                 r = jmap_openmbox(req, mboxname, &newmailbox, 1);
                 if (r) {
                     syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
                     mboxlist_entry_free(&mbentry);
+                    free(mboxname);
                     goto done;
                 }
                 do_move = 1;
             }
+            free(mboxname);
             json_object_del(arg, "addressbookId");
         }
 
