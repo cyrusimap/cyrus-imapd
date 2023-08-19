@@ -158,6 +158,12 @@ Any of the above defined identifiers may be prefixed with a ``-``
 character. The associated rights are then removed from that identifier.
 These are referred to as *negative rights*.
 
+Special Strings
+===============
+
+The ACL may be combined of the special strings none, read (lrs), post (lrsp), append (lrsip), write(lrswipkxte), delete (lrxte), or all (lrswipkxte), or any combinations of the ACL codes when using the setacl methods 
+:ref:`imap-reference-manpages-systemcommands-cyradm-setaclmailbox`
+
 Calculating a Users' Rights
 ===========================
 
