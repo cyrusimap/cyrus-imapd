@@ -580,7 +580,7 @@ static int process_alarm_cb(icalcomponent *comp,
         struct icaltriggertype trigger = icalvalue_get_trigger(val);
         /* XXX validate trigger */
 
-        icaltimetype alarmtime = icaltime_null_time();
+        icaltimetype alarmtime/* = icaltime_null_time()*/;
         unsigned is_duration = (icalvalue_isa(val) == ICAL_DURATION_VALUE);
         if (is_duration) {
             icalparameter *param =
