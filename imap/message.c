@@ -3317,7 +3317,7 @@ static void message_read_binarybody(struct body *body, const char **sect,
                                     uint32_t cache_version)
 {
     bit32 n, i;
-    const char *p = *sect;
+    const char *p/* = *sect*/;
     struct body *subpart;
     size_t len;
     uint32_t cte;
