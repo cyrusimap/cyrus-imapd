@@ -64,8 +64,10 @@
 
 #include "master/masterconf.h"
 
+#ifdef USE_SIEVE
 #include "sieve/bytecode.h"
 #include "sieve/sieve_interface.h"
+#endif
 
 /* Make ld happy */
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
@@ -290,10 +292,12 @@ static json_t *buildinfo()
     json_object_set_new(search, "xapian_cjk_tokens", json_string(XAPIAN_CJK_TOKENS));
 
     /* Internal version numbers */
+#ifdef USE_SIEVE
     json_object_set_new(version, "BYTECODE_MIN_VERSION",
                                  json_integer(BYTECODE_MIN_VERSION));
     json_object_set_new(version, "BYTECODE_VERSION",
                                  json_integer(BYTECODE_VERSION));
+#endif
     json_object_set_new(version, "CONVERSATIONS_KEY_VERSION",
                                  json_integer(CONVERSATIONS_KEY_VERSION));
     json_object_set_new(version, "CONVERSATIONS_RECORD_VERSION",
@@ -310,8 +314,10 @@ static json_t *buildinfo()
                                  json_integer(MAILBOX_CACHE_MINOR_VERSION));
     json_object_set_new(version, "MAILBOX_MINOR_VERSION",
                                  json_integer(MAILBOX_MINOR_VERSION));
+#ifdef USE_SIEVE
     json_object_set_new(version, "SIEVE_VERSION",
                                  json_string(SIEVE_VERSION));
+#endif
     json_object_set_new(version, "STATUSCACHE_VERSION",
                                  json_integer(STATUSCACHE_VERSION));
     json_object_set_new(version, "ZONEINFO_VERSION",
