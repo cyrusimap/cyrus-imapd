@@ -1,0 +1,18 @@
+Description:
+
+Restores functionality of the sync_client -o/--connect-once option
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Nothing required
+
+
+GitHub issue:
+
+None

@@ -2063,7 +2063,7 @@ sub test_rolling_retry_wait_limit
     # get a rolling sync_client started, which won't be able to connect
     # XXX can't just run_replication bc it expects sync_client to finish
     my $errfile = "$self->{instance}->{basedir}/stderr.out";
-    my @cmd = qw( sync_client -v -v -o -R );
+    my @cmd = qw( sync_client -v -v -R );
     my $sync_client_pid = $self->{instance}->run_command(
         {
             cyrus => 1,
@@ -2098,6 +2098,51 @@ sub test_rolling_retry_wait_limit
     my @waits = $output =~ m/retrying in (\d+) seconds/g;
     $self->assert_num_lte($maxwait, $_) for @waits;
     $self->assert_deep_equals([ 15, 20, 20, 20 ], \@waits);
+}
+
+sub test_connect_once
+    :CSyncReplication :min_version_3_9
+    :needs_component_replication
+{
+    my ($self) = @_;
+
+    # stop the replica
+    $self->{replica}->stop();
+
+    # start a sync_client, which won't be able to connect
+    # n.b. can't just run_replication bc it expects sync_client to finish
+    my $errfile = "$self->{instance}->{basedir}/stderr.out";
+    my @cmd = qw( sync_client -v -v -o -m user.cassandane );
+    my $sync_client_pid = $self->{instance}->run_command(
+        {
+            cyrus => 1,
+            background => 1,
+            handlers => {
+                exited_abnormally => sub {
+                    my ($child, $code) = @_;
+                    xlog "child process $child->{binary}\[$child->{pid}\]"
+                        . " exited with code $code";
+                    return $code;
+                },
+            },
+            redirects => { stderr => $errfile },
+        },
+        @cmd);
+
+    # give sync_client time to fail to connect
+    sleep 10;
+
+    # clean up whatever's left of it
+    my $ec = $self->{instance}->stop_command($sync_client_pid);
+
+    # if it exited itself due to being unable to connect, this will be 1.
+    # if it was shut down by stop_command, 75
+    $self->assert_not_equals(75, $ec);
+    $self->assert_equals(1, $ec);
+
+    my $output = slurp_file($errfile);
+    $self->assert_matches(qr/Can not connect to server/, $output);
+    $self->assert_does_not_match(qr/retrying in \d+ seconds/, $output);
 }
 
 #
