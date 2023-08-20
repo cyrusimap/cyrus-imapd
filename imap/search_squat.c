@@ -399,7 +399,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 
 static int add_unindexed(SquatBuilderData *bb)
 {
-    struct opstack *top = opstack_top(bb);
+    struct opstack *top/* = opstack_top(bb)*/;
     int r = 0;
 
     top = opstack_push(bb, /*doesn't matter*/0);
