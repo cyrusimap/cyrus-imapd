@@ -97,20 +97,23 @@ EXPORTED int backup_read_message_data(struct backup *backup,
                                       const struct backup_message *message,
                                       backup_read_data_cb proc, void *rock)
 {
-    struct backup_chunk *chunk = NULL;
-    struct gzuncat *gzuc = NULL;
     struct dlist *dl = NULL;
     struct dlist *di;
     int r;
 
-    chunk = backup_get_chunk(backup, message->chunk_id);
+    struct backup_chunk *chunk = backup_get_chunk(backup, message->chunk_id);
     if (!chunk) return -1;
 
-    gzuc = gzuc_new(backup->fd);
+    struct gzuncat *gzuc = gzuc_new(backup->fd);
 
     gzuc_member_start_from(gzuc, chunk->offset);
     r = gzuc_seekto(gzuc, message->offset);
-    if (r) return r;
+    if (r) {
+        gzuc_member_end(gzuc, NULL);
+        gzuc_free(&gzuc);
+
+        return r;
+    }
 
     struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
     prot_setisclient(ps, 1); /* don't sync literals */
