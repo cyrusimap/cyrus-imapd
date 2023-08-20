@@ -542,8 +542,8 @@ EXPORTED int spool_copy_msg(struct protstream *fin, FILE *fout)
     char buf[8192], *p;
     int r = 0;
 
-    /* -2: Might need room to add a \r\n\0 set */
-    while (prot_fgets(buf, sizeof(buf)-2, fin)) {
+    /* -3: Might need room to add a \r\n\0 set */
+    while (prot_fgets(buf, sizeof(buf)-3, fin)) {
         p = buf + strlen(buf) - 1;
         if (p < buf) {
             /* buffer start with a \0 */
@@ -578,8 +578,8 @@ EXPORTED int spool_copy_msg(struct protstream *fin, FILE *fout)
         /* Remove any lone CR characters */
         while ((p = strchr(buf, '\r')) && p[1] != '\n') {
             /* Src/Target overlap, use memmove */
-            /* strlen(p) will result in copying the NUL byte as well */
-            memmove(p, p+1, strlen(p));
+            /* strlen(p)+1 will result in copying the NUL byte as well */
+            memmove(p, p+1, strlen(p)+1);
         }
 
         if (buf[0] == '.') {
