@@ -8147,6 +8147,9 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         break;
     }
 
+    sched_request(req->accountid, req->accountid, NULL, organizer,
+                  update.oldical, update.newical, SCHED_MECH_JMAP_PARTREPLY);
+
     /* Build response */
     req->accountid = NULL;
     jmap_ok(req, res);
