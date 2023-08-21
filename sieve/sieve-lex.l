@@ -47,6 +47,7 @@
 #include <config.h>
 #endif
 
+#include <strings.h>
 #include "util.h"
 
 #include "sieve/tree.h"
