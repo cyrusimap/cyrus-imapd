@@ -8626,12 +8626,13 @@ static unsigned _jsl10n_to_vcard(struct jmap_parser *parser, json_t *obj,
         json_t *jpatch;
         
         json_object_foreach(patches, lang, jpatch) {
-            json_t *invalid = json_array();
             json_t *altobj = json_object_get(jpatch, "");
+            json_t *invalid = NULL, *patched = NULL;
 
             if (!altobj) {
-                altobj = jmap_patchobject_apply(obj, jpatch,
-                                                invalid, PATCH_ALLOW_ARRAY);
+                invalid = json_array();
+                altobj = patched = jmap_patchobject_apply(obj, jpatch, invalid,
+                                                          PATCH_ALLOW_ARRAY);
             }
 
             if (altobj) {
@@ -8653,7 +8654,8 @@ static unsigned _jsl10n_to_vcard(struct jmap_parser *parser, json_t *obj,
 
                     r |= rock->u.prop_cb(parser, altobj, &my_l10n, card);
                 }
-                json_decref(altobj);
+
+                if (patched) json_decref(patched);
             }
             else {
                 json_t *path;
@@ -8672,7 +8674,7 @@ static unsigned _jsl10n_to_vcard(struct jmap_parser *parser, json_t *obj,
                 buf_reset(&buf);
             }
 
-            json_decref(invalid);
+            if (invalid) json_decref(invalid);
         }
 
         json_decref(patches);
