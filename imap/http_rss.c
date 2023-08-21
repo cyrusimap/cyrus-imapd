@@ -1235,7 +1235,7 @@ static void display_part(struct transaction_t *txn,
                 charset = charset_lookupname("us-ascii");
             }
             body->decoded_body =
-                charset_to_utf8(buf_base(msg_buf) + body->content_offset,
+                charset_to_utf8cstr(buf_base(msg_buf) + body->content_offset,
                                 body->content_size, charset, encoding);
             charset_free(&charset);
             if (!ishtml) buf_printf_markup(buf, level, "<pre>");

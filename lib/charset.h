@@ -142,8 +142,10 @@ extern char *charset_encode_mimebody(const char *msg_base, size_t len,
                                      int *outlines, int wrap);
 extern char *charset_qpencode_mimebody(const char *msg_base, size_t len,
                                        int force_quote, size_t *outlen);
-extern char *charset_to_utf8(const char *msg_base, size_t len, charset_t charset, int encoding);
+extern char *charset_to_utf8cstr(const char *msg_base, size_t len, charset_t charset, int encoding);
 extern char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t charset, int encoding);
+
+extern int charset_to_utf8(struct buf *dst, const char *src, size_t len, charset_t charset, int encoding);
 
 extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int flags);
 

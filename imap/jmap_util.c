@@ -674,7 +674,7 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
         else counts.replacement = 0; // ignore replacement in source data
     }
     if (!text) {
-        text = charset_to_utf8(data, datalen, cs, encoding);
+        text = charset_to_utf8cstr(data, datalen, cs, encoding);
         if (!text) {
             if (is_encoding_problem) *is_encoding_problem = 1;
             goto done;
@@ -696,7 +696,7 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
                 guess_cs = charset_lookupname("UTF-32LE");
             else
                 guess_cs = charset_lookupname("UTF-32BE");
-            char *guess = charset_to_utf8(data, datalen, guess_cs, encoding);
+            char *guess = charset_to_utf8cstr(data, datalen, guess_cs, encoding);
             if (guess) {
                 struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
                 if (guess_counts.valid > counts.valid) {
@@ -715,7 +715,7 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
             /* Could be ISO-2022-JP */
             charset_t guess_cs = charset_lookupname("ISO-2022-JP");
             if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
-                char *guess = charset_to_utf8(data, datalen, guess_cs, encoding);
+                char *guess = charset_to_utf8cstr(data, datalen, guess_cs, encoding);
                 if (guess) {
                     struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
                     if (!guess_counts.invalid && !guess_counts.replacement) {
@@ -748,7 +748,7 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
         if (detect_handledata_r(&d, buf_base(&buf), buf_len(&buf), &obj) == CHARDET_SUCCESS) {
             charset_t guess_cs = charset_lookupname(obj->encoding);
             if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
-                char *guess = charset_to_utf8(data, datalen, guess_cs, encoding);
+                char *guess = charset_to_utf8cstr(data, datalen, guess_cs, encoding);
                 if (guess) {
                     struct char_counts guess_counts =
                         charset_count_validutf8(guess, strlen(guess));

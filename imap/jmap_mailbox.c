@@ -321,8 +321,8 @@ static char *_mbox_get_name(const char *account_id __attribute__((unused)),
         extname = xstrdup(strarray_nth(boxes, strarray_size(boxes)-1));
         /* Decode extname from IMAP UTF-7 to UTF-8. Or fall back to extname. */
         charset_t cs = charset_lookupname("imap-utf-7");
-        char *decoded = charset_to_utf8(extname, strlen(extname),
-                                        cs, ENCODING_NONE);
+        char *decoded = charset_to_utf8cstr(extname, strlen(extname),
+                                            cs, ENCODING_NONE);
         if (decoded) {
             free(extname);
             extname = decoded;
