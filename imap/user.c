@@ -131,33 +131,57 @@ static int user_deleteacl(char *name, int matchlen, int category, void* rock)
 }
 #endif
 
-EXPORTED const char *user_sieve_path(const char *user)
+/*
+ * Provide user as local@domain. user=NULL for getting the global path for all domains
+ * user=@domain" for the per domain /global, or user=localpart for using the default
+ * domain or with virtdomains off. Don't call with terminating '@'.
+ * Free() the result.
+ */
+EXPORTED char *user_sieve_path(const char *user_orig)
 {
-    static char sieve_path[2048];
-    char hash, *domain;
-
-    if (config_virtdomains && (domain = strchr(user, '@'))) {
-        char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-        *domain = '\0';  /* split user@domain */
-        hash = (char) dir_hash_c(user, config_fulldirhash);
-        snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
-                 config_getstring(IMAPOPT_SIEVEDIR),
-                 FNAME_DOMAINDIR, d, domain+1, hash, user);
-        *domain = '@';  /* reassemble user@domain */
+    char *sieve_path = xmalloc(PATH_MAX), *domain, hash, *user;
+    if (user_orig) {
+        user = strdup(user_orig);
+        if (*user == '@') {
+            domain = user + 1;
+            *user = '\0';
+        } else {
+            if ((domain = strchr(user + 1, '@')))
+                *domain++ = '\0';
+            hash = (char) dir_hash_c(user, config_fulldirhash);
+        }
+    } else {
+        domain = NULL;
+        user = strdup("");
     }
-    else {
-        hash = (char) dir_hash_c(user, config_fulldirhash);
-
-        snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-                 config_getstring(IMAPOPT_SIEVEDIR), hash, user);
+    static const char* config_sieve_path;
+    if (!config_sieve_path) config_sieve_path = config_getstring(IMAPOPT_SIEVEDIR);
+    if (config_virtdomains && domain) {
+        char d = (char) dir_hash_c(domain, config_fulldirhash);
+        if (*user)
+            snprintf(sieve_path, PATH_MAX, "%s%s%c/%s/%c/%s",
+                config_sieve_path,
+                FNAME_DOMAINDIR, d, domain, hash, user);
+        else
+            snprintf(sieve_path, PATH_MAX, "%s%s%c/%s/global",
+                config_sieve_path,
+                FNAME_DOMAINDIR, d, domain);
+    } else {
+        if (*user)
+            snprintf(sieve_path, PATH_MAX, "%s/%c/%s",
+                config_sieve_path, hash, user);
+        else
+            snprintf(sieve_path, PATH_MAX, "%s/global",
+                config_sieve_path);
     }
+
+    free(user);
 
     return sieve_path;
 }
 
 static int user_deletesieve(const char *user)
 {
-    const char *sieve_path;
     char filename[2048];
     DIR *mbdir;
     struct dirent *next = NULL;
@@ -165,7 +189,7 @@ static int user_deletesieve(const char *user)
     /* oh well */
     if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
 
-    sieve_path = user_sieve_path(user);
+    char *sieve_path = user_sieve_path(user);
 
     mbdir = opendir(sieve_path);
 
@@ -185,7 +209,7 @@ static int user_deletesieve(const char *user)
         /* remove mbdir */
         rmdir(sieve_path);
     }
-
+    free(sieve_path);
     return 0;
 }
 
@@ -276,50 +300,15 @@ static int user_renamesub(const char *name, void* rock)
 
 static int user_renamesieve(const char *olduser, const char *newuser)
 {
-    char hash, *domain;
-    char oldpath[2048], newpath[2048];
-    int r;
-
     /* oh well */
     if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
-
-    if (config_virtdomains && (domain = strchr(olduser, '@'))) {
-        char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-        *domain = '\0';  /* split user@domain */
-        hash = (char) dir_hash_c(olduser, config_fulldirhash);
-        snprintf(oldpath, sizeof(oldpath), "%s%s%c/%s/%c/%s",
-                 config_getstring(IMAPOPT_SIEVEDIR),
-                 FNAME_DOMAINDIR, d, domain+1, hash, olduser);
-        *domain = '@';  /* reassemble user@domain */
-    }
-    else {
-        hash = (char) dir_hash_c(olduser, config_fulldirhash);
-
-        snprintf(oldpath, sizeof(oldpath), "%s/%c/%s",
-                 config_getstring(IMAPOPT_SIEVEDIR), hash, olduser);
-    }
-
-    if (config_virtdomains && (domain = strchr(newuser, '@'))) {
-        char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-        *domain = '\0';  /* split user@domain */
-        hash = (char) dir_hash_c(newuser, config_fulldirhash);
-        snprintf(newpath, sizeof(newpath), "%s%s%c/%s/%c/%s",
-                 config_getstring(IMAPOPT_SIEVEDIR),
-                 FNAME_DOMAINDIR, d, domain+1, hash, newuser);
-        *domain = '@';  /* reassemble user@domain */
-    }
-    else {
-        hash = (char) dir_hash_c(newuser, config_fulldirhash);
-
-        snprintf(newpath, sizeof(newpath), "%s/%c/%s",
-                 config_getstring(IMAPOPT_SIEVEDIR), hash, newuser);
-    }
-
+    char *oldpath = user_sieve_path(olduser);
+    char *newpath = user_sieve_path(newuser);
     /* rename sieve directory
      *
      * XXX this doesn't rename sieve scripts
      */
-    r = rename(oldpath, newpath);
+    int r = rename(oldpath, newpath);
     if (r < 0) {
         if (errno == ENOENT) {
             syslog(LOG_WARNING, "error renaming %s to %s: %m",
@@ -336,6 +325,8 @@ static int user_renamesieve(const char *olduser, const char *newuser)
             syslog(LOG_ERR, "error renaming %s to %s: %m", oldpath, newpath);
         }
     }
+    free(oldpath);
+    free(newpath);
 
     return r;
 }
