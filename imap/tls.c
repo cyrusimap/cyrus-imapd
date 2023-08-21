@@ -1540,8 +1540,8 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     int     verify_flags = SSL_VERIFY_NONE;
     const char   *server_ca_dir;
     const char   *server_ca_file;
-    char   *client_cert;
-    char   *client_key;
+    const char   *client_cert;
+    const char   *client_key;
 
     if (tls_clientengine)
         return (0);                             /* already running */
@@ -1594,17 +1594,17 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     if (!var_server_cert || strlen(var_server_cert) == 0)
         client_cert = NULL;
     else
-        client_cert = xstrdup(var_server_cert);
+        client_cert = var_server_cert;
 
     if (!var_server_key || strlen(var_server_key) == 0)
         client_key = NULL;
     else
-        client_key = xstrdup(var_server_key);
+        client_key = var_server_key;
 
     if (client_cert || client_key) {
         if (!set_cert_stuff(c_ctx, client_cert, client_key)) {
             syslog(LOG_ERR,"TLS client engine: cannot load cert/key data, may be a cert/key mismatch?");
-            return (-1);
+            return -1;
         }
     }
 
