@@ -259,17 +259,15 @@ int main(int argc, char **argv)
         mailbox_close(&mailbox);
     }
     else if (filename) {
-        message_t *message = NULL;
+        message_t *message = message_new_from_filename(filename);
 
-        message = message_new_from_filename(filename);
         r = dump_message(message);
+        message_unref(&message);
         if (r) {
             fprintf(stderr, "Error dumping message: %s\n",
                     error_message(r));
             return 1;
         }
-
-        message_unref(&message);
     }
     else {
         message_t *message = NULL;

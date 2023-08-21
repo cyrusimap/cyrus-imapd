@@ -285,7 +285,7 @@ extern message_t *message_new_from_index(struct mailbox *,
                                          const struct index_record *,
                                          uint32_t msgno,
                                          uint32_t indexflags);
-extern message_t *message_new_from_filename(const char *filename);
+__attribute__((malloc, nonnull, returns_nonnull, warn_unused_result)) message_t *message_new_from_filename(const char *filename);
 extern void message_set_from_data(const char *base, size_t len,
                                   message_t *m);
 extern void message_set_from_mailbox(struct mailbox *mailbox,
