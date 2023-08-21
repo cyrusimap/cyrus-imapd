@@ -65,6 +65,7 @@
 #include "times.h"
 
 #include <string.h>
+#include <syslog.h>
 
 #ifdef HAVE_ICAL
 #include <libical/ical.h>
@@ -356,8 +357,21 @@ static int do_comparison(const char *needle, const char *hay,
             res = SIEVE_NOMEM;
         }
         else {
+            struct timeval start, end;
+            double total;
+
+            gettimeofday(&start, 0);
+
             res = comp(hay, strlen(hay),
                        (const char *) reg, match_vars, comprock);
+
+            gettimeofday(&end, 0);
+            total = timesub(&start, &end);
+            if (total > 5.0) {
+                syslog(LOG_NOTICE, "long-running Sieve :regex '%s': %fs",
+                       needle, total);
+            }
+
             regfree(reg);
             free(reg);
         }
