@@ -5950,15 +5950,20 @@ static json_t *_to_jmap_date(vcardproperty *prop)
 }
 
 static void _unmapped_param(json_t *obj,
-                            vcardparameter_kind param_kind, char *param_value)
+                            vcardparameter *param, char *param_value)
 {
+    vcardparameter_kind param_kind = vcardparameter_isa(param);
     json_t *params = json_object_get_vanew(obj, "vCardParams", "{}");
     struct buf buf = BUF_INITIALIZER;
-    
-    buf_setcstr(&buf, vcardparameter_kind_to_string(param_kind));
 
-    json_object_set_new(params, buf_lcase(&buf),
-                        jmap_utf8string(param_value));
+    if (param_kind == VCARD_IANA_PARAMETER) {
+        buf_setcstr(&buf, vcardparameter_get_iana_name(param));
+    }
+    else {
+        buf_setcstr(&buf, vcardparameter_kind_to_string(param_kind));
+    }
+
+    json_object_set_new(params, buf_lcase(&buf), jmap_utf8string(param_value));
 
     buf_free(&buf);
 }
@@ -6191,7 +6196,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
                     }
                     else {
                         /* Unknown/unexpected TYPE */
-                        _unmapped_param(obj, param_kind, param_value);
+                        _unmapped_param(obj, param, param_value);
                     }
                 }
             }
@@ -6216,7 +6221,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
         }
 
         /* Unknown/unexpected parameter [value]*/
-        _unmapped_param(obj, param_kind, param_value);
+        _unmapped_param(obj, param, param_value);
     }
 
     buf_free(&buf);
