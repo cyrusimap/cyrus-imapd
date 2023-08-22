@@ -32,7 +32,7 @@ KIND:individual
 FN:Simon Perreault
 N:Perreault;Simon;;;ing. jr
 BDAY;PROP-ID=A1:--0203
-ANNIVERSARY:20090808T1430-0500
+ANNIVERSARY;PROP-ID=A2:20090808T1430-0500
 GENDER:M
 LANG;PROP-ID=L1;PREF=1:fr
 LANG;PROP-ID=L2;PREF=2:en
@@ -91,11 +91,11 @@ EOF
             foo => 'bar'
         },
         anniversaries => {
-            birth => {
+            A1 => {
                 'kind' => 'birth',
                 'date' => { 'month' => 2, 'day' => 3 }
             },
-            wedding => {
+            A2 => {
                 'kind' => 'wedding',
                 'date' => { '@type' => 'Timestamp', 'utc' => '2009-08-08T19:30:00Z' }
             },
