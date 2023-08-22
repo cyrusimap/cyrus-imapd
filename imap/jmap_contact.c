@@ -6784,7 +6784,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         if (!strncmp(prop_value, "urn:uuid:", 9)) {
             json_t *members = json_object_get_vanew(obj, "members", "{}");
 
-            json_object_set_new(members, prop_value+9, json_true());
+            json_object_set_new(members, prop_value, json_true());
         }
         else goto unmapped;
         break;
@@ -7146,7 +7146,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
                                     unsigned flags)
 {
     /* Default to kind:individual for /query.
-       Will be overwritten by KIND propertym if present. */
+       Will be overwritten by KIND property if present. */
     json_t *jcard = json_pack("{s:s s:s s:s}",
                               "@type", "Card",
                               "version", "1.0",
