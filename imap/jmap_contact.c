@@ -5984,12 +5984,12 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
             continue;
 
         case VCARD_AUTHOR_PARAMETER:
-            key = "name";
+            key = "uri";
 
             GCC_FALLTHROUGH
 
         case VCARD_AUTHORNAME_PARAMETER:
-            if (!key) key = "uri";
+            if (!key) key = "name";
 
             if (prop_kind == VCARD_NOTE_PROPERTY) {
                 json_t *author =
