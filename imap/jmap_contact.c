@@ -6233,6 +6233,7 @@ struct card_rock {
     const char *deflang;
     hash_table *labels;
     hash_table *adrs;
+    hash_table *orgs;
     struct mailbox *mailbox;
     struct index_record *record;
     unsigned flags;
@@ -6851,12 +6852,18 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
     case VCARD_TITLE_PROPERTY: {
         json_t *titles = json_object_get_vanew(obj, "titles", "{}");
+        const char *org = NULL;
+
+        if (prop_group) {
+            org = hash_lookup(prop_group, crock->orgs);
+        }
 
         prop_value = vcardproperty_get_title(prop);
         json_object_set_new(titles, prop_id,
-                            json_pack("{s:s* s:o}",
+                            json_pack("{s:s* s:o s:s*}",
                                       "kind", kind,
-                                      "name", jmap_utf8string(prop_value)));
+                                      "name", jmap_utf8string(prop_value),
+                                      "organization", org));
         break;
     }
 
@@ -7156,9 +7163,10 @@ static json_t *jmap_card_from_vcard(const char *userid,
     hash_table props_by_name = HASH_TABLE_INITIALIZER;
     hash_table labels = HASH_TABLE_INITIALIZER;
     hash_table adrs = HASH_TABLE_INITIALIZER;
+    hash_table orgs = HASH_TABLE_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct card_rock crock = {
-        jcard, NULL, NULL, &labels, &adrs, mailbox, record, flags, &buf
+        jcard, NULL, NULL, &labels, &adrs, &orgs, mailbox, record, flags, &buf
     };
     vcardproperty *prop;
     vcardparameter *param;
@@ -7167,10 +7175,12 @@ static json_t *jmap_card_from_vcard(const char *userid,
        - Sort them by name and then by altid for calculating localizations
        - Fetch VERSION for sanity checking
        - Fetch ADRs for combining with geographic properties
+       - Fetch ORGs for pairing with grouped TITLE/ROLE
        - Fetch Apple-style labels for pairing with grouped properties
     */
     construct_hash_table(&props_by_name, 100, 0);
     construct_hash_table(&adrs, 10, 0);
+    construct_hash_table(&orgs, 10, 0);
     construct_hash_table(&labels, 10, 0);
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
@@ -7216,18 +7226,23 @@ static json_t *jmap_card_from_vcard(const char *userid,
             }
             strarray_append(ids, _prop_id(prop));
         }
-        else if (group && (prop_kind == VCARD_X_PROPERTY) &&
-                 !strcasecmp(prop_name, VCARD_APPLE_LABEL_PROPERTY)) {
-            const char *label = vcardproperty_get_value_as_string(prop);
-            size_t label_len = strlen(label);
-
-            /* Check and adjust for weird (localized?) labels */
-            if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
-                label += 4;      // skip "_$!<" prefix
-                label_len -= 8;  // and trim ">!$_" suffix
+        else if (group) {
+            if (prop_kind == VCARD_ORG_PROPERTY) {
+                hash_insert(group, xstrdup(_prop_id(prop)), &orgs);
             }
+            else if (prop_kind == VCARD_X_PROPERTY &&
+                     !strcasecmp(prop_name, VCARD_APPLE_LABEL_PROPERTY)) {
+                const char *label = vcardproperty_get_value_as_string(prop);
+                size_t label_len = strlen(label);
 
-            hash_insert(group, xstrndup(label, label_len), &labels);
+                /* Check and adjust for weird (localized?) labels */
+                if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
+                    label += 4;      // skip "_$!<" prefix
+                    label_len -= 8;  // and trim ">!$_" suffix
+                }
+
+                hash_insert(group, xstrndup(label, label_len), &labels);
+            }
         }
     }
 
@@ -7265,6 +7280,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
   done:
     buf_free(&buf);
     free_hash_table(&labels, &free);
+    free_hash_table(&orgs, &free);
     free_hash_table(&adrs, (void (*)(void *)) &strarray_free);
     free_hash_table(&props_by_name, &free_props_by_altid);
 
