@@ -6836,10 +6836,11 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     case VCARD_RELATED_PROPERTY: {
         json_t *relatedto = json_object_get_vanew(obj, "relatedTo", "{}");
 
-        jprop = json_object();
+        param_flags = ALLOW_TYPE_PARAM;
 
-        json_object_set_new(relatedto, prop_value,
-                            json_pack("{s:o}", "relation", jprop));
+        jprop = json_pack("{s:{}}", "relation");
+
+        json_object_set_new(relatedto, prop_value, jprop);
         break;
     }
 
