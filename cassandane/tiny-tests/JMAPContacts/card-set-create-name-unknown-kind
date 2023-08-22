@@ -69,6 +69,6 @@ sub test_card_set_create_name_unknown_kind
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
     $self->assert_matches(qr|JSPROP;JSPTR=name/components:|, $card);
-    $self->assert_matches(qr/FN:No Name/, $card);
-    $self->assert_does_not_match(qr/N;/, $card);
+    $self->assert_matches(qr/FN;DERIVED=TRUE:No Name/, $card);
+    $self->assert_does_not_match(qr/\r\nN;/, $card);
 }

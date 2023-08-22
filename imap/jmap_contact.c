@@ -10777,7 +10777,11 @@ static int _jscard_to_vcard(struct jmap_req *req,
 
     if (!vcardcomponent_get_first_property(card, VCARD_FN_PROPERTY)) {
         /* Need to construct an FN property */
-        vcardcomponent_add_property(card, vcardproperty_new_fn("No Name"));
+        vcardproperty *prop =
+            vcardproperty_vanew_fn("No Name",
+                                   vcardparameter_new_derived(VCARD_DERIVED_TRUE),
+                                   NULL);
+        vcardcomponent_add_property(card, prop);
         record_is_dirty = 1;
     }
 
