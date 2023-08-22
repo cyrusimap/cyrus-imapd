@@ -20,8 +20,8 @@ sub test_cardgroup_get_v3
     );
 
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $member1 = '03a0e51f-d1aa-4385-8a53-e29025acd8af';
-    my $member2 = 'b8767877-b4a1-4c70-9acc-505d3819e519';
+    my $member1 = 'urn:uuid:03a0e51f-d1aa-4385-8a53-e29025acd8af';
+    my $member2 = 'urn:uuid:b8767877-b4a1-4c70-9acc-505d3819e519';
     my $href = "Default/$id.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
@@ -30,8 +30,8 @@ X-ADDRESSBOOKSERVER-KIND:group
 UID:$id
 FN:The Doe Family
 N:;;;;
-X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:$member1
-X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:$member2
+X-ADDRESSBOOKSERVER-MEMBER:$member1
+X-ADDRESSBOOKSERVER-MEMBER:$member2
 END:VCARD
 EOF
 
