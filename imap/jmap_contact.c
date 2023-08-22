@@ -6461,7 +6461,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         {
             json_t *annivs = json_object_get_vanew(obj, "anniversaries", "{}");
 
-            jprop = json_object_get_vanew(annivs, kind, "{s:s}", "kind", kind);
+            jprop = json_object_get_vanew(annivs, prop_id, "{s:s}", "kind", kind);
 
             json_object_set_new(jprop, subprop.key, subprop.val);
         }

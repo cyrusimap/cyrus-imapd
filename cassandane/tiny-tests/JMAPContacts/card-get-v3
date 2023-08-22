@@ -26,7 +26,7 @@ sub test_card_get_v3
 BEGIN:VCARD
 VERSION:3.0
 UID:$id
-BDAY:1944-06-07
+BDAY;PROP-ID=A1:1944-06-07
 N:Gump;Forrest;;Mr.
 FN:Forrest Gump
 ORG;PROP-ID=O1:Bubba Gump Shrimp Co.;foo
@@ -67,7 +67,7 @@ EOF
             ]
         },
         anniversaries => {
-            birth => {
+            A1 => {
                 'kind' => 'birth',
                 'date' => { 'year' => 1944, 'month' => 6, 'day' => 7 }
             }
