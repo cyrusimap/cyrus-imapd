@@ -6252,7 +6252,8 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
     vcardparameter *param;
     vcardstrarray *sa;
     const char *val, *val_prop_name = "value";
-    size_t i;
+    json_t *comps, *comp;
+    size_t i, j = 0;
 
     param = vcardproperty_get_first_parameter(prop, VCARD_PHONETIC_PARAMETER);
     if (param) {
@@ -6355,12 +6356,16 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
                         continue;
                 }
 
-                json_array_append_new(json_object_get_vanew(obj,
-                                                            "components", "[]"),
-                                      json_pack("{s:s s:o}",
-                                                "kind", ckind->name,
-                                                val_prop_name,
-                                                jmap_utf8string(val)));
+                comps = json_object_get_vanew(obj, "components", "[]");
+                if (json_array_size(comps) > j) {
+                    comp = json_array_get(comps, j);
+                }
+                else {
+                    comp = json_pack("{s:s}", "kind", ckind->name);
+                    json_array_append_new(comps, comp);
+                }
+                json_object_set_new(comp, val_prop_name, jmap_utf8string(val));
+                j++;
             }
         }
     }
