@@ -391,7 +391,11 @@ static char *decode_to_utf8cstr(const char *charset,
             j++;
         }
     }
-    buf_truncate(&buf, j);
+    if (j != buf_len(&buf)) {
+        buf_truncate(&buf, j);
+        if (is_encoding_problem)
+            *is_encoding_problem = 1;
+    }
 
     return buf_len(&buf) ? buf_release(&buf) : NULL;
 }

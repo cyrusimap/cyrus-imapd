@@ -37,6 +37,9 @@ EOF
         }, 'R2'],
     ]);
 
+    my $bodyValue = $res->[1][1]{list}[0]{bodyValues}{1};
     $self->assert_str_equals("<html><body>hello world</body></html>",
-        $res->[1][1]{list}[0]{bodyValues}{1}{value});
+        $bodyValue->{value});
+    $self->assert_equals(JSON::true, $bodyValue->{isEncodingProblem});
+    $self->assert_equals(JSON::false, $bodyValue->{isTruncated});
 }
