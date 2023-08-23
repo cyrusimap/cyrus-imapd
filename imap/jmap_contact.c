@@ -5777,7 +5777,7 @@ struct comp_kind {
     unsigned backward : 1;
 };
 
-/* vCard N fields and JSContact Name components */
+/* JSContact Name components - ordered per vCard vcard_n_field enum */
 static const struct comp_kind n_comp_kinds[] = {
     { "surname",       VCARD_N_FAMILY,          VCARD_N_SECONDARY,     0 },
     { "given",         VCARD_N_GIVEN,           VCARD_N_GIVEN,         0 },
@@ -5789,7 +5789,7 @@ static const struct comp_kind n_comp_kinds[] = {
     { NULL,            0,                       0,                     0 }
 };
 
-/* vCard ADR fields and JSContact Address components */
+/* JSContact Address components - ordered per vCard vcard_adr_field enum */
 static const struct comp_kind adr_comp_kinds[] = {
     { "postOfficeBox", VCARD_ADR_PO_BOX,        VCARD_ADR_PO_BOX,      0 },
     { "apartment",     VCARD_ADR_EXTENDED,      VCARD_ADR_EXTENDED,    0 },
@@ -5803,21 +5803,23 @@ static const struct comp_kind adr_comp_kinds[] = {
 
 static const struct comp_kind ext_adr_comp_kinds[] = {
     { "postOfficeBox", VCARD_ADR_PO_BOX,        VCARD_ADR_PO_BOX,      0 },
+    { "",              VCARD_ADR_EXTENDED,      VCARD_ADR_EXTENDED,    0 },
+    { "",              VCARD_ADR_STREET,        VCARD_ADR_STREET,      0 },
     { "locality",      VCARD_ADR_LOCALITY,      VCARD_ADR_LOCALITY,    0 },
     { "region",        VCARD_ADR_REGION,        VCARD_ADR_REGION,      0 },
     { "postcode",      VCARD_ADR_POSTAL_CODE,   VCARD_ADR_POSTAL_CODE, 0 },
     { "country",       VCARD_ADR_COUNTRY,       VCARD_ADR_COUNTRY,     0 },
     { "room",          VCARD_ADR_ROOM,          VCARD_ADR_EXTENDED,    1 },
-    { "floor",         VCARD_ADR_FLOOR,         VCARD_ADR_EXTENDED,    1 },
     { "apartment",     VCARD_ADR_APARTMENT,     VCARD_ADR_EXTENDED,    1 },
-    { "building",      VCARD_ADR_BUILDING,      VCARD_ADR_EXTENDED,    1 },
+    { "floor",         VCARD_ADR_FLOOR,         VCARD_ADR_EXTENDED,    1 },
     { "number",        VCARD_ADR_STREET_NUMBER, VCARD_ADR_STREET,      1 },
     { "name",          VCARD_ADR_STREET_NAME,   VCARD_ADR_STREET,      1 },
+    { "building",      VCARD_ADR_BUILDING,      VCARD_ADR_EXTENDED,    1 },
     { "block",         VCARD_ADR_BLOCK,         VCARD_ADR_STREET,      1 },
-    { "direction",     VCARD_ADR_DIRECTION,     VCARD_ADR_STREET,      1 },
-    { "landmark",      VCARD_ADR_LANDMARK,      VCARD_ADR_STREET,      1 },
     { "subdistrict",   VCARD_ADR_SUBDISTRICT,   VCARD_ADR_STREET,      1 },
     { "district",      VCARD_ADR_DISTRICT,      VCARD_ADR_STREET,      1 },
+    { "landmark",      VCARD_ADR_LANDMARK,      VCARD_ADR_STREET,      1 },
+    { "direction",     VCARD_ADR_DIRECTION,     VCARD_ADR_STREET,      1 },
     { NULL,            0,                       0,                     0 }
 };
 
@@ -6343,6 +6345,7 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
     /* Iterate through all components and values */
     for (const struct comp_kind *ckind = comp_kinds; ckind->name; ckind++) {
         if (ckind->idx >= st->num_fields) continue;
+        if (!*ckind->name) continue;
 
         sa = st->field[ckind->idx];
         for (i = 0; sa && i < vcardstrarray_size(sa); i++) {
