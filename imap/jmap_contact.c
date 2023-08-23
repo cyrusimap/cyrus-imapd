@@ -7021,8 +7021,8 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     unmapped:
     default: {
         json_t *props = json_object_get_vanew(obj, "vCardProps", "[]");
-        json_t *jparams = json_object();
-        const char *type = "text";
+        json_t *jtype, *jparams = json_object();
+        const char *type = NULL;
 
         for (param = vcardproperty_get_first_parameter(prop,
                                                        VCARD_ANY_PARAMETER);
@@ -7045,6 +7045,35 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
             }
         }
 
+        if (!type) {
+            vcardvalue_kind vkind = vcardproperty_kind_to_value_kind(prop_kind);
+
+            switch (vkind) {
+            case VCARD_X_VALUE:
+            case VCARD_NO_VALUE:
+                type = "unknown";
+                break;
+                    
+            case VCARD_TZ_VALUE:
+            case VCARD_GEO_VALUE:
+            case VCARD_KIND_VALUE:
+            case VCARD_TEXT_VALUE:
+            case VCARD_VERSION_VALUE:
+            case VCARD_TEXTLIST_VALUE:
+            case VCARD_GRAMGENDER_VALUE:
+            case VCARD_STRUCTURED_VALUE:
+                type = "text";
+                break;
+
+            default:
+                buf_setcstr(crock->buf, vcardvalue_kind_to_string(vkind));
+                type = buf_lcase(crock->buf);
+                break;
+            }
+        }
+
+        jtype = json_string(type);
+
         if (prop_group) {
             const char *label;
 
@@ -7065,8 +7094,8 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
         buf_setcstr(crock->buf, vcardproperty_get_property_name(prop));
         json_array_append_new(props,
-                              json_pack("[s o s o]",
-                                        buf_lcase(crock->buf), jparams, type,
+                              json_pack("[s o o o]",
+                                        buf_lcase(crock->buf), jparams, jtype,
                                         jmap_utf8string(prop_value)));
         return;
     }
