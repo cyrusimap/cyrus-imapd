@@ -30,7 +30,7 @@ def generate_sitemap(app, exception):
         raise errors.ExtensionError("Cannot generate sitemap. Set 'sitemap_website' in conf.py with website hostname")
 
     env = app.builder.env
-    for page in env.found_docs:
+    for page in sorted(env.found_docs):
         for site in website:
             url = {}
             url["loc"] = "{}{}.html".format(site, page)
