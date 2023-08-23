@@ -2498,6 +2498,13 @@ static int convert_to_name(struct buf *dst,
     n = ucnv_convert(to_name, from, dst->s, 0, src, len, &err) + 1;
     if (err != U_BUFFER_OVERFLOW_ERROR)
         return -1;
+
+    /* ucnv_convert return value includes size with NUL byte */
+    if (n < 2) {
+        buf_cstring(dst);
+        buf_reset(dst);
+        return 0;
+    }
     buf_ensure(dst, n);
 
     /* run the conversion */
@@ -2507,7 +2514,7 @@ static int convert_to_name(struct buf *dst,
         return -1;
     }
 
-    buf_truncate(dst, n);
+    buf_truncate(dst, n - 1);
     buf_cstring(dst);
     return 0;
 }
