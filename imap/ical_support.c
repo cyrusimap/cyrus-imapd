@@ -58,7 +58,6 @@
 #include "strhash.h"
 #include "stristr.h"
 #include "util.h"
-#include "icu_wrap.h"
 #include "xsha1.h"
 
 #ifdef WITH_JMAP
