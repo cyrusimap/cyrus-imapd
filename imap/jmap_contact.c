@@ -6268,7 +6268,7 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
     vcardparameter *param;
     vcardstrarray *sa;
     const char *val, *val_prop_name = "value";
-    json_t *comps, *comp;
+    json_t *comps, *comp = NULL;
     size_t i, j = 0;
 
     param = vcardproperty_get_first_parameter(prop, VCARD_PHONETIC_PARAMETER);
@@ -6342,12 +6342,19 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
             }
 
             if (*val) {
-                json_array_append_new(json_object_get_vanew(obj,
-                                                            "components", "[]"),
-                                      json_pack("{s:s s:o}",
-                                                "kind", kind,
-                                                val_prop_name,
-                                                jmap_utf8string(val)));
+                /* This assumes that JSCOMPS are identical
+                   for props paired by ALTID */
+                comps = json_object_get_vanew(obj, "components", "[]");
+                if (json_array_size(comps) > j) {
+                    /* Grab the existing component by position */
+                    comp = json_array_get(comps, j);
+                }
+                else {
+                    comp = json_pack("{s:s}", "kind", kind);
+                    json_array_append_new(comps, comp);
+                }
+                json_object_set_new(comp, val_prop_name, jmap_utf8string(val));
+                j++;
             }
         }
 
@@ -6376,7 +6383,16 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
 
                 comps = json_object_get_vanew(obj, "components", "[]");
                 if (json_array_size(comps) > j) {
-                    comp = json_array_get(comps, j);
+                    size_t k;
+
+                    /* Find the existing component by name */
+                    json_array_foreach(comps, k, comp) {
+                        if (!strcmp(ckind->name,
+                                    json_string_value(json_object_get(comp, "kind")))) {
+                            break;
+                        }
+                    }
+                    if (k > json_array_size(comps)) continue;
                 }
                 else {
                     comp = json_pack("{s:s}", "kind", ckind->name);
@@ -7262,7 +7278,15 @@ static json_t *jmap_card_from_vcard(const char *userid,
             props = ptrarray_new();
             hash_insert(altid, props, props_by_altid);
         }
-        ptrarray_append(props, prop);
+        if ((prop_kind == VCARD_N_PROPERTY || prop_kind == VCARD_ADR_PROPERTY) &&
+            vcardproperty_get_first_parameter(prop, VCARD_JSCOMPS_PARAMETER)) {
+            /* Always place props with JSCOMPS at the head of the list
+               so the comp order is set before handling PHONETICS */
+            ptrarray_insert(props, 0, prop);
+        }
+        else {
+            ptrarray_append(props, prop);
+        }
 
         if (prop_kind == VCARD_VERSION_PROPERTY) {
             crock.version = vcardproperty_get_version(prop);
