@@ -141,6 +141,8 @@ static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
 static int64_t maxsize = 0;
 
+static struct client_behavior_registry client_behavior;
+
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
    currently piping */
@@ -867,6 +869,17 @@ static void imapd_reset(void)
 
     /* run delayed commands first before closing anything */
     libcyrus_run_delayed();
+
+    /* log the client behaviors */
+    xsyslog(LOG_NOTICE, "session ended",
+                        "sessionid=<%s> userid=<%s>"
+                        " compress=<%u> notify=<%u>",
+                        session_id(),
+                        imapd_userid ? imapd_userid : "",
+                        client_behavior.did_compress,
+                        client_behavior.did_notify);
+
+    memset(&client_behavior, 0, sizeof(client_behavior));
 
     proc_cleanup(&proc_handle);
 
@@ -15031,6 +15044,8 @@ static void cmd_resetkey(char *tag, char *name,
 #ifdef HAVE_ZLIB
 static void cmd_compress(char *tag, char *alg)
 {
+    client_behavior.did_compress = 1;
+
     if (imapd_compress_done) {
         prot_printf(imapd_out,
                     "%s BAD [COMPRESSIONACTIVE] DEFLATE active via COMPRESS\r\n",
@@ -15712,6 +15727,8 @@ static void cmd_notify(char *tag, int set)
     struct buf arg = BUF_INITIALIZER;
     char *filter_name = NULL;
     int c = EOF, do_status = 0;
+
+    client_behavior.did_notify = 1;
 
     if (set) {
         /* Parse optional status-indicator */

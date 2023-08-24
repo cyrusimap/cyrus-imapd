@@ -431,4 +431,9 @@ enum {
 
 extern struct protstream *imapd_out, *imapd_in;
 
+struct client_behavior_registry {
+    unsigned int did_compress : 1;   /* client started COMPRESS */
+    unsigned int did_notify   : 1;   /* client used NOTIFY */
+};
+
 #endif /* INCLUDED_IMAPD_H */
