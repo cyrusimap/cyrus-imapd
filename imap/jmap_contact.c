@@ -10372,6 +10372,41 @@ static unsigned _vcardprops_to_card(struct jmap_parser *parser, json_t *jval,
 #define PROP_LANG_TAG_PREFIX      "cyrusimap.org:lang:"
 #define PROP_LANG_TAG_PREFIX_LEN  19
 
+static void reject_reserved_props(json_t *jsobj, struct jmap_parser *parser)
+{
+    if (JNULL(jsobj)) return;
+
+    const char *key;
+    json_t *jval;
+    json_object_foreach(jsobj, key, jval) {
+        if (!strcasecmp(key, "extra")) {
+            jmap_parser_invalid(parser, key);
+        }
+        else if (strchr(key, '/')) {
+            strarray_t *segs = strarray_split(key, "/", STRARRAY_LCASE);
+            for (int i = 0; i < strarray_size(segs); i++) {
+                if (!strcmp(strarray_nth(segs, i), "extra")) {
+                    jmap_parser_invalid(parser, key);
+                    break;
+                }
+            }
+            strarray_free(segs);
+        }
+
+        for (size_t i = 0; i < json_array_size(jval); i++) {
+            jmap_parser_push_index(parser, key, i, NULL);
+            reject_reserved_props(json_array_get(jval, i), parser);
+            jmap_parser_pop(parser);
+        }
+
+        if (json_object_size(jval)) {
+            jmap_parser_push(parser, key);
+            reject_reserved_props(jval, parser);
+            jmap_parser_pop(parser);
+        }
+    }
+}
+
 static int _jscard_to_vcard(struct jmap_req *req,
                             struct carddav_data *cdata,
                             const char *mboxname,
@@ -10394,6 +10429,9 @@ static int _jscard_to_vcard(struct jmap_req *req,
 
     json_decref(parser.invalid);
     parser.invalid = errors->invalid;
+
+    /* Using reserved props is invalid */
+    reject_reserved_props(arg, &parser);
 
     construct_hash_table(&groups, 10, 0);
     construct_hash_table(&l10n_by_key, 10, 0);
