@@ -1295,6 +1295,33 @@ done:
  * JMAP Contacts API
  ****************************************************************************/
 
+struct contact_getargs {
+    const char *addressbook_id;
+    int disable_uri_as_blobid;
+};
+
+static int _contact_getargs_parse(jmap_req_t *req __attribute__((unused)),
+                                  struct jmap_parser *parser __attribute__((unused)),
+                                  const char *key,
+                                  json_t *arg,
+                                  void *rock)
+{
+    struct contact_getargs *args = rock;
+    int r = 0;
+
+    /* Non-JMAP spec addressbookId argument */
+    if (!strcmp(key, "addressbookId") && json_is_string(arg)) {
+        args->addressbook_id = json_string_value(arg);
+        r = 1;
+    }
+    else if (!strcmp(key, "disableUriAsBlobId") && json_is_boolean(arg)) {
+        args->disable_uri_as_blobid = json_boolean_value(arg);
+        r = 1;
+    }
+
+    return r;
+}
+
 struct cards_rock {
     struct carddav_db *db;
     struct jmap_req *req;
@@ -1303,6 +1330,7 @@ struct cards_rock {
     mbentry_t *mbentry;
     hashu64_table jmapcache;
     int rows;
+    struct contact_getargs args;
 };
 
 static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
@@ -1616,25 +1644,6 @@ static const jmap_property_t group_props[] = {
     { NULL, NULL, 0 }
 };
 
-static int _contact_getargs_parse(jmap_req_t *req __attribute__((unused)),
-                                  struct jmap_parser *parser __attribute__((unused)),
-                                  const char *key,
-                                  json_t *arg,
-                                  void *rock)
-{
-    const char **addressbookId = (const char **) rock;
-    int r = 1;
-
-    /* Non-JMAP spec addressbookId argument */
-    if (!strcmp(key, "addressbookId") && json_is_string(arg)) {
-        *addressbookId = json_string_value(arg);
-    }
-
-    else r = 0;
-
-    return r;
-}
-
 static void cachecards_cb(uint64_t rowid, void *payload, void *vrock)
 {
     const char *eventrep = payload;
@@ -1682,15 +1691,17 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
     int r = 0;
 
     /* Build callback data */
-    struct cards_rock rock = { NULL, req, &get, NULL /*mailbox*/, NULL /*mbentry*/,
-                               HASHU64_TABLE_INITIALIZER, 0 /*rows */ };
+    struct cards_rock rock = {
+        .req = req,
+        .get = &get,
+        .jmapcache = HASHU64_TABLE_INITIALIZER,
+    };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
 
     /* Parse request */
-    const char *addressbookId = NULL;
     jmap_get_parse(req, &parser, props, /* allow_null_ids */ 1,
-                   &_contact_getargs_parse, &addressbookId, &get, &err);
+                   &_contact_getargs_parse, &rock.args, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1705,8 +1716,8 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
         goto done;
     }
 
-    if (addressbookId) {
-        char *mboxname = carddav_mboxname(req->accountid, addressbookId);
+    if (rock.args.addressbook_id) {
+        char *mboxname = carddav_mboxname(req->accountid, rock.args.addressbook_id);
         mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
         free(mboxname);
         /* XXX  invalidArgument? */
@@ -1823,16 +1834,16 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     int r = 0;
 
     /* Parse request */
-    const char *addressbookId = NULL;
+    struct contact_getargs args = {0};
     jmap_changes_parse(req, &parser, req->counters.carddavdeletedmodseq,
-                       &_contact_getargs_parse, &addressbookId, &changes, &err);
+                       &_contact_getargs_parse, &args, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
     }
 
-    if (addressbookId) {
-        char *mboxname = carddav_mboxname(req->accountid, addressbookId);
+    if (args.addressbook_id) {
+        char *mboxname = carddav_mboxname(req->accountid, args.addressbook_id);
         mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
         free(mboxname);
         /* XXX  invalidArgument? */
@@ -5856,8 +5867,14 @@ static const char *_prop_id(vcardproperty *prop)
 static char *_value_to_uri_blobid(vcardproperty *prop,
                                   struct mailbox *mailbox,
                                   struct index_record *record,
+                                  vcardproperty_version version,
                                   char **type, char **blobid)
 {
+    if (!blobid && version == VCARD_VERSION_40) {
+        const char *uri = vcardvalue_get_uri(vcardproperty_get_value(prop));
+        if (uri) return xstrdup(uri);
+    }
+
     struct message_guid guid;
     size_t size = vcard_prop_decode_value_x(prop, NULL, type, &guid);
 
@@ -5873,7 +5890,7 @@ static char *_value_to_uri_blobid(vcardproperty *prop,
             vcardproperty_remove_parameter_by_kind(prop, VCARD_TYPE_PARAMETER);
         }
 
-        if (mailbox && record) {
+        if (mailbox && record && blobid) {
             const char *prop_name = vcardproperty_get_property_name(prop);
 
             jmap_encode_rawdata_blobid('V', mailbox_uniqueid(mailbox),
@@ -6231,8 +6248,9 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
     if (label) json_object_set_new(obj, "label", jmap_utf8string(label));
 }
 
-#define IGNORE_VCARD_VERSION (1<<0)
-#define IGNORE_DERIVED_PROPS (1<<1)
+#define IGNORE_VCARD_VERSION  (1<<0)
+#define IGNORE_DERIVED_PROPS  (1<<1)
+#define DISABLE_URI_AS_BLOBID (1<<2)
 
 struct card_rock {
     json_t *card;
@@ -6245,6 +6263,7 @@ struct card_rock {
     struct index_record *record;
     unsigned flags;
     struct buf *buf;
+    vcardproperty_version version;
 };
 
 static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
@@ -6598,8 +6617,9 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
             param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
                 ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
 
-            uri = _value_to_uri_blobid(prop, crock->mailbox, crock->record,
-                                       &type, &blobid);
+            uri = _value_to_uri_blobid(prop,
+                    crock->mailbox, crock->record, crock->version,
+                    &type, crock->flags & DISABLE_URI_AS_BLOBID ? NULL : &blobid);
 
             jprop = json_pack("{s:s s:s* s:s* s:s*}",
                               "kind", kind, "mediaType", type,
@@ -6965,8 +6985,9 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
             ALLOW_LABEL_PARAM | ALLOW_MEDIATYPE_PARAM;
 
-        uri = _value_to_uri_blobid(prop, crock->mailbox, crock->record,
-                                   &type, &blobid);
+        uri = _value_to_uri_blobid(prop,
+                crock->mailbox, crock->record, crock->version,
+                &type, crock->flags & DISABLE_URI_AS_BLOBID ? NULL : &blobid);
 
         jprop = json_pack("{s:s* s:s* s:s*}",
                           "mediaType", type, "uri", uri, "blobId", blobid);
@@ -7201,14 +7222,13 @@ static json_t *jmap_card_from_vcard(const char *userid,
                               "@type", "Card",
                               "version", "1.0",
                               "kind", "individual");
-    vcardproperty_version version = VCARD_VERSION_NONE;
     hash_table props_by_name = HASH_TABLE_INITIALIZER;
     hash_table labels = HASH_TABLE_INITIALIZER;
     hash_table adrs = HASH_TABLE_INITIALIZER;
     hash_table orgs = HASH_TABLE_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct card_rock crock = {
-        jcard, NULL, NULL, &labels, &adrs, &orgs, mailbox, record, flags, &buf
+        jcard, NULL, NULL, &labels, &adrs, &orgs, mailbox, record, flags, &buf, VCARD_VERSION_NONE
     };
     vcardproperty *prop;
     vcardparameter *param;
@@ -7254,7 +7274,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
         ptrarray_append(props, prop);
 
         if (prop_kind == VCARD_VERSION_PROPERTY) {
-            version = vcardproperty_get_version(prop);
+            crock.version = vcardproperty_get_version(prop);
         }
         else if (prop_kind == VCARD_LANGUAGE_PROPERTY) {
             crock.deflang = vcardproperty_get_language(prop);
@@ -7288,7 +7308,8 @@ static json_t *jmap_card_from_vcard(const char *userid,
         }
     }
 
-    if (version == VCARD_VERSION_NONE || version == VCARD_VERSION_X) goto done;
+    if (crock.version == VCARD_VERSION_NONE || crock.version == VCARD_VERSION_X)
+        goto done;
 
     /* Don't combine geographical props unless at least one ADR has GROUP set */
     if (hash_numrecords(&adrs) == 1 && hash_lookup("", &adrs)) {
@@ -7363,8 +7384,12 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     }
 
     /* Convert the vCard to a JSContact Card. */
+    int from_vcard_flags = IGNORE_DERIVED_PROPS;
+    if (crock->args.disable_uri_as_blobid)
+        from_vcard_flags |= DISABLE_URI_AS_BLOBID;
+
     obj = jmap_card_from_vcard(crock->req->userid, vcard,
-                               crock->mailbox, &record, IGNORE_DERIVED_PROPS);
+                               crock->mailbox, &record, from_vcard_flags);
     vcardcomponent_free(vcard);
 
     jmap_filterprops(obj, crock->get->props);
@@ -11406,51 +11431,55 @@ static int jmap_card_copy(struct jmap_req *req)
     return _contacts_copy(req, &_card_from_record, &_card_set_create);
 }
 
+struct card_parseargs {
+    hash_table *props;
+    int disable_uri_as_blobid;
+};
+
 static int _card_parseargs_parse(jmap_req_t *req __attribute__((unused)),
                                  struct jmap_parser *parser,
                                  const char *key,
                                  json_t *arg,
                                  void *rock)
 {
-    hash_table **props = (hash_table **) rock;
+    struct card_parseargs *args = rock;
+    int r = 0;
 
-    if (!strcmp(key, "properties")) {
-        if (json_is_array(arg)) {
-            size_t i;
-            json_t *val;
+    if (!strcmp(key, "properties") && json_is_array(arg)) {
+        size_t i;
+        json_t *val;
 
-            *props = xzmalloc(sizeof(hash_table));
-            construct_hash_table(*props, json_array_size(arg) + 1, 0);
-            json_array_foreach(arg, i, val) {
-                const char *s = json_string_value(val);
-                if (!s) {
-                    jmap_parser_push_index(parser, "properties", i, s);
-                    jmap_parser_invalid(parser, NULL);
-                    jmap_parser_pop(parser);
-                    continue;
-                }
-                hash_insert(s, (void*)1, *props);
+        args->props = xzmalloc(sizeof(hash_table));
+        construct_hash_table(args->props, json_array_size(arg) + 1, 0);
+        json_array_foreach(arg, i, val) {
+            const char *s = json_string_value(val);
+            if (!s) {
+                jmap_parser_push_index(parser, "properties", i, s);
+                jmap_parser_invalid(parser, NULL);
+                jmap_parser_pop(parser);
+                continue;
             }
+            hash_insert(s, (void*)1, args->props);
         }
-        else if (JNOTNULL(arg)) {
-            return 0;
-        }
-
-        return 1;
+        r = 1;
+    }
+    else if (!strcmp(key, "disableUriAsBlobId") && json_is_boolean(arg)) {
+        args->disable_uri_as_blobid = json_boolean_value(arg);
+        r = 1;
     }
 
-    return 0;
+    return r;
 }
 
 static int jmap_card_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_parse parse;
-    hash_table *props = NULL;
+    struct card_parseargs args = {0};
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_parse_parse(req, &parser, &_card_parseargs_parse, &props, &parse, &err);
+    jmap_parse_parse(req, &parser, &_card_parseargs_parse, &args, &parse, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -11493,13 +11522,17 @@ static int jmap_card_parse(jmap_req_t *req)
 
         vcard = vcard_parse_buf_x(&blob_ctx.blob);
         if (vcard) {
+            int from_vcard_flags = IGNORE_DERIVED_PROPS;
+            if (args.disable_uri_as_blobid)
+                from_vcard_flags |= DISABLE_URI_AS_BLOBID;
+
             jcard = jmap_card_from_vcard(req->userid, vcard,
-                                         mailbox, &record, IGNORE_DERIVED_PROPS);
+                                         mailbox, &record, from_vcard_flags);
             vcardcomponent_free(vcard);
         }
 
         if (jcard) {
-            jmap_filterprops(jcard, props);
+            jmap_filterprops(jcard, args.props);
             json_object_set_new(parse.parsed, blobid, jcard);
         }
         else {
@@ -11517,8 +11550,8 @@ static int jmap_card_parse(jmap_req_t *req)
 done:
     jmap_parser_fini(&parser);
     jmap_parse_fini(&parse);
-    free_hash_table(props, NULL);
-    free(props);
+    free_hash_table(args.props, NULL);
+    free(args.props);
     return 0;
 }
 
