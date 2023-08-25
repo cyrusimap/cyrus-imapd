@@ -4503,6 +4503,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
             ucase(arg.s);
             if (!strcmp(arg.s, "CONDSTORE")) {
                 client_capa |= CAPA_CONDSTORE;
+                client_behavior.did_condstore = 1;
             }
             else if ((client_capa & CAPA_QRESYNC) &&
                      !strcmp(arg.s, "QRESYNC")) {
@@ -6123,6 +6124,8 @@ static void cmd_store(char *tag, char *sequence, int usinguid)
             c = getword(imapd_in, &storemod);
             ucase(storemod.s);
             if (!strcmp(storemod.s, "UNCHANGEDSINCE")) {
+                client_behavior.did_condstore = 1;
+
                 if (c != ' ') {
                     prot_printf(imapd_out,
                                 "%s BAD Missing required argument to %s %s\r\n",
