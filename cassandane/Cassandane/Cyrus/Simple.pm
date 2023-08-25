@@ -195,11 +195,18 @@ sub test_cmdtimer_sessionid
 
     # should have logged some timer output, which should include the sess id
     if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = grep { m/\bcmdtimer:/ } $self->{instance}->getsyslog();
-        $self->assert_num_gte(1, scalar @lines);
-        foreach my $line (@lines) {
+        my @lines = $self->{instance}->getsyslog();
+
+        my @timer_lines = grep { m/\bcmdtimer:/ } @lines;
+        $self->assert_num_gte(1, scalar @timer_lines);
+        foreach my $line (@timer_lines) {
             $self->assert_matches(qr/sessionid=<[^ >]+>/, $line);
         }
+
+        my (@behavior_lines) = grep { /session ended/ && /notify=<[01]>/ }
+                               @lines;
+
+        $self->assert_num_gte(1, scalar @behavior_lines);
     }
 }
 
