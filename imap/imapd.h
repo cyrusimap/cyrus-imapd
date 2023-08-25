@@ -432,6 +432,7 @@ enum {
 extern struct protstream *imapd_out, *imapd_in;
 
 struct client_behavior_registry {
+    unsigned int did_annotate : 1;   /* called SETANNOTATION or FETCH-ed ANNOTATION */
     unsigned int did_condstore: 1;   /* gave CONDSTORE on SELECT */
     unsigned int did_compress : 1;   /* started COMPRESS */
     unsigned int did_idle     : 1;   /* used IDLE */

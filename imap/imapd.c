@@ -5525,6 +5525,9 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (usinguid)
         fetchargs.fetchitems |= FETCH_UID;
 
+    if (fetchargs.fetchitems & FETCH_ANNOTATION)
+        client_behavior.did_annotate = 1;
+
     r = index_fetch(imapd_index, sequence, usinguid, &fetchargs,
                 &fetchedsomething);
 
@@ -10821,6 +10824,8 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     strarray_t attribs = STRARRAY_INITIALIZER;
     annotate_state_t *astate = NULL;
 
+    client_behavior.did_annotate = 1;
+
     c = parse_annotate_fetch_data(tag, /*permessage_flag*/0, &entries, &attribs);
     if (c == EOF) {
         eatline(imapd_in, c);
@@ -11213,6 +11218,8 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     int c, r = 0;
     struct entryattlist *entryatts = NULL;
     annotate_state_t *astate = NULL;
+
+    client_behavior.did_annotate = 1;
 
     c = parse_annotate_store_data(tag, 0, &entryatts);
     if (c == EOF) {
