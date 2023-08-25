@@ -437,6 +437,7 @@ struct client_behavior_registry {
     unsigned int did_compress : 1;   /* started COMPRESS */
     unsigned int did_idle     : 1;   /* used IDLE */
     unsigned int did_notify   : 1;   /* used NOTIFY */
+    unsigned int did_preview  : 1;   /* fetched PREVIEW */
     unsigned int did_qresync  : 1;   /* gave QRESYNC on SELECT */
 };
 

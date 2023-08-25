@@ -5528,6 +5528,9 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (fetchargs.fetchitems & FETCH_ANNOTATION)
         client_behavior.did_annotate = 1;
 
+    if (fetchargs.fetchitems & FETCH_PREVIEW)
+        client_behavior.did_preview = 1;
+
     r = index_fetch(imapd_index, sequence, usinguid, &fetchargs,
                 &fetchedsomething);
 
