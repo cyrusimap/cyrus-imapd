@@ -4387,9 +4387,6 @@ EXPORTED int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *modseqp)
     conv_status_t status = CONV_STATUS_INIT;
     int r;
 
-    if (modseqp)
-        *modseqp = 0;
-
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
     if (!cstate) return 0;
 

@@ -748,7 +748,7 @@ extern int mailbox_cid_rename(struct mailbox *mailbox,
                               conversation_id_t from_cid,
                               conversation_id_t to_cid);
 extern int mailbox_add_conversations(struct mailbox *mailbox, int silent);
-extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
+__attribute__((nonnull)) int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
 extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t, int force);
 #define mailbox_has_conversations(m) mailbox_has_conversations_full(m, 0)
 extern int mailbox_has_conversations_full(struct mailbox *mailbox, int allow_deleted);
