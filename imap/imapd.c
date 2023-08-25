@@ -3487,6 +3487,8 @@ static void cmd_idle(char *tag)
     struct protstream *be_in = NULL;
     int extra_fd = idle_sock;
 
+    client_behavior.did_idle = 1;
+
     /* get idle timeout */
     if (idle_timeout == -1) {
         idle_timeout = config_getduration(IMAPOPT_IMAPIDLETIMEOUT, 'm');
