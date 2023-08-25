@@ -11049,7 +11049,7 @@ static void cmd_getmetadata(const char *tag)
 
         if (c != '\n') {
             prot_printf(imapd_out,
-                        "%s BAD Unexpected extra arguments to Getannotation\r\n",
+                        "%s BAD Unexpected extra arguments to Getmetadata\r\n",
                         tag);
             eatline(imapd_in, c);
             goto freeargs;
