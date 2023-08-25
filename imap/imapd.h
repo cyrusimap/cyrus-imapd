@@ -439,6 +439,7 @@ struct client_behavior_registry {
     unsigned int did_notify   : 1;   /* used NOTIFY */
     unsigned int did_preview  : 1;   /* fetched PREVIEW */
     unsigned int did_qresync  : 1;   /* gave QRESYNC on SELECT */
+    unsigned int did_savedate : 1;   /* fetched SAVEDATE */
 };
 
 #endif /* INCLUDED_IMAPD_H */
