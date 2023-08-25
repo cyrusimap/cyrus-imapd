@@ -7106,6 +7106,8 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     char *copyuid = NULL;
     mbentry_t *mbentry = NULL;
 
+    if (ismove) client_behavior.did_move = 1;
+
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
     r = mlookup(NULL, NULL, intname, &mbentry);
 
