@@ -4509,6 +4509,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
                      !strcmp(arg.s, "QRESYNC")) {
                 char *p;
 
+                client_behavior.did_qresync = 1;
+
                 if (c != ' ') goto badqresync;
                 c = prot_getc(imapd_in);
                 if (c != '(') goto badqresync;
