@@ -432,18 +432,19 @@ enum {
 extern struct protstream *imapd_out, *imapd_in;
 
 struct client_behavior_registry {
-    unsigned int did_annotate : 1;   /* called SETANNOTATION or FETCH-ed ANNOTATION */
-    unsigned int did_condstore: 1;   /* gave CONDSTORE on SELECT */
-    unsigned int did_compress : 1;   /* started COMPRESS */
-    unsigned int did_idle     : 1;   /* used IDLE */
-    unsigned int did_metadata : 1;   /* called GETMETADATA or SETMETADATA */
-    unsigned int did_move     : 1;   /* used MOVE */
-    unsigned int did_notify   : 1;   /* used NOTIFY */
-    unsigned int did_preview  : 1;   /* fetched PREVIEW */
-    unsigned int did_qresync  : 1;   /* gave QRESYNC on SELECT */
-    unsigned int did_savedate : 1;   /* fetched SAVEDATE */
-    unsigned int did_searchres: 1;   /* used SAVE on SEARCH */
-    unsigned int did_replace  : 1;   /* used REPLACE */
+    unsigned int did_annotate     : 1;   /* used SETANNOTATION or FETCH-ed ANNOTATION */
+    unsigned int did_condstore    : 1;   /* gave CONDSTORE on SELECT */
+    unsigned int did_compress     : 1;   /* started COMPRESS */
+    unsigned int did_idle         : 1;   /* used IDLE */
+    unsigned int did_metadata     : 1;   /* called GETMETADATA or SETMETADATA */
+    unsigned int did_multisearch  : 1;   /* called ESEARCH */
+    unsigned int did_move         : 1;   /* used MOVE */
+    unsigned int did_notify       : 1;   /* used NOTIFY */
+    unsigned int did_preview      : 1;   /* fetched PREVIEW */
+    unsigned int did_qresync      : 1;   /* gave QRESYNC on SELECT */
+    unsigned int did_savedate     : 1;   /* fetched SAVEDATE */
+    unsigned int did_searchres    : 1;   /* used SAVE on SEARCH */
+    unsigned int did_replace      : 1;   /* used REPLACE */
 };
 
 #endif /* INCLUDED_IMAPD_H */

@@ -882,25 +882,28 @@ static void imapd_reset(void)
                         "sessionid=<%s> userid=<%s>"
                         "%s%s%s%s"
                         "%s%s%s%s"
-                        "%s%s%s%s",
+                        "%s%s%s%s"
+                        "%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
 
-                        client_behavior.did_annotate  ? " annotate=<1>"   : "",
-                        client_behavior.did_compress  ? " compress=<1>"   : "",
-                        client_behavior.did_condstore ? " condstore=<1>"  : "",
-                        client_behavior.did_idle      ? " idle=<1>"       : "",
+                        client_behavior.did_annotate    ? " annotate=<1>"     : "",
+                        client_behavior.did_compress    ? " compress=<1>"     : "",
+                        client_behavior.did_condstore   ? " condstore=<1>"    : "",
+                        client_behavior.did_idle        ? " idle=<1>"         : "",
 
-                        client_behavior.did_metadata  ? " metadata=<1>"   : "",
-                        client_behavior.did_move      ? " move=<1>"       : "",
-                        client_behavior.did_notify    ? " notify=<1>"     : "",
-                        client_behavior.did_preview   ? " preview=<1>"    : "",
+                        client_behavior.did_metadata    ? " metadata=<1>"     : "",
+                        client_behavior.did_move        ? " move=<1>"         : "",
+                        client_behavior.did_multisearch ? " multisearch=<1>"  : "",
+                        client_behavior.did_notify      ? " notify=<1>"       : "",
 
-                        client_behavior.did_qresync   ? " qresync=<1>"    : "",
-                        client_behavior.did_replace   ? " replace=<1>"    : "",
-                        client_behavior.did_savedate  ? " savedate=<1>"   : "",
-                        client_behavior.did_searchres ? " searchres=<1>"  : "");
+                        client_behavior.did_preview     ? " preview=<1>"      : "",
+                        client_behavior.did_qresync     ? " qresync=<1>"      : "",
+                        client_behavior.did_replace     ? " replace=<1>"      : "",
+                        client_behavior.did_savedate    ? " savedate=<1>"     : "",
+
+                        client_behavior.did_searchres   ? " searchres=<1>"    : "");
 
     memset(&client_behavior, 0, sizeof(client_behavior));
 
@@ -6429,6 +6432,7 @@ static void cmd_search(char *tag, char *cmd)
 
     switch (cmd[0]) {
     case 'E':  // Esearch (multisearch)
+        client_behavior.did_multisearch = 1;
         state |= GETSEARCH_SOURCE;
 
         GCC_FALLTHROUGH
