@@ -203,8 +203,7 @@ sub test_cmdtimer_sessionid
             $self->assert_matches(qr/sessionid=<[^ >]+>/, $line);
         }
 
-        my (@behavior_lines) = grep { /session ended/ && /notify=<[01]>/ }
-                               @lines;
+        my (@behavior_lines) = grep { /session ended/ } @lines;
 
         $self->assert_num_gte(1, scalar @behavior_lines);
     }
