@@ -436,6 +436,7 @@ struct client_behavior_registry {
     unsigned int did_condstore: 1;   /* gave CONDSTORE on SELECT */
     unsigned int did_compress : 1;   /* started COMPRESS */
     unsigned int did_idle     : 1;   /* used IDLE */
+    unsigned int did_metadata : 1;   /* called GETMETADATA or SETMETADATA */
     unsigned int did_move     : 1;   /* used MOVE */
     unsigned int did_notify   : 1;   /* used NOTIFY */
     unsigned int did_preview  : 1;   /* fetched PREVIEW */

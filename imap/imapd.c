@@ -11070,6 +11070,8 @@ static void cmd_getmetadata(const char *tag)
     struct getmetadata_options opts = OPTS_INITIALIZER;
     annotate_state_t *astate = NULL;
 
+    client_behavior.did_metadata = 1;
+
     while (nlists < 3)
     {
         c = parse_metadata_string_or_list(tag, &lists[nlists], &is_list[nlists]);
@@ -11299,6 +11301,8 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     int c, r = 0;
     struct entryattlist *entryatts = NULL;
     annotate_state_t *astate = NULL;
+
+    client_behavior.did_metadata = 1;
 
     c = parse_metadata_store_data(tag, &entryatts);
     if (c == EOF) {
