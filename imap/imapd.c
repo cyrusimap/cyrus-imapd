@@ -15513,6 +15513,8 @@ static void cmd_replace(char *tag, char *seqno, char *name, int usinguid)
     char *intname = NULL;
     int r = 0;
 
+    client_behavior.did_replace = 1;
+
     /* Need permission to delete message and seqno must be valid */
     if (backend_current) {
         static const int needrights = ACL_DELETEMSG|ACL_EXPUNGE;

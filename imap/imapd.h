@@ -443,6 +443,7 @@ struct client_behavior_registry {
     unsigned int did_qresync  : 1;   /* gave QRESYNC on SELECT */
     unsigned int did_savedate : 1;   /* fetched SAVEDATE */
     unsigned int did_searchres: 1;   /* used SAVE on SEARCH */
+    unsigned int did_replace  : 1;   /* used REPLACE */
 };
 
 #endif /* INCLUDED_IMAPD_H */
