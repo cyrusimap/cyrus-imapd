@@ -575,8 +575,7 @@ static icaltimezone *get_floatingtz(const char *mailbox, const char *userid)
     icaltimezone *floatingtz = NULL;
 
     struct buf buf = BUF_INITIALIZER;
-    const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
-    if (!annotatemore_lookupmask(mailbox, annotname, userid, &buf)) {
+    if (!annotatemore_lookupmask(mailbox, DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone", userid, &buf) && buf_len(&buf)) {
         icalcomponent *comp = NULL;
         comp = icalparser_parse_string(buf_cstring(&buf));
         icalcomponent *subcomp =
