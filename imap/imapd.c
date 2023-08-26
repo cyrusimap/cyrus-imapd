@@ -870,14 +870,37 @@ static void imapd_reset(void)
     /* run delayed commands first before closing anything */
     libcyrus_run_delayed();
 
-    /* log the client behaviors */
+    /* log the client behaviors
+     *
+     * This slightly weird sprintf-ing is do that we only log the hits, not the
+     * misses.  Most connections, even those from clients that support
+     * SEARCHRES, won't use SEARCH SAVE, for example.  This pushes just a
+     * little complexity into the log processor, but should mean that the logs
+     * are a bit easier to skim and a bit smaller.
+     */
     xsyslog(LOG_NOTICE, "session ended",
                         "sessionid=<%s> userid=<%s>"
-                        " compress=<%u> notify=<%u>",
+                        "%s%s%s%s"
+                        "%s%s%s%s"
+                        "%s%s%s%s",
+
                         session_id(),
                         imapd_userid ? imapd_userid : "",
-                        client_behavior.did_compress,
-                        client_behavior.did_notify);
+
+                        client_behavior.did_annotate  ? " annotate=<1>"   : "",
+                        client_behavior.did_compress  ? " compress=<1>"   : "",
+                        client_behavior.did_condstore ? " condstore=<1>"  : "",
+                        client_behavior.did_idle      ? " idle=<1>"       : "",
+
+                        client_behavior.did_metadata  ? " metadata=<1>"   : "",
+                        client_behavior.did_move      ? " move=<1>"       : "",
+                        client_behavior.did_notify    ? " notify=<1>"     : "",
+                        client_behavior.did_preview   ? " preview=<1>"    : "",
+
+                        client_behavior.did_qresync   ? " qresync=<1>"    : "",
+                        client_behavior.did_replace   ? " replace=<1>"    : "",
+                        client_behavior.did_savedate  ? " savedate=<1>"   : "",
+                        client_behavior.did_searchres ? " searchres=<1>"  : "");
 
     memset(&client_behavior, 0, sizeof(client_behavior));
 
