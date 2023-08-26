@@ -765,7 +765,6 @@ includedir=@includedir@/cyrus
 include_HEADERS = \
 	lib/acl.h \
 	lib/arrayu64.h \
-	lib/assert.h \
 	lib/auth.h \
 	lib/auth_pts.h \
 	lib/bitvector.h \
@@ -815,12 +814,16 @@ include_HEADERS = \
 	lib/vparse.h \
 	lib/wildmat.h \
 	lib/xmalloc.h \
-	lib/xunlink.h
+	lib/xunlink.h \
+	lib/xsha1.h
 
 nodist_include_HEADERS = \
 	lib/imapopts.h
 
-nobase_include_HEADERS = sieve/sieve_interface.h
+nobase_include_HEADERS = \
+	sieve/sieve_interface.h \
+	lib/assert.h
+
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
 noinst_HEADERS += \
@@ -831,7 +834,6 @@ noinst_HEADERS += \
 	lib/prot.h \
 	lib/ptrarray.h \
 	lib/util.h \
-	lib/xsha1.h \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h \
 	lib/xstrnchr.h
