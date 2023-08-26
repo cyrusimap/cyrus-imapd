@@ -453,7 +453,7 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
     buf_appendcstr(&msgbuf, "Content-Disposition: inline\r\n");
     buf_appendcstr(&msgbuf, "\r\n");
 
-    buf_appendcstr(&msgbuf, HTML_DOCTYPE "\r\n<html><head><title></title></head><body>\r\n");
+    buf_appendcstr(&msgbuf, HTML_DOCTYPE "\r\n<html style='color-scheme:dark light'><head><title></title></head><body>\r\n");
 
     if (originator->name) {
         HTMLencode(&tmpbuf, originator->name);

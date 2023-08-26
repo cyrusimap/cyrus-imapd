@@ -596,7 +596,7 @@ static int webdav_get(struct transaction_t *txn,
         /* Send HTML with davmount link */
         buf_reset(body);
         buf_printf_markup(body, level, HTML_DOCTYPE);
-        buf_printf_markup(body, level++, "<html>");
+        buf_printf_markup(body, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(body, level++, "<head>");
         buf_printf_markup(body, level, "<title>%s</title>", txn->req_tgt.path);
         buf_printf_markup(body, --level, "</head>");
