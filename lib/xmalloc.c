@@ -45,6 +45,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "xmalloc.h"
+#include "lib/util.h"
 
 #include "exitcodes.h"
 
@@ -94,6 +95,15 @@ EXPORTED char *xstrdup(const char* str)
 {
     char *p = xmalloc(strlen(str)+1);
     strcpy(p, str);
+    return p;
+}
+
+EXPORTED char *xstrduplcase(const char* str) {
+    char *p = xmalloc(strlen(str)+1);
+    int i;
+    for (i = 0; str[i]; i++)
+        p[i] = TOLOWER(str[i]);
+    p[i] = '\0';
     return p;
 }
 
