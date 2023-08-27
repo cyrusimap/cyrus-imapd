@@ -56,7 +56,6 @@
 #include <jansson.h>
 #include <syslog.h>
 
-#include "util.h"
 #include "global.h"
 #include "mailbox.h"
 #include "xmalloc.h"
