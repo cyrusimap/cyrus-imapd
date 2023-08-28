@@ -1,0 +1,39 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.8.1 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.1/cyrus-imapd-3.8.1.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.1/cyrus-imapd-3.8.1.tar.gz.sig
+
+.. _relnotes-3.8.1-changes:
+
+Changes since 3.8.0
+===================
+
+Build changes
+-------------
+
+* Fixed :issue:`4071`: libical >= 3.0.10 is required
+* Fixed :issue:`4561`: retired custom manpage generator
+
+Bug fixes
+---------
+
+* Fixed :issue:`4309`: incorrect error code used for JMAP
+  invalidResultReference errors
+* Fixed :issue:`4523`: httpd crash with SIGSEGV when listing calendar
+* Fixed :issue:`4544`: leaked SSL_SESSION during backend disconnect
+* Fixed :issue:`4293`: cyr_cd.sh is bash, not sh
+* Fixed :issue:`4574`: potential crash in jmap_email_parse
+* Fixed :issue:`4567`: invalid FETCH BINARY response for sections with
+  unknown Content-Transfer-Encoding
+* Fixed :issue:`4370`: XFER did not fully remove source mailbox
+
+Other changes
+-------------
+
+* Fixed :issue:`4558`: better cyrusdb / ``ctl_cyrusdb -r`` UX
