@@ -280,6 +280,10 @@ sub test_message
 
     # we enabled NOTIFY, so we should see it in client behaviors
     if ($self->{instance}->{have_syslog_replacement}) {
+        # make sure that the connection is ended so that imapd reset happens
+        $talk->logout();
+        undef $talk;
+
         my (@lines) = grep { /session ended/ && /notify=<1>/ }
                       $self->{instance}->getsyslog();
 

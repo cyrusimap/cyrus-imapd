@@ -195,6 +195,10 @@ sub test_cmdtimer_sessionid
 
     # should have logged some timer output, which should include the sess id
     if ($self->{instance}->{have_syslog_replacement}) {
+        # make sure that the connection is ended so that imapd reset happens
+        $imaptalk->logout();
+        undef $imaptalk;
+
         my @lines = $self->{instance}->getsyslog();
 
         my @timer_lines = grep { m/\bcmdtimer:/ } @lines;
