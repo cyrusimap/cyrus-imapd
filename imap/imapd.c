@@ -861,14 +861,17 @@ static void event_groups_free(struct event_groups **groups)
     xzfree(*groups);
 }
 
-static void imapd_reset(void)
+static void imapd_log_client_behavior(void)
 {
-    int i;
-    int bytes_in = 0;
-    int bytes_out = 0;
+    struct attvaluelist *p = imapd_id.params;
+    const char *id_name = NULL;
 
-    /* run delayed commands first before closing anything */
-    libcyrus_run_delayed();
+    for (; p; p = p->next) {
+        if (0 == strcasecmp(p->attrib, "name")) {
+            id_name = buf_cstring(&p->value);
+            break;
+        }
+    }
 
     /* log the client behaviors
      *
@@ -879,7 +882,7 @@ static void imapd_reset(void)
      * are a bit easier to skim and a bit smaller.
      */
     xsyslog(LOG_NOTICE, "session ended",
-                        "sessionid=<%s> userid=<%s>"
+                        "sessionid=<%s> userid=<%s> id.name=<%s>"
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
@@ -887,6 +890,7 @@ static void imapd_reset(void)
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
+                        id_name,
 
                         client_behavior.did_annotate    ? " annotate=<1>"     : "",
                         client_behavior.did_compress    ? " compress=<1>"     : "",
@@ -904,7 +908,19 @@ static void imapd_reset(void)
                         client_behavior.did_savedate    ? " savedate=<1>"     : "",
 
                         client_behavior.did_searchres   ? " searchres=<1>"    : "");
+}
 
+static void imapd_reset(void)
+{
+    int i;
+    int bytes_in = 0;
+    int bytes_out = 0;
+
+    /* run delayed commands first before closing anything */
+    libcyrus_run_delayed();
+
+    /* log the client behaviors */
+    imapd_log_client_behavior();
     memset(&client_behavior, 0, sizeof(client_behavior));
 
     proc_cleanup(&proc_handle);
