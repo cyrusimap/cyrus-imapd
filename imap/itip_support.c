@@ -1124,9 +1124,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     if (mailfrom && mailfrom->mailbox)
         sched_sender_address = address_get_all(mailfrom, 0);
     if (!sched_sender_address)
-        sched_sender_address = xstrdup(sender);
-    spool_append_header(xstrdup("Schedule-Sender-Address"),
-            sched_sender_address, txn.req_hdrs);
+        sched_sender_address = xstrdupnull(sender);
+    if (sched_sender_address)
+        spool_append_header(xstrdup("Schedule-Sender-Address"),
+                sched_sender_address, txn.req_hdrs);
     if (mailfrom && mailfrom->name)
         spool_append_header(xstrdup("Schedule-Sender-Name"),
                 xstrdup(mailfrom->name), txn.req_hdrs);
