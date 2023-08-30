@@ -1,0 +1,18 @@
+Description:
+
+Removes support for parsing and generating bytecode for the deprecated
+denotify action and notify actions using the legacy (pre-RFC5435) syntax.
+Existing bytecode containing these actions will still be executed.
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Scripts that contain the deprecated denotify action should be rewritten
+to remove them.
+Scripts that contain notify actions using the legacy syntax should be rewritten
+to use the syntax in RFC5435.

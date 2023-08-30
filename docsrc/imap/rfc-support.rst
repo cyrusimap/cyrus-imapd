@@ -948,10 +948,6 @@ draft-ietf-sieve-regex
 
     Sieve Email Filtering -- Regular Expression Extension
 
-draft-martin-sieve-notify
-
-    Sieve -- An extension for providing instant notifications
-
 draft-york-vpoll
 
     VPOLL: Consensus Scheduling Component for iCalendar

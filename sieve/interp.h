@@ -160,7 +160,7 @@ enum sieve_capa_flag {
 
     /* Notifications - RFC 5435 */
     SIEVE_CAPA_ENOTIFY      = 1LL<<23,
-    SIEVE_CAPA_NOTIFY       = 1LL<<24, /* draft-martin-sieve-notify-01 */
+    SIEVE_CAPA_NOTIFY       = 0LL<<24, /* deprecated draft-martin-sieve-notify-01 */
 
     /* Ihave - RFC 5463 */
     SIEVE_CAPA_IHAVE        = 1LL<<25,

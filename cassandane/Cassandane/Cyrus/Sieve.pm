@@ -267,7 +267,7 @@ sub test_vacation_with_following_rules
     xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
     $self->{instance}->install_sieve_script(<<'EOF'
 
-require ["fileinto", "reject", "vacation", "imap4flags", "notify", "envelope", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables"];
+require ["fileinto", "reject", "vacation", "imap4flags", "envelope", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables"];
 
 ### 5. Sieve generated for vacation responses
 if
@@ -2315,7 +2315,7 @@ sub test_github_issue_complex_variables
 
     xlog $self, "Install a sieve script with complex variable work";
     $self->{instance}->install_sieve_script(<<'EOF');
-require ["fileinto", "reject", "vacation", "notify", "envelope", "body", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables", "imap4flags", "editheader", "duplicate", "vacation-seconds"];
+require ["fileinto", "reject", "vacation", "envelope", "body", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables", "imap4flags", "editheader", "duplicate", "vacation-seconds"];
 
 ### BEGIN USER SIEVE
 ### GitHub
@@ -3659,15 +3659,14 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
-sub test_notify
+sub test_enotify
     :needs_component_sieve :min_version_3_2
 {
     my ($self) = @_;
 
     $self->{instance}->install_sieve_script(<<'EOF'
-require ["notify", "enotify"];
+require ["enotify"];
 
-notify :method "addcal" :options ["calendarId","6ae6a9e0-53f5-4559-8c5a-520208f86cfd"];
 notify "https://cyrusimap.org/notifiers/updatecal";
 notify "mailto:foo@example.com";
 EOF
@@ -3678,11 +3677,9 @@ EOF
     $self->{instance}->deliver($msg1);
 
     my $data = $self->{instance}->getnotify();
-    my ($addcal) = grep { $_->{METHOD} eq 'addcal' } @$data;
     my ($updatecal) = grep { $_->{METHOD} eq 'updatecal' } @$data;
     my ($mailto) = grep { $_->{METHOD} eq 'mailto' } @$data;
 
-    $self->assert_not_null($addcal);
     $self->assert_not_null($updatecal);
     $self->assert_not_null($mailto);
 }

@@ -492,7 +492,7 @@ static const struct sieve_capa_t {
 
     /* Notifications - RFC 5435 */
     { "enotify", SIEVE_CAPA_ENOTIFY },
-    { "notify",  SIEVE_CAPA_NOTIFY }, /* draft-martin-sieve-notify-01 */
+    { "notify",  SIEVE_CAPA_NOTIFY }, /* deprecated draft-martin-sieve-notify-01 */
 
     /* Ihave - RFC 5463 */
     { "ihave", SIEVE_CAPA_IHAVE },

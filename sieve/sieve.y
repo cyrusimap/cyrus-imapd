@@ -106,9 +106,8 @@ static commandlist_t *build_rej_err(sieve_script_t*, int t, char *message);
 static commandlist_t *build_vacation(sieve_script_t*, commandlist_t *t, char *s);
 static commandlist_t *build_flag(sieve_script_t*,
                                  commandlist_t *c, strarray_t *flags);
-static commandlist_t *build_notify(sieve_script_t*, int t,
+static commandlist_t *build_notify(sieve_script_t*,
                                    commandlist_t *c, char *method);
-static commandlist_t *build_denotify(sieve_script_t*, commandlist_t *c);
 static commandlist_t *build_include(sieve_script_t*, commandlist_t *c, char*);
 static commandlist_t *build_set(sieve_script_t*, commandlist_t *c,
                                 char *variable, char *value);
@@ -276,17 +275,12 @@ extern void sieverestart(FILE *f);
 %type <nval> reject
 
 /* enotify - RFC 5435 */
-%token METHOD OPTIONS MESSAGE IMPORTANCE VALIDNOTIFYMETHOD NOTIFYMETHODCAPABILITY
-%token <nval> NOTIFY ENOTIFY ENCODEURL
-%type <cl> ntags
-%type <nval> mod15
-%type <test> methtags
-
-/* notify - draft-martin-sieve-notify-01 */
-%token DENOTIFY NID ANY
+%token OPTIONS MESSAGE IMPORTANCE VALIDNOTIFYMETHOD NOTIFYMETHODCAPABILITY
+%token <nval> NOTIFY ENCODEURL
 %token <nval> LOW NORMAL HIGH
-%type <cl> dtags
-%type <nval> priority
+%type <cl> ntags
+%type <nval> priority mod15
+%type <test> methtags
 
 /* ihave - RFC 5463 */
 %token IHAVE ERROR
@@ -522,13 +516,7 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
                                                            $2, $3, $4); }
 
         | reject string          { $$ = build_rej_err(sscript, $1, $2); }
-        | NOTIFY ntags string    { $$ = build_notify(sscript,
-                                                     B_ENOTIFY, $2, $3); }
-
-        | NOTIFY ntags           { $$ = build_notify(sscript,
-                                                     B_NOTIFY, $2, NULL); }
-
-        | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
+        | NOTIFY ntags string    { $$ = build_notify(sscript, $2, $3); }
         | LOG string             { $$ = build_log(sscript, $2); }
         | SNOOZE sntags timelist { $$ = build_snooze(sscript, $2, $3); }
         | PROCESSIMIP imiptags   { $$ = build_imip(sscript, $2); }
@@ -1057,13 +1045,7 @@ reject:   REJCT                  { $$ = B_REJECT;  }
         ;
 
 
-/* NOTIFY tagged arguments
- *
- * Haven't been able to find a way to split the allowed tags for enotify
- * and legacy notify without creating a shift/reduce conflict, so we
- * try to police it during parsing.  Note that this allows :importance
- * and :low/:normal/:high to be used with the incorrect notify flavor.
- */
+/* NOTIFY tagged arguments */
 ntags: /* empty */               {
                                      $$ = new_command(B_ENOTIFY, sscript);
                                      flags = &($$->u.n.fcc.flags);
@@ -1072,8 +1054,6 @@ ntags: /* empty */               {
                                      mailboxid = &($$->u.n.fcc.t.mailboxid);
                                      fccfolder = &($$->u.n.fcc.t.folder);
                                  }
-
-        /* enotify-only tagged arguments */
         | ntags FROM string      {
                                      if ($$->u.n.from != NULL) {
                                          sieveerror_c(sscript,
@@ -1095,40 +1075,6 @@ ntags: /* empty */               {
 
                                      $$->u.n.priority = $3;
                                  }
-        | ntags fcctags
-
-        /* legacy-only tagged arguments */
-        | ntags NID string       {
-                                     if ($$->u.n.id != NULL) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":id");
-                                         free($$->u.n.id);
-                                     }
-
-                                     $$->u.n.id = $3;
-                                 }
-        | ntags METHOD string    {
-                                     if ($$->u.n.method != NULL) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":method");
-                                         free($$->u.n.method);
-                                     }
-
-                                     $$->u.n.method = $3;
-                                 }
-        | ntags priority         {
-                                     if ($$->u.n.priority != -1) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_MULTIPLE_TAGS,
-                                                      "priority");
-                                     }
-
-                                     $$->u.n.priority = $2;
-                                 }
-
-        /* common tagged arguments */
         | ntags MESSAGE string   {
                                      if ($$->u.n.message != NULL) {
                                          sieveerror_c(sscript,
@@ -1151,36 +1097,14 @@ ntags: /* empty */               {
 
                                      $$->u.n.options = $3;
                                  }
+        | ntags fcctags
         ;
 
 
-/* priority tag or :importance value */
+/* :importance value */
 priority: LOW                    { $$ = B_LOW;    }
         | NORMAL                 { $$ = B_NORMAL; }
         | HIGH                   { $$ = B_HIGH;   }
-        ;
-
-
-/* DENOTIFY tagged arguments */
-dtags: /* empty */               {
-                                     $$ = new_command(B_DENOTIFY, sscript);
-                                     ctags = &($$->u.d.comp);
-                                 }
-        | dtags priority         {
-                                     if ($$->u.d.priority != -1) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_MULTIPLE_TAGS,
-                                                      "priority");
-                                     }
-
-                                     $$->u.d.priority = $2;
-                                 }
-
-        | dtags matchtype string
-                                 {
-                                     if ($$->u.d.pattern) free($$->u.d.pattern);
-                                     $$->u.d.pattern = $3;
-                                 }
         ;
 
 
@@ -2820,95 +2744,35 @@ static commandlist_t *build_rej_err(sieve_script_t *sscript,
     return c;
 }
 
-static commandlist_t *build_notify(sieve_script_t *sscript, int t,
+static commandlist_t *build_notify(sieve_script_t *sscript,
                                    commandlist_t *c, char *method)
 {
-    assert(c && (t == B_NOTIFY || t == B_ENOTIFY));
+    assert(c && c->type == B_ENOTIFY);
 
-    if (t == B_ENOTIFY) {
-        if (!supported(SIEVE_CAPA_ENOTIFY)) {
-            sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "enotify");
+    if (c->u.n.fcc.t.folder) {
+        verify_mailbox(sscript, c->u.n.fcc.t.folder);
+        if (c->u.n.fcc.flags && !_verify_flaglist(c->u.n.fcc.flags)) {
+            strarray_add(c->u.n.fcc.flags, "");
         }
-        if (c->u.n.id != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":id");
-        }
-        if (c->u.n.method != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":method");
-        }
-        if (c->u.n.fcc.t.folder) {
-            verify_mailbox(sscript, c->u.n.fcc.t.folder);
-            if (c->u.n.fcc.flags && !_verify_flaglist(c->u.n.fcc.flags)) {
-                strarray_add(c->u.n.fcc.flags, "");
-            }
-        }
-        else if (c->u.n.fcc.create || c->u.n.fcc.flags ||
-                 c->u.n.fcc.t.specialuse || c->u.n.fcc.t.mailboxid) {
-            sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
-        }
-
-        c->u.n.method = method;
     }
-    else {
-        if (!supported(SIEVE_CAPA_NOTIFY)) {
-            sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "notify");
-        }
-        if (c->u.n.from != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":from");
-        }
-        if (c->u.n.fcc.t.folder != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":fcc");
-        }
-        if (c->u.n.fcc.create != 0) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":create");
-        }
-        if (c->u.n.fcc.flags != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":flags");
-        }
-        if (c->u.n.fcc.t.specialuse != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":specialuse");
-        }
-
-        if (!c->u.n.method) c->u.n.method = xstrdup("default");
+    else if (c->u.n.fcc.create || c->u.n.fcc.flags ||
+             c->u.n.fcc.t.specialuse || c->u.n.fcc.t.mailboxid) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
     }
 
-    c->type = t;
+    c->u.n.method = method;
+
     if (c->u.n.priority == -1) c->u.n.priority = B_NORMAL;
     if (!c->u.n.message) c->u.n.message = xstrdup("$from$: $subject$");
 
     c->nargs = bc_precompile(c->args, "ssSis",
                              c->u.n.method,
-                             (c->type == B_ENOTIFY) ? c->u.n.from : c->u.n.id,
+                             c->u.n.from,
                              c->u.n.options,
                              c->u.n.priority,
                              c->u.n.message);
 
     return c;
-}
-
-static commandlist_t *build_denotify(sieve_script_t *sscript,
-                                     commandlist_t *t)
-{
-    assert(t && t->type == B_DENOTIFY);
-
-    canon_comptags(&t->u.d.comp, sscript);
-
-    if (t->u.d.priority == -1) t->u.d.priority = B_ANY;
-    if (t->u.d.pattern) {
-        strarray_t sa = STRARRAY_INITIALIZER;
-
-        strarray_pushm(&sa, t->u.d.pattern);
-        verify_patternlist(sscript, &sa, &t->u.d.comp, NULL);
-        strarray_pop(&sa);
-        strarray_fini(&sa);
-    }
-
-    t->nargs = bc_precompile(t->args, "iiis",
-                             t->u.d.priority,
-                             t->u.d.comp.match,
-                             t->u.d.comp.relation,
-                             t->u.d.pattern);
-
-    return t;
 }
 
 static commandlist_t *build_include(sieve_script_t *sscript,
