@@ -5986,7 +5986,7 @@ static void _unmapped_param(json_t *obj,
 }
 
 static void _add_vcard_params(json_t *obj, vcardproperty *prop,
-                              const char *label, unsigned param_flags)
+                              unsigned param_flags)
 {
     vcardproperty_kind prop_kind = vcardproperty_isa(prop);
     struct buf buf = BUF_INITIALIZER;
@@ -6241,8 +6241,6 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
     }
 
     buf_free(&buf);
-
-    if (label) json_object_set_new(obj, "label", jmap_utf8string(label));
 }
 
 #define IGNORE_VCARD_VERSION  (1<<0)
@@ -6410,17 +6408,7 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
 static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                               const char *prop_id, struct card_rock *crock)
 {
-    vcardproperty_kind prop_kind = vcardproperty_isa(prop);
-    const char *prop_group = vcardproperty_get_group(prop);
-    const char *prop_value = vcardproperty_get_value_as_string(prop);
-    unsigned param_flags = 0;
-    const char *kind = NULL;
     vcardparameter *param;
-    json_t *jprop = NULL;
-    struct {
-        const char *key;
-        json_t *val;
-    } subprop = { 0 };
 
     if ((crock->flags & IGNORE_DERIVED_PROPS) &&
         (param = vcardproperty_get_first_parameter(prop,
@@ -6430,6 +6418,19 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         /* Don't convert this property */
         return;
     }
+
+    vcardproperty_kind prop_kind = vcardproperty_isa(prop);
+    const char *prop_group = vcardproperty_get_group(prop);
+    const char *prop_value = vcardproperty_get_value_as_string(prop);
+    const char *label = prop_group ?  /* Apple label? */
+        hash_lookup(prop_group, crock->labels) : NULL;
+    unsigned param_flags = 0;
+    const char *kind = NULL;
+    json_t *jprop = NULL;
+    struct {
+        const char *key;
+        json_t *val;
+    } subprop = { 0 };
 
     switch (prop_kind) {
         /* Apple Properties */
@@ -7132,11 +7133,9 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         jtype = json_string(type);
 
         if (prop_group) {
-            const char *label;
-
             json_object_set_new(jparams, "group", jmap_utf8string(prop_group));
 
-            if ((label = hash_lookup(prop_group, crock->labels))) {
+            if (label) {
                 /* Apple label */
                 buf_setcstr(crock->buf, VCARD_APPLE_LABEL_PROPERTY);
                 json_array_append_new(props,
@@ -7159,14 +7158,12 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     }
 
     if (jprop) {
-        const char *label = NULL;
+        _add_vcard_params(jprop, prop, param_flags);
 
-        if (prop_group && (param_flags & ALLOW_LABEL_PARAM)) {
-            /* Apple label? */
-            label = hash_lookup(prop_group, crock->labels);
+        if (label && (param_flags & ALLOW_LABEL_PARAM)) {
+            /* Apple label */
+            json_object_set_new(jprop, "label", jmap_utf8string(label));
         }
-
-        _add_vcard_params(jprop, prop, label, param_flags);
     }
 }
 
