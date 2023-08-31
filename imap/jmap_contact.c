@@ -7253,17 +7253,19 @@ static json_t *jmap_card_from_vcard(const char *userid,
     hash_table orgs = HASH_TABLE_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct card_rock crock = {
-        jcard, NULL, NULL, &labels, &adrs, &orgs, mailbox, record, flags, &buf, VCARD_VERSION_NONE
+        jcard, NULL, NULL, &labels, &adrs, &orgs,
+        mailbox, record, flags, &buf, VCARD_VERSION_NONE
     };
     vcardproperty *prop;
     vcardparameter *param;
 
     /* Iterate through the vCard properties:
-       - Sort them by name and then by altid for calculating localizations
        - Fetch VERSION for sanity checking
+       - Fetch LANGUAGE for localizations
        - Fetch ADRs for combining with geographic properties
        - Fetch ORGs for pairing with grouped TITLE/ROLE
        - Fetch Apple-style labels for pairing with grouped properties
+       - Sort them by name and then by altid for calculating localizations
     */
     construct_hash_table(&props_by_name, 100, 0);
     construct_hash_table(&adrs, 10, 0);
@@ -7272,12 +7274,65 @@ static json_t *jmap_card_from_vcard(const char *userid,
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
          prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
-        vcardproperty_kind prop_kind = vcardproperty_isa(prop);
         const char *prop_name = vcardproperty_get_property_name(prop);
         const char *group = vcardproperty_get_group(prop);
         const char *altid = "";
         hash_table *props_by_altid;
         ptrarray_t *props;
+        int prop_idx = -1;  /* append */
+
+        switch (vcardproperty_isa(prop)) {
+        case VCARD_VERSION_PROPERTY:
+            crock.version = vcardproperty_get_version(prop);
+            break;
+
+        case VCARD_LANGUAGE_PROPERTY:
+            crock.deflang = vcardproperty_get_language(prop);
+            break;
+
+        case VCARD_ADR_PROPERTY: {
+            strarray_t *ids = hash_lookup(group ? group : "", &adrs);
+
+            if (!ids) {
+                ids = strarray_new();
+                hash_insert(group ? group : "", ids, &adrs);
+            }
+            strarray_append(ids, _prop_id(prop));
+
+            /* Fall through */
+            GCC_FALLTHROUGH
+        }
+
+        case VCARD_N_PROPERTY:
+            if (vcardproperty_get_first_parameter(prop, VCARD_JSCOMPS_PARAMETER)) {
+                /* Always place props with JSCOMPS at the head of the list
+                   so the component order is set before handling any PHONETICS */
+                prop_idx = 0;
+            }
+            break;
+
+        case VCARD_ORG_PROPERTY:
+            if (group) hash_insert(group, xstrdup(_prop_id(prop)), &orgs);
+            break;
+
+        case VCARD_X_PROPERTY:
+            if (group && !strcasecmp(prop_name, VCARD_APPLE_LABEL_PROPERTY)) {
+                const char *label = vcardproperty_get_value_as_string(prop);
+                size_t label_len = strlen(label);
+
+                /* Check and adjust for weird (localized?) labels */
+                if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
+                    label += 4;      // skip "_$!<" prefix
+                    label_len -= 8;  // and trim ">!$_" suffix
+                }
+
+                hash_insert(group, xstrndup(label, label_len), &labels);
+            }
+            break;
+
+        default:
+            break;
+        }
 
         param = vcardproperty_get_first_parameter(prop, VCARD_ALTID_PARAMETER);
         if (param) {
@@ -7296,48 +7351,12 @@ static json_t *jmap_card_from_vcard(const char *userid,
             props = ptrarray_new();
             hash_insert(altid, props, props_by_altid);
         }
-        if ((prop_kind == VCARD_N_PROPERTY || prop_kind == VCARD_ADR_PROPERTY) &&
-            vcardproperty_get_first_parameter(prop, VCARD_JSCOMPS_PARAMETER)) {
-            /* Always place props with JSCOMPS at the head of the list
-               so the comp order is set before handling PHONETICS */
-            ptrarray_insert(props, 0, prop);
-        }
-        else {
+
+        if (prop_idx < 0) {
             ptrarray_append(props, prop);
         }
-
-        if (prop_kind == VCARD_VERSION_PROPERTY) {
-            crock.version = vcardproperty_get_version(prop);
-        }
-        else if (prop_kind == VCARD_LANGUAGE_PROPERTY) {
-            crock.deflang = vcardproperty_get_language(prop);
-        }
-        else if (prop_kind == VCARD_ADR_PROPERTY) {
-            strarray_t *ids = hash_lookup(group ? group : "", &adrs);
-
-            if (!ids) {
-                ids = strarray_new();
-                hash_insert(group ? group : "", ids, &adrs);
-            }
-            strarray_append(ids, _prop_id(prop));
-        }
-        else if (group) {
-            if (prop_kind == VCARD_ORG_PROPERTY) {
-                hash_insert(group, xstrdup(_prop_id(prop)), &orgs);
-            }
-            else if (prop_kind == VCARD_X_PROPERTY &&
-                     !strcasecmp(prop_name, VCARD_APPLE_LABEL_PROPERTY)) {
-                const char *label = vcardproperty_get_value_as_string(prop);
-                size_t label_len = strlen(label);
-
-                /* Check and adjust for weird (localized?) labels */
-                if (label_len > 8 && !strncmp(label, "_$!<", 4)) {
-                    label += 4;      // skip "_$!<" prefix
-                    label_len -= 8;  // and trim ">!$_" suffix
-                }
-
-                hash_insert(group, xstrndup(label, label_len), &labels);
-            }
+        else {
+            ptrarray_insert(props, prop_idx, prop);
         }
     }
 
