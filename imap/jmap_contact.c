@@ -6081,8 +6081,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
             continue;
 
         case VCARD_LABEL_PARAMETER:
-            json_object_set_new(obj, "label", jmap_utf8string(param_value));
-            label = NULL;
+            /* Should be handled by the properties that use it */
             break;
 
         case VCARD_LEVEL_PARAMETER:
