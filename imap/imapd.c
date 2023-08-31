@@ -141,6 +141,8 @@ static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
 static int64_t maxsize = 0;
 
+static struct client_behavior_registry client_behavior;
+
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
    currently piping */
@@ -859,6 +861,55 @@ static void event_groups_free(struct event_groups **groups)
     xzfree(*groups);
 }
 
+static void imapd_log_client_behavior(void)
+{
+    struct attvaluelist *p = imapd_id.params;
+    const char *id_name = NULL;
+
+    for (; p; p = p->next) {
+        if (0 == strcasecmp(p->attrib, "name")) {
+            id_name = buf_cstring(&p->value);
+            break;
+        }
+    }
+
+    /* log the client behaviors
+     *
+     * This slightly weird sprintf-ing is do that we only log the hits, not the
+     * misses.  Most connections, even those from clients that support
+     * SEARCHRES, won't use SEARCH SAVE, for example.  This pushes just a
+     * little complexity into the log processor, but should mean that the logs
+     * are a bit easier to skim and a bit smaller.
+     */
+    xsyslog(LOG_NOTICE, "session ended",
+                        "sessionid=<%s> userid=<%s> id.name=<%s>"
+                        "%s%s%s%s"
+                        "%s%s%s%s"
+                        "%s%s%s%s"
+                        "%s",
+
+                        session_id(),
+                        imapd_userid ? imapd_userid : "",
+                        id_name,
+
+                        client_behavior.did_annotate    ? " annotate=<1>"     : "",
+                        client_behavior.did_compress    ? " compress=<1>"     : "",
+                        client_behavior.did_condstore   ? " condstore=<1>"    : "",
+                        client_behavior.did_idle        ? " idle=<1>"         : "",
+
+                        client_behavior.did_metadata    ? " metadata=<1>"     : "",
+                        client_behavior.did_move        ? " move=<1>"         : "",
+                        client_behavior.did_multisearch ? " multisearch=<1>"  : "",
+                        client_behavior.did_notify      ? " notify=<1>"       : "",
+
+                        client_behavior.did_preview     ? " preview=<1>"      : "",
+                        client_behavior.did_qresync     ? " qresync=<1>"      : "",
+                        client_behavior.did_replace     ? " replace=<1>"      : "",
+                        client_behavior.did_savedate    ? " savedate=<1>"     : "",
+
+                        client_behavior.did_searchres   ? " searchres=<1>"    : "");
+}
+
 static void imapd_reset(void)
 {
     int i;
@@ -867,6 +918,10 @@ static void imapd_reset(void)
 
     /* run delayed commands first before closing anything */
     libcyrus_run_delayed();
+
+    /* log the client behaviors */
+    imapd_log_client_behavior();
+    memset(&client_behavior, 0, sizeof(client_behavior));
 
     proc_cleanup(&proc_handle);
 
@@ -3474,6 +3529,8 @@ static void cmd_idle(char *tag)
     struct protstream *be_in = NULL;
     int extra_fd = idle_sock;
 
+    client_behavior.did_idle = 1;
+
     /* get idle timeout */
     if (idle_timeout == -1) {
         idle_timeout = config_getduration(IMAPOPT_IMAPIDLETIMEOUT, 'm');
@@ -4488,10 +4545,13 @@ static void cmd_select(char *tag, char *cmd, char *name)
             ucase(arg.s);
             if (!strcmp(arg.s, "CONDSTORE")) {
                 client_capa |= CAPA_CONDSTORE;
+                client_behavior.did_condstore = 1;
             }
             else if ((client_capa & CAPA_QRESYNC) &&
                      !strcmp(arg.s, "QRESYNC")) {
                 char *p;
+
+                client_behavior.did_qresync = 1;
 
                 if (c != ' ') goto badqresync;
                 c = prot_getc(imapd_in);
@@ -5507,6 +5567,15 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (usinguid)
         fetchargs.fetchitems |= FETCH_UID;
 
+    if (fetchargs.fetchitems & FETCH_ANNOTATION)
+        client_behavior.did_annotate = 1;
+
+    if (fetchargs.fetchitems & FETCH_PREVIEW)
+        client_behavior.did_preview = 1;
+
+    if (fetchargs.fetchitems & FETCH_SAVEDATE)
+        client_behavior.did_savedate = 1;
+
     r = index_fetch(imapd_index, sequence, usinguid, &fetchargs,
                 &fetchedsomething);
 
@@ -6108,6 +6177,8 @@ static void cmd_store(char *tag, char *sequence, int usinguid)
             c = getword(imapd_in, &storemod);
             ucase(storemod.s);
             if (!strcmp(storemod.s, "UNCHANGEDSINCE")) {
+                client_behavior.did_condstore = 1;
+
                 if (c != ' ') {
                     prot_printf(imapd_out,
                                 "%s BAD Missing required argument to %s %s\r\n",
@@ -6377,6 +6448,7 @@ static void cmd_search(char *tag, char *cmd)
 
     switch (cmd[0]) {
     case 'E':  // Esearch (multisearch)
+        client_behavior.did_multisearch = 1;
         state |= GETSEARCH_SOURCE;
 
         GCC_FALLTHROUGH
@@ -6390,6 +6462,9 @@ static void cmd_search(char *tag, char *cmd)
     searchargs = new_searchargs(tag, state,
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
+
+    if (searchargs->returnopts & SEARCH_RETURN_SAVE)
+      client_behavior.did_searchres = 1;
 
     /* Set FUZZY search according to config and quirks */
     static const char *annot = IMAP_ANNOT_NS "search-fuzzy-always";
@@ -7073,6 +7148,8 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     int r, myrights = 0;
     char *copyuid = NULL;
     mbentry_t *mbentry = NULL;
+
+    if (ismove) client_behavior.did_move = 1;
 
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
     r = mlookup(NULL, NULL, intname, &mbentry);
@@ -10801,6 +10878,8 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     strarray_t attribs = STRARRAY_INITIALIZER;
     annotate_state_t *astate = NULL;
 
+    client_behavior.did_annotate = 1;
+
     c = parse_annotate_fetch_data(tag, /*permessage_flag*/0, &entries, &attribs);
     if (c == EOF) {
         eatline(imapd_in, c);
@@ -11034,6 +11113,8 @@ static void cmd_getmetadata(const char *tag)
     struct getmetadata_options opts = OPTS_INITIALIZER;
     annotate_state_t *astate = NULL;
 
+    client_behavior.did_metadata = 1;
+
     while (nlists < 3)
     {
         c = parse_metadata_string_or_list(tag, &lists[nlists], &is_list[nlists]);
@@ -11194,6 +11275,8 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     struct entryattlist *entryatts = NULL;
     annotate_state_t *astate = NULL;
 
+    client_behavior.did_annotate = 1;
+
     c = parse_annotate_store_data(tag, 0, &entryatts);
     if (c == EOF) {
         eatline(imapd_in, c);
@@ -11261,6 +11344,8 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     int c, r = 0;
     struct entryattlist *entryatts = NULL;
     annotate_state_t *astate = NULL;
+
+    client_behavior.did_metadata = 1;
 
     c = parse_metadata_store_data(tag, &entryatts);
     if (c == EOF) {
@@ -15031,6 +15116,8 @@ static void cmd_resetkey(char *tag, char *name,
 #ifdef HAVE_ZLIB
 static void cmd_compress(char *tag, char *alg)
 {
+    client_behavior.did_compress = 1;
+
     if (imapd_compress_done) {
         prot_printf(imapd_out,
                     "%s BAD [COMPRESSIONACTIVE] DEFLATE active via COMPRESS\r\n",
@@ -15469,6 +15556,8 @@ static void cmd_replace(char *tag, char *seqno, char *name, int usinguid)
     char *intname = NULL;
     int r = 0;
 
+    client_behavior.did_replace = 1;
+
     /* Need permission to delete message and seqno must be valid */
     if (backend_current) {
         static const int needrights = ACL_DELETEMSG|ACL_EXPUNGE;
@@ -15712,6 +15801,8 @@ static void cmd_notify(char *tag, int set)
     struct buf arg = BUF_INITIALIZER;
     char *filter_name = NULL;
     int c = EOF, do_status = 0;
+
+    client_behavior.did_notify = 1;
 
     if (set) {
         /* Parse optional status-indicator */

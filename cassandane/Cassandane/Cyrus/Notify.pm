@@ -277,6 +277,18 @@ sub test_message
     # Should get no unsolicited responses
     $res = $store->idle_response({}, 1);
     $self->assert(!$res, "no unsolicited responses");
+
+    # we enabled NOTIFY, so we should see it in client behaviors
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # make sure that the connection is ended so that imapd reset happens
+        $talk->logout();
+        undef $talk;
+
+        my (@lines) = grep { /session ended/ && /notify=<1>/ }
+                      $self->{instance}->getsyslog();
+
+        $self->assert_num_gte(1, scalar @lines);
+    }
 }
 
 sub test_mailbox
