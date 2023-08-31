@@ -5943,20 +5943,23 @@ static json_t *_to_jmap_date(vcardproperty *prop)
          param = vcardproperty_get_next_parameter(prop, VCARD_X_PARAMETER)) {
         const char *param_name = vcardparameter_get_xname(param);
 
-        if (!strcasecmp(param_name, "X-APPLE-OMIT-YEAR"))
+        if (!strcasecmp(param_name, "X-APPLE-OMIT-YEAR")) {
             /* XXX compare value with actual year? */
             y = 0;
-        if (!strcasecmp(param_name, "X-FM-NO-MONTH"))
-            m = 0;
-        if (!strcasecmp(param_name, "X-FM-NO-DAY"))
-            d = 0;
+        }
+        else if (!strncasecmp(param_name, "X-FM-NO-", 8)) {
+            param_name += 8;
+
+            if (!strcasecmp(param_name, "MONTH"))
+                m = 0;
+            else if (!strcasecmp(param_name, "DAY"))
+                d = 0;
+        }
     }
 
     /* sigh, magic year 1604 has been seen without X-APPLE-OMIT-YEAR, making
      * me wonder what the bloody point is */
-    if (y == 1604) y = 0;
-
-    if (y > 0) json_object_set_new(jdate, "year",  json_integer(y));
+    if (y > 0 && y != 1604) json_object_set_new(jdate, "year",  json_integer(y));
     if (m > 0) json_object_set_new(jdate, "month", json_integer(m));
     if (d > 0) json_object_set_new(jdate, "day",   json_integer(d));
 
