@@ -16090,7 +16090,7 @@ static void cmd_notify(char *tag, int set)
 
 static void push_updates(int idling)
 {
-    json_t *msg, *nextmsg = NULL;
+    json_t *msg;
     const char *mtype, *mboxid, *event;
     mbentry_t *mbentry = NULL;
     enum event_type etype;
@@ -16099,6 +16099,8 @@ static void push_updates(int idling)
     msg = idle_get_message();
 
     while (msg) {
+        json_t *nextmsg = NULL;
+
         mtype = json_string_value(json_object_get(msg, "@type"));
 
         if (!strcmp(mtype, "alert")) {
