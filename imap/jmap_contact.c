@@ -7061,6 +7061,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         json_t *props = json_object_get_vanew(obj, "vCardProps", "[]");
         json_t *jtype, *jparams = json_object();
         const char *type = NULL;
+        vcardvalue_kind vkind;
 
         for (param = vcardproperty_get_first_parameter(prop,
                                                        VCARD_ANY_PARAMETER);
@@ -7077,14 +7078,32 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                 type = lcase(param_value);
             }
             else {
-                json_object_set_new(jparams,
-                                    buf_lcase(crock->buf),
-                                    jmap_utf8string(param_value));
+                int is_multivalued = 0;  /* XXX  Create JSON array? */
+                json_t *val;
+
+                vkind = vcardparameter_kind_value_kind(param_kind, &is_multivalued);
+
+                switch (vkind) {
+                case VCARD_INTEGER_VALUE:
+                    val = json_integer(vcardparameter_get_index(param));
+                    break;
+
+                case VCARD_BOOLEAN_VALUE:
+                    val = json_boolean(VCARD_DERIVED_TRUE ==
+                                       vcardparameter_get_derived(param));
+                    break;
+
+                default:
+                    val = jmap_utf8string(param_value);
+                    break;
+                }
+
+                json_object_set_new(jparams, buf_lcase(crock->buf), val);
             }
         }
 
         if (!type) {
-            vcardvalue_kind vkind = vcardproperty_kind_to_value_kind(prop_kind);
+            vkind = vcardproperty_kind_to_value_kind(prop_kind);
 
             switch (vkind) {
             case VCARD_X_VALUE:
@@ -8619,19 +8638,36 @@ static void _vcardparams_to_prop(json_t *jparams, vcardproperty *prop)
             continue;
         }
 
+        vcardparameter_kind kind = vcardparameter_string_to_kind(name);
+        switch (kind) {
+        case VCARD_X_PARAMETER:
+        case VCARD_NO_PARAMETER:
+        case VCARD_IANA_PARAMETER:
+            param = vcardparameter_new(VCARD_IANA_PARAMETER);
+            vcardparameter_set_iana_name(param, name);
+            break;
+
+        default:
+            param = vcardparameter_new(kind);
+            break;
+        }
+
         if (json_is_string(jval)) {
-            param = vcardparameter_new_iana(json_string_value(jval));
+            vcardparameter_set_value_from_string(param, json_string_value(jval));
         }
         else if (json_is_boolean(jval)) {
-            param = vcardparameter_new_iana(json_boolean_value(jval) ?
-                                            "TRUE" : "FALSE");
+            vcardparameter_set_derived(param, json_boolean_value(jval) ?
+                                       VCARD_DERIVED_TRUE : VCARD_DERIVED_FALSE);
+        }
+        else if (json_is_integer(jval)) {
+            vcardparameter_set_index(param, json_integer_value(jval));
         }
         else {
             char *val = json_dumps(jval, JSON_COMPACT);
             param = vcardparameter_new_iana(val);
             free(val);
         }
-        vcardparameter_set_iana_name(param, name);
+
         vcardproperty_add_parameter(prop, param);
     }
 }
