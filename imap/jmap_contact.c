@@ -11711,25 +11711,31 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
         goto done;
     }
 
-    /* Load vCard data */
+    /* Fetch index record */
     struct index_record record;
     r = mailbox_find_index_record(mailbox, uid, &record);
-    if (r == IMAP_NOTFOUND) {
-        res = HTTP_NOT_FOUND;
-        goto done;
-    }
-
-    if (!r) {
-        vcard = record_to_vcard_x(mailbox, &record);
-    }
-    if (!vcard) {
-        ctx->errstr = "failed to load record";
-        res = HTTP_SERVER_ERROR;
+    if (r) {
+        if (r == IMAP_NOTFOUND) {
+            res = HTTP_NOT_FOUND;
+        }
+        else {
+            ctx->errstr = "failed to load record";
+            res = HTTP_SERVER_ERROR;
+        }
         goto done;
     }
 
     if (propname) {
         /* Fetching a particular property as a blob */
+
+        /* Load vCard data */
+        vcard = record_to_vcard_x(mailbox, &record);
+        if (!vcard) {
+            ctx->errstr = "failed to parse vCard";
+            res = HTTP_SERVER_ERROR;
+            goto done;
+        }
+
         vcardproperty_kind kind = vcardproperty_string_to_kind(propname);
         vcardproperty *prop = vcardcomponent_get_first_property(vcard, kind);
         struct message_guid prop_guid = MESSAGE_GUID_INITIALIZER;
@@ -11756,18 +11762,33 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
         buf_setcstr(&ctx->encoding, "BINARY");
     }
     else {
+        /* Load message containing the resource */
+        struct buf buf = BUF_INITIALIZER;
+
+        if (mailbox_map_record(mailbox, &record, &buf)) {
+            ctx->errstr = "failed to load vCard";
+            res = HTTP_SERVER_ERROR;
+            goto done;
+        }
+
         if (!ctx->accept_mime || !strcmp(ctx->accept_mime, "text/vcard")) {
-            enum vcardproperty_version version =
-                vcardcomponent_get_version(vcard);
+            struct carddav_db *db = carddav_open_mailbox(mailbox);
+            struct carddav_data *cdata = NULL;
 
             buf_setcstr(&ctx->content_type, "text/vcard");
-            if (version != VCARD_VERSION_NONE)
-                buf_printf(&ctx->content_type, "; version=%s",
-                           vcardproperty_enum_to_string(version));
+
+            if (db &&
+                !carddav_lookup_imapuid(db, mbentry, uid, &cdata, 0) && cdata) {
+                buf_printf(&ctx->content_type, "; version=%u.0", cdata->version);
+            }
+
+            carddav_close(db);
         }
 
         buf_setcstr(&ctx->encoding, "8BIT");
-        buf_initmcstr(&ctx->blob, vcardcomponent_as_vcard_string_r(vcard));
+        buf_setmap(&ctx->blob, buf_base(&buf) + record.header_size,
+                   record.size - record.header_size);
+        buf_free(&buf);
     }
 
 done:
