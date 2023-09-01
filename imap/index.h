@@ -230,11 +230,11 @@ enum index_warmup_flags
 
 /* non-locking, non-updating - just do a fetch on the state
  * we already have */
-void index_fetchresponses(struct index_state *state,
-                                 seqset_t *seq,
-                                 int usinguid,
-                                 const struct fetchargs *fetchargs,
-                                 int *fetchedsomething);
+int index_fetchresponses(struct index_state *state,
+                         seqset_t *seq,
+                         int usinguid,
+                         const struct fetchargs *fetchargs,
+                         int *fetchedsomething);
 extern int index_fetch(struct index_state *state,
                        const char* sequence,
                        int usinguid,
