@@ -1088,15 +1088,16 @@ static int _fetch_setseen(struct index_state *state,
 }
 
 /* seq can be NULL - means "ALL" */
-EXPORTED void index_fetchresponses(struct index_state *state,
-                          seqset_t *seq,
-                          int usinguid,
-                          const struct fetchargs *fetchargs,
-                          int *fetchedsomething)
+EXPORTED int index_fetchresponses(struct index_state *state,
+                                  seqset_t *seq,
+                                  int usinguid,
+                                  const struct fetchargs *fetchargs,
+                                  int *fetchedsomething)
 {
     uint32_t msgno, start, end;
     struct index_map *im;
     int fetched = 0;
+    int r = 0;
     annotate_db_t *annot_db = NULL;
 
     /* Keep an open reference on the per-mailbox db to avoid
@@ -1150,7 +1151,7 @@ EXPORTED void index_fetchresponses(struct index_state *state,
             continue;
         }
 
-        if (index_fetchreply(state, msgno, fetchargs))
+        if ((r = index_fetchreply(state, msgno, fetchargs)))
             break;
         fetched = 1;
     }
@@ -1160,6 +1161,8 @@ EXPORTED void index_fetchresponses(struct index_state *state,
 
     if (fetchedsomething) *fetchedsomething = fetched;
     annotate_putdb(&annot_db);
+
+    return r;
 }
 
 /*
@@ -1250,7 +1253,7 @@ EXPORTED int index_fetch(struct index_state *state,
 
     seqset_free(&vanishedlist);
 
-    index_fetchresponses(state, seq, usinguid, fetchargs, fetchedsomething);
+    r = index_fetchresponses(state, seq, usinguid, fetchargs, fetchedsomething);
 
     if (seq != state->searchres) seqset_free(&seq);
 
@@ -4416,8 +4419,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
     if ((fetchitems & FETCH_ANNOTATION)) {
         prot_printf(state->out, "%cANNOTATION (", sepchar);
-        r = index_fetchannotations(state, msgno, fetchargs);
-        r = 0;
+        /* ignoring the result anyway, so don't conceal prior errors */
+        index_fetchannotations(state, msgno, fetchargs);
         prot_printf(state->out, ")");
         sepchar = ' ';
     }
@@ -4543,15 +4546,15 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (config_getswitch(IMAPOPT_CONVERSATIONS)) {
         if (fetchitems & FETCH_MAILBOXES) {
             prot_printf(state->out, "%cMAILBOXES (", sepchar);
-            r = index_fetchmailboxes(state, msgno, fetchargs);
-            r = 0;
+            /* ignoring the result anyway, so don't conceal prior errors */
+            index_fetchmailboxes(state, msgno, fetchargs);
             prot_printf(state->out, ")");
             sepchar = ' ';
         }
         if (fetchitems & FETCH_MAILBOXIDS) {
             prot_printf(state->out, "%cMAILBOXIDS (", sepchar);
-            r = index_fetchmailboxids(state, msgno, fetchargs);
-            r = 0;
+            /* ignoring the result anyway, so don't conceal prior errors */
+            index_fetchmailboxids(state, msgno, fetchargs);
             prot_printf(state->out, ")");
             sepchar = ' ';
         }
@@ -4672,13 +4675,15 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
         loadbody(mailbox, &record, &body);
         if (body) {
-            r = index_fetchsection(state, respbuf, &buf,
-                    section->name, body, record.size,
-                    (fetchitems & FETCH_IS_PARTIAL) ?
-                    fetchargs->start_octet : oi->start_octet,
-                    (fetchitems & FETCH_IS_PARTIAL) ?
-                    fetchargs->octet_count : oi->octet_count);
-            if (!r) sepchar = ' ';
+            /* n.b. success should not conceal an earlier error */
+            int r2 = index_fetchsection(state, respbuf, &buf,
+                                        section->name, body, record.size,
+                                        (fetchitems & FETCH_IS_PARTIAL) ?
+                                         fetchargs->start_octet : oi->start_octet,
+                                        (fetchitems & FETCH_IS_PARTIAL) ?
+                                         fetchargs->octet_count : oi->octet_count);
+            if (!r2) sepchar = ' ';
+            if (!r) r = r2;
         }
     }
     for (section = fetchargs->binsections; section; section = section->next) {
@@ -4693,13 +4698,15 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         loadbody(mailbox, &record, &body);
         if (body) {
             oi = &section->octetinfo;
-            r = index_fetchsection(state, respbuf, &buf,
-                                   section->name, body, record.size,
-                                   (fetchitems & FETCH_IS_PARTIAL) ?
-                                    fetchargs->start_octet : oi->start_octet,
-                                   (fetchitems & FETCH_IS_PARTIAL) ?
-                                    fetchargs->octet_count : oi->octet_count);
-            if (!r) sepchar = ' ';
+            /* n.b. success should not conceal an earlier error */
+            int r2 = index_fetchsection(state, respbuf, &buf,
+                                        section->name, body, record.size,
+                                        (fetchitems & FETCH_IS_PARTIAL) ?
+                                         fetchargs->start_octet : oi->start_octet,
+                                        (fetchitems & FETCH_IS_PARTIAL) ?
+                                         fetchargs->octet_count : oi->octet_count);
+            if (!r2) sepchar = ' ';
+            if (!r) r = r2;
         }
     }
     for (section = fetchargs->sizesections; section; section = section->next) {
@@ -4713,14 +4720,17 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 
         loadbody(mailbox, &record, &body);
         if (body) {
-            r = index_fetchsection(state, respbuf, &buf,
-                                   section->name, body, record.size,
-                                   fetchargs->start_octet, fetchargs->octet_count);
-            if (!r) sepchar = ' ';
+            /* n.b. success should not conceal an earlier error */
+            int r2 = index_fetchsection(state, respbuf, &buf,
+                                        section->name, body, record.size,
+                                        fetchargs->start_octet,
+                                        fetchargs->octet_count);
+            if (!r2) sepchar = ' ';
+            if (!r) r = r2;
         }
     }
     if (sepchar != '(') {
-        /* finsh the response if we have one */
+        /* finish the response if we have one */
         prot_printf(state->out, ")\r\n");
     }
     buf_free(&buf);
