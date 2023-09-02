@@ -2615,7 +2615,8 @@ product version in the capabilities
    modified UTF7 encoding should be used. */
 
 { "sieve_sasl_send_unsolicited_capability", 0, SWITCH, "2.3.17" }
-/* If enabled, timsieved will emit a capability response after a successful
+/* Deprecated: to comply with RFC 5804 this option must be off. If
+   enabled, timsieved will emit a capability response after a successful
    SASL authentication, per draft-martin-managesieve-12.txt . */
 
 { "sieve_use_lmtp_reject", 1, SWITCH, "3.1.1" }
