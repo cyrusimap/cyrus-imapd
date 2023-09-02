@@ -147,7 +147,7 @@ know the imap credentials on the replica to allow it to send details to
 the replica. It is the port configuration on the replica to know where
 to listen for change updates.
 
-There's two standard channel configurations:
+There are two standard channel configurations:
 
 1. Single master keeping all replicas up to date.
 

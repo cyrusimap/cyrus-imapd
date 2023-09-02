@@ -15,6 +15,9 @@ Major changes since the 3.2 series
 ==================================
 
 * DAV improvements
+
+  * Allow clients to set schedule-default-calendar-URL
+
 * Improved performance for users with large folders
 * LITERAL- maximum size is now honoured (:rfc:`7888`)
 * Support for the ESORT (but not CONTEXT) extension from :rfc:`5267`
@@ -78,6 +81,7 @@ Major changes since the 3.2 series
   (Squat backend only)
 * :cyrusman:`squatter(8)` now supports long options
 * Improvements to search query normalisation performance
+* Prefer SPNEGO over BASIC WWW-Auth in Firefox/Thunderbird :issue:`2882`.
 
 
 Updates to default configuration
