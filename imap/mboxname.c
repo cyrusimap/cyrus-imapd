@@ -2209,7 +2209,7 @@ EXPORTED char *mboxname_metapath(const char *partition,
     return metaresult;
 }
 
-EXPORTED void mboxname_todeleted(const char *name, char *result, int withtime)
+HIDDEN void mboxname_todeleted(const char *name, char *result, int withtime)
 {
     int domainlen = 0;
     char *p;
