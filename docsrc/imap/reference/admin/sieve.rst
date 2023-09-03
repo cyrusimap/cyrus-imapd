@@ -235,8 +235,6 @@ Cyrus supports a subset of these:
 * IMAP flag Extension :rfc:`5232`
 * Body Extension :rfc:`5173`
 
-Note that the final RFCs of these last sieve extensions have significant
-changes that are not currently supported.
 
 Sieve Tools
 -----------
