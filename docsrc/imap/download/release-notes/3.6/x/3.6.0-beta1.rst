@@ -20,7 +20,7 @@ Major changes since the 3.4 series
 * XFER will no longer move individual mailboxes that would leave unselectable
   mailboxes behind in the user heirarchy.
 * Update IMAP PREVIEW extension from
-  :draft:`draft-ietf-extra-imap-fetch-preview-07` to :rfc:`8970`
+  :draft:`draft-ietf-extra-imap-fetch-preview-07` to :rfc:`8970`.
 * JMAP Blob handling updated to :draft:`draft-ietf-jmap-blob-04`
 * Always return 'blobId' and 'size' in Contact/setcreate, Contact/setupdate,
   and Contact/get responses.
@@ -50,7 +50,7 @@ Major changes since the 3.4 series
   :cyrusman:`imapd.conf(5)` option.
 * :cyrusman:`sync_client(8)` now recognises when the remote
   :cyrusman:`sync_server(8)` has been shut down cleanly, and doesn't log a
-  bunch of disconnection errors about it
+  bunch of disconnection errors about it.
 * Added an inactivity timeout for WebSocket connections, configurable with
   the `websocket_timeout` :cyrusman:`imapd.conf(5)` option.
 * Mailboxes and user metadata directories are now organised on disk by UUID
