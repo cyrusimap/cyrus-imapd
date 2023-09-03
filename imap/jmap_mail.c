@@ -7178,7 +7178,6 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     }
 
     /* The following fields are all read from the body-part structure */
-    const struct body *part = NULL;
     if (jmap_wantprop(props, "messageId") ||
         jmap_wantprop(props, "inReplyTo") ||
         jmap_wantprop(props, "from") ||
@@ -7187,6 +7186,7 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
         jmap_wantprop(props, "bcc") ||
         jmap_wantprop(props, "subject") ||
         jmap_wantprop(props, "sentAt")) {
+        const struct body *part;
         if (msg->rfc822part) {
             part = msg->rfc822part->subpart;
         }
@@ -7195,46 +7195,46 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
             if (r) return r;
             part = msg->part0;
         }
-    }
-    /* messageId */
-    if (jmap_wantprop(props, "messageId")) {
-        json_object_set_new(email, "messageId",
-                jmap_header_as_messageids(part->message_id));
-    }
-    /* inReplyTo */
-    if (jmap_wantprop(props, "inReplyTo")) {
-        json_object_set_new(email, "inReplyTo",
-                jmap_header_as_messageids(part->in_reply_to));
-    }
-    /* from */
-    if (jmap_wantprop(props, "from")) {
-        json_object_set_new(email, "from",
-                jmap_emailaddresses_from_addr(part->from, HEADER_FORM_ADDRESSES));
-    }
-    /* to */
-    if (jmap_wantprop(props, "to")) {
-        json_object_set_new(email, "to",
-                jmap_emailaddresses_from_addr(part->to, HEADER_FORM_ADDRESSES));
-    }
-    /* cc */
-    if (jmap_wantprop(props, "cc")) {
-        json_object_set_new(email, "cc",
-                jmap_emailaddresses_from_addr(part->cc, HEADER_FORM_ADDRESSES));
-    }
-    /* bcc */
-    if (jmap_wantprop(props, "bcc")) {
-        json_object_set_new(email, "bcc",
-                jmap_emailaddresses_from_addr(part->bcc, HEADER_FORM_ADDRESSES));
-    }
-    /* subject */
-    if (jmap_wantprop(props, "subject")) {
-        json_object_set_new(email, "subject",
-                jmap_header_as_text(part->subject));
-    }
-    /* sentAt */
-    if (jmap_wantprop(props, "sentAt")) {
-        json_object_set_new(email, "sentAt",
-                            jmap_header_as_date(part->date));
+        /* messageId */
+        if (jmap_wantprop(props, "messageId")) {
+            json_object_set_new(email, "messageId",
+                    jmap_header_as_messageids(part->message_id));
+        }
+        /* inReplyTo */
+        if (jmap_wantprop(props, "inReplyTo")) {
+            json_object_set_new(email, "inReplyTo",
+                    jmap_header_as_messageids(part->in_reply_to));
+        }
+        /* from */
+        if (jmap_wantprop(props, "from")) {
+            json_object_set_new(email, "from",
+                    jmap_emailaddresses_from_addr(part->from, HEADER_FORM_ADDRESSES));
+        }
+        /* to */
+        if (jmap_wantprop(props, "to")) {
+            json_object_set_new(email, "to",
+                    jmap_emailaddresses_from_addr(part->to, HEADER_FORM_ADDRESSES));
+        }
+        /* cc */
+        if (jmap_wantprop(props, "cc")) {
+            json_object_set_new(email, "cc",
+                    jmap_emailaddresses_from_addr(part->cc, HEADER_FORM_ADDRESSES));
+        }
+        /* bcc */
+        if (jmap_wantprop(props, "bcc")) {
+            json_object_set_new(email, "bcc",
+                    jmap_emailaddresses_from_addr(part->bcc, HEADER_FORM_ADDRESSES));
+        }
+        /* subject */
+        if (jmap_wantprop(props, "subject")) {
+            json_object_set_new(email, "subject",
+                    jmap_header_as_text(part->subject));
+        }
+        /* sentAt */
+        if (jmap_wantprop(props, "sentAt")) {
+            json_object_set_new(email, "sentAt",
+                                jmap_header_as_date(part->date));
+        }
     }
 
     return r;
