@@ -139,17 +139,9 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     A MIME Content-Type for Directory Information
 
-    .. NOTE::
-
-	See the comment behind RFC 6352 below.
-
 :rfc:`2426`
 
     vCard MIME Directory Profile
-
-    .. NOTE::
-
-	See the comment behind RFC 6352 below.
 
 :rfc:`2444`
 
@@ -639,23 +631,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     vCard Format Specification
 
-    .. NOTE::
-
-	See the comment behind RFC 6352 below.
-
 :rfc:`6352`
 
     CardDAV: vCard Extensions to Web Distributed Authoring and
     Versioning (WebDAV)
-
-    .. NOTE::
-
-       Cyrus IMAP accepts over CardDAV both vCard 3.0 and vCard 4.0, but
-       does not advertise over CARDDAV:supported-address-data vCard 4.0
-       support, announces only vCard 3.0.  Moreover, Cyrus IMAP does not
-       convert between vCard 3.0 and vCard 4.0.  It is applications’
-       responsibility not to misinterpret the vCard version and damage
-       the data.
 
 :rfc:`6376`
 
