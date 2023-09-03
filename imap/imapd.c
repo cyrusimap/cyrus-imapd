@@ -7590,7 +7590,6 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
                         prot_printf(s_conn->out, " (");
                         int printsp = 0;
                         if (specialuse.len) {
-                            if (printsp) prot_putc(' ', s_conn->out);
                             printsp = 1;
                             prot_printf(s_conn->out, "USE (%s)", buf_cstring(&specialuse));
                         }
@@ -7604,7 +7603,6 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
                         if (uniqueid) {
                             if (printsp) prot_putc(' ', s_conn->out);
-                            printsp = 1;
                             prot_printf(s_conn->out, "MAILBOXID ");
                             prot_printastring(s_conn->out, uniqueid);
                         }
