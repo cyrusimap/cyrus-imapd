@@ -20,7 +20,11 @@ Major changes since the 3.4 series
 * XFER will no longer move individual mailboxes that would leave unselectable
   mailboxes behind in the user heirarchy.
 * Update IMAP PREVIEW extension from
-  :draft:`draft-ietf-extra-imap-fetch-preview-07` to :rfc:`8970`
+  :draft:`draft-ietf-extra-imap-fetch-preview-07` to :rfc:`8970`.
+* Update IMAP SAVEDATE extension from
+  :draft:`draft-ietf-extra-imap-savedate` to :rfc:`8514`.
+* Update IMAP OBJECTID extension from
+  :draft:`draft-ietf-extra-imap-objectid` to :rfc:`8474`.
 * JMAP Blob handling updated to :draft:`draft-ietf-jmap-blob-04`
 * Always return 'blobId' and 'size' in Contact/setcreate, Contact/setupdate,
   and Contact/get responses.
@@ -50,7 +54,7 @@ Major changes since the 3.4 series
   :cyrusman:`imapd.conf(5)` option.
 * :cyrusman:`sync_client(8)` now recognises when the remote
   :cyrusman:`sync_server(8)` has been shut down cleanly, and doesn't log a
-  bunch of disconnection errors about it
+  bunch of disconnection errors about it.
 * :cyrusman:`sync_client(8)` `-A` mode now keeps processing subsequent
   mailboxes after errors (reconnecting to the replica if necessary), instead
   of bailing out at the first error.  This means everything that can be
@@ -89,6 +93,7 @@ Major changes since the 3.4 series
 * JMAP Contacts avatars can now reference any valid blob, not only blobs
   originally uploaded via JMAP.
 * Preliminary support for building with OpenSSL 3.
+* Support converting vCards 3.0⇔4.0 based on CARDDAV:address-data.
 
 
 .. _relnotes_3.6.0_storage_changes:
@@ -153,7 +158,7 @@ Significant bugfixes
   mailboxes.db entries.  The intermediary file format is now JSON.  This change
   makes it possible to follow the procedure
   for switching `improved_mboxlist_sort` described in
-  :ref:`enabling improved mboxlist sort`
+  :ref:`enabling improved mboxlist sort`.
 * Fixed :issue:`4035`: `ctl_cyrusdb -r` now recovers from mailboxes.db
   records with missing uniqueids, instead of crashing.  A new `-P` option to
   :cyrusman:`reconstruct(8)` enables repairing mailboxes whose header files
