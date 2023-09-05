@@ -960,6 +960,7 @@ static void conv_to_buf(conversation_t *conv, struct buf *buf, int flagcount)
         dlist_setguid(nn, "GUID", &thread->guid);
         dlist_setnum32(nn, "EXISTS", thread->exists);
         dlist_setnum32(nn, "INTERNALDATE", thread->internaldate);
+        dlist_setnum32(nn, "CREATEDMODSEQ", thread->createdmodseq);
     }
 
     dlist_setnum64(dl, "CREATEDMODSEQ", conv->createdmodseq);
@@ -1489,6 +1490,11 @@ int _saxconvparse(int type, struct dlistsax_data *d)
             rock->thread->internaldate = atol(d->data);
             rock->substate = 3;
             return 0;
+
+        case 3:
+            rock->thread->createdmodseq = atoll(d->data);
+            rock->substate = 4;
+            return 0;
         }
         return 0; // there might be following fields that we ignore here
 
@@ -1771,6 +1777,11 @@ static int _thread_datesort(const void **a, const void **b)
     if (r < 0) return -1;
     if (r > 0) return 1;
 
+    // if same internaldate, use createdmodseq for a stable sort
+    int64_t r2 = (ta->createdmodseq - tb->createdmodseq);
+    if (r2 < 0) return -1;
+    if (r2 > 0) return 1;
+
     return message_guid_cmp(&ta->guid, &tb->guid);
 }
 
@@ -1804,6 +1815,7 @@ static void conversations_thread_sort(conversation_t *conv)
 static void conversation_update_thread(conversation_t *conv,
                                        const struct message_guid *guid,
                                        time_t internaldate,
+				       modseq_t createdmodseq,
                                        int delta_exists)
 {
     conv_thread_t *thread, **nextp = &conv->thread;
@@ -1829,7 +1841,15 @@ static void conversation_update_thread(conversation_t *conv,
     }
 
     message_guid_copy(&thread->guid, guid);
-    thread->internaldate = internaldate;
+    // these should always be the same for all copies of an email!
+    // but if not (e.g. IMAP append) we want the earliest non-zero value
+    if (!thread->internaldate || thread->internaldate > internaldate)
+        thread->internaldate = internaldate;
+    // the same email may exist multiple times in a folder or in multiple
+    // folders with different createdmodseq.  We want to track the earliest
+    // one
+    if (!thread->createdmodseq || thread->createdmodseq > createdmodseq)
+        thread->createdmodseq = createdmodseq;
     _apply_delta(&thread->exists, delta_exists);
 
     conversations_thread_sort(conv);
@@ -2585,6 +2605,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     conversation_update_thread(conv,
                                &record->guid,
                                record->internaldate,
+                               record->createdmodseq,
                                delta_exists);
 
     r = conversation_update(cstate, conv, &ecounts,

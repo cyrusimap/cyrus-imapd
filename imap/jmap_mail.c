@@ -6966,6 +6966,46 @@ static const char *_encode_emailheader_blobid(const char *emailid,
     return buf_cstring(dst);
 }
 
+struct email_get_createdmodseq_rock {
+    jmap_req_t *req;
+    modseq_t modseq;
+};
+
+static int _email_get_createdmodseq_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct email_get_createdmodseq_rock *rock = vrock;
+    mbentry_t *mbentry = NULL;
+
+    if (rec->part) return 0;
+
+    if ((rec->system_flags & FLAG_DELETED) ||
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        goto done;
+    }
+
+    conv_guidrec_mbentry(rec, &mbentry);
+
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
+        !jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)) {
+        goto done;
+    }
+
+    struct mailbox *mbox = NULL;
+    if (!jmap_openmbox_by_uniqueid(rock->req, mbentry->uniqueid, &mbox, 0)) {
+        struct index_record index_record = {0};
+        if (!mailbox_find_index_record(mbox, rec->uid, &index_record)) {
+            if (!rock->modseq || rock->modseq > index_record.createdmodseq) {
+                rock->modseq = index_record.createdmodseq;
+            }
+        }
+        jmap_closembox(rock->req, &mbox);
+    }
+
+done:
+    mboxlist_entry_free(&mbentry);
+    return 0;
+}
+
 static int _email_get_meta(jmap_req_t *req,
                            struct email_getargs *args,
                            struct cyrusmsg *msg,
@@ -6996,6 +7036,11 @@ static int _email_get_meta(jmap_req_t *req,
         }
         if (jmap_wantprop(props, "receivedAt"))
             json_object_set_new(email, "receivedAt", json_null());
+
+        if (jmap_wantprop(props, "createdModseq")) {
+            json_object_set_new(email, "createdModseq", json_integer(0));
+        }
+
         return 0;
     }
 
@@ -7141,6 +7186,16 @@ static int _email_get_meta(jmap_req_t *req,
         }
         json_object_set_new(email, "bimiBlobId", jval);
         buf_free(&buf);
+    }
+
+    if (jmap_wantprop(props, "createdModseq")) {
+        struct email_get_createdmodseq_rock rock = { req, 0 };
+
+        /* Look for the smalled createdmodseq for all index records */
+        conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
+                                   _email_get_createdmodseq_cb, &rock);
+
+        json_object_set_new(email, "createdModseq", json_integer(rock.modseq));
     }
 
 done:
@@ -8311,6 +8366,11 @@ static const jmap_property_t email_props[] = {
         "bimiBlobId",
         JMAP_MAIL_EXTENSION,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+    },
+    {
+        "createdModseq",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     },
     { NULL, NULL, 0 }
 };
