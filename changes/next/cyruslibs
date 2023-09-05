@@ -1,0 +1,20 @@
+Description:
+
+Adds cyruslibs third_party source code to cyrus-imapd version control.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Installations building cyrus-imapd from source using cyruslibs will
+need to update their build scripts. Instead of cloning the cyruslibs
+repistory they need to build from the ./third_party directory.
+
+
+GitHub issue:
+
+None.

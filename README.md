@@ -118,16 +118,16 @@ For version 3.0 or later, it is recommended to also build the main
 dependencies from source.
 
 If you intend to use Xapian for search, we strongly recommend to use the
-custom Xapian fork in cyruslibs. However, if this is not an option
+custom Xapian fork in third\_party. However, if this is not an option
 in your environment, please fetch the latest stable upstream Xapian release.
 Cyrus will omit custom features such as word boundary analysis for Chinese,
 Japanese and Korean.
 
-The Cyrus dependencies source is available at:
+The Cyrus dependencies source is available in the directory:
 
-https://github.com/cyrusimap/cyruslibs
+./third\_party
 
-To build and install the libraries, run
+To build and install the libraries, run in this directory:
 
     $ ./build.sh
 
@@ -144,7 +144,7 @@ Cyrus ./configure script as follows:
 
     $ ./configure XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config-1.5" [...]
 
-(If you do not use Xapian from cyruslibs, you'll need to locate the
+(If you do not use Xapian from third\_party, you'll need to locate the
 `xapian-config` binary and substitute `XAPIAN_CONFIG` accordingly).
 
 Then continue to install Cyrus.
