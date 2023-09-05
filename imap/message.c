@@ -651,7 +651,7 @@ static void message_find_part(struct body *body, const char *section,
             if (charset == CHARSET_UNKNOWN_CHARSET)
                 /* try ASCII */
                 charset = charset_lookupname("us-ascii");
-            body->decoded_body = charset_to_utf8(
+            body->decoded_body = charset_to_utf8cstr(
                 msg_base + body->content_offset, body->content_size,
                 charset, encoding); /* returns a cstring */
             charset_free(&charset);

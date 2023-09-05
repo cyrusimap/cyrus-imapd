@@ -369,18 +369,35 @@ typedef enum MsgType {
  * Emails
  */
 
-static char *_decode_to_utf8(const char *charset,
-                             const char *data, size_t datalen,
-                             const char *encoding,
-                             int *is_encoding_problem)
+static char *decode_to_utf8cstr(const char *charset,
+                                const char *data, size_t datalen,
+                                const char *encoding,
+                                int *is_encoding_problem)
 {
+    if (!datalen) return NULL;
+
     /* XXX - keep confidence 0.0 for regression? */
     struct buf buf = BUF_INITIALIZER;
     jmap_decode_to_utf8(charset,
             encoding_lookupname(encoding),
             data, datalen, 0.0, &buf,
             is_encoding_problem);
-    return datalen && buf_len(&buf) ? buf_release(&buf) : NULL;
+
+    // Filter nul bytes from UTF-8 text
+    size_t j = 0;
+    for (size_t i = 0; i < buf.len; i++) {
+        if (buf.s[i] != '\0') {
+            if (i != j) buf.s[j] = buf.s[i];
+            j++;
+        }
+    }
+    if (j != buf_len(&buf)) {
+        buf_truncate(&buf, j);
+        if (is_encoding_problem)
+            *is_encoding_problem = 1;
+    }
+
+    return buf_len(&buf) ? buf_release(&buf) : NULL;
 }
 
 struct headers {
@@ -811,7 +828,7 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
         struct body *part = ptrarray_nth(&bodies->textlist, 0);
         if (!strcasecmp(part->type, "TEXT") &&
                 !strcasecmpsafe(part->subtype, "PLAIN")) {
-            return _decode_to_utf8(part->charset_id,
+            return decode_to_utf8cstr(part->charset_id,
                     msg_buf->s + part->content_offset,
                     part->content_size,
                     part->encoding,
@@ -831,7 +848,7 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
         if (!strcasecmp(part->type, "TEXT") &&
                 !strcasecmpsafe(part->subtype, "PLAIN")) {
             int is_encoding_problem = 0;
-            char *t = _decode_to_utf8(part->charset_id,
+            char *t = decode_to_utf8cstr(part->charset_id,
                                       msg_buf->s + part->content_offset,
                                       part->content_size,
                                       part->encoding,
@@ -922,7 +939,7 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
     if (bodies->htmllist.count == 1) {
         const struct body *part = ptrarray_nth(&bodies->htmllist, 0);
         int is_encoding_problem = 0;
-        char *html = _decode_to_utf8(part->charset_id,
+        char *html = decode_to_utf8cstr(part->charset_id,
                                      msg_buf->s + part->content_offset,
                                      part->content_size,
                                      part->encoding,
@@ -949,7 +966,7 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
             buf_appendcstr(&buf, "<html>"); // XXX use HTML5?
 
         int is_encoding_problem = 0;
-        char *t = _decode_to_utf8(part->charset_id,
+        char *t = decode_to_utf8cstr(part->charset_id,
                                   msg_buf->s + part->content_offset,
                                   part->content_size,
                                   part->encoding,
@@ -7538,7 +7555,7 @@ static json_t * _email_get_bodyvalue(struct body *part,
     struct buf buf = BUF_INITIALIZER;
 
     /* Decode into UTF-8 buffer */
-    char *raw = _decode_to_utf8(part->charset_id,
+    char *raw = decode_to_utf8cstr(part->charset_id,
             msg_buf->s + part->content_offset,
             part->content_size, part->encoding,
             &is_encoding_problem);

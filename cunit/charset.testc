@@ -72,6 +72,9 @@ static void test_to_utf8(void)
 {
     charset_t cs;
     char *s;
+    struct buf buf = BUF_INITIALIZER;
+    int r;
+
     static const char ASCII_1[] = "Hello World";
     static const char ASCII_2[] = "Hello W\370rld";
     static const char UTF8_2[] = "Hello W" UTF8_REPLACEMENT "rld";
@@ -87,44 +90,70 @@ static void test_to_utf8(void)
     CU_ASSERT_PTR_NOT_NULL(cs);
 
     /* zero length input */
-    s = charset_to_utf8("", 0, cs, ENCODING_NONE);
+    s = charset_to_utf8cstr("", 0, cs, ENCODING_NONE);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, "");
     free(s);
+    r = charset_to_utf8(&buf, "", 0, cs, ENCODING_NONE);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(buf_len(&buf), 0);
 
     /* invalid encoding */
-    s = charset_to_utf8(ASCII_1, sizeof(ASCII_1), cs, 0xdeadbeef);
+    s = charset_to_utf8cstr(ASCII_1, sizeof(ASCII_1), cs, 0xdeadbeef);
     CU_ASSERT_PTR_NULL(s);
+    r = charset_to_utf8(&buf, ASCII_1, sizeof(ASCII_1), cs, 0xdeadbeef);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(buf_len(&buf), 0);
 
     /* invalid charset */
-    s = charset_to_utf8(ASCII_1, sizeof(ASCII_1), NULL, ENCODING_NONE);
+    s = charset_to_utf8cstr(ASCII_1, sizeof(ASCII_1), NULL, ENCODING_NONE);
     CU_ASSERT_PTR_NULL(s);
+    r = charset_to_utf8(&buf, ASCII_1, sizeof(ASCII_1), NULL, ENCODING_NONE);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(buf_len(&buf), 0);
 
     /* simple ASCII string */
-    s = charset_to_utf8(ASCII_1, sizeof(ASCII_1)-1, cs, ENCODING_NONE);
+    s = charset_to_utf8cstr(ASCII_1, sizeof(ASCII_1)-1, cs, ENCODING_NONE);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, ASCII_1);
     free(s);
+    r = charset_to_utf8(&buf, ASCII_1, sizeof(ASCII_1)-1, cs, ENCODING_NONE);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(buf_len(&buf), strlen(ASCII_1));
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), ASCII_1);
 
     /* ASCII string with an invalid character */
-    s = charset_to_utf8(ASCII_2, sizeof(ASCII_2)-1, cs, ENCODING_NONE);
+    s = charset_to_utf8cstr(ASCII_2, sizeof(ASCII_2)-1, cs, ENCODING_NONE);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, UTF8_2);
     free(s);
+    r = charset_to_utf8(&buf, ASCII_2, sizeof(ASCII_2)-1, cs, ENCODING_NONE);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(buf_len(&buf), strlen(UTF8_2));
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), UTF8_2);
 
     /* base64 encoding */
-    s = charset_to_utf8(BASE64_3, sizeof(BASE64_3)-1, cs, ENCODING_BASE64);
+    s = charset_to_utf8cstr(BASE64_3, sizeof(BASE64_3)-1, cs, ENCODING_BASE64);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, ASCII_1);
     free(s);
+    r = charset_to_utf8(&buf, BASE64_3, sizeof(BASE64_3)-1, cs, ENCODING_BASE64);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(buf_len(&buf), strlen(ASCII_1));
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), ASCII_1);
 
     /* Quoted-printable encoding */
-    s = charset_to_utf8(QP_4, sizeof(QP_4)-1, cs, ENCODING_QP);
+    s = charset_to_utf8cstr(QP_4, sizeof(QP_4)-1, cs, ENCODING_QP);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, ASCII_4);
     free(s);
+    r = charset_to_utf8(&buf, QP_4, sizeof(QP_4)-1, cs, ENCODING_QP);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(buf_len(&buf), strlen(ASCII_4));
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), ASCII_4);
     
     charset_free(&cs);
+    buf_free(&buf);
 }
 
 static void test_to_imaputf7(void)
@@ -143,7 +172,7 @@ static void test_to_imaputf7(void)
         s = charset_to_imaputf7(_in, strlen(_in), csu8, ENCODING_NONE); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _want); \
-        q = charset_to_utf8(s, strlen(s), csu7, ENCODING_NONE); \
+        q = charset_to_utf8cstr(s, strlen(s), csu7, ENCODING_NONE); \
         CU_ASSERT_PTR_NOT_NULL(q); \
         CU_ASSERT_STRING_EQUAL(q, _in); \
         free(q); \
@@ -189,7 +218,7 @@ static void test_misc_charsets(void)
         static const char _want[] = (want); \
         charset_t cs = charset_lookupname(alias); \
         CU_ASSERT_PTR_NOT_NULL(cs); \
-        s = charset_to_utf8(_in, strlen(_in), cs, ENCODING_NONE); \
+        s = charset_to_utf8cstr(_in, strlen(_in), cs, ENCODING_NONE); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _want); \
         free(s); \
@@ -271,7 +300,7 @@ static void test_qp(void)
         charset_t _cs = charset_lookupname(cs); \
         CU_ASSERT_PTR_NOT_NULL(_cs); \
         int _enc = (enc); \
-        char *s = charset_to_utf8(_in, sizeof(_in)-1, _cs, _enc); \
+        char *s = charset_to_utf8cstr(_in, sizeof(_in)-1, _cs, _enc); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _exp); \
         free(s); \
@@ -1337,7 +1366,7 @@ static void test_broken_length_hint(void)
     cs = charset_lookupname("iso-8859-1");
     CU_ASSERT_PTR_NOT_NULL(cs);
 
-    s = charset_to_utf8(body, strlen(body), cs, ENCODING_QP);
+    s = charset_to_utf8cstr(body, strlen(body), cs, ENCODING_QP);
     CU_ASSERT_STRING_EQUAL(body, s);
     charset_free(&cs);
     free(s);

@@ -2481,12 +2481,13 @@ static struct convert_rock *unorm_init(struct convert_rock *next)
     return rock;
 }
 
-static char* convert_to_name(const char *to, charset_t charset,
-                             const char *src, size_t len)
+static int convert_to_name(struct buf *dst,
+                           const char *to_name,
+                           charset_t charset,
+                           const char *src, size_t len)
 {
     UErrorCode err = U_ZERO_ERROR;
     const char *from;
-    char *res = NULL;
     size_t n;
 
     /* determine the name of the source encoding */
@@ -2494,19 +2495,28 @@ static char* convert_to_name(const char *to, charset_t charset,
 
     /* allocate the target buffer */
     /* we preflight to compromise between memory and runtime efficiency */
-    n = ucnv_convert(to, from, res, 0, src, len, &err) + 1;
-    if (err != U_BUFFER_OVERFLOW_ERROR) return NULL;
-    res = xmalloc(n);
+    n = ucnv_convert(to_name, from, dst->s, 0, src, len, &err) + 1;
+    if (err != U_BUFFER_OVERFLOW_ERROR)
+        return -1;
+
+    /* ucnv_convert return value includes size with NUL byte */
+    if (n < 2) {
+        buf_cstring(dst);
+        buf_reset(dst);
+        return 0;
+    }
+    buf_ensure(dst, n);
 
     /* run the conversion */
     err = U_ZERO_ERROR;
-    ucnv_convert(to, from, res, n, src, len, &err);
+    ucnv_convert(to_name, from, dst->s, n, src, len, &err);
     if (U_FAILURE(err)) {
-        free(res);
-        return NULL;
+        return -1;
     }
 
-    return res;
+    buf_truncate(dst, n - 1);
+    buf_cstring(dst);
+    return 0;
 }
 
 static charset_t lookup_buf(const char *buf, size_t len)
@@ -2764,8 +2774,14 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
         return xstrdup("");
 
     /* check if we can convert the whole block at once */
-    if (encoding == ENCODING_NONE)
-        return convert_to_name("imap-mailbox-name", charset, msg_base, len);
+    if (encoding == ENCODING_NONE) {
+        struct buf buf = BUF_INITIALIZER;
+        if (convert_to_name(&buf, "imap-mailbox-name", charset, msg_base, len) < 0) {
+            buf_free(&buf);
+            return NULL;
+        }
+        else return buf_release(&buf);
+    }
 
     /* set up the conversion path */
     imaputf7 = charset_lookupname("imap-mailbox-name");
@@ -2905,27 +2921,30 @@ done:
     return ret;
 }
 
-/* Convert from a given charset and encoding into utf8 */
-EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t charset, int encoding)
+EXPORTED int charset_to_utf8(struct buf *dst, const char *src, size_t len, charset_t charset, int encoding)
 {
     struct convert_rock *input, *tobuffer;
-    char *res = NULL;
     charset_t utf8;
 
+    buf_reset(dst);
+
     /* Initialize character set mapping */
-    if (charset == CHARSET_UNKNOWN_CHARSET) return NULL;
+    if (charset == CHARSET_UNKNOWN_CHARSET) return -1;
 
     /* check for trivial search */
     if (len == 0)
-        return xstrdup("");
+        return 0;
 
     /* check if we can convert the whole block at once */
-    if (encoding == ENCODING_NONE)
-        return convert_to_name("utf-8", charset, msg_base, len);
+    if (encoding == ENCODING_NONE) {
+        return convert_to_name(dst, "utf-8", charset, src, len);
+    }
 
     /* set up the conversion path */
     utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init(len);
+    buffer_setbuf(tobuffer, dst);
+
     input = convert_init(utf8, 0/*to_uni*/, tobuffer);
     input = convert_init(charset, 1/*to_uni*/, input);
 
@@ -2950,17 +2969,29 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t chars
         /* Don't know encoding--nothing can match */
         convert_free(input);
         charset_free(&utf8);
-        return 0;
+        return -1;
     }
 
-    if (!convert_catn(input, msg_base, len))
-        res = buffer_cstring(tobuffer);
+    int r = convert_catn(input, src, len);
+    buf_cstring(dst);
 
     convert_free(input);
     charset_free(&utf8);
 
-    return res;
+    return r;
 }
+
+/* Convert from a given charset and encoding into utf8 */
+EXPORTED char *charset_to_utf8cstr(const char *msg_base, size_t len, charset_t charset, int encoding)
+{
+    struct buf buf = BUF_INITIALIZER;
+    if (charset_to_utf8(&buf, msg_base, len, charset, encoding)) {
+        buf_free(&buf);
+        return NULL;
+    }
+    return buf_release(&buf);
+}
+
 
 /* Decode bytes from src into buffer dst */
 EXPORTED int charset_decode(struct buf *dst, const char *src, size_t len, int encoding)
@@ -3389,7 +3420,7 @@ EXPORTED char *charset_parse_mimexvalue(const char *s, struct buf *lang)
             buf_appendmap(&buf, p++, 1);
         }
     }
-    ret = charset_to_utf8(buf_base(&buf), buf_len(&buf), cs, 0);
+    ret = charset_to_utf8cstr(buf_base(&buf), buf_len(&buf), cs, 0);
 
 done:
     charset_free(&cs);

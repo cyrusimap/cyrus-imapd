@@ -127,7 +127,7 @@ static int print_name(const char *name, int utf8)
 
     if (utf8) {
         charset_t imaputf7 = charset_lookupname("imap-mailbox-name");
-        utf8name = charset_to_utf8(name, strlen(name), imaputf7, ENCODING_NONE);
+        utf8name = charset_to_utf8cstr(name, strlen(name), imaputf7, ENCODING_NONE);
         name = utf8name;
     }
 

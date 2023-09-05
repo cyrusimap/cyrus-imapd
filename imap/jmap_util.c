@@ -622,21 +622,21 @@ HIDDEN char *jmap_decode_base64_nopad(const char *b64, size_t b64len)
 EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
                                   const char *data, size_t datalen,
                                   float confidence,
-                                  struct buf *dst,
+                                  struct buf *text,
                                   int *is_encoding_problem)
 {
     charset_t cs = charset_lookupname(charset);
-    char *text = NULL;
-    size_t textlen = 0;
     struct char_counts counts = { 0 };
     const char *charset_id = charset_canon_name(cs);
     assert(confidence >= 0.0 && confidence <= 1.0);
+
+    buf_reset(text);
 
     /* Attempt fast path if data claims to be UTF-8 */
     if (encoding == ENCODING_NONE && !strcasecmp(charset_id, "UTF-8")) {
         struct char_counts counts = charset_count_validutf8(data, datalen);
         if (!counts.invalid) {
-            buf_setmap(dst, data, datalen);
+            buf_setmap(text, data, datalen);
             goto done;
         }
     }
@@ -652,35 +652,28 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
     /* Decode source data, converting charset if not already in UTF-8 */
     size_t nreplacement = 0;
     if (!strcasecmp(charset_id, "UTF-8")) {
-        struct buf buf = BUF_INITIALIZER;
-        if (charset_decode(&buf, data, datalen, encoding)) {
+        if (charset_decode(text, data, datalen, encoding)) {
             xsyslog(LOG_INFO, "failed to decode UTF-8 data",
                     "encoding=<%s>", encoding_name(encoding));
-            buf_free(&buf);
             if (is_encoding_problem) *is_encoding_problem = 1;
             goto done;
         }
-        textlen = buf_len(&buf);
-        text = buf_release(&buf);
-        counts = charset_count_validutf8(text, textlen);
+        counts = charset_count_validutf8(buf_base(text), buf_len(text));
         if (counts.invalid) {
             // Source UTF-8 data contains invalid characters.
             // Need to run data through charset_to_utf8
             // to insert replacement characters for these bytes.
             nreplacement = counts.replacement;
-            xzfree(text);
-            textlen = 0;
+            buf_reset(text);
         }
         else counts.replacement = 0; // ignore replacement in source data
     }
-    if (!text) {
-        text = charset_to_utf8(data, datalen, cs, encoding);
-        if (!text) {
+    if (!buf_len(text)) {
+        if (charset_to_utf8(text, data, datalen, cs, encoding)) {
             if (is_encoding_problem) *is_encoding_problem = 1;
             goto done;
         }
-        textlen = strlen(text);
-        counts = charset_count_validutf8(text, textlen);
+        counts = charset_count_validutf8(buf_base(text), buf_len(text));
         if (counts.replacement > nreplacement)
             counts.replacement -= nreplacement;
     }
@@ -696,18 +689,19 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
                 guess_cs = charset_lookupname("UTF-32LE");
             else
                 guess_cs = charset_lookupname("UTF-32BE");
-            char *guess = charset_to_utf8(data, datalen, guess_cs, encoding);
-            if (guess) {
-                struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
+
+            struct buf guess = BUF_INITIALIZER;
+            if (!charset_to_utf8(&guess, data, datalen, guess_cs, encoding)) {
+                struct char_counts guess_counts =
+                    charset_count_validutf8(buf_base(&guess), buf_len(&guess));
                 if (guess_counts.valid > counts.valid) {
-                    free(text);
-                    text = guess;
+                    buf_copy(text, &guess);
                     counts = guess_counts;
-                    textlen = strlen(text);
                     charset_id = charset_canon_name(guess_cs);
                 }
             }
             charset_free(&guess_cs);
+            buf_free(&guess);
         }
     }
     else if (!charset_id || !strcasecmp("US-ASCII", charset_id)) {
@@ -715,19 +709,18 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
             /* Could be ISO-2022-JP */
             charset_t guess_cs = charset_lookupname("ISO-2022-JP");
             if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
-                char *guess = charset_to_utf8(data, datalen, guess_cs, encoding);
-                if (guess) {
-                    struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
+                struct buf guess = BUF_INITIALIZER;
+                if (!charset_to_utf8(&guess, data, datalen, guess_cs, encoding)) {
+                    struct char_counts guess_counts =
+                        charset_count_validutf8(buf_base(&guess), buf_len(&guess));
                     if (!guess_counts.invalid && !guess_counts.replacement) {
-                        free(text);
-                        text = guess;
+                        buf_copy(text, &guess);
                         counts = guess_counts;
-                        textlen = strlen(text);
                         charset_id = charset_canon_name(guess_cs);
                     }
-                    else free(guess);
                 }
                 charset_free(&guess_cs);
+                buf_free(&guess);
             }
         }
     }
@@ -748,10 +741,10 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
         if (detect_handledata_r(&d, buf_base(&buf), buf_len(&buf), &obj) == CHARDET_SUCCESS) {
             charset_t guess_cs = charset_lookupname(obj->encoding);
             if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
-                char *guess = charset_to_utf8(data, datalen, guess_cs, encoding);
-                if (guess) {
+                struct buf guess = BUF_INITIALIZER;
+                if (!charset_to_utf8(&guess, data, datalen, guess_cs, encoding)) {
                     struct char_counts guess_counts =
-                        charset_count_validutf8(guess, strlen(guess));
+                        charset_count_validutf8(buf_base(&guess), buf_len(&guess));
                     if ((guess_counts.valid > counts.valid) &&
                             (obj->confidence >= confidence)) {
                         // libchardet might have guessed a single-byte character encoding,
@@ -769,15 +762,13 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
                         if ((guess_counts.replacement <= counts.replacement) &&
                             (!guess_counts.invalid || guess_counts.invalid < counts.invalid) &&
                                 guess_printable >= printable) {
-                            free(text);
-                            text = guess;
-                            guess = NULL;
+                            buf_copy(text, &guess);
                             counts = guess_counts;
                         }
                     }
-                    free(guess);
                 }
                 charset_free(&guess_cs);
+                buf_free(&guess);
             }
         }
         detect_obj_free(&obj);
@@ -787,8 +778,6 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
 
 done:
     charset_free(&cs);
-    if (text) buf_setcstr(dst, text);
-    free(text);
 }
 
 /*

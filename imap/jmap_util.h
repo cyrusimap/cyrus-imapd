@@ -137,15 +137,14 @@ extern char *jmap_decode_base64_nopad(const char *b64, size_t b64len);
  * - data points to the encoded bytes
  * - datalen indicates the byte length of data
  * - confidence indicates the threshold for charset detection (0 to 1.0)
- * - dst points to a buffer for the decoded output. The buffer is NOT
- *   reset to allow for consecutive decoding.
+ * - dst points to a buffer for the decoded output. This buffer is reset
  * - (optional) is_encoding_problem is set for invalid byte sequences
  *
  */
 extern void jmap_decode_to_utf8(const char *charset, int encoding,
                                 const char *data, size_t datalen,
                                 float confidence,
-                                struct buf *buf,
+                                struct buf *dst,
                                 int *is_encoding_problem);
 
 extern const char *jmap_encode_rawdata_blobid(const char prefix,
