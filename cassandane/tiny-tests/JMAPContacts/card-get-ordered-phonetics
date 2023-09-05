@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 use utf8;
 
 sub test_card_get_ordered_phonetics
-    :min_version_3_9 :needs_component_jmap
+    :min_version_3_9 :needs_component_jmap :needs_dependency_icalvcard
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
