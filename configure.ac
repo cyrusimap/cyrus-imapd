@@ -1674,9 +1674,12 @@ dnl
                         [Do we have support for fetching X- component names?]))
 
         dnl Check for libicalvcard
-        AC_CHECK_LIB(icalvcard, vcardcomponent_new,
-                [LIBS="$LIBS -licalvcard"   
-                 AC_DEFINE(HAVE_LIBICALVCARD,[],[Do we have the icalvcard library?])])
+        AC_CHECK_LIB(icalvcard, vcardcomponent_new, [
+                 AC_DEFINE(HAVE_LIBICALVCARD,[],[Do we have the icalvcard library?])
+                 LIBS="$LIBS -licalvcard"
+                 with_icalvcard=yes
+                ],
+                with_icalvcard=no)
 
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
@@ -1762,6 +1765,7 @@ else
         with_zstd="no (httpd is not built)"
         with_xml2="no (httpd is not built)"
         with_ical="no (httpd is not built)"
+        with_icalvcard="no (httpd is not built)"
         with_shapelib="no (httpd is not built)"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
@@ -2568,6 +2572,7 @@ External dependencies:
    zstd:               $with_zstd
    xml2:               $with_xml2
    ical:               $with_ical
+   icalvcard:          $with_icalvcard
    shapelib:           $with_shapelib
    icu4c:              $with_icu4c
    chardet:            $with_chardet
