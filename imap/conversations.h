@@ -264,8 +264,6 @@ extern conv_folder_t *conversation_get_folder(conversation_t *conv,
 extern void conversation_normalise_subject(struct buf *);
 
 /* G record */
-extern int conversations_guid_exists(struct conversations_state *state,
-                                     const char *guidrep);
 extern int conversations_guid_foreach(struct conversations_state *state,
                                       const char *guidrep,
                                       int(*cb)(const conv_guidrec_t*,void*),

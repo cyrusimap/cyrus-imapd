@@ -1944,29 +1944,6 @@ EXPORTED void conversation_update_sender(conversation_t *conv,
     conv->flags |= CONV_ISDIRTY;
 }
 
-static int _match1(void *rock,
-                   const char *key __attribute__((unused)),
-                   size_t keylen __attribute__((unused)),
-                   const char *data __attribute__((unused)),
-                   size_t datalen __attribute__((unused)))
-{
-    int *match = (int *)rock;
-    *match = 1;
-    return CYRUSDB_DONE;
-}
-
-EXPORTED int conversations_guid_exists(struct conversations_state *state,
-                                       const char *guidrep)
-{
-    int match = 0;
-
-    char *key = strconcat("G", guidrep, (char *)NULL);
-    cyrusdb_foreach(state->db, key, strlen(key), NULL, _match1, &match, NULL);
-    free(key);
-
-    return match;
-}
-
 struct guid_foreach_rock {
     struct conversations_state *state;
     int(*cb)(const conv_guidrec_t *, void *);
