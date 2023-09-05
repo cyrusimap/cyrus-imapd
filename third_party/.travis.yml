@@ -1,0 +1,3 @@
+script:
+  - curl -X POST https://cloud.docker.com/api/build/v1/source/df0cc429-09af-4a49-a57b-2d8778d8c8ba/trigger/9bb3edbb-5c11-4031-81d7-1d2339f560b4/call/
+
