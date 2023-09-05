@@ -138,8 +138,8 @@ struct conv_folder {
     uint32_t        prev_exists;
 };
 
-#define CONV_GUIDREC_VERSION 0x2          // (must be <= 127)
-#define CONV_GUIDREC_BYNAME_VERSION 0x1   // last folders byname version
+#define CONV_GUIDREC_VERSION 3          // (must be <= 127)
+#define CONV_GUIDREC_BYNAME_VERSION 1   // last folders byname version
 
 struct conv_guidrec {
     const struct conversations_state *cstate;  // this conversationsdb!
@@ -148,6 +148,7 @@ struct conv_guidrec {
     uint32_t        uid;
     const char      *part;
     conversation_id_t cid;
+    conversation_id_t basecid;
     char            version;
     uint32_t        system_flags;   // if version >= 1
     uint32_t        internal_flags; // if version >= 1

@@ -1957,6 +1957,7 @@ struct guid_foreach_rock {
 static int _guid_one(struct guid_foreach_rock *frock,
                      const char *key,
                      conversation_id_t cid,
+                     conversation_id_t basecid,
                      uint32_t system_flags,
                      uint32_t internal_flags,
                      time_t internaldate,
@@ -1970,6 +1971,7 @@ static int _guid_one(struct guid_foreach_rock *frock,
     rec.cstate = frock->state;
     rec.guidrep = key+1;
     rec.cid = cid;
+    rec.basecid = basecid;
     rec.system_flags = system_flags;
     rec.internal_flags = internal_flags;
     rec.internaldate = internaldate;
@@ -2049,7 +2051,7 @@ static int _guid_cb(void *rock,
         int i;
         for (i = 0; i < recs->count; i++) {
             buf_setcstr(&frock->partbuf, strarray_nth(recs, i));
-            r = _guid_one(frock, key, /*cid*/0,
+            r = _guid_one(frock, key, /*cid*/0, /*basecid*/0,
                           /*system_flags*/0, /*internal_flags*/0,
                           /*internaldate*/0, /*version*/0);
             if (r) break;
@@ -2063,6 +2065,7 @@ static int _guid_cb(void *rock,
         return IMAP_INTERNAL;
 
     conversation_id_t cid = 0;
+    conversation_id_t basecid = 0;
     uint32_t system_flags = 0;
     uint32_t internal_flags = 0;
     time_t internaldate = 0;
@@ -2074,12 +2077,15 @@ static int _guid_cb(void *rock,
         if (*p & 0x80) version = *p & 0x7f;
         if (version > 0) p++;
 
-        if (version == 0) {
+        switch (version) {
+        case 0:
             /* cid */
             r = parsehex(p, &p, 16, &cid);
             if (r) return r;
-        }
-        else {
+            break;
+
+        case 1: /* OLD - byname version */
+        case 2: /* original byid version (no basecid) */
             /* cid */
             cid = ntohll(*((bit64*)p));
             p += 8;
@@ -2092,11 +2098,30 @@ static int _guid_cb(void *rock,
             /* internaldate*/
             internaldate = (time_t) ntohll(*((bit64*)p));
             p += 8;
+            break;
+
+        default:
+            /* cid */
+            cid = ntohll(*((bit64*)p));
+            p += 8;
+            /* system_flags */
+            system_flags = ntohl(*((bit32*)p));
+            p += 4;
+            /* internal flags */
+            internal_flags = ntohl(*((bit32*)p));
+            p += 4;
+            /* internaldate*/
+            internaldate = (time_t) ntohll(*((bit64*)p));
+            p += 8;
+            /* basecid */
+            basecid = ntohll(*((bit64*)p));
+            p += 8;
+            break;
         }
     }
 
     buf_setmap(&frock->partbuf, key+42, keylen-42);
-    r = _guid_one(frock, key, cid, system_flags, internal_flags,
+    r = _guid_one(frock, key, cid, basecid, system_flags, internal_flags,
                   internaldate, version);
 
     return r;
@@ -2187,6 +2212,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
                                       const char *guidrep,
                                       const char *item,
                                       conversation_id_t cid,
+                                      conversation_id_t basecid,
                                       uint32_t system_flags,
                                       uint32_t internal_flags,
                                       time_t internaldate,
@@ -2226,16 +2252,24 @@ static int conversations_guid_setitem(struct conversations_state *state,
     buf_appendcstr(&key, item);
 
     if (add) {
-        /* When bumping the G value version, make sure to update _guid_cb */
         struct buf val = BUF_INITIALIZER;
-        char version = (state->folders_byname) ?
-            CONV_GUIDREC_BYNAME_VERSION : CONV_GUIDREC_VERSION;
+        if (state->folders_byname) {
+            buf_putc(&val, 0x80 | CONV_GUIDREC_BYNAME_VERSION);
+            buf_appendbit64(&val, cid);
+            buf_appendbit32(&val, system_flags);
+            buf_appendbit32(&val, internal_flags);
+            buf_appendbit64(&val, (bit64)internaldate);
+        }
+        /* When bumping the G value version, make sure to update _guid_cb */
+        else {
+            buf_putc(&val, 0x80 | CONV_GUIDREC_VERSION);
+            buf_appendbit64(&val, cid);
+            buf_appendbit32(&val, system_flags);
+            buf_appendbit32(&val, internal_flags);
+            buf_appendbit64(&val, (bit64)internaldate);
+            buf_appendbit64(&val, basecid);
+        }
 
-        buf_putc(&val, 0x80 | version);
-        buf_appendbit64(&val, cid);
-        buf_appendbit32(&val, system_flags);
-        buf_appendbit32(&val, internal_flags);
-        buf_appendbit64(&val, (bit64)internaldate);
         r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),
                                      buf_base(&val), buf_len(&val),
                                      &state->txn);
@@ -2253,6 +2287,7 @@ done:
 
 static int _guid_addbody(struct conversations_state *state,
                          conversation_id_t cid,
+                         conversation_id_t basecid,
                          uint32_t system_flags, uint32_t internal_flags,
                          time_t internaldate,
                          struct body *body,
@@ -2269,7 +2304,7 @@ static int _guid_addbody(struct conversations_state *state,
         buf_setcstr(&buf, base);
         buf_printf(&buf, "[%s]", body->part_id);
         const char *guidrep = message_guid_encode(&body->content_guid);
-        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), cid,
+        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), cid, basecid,
                                        system_flags, internal_flags, internaldate,
                                        add);
         buf_free(&buf);
@@ -2277,11 +2312,11 @@ static int _guid_addbody(struct conversations_state *state,
         if (r) return r;
     }
 
-    r = _guid_addbody(state, cid, system_flags, internal_flags, internaldate, body->subpart, base, add);
+    r = _guid_addbody(state, cid, basecid, system_flags, internal_flags, internaldate, body->subpart, base, add);
     if (r) return r;
 
     for (i = 1; i < body->numparts; i++) {
-        r = _guid_addbody(state, cid, system_flags, internal_flags, internaldate, body->subpart + i, base, add);
+        r = _guid_addbody(state, cid, basecid, system_flags, internal_flags, internaldate, body->subpart + i, base, add);
         if (r) return r;
     }
 
@@ -2310,12 +2345,12 @@ static int conversations_set_guid(struct conversations_state *state,
     const char *base = buf_cstring(&item);
 
     r = conversations_guid_setitem(state, message_guid_encode(&record->guid),
-                                   base, record->cid,
+                                   base, record->cid, record->basecid,
                                    record->system_flags,
                                    record->internal_flags,
                                    record->internaldate,
                                    add);
-    if (!r) r = _guid_addbody(state, record->cid,
+    if (!r) r = _guid_addbody(state, record->cid, record->basecid,
                               record->system_flags, record->internal_flags,
                               record->internaldate, body, base, add);
 
