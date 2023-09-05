@@ -2189,22 +2189,32 @@ EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
     return 0;
 }
 
+struct cidlookupdata {
+    struct index_record *record;
+    int found;
+};
+
 static int _getcid(const conv_guidrec_t *rec, void *rock)
 {
-    conversation_id_t *cidp = (conversation_id_t *)rock;
+    struct cidlookupdata *data = (struct cidlookupdata *)rock;
     if (!rec->part) {
-        *cidp = rec->cid;
+        if (data->record) {
+            data->record->cid = rec->cid;
+            data->record->basecid = rec->basecid;
+        }
+        data->found = 1;
         return CYRUSDB_DONE;
     }
     return 0;
 }
 
-EXPORTED conversation_id_t conversations_guid_cid_lookup(struct conversations_state *state,
-                                                         const char *guidrep)
+EXPORTED int conversations_guid_cid_lookup(struct conversations_state *state,
+                                           const char *guidrep,
+                                           struct index_record *record)
 {
-    conversation_id_t cid = 0;
-    conversations_guid_foreach(state, guidrep, _getcid, &cid);
-    return cid;
+    struct cidlookupdata rock = { record, 0 };
+    conversations_guid_foreach(state, guidrep, _getcid, &rock);
+    return rock.found;
 }
 
 

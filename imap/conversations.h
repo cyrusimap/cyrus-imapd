@@ -273,8 +273,8 @@ extern int conversations_iterate_searchset(struct conversations_state *state,
                                            const void *data, size_t n,
                                            int(*cb)(const conv_guidrec_t*,void*),
                                            void *rock);
-extern conversation_id_t conversations_guid_cid_lookup(struct conversations_state *state,
-                                                       const char *guidrep);
+extern int conversations_guid_cid_lookup(struct conversations_state *state,
+                                         const char *guidrep, struct index_record *record);
 
 /* lookup the matching name or uniqueid */
 #define conv_guidrec_mboxname(rec) conversations_folder_mboxname((rec)->cstate, (rec)->foldernum)

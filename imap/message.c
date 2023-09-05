@@ -3886,11 +3886,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     /* calculate the CID if needed */
     if (!record->silentupdate) {
         /* match for GUID, it always has the same CID */
-        conversation_id_t currentcid = conversations_guid_cid_lookup(state, message_guid_encode(&record->guid));
-        if (currentcid) {
-            // would love to have this, but might hit bogus broken existing data...
-            // assert(record->cid == 0 || record->cid == currentcid);
-            record->cid = currentcid;
+        if (conversations_guid_cid_lookup(state, message_guid_encode(&record->guid), record)) {
             mustkeep = 1;
         }
         if (!record->cid) record->cid = arrayu64_max(&matchlist);
