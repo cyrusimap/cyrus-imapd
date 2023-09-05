@@ -1,40 +1,40 @@
 [submodule "jansson"]
-	path = jansson
+	path = third_party/jansson
 	url = https://github.com/cyrusimap/jansson.git
 	branch = cyrus
 [submodule "xapian"]
-	path = xapian
+	path = third_party/xapian
 	url = https://github.com/cyrusimap/xapian.git
 	branch = cyrus
 [submodule "libical"]
-	path = libical
+	path = third_party/libical
 	url = https://github.com/cyrusimap/libical.git
 	branch = cyrus
 [submodule "icu4c"]
-	path = icu
+	path = third_party/icu
 	url = https://github.com/cyrusimap/icu4c.git
 	branch = cyrus
 [submodule "cyrus-timezones"]
-	path = cyrus-timezones
+	path = third_party/cyrus-timezones
 	url = https://github.com/cyrusimap/cyrus-timezones.git
 [submodule "re2"]
-	path = re2
+	path = third_party/re2
 	url = https://github.com/google/re2.git
 [submodule "cre2"]
-	path = cre2
+	path = third_party/cre2
 	url = https://github.com/marcomaggi/cre2
 [submodule "zeroskip"]
-	path = zeroskip
+	path = third_party/zeroskip
 	url = https://github.com/cyrusimap/zeroskip.git
 [submodule "wslay"]
-	path = wslay
+	path = third_party/wslay
 	url = https://github.com/cyrusimap/wslay
 [submodule "libchardet"]
-	path = libchardet
+	path = third_party/libchardet
 	url = https://github.com/cyrusimap/libchardet
 [submodule "cld2"]
-	path = cld2
+	path = third_party/cld2
 	url = https://github.com/cyrusimap/cld2.git
 [submodule "vzic"]
-	path = vzic
+	path = third_party/vzic
 	url = https://github.com/libical/vzic.git
