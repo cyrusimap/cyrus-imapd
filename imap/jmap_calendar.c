@@ -1003,6 +1003,7 @@ static int jmap_calendar_get(struct jmap_req *req)
     }
 
     if (!has_calendars(req)) {
+        get.state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, 0));
         jmap_ok(req, jmap_get_reply(&get));
         goto done;
     }
@@ -1143,6 +1144,7 @@ static int jmap_calendar_changes(struct jmap_req *req)
     }
 
     if (!has_calendars(req)) {
+        changes.new_modseq = changes.since_modseq;
         jmap_ok(req, jmap_changes_reply(&changes));
         goto done;
     }
