@@ -2197,7 +2197,7 @@ struct cidlookupdata {
 static int _getcid(const conv_guidrec_t *rec, void *rock)
 {
     struct cidlookupdata *data = (struct cidlookupdata *)rock;
-    if (!rec->part) {
+    if (!rec->part && rec->cid) {
         if (data->record) {
             data->record->cid = rec->cid;
             data->record->basecid = rec->basecid;
@@ -2378,6 +2378,8 @@ struct read_emailcounts_rock {
 static int _read_emailcounts_cb(const conv_guidrec_t *rec, void *rock)
 {
     if (rec->part) return 0;
+    // only count records with cids, otherwise the zero and rebuild fails
+    if (!rec->cid) return 0;
 
     struct emailcounts *ecounts = ((struct read_emailcounts_rock*)rock)->ecounts;
     struct conversations_state *cstate = ((struct read_emailcounts_rock*)rock)->cstate;
