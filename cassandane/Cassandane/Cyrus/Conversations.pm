@@ -395,8 +395,6 @@ sub test_reconstruct_splitconv
     # zero everything out
     $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-z', 'cassandane');
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-d', 'cassandane');
-
     # rebuild
     $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-b', 'cassandane');
 
