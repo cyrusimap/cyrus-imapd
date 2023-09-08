@@ -633,7 +633,7 @@ sub test_xfer_user_noaltns_nounixhs
 
 sub test_xfer_user_verify_cleanup
     :AllowMoves :NoAltNamespace :Conversations
-    :needs_component_murder :min_version_3_9
+    :needs_component_murder :min_version_3_6
 {
     my ($self) = @_;
 
