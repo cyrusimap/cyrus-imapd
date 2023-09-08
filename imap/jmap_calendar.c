@@ -2947,6 +2947,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
     hash_table *props = rock->get->props;
     icalcomponent *myical = NULL;
     json_t *jrtzid = json_object_get(jsevent, "timeZone");
+    struct buf baseidbuf = BUF_INITIALIZER;
     int r = 0;
 
     mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
@@ -2960,6 +2961,9 @@ static int getcalendarevents_getinstances(json_t *jsevent,
         format_icaltimestr_to_datetimestr(eid->ical_recurid, &rock->buf);
         const char *jscalrecurid = buf_cstring(&rock->buf);
 
+        struct jmap_caleventid base_eid = { .ical_uid = eid->ical_uid };
+        jmap_caleventid_encode(&base_eid, &baseidbuf);
+
         /* Client requested event recurrence instance */
         json_t *override = json_object_get(
                 json_object_get(jsevent, "recurrenceOverrides"), jscalrecurid);
@@ -2971,6 +2975,8 @@ static int getcalendarevents_getinstances(json_t *jsevent,
                 if (json_object_get(override, "start") == NULL) {
                     json_object_set_new(myevent, "start", json_string(jscalrecurid));
                 }
+                json_object_set_new(myevent, "baseEventId",
+                        json_string(buf_cstring(&baseidbuf)));
                 json_object_set_new(myevent, "recurrenceId", json_string(jscalrecurid));
                 json_object_set(myevent, "recurrenceIdTimeZone", jrtzid);
                 json_array_append_new(rock->get->list, myevent);
@@ -3021,6 +3027,8 @@ static int getcalendarevents_getinstances(json_t *jsevent,
                 getcalendarevents_get_utctimes(myevent, jstzones, floatingtz);
             }
             getcalendarevents_filterinstance(myevent, props, eid->raw, cdata->ical_uid);
+            json_object_set_new(myevent, "baseEventId",
+                    json_string(buf_cstring(&baseidbuf)));
             json_object_set_new(myevent, "recurrenceId", json_string(jscalrecurid));
             json_object_set(myevent, "recurrenceIdTimeZone", jrtzid);
             json_array_append_new(rock->get->list, myevent);
@@ -3030,6 +3038,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
 done:
     if (myical) icalcomponent_free(myical);
     mboxlist_entry_free(&mbentry);
+    buf_free(&baseidbuf);
     return r;
 }
 
@@ -3911,6 +3920,11 @@ static const jmap_property_t event_props[] = {
         "isOrigin",
         JMAP_URN_CALENDARS,
         0
+    },
+    {
+        "baseEventId",
+        JMAP_URN_CALENDARS,
+        JMAP_PROP_SERVER_SET
     },
 
     /* FM specific */
@@ -4904,10 +4918,19 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
     icaltimetype icalrecuriddt = icaltime_from_string(eid->ical_recurid);
     struct jmapical_datetime recuriddt = JMAPICAL_DATETIME_INITIALIZER;
     jmapical_datetime_from_icaltime(icalrecuriddt, &recuriddt);
+    struct jmap_caleventid base_eid = { .ical_uid = eid->ical_uid };
     struct buf buf = BUF_INITIALIZER;
+
     jmapical_localdatetime_as_string(&recuriddt, &buf);
-    char *recurid = buf_release(&buf);
+    char *recurid = xstrdupnull(buf_cstring(&buf));
+    buf_reset(&buf);
+
+    jmap_caleventid_encode(&base_eid, &buf);
+    char *baseid = xstrdupnull(buf_cstring(&buf));
+    buf_reset(&buf);
+
     json_t *new_event = NULL;
+    json_t *jprop = NULL;
 
     int is_rdate = !_recurid_is_instanceof(icalrecuriddt, oldical, 1);
 
@@ -4941,6 +4964,12 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
             json_object_del(new_instance, "duration");
         }
         setcalendarevents_set_utctimes(new_instance, floatingtz, invalid);
+    }
+
+    /* Can keep existing baseEventId */
+    jprop = json_object_get(event_patch, "baseEventId");
+    if (jprop && strcmpsafe(json_string_value(jprop), baseid)) {
+        json_array_append_new(invalid, json_string("baseEventId"));
     }
 
     json_object_del(new_instance, "recurrenceRules");
@@ -4998,6 +5027,8 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
 done:
     *new_eventp = new_event;
     free(recurid);
+    free(baseid);
+    buf_free(&buf);
 }
 
 static void updateevent_apply_patch_event(json_t *old_event,
@@ -5010,6 +5041,12 @@ static void updateevent_apply_patch_event(json_t *old_event,
 {
     jstimezones_t *jstzones = jstimezones_new(oldical, 1);
     json_t *new_event = NULL;
+    json_t *jprop;
+
+    jprop = json_object_get(event_patch, "baseEventId");
+    if (jprop) {
+        json_array_append_new(invalid, json_string("baseEventId"));
+    }
 
     if (eventpatch_updates_recurrenceoverrides(event_patch)) {
         /* Split patch into main event and override patches */
