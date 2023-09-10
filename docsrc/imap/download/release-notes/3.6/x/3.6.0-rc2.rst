@@ -85,7 +85,7 @@ Major changes since the 3.4 series
 * JMAP Contact.importance property is now a per-user property rather than
   shared.
 * JMAP Contacts now uses Apple-style labels on vCard ADR/TEL/EMAIL properties
-  (via property grouping)
+  (via property grouping).
 * JMAP Contacts avatars can now reference any valid blob, not only blobs
   originally uploaded via JMAP.
 * Preliminary support for building with OpenSSL 3.
@@ -147,7 +147,7 @@ Significant bugfixes
   running :cyrusman:`reconstruct(8)` to repair the cache, and then
   :cyrusman:`squatter(8)` to reindex the mailbox.
 * Fixed :issue:`3421`: PROPFIND <C:schedule-calendar-transp> now returns an
-  XML element instead of text (thanks Дилян Палаузов)
+  XML element instead of text. (thanks Дилян Палаузов)
 * Fixed :issue:`3896`: the `-d` (dump) and `-u` (undump) options to
   :cyrusman:`ctl_mboxlist(8)` now correctly dump and undump all fields in
   mailboxes.db entries.  The intermediary file format is now JSON.  This change
