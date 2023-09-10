@@ -79,6 +79,7 @@ PKG_PROG_PKG_CONFIG
 
 AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2
                   no-installinfo subdir-objects silent-rules tar-ustar])
+AM_SILENT_RULES([yes])
 AC_CONFIG_LIBOBJ_DIR([lib])
 
 dnl Useful hook for distributions
