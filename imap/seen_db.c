@@ -498,6 +498,7 @@ static int seen_merge_cb(void *rockp,
         dirty = 1; /* no record */
     }
     else {
+        seen_freedata(&oldsd);
         if (newsd.lastuid > oldsd.lastuid) dirty = 1;
         if (newsd.lastread > oldsd.lastread) dirty = 1;
     }
@@ -506,6 +507,7 @@ static int seen_merge_cb(void *rockp,
         /* write back data from new entry */
         r = seen_write(seendb, uniqueid, &newsd);
     }
+    seen_freedata(&newsd);
 
     free(uniqueid);
 
