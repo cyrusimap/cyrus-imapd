@@ -1003,6 +1003,7 @@ static int jmap_calendar_get(struct jmap_req *req)
     }
 
     if (!has_calendars(req)) {
+        get.state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, 0));
         jmap_ok(req, jmap_get_reply(&get));
         goto done;
     }
@@ -1078,14 +1079,6 @@ static int getcalendarchanges_cb(const mbentry_t *mbentry, void *vrock)
     if (!mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype))
         return 0;
 
-    /* Ignore mailboxes that are hidden from us. */
-    /* XXX Deleted mailboxes loose their ACL so we can't determine
-     * if they ever could be read by the authenticated user. We
-     * need to leak these deleted entries to not mess up client state. */
-    if (!(mbentry->mbtype & MBTYPE_DELETED) || strcmpsafe(mbentry->acl, "")) {
-        if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) return 0;
-    }
-
     /* Ignore special-purpose calendar mailboxes. */
     mbname = mbname_from_intname(mbentry->name);
     if (jmap_calendar_isspecial(mbname)) {
@@ -1111,7 +1104,9 @@ static int getcalendarchanges_cb(const mbentry_t *mbentry, void *vrock)
     const char *id = strarray_nth(boxes, boxes->count-1);
 
     /* Report this calendar as created, updated or destroyed. */
-    if (mbentry->mbtype & MBTYPE_DELETED) {
+    if (mbentry->mbtype & MBTYPE_DELETED ||
+            // leak unshared calendars, they might have been shared before
+            !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         if (mbentry->createdmodseq <= rock->changes->since_modseq)
             json_array_append_new(rock->changes->destroyed, json_string(id));
     }
@@ -1143,6 +1138,7 @@ static int jmap_calendar_changes(struct jmap_req *req)
     }
 
     if (!has_calendars(req)) {
+        changes.new_modseq = changes.since_modseq;
         jmap_ok(req, jmap_changes_reply(&changes));
         goto done;
     }
