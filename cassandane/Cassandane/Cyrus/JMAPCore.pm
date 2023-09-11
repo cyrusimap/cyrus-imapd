@@ -200,6 +200,9 @@ sub test_get_session
             $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/sieve'});
         }
     }
+    if ($buildinfo->get('dependency', 'icalvcard')) {
+        $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:contacts'});
+    }
 
     # primaryAccounts
     my $expect_primaryAccounts = {
@@ -223,6 +226,10 @@ sub test_get_session
             $expect_primaryAccounts->{'https://cyrusimap.org/ns/jmap/sieve'}
             = 'cassandane';
         }
+    }
+    if ($buildinfo->get('dependency', 'icalvcard')) {
+        $expect_primaryAccounts->{'urn:ietf:params:jmap:contacts'}
+            = 'cassandane';
     }
     $self->assert_deep_equals($expect_primaryAccounts,
                               $session->{primaryAccounts});

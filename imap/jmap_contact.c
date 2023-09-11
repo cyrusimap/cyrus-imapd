@@ -258,8 +258,10 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
         hash_insert(mp->name, mp, &settings->methods);
     }
 
+#ifdef HAVE_LIBICALVCARD
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_CONTACTS, json_object());
+#endif
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
@@ -287,8 +289,13 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
 }
 
 HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
+#ifdef HAVE_LIBICALVCARD
                                       struct auth_state *authstate,
                                       const char *authuserid,
+#else
+                                      struct auth_state *authstate __attribute__((unused)),
+                                      const char *authuserid __attribute__((unused)),
+#endif
                                       const char *accountid)
 {
     char *cardhomename = carddav_mboxname(accountid, NULL);
@@ -300,12 +307,15 @@ HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
                 cardhomename, error_message(r));
         goto done;
     }
+
+#ifdef HAVE_LIBICALVCARD
     int rights = httpd_myrights(authstate, mbentry);
     int is_main_account = !strcmpsafe(authuserid, accountid);
 
     json_object_set_new(account_capabilities, JMAP_URN_CONTACTS,
                         json_pack("{s:b}", "mayCreateAddressBook",
                                   is_main_account || (rights & JACL_CREATECHILD)));
+#endif
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities, JMAP_CONTACTS_EXTENSION, json_object());

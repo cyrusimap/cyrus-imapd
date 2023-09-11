@@ -859,7 +859,7 @@ EOF
     $newcard = $response->{content};
     $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
     $self->assert_matches(qr/UID:$uid/, $newcard);
-    $self->assert_matches(qr/PHOTO;ENCODING=B;TYPE=GIF:$image/, $newcard);
+    $self->assert_matches(qr/PHOTO;ENCODING=[bB];TYPE=GIF:$image/, $newcard);
 
     xlog $self, "PUT vCard v3 with text UID";
     $card =~ s/VERSION:4.0/VERSION:3.0/;
