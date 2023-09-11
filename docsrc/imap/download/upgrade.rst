@@ -132,59 +132,15 @@ of the instructions are assuming a sandboxed 3.8 installation.
 Upgrade by replicating
 ~~~~~~~~~~~~~~~~~~~~~~
 
-If you're familiar with replication, and your current installation is 2.4 or
-newer, you can set up your existing installation to replicate data to a new
-3.8 installation and failover to the new installation when you're ready. The
-replication protocol has been kept backwards compatible.
-
-If your old installation contains mailboxes or messages that are older than
-2.4, they may not have GUID fields in their indexes (index version too old),
-or they may have their GUID field set to zero.  3.8 will not accept message
-replications without valid matching GUIDs, so you need to fix this on your
-old installation first.
-
-You can check for affected mailboxes by examining the output from the
-:cyrusman:`mbexamine(8)` tool:
-
-* mailboxes that report a 'Minor Version:' less than 10 will need to have
-  their index upgraded using :cyrusman:`reconstruct(8)` with the
-  `-V <version>` parameter to be at least 10.
-* mailboxes containing messages that report 'GUID:0' will need to have
-  their GUIDs recalculated using :cyrusman:`reconstruct(8)` with the `-G`
-  parameter.
-
-If you have a large amount of data, these reconstructs will take a long time,
-so it's better to identify the mailboxes needing attention and target them
-specifically.  But if you have a small amount of data, it might be less work
-to just `reconstruct -G -V max` everything.
+If you're familiar with replication, you can set up your existing installation to
+replicate data to a new 3.8 installation and failover to the new installation
+when you're ready. The replication protocol has been kept backwards compatible.
 
 Upgrade in place
 ~~~~~~~~~~~~~~~~
 
 If you are upgrading in place, you will need to shut down Cyrus
-entirely while you install the new package.  If your old installation
-was using Berkeley DB format databases, you will need to convert or
-upgrade the databases **before** you upgrade.  Cyrus v3.8 does not
-support Berkeley DB at all.
-
-.. note::
-
-    If you are upgrading from Cyrus version 2.5 or earlier,
-    and your system is configured with the following combination
-    in :cyrusman:`imapd.conf(5)`::
-
-        fulldirhash: yes
-        hashimapspool: either yes or no
-        unixhierarchysep: yes
-
-    then you will not be able to upgrade-in-place.  This is due to
-    a change in how directory hashes are calculated for users whose
-    localpart contains a dot, which was introduced in 3.0.0.  After
-    an in-place upgrade, Cyrus will not be able to find these users'
-    metadata and/or mailboxes.
-
-    If you have this configuration, you will need to upgrade by
-    replicating, not in place.
+entirely while you install the new package.
 
 Do What As Who?
 ###############
@@ -322,51 +278,10 @@ you have provided overrides for in your config files::
 
     cyr_info conf-all -C <path to imapd.conf> -M <path to cyrus.conf>
 
-**Important config** options: ``unixhierarchysep:`` and ``altnamespace:``
-defaults in :cyrusman:`imapd.conf(5)` changed in 3.0, which will affect you
-if you are upgrading to 3.8 from something earlier than 3.0. Implications
-are outlined in the Note in :ref:`imap-admin-namespaces-mode` and
-:ref:`imap-switching-alt-namespace-mode`.  Please also see "Sieve Scripts,"
-below.
-
-* unixhierarchysep: on
-* altnamespace: on
-
-In :cyrusman:`cyrus.conf(5)` move idled from the START section to the
-DAEMON section.
-
 6. Upgrade specific items
 -------------------------
 
-* Special-Use flags
-
-   If your 2.4 :cyrusman:`imapd.conf(5)` made use of the ``xlist-XX``
-   directive(s), you can convert these to per-user special-use annotations
-   in your new install with the :cyrusman:`cvt_xlist_specialuse(8)` tool
-
-.. warning::
-
-    **Berkeley db format no longer supported since 3.0**
-
-    If you have any databases using Berkeley db, they'll need to be
-    converted to skiplist or flat *in your existing installation*. And
-    then optionally converted to whatever final format you'd like in
-    your 3.8 installation.
-
-    Databases potentially affected: mailboxes, annotations, conversations,
-    quotas.
-
-    On old install, prior to migration::
-
-       cvt_cyrusdb /<configdirectory>mailboxes.db berkeley /tmp/new-mailboxes.db skiplist
-
-    If you don't want to use flat or skiplist for 3.5, you can use
-    :cyrusman:`cvt_cyrusdb(8)` to swap to new format::
-
-       cvt_cyrusdb /tmp/new-mailboxes.db skiplist /<configdirectory>/mailboxes.db <new file format>
-
-.. note::
-    The :cyrusman:`cvt_cyrusdb(8)` command does not accept relative paths.
+* None
 
 7. Start new 3.8 Cyrus and verify
 ---------------------------------
@@ -406,7 +321,7 @@ possibly days.
     reconstruct -V max
 
 New configuration: if turning on conversations, you need to create
-conversations.db for each user.  (This is required for JMAP).::
+conversations.db for each user.  This is required for JMAP.::
 
      ctl_conversationsdb -b -r
 
@@ -418,23 +333,6 @@ If you've been using CalDAV/CardDAV/all of the DAV from earlier releases, then
 the user.dav databases need to be reconstructed due to format changes.::
 
     dav_reconstruct -a
-
-If you are upgrading from 3.0, and have the `reverseacls` feature enabled
-in :cyrusman:`imapd.conf(5)`, you may need to regenerate the data it uses
-(which is stored in `mailboxes.db`).  This is automatically regenerated at
-startup by `ctl_cyrusdb -r` if the `reverseacls` setting has changed. So,
-to force a regeneration:
-
-    1. Shut down Cyrus
-    2. Change `reverseacls` to `0` in :cyrusman:`imapd.conf(5)`
-    3. Run :cyrusman:`ctl_cyrusdb(8)` with the `-r` switch (or just start
-       Cyrus, assuming your :cyrusman:`cyrus.conf(5)` contains a
-       `ctl_cyrusdb -r` entry in the START section).  The old RACL entries
-       will be removed
-    4. (If you started Cyrus, shut it down again)
-    5. Change `reverseacls` back to `1`
-    6. Start up Cyrus (or run `ctl_cyrusdb -r`).  The RACL entries will
-       be rebuilt
 
 There were fixes and improvements to caching and search indexing in 3.6.  If
 you are upgrading to 3.8 from something earlier than 3.6, you should consider
@@ -471,11 +369,7 @@ Upgrade your mupdate master and front ends last.
 
 If you wish to use XFER to transfer mailboxes from an existing backend to your
 new 3.8 backend, you should first upgrade your existing backends to 3.6.1,
-3.4.5, 3.2.11, or 3.0.18.  These releases contain a patch such that XFER will
+3.4.5, or 3.2.11.  These releases contain a patch such that XFER will
 correctly recognise 3.8 and later destinations.  Without this patch, XFER will
 not recognise 3.8, and will downgrade mailboxes to the oldest supported format
 (losing metadata) in transit.
-
-If your existing backends are 2.4 or 2.5, there are equivalent patches for
-recognising 3.8+ on the cyrus-imapd-2.4 and cyrus-imapd-2.5 git branches, but
-these are not in any released version.
