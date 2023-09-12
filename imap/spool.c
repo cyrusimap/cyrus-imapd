@@ -110,6 +110,7 @@ typedef enum {
 
    on error, returns < 0
 */
+__attribute__((nonnull(3,4,5)))
 static int parseheader(struct protstream *fin, FILE *fout,
                        char **headname, char **contents,
                        char **rawvalue,
@@ -291,9 +292,9 @@ static int parseheader(struct protstream *fin, FILE *fout,
     if (c != EOF) prot_ungetc(c, fin);
 
     /* and we didn't get a header */
-    if (headname != NULL) *headname = NULL;
-    if (contents != NULL) *contents = NULL;
-    if (rawvalue != NULL) *rawvalue = NULL;
+    *headname = NULL;
+    *contents = NULL;
+    *rawvalue = NULL;
 
     return r;
 
@@ -303,9 +304,9 @@ static int parseheader(struct protstream *fin, FILE *fout,
     /* Note: xstrdup()ing the string ensures we return
      * a minimal length string with no allocation slack
      * at the end */
-    if (headname != NULL) *headname = xstrdup(name.s);
-    if (contents != NULL) *contents = xstrdup(body.s);
-    if (rawvalue != NULL) *rawvalue = xstrdup(raw.s);
+    *headname = xstrdup(name.s);
+    *contents = xstrdup(body.s);
+    *rawvalue = xstrdup(raw.s);
 
     return 0;
 }
