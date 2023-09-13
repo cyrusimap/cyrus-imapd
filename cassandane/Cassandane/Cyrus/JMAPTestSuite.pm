@@ -123,6 +123,7 @@ sub new
         return $class->SUPER::new({
             config => $config,
             adminstore => 1,
+            squatter => 1,
             services => ['imap', 'http'],
         }, @_);
     }
@@ -281,22 +282,6 @@ sub run_test
     local $ENV{JMTS_TELEMETRY} = 1 if get_verbose >= 3;
     local $ENV{JMTS_USE_WEBSOCKETS} = 0;
 
-    # Needed so text based searching works in Email/query, etc...
-    my $squatter_pid = $self->{instance}->run_command({
-            cyrus => 1,
-            background => 1,
-            handlers => {
-                exited_abnormally => sub {
-                    my ($child, $code) = @_;
-                    return 0 if $code == 75; # ignore EX_TEMPFAIL
-                    my $desc = Cassandane::Instance::_describe_child($child);
-                    die "child process $desc exited with code $code";
-                },
-            },
-        },
-        'squatter', '-R', '-d',
-    );
-
     $self->{instance}->run_command({
             redirects => { stderr => $errfile, stdout => $outfile },
             workingdir => $basedir,
@@ -308,8 +293,6 @@ sub run_test
         "perl", '-I' => "$basedir/lib",
          "$basedir/$name.t",
     );
-
-    $self->{instance}->stop_command($squatter_pid);
 
     if ((!$status || get_verbose)) {
         if (-f $errfile) {
