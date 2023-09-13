@@ -107,6 +107,7 @@ static int allow_partials = 0;
 static int allow_duplicateparts = 0;
 static int reindex_partials = 0;
 static int reindex_minlevel = 0;
+static int cyrus_isdaemon = 0;
 static search_text_receiver_t *rx = NULL;
 
 static strarray_t *skip_domains = NULL;
@@ -798,7 +799,7 @@ static void do_rolling(const char *channel)
     for (;;) {
         int sig = signals_poll();
 
-        if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
+        if (sig == SIGHUP && cyrus_isdaemon) {
             syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully");
             sync_log_reader_end(slr);
             shut_down(0);
@@ -1230,6 +1231,9 @@ int main(int argc, char **argv)
         usage("squatter");
     }
 
+    if (getenv("CYRUS_ISDAEMON"))
+        cyrus_isdaemon = atoi(getenv("CYRUS_ISDAEMON"));
+
     cyrus_init(alt_config, "squatter", init_flags, CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
@@ -1279,8 +1283,9 @@ int main(int argc, char **argv)
         r = do_search(query, !multi_folder, &mboxnames);
         break;
     case ROLLING:
-        if (background && !getenv("CYRUS_ISDAEMON"))
+        if (background && !cyrus_isdaemon) {
             become_daemon();
+        }
         do_rolling(channel);
         /* never returns */
         break;
