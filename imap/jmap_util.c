@@ -174,55 +174,48 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
     json_object_foreach(patch, path, newval) {
         /* Start traversal at root object */
         json_t *it = dst;
-        const char *base = path, *top;
+        const char *base = path, *top, *err;
+        char *ref = NULL;
+        bit64 idx;
+        int r = -1;
+
         /* Find path in object tree */
         while (it && (top = strchr(base, '/'))) {
-            char *ref = jmap_pointer_decode(base, top-base);
-            if (json_is_array(it) && (flags & PATCH_ALLOW_ARRAY)) {
-                const char *err = NULL;
-                bit64 idx;
-                if (!parsenum(ref, &err, 0, &idx) && !*err &&
-                        idx < json_array_size(it)) {
-                    it = json_array_get(it, idx);
-                }
-                else it = NULL;
+            ref = jmap_pointer_decode(base, top-base);
+
+            if (json_is_array(it) && (flags & PATCH_ALLOW_ARRAY) &&
+                    !parsenum(ref, &err, 0, &idx) && !*err) {
+                it = json_array_get(it, idx);
             }
             else {
                 it = json_object_get(it, ref);
             }
+
             free(ref);
             base = top + 1;
         }
 
-        /* Set value at path */
-        int is_valid = 0;
-
         if (it) {
-            char *ref = jmap_pointer_decode(base, strlen(base));
+            /* Replace value at path */
+            ref = jmap_pointer_decode(base, strlen(base));
 
-            if (json_is_object(it)) {
-                is_valid = 1;
-                if (newval == json_null()) {
-                    json_object_del(it, ref);
-                } else {
-                    json_object_set(it, ref, newval);
+            if (json_is_array(it)) {
+                if ((flags & PATCH_ALLOW_ARRAY) && !json_is_null(newval) &&
+                        !parsenum(ref, &err, 0, &idx) && !*err) {
+                    r = json_array_set(it, idx, newval);
                 }
             }
-            else if (json_is_array(it) && !json_is_null(newval) &&
-                    (flags & PATCH_ALLOW_ARRAY)) {
-                const char *err = NULL;
-                bit64 idx;
-                if (!parsenum(ref, &err, 0, &idx) && !*err &&
-                        idx < json_array_size(it)) {
-                    is_valid = 1;
-                    json_array_set(it, idx, newval);
-                }
+            else if (json_is_null(newval)) {
+                r = json_object_del(it, ref);
+            }
+            else {
+                r = json_object_set(it, ref, newval);
             }
 
             free(ref);
         }
 
-        if (!is_valid) {
+        if (r != 0) {
             if (invalid) json_array_append_new(invalid, json_string(path));
             json_decref(dst);
             return NULL;
