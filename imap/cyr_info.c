@@ -150,6 +150,7 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 printf("\n");
                 break;
 
+            case OPT_BYTESIZE:
             case OPT_DURATION:
                 if (only_changed) {
                     if (0 == strcmpsafe(imapopts[i].def.s, imapopts[i].val.s))
@@ -264,6 +265,7 @@ static void do_defconf(int want_since, uint32_t since)
                 printf("%s: %ld\n", imapopts[i].optname, imapopts[i].def.i);
                 break;
 
+            case OPT_BYTESIZE:
             case OPT_DURATION:
             case OPT_STRING:
             case OPT_STRINGLIST:
