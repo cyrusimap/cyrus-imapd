@@ -99,34 +99,41 @@ sub run_cyr_info
     return @res;
 }
 
-sub bogus_test_info_conf
-{ # XXX - defaults changed, and .conf file contains default fields now
+sub test_info_conf
+{
     my ($self) = @_;
 
-    xlog $self, "test 'cyr_info conf' in the simplest case";
-
-    # Slurp the imapd.conf
+    my %imapd_conf;
     my $filename = $self->{instance}->_imapd_conf();
-    open CONF, '<', $filename
+    open my $fh, '<', $filename
         or die "Cannot open $filename for reading: $!";
-    my @imapd_conf = readline(CONF);
-    close CONF;
+    while (my $line = <$fh>) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $imapd_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $imapd_conf{$name} = $value;
+        }
+    }
+    close $fh;
 
-    @imapd_conf = sort {
-            substr($a, 0, index($a, ':'))
-            cmp
-            substr($b, 0, index($b, ':'))
-        } @imapd_conf;
+    my %cyr_info_conf;
+    foreach my $line ($self->run_cyr_info('conf')) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $cyr_info_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $cyr_info_conf{$name} = $value;
+        }
+    }
 
-    my @output = $self->run_cyr_info('conf');
-
-    @output = sort {
-            substr($a, 0, index($a, ':'))
-            cmp
-            substr($b, 0, index($b, ':'))
-        } @output;
-
-    $self->assert_deep_equals(\@imapd_conf, \@output);
+    $self->assert_deep_equals(\%imapd_conf, \%cyr_info_conf);
 }
 
 sub test_info_lint
