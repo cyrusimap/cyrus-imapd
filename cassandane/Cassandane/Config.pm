@@ -103,9 +103,6 @@ sub default
             'partition-default' => '@basedir@/data',
             sasl_mech_list => 'PLAIN LOGIN',
             allowplaintext => 'yes',
-            # config options used at FastMail - may as well be testing our stuff
-            expunge_mode => 'delayed',
-            delete_mode => 'delayed',
             # for debugging - see cassandane.ini.example
             debug_command => '@prefix@/utils/gdbtramp %s %d',
             # everyone should be running this
