@@ -99,7 +99,7 @@ sub run_cyr_info
     return @res;
 }
 
-sub test_info_conf
+sub test_conf
 {
     my ($self) = @_;
 
@@ -136,7 +136,7 @@ sub test_info_conf
     $self->assert_deep_equals(\%imapd_conf, \%cyr_info_conf);
 }
 
-sub test_info_conf_all
+sub test_conf_all
 {
     my ($self) = @_;
 
@@ -178,7 +178,7 @@ sub test_info_conf_all
     $self->assert_deep_equals(\%imapd_conf, \%cyr_info_conf);
 }
 
-sub test_info_conf_default
+sub test_conf_default
 {
     my ($self) = @_;
 
@@ -202,7 +202,7 @@ sub test_info_conf_default
     }
 }
 
-sub test_info_lint
+sub test_lint
 {
     my ($self) = @_;
 
@@ -216,7 +216,7 @@ Cassandane::Cyrus::TestCase::magic(ConfigJunk => sub {
     shift->config_set(trust_fund => 'street art');
 });
 
-sub test_info_lint_junk
+sub test_lint_junk
     :ConfigJunk
 {
     my ($self) = @_;
@@ -227,7 +227,7 @@ sub test_info_lint_junk
     $self->assert_deep_equals(["trust_fund: street art\n"], \@output);
 }
 
-sub test_info_lint_channels
+sub test_lint_channels
     :min_version_3_2 :NoStartInstances
 {
     my ($self) = @_;
@@ -254,7 +254,7 @@ sub test_info_lint_channels
     );
 }
 
-sub test_info_lint_partitions
+sub test_lint_partitions
     :min_version_3_0 :NoStartInstances
 {
     my ($self) = @_;
