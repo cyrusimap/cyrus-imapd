@@ -6072,4 +6072,50 @@ EOF
     $self->assert_num_equals(2, scalar @$data);
 }
 
+sub test_utf8_url
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $uid = "%E2%98%83";  # percent-encoded ☃";
+    my $href = $CalDAV->request_url('') . "/$CalendarId/$uid.ics";
+
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+PRODID:-//Fastmail/2020.5/EN
+BEGIN:VEVENT
+DTEND:20230914T201611
+DTSTAMP:20230914T191611Z
+DTSTART:20230914T191611
+SEQUENCE:0
+SUMMARY:hiya
+TRANSP:OPAQUE
+UID:$uid
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my %headers = (
+        'Content-Type' => 'text/calendar',
+        'Authorization' => $CalDAV->auth_header());
+
+    my $res = $CalDAV->{ua}->request('PUT', $href, {
+        headers => \%headers,
+        content => $event
+    });
+    $self->assert_str_equals('201', $res->{status});
+
+    $res = $CalDAV->{ua}->request('GET', $href, {
+        headers => \%headers
+    });
+    $self->assert_str_equals('200', $res->{status});
+}
+
 1;
