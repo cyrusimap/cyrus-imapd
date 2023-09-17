@@ -61,10 +61,8 @@ my %bitfields = (
 );
 my $bitfields_fixed = 0;
 
-sub new
+sub init_bitfields
 {
-    my $class = shift;
-
     if (!$bitfields_fixed) {
         while (my ($key, $allvalues) = each %bitfields) {
             $bitfields{$key} = {};
@@ -74,6 +72,13 @@ sub new
         }
         $bitfields_fixed = 1;
     }
+}
+
+sub new
+{
+    my $class = shift;
+
+    init_bitfields();
 
     my $self = {
         parent => undef,
@@ -103,9 +108,6 @@ sub default
             'partition-default' => '@basedir@/data',
             sasl_mech_list => 'PLAIN LOGIN',
             allowplaintext => 'yes',
-            # config options used at FastMail - may as well be testing our stuff
-            expunge_mode => 'delayed',
-            delete_mode => 'delayed',
             # for debugging - see cassandane.ini.example
             debug_command => '@prefix@/utils/gdbtramp %s %d',
             # everyone should be running this
@@ -364,6 +366,37 @@ sub generate
         }
     }
     close CONF;
+}
+
+sub is_bitfield
+{
+    my ($name) = @_;
+
+    init_bitfields();
+
+    return defined $bitfields{$name};
+}
+
+sub is_bitfield_bit
+{
+    my ($name, $value) = @_;
+
+    init_bitfields();
+
+    die "$name is not a bitfield option" if not exists $bitfields{$name};
+
+    return defined $bitfields{$name}->{$value};
+}
+
+sub get_bitfield_bits
+{
+    my ($name) = @_;
+
+    init_bitfields();
+
+    die "$name is not a bitfield option" if not exists $bitfields{$name};
+
+    return sort keys %{$bitfields{$name}};
 }
 
 1;

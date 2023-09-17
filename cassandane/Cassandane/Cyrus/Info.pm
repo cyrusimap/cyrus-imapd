@@ -99,37 +99,110 @@ sub run_cyr_info
     return @res;
 }
 
-sub bogus_test_info_conf
-{ # XXX - defaults changed, and .conf file contains default fields now
+sub test_conf
+{
     my ($self) = @_;
 
-    xlog $self, "test 'cyr_info conf' in the simplest case";
-
-    # Slurp the imapd.conf
+    my %imapd_conf;
     my $filename = $self->{instance}->_imapd_conf();
-    open CONF, '<', $filename
+    open my $fh, '<', $filename
         or die "Cannot open $filename for reading: $!";
-    my @imapd_conf = readline(CONF);
-    close CONF;
+    while (my $line = <$fh>) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $imapd_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $imapd_conf{$name} = $value;
+        }
+    }
+    close $fh;
 
-    @imapd_conf = sort {
-            substr($a, 0, index($a, ':'))
-            cmp
-            substr($b, 0, index($b, ':'))
-        } @imapd_conf;
+    my %cyr_info_conf;
+    foreach my $line ($self->run_cyr_info('conf')) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $cyr_info_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $cyr_info_conf{$name} = $value;
+        }
+    }
 
-    my @output = $self->run_cyr_info('conf');
-
-    @output = sort {
-            substr($a, 0, index($a, ':'))
-            cmp
-            substr($b, 0, index($b, ':'))
-        } @output;
-
-    $self->assert_deep_equals(\@imapd_conf, \@output);
+    $self->assert_deep_equals(\%imapd_conf, \%cyr_info_conf);
 }
 
-sub test_info_lint
+sub test_conf_all
+{
+    my ($self) = @_;
+
+    my %imapd_conf;
+    my $filename = $self->{instance}->_imapd_conf();
+    open my $fh, '<', $filename
+        or die "Cannot open $filename for reading: $!";
+    while (my $line = <$fh>) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $imapd_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $imapd_conf{$name} = $value;
+        }
+    }
+    close $fh;
+
+    my %cyr_info_conf;
+    foreach my $line ($self->run_cyr_info('conf-all')) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+
+        # conf-all outputs ALL configured values (including defaults)
+        # but we can only really test for the ones we know we put there
+        next if not exists $imapd_conf{$name};
+
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $cyr_info_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $cyr_info_conf{$name} = $value;
+        }
+    }
+
+    $self->assert_deep_equals(\%imapd_conf, \%cyr_info_conf);
+}
+
+sub test_conf_default
+{
+    my ($self) = @_;
+
+    # conf-default spits out all the defaults.  can't do much to
+    # check the actual contents, short of duplicating lib/imapoptions
+    # in here, but we can at least make sure it runs without crashing
+    # and its output looks reasonably sane
+
+    foreach my $line ($self->run_cyr_info('conf-default')) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+
+        $self->assert_not_null($name);
+        $self->assert_not_null($value);
+
+        if (Cassandane::Config::is_bitfield($name)) {
+            foreach my $v (split /\s+/, $value) {
+                $self->assert_not_null(Cassandane::Config::is_bitfield_bit($name, $v));
+            }
+        }
+    }
+}
+
+sub test_lint
 {
     my ($self) = @_;
 
@@ -143,7 +216,7 @@ Cassandane::Cyrus::TestCase::magic(ConfigJunk => sub {
     shift->config_set(trust_fund => 'street art');
 });
 
-sub test_info_lint_junk
+sub test_lint_junk
     :ConfigJunk
 {
     my ($self) = @_;
@@ -154,7 +227,7 @@ sub test_info_lint_junk
     $self->assert_deep_equals(["trust_fund: street art\n"], \@output);
 }
 
-sub test_info_lint_channels
+sub test_lint_channels
     :min_version_3_2 :NoStartInstances
 {
     my ($self) = @_;
@@ -181,7 +254,7 @@ sub test_info_lint_channels
     );
 }
 
-sub test_info_lint_partitions
+sub test_lint_partitions
     :min_version_3_0 :NoStartInstances
 {
     my ($self) = @_;
