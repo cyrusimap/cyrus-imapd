@@ -103,6 +103,7 @@ sub new
         deliver => 0,
         jmap => 0,
         install_certificates => 0,
+        squatter => 0,
     };
     map {
         $want->{$_} = delete $params->{$_}
@@ -593,6 +594,17 @@ sub _create_instances
         $self->{instance}->add_services(@{$want->{services}});
         $self->{instance}->_setup_for_deliver()
             if ($want->{deliver});
+
+        if ($want->{squatter}) {
+            $self->{instance}->add_daemon(
+                name => 'squatter',
+                argv => [
+                    'squatter',
+                    '-R',
+                ],
+                wait => 'y',
+            );
+        }
 
         if ($want->{replica} || $want->{csyncreplica})
         {
