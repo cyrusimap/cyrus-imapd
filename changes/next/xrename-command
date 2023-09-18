@@ -1,0 +1,15 @@
+Description:
+
+RENAME no longer emits per-folder updates, new XRENAME command does
+
+
+Config changes:
+
+No config changes
+
+
+Upgrade instructions:
+
+If using a new Cyrus from a telnet connection, use XRENAME if you want
+to see the names of each folder as it renames.  NOTE, this is really quick
+these days with UUID mailboxes, you probably don't want to.
