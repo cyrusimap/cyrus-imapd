@@ -206,7 +206,8 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
                 }
             }
             else if (json_is_null(newval)) {
-                r = json_object_del(it, ref);
+                json_object_del(it, ref);
+                r = 0;
             }
             else {
                 r = json_object_set(it, ref, newval);
