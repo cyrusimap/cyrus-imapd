@@ -344,8 +344,10 @@ sub test_reconstruct_splitconv
     my ($self) = @_;
     my %exp;
 
+    my $talk = $self->{store}->get_client();
+
     # check IMAP server has the XCONVERSATIONS capability
-    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+    $self->assert($talk->capability()->{xconversations});
 
     xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
@@ -358,12 +360,18 @@ sub test_reconstruct_splitconv
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
     }
 
+    $talk->create('foo');
+    $talk->copy('1:*', 'foo');
+
     $self->check_messages(\%exp, keyed_on => 'uid');
 
     # first run WITHOUT splitting
     $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r');
 
     $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
 
     # then run WITH splitting, and see the changed CIDs
     $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r', '-S');
@@ -380,6 +388,20 @@ sub test_reconstruct_splitconv
     $exp{"A20"}->set_attributes(cid => $exp{"A20"}->make_cid(), basecid => $exp{A}->make_cid());
 
     $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
+
+    # zero everything out
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-z', 'cassandane');
+
+    # rebuild
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-b', 'cassandane');
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    #$talk->select("INBOX");
 }
 
 #

@@ -138,8 +138,8 @@ struct conv_folder {
     uint32_t        prev_exists;
 };
 
-#define CONV_GUIDREC_VERSION 0x2          // (must be <= 127)
-#define CONV_GUIDREC_BYNAME_VERSION 0x1   // last folders byname version
+#define CONV_GUIDREC_VERSION 3          // (must be <= 127)
+#define CONV_GUIDREC_BYNAME_VERSION 1   // last folders byname version
 
 struct conv_guidrec {
     const struct conversations_state *cstate;  // this conversationsdb!
@@ -148,6 +148,7 @@ struct conv_guidrec {
     uint32_t        uid;
     const char      *part;
     conversation_id_t cid;
+    conversation_id_t basecid;
     char            version;
     uint32_t        system_flags;   // if version >= 1
     uint32_t        internal_flags; // if version >= 1
@@ -264,8 +265,6 @@ extern conv_folder_t *conversation_get_folder(conversation_t *conv,
 extern void conversation_normalise_subject(struct buf *);
 
 /* G record */
-extern int conversations_guid_exists(struct conversations_state *state,
-                                     const char *guidrep);
 extern int conversations_guid_foreach(struct conversations_state *state,
                                       const char *guidrep,
                                       int(*cb)(const conv_guidrec_t*,void*),
@@ -274,8 +273,8 @@ extern int conversations_iterate_searchset(struct conversations_state *state,
                                            const void *data, size_t n,
                                            int(*cb)(const conv_guidrec_t*,void*),
                                            void *rock);
-extern conversation_id_t conversations_guid_cid_lookup(struct conversations_state *state,
-                                                       const char *guidrep);
+extern int conversations_guid_cid_lookup(struct conversations_state *state,
+                                         const char *guidrep, struct index_record *record);
 
 /* lookup the matching name or uniqueid */
 #define conv_guidrec_mboxname(rec) conversations_folder_mboxname((rec)->cstate, (rec)->foldernum)

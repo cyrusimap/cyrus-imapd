@@ -178,6 +178,18 @@ static int zero_cid_cb(const mbentry_t *mbentry,
     return r;
 }
 
+static int delannot_cb(const char *mboxname,
+                       uint32_t uid __attribute__((unused)),
+                       const char *entry,
+                       const char *userid,
+                       const struct buf *value __attribute__((unused)),
+                       const struct annotate_metadata *mdata __attribute__((unused)),
+                       void *rock)
+{
+    return annotatemore_write(mboxname, entry, userid, (const struct buf *)rock);
+}
+
+
 static int do_zero(const char *userid)
 {
     struct conversations_state *state = NULL;
@@ -189,10 +201,11 @@ static int do_zero(const char *userid)
     r = mboxlist_usermboxtree(userid, NULL, zero_cid_cb, NULL, 0);
     if (r) goto done;
 
-    /* XXX:
-     * annotatemore_findall(state->annotmboxname, IMAP_ANNOT_NS "basecid/%", &deleteannot);
-     * remove all the basecid mappings so they don't create bad splits on rebuild
-     */
+    // remove all "newcid" mappings, since we've zeroed all the basecids already
+    struct buf zerobuf = BUF_INITIALIZER;
+    r = annotatemore_findall_mboxname(state->annotmboxname, /*uid*/0, IMAP_ANNOT_NS "newcid/%",
+                                      /*modseq*/0, &delannot_cb, &zerobuf, /*flags*/0);
+    if (r) goto done;
 
 done:
     conversations_commit(&state);
