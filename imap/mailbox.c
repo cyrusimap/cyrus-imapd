@@ -3625,6 +3625,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     struct body *body = NULL;
     struct carddav_data *cdata = NULL;
     const char *resource = NULL;
+    char *xval = NULL;
     int r = 0;
 
     r = mailbox_cacherecord(mailbox, new);
@@ -3635,6 +3636,9 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     for (param = body->disposition_params; param; param = param->next) {
         if (!strcmp(param->attribute, "FILENAME")) {
             resource = param->value;
+        }
+        else if (!strcmp(param->attribute, "FILENAME*")) {
+            resource = xval = charset_parse_mimexvalue(param->value, NULL);
         }
     }
 
@@ -3699,6 +3703,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
 done:
     message_free_body(body);
     free(body);
+    free(xval);
 
     return r;
 }
@@ -3713,6 +3718,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     const char *resource = NULL;
     const char *sched_tag = NULL;
     unsigned tzbyref = 0, shared = 0;
+    char *xval = NULL;
     int r = 0;
 
     r = mailbox_cacherecord(mailbox, new);
@@ -3723,6 +3729,9 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     for (param = body->disposition_params; param; param = param->next) {
         if (!strcmp(param->attribute, "FILENAME")) {
             resource = param->value;
+        }
+        else if (!strcmp(param->attribute, "FILENAME*")) {
+            resource = xval = charset_parse_mimexvalue(param->value, NULL);
         }
         else if (!strcmp(param->attribute, "SCHEDULE-TAG")) {
             sched_tag = param->value;
@@ -3827,6 +3836,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 done:
     message_free_body(body);
     free(body);
+    free(xval);
 
     return r;
 }
@@ -3849,6 +3859,10 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     for (param = body->disposition_params; param; param = param->next) {
         if (!strcmp(param->attribute, "FILENAME")) {
             buf_setcstr(&resource, param->value);
+        }
+        else if (!strcmp(param->attribute, "FILENAME*")) {
+            buf_initmcstr(&resource,
+                          charset_parse_mimexvalue(param->value, NULL));
         }
     }
     if (!buf_len(&resource))
