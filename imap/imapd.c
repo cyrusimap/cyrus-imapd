@@ -528,7 +528,7 @@ static void cmd_dump(char *tag, char *name, int uid_start);
 static void cmd_undump(char *tag, char *name);
 static void cmd_xfer(const char *tag, const char *name,
                      const char *toserver, const char *topart);
-static void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
+static void cmd_rename(char *tag, char *oldname, char *newname, char *partition, int noisy);
 static void cmd_reconstruct(const char *tag, const char *name, int recursive);
 static void getlistargs(char *tag, struct listargs *listargs);
 static void cmd_list(char *tag, struct listargs *listargs);
@@ -2094,7 +2094,7 @@ static void cmdloop(void)
                     if (!imparse_isatom(arg3.s)) goto badpartition;
                 }
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
-                cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0);
+                cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0, /*noisy*/0);
 
                 /* XXX prometheus_increment(CYRUS_IMAP_RENAME_TOTAL); */
             } else if(!strcmp(cmd.s, "Reconstruct")) {
@@ -2650,6 +2650,22 @@ static void cmdloop(void)
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_xrunannotator(tag.s, arg1.s, usinguid);
                 /* XXX prometheus_increment(CYRUS_IMAP_XRUNANNOTATOR_TOTAL); */
+            }
+            else if (!strcmp(cmd.s, "Xrename")) {
+                if (readonly) goto noreadonly;
+                havepartition = 0;
+                if (c != ' ') goto missingargs;
+                c = getastring(imapd_in, imapd_out, &arg1);
+                if (c != ' ') goto missingargs;
+                c = getastring(imapd_in, imapd_out, &arg2);
+                if (c == EOF) goto missingargs;
+                if (c == ' ') {
+                    havepartition = 1;
+                    c = getword(imapd_in, &arg3);
+                    if (!imparse_isatom(arg3.s)) goto badpartition;
+                }
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
+                cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0, /*noisy*/1);
             }
             else if (!strcmp(cmd.s, "Xsnippets")) {
                 if (c != ' ') goto missingargs;
@@ -8044,6 +8060,7 @@ struct renrock
     char *newmailboxname;
     const char *partition;
     int found;
+    int noisy;
 };
 
 /* Callback for use by cmd_rename */
@@ -8124,8 +8141,10 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
         }
 
         // non-standard output item, but it helps give progress
-        prot_printf(imapd_out, "* OK rename %s %s\r\n",
-                    oldextname, newextname);
+	if (text->noisy) {
+           prot_printf(imapd_out, "* OK rename %s %s\r\n",
+                       oldextname, newextname);
+	}
     }
 
 done:
@@ -8151,7 +8170,7 @@ static int checkrenmacl(const mbentry_t *mbentry, void *rock)
 /*
  * Perform a RENAME command
  */
-static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
+static void cmd_rename(char *tag, char *oldname, char *newname, char *location, int noisy)
 {
     int r = 0;
     char *c;
@@ -8476,6 +8495,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         rock.newuser = newuser;
         rock.partition = location;
         rock.rename_user = rename_user;
+	rock.noisy = noisy;
 
         /* Check mboxnames to ensure we can write them all BEFORE we start */
         r = mboxlist_allmbox(ombn, checkmboxname, &rock, 0);
@@ -8548,8 +8568,10 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
-        prot_printf(imapd_out, "* OK rename %s %s\r\n",
-                    oldextname, newextname);
+        if (noisy) {
+            prot_printf(imapd_out, "* OK rename %s %s\r\n",
+                        oldextname, newextname);
+        }
         prot_flush(imapd_out);
 
 submboxes:
