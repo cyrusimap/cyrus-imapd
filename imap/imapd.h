@@ -445,6 +445,7 @@ struct client_behavior_registry {
     unsigned int did_savedate     : 1;   /* fetched SAVEDATE */
     unsigned int did_searchres    : 1;   /* used SAVE on SEARCH */
     unsigned int did_replace      : 1;   /* used REPLACE */
+    unsigned int did_imap4rev2    : 1;   /* used ENABLE IMAP4rev2  */
 };
 
 #endif /* INCLUDED_IMAPD_H */

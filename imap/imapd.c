@@ -886,7 +886,7 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
-                        "%s",
+                        "%s%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
@@ -897,16 +897,17 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_condstore   ? " condstore=<1>"    : "",
                         client_behavior.did_idle        ? " idle=<1>"         : "",
 
+                        client_behavior.did_imap4rev2   ? " imap4rev2=<1>"    : "",
                         client_behavior.did_metadata    ? " metadata=<1>"     : "",
                         client_behavior.did_move        ? " move=<1>"         : "",
                         client_behavior.did_multisearch ? " multisearch=<1>"  : "",
-                        client_behavior.did_notify      ? " notify=<1>"       : "",
 
+                        client_behavior.did_notify      ? " notify=<1>"       : "",
                         client_behavior.did_preview     ? " preview=<1>"      : "",
                         client_behavior.did_qresync     ? " qresync=<1>"      : "",
                         client_behavior.did_replace     ? " replace=<1>"      : "",
-                        client_behavior.did_savedate    ? " savedate=<1>"     : "",
 
+                        client_behavior.did_savedate    ? " savedate=<1>"     : "",
                         client_behavior.did_searchres   ? " searchres=<1>"    : "");
 }
 
@@ -15209,6 +15210,7 @@ static void cmd_enable(char *tag)
             new_capa |= CAPA_QRESYNC | CAPA_CONDSTORE;
         }
         else if (!strcasecmp(arg.s, "imap4rev2")) {
+            client_behavior.did_imap4rev2 = 1;
             new_capa |= CAPA_IMAP4REV2;
         }
     } while (c == ' ');
