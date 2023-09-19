@@ -1542,6 +1542,9 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         json_object_set_new(set.created, creation_id, new_submission);
         json_object_set_new(success_emailids, id, json_string(emailid));
         free(emailid);
+
+        /* Register creation id */
+        jmap_add_id(req, creation_id, id);
     }
     if (sm) smtpclient_close(&sm);
 
