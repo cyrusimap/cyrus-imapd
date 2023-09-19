@@ -1871,8 +1871,8 @@ struct emailsearch_folders_value {
     strarray_t foldernames;
     bitvector_t foldernums;
     int jmapupload_foldernum;
-    int is_otherthan : 1;
-    int want_expunged : 1;
+    unsigned int is_otherthan : 1;
+    unsigned int want_expunged : 1;
 };
 
 static void emailsearch_folders_value_free(struct emailsearch_folders_value **valp)

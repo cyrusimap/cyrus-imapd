@@ -142,8 +142,8 @@ static struct msg {
     uint32_t uid;
     uint32_t recno;
     uint32_t size;
-    int deleted:1;
-    int seen:1;
+    unsigned int deleted:1;
+    unsigned int seen:1;
 } *popd_map = NULL;
 
 static struct io_count *io_count_start;
