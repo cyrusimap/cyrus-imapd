@@ -688,6 +688,9 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
     int opcode = ntohl(bc[pos++].op);
     int has_index = 0;
 
+    memset(test, 0, sizeof(test_t));
+    test->type = opcode;
+
     if (opcode >= BC_ILLEGAL_VALUE) {
         /* Unknown opcode */
         return -1;
@@ -815,9 +818,6 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
             break;
         }
     }
-
-    memset(test, 0, sizeof(test_t));
-    test->type = opcode;
 
     return bc_args_parse(bc, pos, fmt, test, offsets);
 }
