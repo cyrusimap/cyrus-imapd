@@ -15200,12 +15200,17 @@ static void cmd_enable(char *tag)
             eatline(imapd_in, c);
             return;
         }
-        if (!strcasecmp(arg.s, "condstore"))
+        if (!strcasecmp(arg.s, "condstore")) {
+            client_behavior.did_condstore = 1;
             new_capa |= CAPA_CONDSTORE;
-        else if (!strcasecmp(arg.s, "qresync"))
+        }
+        else if (!strcasecmp(arg.s, "qresync")) {
+            client_behavior.did_qresync = 1;
             new_capa |= CAPA_QRESYNC | CAPA_CONDSTORE;
-        else if (!strcasecmp(arg.s, "imap4rev2"))
+        }
+        else if (!strcasecmp(arg.s, "imap4rev2")) {
             new_capa |= CAPA_IMAP4REV2;
+        }
     } while (c == ' ');
 
     /* check for CRLF */
