@@ -2382,7 +2382,6 @@ int run_sieve(const mbname_t *mbname, sieve_interp_t *interp, deliver_data_t *ms
         return 1; /* do normal delivery actions */
     }
     buf_free(&attrib);
-    script = NULL;
 
     sdata.mbname = mbname;
     sdata.ns = msgdata->ns;
