@@ -1767,8 +1767,11 @@ static int carddav_put(struct transaction_t *txn, void *obj,
                     txn->error.precond = CARDDAV_SUPP_DATA;
                     txn->error.desc =
                         "Server only accepts Content-type charset=utf-8";
+                    charset_free(&charset);
                     goto done;
                 }
+
+                charset_free(&charset);
             }
             else if (!strcasecmp(param->attribute, "profile")) {
                 profile = param->value;
