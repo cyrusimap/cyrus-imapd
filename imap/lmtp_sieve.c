@@ -1508,7 +1508,6 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
         /* XXX  Outlook sends METHOD:REPLY with no ORGANIZER,
            but libical doesn't allow them in its restrictions checks */
         buf_setcstr(&imip->outcome, "error");
-        buf_reset(&imip->errstr);
         buf_printf(&imip->errstr, "invalid iCalendar data: %s", errstr);
         goto done;
     }
@@ -1665,7 +1664,7 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
                    sched_data.status ? sched_data.status : "");
         break;
     case SCHED_DELIVER_NOACTION:
-        buf_setcstr(&imip->outcome, "no_action");
+        //imip->outcome is no_action
         break;
     case SCHED_DELIVER_ADDED:
         buf_setcstr(&imip->outcome, "added");
