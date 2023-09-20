@@ -48,8 +48,12 @@
 
 #define DAVSHARING_CONTENT_TYPE "application/davsharing+xml"
 
-/* Privileges assigned via WebDAV Sharing (draft-pot-webdav-resource-sharing) */
-#define DACL_SHARE      ( DACL_READ   | DACL_READFB )
+/* Privileges assigned via WebDAV Sharing (draft-pot-webdav-resource-sharing)
+ *
+ * JMAP can always set calendar properties for read-only calendars,
+ * but need to flag the account as isReadOnly=false, so include ACL_WRITE.
+ */
+#define DACL_SHARE      ( DACL_READ   | DACL_READFB       | ACL_WRITE )
 #define DACL_SHARERW    ( DACL_SHARE  | DACL_WRITECONT    | DACL_WRITEPROPS |   \
                           DACL_RMRSRC | DACL_WRITEOWNRSRC | DACL_UPDATEPRIVATE )
 
