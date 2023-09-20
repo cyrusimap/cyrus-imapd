@@ -608,7 +608,8 @@ calendar_sharewith_to_rights_iter:
     }
     if (++iteration == 2) goto calendar_sharewith_to_rights_iter;
 
-    /* Allow to set calendar properties */
+    /* Can always set calendar properties for read-only calendars,
+       but we need to flag the account as isReadOnly=false, so include ACL_WRITE. */
     if (newrights & ~JACL_READFB) {
         newrights |= ACL_WRITE;
     }
