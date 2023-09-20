@@ -1257,9 +1257,10 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
         mbentry_t *mbparent = NULL;
         r = _findparent(mbentry->name, &mbparent);
         if (r && r != IMAP_MAILBOX_NONEXISTENT) {
+            free(rec);
             goto done;
         }
-        else if (!r) {
+        if (!r) {
             rec->parent_id = xstrdup(mbparent->uniqueid);
         }
         mboxlist_entry_free(&mbparent);
