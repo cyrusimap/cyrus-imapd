@@ -29,7 +29,9 @@ jobs:
         ./tools/build-with-cyruslibs.sh
     - name: report cyrus version
       shell: bash
-      run: /usr/cyrus/libexec/master -V
+      run: |
+        /usr/cyrus/libexec/master -V
+        /usr/cyrus/sbin/cyr_buildinfo
     - name: update jmap test suite
       working-directory: /srv/JMAP-TestSuite.git
       shell: bash
