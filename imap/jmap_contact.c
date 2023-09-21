@@ -4188,22 +4188,25 @@ static int _contact_set_update(jmap_req_t *req, unsigned kind,
 
     json_t *abookid = json_object_get(jcard, "addressbookId");
     if (abookid && json_string_value(abookid)) {
-        const char *mboxname =
-            mboxname_abook(req->accountid, json_string_value(abookid));
+        char *mboxname = mboxname_abook(req->accountid, json_string_value(abookid));
+
         if (mbentry && strcmp(mboxname, mbentry->name)) {
             /* move */
             if (!jmap_hasrights(req, mboxname, JACL_ADDITEMS)) {
                 json_array_append_new(invalid, json_string("addressbookId"));
-                goto done;
+                r = HTTP_FORBIDDEN;
             }
-            r = jmap_openmbox(req, mboxname, &newmailbox, 1);
-            if (r) {
+            else if ((r = jmap_openmbox(req, mboxname, &newmailbox, 1))) {
                 syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
-                goto done;
             }
-            do_move = 1;
+            else {
+                do_move = 1;
+            }
         }
         json_object_del(jcard, "addressbookId");
+        free(mboxname);
+
+        if (r) goto done;
     }
 
     int needrights = do_move ? JACL_UPDATEITEMS : required_set_rights(jcard);
