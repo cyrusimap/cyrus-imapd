@@ -400,21 +400,21 @@ static struct capa_struct base_capabilities[] = {
     { "COMPRESS=DEFLATE",      CAPA_POSTAUTH|CAPA_STATE,         /* RFC 4978 */
       { .statep = &imapd_compress_allowed }                   },
     { "CONDSTORE",             CAPA_POSTAUTH,           { 0 } }, /* RFC 7162 */
-    /* CONTEXT=SEARCH   RFC 5267 is not fully implemented. Only ESORT is ready */
-    /* CONTEXT=SORT     RFC 5267 is not fully implemented. Only ESORT is ready */
-    /* CONVERT          RFC 5259 is not implemented */
+    { "CONTEXT=SEARCH",        0, /* not implemented */ { 0 } }, /* RFC 5267 */
+    { "CONTEXT=SORT",          0, /* not implemented */ { 0 } }, /* RFC 5267 */
+    { "CONVERT",               0, /* not implemented */ { 0 } }, /* RFC 5259 */
     { "CREATE-SPECIAL-USE",    CAPA_POSTAUTH,           { 0 } }, /* RFC 6154 */
     { "ENABLE",                CAPA_OMNIAUTH,           { 0 } }, /* RFC 5161 */
     { "ESEARCH",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4731 */
     { "ESORT",                 CAPA_POSTAUTH,           { 0 } }, /* RFC 5267 */
-    /* FILTERS          RFC 5466 is not implemented */
-    /* I18NLEVEL=1      RFC 5255 is not implemented */
-    /* I18NLEVEL=2      RFC 5255 is not implemented */
+    { "FILTERS",               0, /* not implemented */ { 0 } }, /* RFC 5466 */
+    { "I18NLEVEL=1",           0, /* not implemented */ { 0 } }, /* RFC 5255 */
+    { "I18NLEVEL=2",           0, /* not implemented */ { 0 } }, /* RFC 5255 */
     { "ID",                    CAPA_OMNIAUTH,           { 0 } }, /* RFC 2971 */
     { "IDLE",                  CAPA_POSTAUTH|CAPA_STATE,         /* RFC 2177 */
       { .statep = &imapd_idle_enabled }                       },
-    /* IMAPSIEVE=       RFC 6785 is not implemented */
-    /* LANGUAGE         RFC 5255 is not implemented */
+    { "IMAPSIEVE=",            0, /* not implemented */ { 0 } }, /* RFC 6785 */
+    { "LANGUAGE",              0, /* not implemented */ { 0 } }, /* RFC 5255 */
     { "LIST-EXTENDED",         CAPA_POSTAUTH,           { 0 } }, /* RFC 5258 */
     { "LIST-MYRIGHTS",         CAPA_POSTAUTH,           { 0 } }, /* RFC 8440 */
     { "LIST-STATUS",           CAPA_POSTAUTH,           { 0 } }, /* RFC 5819 */
@@ -422,13 +422,13 @@ static struct capa_struct base_capabilities[] = {
       { .config = IMAPOPT_LITERALMINUS }                      },
     { "LITERAL-",              CAPA_OMNIAUTH|CAPA_CONFIG,        /* RFC 7888 */
       { .config = IMAPOPT_LITERALMINUS }                      },
-    /* LOGIN-REFERRALS  RFC 2221 is not implemented */
+    { "LOGIN-REFERRALS",       0, /* not implemented */ { 0 } }, /* RFC 2221 */
     { "LOGINDISABLED",         CAPA_OMNIAUTH|CAPA_STATE,         /* RFC 9051 */
       { .statep = &imapd_login_disabled }                     },
     { "MAILBOX-REFERRALS",     CAPA_POSTAUTH|CAPA_REVCONFIG,     /* RFC 2193 */
       { .config = IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS }  },
     { "METADATA",              CAPA_POSTAUTH,           { 0 } }, /* RFC 5464 */
-    /* METADATA-SERVER  RFC 5464.  Sending METADATA implies METADATA-SERVER */
+    { "METADATA-SERVER",       0,/*implied by METADATA*/{ 0 } }, /* RFC 5464 */
     { "MOVE",                  CAPA_POSTAUTH,           { 0 } }, /* RFC 6851 */
     { "MULTIAPPEND",           CAPA_POSTAUTH,           { 0 } }, /* RFC 3502 */
     { "MULTISEARCH",           CAPA_POSTAUTH,           { 0 } }, /* RFC 7377 */
@@ -436,12 +436,13 @@ static struct capa_struct base_capabilities[] = {
     { "NOTIFY",                CAPA_POSTAUTH|CAPA_STATE,         /* RFC 5465 */
       { .statep = &imapd_notify_enabled }                     },
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
+    { "PARTIAL",               0, /* not implemented */ { 0 } }, /* RFC 9394 */
     { "PREVIEW",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8970 */
     { "QRESYNC",               CAPA_POSTAUTH,           { 0 } }, /* RFC 7162 */
     { "QUOTA",                 CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
-    { "QUOTASET",              CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
     { "QUOTA=RES-",            CAPA_POSTAUTH|CAPA_MULTI,         /* RFC 9208 */
       { .multi = { (const char **) quota_names, QUOTA_NUMRESOURCES } } },
+    { "QUOTASET",              CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
     { "REPLACE",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8508 */
     { "RIGHTS=kxten",          CAPA_POSTAUTH,           { 0 } }, /* RFC 4314 */
     { "SASL_IR",               CAPA_PREAUTH,            { 0 } }, /* RFC 4959 */
@@ -465,12 +466,12 @@ static struct capa_struct base_capabilities[] = {
     { "URLAUTH",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4467 */
     { "URLAUTH=BINARY",        CAPA_POSTAUTH,           { 0 } }, /* RFC 5524 */
 #endif
-    /* UTF8=ACCEPT      RFC 6855 is not implemented */
-    /* UTF8=ONLY        RFC 6855 is not implemented */
+    { "UTF8=ACCEPT",           0, /* not implemented */ { 0 } }, /* RFC 6855 */
+    { "UTF8=ONLY",             0, /* not implemented */ { 0 } }, /* RFC 6855 */
     { "WITHIN",                CAPA_POSTAUTH,           { 0 } }, /* RFC 5032 */
 
 /* drafts, non-standard (NS), Cyrus custom (CY) */
-    { "ANNOTATEMORE",          CAPA_POSTAUTH|CAPA_CONFIG,        /* legacy SETANNOTATION/GETANNOTATION commands */
+    { "ANNOTATEMORE",          CAPA_POSTAUTH|CAPA_CONFIG,        /* draft-daboo-imap-annotatemore-08 */
       { .config = IMAPOPT_ANNOTATION_ENABLE_LEGACY_COMMANDS } },
     { "DIGEST=SHA1",           CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "LIST-METADATA",         CAPA_POSTAUTH,           { 0 } }, /* draft-murchison-imap-list-metadata */
