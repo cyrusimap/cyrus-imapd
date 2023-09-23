@@ -70,7 +70,7 @@ Major changes since the 3.4 series
   `sievedir`.  Compiled bytecode is still stored in `sievedir`.  The name of
   the mailbox can be overridden with the `sieve_folder`
   :cyrusman:`imapd.conf(5)` option (default: '#sieve').
-* Experimental `processimip` Sieve action, for updating calendar entries
+* Experimental :ref:`processimip` Sieve action, for updating calendar entries
   based on iMIP (:rfc:`6047`) messages.
 * Support for JMAP Push (:rfc:`8620`) over EventSource, with polling interval
   controlled by the `jmap_pushpoll` :cyrusman:`imapd.conf(5)` option
