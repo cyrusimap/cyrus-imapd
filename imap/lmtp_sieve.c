@@ -81,6 +81,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "imap/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -2275,7 +2276,8 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_register_jmapquery(interp, &jmapquery);
 #endif
 #ifdef HAVE_ICAL
-    /* need timezones for sieve snooze */
+    /* need timezones for sieve snooze and stripping in processimip */
+    zoneinfo_open(NULL);
     ical_support_init();
     sieve_register_snooze(interp, &sieve_snooze);
 #ifdef WITH_DAV
