@@ -99,6 +99,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "imap/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -1040,6 +1041,9 @@ void shut_down(int code)
 
     libcyrus_run_delayed();
 
+#if defined USE_SIEVE && defined HAVE_ICAL
+    zoneinfo_close(NULL);
+#endif
     /* close backend connections */
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
         struct backend *be = ptrarray_nth(&backend_cached, i);
