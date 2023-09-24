@@ -520,7 +520,7 @@ extern void jmap_comparator_parse(jmap_req_t *req, struct jmap_parser *parser,
                                   jmap_comparator_parse_cb comp_cb, void *comp_rock,
                                   json_t **err);
 
-extern void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
+__attribute__((nonnull(10))) void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
                              jmap_args_parse_cb args_parse, void *args_rock,
                              jmap_filter_parse_cb filter_cb, void *filter_rock,
                              jmap_comparator_parse_cb comp_cb, void *comp_rock,
@@ -549,7 +549,7 @@ struct jmap_querychanges {
     json_t *added;
 };
 
-extern void jmap_querychanges_parse(jmap_req_t *req,
+__attribute__((nonnull(10))) void jmap_querychanges_parse(jmap_req_t *req,
                                     struct jmap_parser *parser,
                                     jmap_args_parse_cb args_parse, void *args_rock,
                                     jmap_filter_parse_cb filter_cb, void *filter_rock,

@@ -2374,7 +2374,7 @@ HIDDEN void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
                                   filter_cb, filter_rock, err);
                 jmap_parser_pop(parser);
                 query->filter = arg;
-                if (err && *err) {
+                if (*err) {
                     goto done;
                 }
             }
@@ -2391,7 +2391,7 @@ HIDDEN void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
                     jmap_comparator_parse(req, parser, val, unsupported_sort,
                                           comp_cb, comp_rock, err);
                     jmap_parser_pop(parser);
-                    if (err && *err) {
+                    if (*err) {
                         goto done;
                     }
                 }
@@ -2543,7 +2543,7 @@ HIDDEN void jmap_querychanges_parse(jmap_req_t *req,
                                   filter_cb, filter_rock, err);
                 jmap_parser_pop(parser);
                 query->filter = arg;
-                if (err && *err) {
+                if (*err) {
                     goto done;
                 }
             }
