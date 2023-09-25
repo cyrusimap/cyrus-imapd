@@ -78,7 +78,7 @@ Major changes since the 3.4 series
 * JMAP Contact.importance property is now a per-user property rather than
   shared.
 * JMAP Contacts now uses Apple-style labels on vCard ADR/TEL/EMAIL properties
-  (via property grouping)
+  (via property grouping).
 * JMAP Contacts avatars can now reference any valid blob, not only blobs
   originally uploaded via JMAP.
 
@@ -136,4 +136,4 @@ Significant bugfixes
   running :cyrusman:`reconstruct(8)` to repair the cache, and then
   :cyrusman:`squatter(8)` to reindex the mailbox.
 * Fixed :issue:`3421`: PROPFIND <C:schedule-calendar-transp> now returns an
-  XML element instead of text (thanks Дилян Палаузов)
+  XML element instead of text. (thanks Дилян Палаузов)

@@ -16,8 +16,8 @@ Major changes since the 3.6 series
 
 * Adds the ability for replication to stage message uploads to the
   archive partition rather than the spool partition.
-* Adds long-options support to various command line tools
-* Adds a new BYTESIZE smart type for imapoptions that set sizes
+* Adds long-options support to various command line tools.
+* Adds a new BYTESIZE smart type for imapoptions that set sizes.
 * Removes empty lines from :cyrusman:`cyr_expire(8)` verbose output.  If you
   parse this output with external tools, those may need updating to match.
 * Adds a module to ptloader which speaks HTTP.  See the "pts_module" and
@@ -41,7 +41,7 @@ Major changes since the 3.6 series
   ``imapflags`` capability and ``mark`` / ``unmark`` actions.  See
   :ref:`upgrade_3.8.0_sieve_changes` in the upgrade instructions.
 * Lock ordering fixes should result in fewer "resource deadlock avoided"
-  errors
+  errors.
 
 .. _relnotes_3.8.0-beta2_storage_changes:
 
@@ -109,6 +109,6 @@ Significant bugfixes
 * Fixed :issue:`4187`: :cyrusman:`ctl_mboxlist(8)` can now detect and report
   broken UUID mailboxes.  Thanks Matthias Hunstock.
 * Fixed :issue:`4383`: rolling :cyrusman:`squatter(8)` only compacted its index
-  databases at shutdown
+  databases at shutdown.
 * Fixed :issue:`4439`: GETMETADATA wasn't proxied correctly to murder backends.
   Thanks Stéphane GAUBERT.
