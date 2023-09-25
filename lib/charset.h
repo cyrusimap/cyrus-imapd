@@ -184,6 +184,7 @@ struct char_counts {
     size_t replacement;
     size_t invalid;
     size_t cntrl;
+    size_t bytelen[5]; // n-th position = count of n-byte chars, position 0 counts surrogates and invalid code points
 };
 
 /* Count the number of valid, invalid and replacement UTF-8 characters
