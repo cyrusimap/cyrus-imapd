@@ -74,7 +74,7 @@ In development
 
 * JMAP Calendars (:draft:`draft-ietf-jmap-calendars`)
 * JMAP Sharing (:draft:`draft-ietf-jmap-sharing`)
-* JMAP Blobs (:draft:`draft-ietf-jmap-blob`)
+* JMAP Blobs (:rfc:`9404`)
 * JMAP Sieve (:draft:`draft-ietf-jmap-sieve`)
 * JMAP Contacts (:draft:`draft-ietf-jmap-jscontact`)
 * JMAP MDN (:rfc:`9007`)
@@ -82,4 +82,4 @@ In development
 Not implemented
 ---------------
 * JMAP Tasks (:draft:`draft-ietf-jmap-tasks`)
-* JMAP SMIME (:draft:`draft-ietf-jmap-smime`)
+* JMAP SMIME (:rfc:`9219`)
