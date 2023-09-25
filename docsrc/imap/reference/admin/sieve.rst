@@ -108,7 +108,7 @@ attach::
     localhost.localdomain> mboxcfg shared.folder@example.com sieve my_script
 
 
-Testing the sieve server
+Testing the Sieve Server
 ========================
 
 The Sieve server, :cyrusman:`timsieved(8)`, is used for transporting user Sieve
@@ -235,6 +235,77 @@ Cyrus supports a subset of these:
 * IMAP flag Extension :rfc:`5232`
 * Body Extension :rfc:`5173`
 
+Cyrus IMAP Specific Extensions
+------------------------------
+
+.. _vnd.cyrus.log:
+
+log
+^^^
+
+Usage::
+
+   require "vnd.cyrus.log";
+   log <string>;
+
+The **log** action sends the string to syslog with INFO priority.
+
+.. _processimip:
+
+processimip
+^^^^^^^^^^^
+
+Usage::
+
+  require "vnd.cyrus.imip";
+  processimip [ ":invitesonly" / ":deletecanceled" ] [ ":outcome" <string> ] [ ":errstr" <string> ] [ ":calendarid" <string> ];
+  processimip ":updatesonly" [ ":deletecanceled" ] [ ":outcome" <string> ] [ ":errstr" <string> ];
+
+The **processimip** action processes iMIP messages during LMTP delivery.  It handles the first possibly nested *text/calendar* MIME part and ignores the *application/ics* MIME part.
+
+If present, the variable pointed after the ``:outcome`` parameter contains the enacted action.  Problems are communicated with the variable named after the ``:errstr`` parameter.  The ``:errstr`` and ``:outcome`` parameters can be used only with ``require "variables";``.
+
+**processimip** does not affect the implicit keep.  The action sends to syslog with INFO priority *outcome* and *errstr*, even when these parameters were not used.  **processimip** does not change the *PARTSTAT* property parameter value and in turn does not send replies to the *ORGANIZER*.  **processimip** does not produce runtime errors, if it is used together with the *[e]reject* action.  The handled *text/calendar* MIME part is stored in the scheduling Inbox.
+
+The string after the ``:calendarid`` parameter indicates in which calendar to create new iCalendar messages.  The default destination depends on the scheduling Inbox’s **CALDAV:schedule-default-calendar-URL** WebDAV property.
+
+When method CANCEL is received, by default the iCalendar object is retained and its STATUS property is changed to CANCELLED.  With parameter ``:deletecanceled`` the iCalendar object is deleted on method CANCEL.
+
+.. code-block:: none
+    :caption: Example
+
+    require ["ereject", "variables", "vnd.cyrus.imip"];
+    if envelope "to" "me+imip@domain" {
+        processimip :outcome "outcome" :errstr "errstr";
+        if string "${outcome}" "error" {
+            ereject "iMIP handling failed: ${errstr}";
+        }
+    }
+
+After **processimip** returns the *outcome* and *errstr* variables have one of these values:
+
+========= =========================================== =======
+outcome   errstr                                      Remark
+========= =========================================== =======
+error     could not autoprovision calendars           Default calendars cannot be created.
+error     no component to schedule
+error     missing UID property
+error     invalid iCalendar data: …
+error     missing ORGANIZER property                  When method is ADD, CANCEL, POLLSTATUS or REQUEST.
+error     missing ATTENDEE property                   When method is REPLY.
+error     unsupported method: …                       E.g. when VPOLL component is used with method ADD.
+error     unsupported component: …
+error     failed to deliver iMIP message: …
+error     could not find matching ATTENDEE property   When method is ADD, CANCEL, POLLSTATUS, PUBLISH or REQUEST.
+no_action unable to parse iMIP message                The email cannot be parsed.
+no_action unable to find & parse text/calendar part
+no_action missing METHOD property
+no_action configured to NOT process updates           When method is ADD, CANCEL or POLLSTATUS and ``:invitesonly`` is provided.
+no_action configured to NOT process replies           When method is REPLY and ``:invitesonly`` is provided.
+no_action
+added
+updated                                               Also on method CANCEL.
+========= =========================================== =======
 
 Sieve Tools
 -----------

@@ -39,7 +39,7 @@ Major changes since the 3.2 series
 * Further improvements to the `reverseacls` :cyrusman:`imapd.conf(5)`
   performance option
 * Improvements to replication reliability and performance
-* Experimental vnd.cyrus.log and vnd.cyrus.jmapquery Sieve extensions
+* Experimental :ref:`vnd.cyrus.log <vnd.cyrus.log>` and vnd.cyrus.jmapquery Sieve extensions
 * Experimental Sieve Snooze extension based on
   :draft:`draft-ietf-extra-sieve-snooze`
 * Experimental Sieve mailboxid extension based on
