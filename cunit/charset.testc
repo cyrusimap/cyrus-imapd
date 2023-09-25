@@ -1475,6 +1475,11 @@ static void test_count_validutf8(void)
     CU_ASSERT_EQUAL(5, counts.valid);
     CU_ASSERT_EQUAL(0, counts.replacement);
     CU_ASSERT_EQUAL(0, counts.invalid);
+    CU_ASSERT_EQUAL(0, counts.bytelen[0]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[1]);
+    CU_ASSERT_EQUAL(4, counts.bytelen[2]);
+    CU_ASSERT_EQUAL(1, counts.bytelen[3]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[4]);
 
     /* Two continuation bytes */
     data = "a \x80\xbf\x80 text";
@@ -1482,6 +1487,11 @@ static void test_count_validutf8(void)
     CU_ASSERT_EQUAL(7, counts.valid);
     CU_ASSERT_EQUAL(0, counts.replacement);
     CU_ASSERT_EQUAL(3, counts.invalid);
+    CU_ASSERT_EQUAL(3, counts.bytelen[0]);
+    CU_ASSERT_EQUAL(7, counts.bytelen[1]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[2]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[3]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[4]);
 
     /* Lonely start character, followed by 3-byte char, plus replacement char */
     data = "\xfc\xe2\x82\xac \xef\xbf\xbd";
@@ -1489,6 +1499,11 @@ static void test_count_validutf8(void)
     CU_ASSERT_EQUAL(2, counts.valid);
     CU_ASSERT_EQUAL(1, counts.replacement);
     CU_ASSERT_EQUAL(1, counts.invalid);
+    CU_ASSERT_EQUAL(1, counts.bytelen[0]);
+    CU_ASSERT_EQUAL(1, counts.bytelen[1]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[2]);
+    CU_ASSERT_EQUAL(2, counts.bytelen[3]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[4]);
 }
 
 static void test_qpencode_mimebody(void)
