@@ -4338,6 +4338,7 @@ EXPORTED struct char_counts charset_count_validutf8(const char *data, size_t dat
         UChar32 c;
         U8_NEXT(data8, i, length, c);
         counts.total++;
+        counts.bytelen[U8_LENGTH(c)]++;
         if (c == 0xfffd)
             counts.replacement++;
         else if (c >= 0) {
