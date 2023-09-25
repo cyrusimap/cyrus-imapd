@@ -5264,7 +5264,7 @@ static void extract_one(struct buf *buf,
                         const char *name,
                         int flags,
                         int has_name,
-                        int isutf8,
+                        int isutf8, // <0: maybe, 0: no, >1: yes
                         struct buf *raw)
 {
     char *p = NULL;
@@ -5295,6 +5295,16 @@ static void extract_one(struct buf *buf,
         /* insert a fieldname and colon */
         buf_insertcstr(raw, 0, ":");
         buf_insertcstr(raw, 0, name);
+    }
+
+    if (isutf8 < 0) {
+        struct char_counts utf8counts =
+            charset_count_validutf8(buf_base(raw), buf_len(raw));
+
+        // do not decode MIME header if its raw value is a valid
+        // UTF8 string and contains multi-byte characters
+        isutf8 = utf8counts.total && !utf8counts.invalid &&
+            utf8counts.bytelen[1] != utf8counts.total;
     }
 
     switch (flags & _MESSAGE_FORMAT_MASK) {
@@ -5361,7 +5371,7 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     strarray_t want = STRARRAY_INITIALIZER;
     struct buf raw = BUF_INITIALIZER;
     int hasname = 1;
-    int isutf8 = 0;
+    int isutf8 = -1; // maybe
 
     if (!strcasecmp(hdr, "rawheaders")) {
         int r = message_need(m, M_MAP);
