@@ -53,6 +53,7 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
+use utf8;
 
 my $MELBOURNE = <<EOF;
 BEGIN:VCALENDAR
@@ -6073,7 +6074,7 @@ EOF
 }
 
 sub test_utf8_url
-    :needs_component_httpd
+    :min_version_3_9 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -6097,14 +6098,16 @@ DTSTART:20230914T191611
 SEQUENCE:0
 SUMMARY:hiya
 TRANSP:OPAQUE
-UID:$uid
+UID:☃
 END:VEVENT
 END:VCALENDAR
 EOF
 
     my %headers = (
-        'Content-Type' => 'text/calendar',
+        'Content-Type' => 'text/calendar; charset=utf-8',
         'Authorization' => $CalDAV->auth_header());
+
+    utf8::encode($event);
 
     my $res = $CalDAV->{ua}->request('PUT', $href, {
         headers => \%headers,
