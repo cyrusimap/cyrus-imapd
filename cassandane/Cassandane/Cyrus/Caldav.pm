@@ -110,6 +110,8 @@ sub new
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
     $config->set(icalendar_max_size => 100000);
+    $config->set(event_extra_params => 'vnd.cmu.davFilename vnd.cmu.davUid');
+    $config->set(event_groups => 'calendar');
     return $class->SUPER::new({
         config => $config,
         adminstore => 1,
@@ -6109,6 +6111,7 @@ EOF
 
     utf8::encode($event);
 
+    # This will fail if the UTF-8 resource name isn't handled properly
     my $res = $CalDAV->{ua}->request('PUT', $href, {
         headers => \%headers,
         content => $event

@@ -1104,6 +1104,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
         const char *resource = NULL;
         struct param *param;
+        char *xval = NULL;
 
         if (!body) {
             if (mailbox_cacherecord(mailbox, record))
@@ -1114,6 +1115,9 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         for (param = body->disposition_params; param; param = param->next) {
             if (!strcmp(param->attribute, "FILENAME")) {
                 resource = param->value;
+            }
+            else if (!strcmp(param->attribute, "FILENAME*")) {
+                resource = xval = charset_parse_mimexvalue(param->value, NULL);
             }
         }
 
@@ -1145,6 +1149,8 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(""));
             }
         }
+
+        free(xval);
     }
 #endif // WITH_DAV
 
@@ -1303,6 +1309,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
         const char *resource = NULL;
         struct param *param;
+        char *xval = NULL;
 
         if (!body) {
             r = msgrecord_extract_bodystructure(msgrec, &body);
@@ -1315,6 +1322,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         for (param = body->disposition_params; param; param = param->next) {
             if (!strcmp(param->attribute, "FILENAME")) {
                 resource = param->value;
+            }
+            else if (!strcmp(param->attribute, "FILENAME*")) {
+                resource = xval = charset_parse_mimexvalue(param->value, NULL);
             }
         }
 
@@ -1346,6 +1356,8 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(""));
             }
         }
+
+        free(xval);
     }
 #endif // WITH_DAV
 
