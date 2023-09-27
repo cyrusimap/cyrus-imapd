@@ -1819,8 +1819,8 @@ HIDDEN int caldav_init_jmapcalendar(const char *userid, struct mailbox *mailbox)
         mbentry_t *mbentry;
         if (!mboxlist_lookup(mboxname, &mbentry, NULL)) {
             r = copy_defaultalarms_cb(mbentry, &rock);
+            mboxlist_entry_free(&mbentry);
         }
-        mboxlist_entry_free(&mbentry);
         free(mboxname);
         free(defaultcoll);
     }
