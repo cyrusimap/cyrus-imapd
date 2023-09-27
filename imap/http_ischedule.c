@@ -491,7 +491,7 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     icalrestriction_check(ical);
-    if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
+    if ((txn->error.desc = get_icalcomponent_errstr(ical, ICAL_SUPPORT_STRICT))) {
         assert(!buf_len(&txn->buf));
         buf_setcstr(&txn->buf, txn->error.desc);
         txn->error.desc = buf_cstring(&txn->buf);
