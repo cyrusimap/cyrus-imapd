@@ -166,7 +166,9 @@ extern icalcomponent *record_to_ical(struct mailbox *mailbox,
                                      const struct index_record *record,
                                      strarray_t *schedule_addresses);
 
-extern const char *get_icalcomponent_errstr(icalcomponent *ical);
+#define ICAL_SUPPORT_STRICT 0
+#define ICAL_SUPPORT_ALLOW_INVALID_IANA_TIMEZONE (1<<0)
+extern const char *get_icalcomponent_errstr(icalcomponent *ical, unsigned flags);
 
 extern void icalcomponent_remove_invitee(icalcomponent *comp,
                                          icalproperty *prop);

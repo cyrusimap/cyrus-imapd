@@ -894,7 +894,7 @@ EXPORTED void icalsupport_personal_data_fini(struct icalsupport_personal_data *d
     memset(data, 0, sizeof(struct icalsupport_personal_data));
 }
 
-EXPORTED const char *get_icalcomponent_errstr(icalcomponent *ical)
+EXPORTED const char *get_icalcomponent_errstr(icalcomponent *ical, unsigned flags)
 {
     icalcomponent *comp;
 
@@ -902,6 +902,15 @@ EXPORTED const char *get_icalcomponent_errstr(icalcomponent *ical)
          comp;
          comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
         icalproperty *prop;
+
+        // If this is a VTIMEZONE then keep track of its TZID, we'll need it later
+        const char *tzid = NULL;
+        if (icalcomponent_isa(comp) == ICAL_VTIMEZONE_COMPONENT) {
+            if ((prop = icalcomponent_get_x_property_by_name(comp, "X-LIC-LOCATION")))
+                tzid = icalproperty_get_value_as_string(prop);
+            if (!tzid && (prop = icalcomponent_get_first_property(comp, ICAL_TZID_PROPERTY)))
+                tzid = icalproperty_get_value_as_string(prop);
+        }
 
         for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
              prop;
@@ -925,10 +934,15 @@ EXPORTED const char *get_icalcomponent_errstr(icalcomponent *ical)
                     /* For iOS 11 */
                     if (!strcasecmp(propname, "URL")) continue;
                 }
-                else {
+                else if (!strncmp(errstr, "Parse error in property name", 28)) {
                     /* Ignore unknown property errors */
-                    if (!strncmp(errstr, "Parse error in property name", 28))
-                        continue;
+                    continue;
+                }
+                else if ((flags & ICAL_SUPPORT_ALLOW_INVALID_IANA_TIMEZONE) &&
+                        !strncmp(errstr, "Failed iTIP restrictions for VTIMEZONE", 38) &&
+                        icaltimezone_get_cyrus_timezone_from_tzid(tzid)) {
+                    /* Ignore invalid VTIMEZONE if we can map it to IANA name */
+                    continue;
                 }
 
                 return errstr;

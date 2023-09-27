@@ -1502,7 +1502,8 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
     }
 
     cyrus_icalrestriction_check(itip);
-    if ((errstr = get_icalcomponent_errstr(itip)) &&
+    if ((errstr = get_icalcomponent_errstr(itip,
+                    ICAL_SUPPORT_ALLOW_INVALID_IANA_TIMEZONE)) &&
         ((meth != ICAL_METHOD_REPLY && meth != ICAL_METHOD_PUBLISH) ||
          (!strstr(errstr, "Failed iTIP restrictions for ORGANIZER property") &&
           !strstr(errstr, "No value for ORGANIZER property")))) {

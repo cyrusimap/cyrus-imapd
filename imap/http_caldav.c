@@ -3462,7 +3462,7 @@ static int caldav_import(struct transaction_t *txn, void *obj,
             return HTTP_FORBIDDEN;
         }
         cyrus_icalrestriction_check(ical);
-        if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
+        if ((txn->error.desc = get_icalcomponent_errstr(ical, ICAL_SUPPORT_STRICT))) {
             buf_setcstr(&txn->buf, txn->error.desc);
             txn->error.desc = buf_cstring(&txn->buf);
             txn->error.precond = CALDAV_VALID_DATA;
@@ -3626,9 +3626,10 @@ static int caldav_patch(struct transaction_t *txn, void *obj)
         ret = HTTP_BAD_REQUEST;
     }
     else if (!icalrestriction_check(pdoc) || icalcomponent_count_errors(pdoc)) {
-        if ((txn->error.desc = get_icalcomponent_errstr(pdoc)) ||
+        if ((txn->error.desc = get_icalcomponent_errstr(pdoc, ICAL_SUPPORT_STRICT)) ||
             (txn->error.desc =
-             get_icalcomponent_errstr(icalcomponent_get_first_real_component(pdoc)))) {
+             get_icalcomponent_errstr(icalcomponent_get_first_real_component(pdoc),
+                 ICAL_SUPPORT_STRICT))) {
             buf_setcstr(&txn->buf, txn->error.desc);
             txn->error.desc = buf_cstring(&txn->buf);
         }
@@ -3781,7 +3782,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
 
     cyrus_icalrestriction_check(ical);
-    if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
+    if ((txn->error.desc = get_icalcomponent_errstr(ical, ICAL_SUPPORT_STRICT))) {
         buf_setcstr(&txn->buf, txn->error.desc);
         txn->error.desc = buf_cstring(&txn->buf);
         txn->error.precond = CALDAV_VALID_DATA;
