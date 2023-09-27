@@ -1078,7 +1078,7 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
     if (mailbox) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
-    if (kind != CARDDAV_KIND_ANY) {
+    if (kind >= 0 && kind != CARDDAV_KIND_ANY) {
         buf_appendcstr(&sqlbuf, " kind = :kind AND");
     }
     if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
