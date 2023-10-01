@@ -974,6 +974,8 @@ sub make_message
 
     my $msg = $self->{gen}->generate(subject => $subject, %attrs);
     $msg->remove_headers('subject') if !defined $subject;
+    $msg->remove_headers('to') if exists $attrs{to} and not $attrs{to};
+    $msg->remove_headers('from') if exists $attrs{from} and not $attrs{from};
     $self->_save_message($msg, $store);
 
     return $msg;
