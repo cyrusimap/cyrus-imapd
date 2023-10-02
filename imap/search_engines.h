@@ -117,7 +117,7 @@ extern search_snippet_markup_t default_snippet_markup;
 typedef struct search_text_receiver search_text_receiver_t;
 struct search_text_receiver {
     int (*begin_mailbox)(search_text_receiver_t *,
-                         struct mailbox *, int incremental);
+                         struct mailbox *, int flags);
     uint32_t (*first_unindexed_uid)(search_text_receiver_t *);
     /* returns the highest index level of msg. ties between equal index levels
      * are broken by choosing the index level without the partial bit set */

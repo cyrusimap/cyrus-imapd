@@ -47,6 +47,7 @@ use Data::Dumper;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 sub new
 {
@@ -66,6 +67,27 @@ sub tear_down
 {
     my ($self) = @_;
     $self->SUPER::tear_down();
+}
+
+sub run_squatter
+{
+    my ($self, @args) = @_;
+
+    my $outfname = $self->{instance}->{basedir} . "/squatter.out";
+    my $errfname = $self->{instance}->{basedir} . "/squatter.err";
+
+    $self->{instance}->run_command({
+            cyrus => 1,
+            redirects => {
+                stdout => $outfname,
+                stderr => $errfname,
+            },
+        },
+        'squatter',
+        @args
+    );
+
+    return (slurp_file($outfname), slurp_file($errfname));
 }
 
 # XXX version gated to 3.4+ for now to keep travis happy, but if we
@@ -136,6 +158,36 @@ sub test_skip_unmodified
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-s', '0');
     @lines = $self->{instance}->getsyslog();
     $self->assert_matches(qr{Squat skipping mailbox}, join("\n", @lines));
+}
+
+sub test_nonincremental
+    :SearchEngineSquat
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+    my $n = 0;
+
+    for (1..5) {
+        # make a new message
+        $self->make_message();
+        $n++;
+
+        # do a full reindex
+        my (undef, $err) = $self->run_squatter('-vv');
+
+        # better have indexed them all, not just the new one!
+        $self->assert_matches(qr{indexed $n messages}, $err);
+    }
+
+    # make a message with no subject, to, or from
+    $self->make_message(undef, to => undef, from => undef);
+    $n++;
+
+    # do a full reindex
+    my (undef, $err) = $self->run_squatter('-vv');
+
+    # better have indexed them all, not just the new one!
+    $self->assert_matches(qr{indexed $n messages}, $err);
 }
 
 1;
