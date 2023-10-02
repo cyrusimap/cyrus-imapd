@@ -774,7 +774,7 @@ static int doc_check(void *closure, const SquatListDoc *doc)
 
 static int begin_mailbox(search_text_receiver_t *rx,
                          struct mailbox *mailbox,
-                         int incremental)
+                         int flags)
 {
     SquatReceiverData *d = (SquatReceiverData *)rx;
     SquatOptions options;
@@ -786,6 +786,7 @@ static int begin_mailbox(search_text_receiver_t *rx,
     SquatSearchIndex *old_index = NULL;
     int r = 0;      /* IMAP error code */
     int s = 0;      /* SQUAT error code */
+    int incremental = (flags & SEARCH_UPDATE_INCREMENTAL);
 
     bv_clearall(&d->indexed);
 
