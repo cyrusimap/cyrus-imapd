@@ -286,7 +286,7 @@ void mboxname_id_hash(char *buf, size_t buf_len,
 char *mboxname_to_userid(const char *mboxname);
 char *mboxname_user_mbox(const char *userid, const char *subfolder);
 char *mboxname_user_mbox_external(const char *userid, const char *extsubfolder);
-char *mboxname_abook(const char *userid, const char *collection);
+__attribute__((malloc, warn_unused_result, returns_nonnull)) char *mboxname_abook(const char *userid, const char *collection);
 char *mboxname_cal(const char *userid, const char *collection);
 char *mboxname_drive(const char *userid, const char *collection);
 
