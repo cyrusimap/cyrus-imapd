@@ -140,8 +140,8 @@ strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
 strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
 
 /* process each entry of type 'kind' for 'mailbox' in 'carddavdb' with cb() */
-int carddav_get_cards(struct carddav_db *carddavdb,
-                      const mbentry_t *mbentry, const char *vcard_uid, int kind,
+int carddav_get_cards(struct carddav_db *carddavdb, const mbentry_t *mbentry,
+                      const char *userid, const char *vcard_uid, int kind,
                       carddav_cb_t *cb, void *rock);
 
 /* Process each entry for 'carddavdb' with a modseq higher than oldmodseq,
@@ -164,8 +164,9 @@ int carddav_foreach_sort(struct carddav_db *carddavdb, const mbentry_t *mbentry,
                          enum carddav_sort* sort, size_t nsort,
                          carddav_cb_t *cb, void *rock);
 
-int carddav_write_jmapcache(struct carddav_db *carddavdb, int rowid,
-                            int version, const char *data);
+int carddav_write_jscardcache(struct carddav_db *carddavdb,
+                              int rowid, const char *userid,
+                              int version, const char *data);
 
 /* update an entry in 'carddavdb' */
 int carddav_update(struct carddav_db *carddavdb,

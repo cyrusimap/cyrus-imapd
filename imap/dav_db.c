@@ -193,11 +193,21 @@
     " PRIMARY KEY (rowid, ical_recurid, userid)"                             \
     " FOREIGN KEY (rowid, ical_recurid) REFERENCES jscal_objs (rowid, ical_recurid) ON DELETE CASCADE );"
 
+// dropped in version 16
 #define CMD_CREATE_CARDCACHE                                            \
     "CREATE TABLE IF NOT EXISTS vcard_jmapcache ("                      \
     " rowid INTEGER NOT NULL PRIMARY KEY,"                              \
     " jmapversion INTEGER NOT NULL,"                                    \
     " jmapdata TEXT NOT NULL,"                                          \
+    " FOREIGN KEY (rowid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
+
+#define CMD_CREATE_JSCARDCACHE                                          \
+    "CREATE TABLE IF NOT EXISTS jscard_cache ("                         \
+    " rowid INTEGER NOT NULL,"                                          \
+    " userid TEXT NOT NULL,"                                            \
+    " jmapversion INTEGER NOT NULL,"                                    \
+    " jmapdata TEXT NOT NULL,"                                          \
+    " PRIMARY KEY (rowid, userid)"                                      \
     " FOREIGN KEY (rowid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
 
 #define CMD_CREATE_SIEVE                                                \
@@ -221,7 +231,8 @@
 
 #define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_CARD CMD_CREATE_EM CMD_CREATE_GR \
                    CMD_CREATE_OBJS CMD_CREATE_CALCACHE CMD_CREATE_CARDCACHE   \
-                   CMD_CREATE_SIEVE CMD_CREATE_JSCALOBJS CMD_CREATE_JSCALCACHE
+                   CMD_CREATE_SIEVE CMD_CREATE_JSCALOBJS CMD_CREATE_JSCALCACHE \
+                   CMD_CREATE_JSCARDCACHE
 
 /* leaves these unused columns around, but that's life.  A dav_reconstruct
  * will fix them */
@@ -274,6 +285,10 @@
     "INSERT INTO jscal_objs" \
     " SELECT rowid, '', modseq, createdmodseq, dtstart, dtend, alive, '' FROM ical_objs;"
 
+#define CMD_DBUPGRADEv16 \
+    "DROP TABLE vcard_jmapcache;" \
+    CMD_CREATE_JSCARDCACHE
+
 static int sievedb_upgrade(sqldb_t *db);
 
 struct sqldb_upgrade davdb_upgrade[] = {
@@ -291,10 +306,11 @@ struct sqldb_upgrade davdb_upgrade[] = {
   /* Don't upgrade to version 13.  This was an intermediate Sieve DB version */
   { 14, CMD_DBUPGRADEv14, &sievedb_upgrade },
   { 15, CMD_DBUPGRADEv15, NULL },
+  { 16, CMD_DBUPGRADEv16, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 15
+#define DB_VERSION 16
 
 static sqldb_t *reconstruct_db;
 

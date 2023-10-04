@@ -203,12 +203,13 @@ static const char *column_text_to_buf(const char *text, struct buf *buf)
     "  modseq, createdmodseq, NULL, NULL" \
     " FROM vcard_objs"
 
-#define CMD_GETFIELDS_JMAP                                              \
+#define CMD_GETFIELDS_JSCARD                                            \
     "SELECT vcard_objs.rowid, creationdate, mailbox, resource, imap_uid," \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  version, vcard_uid, kind, fullname, name, nickname, alive,"      \
     "  modseq, createdmodseq, jmapversion, jmapdata" \
-    " FROM vcard_objs LEFT JOIN vcard_jmapcache USING (rowid)"
+    " FROM vcard_objs LEFT JOIN jscard_cache"                           \
+    "  ON (vcard_objs.rowid = jscard_cache.rowid AND jscard_cache.userid = :userid)"
 
 static int read_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -285,7 +286,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
             column_text_to_buf((const char *) sqlite3_column_text(stmt, 14),
                                &db->bufs[8]);
         cdata->jmapdata =
-            column_text_to_buf((const char *) sqlite3_column_text(stmt, 15),
+            column_text_to_buf((const char *) sqlite3_column_text(stmt, 19),
                                 &db->bufs[9]);
     }
 
@@ -889,7 +890,7 @@ static int carddav_write_groups(struct carddav_db *carddavdb, int rowid, const s
     "  nickname     = :nickname"        \
     " WHERE rowid = :rowid;"
 
-#define CMD_DELETE_JMAPCACHE "DELETE FROM vcard_jmapcache WHERE rowid = :rowid"
+#define CMD_DELETE_JSCARDCACHE "DELETE FROM jscard_cache WHERE rowid = :rowid"
 
 EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata)
 {
@@ -915,9 +916,7 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
         { NULL,            SQLITE_NULL,    { .s = NULL                    } } };
 
     if (cdata->dav.rowid) {
-        int r = sqldb_exec(carddavdb->db, CMD_DELETE_JMAPCACHE, bval, NULL, NULL);
-        if (r) return r;
-        r = sqldb_exec(carddavdb->db, CMD_UPDATE, bval, NULL, NULL);
+        int r = sqldb_exec(carddavdb->db, CMD_UPDATE, bval, NULL, NULL);
         if (r) return r;
     }
     else {
@@ -985,30 +984,39 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb,
     return 0;
 }
 
-#define CMD_INSERT_JMAPCACHE                                                \
-    "INSERT INTO vcard_jmapcache ( rowid, jmapversion, jmapdata )"          \
-    " VALUES ( :rowid, :jmapversion, :jmapdata );"
+#define CMD_DELETE_JSCARDCACHE_USER                                         \
+    "DELETE FROM jscard_cache"                                              \
+    " WHERE rowid = :rowid AND userid = :userid"
 
-EXPORTED int carddav_write_jmapcache(struct carddav_db *carddavdb, int rowid, int version, const char *data)
+#define CMD_INSERT_JSCARDCACHE_USER                                         \
+    "INSERT INTO jscard_cache ( rowid, userid, jmapversion, jmapdata )"     \
+    " VALUES ( :rowid, :userid, :jmapversion, :jmapdata );"
+
+EXPORTED int carddav_write_jscardcache(struct carddav_db *carddavdb,
+                                       int rowid, const char *userid,
+                                       int version, const char *data)
 {
     struct sqldb_bindval bval[] = {
         { ":rowid",        SQLITE_INTEGER, { .i = rowid  } },
+        { ":userid",       SQLITE_TEXT,    { .s = userid } },
         { ":jmapversion",  SQLITE_INTEGER, { .i = version } },
         { ":jmapdata",     SQLITE_TEXT,    { .s = data   } },
         { NULL,            SQLITE_NULL,    { .s = NULL   } } };
     int r;
 
     /* clean up existing records if any */
-    r = sqldb_exec(carddavdb->db, CMD_DELETE_JMAPCACHE, bval, NULL, NULL);
+    r = sqldb_exec(carddavdb->db, CMD_DELETE_JSCARDCACHE_USER, bval, NULL, NULL);
     if (r) return r;
 
+    if (!data) return 0;
+
     /* insert the cache record */
-    return sqldb_exec(carddavdb->db, CMD_INSERT_JMAPCACHE, bval, NULL, NULL);
+    return sqldb_exec(carddavdb->db, CMD_INSERT_JSCARDCACHE_USER, bval, NULL, NULL);
 }
 
 EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
                                const mbentry_t *mbentry,
-                               const char *vcard_uid, int kind,
+                               const char *userid, const char *vcard_uid, int kind,
                                int (*cb)(void *rock,
                                          struct carddav_data *cdata),
                                void *rock)
@@ -1017,6 +1025,7 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
         ((carddavdb->db->version >= DB_MBOXID_VERSION) ?
          mbentry->uniqueid : mbentry->name);
     struct sqldb_bindval bval[] = {
+        { ":userid",    SQLITE_TEXT,    { .s = userid    } },
         { ":kind",      SQLITE_INTEGER, { .i = kind      } },
         { ":mailbox",   SQLITE_TEXT,    { .s = mailbox   } },
         { ":vcard_uid", SQLITE_TEXT,    { .s = vcard_uid } },
@@ -1026,7 +1035,7 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
     struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
     struct buf sqlbuf = BUF_INITIALIZER;
 
-    buf_setcstr(&sqlbuf, CMD_GETFIELDS_JMAP);
+    buf_setcstr(&sqlbuf, CMD_GETFIELDS_JSCARD);
     buf_appendcstr(&sqlbuf, " WHERE alive = 1");
     if (kind != CARDDAV_KIND_ANY)
         buf_appendcstr(&sqlbuf, " AND kind = :kind");
@@ -1481,7 +1490,17 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
         }
     }
 
-    int r = carddav_write(carddavdb, cdata);
+    int r;
+    if (cdata->dav.rowid) {
+        /* clean up existing cache records */
+        struct sqldb_bindval bval[] = {
+            { ":rowid",        SQLITE_INTEGER, { .i = cdata->dav.rowid } },
+            { NULL,            SQLITE_NULL,    { .s = NULL             } } };
+
+        r = sqldb_exec(carddavdb->db, CMD_DELETE_JSCARDCACHE, bval, NULL, NULL);
+        if (r) return r;
+    }
+    r = carddav_write(carddavdb, cdata);
     if (!r) r = carddav_write_emails(carddavdb,
                                      cdata->dav.rowid, &emails, ispinned);
     if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
