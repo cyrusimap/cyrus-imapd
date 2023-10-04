@@ -48,7 +48,7 @@ sub test_calendarevent_participantreply_standalone
     $self->{instance}->getnotify();
 
     xlog "Create scheduled standalone instance";
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
                 instance1 => {
@@ -72,7 +72,7 @@ sub test_calendarevent_participantreply_standalone
 
     xlog $self, "verify invitation sent from organizer to attendees";
     my $data = $self->{instance}->getnotify();
-    my (@imips) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
     my $imip = $imips[0];
     $self->assert_not_null($imip);
 
@@ -85,7 +85,7 @@ sub test_calendarevent_participantreply_standalone
     $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
 
     xlog $self, "set attendee status";
-    my $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
+    $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
         eventId => $id,
         participantEmail => "bugs\@looneytunes.com",
         updates => {
@@ -95,7 +95,7 @@ sub test_calendarevent_participantreply_standalone
 
     xlog $self, "verify reply sent from attendee to organizer";
     $data = $self->{instance}->getnotify();
-    (@imips) = grep { $_->{METHOD} eq 'imip' } @$data;
+    @imips = grep { $_->{METHOD} eq 'imip' } @$data;
     $imip = $imips[0];
     $self->assert_not_null($imip);
 
@@ -118,4 +118,29 @@ sub test_calendarevent_participantreply_standalone
     $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
     $self->assert($ical =~ "METHOD:REQUEST");
     $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min >= 9)) {
+        xlog $self, "actually update attendee status on the event";
+        $res = $jmap->CallMethods([['CalendarEvent/set', {
+            update => {
+                $id => { "participants/att/participationStatus" => "accepted" }
+            }
+        }, "R1"]]);
+
+        xlog $self, "set attendee status again";
+        $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
+            eventId => $id,
+            participantEmail => "bugs\@looneytunes.com",
+            updates => {
+                participationStatus => "accepted"
+            }
+        }, "R2"]]);
+        $self->assert_str_equals("2.0", $res->[0][1]{scheduleStatus});
+
+        xlog $self, "verify that NO iMIP messages are sent to organizer/attendee";
+        $data = $self->{instance}->getnotify();
+        @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+        $self->assert_null($imips);
+    }
 }
