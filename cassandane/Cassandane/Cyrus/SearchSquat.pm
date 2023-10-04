@@ -148,6 +148,84 @@ sub test_simple
     }
 }
 
+sub test_one_doc_per_message
+    :SearchEngineSquat :min_version_3_4
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    # make some messages where the only indexed field is the body
+    foreach my $body (qw(term1 term1 term2 term4)) {
+        $self->make_message(undef,
+                            from => undef,
+                            to => undef,
+                            body => $body) || die;
+    }
+
+    $self->run_squatter();
+
+    my @tests = ({
+        search => ['body', 'term1'],
+        wantUids => [1,2],
+    }, {
+        search => ['body', 'term2'],
+        wantUids => [3],
+    }, {
+        search => ['body', 'term3'],
+        wantUids => [],
+    }, {
+        search => ['body', 'term4'],
+        wantUids => [4],
+    });
+
+    foreach (@tests) {
+        $self->{instance}->getsyslog();
+
+        my $uids = $imap->search(@{$_->{search}}) || die;
+        $self->assert_deep_equals($_->{wantUids}, $uids);
+
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert(grep /Squat run/, @lines);
+    }
+
+    # make some more messages
+    foreach my $body (qw(term5 term6 term6 term8)) {
+        $self->make_message(undef,
+                            from => undef,
+                            to => undef,
+                            body => $body) || die;
+    }
+
+    # incremental reindex
+    my (undef, $err) = $self->run_squatter('-i', '-v');
+    $self->assert_matches(qr{indexed 4 messages}, $err);
+
+    push @tests, {
+        search => ['body', 'term5'],
+        wantUids => [5],
+    }, {
+        search => ['body', 'term6'],
+        wantUids => [6, 7],
+    }, {
+        search => ['body', 'term7'],
+        wantUids => [],
+    }, {
+        search => ['body', 'term8'],
+        wantUids => [8],
+    };
+
+    # better not be any off-by-one errors in search results!
+    foreach (@tests) {
+        $self->{instance}->getsyslog();
+
+        my $uids = $imap->search(@{$_->{search}}) || die;
+        $self->assert_deep_equals($_->{wantUids}, $uids);
+
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert(grep /Squat run/, @lines);
+    }
+}
+
 # XXX version gated to 3.4+ for now to keep travis happy, but if we
 # XXX backport the fix we should change or remove the gate...
 sub test_skip_unmodified
