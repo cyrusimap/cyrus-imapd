@@ -123,7 +123,7 @@ static int _json_to_card(struct jmap_req *req,
 
 static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-#define JMAPCACHE_CONTACTVERSION 1
+#define JMAPCACHE_CARDVERSION 1
 
 static jmap_method_t jmap_contact_methods_standard[] = {
 #ifdef HAVE_LIBICALVCARD
@@ -490,12 +490,6 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
         return 0;
     }
 
-    if (cdata->jmapversion == JMAPCACHE_CONTACTVERSION) {
-        json_error_t jerr;
-        obj = json_loads(cdata->jmapdata, 0, &jerr);
-        if (obj) goto gotvalue;
-    }
-
     if (!crock->mailbox || strcmp(mailbox_uniqueid(crock->mailbox), cdata->dav.mailbox)) {
         mailbox_close(&crock->mailbox);
         r = mailbox_open_irl(mbentry->name, &crock->mailbox);
@@ -518,10 +512,6 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     obj = jmap_group_from_vcard(vcard->objects);
 
     vparse_free_card(vcard);
-
-    hashu64_insert(cdata->dav.rowid, json_dumps(obj, 0), &crock->jmapcache);
-
-gotvalue:
 
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
     json_object_set_new(obj, "uid", json_string(cdata->vcard_uid));
@@ -719,13 +709,13 @@ static const jmap_property_t group_props[] = {
 
 static void cachecards_cb(uint64_t rowid, void *payload, void *vrock)
 {
-    const char *eventrep = payload;
+    const char *jscard = payload;
     struct cards_rock *rock = vrock;
 
     // there's no way to return errors, but luckily it doesn't matter if we
     // fail to cache
-    carddav_write_jmapcache(rock->db, rowid,
-                            JMAPCACHE_CONTACTVERSION, eventrep);
+    carddav_write_jscardcache(rock->db, rowid,
+                              rock->req->userid, JMAPCACHE_CARDVERSION, jscard);
 }
 
 static int has_addressbooks_cb(const mbentry_t *mbentry, void *rock)
@@ -803,7 +793,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
             rock.rows = 0;
             const char *id = json_string_value(jval);
 
-            r = carddav_get_cards(db, mbentry, id, kind, cb, &rock);
+            r = carddav_get_cards(db, mbentry, req->userid, id, kind, cb, &rock);
             if (r || !rock.rows) {
                 json_array_append(get.not_found, jval);
             }
@@ -812,7 +802,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
     }
     else {
         rock.rows = 0;
-        r = carddav_get_cards(db, mbentry, NULL, kind, cb, &rock);
+        r = carddav_get_cards(db, mbentry, req->userid, NULL, kind, cb, &rock);
         if (r) goto done;
     }
 
@@ -2705,12 +2695,6 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
         return 0;
     }
 
-    if (cdata->jmapversion == JMAPCACHE_CONTACTVERSION) {
-        json_error_t jerr;
-        entry = json_loads(cdata->jmapdata, 0, &jerr);
-        if (entry) goto gotvalue;
-    }
-
     /* Open mailbox. */
     if (!crock->mailbox || strcmp(mailbox_name(crock->mailbox), mbentry->name)) {
         mailbox_close(&crock->mailbox);
@@ -2742,9 +2726,6 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
         jmap_contact_from_vcard(crock->req->userid, vcard->objects,
                                 crock->mailbox, &record);
     vparse_free_card(vcard);
-
-gotvalue:
-
 
     if (crock->filter) {
         /* Match the contact against the filter */
@@ -7440,6 +7421,14 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
     if (r) goto done;
 
+    if (!crock->args.disable_uri_as_blobid &&
+        cdata->jmapversion == JMAPCACHE_CARDVERSION) {
+        /* We only cache contacts with media as blobids */
+        json_error_t jerr;
+        obj = json_loads(cdata->jmapdata, 0, &jerr);
+        if (obj) goto gotvalue;
+    }
+
     /* Load message containing the resource and parse vcard data */
     vcardcomponent *vcard = record_to_vcard_x(crock->mailbox, &record);
     if (!vcard) {
@@ -7457,6 +7446,13 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     obj = jmap_card_from_vcard(crock->req->userid, vcard,
                                crock->mailbox, &record, from_vcard_flags);
     vcardcomponent_free(vcard);
+
+    if (!crock->args.disable_uri_as_blobid) {
+        /* Only cache contacts with media as blobids */
+        hashu64_insert(cdata->dav.rowid, json_dumps(obj, 0), &crock->jmapcache);
+    }
+
+  gotvalue:
 
     jmap_filterprops(obj, crock->get->props);
 
@@ -8162,13 +8158,13 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
         mboxlist_entry_free(&mbentry);
         return 0;
     }
-#if 0
-    if (cdata->jmapversion == JMAPCACHE_CONTACTVERSION) {
+
+    if (cdata->jmapversion == JMAPCACHE_CARDVERSION) {
         json_error_t jerr;
         entry = json_loads(cdata->jmapdata, 0, &jerr);
         if (entry) goto gotvalue;
     }
-#endif
+
     /* Open mailbox. */
     if (!crock->mailbox || strcmp(mailbox_name(crock->mailbox), mbentry->name)) {
         mailbox_close(&crock->mailbox);
@@ -8190,8 +8186,7 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
         goto done;
     }
 
-//gotvalue:
-
+  gotvalue:
 
     if (crock->filter) {
         /* Match the contact against the filter */
@@ -11336,7 +11331,13 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                                     req->userid, req->authstate);
             if (!r) r = annotate_state_store(state, annots);
             if (!r) r = mailbox_rewrite_index_record(*mailbox, &record);
-            if (!r) *item = json_null();
+            if (!r) {
+                *item = json_null();
+
+                /* flush cached JSContactCard for this user */
+                carddav_write_jscardcache(db, cdata->dav.rowid,
+                                          req->userid, 0, NULL);
+            }
             goto done;
         }
     }
