@@ -123,6 +123,18 @@ sub test_simple
     }, {
         search => ['fuzzy', 'body', 'term4'],
         wantUids => [4],
+    }, {
+        # we don't index content-type, make sure we actually didn't
+        search => ['from', 'text/plain'],
+        wantUids => [],
+    }, {
+        # we don't index content-type, make sure we actually didn't
+        search => ['to', 'text/plain'],
+        wantUids => [],
+    }, {
+        # we don't index content-type, make sure we actually didn't
+        search => ['subject', 'text/plain'],
+        wantUids => [],
     });
 
     foreach (@tests) {
