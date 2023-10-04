@@ -55,7 +55,7 @@ EOF
 
     xlog $self, "verify invitation sent from organizer to attendees";
     my $data = $self->{instance}->getnotify();
-    my (@imips) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
     my $imip = $imips[0];
     $self->assert_not_null($imip);
 
@@ -96,7 +96,7 @@ EOF
 
     xlog $self, "verify reply sent from attendee to organizer";
     $data = $self->{instance}->getnotify();
-    (@imips) = grep { $_->{METHOD} eq 'imip' } @$data;
+    @imips = grep { $_->{METHOD} eq 'imip' } @$data;
     $imip = $imips[0];
     $self->assert_not_null($imip);
 

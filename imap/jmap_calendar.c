@@ -7927,6 +7927,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     struct mailbox *mbox = NULL;
     strarray_t schedule_addr = STRARRAY_INITIALIZER;
     struct updateevent update = { .schedule_addresses = &schedule_addr };
+    icalparameter_partstat ical_part_stat = ICAL_PARTSTAT_NONE;
     json_t *res = json_object();
     json_t *err = NULL;
     int r = 0;
@@ -7947,8 +7948,6 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
     jprop = json_object_get(req->args, "updates");
     if (json_is_object(jprop)) {
-        icalparameter_partstat ical_part_stat = ICAL_PARTSTAT_NONE;
-
         jmap_parser_push(&parser, "updates");
         jprop = json_object_get(jprop, "participationStatus");
         if (json_is_string(jprop)) {
@@ -8097,6 +8096,22 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
 
         prop = find_attendee(comp, part_email);
         if (prop) {
+            /* Compare partStat */
+            icalparameter *param =
+                icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+            if (ical_part_stat == icalparameter_get_partstat(param)) {
+                errno = 0;
+                xsyslog(LOG_ERR, "ignoring redundant RSVP (same partStat)",
+                        "eventid=<%s> recurid=<%s>"
+                        " attendee=<%s> participationStatus=<%s>",
+                        update.eid->ical_uid,
+                        update.eid->ical_recurid ? update.eid->ical_recurid : "",
+                        part_email, part_stat);
+                json_object_set_new(res, "scheduleStatus",
+                                    json_string(SCHEDSTAT_SUCCESS));
+                goto no_op;
+            }
+
             part_id = jmap_partid_from_ical(prop);
             break;
         }
@@ -8184,6 +8199,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     sched_request(req->accountid, req->accountid, NULL, organizer,
                   update.oldical, update.newical, SCHED_MECH_JMAP_PARTREPLY);
 
+no_op:
     /* Build response */
     req->accountid = NULL;
     jmap_ok(req, res);
