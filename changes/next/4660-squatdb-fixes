@@ -1,0 +1,21 @@
+Description:
+
+Fixed: squat db reindexes are no longer always incremental
+Fixed: squat db corruption from unintentional indexing of fields
+  intended to be skipped
+Fixed: squat db out of bounds access in incremental reindex docID map
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Squat search databases may benefit from a full (non-incremental) reindex
+
+
+GitHub issue:
+
+#4660
