@@ -1117,6 +1117,10 @@ sub _start_smtpd
             port => $port,
             max_servers => 3, # default is 50, yikes
             control_file => "$basedir/conf/smtpd.json",
+            # XXX JMAPEmailSubmission.emailsubmission_set_futurerelease
+            # XXX hangs indefinitely when run with verbosity (?!), but
+            # XXX somehow disabling ipv6 here prevents that...
+            ipv => 4,
         });
         $smtpd->run() or die;
         exit 0; # Never reached

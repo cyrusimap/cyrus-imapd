@@ -46,9 +46,13 @@
 
 #include <config.h>
 
-#include "sqldb.h"
-#include "mailbox.h"
 #include <libical/ical.h>
+
+#include "lib/sqldb.h"
+
+#include "imap/mailbox.h"
+#include "imap/mboxname.h"
+#include "imap/json_support.h"
 
 enum alarm_type {
     ALARM_CALENDAR = 1,
@@ -56,6 +60,8 @@ enum alarm_type {
     ALARM_SEND,
     ALARM_UNSCHEDULED,
 };
+
+#define CALDAV_ALARM_LOOKAHEAD (10)
 
 /* prepare for caldav alarm operations in this process */
 int caldav_alarm_init(void);
@@ -92,8 +98,47 @@ int caldav_alarm_delete_mailbox(const char *mboxname);
 /* delete all alarms for a user */
 int caldav_alarm_delete_user(const char *userid);
 
-/* distribute alarms with triggers in the next minute */
+/* process alarms with triggers before a given time */
 int caldav_alarm_process(time_t runtime, time_t *next, int dryrun);
+
+/* list alarms (via callbacks) before a given time */
+typedef void (*list_calendar_proc)(const mbname_t *mbname,
+                                   uint32_t imap_uid,
+                                   time_t nextcheck,
+                                   uint32_t num_rcpts,
+                                   uint32_t num_retries,
+                                   time_t last_run,
+                                   const char *last_err,
+                                   void *rock);
+typedef void (*list_snooze_proc)(const mbname_t *mbname,
+                                 time_t nextcheck,
+                                 uint32_t num_retries,
+                                 time_t last_run,
+                                 const char *last_err,
+                                 json_t *snoozed,
+                                 void *rock);
+typedef void (*list_send_proc)(const mbname_t *mbname,
+                               time_t nextcheck,
+                               uint32_t num_retries,
+                               time_t last_run,
+                               const char *last_err,
+                               json_t *submission,
+                               void *rock);
+typedef void (*list_unscheduled_proc)(const mbname_t *mbname,
+                                      uint32_t imap_uid,
+                                      time_t nextcheck,
+                                      uint32_t num_rcpts,
+                                      uint32_t num_retries,
+                                      time_t last_run,
+                                      const char *last_err,
+                                      void *rock);
+int caldav_alarm_list(time_t runtime,
+                      int lookahead,
+                      list_calendar_proc calendar_proc,
+                      list_snooze_proc snooze_proc,
+                      list_send_proc send_proc,
+                      list_unscheduled_proc unscheduled_proc,
+                      void *rock);
 
 /* upgrade old databases */
 int caldav_alarm_upgrade();

@@ -239,7 +239,10 @@ endif # MURDER
 
 if CALALARMD
 libexec_PROGRAMS += imap/calalarmd
-endif
+if JMAP
+sbin_PROGRAMS += imap/cyr_alarmq
+endif #JMAP
+endif #CALALARMD
 
 if HTTPD
 
@@ -964,6 +967,9 @@ imap_idled_LDADD = $(LD_UTILITY_ADD)
 
 imap_calalarmd_SOURCES = imap/calalarmd.c imap/mutex_fake.c
 imap_calalarmd_LDADD = $(LD_SERVER_ADD)
+
+imap_cyr_alarmq_SOURCES = imap/cli_fatal.c imap/cyr_alarmq.c imap/mutex_fake.c
+imap_cyr_alarmq_LDADD = $(LD_UTILITY_ADD)
 
 imap_jmap_expire_SOURCES = imap/cli_fatal.c imap/jmap_expire.c imap/mutex_fake.c
 imap_jmap_expire_LDADD = $(LD_UTILITY_ADD)

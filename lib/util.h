@@ -432,6 +432,23 @@ void xsyslog_fn(int priority, const char *description,
 #define xsyslog(pri, desc, ...)  \
     xsyslog_fn(pri, desc, __func__, __VA_ARGS__)
 
+/* append ANSI "Select Graphic Rendition" sequence (for terminal color etc)
+ * see https://en.wikipedia.org/wiki/ANSI_escape_code
+ *
+ * argument list must be terminated with negative value (such as SGR_DONE)!
+ */
+#define SGR_DONE (-1)
+void buf_append_sgr(struct buf *dst, ...);
+
+/* append a key=<value> pair, with leading separator and optional
+ * deterministic coloring of the value */
+void buf_append_kv(struct buf *dst, int sep, int want_color,
+                   const char *key, const char *value);
+void buf_append_kvf(struct buf *dst, int sep, int want_color,
+                    const char *key, const char *valfmt,
+                    ...)
+                   __attribute__((format(printf, 5, 6)));
+
 /*
  * GCC_VERSION macro usage:
  * #if GCC_VERSION > 60909    //GCC version 7 and above

@@ -100,6 +100,7 @@ sub rset {
     my ($Self) = @_;
     $Self->mylog("SMTP: RSET");
     return if $Self->override('rset');
+    delete $Self->{_rcpt_to_count};
     $Self->send_client_resp(250, "ok");
     return 0;
 }
