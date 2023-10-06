@@ -13,6 +13,14 @@ have a preferred distro, maybe consider using Debian.
 First make sure you have a :ref:`copy of the source <getcyrus>`. You can either
 fetch the latest source from git, or download one of our release tarballs.
 
+.. Note::
+
+    Cyrus does not support compiling with `Link Time Optimization
+    <https://gcc.gnu.org/onlinedocs/gccint/LTO-Overview.html>`_,
+    but some platforms now enable Link Time Optimization by default.
+    If your platform does so, you will need to override it, perhaps
+    by adding ``-fno-lto`` to ``CFLAGS`` and ``LDFLAGS``.
+
 Setting up dependencies
 =======================
 
