@@ -24,7 +24,6 @@
 struct server_config {
     int sasl_plain;
     int sasl_login;
-    int sasl_digestmd5;
     int starttls;
     int deflate;
     int caps_one_per_line;
@@ -71,7 +70,6 @@ static struct server_state *server_state;
 static const struct server_config default_server_config = {
     .sasl_plain = 1,
     .sasl_login = 0,
-    .sasl_digestmd5 = 0,
     .starttls = 0,
     .deflate = 0,
     .caps_one_per_line = 1
@@ -582,38 +580,6 @@ static void not_test_sasl_login(void)
 }
 #endif
 
-/*
- * Test authenticating with the DIGEST-MD5 mechanism.
- */
-static void test_sasl_digestmd5(void)
-{
-    struct backend *be;
-    const char *auth_status = NULL;
-    char *mechs;
-    int r;
-
-    default_conditions();
-    server_state->config.sasl_plain = 0;
-    server_state->config.sasl_digestmd5 = 1;
-
-    be = backend_connect(NULL, HOST, &test_prot,
-                         USERID, callbacks, &auth_status, /*fd*/-1);
-    CU_ASSERT_PTR_NOT_NULL_FATAL(be);
-    CU_ASSERT_EQUAL(server_state->is_connected, 1);
-    CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
-    CU_ASSERT_EQUAL(server_state->is_tls, 0);
-
-    mechs = backend_get_cap_params(be, CAPA_AUTH);
-    CU_ASSERT_STRING_EQUAL(mechs, "DIGEST-MD5");
-    free(mechs);
-
-    r = backend_ping(be, NULL);
-    CU_ASSERT_EQUAL(r, 0);
-
-    backend_disconnect(be);
-    free(be);
-}
-
 /* Common routine to test the semantics of capabilities */
 static void caps_common(void)
 {
@@ -1036,7 +1002,6 @@ static void server_emit_caps(struct server_state *state)
     if (!state->config.starttls || state->is_tls) {
         int got_login = 0;
         int got_plain = 0;
-        int got_digestmd5 = 0;
 
         /* First see what mechanisms SASL has; no point reporting
          * mechanisms which aren't actually available. */
@@ -1057,10 +1022,6 @@ static void server_emit_caps(struct server_state *state)
                 words[n++] = "PLAIN";
                 got_plain = 1;
             }
-            if (!strcasecmp(p, "DIGEST-MD5") && state->config.sasl_digestmd5) {
-                words[n++] = "DIGEST-MD5";
-                got_digestmd5 = 1;
-            }
         }
         words[n++] = NULL;
         free(b);
@@ -1071,9 +1032,6 @@ static void server_emit_caps(struct server_state *state)
         if (state->config.sasl_plain && !got_plain)
             fprintf(stderr, "Server failed to find requested "
                             "SASL mechanism \"PLAIN\"\n");
-        if (state->config.sasl_digestmd5 && !got_digestmd5)
-            fprintf(stderr, "Server failed to find requested "
-                            "SASL mechanism \"DIGEST-MD5\"\n");
     }
 
     /*
@@ -1462,8 +1420,7 @@ static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unu
     if (!prop)
         return AUXPROP_RET;
     for ( ; prop->name ; prop++) {
-        if (!strcmp(prop->name, "*userPassword") ||
-            !strcmp(prop->name, "*cmusaslsecretDIGEST-MD5")) {
+        if (!strcmp(prop->name, "*userPassword")) {
             if (prop->values)
                 sparams->utils->prop_erase(sparams->propctx, prop->name);
             sparams->utils->prop_set(sparams->propctx, prop->name,
@@ -1476,7 +1433,7 @@ static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unu
 
 /*
  * Helps create a fake "auxiliary property plugin" for the SASL library,
- * which is how we hook into the DIGEST-MD5 mechanism when it wants to
+ * which is how we hook into the DIGEST-MD5? mechanism when it wants to
  * get a plaintext password to check against the hash received from the
  * client.
  */

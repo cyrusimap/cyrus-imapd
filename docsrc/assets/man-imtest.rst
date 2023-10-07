@@ -56,7 +56,7 @@ Options
 
     .. Note::
         This is only used with SASL mechanisms that allow proxying
-        (e.g. PLAIN, DIGEST-MD5).
+        (e.g. PLAIN).
 
 .. option:: -k num, --minssf=num
 
@@ -73,7 +73,7 @@ Options
 .. option:: -r realm, --realm=realm
 
     Specify the *realm* to use. Certain authentication mechanisms
-    (e.g. DIGEST-MD5) may require one to specify the realm.
+    may require one to specify the realm.
 
 .. option:: -f file, --input-filename=file
 
@@ -82,8 +82,7 @@ Options
 .. option:: -n num, --reauth-attempts=num
 
     Number of authentication attempts; default = 1.  The client will
-    attempt to do SSL/TLS session reuse and/or fast reauth
-    (e.g. DIGEST-MD5), if possible.
+    attempt to do SSL/TLS session reuse and/or fast reauth if possible.
 
 .. option:: -s, --require-tls
 

@@ -1766,7 +1766,7 @@ Connect to the *server* specified on the port specified.
 
 =item C<--auth> I<mechanism>
 
-Use the mechanism specified to authenticate. One of PLAIN, LOGIN, DIGEST-MD5, etc.
+Use the mechanism specified to authenticate. One of PLAIN, LOGIN, etc.
 
 =item C<--help>
 

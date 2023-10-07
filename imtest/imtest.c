@@ -2359,10 +2359,6 @@ static void http_parse_mechlist(struct buf *ret, const char *str,
         *capabilities |= CAPA_LOGIN;
         return;
     }
-    else if (len == 6 && !strncmp(scheme, "Digest", len)) {
-        scheme = "DIGEST-MD5";
-        len = strlen(scheme);
-    }
     else if (len == 9 && !strncmp(scheme, "Negotiate", len)) {
         scheme = "GSS-SPNEGO";
         len = strlen(scheme);
@@ -2459,10 +2455,6 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
         return saslresult;
     }
 
-    if (!strcmp(mechusing, "DIGEST-MD5")) {
-        mechusing = "Digest";
-        do_base64 = 0;
-    }
     else if (!strcmp(mechusing, "GSS-SPNEGO")) {
         mechusing = "Negotiate";
     }
@@ -2668,8 +2660,7 @@ static int http_do_auth(struct sasl_cmd_t *sasl_cmd __attribute__((unused)),
                 result = auth_http_basic(servername);
             }
         } else {
-            if (!strcasecmp(mech, "digest")) mech = "DIGEST-MD5";
-            else if (!strcasecmp(mech, "negotiate")) mech = "GSS-SPNEGO";
+            if (!strcasecmp(mech, "negotiate")) mech = "GSS-SPNEGO";
 
             if (!mechlist || !stristr(mechlist, mech)) {
                 printf("[Server did not advertise HTTP %s]\n", ucase(mech));

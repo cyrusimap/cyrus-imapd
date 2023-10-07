@@ -85,8 +85,8 @@ authentication does not depend on a Cyrus SASL plugin.
 
 The advertisement of the other HTTP authentication schemes is controlled by the
 :ref:`SASL mech_list option <cyrussasl:options>` option. For Cyrus httpd
-the DIGEST-MD5, GSS-SPNEGO, NTLM, SCRAM-SHA-1, and SCRAM-SHA-256 values enable
-support for the Digest, Negotiate (Kerberos only), NTLM, SCRAM-SHA-1, and
+the GSS-SPNEGO, NTLM, SCRAM-SHA-1, and SCRAM-SHA-256 values enable
+support for the Negotiate (Kerberos only), NTLM, SCRAM-SHA-1, and
 SCRAM-SHA-256 authentication schemes respectively, provided that the plugins
 are installed on the server.
 
