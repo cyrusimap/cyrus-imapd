@@ -75,8 +75,7 @@ EXPORTED void *xrealloc(void *ptr, size_t size)
 {
     void *ret;
 
-    /* xrealloc (NULL, size) behaves like xmalloc (size), as in ANSI C */
-    ret = (!ptr ? malloc(size) : realloc(ptr, size));
+    ret = realloc(ptr, size);
     if (ret != NULL) return ret;
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
