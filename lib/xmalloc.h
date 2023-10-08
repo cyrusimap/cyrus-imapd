@@ -52,6 +52,7 @@ extern void *xmalloc(size_t size);
 extern void *xzmalloc(size_t size);
 extern void *xcalloc(size_t nmemb, size_t size);
 extern void *xrealloc(void *ptr, size_t size);
+extern void *xzrealloc(void *ptr, size_t orig_size, size_t new_size);
 extern char *xstrdup(const char *str);
 extern char *xstrdupnull(const char *str);
 extern char *xstrdupsafe(const char *str);

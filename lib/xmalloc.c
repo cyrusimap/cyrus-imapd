@@ -82,6 +82,16 @@ EXPORTED void *xrealloc(void *ptr, size_t size)
     return 0; /*NOTREACHED*/
 }
 
+EXPORTED void *xzrealloc(void *ptr, size_t orig_size, size_t new_size)
+{
+    void *ret = xrealloc(ptr, new_size);
+
+    if (orig_size < new_size)
+        memset(ret + orig_size, 0, new_size - orig_size);
+
+    return ret;
+}
+
 EXPORTED char *xstrdup(const char* str)
 {
     char *p = xmalloc(strlen(str)+1);
