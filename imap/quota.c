@@ -343,10 +343,11 @@ static int fixquota_addroot(struct quota *q, void *rock)
 
     if (quota_num == quota_alloc) {
         /* Create new qr list entry */
-        quota_alloc += QUOTAGROW;
-        quotaroots = (struct quotaentry *)
-            xrealloc((char *)quotaroots, quota_alloc * sizeof(struct quotaentry));
-        memset(&quotaroots[quota_num], 0, QUOTAGROW * sizeof(struct quotaentry));
+        int new_alloc = quota_alloc + QUOTAGROW;
+        quotaroots = xzrealloc(quotaroots,
+                               quota_alloc * sizeof(struct quotaentry),
+                               new_alloc * sizeof(struct quotaentry));
+        quota_alloc = new_alloc;
     }
 
     quotaroots[quota_num].name = xstrdup(q->root);
