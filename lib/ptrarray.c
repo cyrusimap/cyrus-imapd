@@ -92,8 +92,9 @@ static void ensure_alloc(ptrarray_t *pa, int newalloc)
     if (newalloc < pa->alloc)
         return;
     newalloc = grow(pa->alloc, newalloc + 1);
-    pa->data = xrealloc(pa->data, sizeof(void *) * newalloc);
-    memset(pa->data+pa->alloc, 0, sizeof(void *) * (newalloc-pa->alloc));
+    pa->data = xzrealloc(pa->data,
+                         sizeof(void *) * pa->alloc,
+                         sizeof(void *) * newalloc);
     pa->alloc = newalloc;
 }
 
