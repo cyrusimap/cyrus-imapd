@@ -96,8 +96,9 @@ static void ensure_alloc(strarray_t *sa, int newalloc)
     if (newalloc < sa->alloc)
         return;
     newalloc = grow(sa->alloc, newalloc + 1);
-    sa->data = xrealloc(sa->data, sizeof(char *) * newalloc);
-    memset(sa->data + sa->alloc, 0, sizeof(char *) * (newalloc - sa->alloc));
+    sa->data = xzrealloc(sa->data,
+                         sizeof(char *) * sa->alloc,
+                         sizeof(char *) * newalloc);
     sa->alloc = newalloc;
 }
 
