@@ -83,8 +83,7 @@ static void bv_ensure(bitvector_t *bv, unsigned int len)
             bv->bits.alloced = alloced;
         }
         else {
-            bv->bits.alloced = xrealloc(bv->bits.alloced, newalloc);
-            memset(bv->bits.alloced + bv->alloc, 0, newalloc - bv->alloc);
+            bv->bits.alloced = xzrealloc(bv->bits.alloced, bv->alloc, newalloc);
         }
         bv->alloc = newalloc;
     }
