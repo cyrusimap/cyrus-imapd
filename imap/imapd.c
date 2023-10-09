@@ -1311,8 +1311,6 @@ void shut_down(int code)
         idle_stop(FILTER_NONE);
 
     if (imapd_index) {
-        if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
-            index_expunge(imapd_index, NULL, 1);
         index_close(&imapd_index);
     }
 
