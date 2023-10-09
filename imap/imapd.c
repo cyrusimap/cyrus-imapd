@@ -13027,12 +13027,11 @@ static int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     for (;;) {
         if (n >= nsort - 1) {   /* leave room for implicit criterion */
             /* (Re)allocate an array for sort criteria */
-            nsort += SORTGROWSIZE;
-            *sortcrit =
-                (struct sortcrit *) xrealloc(*sortcrit,
-                                             nsort * sizeof(struct sortcrit));
-            /* Zero out the newly added sortcrit */
-            memset((*sortcrit)+n, 0, SORTGROWSIZE * sizeof(struct sortcrit));
+            int new_size = nsort + SORTGROWSIZE;
+            *sortcrit = xzrealloc(*sortcrit,
+                                  nsort * sizeof(struct sortcrit),
+                                  new_size * sizeof(struct sortcrit));
+            nsort = new_size;
         }
 
         lcase(criteria.s);
