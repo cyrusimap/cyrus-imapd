@@ -97,8 +97,9 @@ static void ba_ensure_alloc(bufarray_t *ba, size_t newalloc)
     if (newalloc < ba->alloc)
         return;
     newalloc = grow(ba->alloc, newalloc + 1);
-    ba->items = xrealloc(ba->items, sizeof(struct buf) * newalloc);
-    memset(ba->items + ba->alloc, 0, sizeof(struct buf) * (newalloc - ba->alloc));
+    ba->items = xzrealloc(ba->items,
+                          sizeof(struct buf) * ba->alloc,
+                          sizeof(struct buf) * newalloc);
     ba->alloc = newalloc;
 }
 
