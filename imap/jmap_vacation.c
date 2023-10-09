@@ -427,7 +427,7 @@ static void vacation_update(struct jmap_req *req,
 
     /* Update VacationResponse object */
 
-    json_t *new_vacation = jmap_patchobject_apply(vacation, patch, NULL);
+    json_t *new_vacation = jmap_patchobject_apply(vacation, patch, NULL, 0);
     json_decref(vacation);
     vacation = new_vacation;
 

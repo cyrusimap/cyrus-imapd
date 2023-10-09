@@ -620,6 +620,15 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
         }
     }
 
+    if (ctx->mboxp) {
+        *ctx->mboxp = mbox;
+        mbox = NULL;
+
+        if (mr && ctx->recordp) {
+            msgrecord_get_index_record(mr, ctx->recordp);
+        }
+    }
+
  done:
     if (mbox) jmap_closembox(req, &mbox);
     if (body) {

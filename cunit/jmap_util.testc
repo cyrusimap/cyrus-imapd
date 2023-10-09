@@ -5,104 +5,109 @@
 #include "hash.h"
 #include "imap/jmap_util.h"
 
-static void test_patchobject_create(void)
+static void test_patchobject(void)
 {
-#define TESTCASE(src, dst, want) \
+#define TESTCASE(_from, _dest, _want, _flags) \
     { \
-        json_t *jsrc = json_loads(src, JSON_DECODE_ANY, NULL); \
-        json_t *jdst = json_loads(dst, JSON_DECODE_ANY, NULL); \
-        \
-        json_t *jwant = json_loads(want, JSON_DECODE_ANY, NULL); \
-        json_t *jdiff = jmap_patchobject_create(jsrc, jdst); \
+        unsigned myflags = (_flags); \
+        json_t *jfrom = json_loads((_from), JSON_DECODE_ANY, NULL); \
+        json_t *jdest = json_loads((_dest), JSON_DECODE_ANY, NULL); \
+        json_t *jwant = json_loads((_want), JSON_DECODE_ANY, NULL); \
+        json_t *jdiff = jmap_patchobject_create(jfrom, jdest, myflags); \
         CU_ASSERT_PTR_NOT_NULL(jdiff); \
-        \
         char *swant = json_dumps(jwant, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
         char *sdiff = json_dumps(jdiff, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
         CU_ASSERT_STRING_EQUAL(swant, sdiff); \
-        \
+        json_t *jback = jmap_patchobject_apply(jfrom, jdiff, NULL, myflags); \
+        char *sback = json_dumps(jback, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
+        char *sdest = json_dumps(jdest, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
+        CU_ASSERT_STRING_EQUAL(sdest, sback); \
+        free(sdest); \
+        free(sback); \
+        json_decref(jback); \
         free(sdiff); \
         free(swant); \
         json_decref(jdiff); \
         json_decref(jwant); \
-        json_decref(jdst); \
-        json_decref(jsrc); \
+        json_decref(jdest); \
+        json_decref(jfrom); \
     }
 
-    const char *src, *dst, *want;
+    const char *from, *dest, *want;
 
     /* Remove one property at top-level */
-    src = "{"
+    from = "{"
     "  \"a\": 1,"
     "  \"b\": 1"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": 1"
     "}";
     want = "{"
     "  \"b\": null"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Add one property at top-level */
-    src = "{"
+    from = "{"
     "  \"a\": 1"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": 1,"
     "  \"b\": 1"
     "}";
     want = "{"
     "  \"b\": 1"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Replace one scalar property at top-level with another */
-    src = "{"
+    from = "{"
     "  \"a\": 1"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": 2"
     "}";
     want = "{"
     "  \"a\": 2"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Replace one object property at top-level with a scalar */
-    src = "{"
+    from = "{"
     "  \"a\": {"
     "    \"b\": 1"
     "  }"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": 2"
     "}";
     want = "{"
     "  \"a\": 2"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Replace one scalar property at top-level with an object */
-    src = "{"
+    from = "{"
     "  \"a\": {"
     "    \"b\": 1"
     "  }"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": 2"
     "}";
     want = "{"
     "  \"a\": 2"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Add a nested property */
-    src = "{"
+    from = "{"
     "  \"a\": {"
     "    \"b\": 1"
     "  }"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": {"
     "    \"b\": 1,"
     "    \"c\": 2"
@@ -111,16 +116,16 @@ static void test_patchobject_create(void)
     want = "{"
     "  \"a/c\": 2"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
     /* Remove a nested property */
-    src = "{"
+    from = "{"
     "  \"a\": {"
     "    \"b\": 1,"
     "    \"c\": 2"
     "  }"
     "}";
-    dst = "{"
+    dest = "{"
     "  \"a\": {"
     "    \"b\": 1"
     "  }"
@@ -128,8 +133,162 @@ static void test_patchobject_create(void)
     want = "{"
     "  \"a/c\": null"
     "}";
-    TESTCASE(src, dst, want);
+    TESTCASE(from, dest, want, 0);
 
+    /* Changing array member replaces array */
+    from = "{"
+    "  \"a\": [{"
+    "    \"val\": \"foo\""
+    "  }, {"
+    "    \"val\": \"bar\""
+    "  }]"
+    "}";
+    dest = "{"
+    "  \"a\": [{"
+    "    \"val\": \"foo\""
+    "  }, {"
+    "    \"val\": \"baz\""
+    "  }]"
+    "}";
+    want = "{"
+    "  \"a\": [{"
+    "    \"val\": \"foo\""
+    "  }, {"
+    "    \"val\": \"baz\""
+    "  }]"
+    "}";
+    TESTCASE(from, dest, want, 0);
+
+    /* PATCH_ALLOW_ARRAY: replaces array member */
+    from = "{"
+    "  \"a\": [{"
+    "    \"val\": \"foo\""
+    "  }, {"
+    "    \"val\": \"bar\""
+    "  }]"
+    "}";
+    dest = "{"
+    "  \"a\": [{"
+    "    \"val\": \"foo\""
+    "  }, {"
+    "    \"val\": \"baz\""
+    "  }]"
+    "}";
+    want = "{"
+    "  \"a/1/val\": \"baz\""
+    "}";
+    TESTCASE(from, dest, want, PATCH_ALLOW_ARRAY);
+
+#undef TESTCASE
+}
+
+static void test_patchobject_invalid(void)
+{
+#define TESTCASE(_from, _patch, _want_invalid, _flags) \
+    { \
+        unsigned myflags = (_flags); \
+        json_t *jfrom = json_loads((_from), JSON_DECODE_ANY, NULL); \
+        json_t *jpatch = json_loads((_patch), JSON_DECODE_ANY, NULL); \
+        json_t *jwant_invalid = json_loads((_want_invalid), JSON_DECODE_ANY, NULL); \
+        json_t *jhave_invalid = json_array(); \
+        json_t *jhave = jmap_patchobject_apply(jfrom, jpatch, jhave_invalid, myflags); \
+        CU_ASSERT_PTR_NULL(jhave); \
+        char *want_invalid = json_dumps(jwant_invalid, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
+        char *have_invalid = json_dumps(jhave_invalid, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
+        CU_ASSERT_STRING_EQUAL(want_invalid, have_invalid); \
+        free(have_invalid); \
+        free(want_invalid); \
+        json_decref(jhave_invalid); \
+        json_decref(jwant_invalid); \
+        json_decref(jpatch); \
+        json_decref(jfrom); \
+    }
+
+    const char *from, *patch, *want_invalid;
+
+    /* Set non-existent member */
+    from = "{"
+    "  \"a\": \"foo\""
+    "}";
+    patch = "{"
+    "  \"x/y\": \"bar\""
+    "}";
+    want_invalid = "["
+    "\"x/y\""
+    "]";
+    TESTCASE(from, patch, want_invalid, 0);
+
+    /* Remove non-existent member */
+    from = "{"
+    "  \"a\": \"foo\""
+    "}";
+    patch = "{"
+    "  \"x/y\": null"
+    "}";
+    want_invalid = "["
+    "\"x/y\""
+    "]";
+    TESTCASE(from, patch, want_invalid, 0);
+
+    /* Patch inside array - but no PATCH_ALLOW_ARRAY flag */
+    from = "{"
+    "  \"a\": ["
+    "    \"foo\","
+    "    \"bar\""
+    "  ]"
+    "}";
+    patch = "{"
+    "  \"a/1\": \"bam\""
+    "}";
+    want_invalid = "["
+    "  \"a/1\" "
+    "]";
+    TESTCASE(from, patch, want_invalid, 0);
+
+    /* Delete from array */
+    from = "{"
+    "  \"a\": ["
+    "    \"foo\","
+    "    \"bar\""
+    "  ]"
+    "}";
+    patch = "{"
+    "  \"a/1\": null"
+    "}";
+    want_invalid = "["
+    "  \"a/1\" "
+    "]";
+    TESTCASE(from, patch, want_invalid, PATCH_ALLOW_ARRAY);
+
+    /* Patch non-existent array entry */
+    from = "{"
+    "  \"a\": ["
+    "    \"foo\","
+    "    \"bar\""
+    "  ]"
+    "}";
+    patch = "{"
+    "  \"a/2\": \"bam\""
+    "}";
+    want_invalid = "["
+    "  \"a/2\" "
+    "]";
+    TESTCASE(from, patch, want_invalid, PATCH_ALLOW_ARRAY);
+
+    /* Patch with special JSON pointer '-' */
+    from = "{"
+    "  \"a\": ["
+    "    \"foo\","
+    "    \"bar\""
+    "  ]"
+    "}";
+    patch = "{"
+    "  \"a/-\": \"bam\""
+    "}";
+    want_invalid = "["
+    "  \"a/-\" "
+    "]";
+    TESTCASE(from, patch, want_invalid, PATCH_ALLOW_ARRAY);
 
 #undef TESTCASE
 }

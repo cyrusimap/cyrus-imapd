@@ -1,0 +1,224 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_v4
+    :min_version_3_9 :needs_component_jmap :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    # Sample card from RFC 6350
+    # Second N suffix removed due to vparse bug
+    # PROP-IDs added so we can easily compare the results
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+UID:$id
+KIND:individual
+FN:Simon Perreault
+N:Perreault;Simon;;;ing. jr
+BDAY;PROP-ID=A1:--0203
+ANNIVERSARY;PROP-ID=A2:20090808T1430-0500
+GENDER:M
+LANG;PROP-ID=L1;PREF=1:fr
+LANG;PROP-ID=L2;PREF=2:en
+ORG;PROP-ID=O1;TYPE=work:Viagenie
+ADR;PROP-ID=A2;LABEL=Somewhere:;;;;;;;;;;;;;;;;;
+foo.ADR;PROP-ID=A1;TYPE=work:;Suite D2-630;2875 Laurier;
+ Quebec;QC;G1V 2M2;Canada
+TEL;PROP-ID=P1;VALUE=uri;TYPE="work,voice";PREF=1:tel:+1-418-656-9254;ext=102
+TEL;PROP-ID=P2;VALUE=uri;TYPE="work,cell,voice,video,text":tel:+1-418-262-6501
+EMAIL;PROP-ID=E1;TYPE=work:simon.perreault\@viagenie.ca
+foo.GEO;TYPE=work:geo:46.772673,-71.282945
+KEY;PROP-ID=K1;TYPE=work;VALUE=uri:
+ http://www.viagenie.ca/simon.perreault/simon.asc
+foo.TZ:America/Montreal
+URL;PROP-ID=L1;TYPE=home:http://nomis80.org
+PHOTO;PROP-ID=P1:data:image/jpeg;base64,c29tZSBwaG90bw==
+LOGO;PROP-ID=L1;MEDIATYPE=image/png:http://example.org/logo.png
+IMPP;PROP-ID=OS1;PREF=1:xmpp:simon\@example.com
+SOCIALPROFILE;PROP-ID=OS2;SERVICE-TYPE=Mastodon;USERNAME="Simon P.":https://example.com/\@simon
+REV:20230422T194639Z
+JSPROP;JSPTR=name/foo:"bar"
+JSPROP;JSPTR=organizations/O1/foo:{}
+JSPROP;JSPTR=phones/P1/features/foo:true
+JSPROP;JSPTR=addresses/A2/components:[{"kind":"foo"\,"value":"bar"}]
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+        }, 'R1']
+    ]);
+
+    my $want_jscard = {
+        '@type' => 'Card',
+        version => '1.0',
+        addressBookId => 'Default',
+        'cyrusimap.org:href' => $carddav->fullpath() . $href,
+        id => $id,
+        uid => $id,
+        kind => 'individual',
+        updated => '2023-04-22T19:46:39Z',
+        vCardProps => [
+            [ 'version', {}, 'text', '4.0' ],
+            [ 'gender',  {}, 'text', 'M'   ],
+        ],
+        name => {
+            full => 'Simon Perreault',
+            components => [
+                { 'kind' => 'surname', 'value' => 'Perreault' },
+                { 'kind' => 'given', 'value' => 'Simon' },
+                { 'kind' => 'credential', 'value' => 'ing. jr' },
+            ],
+            foo => 'bar'
+        },
+        anniversaries => {
+            A1 => {
+                'kind' => 'birth',
+                'date' => { 'month' => 2, 'day' => 3 }
+            },
+            A2 => {
+                'kind' => 'wedding',
+                'date' => { '@type' => 'Timestamp', 'utc' => '2009-08-08T19:30:00Z' }
+            },
+        },
+        preferredLanguages => {
+            L2 => {
+                'language' => 'en',
+                'pref' => 2
+            },
+            L1 => {
+                'language' => 'fr',
+                'pref' => 1
+            },
+        },
+        organizations => {
+            O1 => {
+                'name' => 'Viagenie',
+                foo => {}
+            }
+        },
+        addresses => {
+            A1 => {
+                'components' => [
+                    { kind => 'apartment', value => 'Suite D2-630' },
+                    { kind => 'name',      value => '2875 Laurier' },
+                    { kind => 'locality',  value => 'Quebec' },
+                    { kind => 'region',    value => 'QC' },
+                    { kind => 'postcode',  value => 'G1V 2M2' },
+                    { kind => 'country',   value => 'Canada' }
+                ],
+                'contexts' => { 'work' => JSON::true },
+                'coordinates' => 'geo:46.772673,-71.282945',
+                'timeZone' => 'America/Montreal'
+            },
+            A2 => {
+                full => 'Somewhere',
+                components => [
+                    { kind => 'foo', value => 'bar' }
+                ]
+            }
+        },
+        phones => {
+              P1 => {
+                number => "tel:+1-418-656-9254;ext=102",
+                contexts => {
+                    work => JSON::true
+                },
+                features => {
+                    voice => JSON::true,
+                    foo => JSON::true
+                },
+                pref => 1
+              },
+            P2 => {
+                'number' => 'tel:+1-418-262-6501',
+                'contexts' => { 'work' => JSON::true },
+                'features' => { 'cell'  => JSON::true, 'voice' => JSON::true,
+                                'video' => JSON::true, 'text'  => JSON::true }
+            },
+        },
+        emails => {
+            E1 => {
+                'address' => 'simon.perreault@viagenie.ca',
+                'contexts' => { 'work' => JSON::true }
+            },
+        },
+        cryptoKeys => {
+            K1 => {
+                'uri' => 'http://www.viagenie.ca/simon.perreault/simon.asc',
+                'contexts' => { 'work' => JSON::true }
+            },
+        },
+        links => {
+            L1 => {
+                'uri' => 'http://nomis80.org',
+                'contexts' => { 'private' => JSON::true }
+            },
+        },
+        onlineServices => {
+            'OS1' => {
+                'uri' => 'xmpp:simon@example.com',
+                'vCardName' => 'impp',
+                'pref' => 1
+            },
+            'OS2' => {
+                'user' => 'Simon P.',
+                'uri' => 'https://example.com/@simon',
+                'service' => 'Mastodon'
+            }
+        },
+        media => {
+            L1 => {
+                'kind' => 'logo',
+                'mediaType' => 'image/png',
+                'uri' => 'http://example.org/logo.png'
+            },
+            P1 => {
+                kind => 'photo',
+                mediaType => 'image/jpeg',
+            },
+        },
+    };
+
+
+    my $have_jscard = $res->[0][1]{list}[0];
+
+    # Get media blob id before we delete it
+    my $blobid = $have_jscard->{media}{P1}{blobId};
+    $self->assert_not_null($blobid);
+
+    # Delete generated fields
+    delete $have_jscard->{blobId};
+    delete $have_jscard->{media}{P1}{blobId};
+    delete $have_jscard->{'cyrusimap.org:blobId'};
+    delete $have_jscard->{'cyrusimap.org:size'};
+
+    # Normalize and compare cards
+    normalize_jscard($want_jscard);
+    normalize_jscard($have_jscard);
+    $self->assert_deep_equals($want_jscard, $have_jscard);
+
+    $res = $jmap->Download('cassandane', $blobid);
+
+    $self->assert_str_equals('image/jpeg', $res->{headers}{'content-type'});
+    $self->assert_str_equals('some photo', $res->{content});
+}

@@ -61,9 +61,9 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_realm => 'Cassandane',
+    $config->set(carddav_realm => 'Cassandane',
                  conversations => 'yes',
-                 httpmodules => 'carddav caldav jmap',
+                 httpmodules => 'carddav jmap',
                  httpallowcompress => 'no',
                  vcard_max_size => 100000,
                  jmap_nonstandard_extensions => 'yes');
@@ -83,7 +83,31 @@ sub set_up
     $self->{jmap}->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/contacts',
+        'https://cyrusimap.org/ns/jmap/debug',
     ]);
+
+    my $buildinfo = Cassandane::BuildInfo->new();
+    if ($buildinfo->get('dependency', 'icalvcard')) {
+        $self->{jmap}->AddUsing('urn:ietf:params:jmap:contacts');
+    }
+}
+
+sub normalize_jscard
+{
+    my ($jscard) = @_;
+
+    if ($jscard->{vCardProps}) {
+        my @sorted = sort { $a->[0] cmp $b->[0] } @{$jscard->{vCardProps}};
+        $jscard->{vCardProps} = \@sorted;
+    }
+
+    if (not exists $jscard->{kind}) {
+        $jscard->{kind} = 'individual';
+    }
+
+    if (not exists $jscard->{'cyrusimap.org:importance'}) {
+        $jscard->{'cyrusimap.org:importance'} = '0';
+    }
 }
 
 sub test_contact_set_multicontact
@@ -4181,5 +4205,7 @@ EOF
         $res->[0][1]{list}[0]{otherAccountContactIds});
 
 }
+
+use Cassandane::Tiny::Loader 'tiny-tests/JMAPContacts';
 
 1;

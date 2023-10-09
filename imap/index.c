@@ -5448,6 +5448,123 @@ done:
     return r;
 }
 
+#ifdef HAVE_LIBICALVCARD
+
+static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
+                            struct getsearchtext_rock *str)
+{
+    vcardcomponent *vcard = NULL;
+    vcardproperty *prop;
+    int r = 0;
+    struct buf buf = BUF_INITIALIZER;
+
+    /* Parse the message into a vcard object */
+    const struct buf *vcardbuf = NULL;
+    if (encoding || strcasecmp(charset_canon_name(charset), "utf-8")) {
+        if (charset_to_utf8(&buf, buf_cstring(raw),
+                            buf_len(raw), charset, encoding)) {
+            /* could be a bogus header - ignore */
+            goto done;
+        }
+        vcardbuf = &buf;
+    }
+    else {
+        vcardbuf = raw;
+    }
+
+    vcard = vcardcomponent_new_from_string(buf_cstring(vcardbuf));
+    if (!vcard) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    buf_reset(&buf);
+
+    // these are all the things that we think might be interesting
+    for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
+         prop;
+         prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
+        vcardstructuredtype *stp = NULL;
+        vcardstructuredtype st = { 1, { 0 } };
+        const char *val;
+
+        switch (vcardproperty_isa(prop)) {
+        case VCARD_X_PROPERTY: {
+            const char *propname = vcardproperty_get_property_name(prop);
+
+            if (strcasecmp(propname, "x-social-profile") &&
+                strcasecmp(propname, "x-fm-online-other")) {
+                break;
+            }
+
+            GCC_FALLTHROUGH
+        }
+
+        case VCARD_FN_PROPERTY:
+        case VCARD_EMAIL_PROPERTY:
+        case VCARD_TEL_PROPERTY:
+        case VCARD_URL_PROPERTY:
+        case VCARD_IMPP_PROPERTY:
+        case VCARD_SOCIALPROFILE_PROPERTY:
+        case VCARD_NICKNAME_PROPERTY:
+        case VCARD_NOTE_PROPERTY:
+            val = vcardproperty_get_value_as_string(prop);
+            if (val && val[0]) {
+                if (buf_len(&buf)) buf_putc(&buf, ' ');
+                buf_appendcstr(&buf, val);
+            }
+            break;
+
+        case VCARD_ORG_PROPERTY: {
+            unsigned f;
+            size_t v;
+
+            st.field[0] = vcardproperty_get_org(prop);
+            stp = &st;
+
+            GCC_FALLTHROUGH
+
+        case VCARD_N_PROPERTY:
+        case VCARD_ADR_PROPERTY:
+            if (!stp) stp = vcardproperty_get_adr(prop);
+
+            for (f = 0; f < stp->num_fields; f++) {
+                vcardstrarray *vals = stp->field[f];
+
+                for (v = 0; vals && v < vcardstrarray_size(vals); v++) {
+                    val = vcardstrarray_element_at(vals, v);
+                    if (val && val[0]) {
+                        if (buf_len(&buf)) buf_putc(&buf, ' ');
+                        buf_appendcstr(&buf, val);
+                    }
+                }
+            }
+            break;
+        }
+
+        default:
+            break;
+        }
+    }
+
+    if (buf_len(&buf)) {
+        charset_t utf8 = charset_lookupname("utf-8");
+        str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
+        charset_extract(extract_cb, str, &buf, utf8, 0, "vcard",
+                        str->charset_flags);
+        str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
+        charset_free(&utf8);
+        buf_reset(&buf);
+    }
+
+done:
+    if (vcard) vcardcomponent_free(vcard);
+    buf_free(&buf);
+    return r;
+}
+
+#else /* !HAVE_LIBICALVCARD */
+
 static void _add_vcard_singlval(struct vparse_card *card, const char *key, struct buf *buf)
 {
     struct vparse_entry *entry;
@@ -5537,6 +5654,7 @@ done:
     return r;
 }
 
+#endif /* HAVE_LIBICALVCARD */
 #endif /* USE_HTTPD */
 
 EXPORTED int index_want_attachextract(const char *type, const char *subtype)

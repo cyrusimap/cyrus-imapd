@@ -668,7 +668,11 @@ struct contact_rock {
     struct buf buf;
 
     /* per-addressbook */
+#ifdef HAVE_LIBICALVCARD
+    vcardcomponent *group_vcard;
+#else
     struct vparse_card *group_vcard;
+#endif
 };
 
 static char *contact_resource_name(message_t *msg, void *rock)
@@ -739,6 +743,58 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
             const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
                                         .uniqueid = (char *)mailbox_uniqueid(mailbox) };
             struct contact_rock *crock = (struct contact_rock *) rock;
+#ifdef HAVE_LIBICALVCARD
+            vcardcomponent *vcard = record_to_vcard_x(mailbox, record);
+
+            if (!vcard) {
+                r = IMAP_INTERNAL;
+            }
+            else {
+                const char *uid = vcardcomponent_get_uid(vcard);
+
+                if (!crock->group_vcard) {
+                    /* Create the group vCard */
+                    char datestr[RFC3339_DATETIME_MAX];
+                    vcardcomponent *gcard;
+
+                    time_to_rfc3339(time(0), datestr, RFC3339_DATETIME_MAX);
+                    buf_reset(&crock->buf);
+                    buf_printf(&crock->buf, "Restored %.10s", datestr);
+
+                    /* Look for existing group vCard with same date prefix */
+                    struct group_rock grock = { buf_cstring(&crock->buf), 0 };
+                    enum carddav_sort sort = CARD_SORT_FULLNAME | CARD_SORT_DESC;
+                    if (carddav_foreach_sort(crock->carddavdb, &mbentry,
+                                             &sort, 1, _group_name_cb, &grock)) {
+                        buf_printf(&crock->buf, " (%u)", grock.num+1);
+                    }
+
+                    gcard =
+                        vcardcomponent_vanew(VCARD_VCARD_COMPONENT,
+                                             vcardproperty_new_version(VCARD_VERSION_40),
+                                             vcardproperty_new_kind(VCARD_KIND_GROUP),
+                                             vcardproperty_new_prodid(_prodid),
+                                             vcardproperty_new_uid(makeuuid()),
+                                             vcardproperty_new_fn(buf_cstring(&crock->buf)),
+                                             0);
+
+                    crock->group_vcard = gcard;
+                }
+
+                /* Add the recreated contact as a member of the group */
+                if (!strncmp(uid, "urn:uuid:", 9)) {
+                    buf_setcstr(&crock->buf, uid);
+                }
+                else {
+                    buf_reset(&crock->buf);
+                    buf_printf(&crock->buf, "urn:uuid:%s", uid);
+                }
+                vcardcomponent_add_property(crock->group_vcard,
+                                            vcardproperty_new_member(buf_cstring(&crock->buf)));
+            }
+
+            vcardcomponent_free(vcard);
+#else /* !HAVE_LIBICALVCARD */
             struct vparse_card *vcard = record_to_vcard(mailbox, record);
 
             if (!vcard || !vcard->objects) {
@@ -782,6 +838,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
             }
 
             vparse_free_card(vcard);
+#endif /* HAVE_LIBICALVCARD */
         }
     }
 
@@ -805,6 +862,15 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
     rrock->keep_open = 1;
     r = restore_collection_cb(mbentry, rock);
 
+#ifdef HAVE_LIBICALVCARD
+    if (!r && crock->group_vcard) {
+        /* Store the group vCard of recreated contacts */
+        r = carddav_store_x(*mailboxp, crock->group_vcard, NULL, 0, NULL, 
+                            rrock->req->accountid, rrock->req->authstate,
+                            /*ignorequota*/ 0, /*oldsize*/ UINT32_MAX);
+    }
+    vcardcomponent_free(crock->group_vcard);
+#else
     if (!r && crock->group_vcard) {
         /* Store the group vCard of recreated contacts */
         r = carddav_store(*mailboxp, crock->group_vcard, NULL, 0, NULL, NULL, 
@@ -812,6 +878,7 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
                           /*ignorequota*/ 0, /*oldsize*/ UINT32_MAX);
     }
     vparse_free_card(crock->group_vcard);
+#endif
     crock->group_vcard = NULL;
 
     jmap_closembox(rrock->req, mailboxp);

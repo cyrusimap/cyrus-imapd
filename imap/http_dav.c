@@ -5069,7 +5069,7 @@ static int meth_delete_collection(struct transaction_t *txn,
                                    httpd_userid, httpd_authstate, mboxevent,
                                    MBOXLIST_DELETE_CHECKACL);
     }
-    if (!r) {
+    if (!r && txn->req_tgt.namespace->id == URL_NS_CALENDAR) {
         r = caldav_update_shareacls(mbname_userid(mbname));
     }
     if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;

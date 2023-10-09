@@ -2427,7 +2427,7 @@ static int _mbox_update_validate_serverset(jmap_req_t *req,
     json_t *jcurRights = _mbox_get_myrights(req, mbentry);
     json_t *jold = json_pack("{s:o}", "myRights", json_copy(jcurRights));
     json_t *invalid = json_array();
-    json_t *jnew = jmap_patchobject_apply(jold, jpatch, invalid);
+    json_t *jnew = jmap_patchobject_apply(jold, jpatch, invalid, 0);
     if (json_array_size(invalid) == 0) {
         json_t *jnewRights = json_object_get(jnew, "myRights");
         if (!json_equal(jcurRights, jnewRights)) {

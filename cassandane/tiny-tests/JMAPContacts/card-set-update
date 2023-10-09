@@ -1,0 +1,178 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_update
+    :min_version_3_9 :needs_component_jmap :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid => $id,
+                    name => { full => 'John Doe' },
+                    nicknames => {
+                        k391 => {
+                            '@type' => 'Nickname',
+                            name => 'Johnny'
+                        }
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    'nicknames/k391/name' => 'Johnny Boy',
+                    'nicknames/foo' => {
+                        '@type' => 'Nickname',
+                        name => 'Doey'
+                    }
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/NICKNAME;PROP-ID=foo:Doey/, $card);
+    $self->assert_matches(qr/NICKNAME;PROP-ID=k391:Johnny Boy/, $card);
+    $self->assert_does_not_match(qr/JSPROP/, $card);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    'nicknames/k391' => JSON::null
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/NICKNAME;PROP-ID=foo:Doey/, $card);
+    $self->assert_does_not_match(qr/NICKNAME;PROP-ID=k391:Johnny Boy/, $card);
+    $self->assert_does_not_match(qr/JSPROP/, $card);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    'cyrusimap.org:importance' => -0.1
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{updated}{$id});
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    'cyrusimap.org:importance' => 0.0,
+                    keywords => { foo => JSON::true }
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/CATEGORIES:foo/, $card);
+    $self->assert_does_not_match(qr/JSPROP/, $card);
+
+    xlog $self, "create alternate addressbook";
+    $res = $jmap->CallMethods([
+            ['AddressBook/set', { create => { "1" => {
+                            name => "foo"
+             }}}, "R1"]
+    ]);
+
+    my $abookid = $res->[0][1]{created}{"1"}{id};
+    my $href = "$abookid/$id.vcf";
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    addressBookId => $abookid
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+    $self->assert_not_null($res->[0][1]{updated}{$id}{updated});
+
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/UID:$id/, $card);
+    $self->assert_matches(qr/NICKNAME;PROP-ID=foo:Doey/, $card);
+    $self->assert_matches(qr/CATEGORIES:foo/, $card);
+    $self->assert_matches(qr/REV:/, $card);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    kind => 'group'
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+    $self->assert_str_equals("invalidProperties",
+                             $res->[0][1]{notUpdated}{$id}{type});
+    $self->assert_str_equals("kind",
+                             $res->[0][1]{notUpdated}{$id}{properties}[0]);
+}
