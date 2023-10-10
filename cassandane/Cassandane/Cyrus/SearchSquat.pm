@@ -162,6 +162,12 @@ sub test_one_doc_per_message
                             body => $body) || die;
     }
 
+    # make enough other messages such that an incremental reindex
+    # will need to realloc doc_ID_map
+    for (1..50) {
+        $self->make_message() || die;
+    }
+
     $self->run_squatter();
 
     my @tests = ({
@@ -202,16 +208,16 @@ sub test_one_doc_per_message
 
     push @tests, {
         search => ['body', 'term5'],
-        wantUids => [5],
+        wantUids => [55],
     }, {
         search => ['body', 'term6'],
-        wantUids => [6, 7],
+        wantUids => [56, 57],
     }, {
         search => ['body', 'term7'],
         wantUids => [],
     }, {
         search => ['body', 'term8'],
-        wantUids => [8],
+        wantUids => [58],
     };
 
     # better not be any off-by-one errors in search results!
@@ -286,8 +292,9 @@ sub test_incremental
     my $imap = $self->{store}->get_client();
     my $err;
 
-    # some initial messages
-    for (1..5) {
+    # some initial messages - enough to definitely force a doc_ID_map realloc
+    # when incrementally reindexing later
+    for (1..50) {
         $self->make_message();
     }
 
@@ -301,7 +308,7 @@ sub test_incremental
 
     # initial non-incremental index
     (undef, $err) = $self->run_squatter('-vv');
-    $self->assert_matches(qr{indexed 6 messages}, $err);
+    $self->assert_matches(qr{indexed 51 messages}, $err);
 
     # incremental reindex with no changes to mailbox
     (undef, $err) = $self->run_squatter('-i', '-vv');
