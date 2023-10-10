@@ -69,6 +69,13 @@ my %notbefore = (
     't:Email:import:one-fails-another-succeeds' => '3.8',
 );
 
+# Tests which JMAPTestSuite will skip anyway when it detects it's
+# talking to Cyrus.
+my %notcyrus = map { $_ => 1 } (
+    't:Mailbox:get:no-existing-entities',
+    't:Mailbox:query:no-existing-entities',
+);
+
 sub cyrus_version_supports_jmap
 {
     my ($maj, $min) = Cassandane::Instance->get_version();
@@ -192,6 +199,7 @@ sub find_tests
             return unless -f "$file.t";
             $file =~ s/^$basedir\/?//;
             $file =~ s{/}{:}g;
+            return if $notcyrus{$file};
             return if $suppressed{$file};
             if (exists $notbefore{$file} and skip_before($notbefore{$file})) {
                 return;
