@@ -1673,6 +1673,14 @@ dnl
                 AC_DEFINE(HAVE_GET_COMPONENT_NAME,[],
                         [Do we have support for fetching X- component names?]))
 
+        dnl Check if libical parser allows setting CONTROL char handling
+        AC_CHECK_LIB(ical, icalparser_get_ctrl,
+            [
+                AC_DEFINE(HAVE_ICALPARSER_CTRL,[], [Can we omit CONTROL characters?])
+                have_ical_ctrl=yes
+            ],
+            have_ical_ctrl=no)
+
         dnl Check for libicalvcard
         AC_CHECK_LIB(icalvcard, vcardcomponent_new, [
                  AC_DEFINE(HAVE_LIBICALVCARD,[],[Do we have the icalvcard library?])
@@ -2589,6 +2597,9 @@ Search engine:
    squat:              $enable_squat
    xapian:             $enable_xapian
    xapian_cjk_tokens:  $xapian_cjk_tokens
+
+iCalendar features:
+   ctrl:               $have_ical_ctrl
 
 Documentation dependencies:
    sphinx-build:       $SPHINX_BUILD

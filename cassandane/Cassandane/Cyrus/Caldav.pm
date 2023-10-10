@@ -2130,62 +2130,6 @@ sub test_imap_magicplus_withdomain
     $self->assert_not_null($this);
 }
 
-sub test_bad_event_hex01
-    :needs_component_httpd
-{
-    my ($self) = @_;
-
-    my $CalDAV = $self->{caldav};
-
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
-
-    my $uuid = "9f4f1212-222f-4182-850a-8f894818593c";
-    my $href = "$CalendarId/$uuid.ics";
-    my $card = <<EOF;
-BEGIN:VCALENDAR
-PRODID:-//Mozilla.org/NONSGML Mozilla Calendar V1.1//EN
-VERSION:2.0
-BEGIN:VTIMEZONE
-TZID:America/Los_Angeles
-BEGIN:DAYLIGHT
-TZOFFSETFROM:-0800
-TZOFFSETTO:-0700
-TZNAME:PDT
-DTSTART:19700308T020000
-RRULE:FREQ=YEARLY;BYDAY=2SU;BYMONTH=3
-END:DAYLIGHT
-BEGIN:STANDARD
-TZOFFSETFROM:-0700
-TZOFFSETTO:-0800
-TZNAME:PST
-DTSTART:19701101T020000
-RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=11
-END:STANDARD
-END:VTIMEZONE
-BEGIN:VEVENT
-CREATED:20160106T200252Z
-LAST-MODIFIED:20160106T200327Z
-DTSTAMP:20160106T200327Z
-UID:$uuid
-SUMMARY:Social Media Event
-DTSTART;TZID=America/Los_Angeles:20160119T110000
-DTEND;TZID=America/Los_Angeles:20160119T120000
-DESCRIPTION:Hi\,
- a weird character 
-END:VEVENT
-END:VCALENDAR
-EOF
-
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
-
-    my $Cal = $CalDAV->GetCalendar($CalendarId);
-
-    my $Events = $CalDAV->GetEvents($Cal->{id});
-
-    $self->assert_str_equals("Hi,a weird character ", $Events->[0]{description});
-}
-
 sub test_fastmailsharing
     :FastmailSharing :ReverseACLs :min_version_3_0 :needs_component_httpd
 {
@@ -6122,6 +6066,91 @@ EOF
         headers => \%headers
     });
     $self->assert_str_equals('200', $res->{status});
+}
+
+sub test_get_control_char
+    :min_version_3_9 :needs_component_httpd :needs_ical_ctrl :MagicPlus
+{
+    my ($self) = @_;
+
+    my $caldav = $self->{caldav};
+    my $plusstore = $self->{instance}->get_service('imap'
+        )->create_store(username => 'cassandane+dav');
+    my $imap = $plusstore->get_client();
+
+    # Assert that CONTROL chars are omitted when reading
+    # iCalendar data from disk.
+
+    my $mimeMsg = <<EOF;
+User-Agent: Net-DAVTalk/0.01
+From: <cassandane\@local>
+Subject: test
+Date: Mon, 28 Sep 2015 15:24:34 +0200
+Message-ID: <c6da9d16e00f7c3431b75f346a28594ca22a1f7d\@local>
+Content-Type: text/calendar; charset=utf-8; component=VEVENT
+Content-Transfer-Encoding: 8bit
+Content-Disposition: attachment;
+	filename*0="test.ics"
+Content-Length: 394
+MIME-Version: 1.0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DTEND;TZID=Europe/Vienna:20160928T170000
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:ct\x{15}rl
+SUMMARY:test
+CLASS:PRIVATE
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $mimeMsg =~ s/\r?\n/\r\n/gs;
+    $imap->append('#calendars.Default', $mimeMsg) || die $@;
+
+    my $res = $caldav->Request('GET', '/dav/calendars/user/cassandane/Default/test.ics');
+    $self->assert_matches(qr/DESCRIPTION:ctrl/, $res->{content});
+}
+
+sub test_put_control_char
+    :min_version_3_9 :needs_component_httpd :needs_ical_ctrl :MagicPlus
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    # Assert that CONTROL chars are omitted when reading
+    # iCalendar data during PUT.
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DTEND;TZID=Europe/Vienna:20160928T170000
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:ct\x{15}rl
+SUMMARY:test
+CLASS:PRIVATE
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    my $res = $caldav->Request('GET', '/dav/calendars/user/cassandane/Default/test.ics');
+    $self->assert_matches(qr/DESCRIPTION:ctrl/, $res->{content});
 }
 
 1;
