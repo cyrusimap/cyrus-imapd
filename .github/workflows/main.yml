@@ -45,6 +45,7 @@ jobs:
       run: |
         cpanm IO::File::fcntl
         cpanm Digest::CRC
+        cpanm XML::Simple # XXX could be grabbed from apt by docker image
     - name: set up cassandane
       working-directory: cassandane
       shell: bash
