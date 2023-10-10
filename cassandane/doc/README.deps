@@ -142,6 +142,7 @@ Cassandane needs the following software to work:
  * DateTime::Format::ISO8601
  * String::CRC32
  * XML::DOM
+ * XML::Simple
     These are available from CPAN
 
 Debian/Ubuntu copypasta:
@@ -159,7 +160,7 @@ Debian/Ubuntu copypasta:
        libdatetime-format-ical-perl libuniversal-require-perl \
        libtest-nowarnings-perl libtest-longstring-perl \
        libtest-warn-perl libnet-ldap-server-perl \
-       libdbd-sqlite3-perl libdigest-crc-perl
+       libdbd-sqlite3-perl libdigest-crc-perl libxml-simple-perl
 
   sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
        Net::CalDAVTalk Net::CardDAVTalk String::CRC32
