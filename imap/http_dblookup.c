@@ -46,6 +46,7 @@
 #include "http_dav.h"
 #include "jmap_mail_query.h"
 #include "json_support.h"
+#include "pushsub_db.h"
 #include "spool.h"
 #include "mboxlist.h"
 #include "util.h"
@@ -503,43 +504,95 @@ static int get_mbpath(struct transaction_t *txn __attribute__((unused)),
     return 0;
 }
 
+static int get_pushsub(void *rock, struct pushsub_data *data)
+{
+    json_t *array = (json_t *) rock;
+    json_t *obj;
+    json_error_t jerr;
+
+    obj = json_loads(data->subscription, 0, &jerr);
+    json_object_set_new(obj, "isVerified", json_boolean(data->isverified));
+
+    json_array_append_new(array, obj);
+
+    return 0;
+}
+
+static int get_pushsubs(struct transaction_t *txn __attribute__((unused)),
+                        const char *userid, const char *key __attribute__((unused)))
+{
+    struct pushsub_db *db = NULL;
+    char *result = NULL;
+    json_t *json;
+    int ret = HTTP_NO_CONTENT;
+
+    db = pushsubdb_open_userid(userid);
+    if (!db) goto done;
+
+    json = json_array();
+    pushsubdb_foreach(db, &get_pushsub, json);
+    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    json_decref(json);
+
+    txn->resp_body.type = "application/json";
+    txn->resp_body.len = strlen(result);
+
+    write_body(HTTP_OK, txn, result, txn->resp_body.len);
+    ret = 0;
+
+done:
+    free(result);
+    if (db) pushsubdb_close(db);
+    return ret;
+}
+
+struct lookup_type_t {
+    const char *path;
+    int (*cb)(struct transaction_t *txn, const char *userid, const char *key);
+    unsigned key_required : 1;
+};
+
+static const struct lookup_type_t lookup_types[] = {
+    { "/email",         &get_email,         1 },
+    { "/email2uids",    &get_email2uids,    1 },
+    { "/email2details", &get_email2details, 1 },
+    { "/uid2groups",    &get_uid2groups,    1 },
+    { "/expandcard",    &get_expandcard,    1 },
+    { "/pushsubs",      &get_pushsubs,      0 },
+    { NULL,             NULL,               0 }
+};
+
 static int meth_get_db(struct transaction_t *txn,
                        void *params __attribute__((unused)))
 {
     const char **userhdrs;
-    const char **keyhdrs;
+    const char **keyhdrs = NULL;
+    const char *req_path = txn->req_uri->path + 9;
+    const struct lookup_type_t *ltype;
+    struct buf buf = BUF_INITIALIZER;
+
+    /* Find our lookup type */
+    for (ltype = lookup_types; ltype->cb && strcmp(req_path, ltype->path); ltype++);
+
+    if (!ltype->cb) return HTTP_NOT_FOUND;
 
     userhdrs = spool_getheader(txn->req_hdrs, "User");
-    keyhdrs = spool_getheader(txn->req_hdrs, "Key");
 
     if (!userhdrs) return HTTP_BAD_REQUEST;
-    if (!keyhdrs) return HTTP_BAD_REQUEST;
-
     if (userhdrs[1]) return HTTP_NOT_ALLOWED;
-    if (keyhdrs[1]) return HTTP_NOT_ALLOWED;
 
-    spool_cache_header(xstrdup(":dblookup"),
-                      strconcat(userhdrs[0], "/", keyhdrs[0], (char *)NULL),
-                      txn->req_hdrs);
+    buf_setcstr(&buf, userhdrs[0]);
 
+    if (ltype->key_required) {
+        keyhdrs = spool_getheader(txn->req_hdrs, "Key");
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/email"))
-        return get_email(txn, userhdrs[0], keyhdrs[0]);
+        if (!keyhdrs) return HTTP_BAD_REQUEST;
+        if (keyhdrs[1]) return HTTP_NOT_ALLOWED;
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/email2uids"))
-        return get_email2uids(txn, userhdrs[0], keyhdrs[0]);
+        buf_printf(&buf, "/%s", keyhdrs[0]);
+    }
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/email2details"))
-        return get_email2details(txn, userhdrs[0], keyhdrs[0]);
+    spool_cache_header(xstrdup(":dblookup"), buf_release(&buf), txn->req_hdrs);
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/uid2groups"))
-        return get_uid2groups(txn, userhdrs[0], keyhdrs[0]);
-
-    if (!strcmp(txn->req_uri->path, "/dblookup/expandcard"))
-        return get_expandcard(txn, userhdrs[0], keyhdrs[0]);
-
-    if (!strcmp(txn->req_uri->path, "/dblookup/mbpath"))
-        return get_mbpath(txn, userhdrs[0], keyhdrs[0]);
-
-    return HTTP_NOT_FOUND;
+    return ltype->cb(txn, userhdrs[0], keyhdrs ? keyhdrs[0] : NULL);
 }
