@@ -288,7 +288,7 @@ static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
     }
 
     if ((r = append_setup_mbox(&as, mailbox, userid, authstate,
-                               0, NULL, NULL, 0, 0))) {
+                               0, NULL, NULL, 0, EVENT_MESSAGE_NEW))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
     }
