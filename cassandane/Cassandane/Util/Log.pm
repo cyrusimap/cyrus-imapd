@@ -40,6 +40,7 @@
 package Cassandane::Util::Log;
 use strict;
 use warnings;
+use File::Basename;
 use Scalar::Util qw(blessed);
 use Sys::Syslog qw(:standard :macros);
 
@@ -77,6 +78,7 @@ sub xlog
     # but the current subroutine name is in the parent frame,
     # as the function-the-caller-called
     my (undef, undef, undef, $sub) = caller(1);
+    $sub //= basename($0);
     $sub =~ s/^Cassandane:://;
     my $msg = "[$$] =====> $sub\[$line] ";
     $msg .= "($id) " if $id;
