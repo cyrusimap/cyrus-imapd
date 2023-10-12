@@ -939,7 +939,8 @@ sub test_guid_duplicate_same_folder
 
     if ($self->{instance}->{have_syslog_replacement}) {
         my @lines = $self->{instance}->getsyslog();
-        $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+        $self->assert_matches(qr{IOERROR: conversations GUID limit},
+                              join("\n", @lines));
     }
 
     $talk->select("INBOX.dest");
@@ -985,7 +986,8 @@ sub test_guid_duplicate_total_count
 
     if ($self->{instance}->{have_syslog_replacement}) {
         my @lines = $self->{instance}->getsyslog();
-        $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+        $self->assert_matches(qr{IOERROR: conversations GUID limit},
+                              join("\n", @lines));
     }
 }
 
@@ -1023,7 +1025,8 @@ sub test_guid_duplicate_expunges
 
     if ($self->{instance}->{have_syslog_replacement}) {
         my @lines = $self->{instance}->getsyslog();
-        $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
+        $self->assert_matches(qr{IOERROR: conversations GUID limit},
+                              join("\n", @lines));
     }
 }
 
