@@ -238,7 +238,10 @@ typedef struct _SquatWordTable {
   SquatWordTableEntry entries[256];
 } SquatWordTable;
 
-/* Map docIDs in existing index to docIDs in the new index */
+/* Map docIDs in existing index to docIDs in the new index.
+ * n.b. docIDs start at one.  Index zero in this map is always
+ * zero.
+ */
 struct doc_ID_map {
     int *map;
     int alloc;
@@ -335,7 +338,7 @@ static int squat_index_copy_document(SquatIndex *index, char const *name,
 static void doc_ID_map_init(struct doc_ID_map *doc_ID_map)
 {
     doc_ID_map->alloc = 50;
-    doc_ID_map->map = xmalloc(doc_ID_map->alloc * sizeof(int));
+    doc_ID_map->map = xzmalloc(doc_ID_map->alloc * sizeof(int));
     doc_ID_map->max = 0;
     doc_ID_map->new = 0;
 }
@@ -350,39 +353,62 @@ static void doc_ID_map_free(struct doc_ID_map *doc_ID_map)
 
 static void doc_ID_map_add(struct doc_ID_map *doc_ID_map, int exists)
 {
-    if (doc_ID_map->max == doc_ID_map->alloc) {
+    /* n.b. "max" is the highest docID mapped, NOT the number of elements
+     * in the array.  there is already an initial allocation, thanks to
+     * doc_ID_map_init().  array index zero always contains 0, because
+     * docIDs start at 1.
+     */
+    assert(doc_ID_map->max >= 0);
+    assert(doc_ID_map->max < doc_ID_map->alloc);
+
+    if (doc_ID_map->max == doc_ID_map->alloc - 1) {
         doc_ID_map->alloc *= 2;
         doc_ID_map->map =
             xrealloc(doc_ID_map->map, doc_ID_map->alloc * sizeof(int));
+        /* XXX maybe zero out the new bytes? */
     }
+
     if (exists) {
-        doc_ID_map->map[doc_ID_map->max++] = doc_ID_map->new++;
-    } else {
-        doc_ID_map->map[doc_ID_map->max++] = 0; /* Does not exist in new index */
+        doc_ID_map->map[++ doc_ID_map->max] = ++ doc_ID_map->new;
+    }
+    else {
+        doc_ID_map->map[++ doc_ID_map->max] = 0; /* Does not exist in new index */
     }
 }
 
 static int doc_ID_map_lookup(struct doc_ID_map *doc_ID_map, int docID)
 {
-    if ((docID < 1) || (docID > doc_ID_map->max))
-        return (0);
+    assert(doc_ID_map->max >= 0);
+    assert(doc_ID_map->max < doc_ID_map->alloc);
+    assert(docID >= 0);
 
-    return (doc_ID_map->map[docID]);
+    if (docID > doc_ID_map->max) {
+        return 0;
+    }
+
+    return doc_ID_map->map[docID];
 }
 
 static int copy_docIDs(void *closure, SquatListDoc const *doc)
 {
     SquatIndex *index = (SquatIndex *) closure;
     struct doc_ID_map *doc_ID_map = &index->doc_ID_map;
-    int choice = (index->select_doc) (index->select_doc_closure, doc);
+
+    /* n.b. this is calling doc_check() in search_squat.c */
+    int choice = index->select_doc(index->select_doc_closure, doc);
 
     if (choice > 0) {
+        /* XXX possible bug here if squat_index_copy_document fails
+         * XXX after we already mapped it as existing */
         doc_ID_map_add(doc_ID_map, 1);
-        return (squat_index_copy_document
-                (index, doc->doc_name, doc->size));
+        return squat_index_copy_document(index, doc->doc_name, doc->size);
     }
 
-    /* This docID no longer exists */
+    /* This docID no longer exists
+     * n.b. This is incredibly rare, because doc_check() in search_squat.c
+     * checks only for doc_name validity, kinda.  In practice, this means
+     * that doc_ID_map entries almost always just map to the same docIDs.
+     */
     doc_ID_map_add(doc_ID_map, 0);
     return SQUAT_CALLBACK_CONTINUE;
 }
