@@ -97,17 +97,26 @@ sub connect
 
     if ($self->{ssl}) {
         my $ca_file = abs_path("data/certs/cacert.pem");
+        # XXX https://github.com/noxxi/p5-io-socket-ssl/issues/121
+        # XXX With newer IO::Socket::SSL, hostname verification fails
+        # XXX because our hostname is an IP address and the certificate
+        # XXX CN does not contain the IP address.
+        # XXX Turning hostname verification back off again for now with
+        # XXX `SSL_verifycn_scheme => 'none'`. The better fix would be
+        # XXX to generate new certificates for 127.0.0.1 and ::1, but
+        # XXX I don't remember how...
         $client = Mail::IMAPTalk->new(
                       Server => $self->{host},
                       Port => $self->{port},
                       UseSSL => $self->{ssl},
                       SSL_ca_file => $ca_file,
+                      SSL_verifycn_scheme => 'none',
                       UseBlocking => 1,  # must be blocking for SSL
                       Pedantic => 1,
                       PreserveINBOX => 1,
                       Uid => 0,
                   )
-            or die "Cannot connect to server: $@";
+            or die "Cannot connect to '$self->{host}:$self->{port}': $@";
     }
     else {
         my $sock = create_client_socket(
