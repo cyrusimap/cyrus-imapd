@@ -85,6 +85,10 @@ sub cyrus_version_supports_jmap
 
 sub have_jmap_tester_websocket
 {
+    # not supported if feature wasn't compiled in
+    my $buildinfo = Cassandane::BuildInfo->new();
+    return 0 if not $buildinfo->get('dependency', 'wslay');
+
     return defined check_install(module => 'JMAP::Tester::WebSocket');
 }
 
