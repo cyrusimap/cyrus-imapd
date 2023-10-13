@@ -2252,6 +2252,15 @@ sub getsyslog
     my ($self) = @_;
     my $logname = $self->{name};
     if ($self->{have_syslog_replacement} && $self->{_syslogfh}) {
+        # https://github.com/Perl/perl5/issues/21240
+        # eof status is no longer cleared automatically in newer perls
+        if ($self->{_syslogfh}->eof()) {
+            $self->{_syslogfh}->clearerr();
+        }
+        if ($self->{_syslogfh}->error()) {
+            die "error reading $self->{syslog_fname}";
+        }
+
         # hopefully unobtrusively, let busy log finish writing
         usleep(100_000); # 100ms (0.1s) as us
         my @lines = grep { m/$logname/ } $self->{_syslogfh}->getlines();
