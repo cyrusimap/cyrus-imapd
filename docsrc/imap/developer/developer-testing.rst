@@ -92,7 +92,14 @@ Install and configure Cassandane
 7. Give your user account access to sudo as ``cyrus``
 
     * ``sudo visudo``
-    * add a line like:``username ALL = (cyrus) NOPASSWD: ALL``, where "username" is your own username
+    * add lines like:
+
+      .. code-block::
+
+        Defaults:username rlimit_core=default
+        username ALL = (cyrus) NOPASSWD: ALL
+
+      where "username" is your own username
 
 8. Make the ``destdir`` directory, as the ``cyrus`` user
 
