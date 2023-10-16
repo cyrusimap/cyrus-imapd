@@ -723,7 +723,7 @@ EXPORTED void conversation_normalise_subject(struct buf *s)
         assert(r == 0);
         r = regcomp(&bracket_re, "(\\[[^]\\[]*])|(^[^\\[]*])|(\\[[^]]*$)", REG_EXTENDED);
         assert(r == 0);
-        r = regcomp(&relike_token_re, "^[ \\t]*[^ \\t\\r\\n\\f]+:", REG_EXTENDED);
+        r = regcomp(&relike_token_re, "^[ \t]*[^ \t\r\n\f]+:", REG_EXTENDED);
         assert(r == 0);
         initialised_res = 1;
     }
