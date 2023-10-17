@@ -227,18 +227,22 @@ done:
 
 #define THIRTY_DAYS  2592000  // 60 * 60 * 24 * 30
 
-static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
-                         json_t *jpushsub, struct mailbox *mailbox)
+static int store_pushsub(const char *id, json_t *jexpires, json_t **new_jexpires,
+                         int verified, json_t *jpushsub, struct mailbox *mailbox)
 {
     struct auth_state *authstate = NULL;
     struct buf buf = BUF_INITIALIZER;
     struct stagemsg *stage;
     struct appendstate as;
-    char *data = json_dumps(jpushsub, JSON_INDENT(2));
-    size_t datalen = strlen(data);
     time_t now = time(0);
     FILE *f;
-    char *mimehdr;
+    char *mimehdr, datestr[RFC3339_DATETIME_MAX];
+#if (SIZEOF_TIME_T > 4)
+    time_t expires = (time_t) LONG_MAX;
+#else
+    time_t expires = (time_t) INT_MAX;
+#endif
+    strarray_t flags = STRARRAY_INITIALIZER;
     int r = 0;
 
     /* Prepare to stage the message */
@@ -246,6 +250,21 @@ static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
         syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         return CYRUSDB_IOERROR;
     }
+
+    /* Adjust expires to no more than 30 days */
+    if (!jexpires) jexpires = json_object_get(jpushsub, "expires");
+    if (jexpires) time_from_iso8601(json_string_value(jexpires), &expires);
+    if (expires - now > THIRTY_DAYS) {
+        expires = now + THIRTY_DAYS;
+
+        time_to_rfc3339(expires, datestr, RFC3339_DATETIME_MAX);
+        *new_jexpires = json_string(datestr);
+        json_object_set(jpushsub, "expires", *new_jexpires);
+    }
+
+    /* Serialize the subscription */
+    char *data = json_dumps(jpushsub, JSON_INDENT(2));
+    size_t datalen = strlen(data);
 
     /* Create RFC 5322 header for subscription */
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
@@ -263,7 +282,6 @@ static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
     fprintf(f, "Subject: %s\r\n", mimehdr);
     free(mimehdr);
 
-    char datestr[80];
     time_to_rfc5322(now, datestr, sizeof(datestr));
     fprintf(f, "Date: %s\r\n", datestr);
 
@@ -282,7 +300,9 @@ static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
 
     fclose(f);
 
-    if (strarray_size(types)) {
+    if (verified) {
+        strarray_append(&flags, "\\flagged");
+
         /* Need authstate in order to set flags */
         authstate = auth_newstate(userid);
     }
@@ -296,9 +316,7 @@ static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
         struct body *body = NULL;
 
         /* Use internaldate to store expires time */
-        if (*expires - now > THIRTY_DAYS) *expires = now + THIRTY_DAYS;
-
-        r = append_fromstage(&as, &body, stage, *expires, 0, types, 0, NULL);
+        r = append_fromstage(&as, &body, stage, expires, 0, &flags, 0, NULL);
         if (body) {
             message_free_body(body);
             free(body);
@@ -319,6 +337,7 @@ static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
 
     append_removestage(stage);
     auth_freestate(authstate);
+    strarray_fini(&flags);
     buf_free(&buf);
     free(userid);
 
@@ -327,17 +346,32 @@ static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
 
 static strarray_t *allowed_push_types = NULL;
 
+static void validate_types(json_t *types, json_t *invalid)
+{
+    if (json_is_array(types)) {
+        size_t i;
+        json_t *val;
+
+        json_array_foreach(types, i, val) {
+            const char *type = json_string_value(val);
+
+            if (!type ||
+                strarray_find_case(allowed_push_types, type, 0) < 0) {
+                json_array_append_new(invalid, json_sprintf("types[%lu]", i));
+            }
+        }
+    }
+    else if (!json_is_null(types)) {
+        json_array_append_new(invalid, json_string("types"));
+    }
+}
+
 static const char *set_create(const char *creation_id, json_t *jpushsub,
                               struct mailbox *mailbox, struct jmap_set *set)
 {
-    json_t *arg, *invalid = json_array(), *err = NULL, *jtypes = NULL;
-    strarray_t types = STRARRAY_INITIALIZER;
+    json_t *arg, *invalid = json_array(), *err = NULL;
+    json_t *jexpires = NULL, *new_jexpires = NULL;
     const char *id = NULL;
-#if (SIZEOF_TIME_T > 4)
-    time_t expires = (time_t) LONG_MAX;
-#else
-    time_t expires = (time_t) INT_MAX;
-#endif
 
     /* MUST NOT set id on create */
     arg = json_object_get(jpushsub, "id");
@@ -383,44 +417,15 @@ static const char *set_create(const char *creation_id, json_t *jpushsub,
                             json_string(makeuuid()));
     }
 
-    /* If supplied, set expires */
-    arg = json_object_get(jpushsub, "expires");
-    if (JNOTNULL(arg)) {
-        if (!json_is_utcdate(arg)) {
-            json_array_append_new(invalid, json_string("expires"));
-        }
-        else {
-            time_from_iso8601(json_string_value(arg), &expires);
-        }
+    /* If supplied, validate expires */
+    jexpires = json_object_get(jpushsub, "expires");
+    if (JNOTNULL(jexpires) && !json_is_utcdate(jexpires)) {
+        json_array_append_new(invalid, json_string("expires"));
     }
-    json_object_del(jpushsub, "expires");  // expires stored as internaldate
 
-    /* If supplied, set types */
+    /* If supplied, validate types */
     arg = json_object_get(jpushsub, "types");
-    if (JNOTNULL(arg)) {
-        if (!json_is_array(arg)) {
-            json_array_append_new(invalid, json_string("types"));
-        }
-        else {
-            size_t i;
-            json_t *val;
-            json_array_foreach(arg, i, val) {
-                const char *type = json_string_value(val);
-
-                if (!type ||
-                    strarray_find_case(allowed_push_types, type, 0) < 0) {
-                    json_array_append_new(invalid,
-                                          json_sprintf("types[%lu]", i));
-                    break;
-                }
-
-                strarray_append(&types, type);
-            }
-
-            jtypes = json_incref(arg);
-        }
-    }
-    json_object_del(jpushsub, "types");  // expires stored as user_flags
+    if (arg) validate_types(arg, invalid);
 
     /* Report any property errors and bail out */
     if (json_array_size(invalid)) {
@@ -429,30 +434,21 @@ static const char *set_create(const char *creation_id, json_t *jpushsub,
         goto done;
     }
 
-    time_t orig_expires = expires;
-    int r = store_pushsub(id, &expires, &types, jpushsub, mailbox);
+    /* Store subscription */
+    int r = store_pushsub(id, jexpires, &new_jexpires, 0, jpushsub, mailbox);
     if (r) {
         err = jmap_server_error(r);
     }
     else {
         /* Report subscription as created, with server-set properties */
-        json_t *new_pushsub = json_pack("{s:s}", "id", id);
-        char datestr[RFC3339_DATETIME_MAX];
-
-        time_to_rfc3339(expires, datestr, RFC3339_DATETIME_MAX);
-
-        if (expires != orig_expires) {
-            json_object_set_new(new_pushsub, "expires", json_string(datestr));
-        }
-        json_object_set_new(set->created, creation_id, new_pushsub);
+        json_object_set_new(set->created, creation_id,
+                            json_pack("{s:s s:O*}",
+                                      "id", id,
+                                      "expires", new_jexpires));
 
         /* Send mboxevent */
         struct mboxevent *event = mboxevent_new(EVENT_PUSHSUB_CREATED);
         char *userid = mboxname_to_userid(mailbox_name(mailbox));
-
-        /* Reinstate expires and type for the mboxevent */
-        json_object_set_new(jpushsub, "expires", json_string(datestr));
-        json_object_set_new(jpushsub, "types", jtypes ? jtypes : json_null());
 
         FILL_STRING_PARAM(event, EVENT_PUSHSUB_CREATED_USERID, userid);
         FILL_JSON_PARAM(event, EVENT_PUSHSUB_CREATED_CONTENT,
@@ -468,7 +464,7 @@ static const char *set_create(const char *creation_id, json_t *jpushsub,
         id = NULL;
     }
     json_decref(invalid);
-    strarray_fini(&types);
+    json_decref(new_jexpires);
 
     return id;
 }
@@ -478,7 +474,6 @@ static void set_update(const char *id, json_t *jpushsub,
                        struct jmap_set *set)
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
-    strarray_t types = STRARRAY_INITIALIZER;
     struct pushsub_data *psdata = NULL;
     json_error_t jerr;
     json_t *old_pushsub;
@@ -494,7 +489,8 @@ static void set_update(const char *id, json_t *jpushsub,
     }
     else {
         struct index_record record;
-        time_t new_expires = 0;
+        json_t *jtypes = NULL, *jexpires = NULL, *new_jexpires = NULL;
+        int verified = 0;
 
         r = mailbox_find_index_record(mailbox, psdata->imap_uid, &record);
         if (r) {
@@ -550,59 +546,30 @@ static void set_update(const char *id, json_t *jpushsub,
 
             if (!strcmpnull(json_string_value(arg), json_string_value(vcode))) {
                 /* Code has been verified */
-                record.system_flags |= FLAG_FLAGGED;
+                verified = 1;
             }
             else {
                 json_array_append_new(invalid, json_string("verificationCode"));
             }
         }
 
-        /* If supplied, update expires */
-        arg = json_object_get(jpushsub, "expires");
-        if (JNOTNULL(arg)) {
-            if (!json_is_utcdate(arg)) {
+        /* If supplied, validate and update expires */
+        jexpires = json_object_get(jpushsub, "expires");
+        if (JNOTNULL(jexpires)) {
+            if (!json_is_utcdate(jexpires)) {
                 json_array_append_new(invalid, json_string("expires"));
             }
             else {
-                time_t now = time(0), expires = 0;
-                time_from_iso8601(json_string_value(arg), &expires);
-                if (expires - now > THIRTY_DAYS)
-                    new_expires = expires = now + THIRTY_DAYS;
-                record.internaldate = expires;
+                json_object_set(old_pushsub, "expires", jexpires);
             }
         }
 
-        /* If supplied, replace types */
-        arg = json_object_get(jpushsub, "types");
-        if (arg) {
-            if (!json_is_array(arg) && !json_is_null(arg)) {
-                json_array_append_new(invalid, json_string("types"));
-            }
-            else {
-                size_t i;
-                json_t *val;
-                int flagnum;
-
-                memset(record.user_flags, 0, sizeof(record.user_flags));
-                json_array_foreach(arg, i, val) {
-                    const char *type = json_string_value(val);
-
-                    if (!type ||
-                        strarray_find_case(allowed_push_types, type, 0) < 0) {
-                        json_array_append_new(invalid,
-                                              json_sprintf("types[%lu]", i));
-                        break;
-                    }
-
-                    r = mailbox_user_flag(mailbox, type, &flagnum, 1);
-                    if (r) goto done;
-
-                    record.user_flags[flagnum/32] |= 1<<(flagnum&31);
-                }
-            }
+        /* If supplied, validate and replace types */
+        jtypes = json_object_get(jpushsub, "types");
+        if (jtypes) {
+            validate_types(jtypes, invalid);
+            json_object_set(old_pushsub, "types", jtypes);
         }
-
-        json_decref(old_pushsub);
 
         /* Report any property errors and bail out */
         if (json_array_size(invalid)) {
@@ -611,22 +578,45 @@ static void set_update(const char *id, json_t *jpushsub,
             goto done;
         }
 
-        /* Update index record */
-        r = mailbox_rewrite_index_record(mailbox, &record);
-        if (r) {
-            syslog(LOG_ERR, "rewriting record (%s:%u) failed: %s",
-                   mailbox_name(mailbox), psdata->imap_uid, error_message(r));
-        }
-        else {
-            /* Report subscription as updated, with server-set properties */
-            if (new_expires) {
-                char datestr[RFC3339_DATETIME_MAX];
-                time_to_rfc3339(new_expires, datestr, RFC3339_DATETIME_MAX);
-                json_object_set_new(set->updated, id,
-                                    json_pack("{s:s}", "expires", datestr));
+        if (jexpires || jtypes) {
+            /* Store updated subscription */
+            verified |= !!(record.system_flags & FLAG_FLAGGED);
+            r = store_pushsub(id, jexpires, &new_jexpires,
+                              verified, old_pushsub, mailbox);
+            if (r) {
+                err = jmap_server_error(r);
             }
-            else json_object_set_new(set->updated, id, json_null());
+            else {
+                /* Expunge current index record */
+                record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+
+                int r1 = mailbox_rewrite_index_record(mailbox, &record);
+                if (r1) {
+                    syslog(LOG_ERR, "rewriting record (%s:%u) failed: %s",
+                           mailbox_name(mailbox), record.uid, error_message(r1));
+                }
+            }
         }
+        else if (verified && !(record.system_flags & FLAG_FLAGGED)) {
+            /* Just update index record */
+            record.system_flags |= FLAG_FLAGGED;
+
+            r = mailbox_rewrite_index_record(mailbox, &record);
+            if (r) {
+                syslog(LOG_ERR, "rewriting record (%s:%u) failed: %s",
+                       mailbox_name(mailbox), record.uid, error_message(r));
+            }
+        }
+
+        if (!r) {
+            /* Report subscription as updated, with server-set properties */
+            json_object_set_new(set->updated, id,
+                                !new_jexpires ? json_null() :
+                                json_pack("{s:O}", "expires", new_jexpires));
+        }
+
+        json_decref(new_jexpires);
+        json_decref(old_pushsub);
     }
 
   done:
@@ -637,7 +627,6 @@ static void set_update(const char *id, json_t *jpushsub,
         json_object_set_new(set->not_updated, id, err);
     }
     json_decref(invalid);
-    strarray_fini(&types);
 }
 
 static void set_destroy(const char *id,
