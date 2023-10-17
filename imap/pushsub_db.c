@@ -277,6 +277,7 @@ EXPORTED int pushsubdb_foreach(struct pushsub_db *pushsubdb,
 
 #define CMD_UPDATE                       \
     "UPDATE push_subscriptions SET"      \
+    "  imap_uid      = :imap_uid,"       \
     "  subscription  = :subscription,"   \
     "  expires       = :expires,"        \
     "  isverified    = :isverified,"     \
@@ -286,11 +287,11 @@ EXPORTED int pushsubdb_foreach(struct pushsub_db *pushsubdb,
 HIDDEN int pushsubdb_write(struct pushsub_db *pushsubdb, struct pushsub_data *psdata)
 {
     struct sqldb_bindval bval[] = {
+        { ":imap_uid",      SQLITE_INTEGER, { .i = psdata->imap_uid     } },
         { ":subscription",  SQLITE_TEXT,    { .s = psdata->subscription } },
         { ":expires",       SQLITE_INTEGER, { .i = psdata->expires      } },
         { ":isverified",    SQLITE_INTEGER, { .i = psdata->isverified   } },
         { ":alive",         SQLITE_INTEGER, { .i = psdata->alive        } },
-        { NULL,             SQLITE_NULL,    { .s = NULL                 } },
         { NULL,             SQLITE_NULL,    { .s = NULL                 } },
         { NULL,             SQLITE_NULL,    { .s = NULL                 } },
         { NULL,             SQLITE_NULL,    { .s = NULL                 } } };
@@ -299,19 +300,16 @@ HIDDEN int pushsubdb_write(struct pushsub_db *pushsubdb, struct pushsub_data *ps
     if (psdata->rowid) {
         cmd = CMD_UPDATE;
 
-        bval[4].name = ":rowid";
-        bval[4].type = SQLITE_INTEGER;
-        bval[4].val.i = psdata->rowid;
+        bval[5].name = ":rowid";
+        bval[5].type = SQLITE_INTEGER;
+        bval[5].val.i = psdata->rowid;
     }
     else {
         cmd = CMD_INSERT;
 
-        bval[4].name = ":mailbox";
-        bval[4].type = SQLITE_TEXT;
-        bval[4].val.s = psdata->mailbox;
-        bval[5].name = ":imap_uid";
-        bval[5].type = SQLITE_INTEGER;
-        bval[5].val.i = psdata->imap_uid;
+        bval[5].name = ":mailbox";
+        bval[5].type = SQLITE_TEXT;
+        bval[5].val.s = psdata->mailbox;
         bval[6].name = ":id";
         bval[6].type = SQLITE_TEXT;
         bval[6].val.s = psdata->id;
