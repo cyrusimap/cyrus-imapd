@@ -792,7 +792,7 @@ static int maxcost(const search_expr_t *e, hashu64_table *costcache)
     if (!e) return 0;
 
     if (costcache) {
-        intptr_t cost = (intptr_t) hashu64_lookup((uint64_t) e, costcache);
+        intptr_t cost = (intptr_t) hashu64_lookup((uint64_t)(uintptr_t) e, costcache);
         assert(cost > INT_MIN && cost < INT_MAX);
         if (cost) return cost > 0 ? cost : 0;
     }
@@ -805,7 +805,7 @@ static int maxcost(const search_expr_t *e, hashu64_table *costcache)
     }
 
     if (costcache) {
-        hashu64_insert((uint64_t) e, (void*)((intptr_t)(cost ? cost : -1)), costcache);
+        hashu64_insert((uint64_t)(uintptr_t) e, (void*)((intptr_t)(cost ? cost : -1)), costcache);
     }
     return cost;
 }
