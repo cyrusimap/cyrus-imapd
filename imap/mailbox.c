@@ -3914,7 +3914,7 @@ static int mailbox_update_pushsub(struct mailbox *mailbox,
 
     if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_JMAPPUSHSUB) return 0;
 
-    /* never have Sieve on deleted mailboxes */
+    /* never have PushSub on deleted mailboxes */
     if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL)) return 0;
 
     /* conditions in which there's nothing to do */
@@ -3947,6 +3947,13 @@ static int mailbox_update_pushsub(struct mailbox *mailbox,
         /* delete entry */
         r = pushsubdb_delete(pushsubdb, psdata->rowid);
     }
+    else if (psdata->imap_uid == new->uid) {
+        /* just a flags update to an existing record */
+        psdata->alive = !isexpunged;
+        psdata->isverified = isverified;
+
+        r = pushsubdb_write(pushsubdb, psdata);
+    }
     else {
         /* Load message containing the script */
         r = mailbox_map_record(mailbox, new, &msg_buf);
@@ -3956,26 +3963,6 @@ static int mailbox_update_pushsub(struct mailbox *mailbox,
         json_error_t err;
         json_t *jpushsub =
             json_loads(buf_cstring(&msg_buf) + new->header_size, 0, &err);
-
-        /* Add expires and types */
-        char datestr[RFC3339_DATETIME_MAX];
-        time_to_rfc3339(new->internaldate.tv_sec, datestr, RFC3339_DATETIME_MAX);
-        json_object_set_new(jpushsub, "expires", json_string(datestr));
-
-        json_t *types = json_array();
-        int i;
-        for (i = 0; i < MAX_USER_FLAGS; i++) {
-            if (mailbox->h.flagname[i] && (new->user_flags[i/32] & 1<<(i&31))) {
-                json_array_append_new(types,
-                                      json_string(mailbox->h.flagname[i]));
-            }
-        }
-        if (!json_array_size(types)) {
-            json_decref(types);
-            types = json_null();
-        }
-        json_object_set_new(jpushsub, "types", types);
-
         char *subscription = json_dumps(jpushsub, JSON_COMPACT);
 
         psdata->mailbox = mailbox_uniqueid(mailbox);
