@@ -285,7 +285,7 @@ static int do_examine(struct findall_data *data, void *rock)
     }
     printf("\n");
     printf("  Last POP3 Login: (" TIME_T_FMT ") %s", mailbox->i.pop3_last_login,
-           ctime((const time_t *) &mailbox->i.pop3_last_login));
+           ctime(&mailbox->i.pop3_last_login));
     printf("  Highest Mod Sequence: " MODSEQ_FMT "\n",
            mailbox->i.highestmodseq);
 
