@@ -127,6 +127,9 @@ sub test_pushsub_set
     $self->assert_null($res->[2][1]{list}[0]{url});
     $self->assert_null($res->[2][1]{list}[0]{keys});
     $self->assert_null($res->[2][1]{list}[0]{verificationCode});
+    $self->assert_not_null($res->[2][1]{list}[0]{expires});
+    $self->assert_num_equals(2, scalar @{$res->[2][1]{list}[0]{types}});
+    $self->assert_equals("Mailbox", $res->[2][1]{list}[0]{types}[0]);
 
     my $data = $self->{instance}->getnotify();
     my $code;
@@ -139,6 +142,21 @@ sub test_pushsub_set
         }
     }
 
+    xlog "verify subscription";
+    $res = $jmap->CallMethods([
+        ['PushSubscription/set', {
+            update => {
+                $id => {
+                    verificationCode => $code
+                },
+            },
+         }, "R1"],
+        ['PushSubscription/get', { }, "R2"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+
     xlog "update subscription";
     $res = $jmap->CallMethods([
         ['PushSubscription/set', {
@@ -146,7 +164,7 @@ sub test_pushsub_set
                 $id => {
                     verificationCode => $code,
                     expires => "2038-01-19T03:14:07Z",
-                    types => [ "Email", "EmailSubmission" ]
+                    types => [ "EmailSubmission", "Mailbox", "Email" ]
                 },
             },
          }, "R1"],
@@ -155,6 +173,9 @@ sub test_pushsub_set
     $self->assert_not_null($res);
     $self->assert_not_null($res->[0][1]{updated}{$id}{expires});
     $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_not_null($res->[1][1]{list}[0]{expires});
+    $self->assert_num_equals(3, scalar @{$res->[1][1]{list}[0]{types}});
+    $self->assert_equals("EmailSubmission", $res->[1][1]{list}[0]{types}[0]);
 
     xlog "destroy subscription";
     $res = $jmap->CallMethods([
