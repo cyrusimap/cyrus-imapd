@@ -2888,6 +2888,7 @@ int main(int argc, char **argv)
 
     const char *pidfile = MASTER_PIDFILE;
     char *pidfile_lock = NULL;
+    const char *ready_file = NULL;
 
     int startup_pipe[2] = { -1, -1 };
     int pidlock_fd = -1;
@@ -2907,7 +2908,7 @@ int main(int argc, char **argv)
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
-    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:vV")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:L:M:p:r:l:Ddj:vV")) != EOF) {
         switch (opt) {
         case 'C': /* alt imapd.conf file */
             alt_config = optarg;
@@ -2922,6 +2923,10 @@ int main(int argc, char **argv)
         case 'p':
             /* Set the pidfile name */
             pidfile = optarg;
+            break;
+        case 'r':
+            /* Set the ready file name */
+            ready_file = optarg;
             break;
         case 'd':
             /* Daemon Mode */
@@ -3196,7 +3201,7 @@ int main(int argc, char **argv)
     }
 
     /* ok, we're going to start spawning like mad now */
-    master_ready(NULL); /* ready for work */
+    master_ready(ready_file); /* ready for work */
 
     for (;;) {
         int i, maxfd, ready_fds, total_children = 0;
