@@ -1,0 +1,20 @@
+Description:
+
+master(8) now touches a ready file to indicate it is "ready for work"
+
+
+Config changes:
+
+* master_ready_file
+
+
+Upgrade instructions:
+
+If you have something that monitors syslog looking for master's
+"ready for work" message, you might consider switching to monitoring
+the master.ready file instead, perhaps using Linux inotify.
+
+
+GitHub issue:
+
+N/A
