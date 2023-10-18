@@ -2856,6 +2856,32 @@ static void check_undermanned(struct service *s, int si, int wdi)
     }
 }
 
+static void master_ready(const char *ready_file)
+{
+    int fd;
+
+    syslog(LOG_DEBUG, "ready for work");
+
+    if (!ready_file) ready_file = config_getstring(IMAPOPT_MASTER_READY_FILE);
+    if (!ready_file) return;
+
+    if (cyrus_mkdir(ready_file, 0755 /* ignored */)) return;
+
+    fd = creat(ready_file, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (fd >= 0) {
+        fsync(fd);
+        close(fd);
+    }
+    else {
+        xsyslog(LOG_ERR, "unable to create ready file",
+                         "fname=<%s>",
+                         ready_file);
+    }
+
+    /* we did our best */
+    errno = 0;
+}
+
 int main(int argc, char **argv)
 {
     static const char lock_suffix[] = ".lock";
@@ -3170,7 +3196,7 @@ int main(int argc, char **argv)
     }
 
     /* ok, we're going to start spawning like mad now */
-    syslog(LOG_DEBUG, "ready for work");
+    master_ready(NULL); /* ready for work */
 
     for (;;) {
         int i, maxfd, ready_fds, total_children = 0;
