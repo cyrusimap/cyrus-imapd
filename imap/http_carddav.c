@@ -1400,8 +1400,11 @@ static int carddav_put(struct transaction_t *txn, void *obj,
                     txn->error.precond = CARDDAV_SUPP_DATA;
                     txn->error.desc =
                         "Server only accepts Content-type charset=utf-8";
+                    charset_free(&charset);
                     goto done;
                 }
+
+                charset_free(&charset);
             }
             else if (!strcasecmp(param->attribute, "profile")) {
                 profile = param->value;
@@ -2096,6 +2099,117 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 }
 
 
+#ifdef HAVE_LIBICALVCARD
+
+static void prune_properties(vcardcomponent *vcard, strarray_t *partial)
+{
+    vcardproperty *prop, *next;
+
+    for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
+         prop; prop = next) {
+        const char *prop_name = vcardproperty_get_property_name(prop);
+
+        next = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY);
+
+        if (strarray_find_case(partial, prop_name, 0) < 0) {
+            vcardcomponent_remove_property(vcard, prop);
+            vcardproperty_free(prop);
+        }
+    }
+}
+
+/* Callback to prescreen/fetch CARDDAV:address-data */
+static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
+                             struct propfind_ctx *fctx,
+                             xmlNodePtr prop,
+                             xmlNodePtr resp __attribute__((unused)),
+                             struct propstat propstat[],
+                             void *rock __attribute__((unused)))
+{
+    static struct mime_type_t *out_type = carddav_mime_types;
+    static strarray_t partial_addrdata = STRARRAY_INITIALIZER;
+    strarray_t *partial = &partial_addrdata;
+    const char *data = NULL;
+    size_t datalen = 0;
+
+    if (!prop) {
+        /* Cleanup "property" request - free partial property array */
+        strarray_fini(partial);
+
+        return 0;
+    }
+
+    if (!propstat) {
+        /* Prescreen "property" request - read partial properties */
+        xmlNodePtr node;
+
+        /* Initialize partial property array to be empty */
+        strarray_init(partial);
+
+        /* Check for and parse child elements of CARDDAV:address-data */
+        for (node = xmlFirstElementChild(prop); node;
+             node = xmlNextElementSibling(node)) {
+
+            if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
+                xmlChar *name = xmlGetProp(node, BAD_CAST "name");
+                if (name) {
+                    strarray_add_case(partial, (const char *) name);
+                    xmlFree(name);
+                }
+            }
+        }
+    }
+    else {
+        struct carddav_data *cdata = (struct carddav_data *) fctx->data;
+        vcardcomponent *vcard = NULL;
+        unsigned want_ver;
+
+        if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
+
+        if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
+
+        if (!fctx->record) return HTTP_NOT_FOUND;
+
+        if (!fctx->msg_buf.len)
+            mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
+        if (!fctx->msg_buf.len) return HTTP_SERVER_ERROR;
+
+        data = buf_cstring(&fctx->msg_buf) + fctx->record->header_size;
+        datalen = fctx->record->size - fctx->record->header_size;
+
+        want_ver = (out_type->version[0] == '4') ? 4 : 3;
+
+        if (cdata->version != want_ver) {
+            /* Translate between vCard versions */
+            vcard = fctx->obj;
+
+            if (!vcard) vcard = fctx->obj = vcardparser_parse_string(data);
+
+            if (want_ver == 4) vcard_to_v4_x(vcard);
+            else vcard_to_v3_x(vcard);
+        }
+
+        if (strarray_size(partial)) {
+            /* Limit returned properties */
+            vcard = fctx->obj;
+
+            if (!vcard) vcard = fctx->obj = vcardparser_parse_string(data);
+            prune_properties(vcard, partial);
+        }
+
+        if (vcard) {
+            /* Create vCard data from new vCard component */
+            data = vcardcomponent_as_vcard_string(vcard);
+            datalen = strlen(data);
+        }
+    }
+
+    return propfind_getdata(name, ns, fctx, prop, propstat, carddav_mime_types,
+                            &out_type, data, datalen);
+}
+
+#else /* !HAVE_LIBICALVCARD */
+
 static void prune_properties(struct vparse_card *vcard, strarray_t *partial)
 {
     struct vparse_entry **entryp = &vcard->properties;
@@ -2205,6 +2319,8 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
     return propfind_getdata(name, ns, fctx, prop, propstat, carddav_mime_types,
                             &out_type, data, datalen);
 }
+
+#endif /* HAVE_LIBICALVCARD */
 
 
 /* Callback to fetch CARDDAV:addressbook-home-set */
