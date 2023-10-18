@@ -1701,6 +1701,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    come up in response to a reconfig+SIGHUP will just be logged and disabled
    like the default behaviour, without causing master to exit. */
 
+{ "master_ready_file", "{configdirectory}/master.ready", STRING, "UNRELEASED" }
+/* The path to a file that master(8) will update to indicate that it is
+   ready to accept client connections.  This file will be created if it does
+   not already exist, or truncated if it does.  */
+
 { "maxheaderlines", 1000, INT, "2.3.17" }
 /* Maximum number of lines of header that will be processed into cache
    records.  Default 1000.  If set to zero, it is unlimited.
