@@ -93,16 +93,19 @@ sub add_perl {
 
   elsif (ref($val) eq 'HASH') {
     my $child = $Self->add_kvlist($key);
-    my $order = delete $val->{__kvlist_order};
+    my %keys = map { $_ => 1 } grep { not m/^_/ } keys %$val;
 
-    if ($order) {
-      die "Unknown order " . ref($order) if ref($order) ne 'ARRAY';
-      foreach my $k (grep { exists $val->{$_} } @{$order}) {
-        $child->add_perl($k, delete $val->{$k});
-      }
+    my $order = $val->{__kvlist_order} || [];
+    die "Unknown order " . ref($order) if ref($order) ne 'ARRAY';
+
+    # if there's a pre-defined key order, add all those keys first, in order
+    foreach my $k (grep { exists $val->{$_} } @$order) {
+      $child->add_perl($k, $val->{$k});
+      delete $keys{$k};
     }
 
-    $child->add_perl($_, $val->{$_}) for sort keys %$val;
+    # add the remaining keys in sort order
+    $child->add_perl($_, $val->{$_}) for sort keys %keys;
   }
 
   elsif (ref($val) eq 'REF') {
@@ -327,7 +330,7 @@ sub as_perl {
       $kvlist->{$datum->{key}} = $datum->as_perl();
     }
 
-    $kvlist->{__kvlist_order} = [ @order ];
+    $kvlist->{__kvlist_order} = \@order;
     return $kvlist;
   }
   elsif ($Self->{type} eq 'list') {
