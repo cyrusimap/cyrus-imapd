@@ -362,10 +362,11 @@ static void doc_ID_map_add(struct doc_ID_map *doc_ID_map, int exists)
     assert(doc_ID_map->max < doc_ID_map->alloc);
 
     if (doc_ID_map->max == doc_ID_map->alloc - 1) {
-        doc_ID_map->alloc *= 2;
-        doc_ID_map->map =
-            xrealloc(doc_ID_map->map, doc_ID_map->alloc * sizeof(int));
-        /* XXX maybe zero out the new bytes? */
+        int new_alloc = doc_ID_map->alloc * 2;
+        doc_ID_map->map = xzrealloc(doc_ID_map->map,
+                                    doc_ID_map->alloc * sizeof(int),
+                                    new_alloc * sizeof(int));
+        doc_ID_map->alloc = new_alloc;
     }
 
     if (exists) {
@@ -591,10 +592,11 @@ int squat_index_open_document(SquatIndex *index, char const *name)
 
     /* Grow the document ID array as necessary */
     if (index->current_doc_ID >= index->doc_ID_list_size) {
-        index->doc_ID_list_size *= 2;
-        index->doc_ID_list =
-            (char *)xrealloc(index->doc_ID_list,
-                             index->doc_ID_list_size * sizeof(SquatInt32));
+        int new_size = index->doc_ID_list_size * 2;
+        index->doc_ID_list = xzrealloc(index->doc_ID_list,
+                                       index->doc_ID_list_size * sizeof(SquatInt32),
+                                       new_size * sizeof(SquatInt32));
+        index->doc_ID_list_size = new_size;
     }
 
     /* Store the offset of the new document record into the array */
