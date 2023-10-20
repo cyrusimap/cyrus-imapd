@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 #
 # cyr_cd -- Shell script to change directory within a mailbox spool
 #
@@ -44,10 +44,10 @@
 
 # This script should be sourced from the command line or from within .bashrc
 
-function cyr_cd() {
-    path=`mbpath $@`
-    if test ${#path} -ne 0
+cyr_cd() {
+    set -- `mbpath $@`
+    if test $# -ne 0
     then
-        cd $path
+        cd "$@"
     fi
 }
