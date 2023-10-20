@@ -9069,8 +9069,6 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                 /* Add separator entry to JSCOMPS */
                 sep = val;
                 buf_setcstr(&buf, sep);
-                buf_replace_all(&buf, ";", "\\;");
-                buf_replace_all(&buf, ",", "\\,");
                 entry = vcardstrarray_new(2);
                 vcardstrarray_append(entry, "s");
                 vcardstrarray_append(entry, buf_cstring(&buf));
