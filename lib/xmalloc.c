@@ -48,7 +48,7 @@
 #include "xmalloc.h"
 
 
-EXPORTED void* xmalloc(size_t size)
+EXPORTED void *xmalloc(size_t size)
 {
     void *ret;
 
@@ -59,7 +59,7 @@ EXPORTED void* xmalloc(size_t size)
     return 0; /*NOTREACHED*/
 }
 
-EXPORTED void* xzmalloc(size_t size)
+EXPORTED void *xzmalloc(size_t size)
 {
     void *ret = xmalloc(size);
     memset(ret, 0, size);
@@ -71,16 +71,25 @@ EXPORTED void *xcalloc(size_t nmemb, size_t size)
     return xzmalloc(nmemb * size);
 }
 
-EXPORTED void *xrealloc (void* ptr, size_t size)
+EXPORTED void *xrealloc(void *ptr, size_t size)
 {
     void *ret;
 
-    /* xrealloc (NULL, size) behaves like xmalloc (size), as in ANSI C */
-    ret = (!ptr ? malloc (size) : realloc (ptr, size));
+    ret = realloc(ptr, size);
     if (ret != NULL) return ret;
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
     return 0; /*NOTREACHED*/
+}
+
+EXPORTED void *xzrealloc(void *ptr, size_t orig_size, size_t new_size)
+{
+    void *ret = xrealloc(ptr, new_size);
+
+    if (orig_size < new_size)
+        memset(ret + orig_size, 0, new_size - orig_size);
+
+    return ret;
 }
 
 EXPORTED char *xstrdup(const char* str)

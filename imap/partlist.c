@@ -467,8 +467,9 @@ static void partlist_fill(const char *key, const char *value, void *rock)
         }
     }
 
-    part_list->items = (partitem_t *)xrealloc(part_list->items, (part_list->size+1) * sizeof(partitem_t));
-    memset(&part_list->items[part_list->size], 0, sizeof(partitem_t));
+    part_list->items = xzrealloc(part_list->items,
+                                 part_list->size * sizeof(partitem_t),
+                                 (part_list->size + 1) * sizeof(partitem_t));
     part_list->items[part_list->size].item = xstrdup(key + key_prefix_len);
     part_list->items[part_list->size].value = xstrdup(value);
     /* item usage data will be filled later */

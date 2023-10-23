@@ -3134,10 +3134,9 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
 
         body->type = xstrdup("MULTIPART");
         do {
-            body->subpart =
-                (struct body *)xrealloc((char *)body->subpart,
-                                        (body->numparts+1)*sizeof(struct body));
-            memset(&body->subpart[body->numparts], 0, sizeof(struct body));
+            body->subpart = xzrealloc(body->subpart,
+                                      body->numparts * sizeof(struct body),
+                                      (body->numparts + 1) * sizeof(struct body));
             buf_reset(&buf);
             if (part_id) buf_printf(&buf, "%s.", part_id);
             buf_printf(&buf, "%d", body->numparts + 1);
