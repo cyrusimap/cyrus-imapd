@@ -449,6 +449,11 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
 
 #ifdef HAVE_LIBICALVCARD
 
+EXPORTED  vcardcomponent *vcard_parse_string_x(const char *str)
+{
+    return vcardcomponent_new_from_string(str);
+}
+
 EXPORTED vcardcomponent *vcard_parse_buf_x(const struct buf *buf)
 {
     return vcardparser_parse_string(buf_cstring(buf));

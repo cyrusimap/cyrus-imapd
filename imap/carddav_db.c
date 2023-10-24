@@ -1111,6 +1111,7 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
 {
     struct vparse_entry *ventry;
 
+    struct buf nicknames = BUF_INITIALIZER;
     strarray_t values = STRARRAY_INITIALIZER;
     strarray_t emails = STRARRAY_INITIALIZER;
     strarray_t member_uids = STRARRAY_INITIALIZER;
@@ -1138,7 +1139,9 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
             propval = NULL;
         }
         else if (!strcasecmp(name, "nickname")) {
-            cdata->nickname = propval;
+            if (buf_len(&nicknames)) buf_putc(&nicknames, ',');
+            buf_appendcstr(&nicknames, propval);
+            cdata->nickname = buf_cstring(&nicknames);;
             strarray_appendm(&values, propval);
             propval = NULL;
         }
@@ -1185,6 +1188,7 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
     if (!r) r = carddav_write_emails(carddavdb, cdata->dav.rowid, &emails, ispinned);
     if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
 
+    buf_free(&nicknames);
     strarray_fini(&values);
     strarray_fini(&emails);
     strarray_fini(&member_uids);
@@ -1412,6 +1416,7 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
                                  vcardcomponent *vcard,
                                  int ispinned)
 {
+    struct buf nicknames = BUF_INITIALIZER;
     strarray_t emails = STRARRAY_INITIALIZER;
     strarray_t member_uids = STRARRAY_INITIALIZER;
     vcardproperty *prop;
@@ -1436,7 +1441,9 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
             break;
 
         case VCARD_NICKNAME_PROPERTY:
-            cdata->nickname = propval;
+            if (buf_len(&nicknames)) buf_putc(&nicknames, ',');
+            buf_appendcstr(&nicknames, propval);
+            cdata->nickname = buf_cstring(&nicknames);;
             break;
 
         case VCARD_EMAIL_PROPERTY: {
@@ -1518,6 +1525,7 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
                                      cdata->dav.rowid, &emails, ispinned);
     if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
 
+    buf_free(&nicknames);
     strarray_fini(&emails);
     strarray_fini(&member_uids);
 

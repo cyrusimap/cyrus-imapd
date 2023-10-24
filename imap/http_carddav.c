@@ -2477,75 +2477,158 @@ done:
 }
 
 
-typedef enum my_vcardproperty_kind {
-    MY_VCARD_ANY_PROPERTY = 0,
-    MY_VCARD_FN_PROPERTY = 1,
-    MY_VCARD_N_PROPERTY = 2,
-    MY_VCARD_NICKNAME_PROPERTY = 3,
-    MY_VCARD_UID_PROPERTY = 4,
-    MY_VCARD_NO_PROPERTY = 1000
-} my_vcardproperty_kind;
-
 struct cardquery_filter {
     unsigned allof : 1;
     struct prop_filter *prop;
 };
 
-static unsigned my_vcardproperty_string_to_kind(const char *str)
+#ifdef HAVE_LIBICALVCARD
+
+static int apply_paramfilter(struct param_filter *paramfilter, vcardproperty *prop)
 {
-    if (!strcasecmp(str, "FN")) return MY_VCARD_FN_PROPERTY;
-    else if (!strcasecmp(str, "N")) return MY_VCARD_N_PROPERTY;
-    else if (!strcasecmp(str, "NICKNAME")) return MY_VCARD_NICKNAME_PROPERTY;
-    else if (!strcasecmp(str, "UID")) return MY_VCARD_UID_PROPERTY;
-    else return MY_VCARD_ANY_PROPERTY;
+    const char *value =
+        vcardproperty_get_parameter_as_string(prop, (char *) paramfilter->name);
+
+    if (!value) return paramfilter->not_defined;
+    if (paramfilter->not_defined) return 0;
+    if (!paramfilter->match) return 1;
+
+    return dav_apply_textmatch(BAD_CAST value, paramfilter->match);
 }
 
-static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
-                            struct error_t *error)
+static int apply_propfilter(struct prop_filter *propfilter,
+                            struct carddav_data *cdata,
+                            struct propfind_ctx *fctx)
 {
-    xmlChar *attr;
-    xmlNodePtr node;
-    struct filter_profile_t profile =
-        { 0 /* anyof */, COLLATION_UNICODE,
-          CARDDAV_SUPP_FILTER, CARDDAV_SUPP_COLLATION,
-          my_vcardproperty_string_to_kind, MY_VCARD_NO_PROPERTY,
-          NULL /* param_string_to_kind */, 0 /* no_param_value */,
-          NULL /* parse_propfilter */ };
+    int pass = 1;
+    vcardcomponent *vcard = fctx->obj;
+    vcardproperty *myprop = NULL, *prop = NULL;
 
-    /* Parse elements of filter */
-    attr = xmlGetProp(root, BAD_CAST "test");
-    if (attr) {
-        if (!xmlStrcmp(attr, BAD_CAST "allof")) filter->allof = 1;
-        else if (xmlStrcmp(attr, BAD_CAST "anyof")) {
-            error->precond = CARDDAV_SUPP_FILTER;
-            error->desc = "Unsupported test";
-            error->node = xmlCopyNode(root, 2);
+    if (!propfilter->param) {
+        const char *str = NULL;
+
+        switch (propfilter->kind) {
+        case VCARD_FN_PROPERTY:
+            str = cdata->fullname;
+            break;
+
+        case VCARD_N_PROPERTY:
+            str = cdata->name;
+            break;
+
+        case VCARD_NICKNAME_PROPERTY:
+            str = cdata->nickname;
+            break;
+
+        case VCARD_UID_PROPERTY:
+            str = cdata->vcard_uid;
+            break;
+
+        default:
+            break;
         }
-        xmlFree(attr);
+
+        if (str) {
+            prop = myprop = vcardproperty_new(propfilter->kind);
+            vcardproperty_set_value_from_string(prop, str, "NO");
+        }
     }
 
-    for (node = xmlFirstElementChild(root); node && !error->precond;
-         node = xmlNextElementSibling(node)) {
-
-        if (!xmlStrcmp(node->name, BAD_CAST "prop-filter")) {
-            struct prop_filter *prop = NULL;
-
-            dav_parse_propfilter(node, &prop, &profile, error);
-            if (prop) {
-                if (filter->prop) prop->next = filter->prop;
-                filter->prop = prop;
+    if (propfilter->param || (propfilter->kind == VCARD_ANY_PROPERTY)) {
+        /* Load message containing the resource and parse vcard data */
+        if (!vcard) {
+            if (!fctx->msg_buf.len) {
+                mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
             }
+            if (fctx->msg_buf.len) {
+                vcard = fctx->obj =
+                    vcard_parse_string_x(buf_cstring(&fctx->msg_buf) +
+                                         fctx->record->header_size);
+            }
+            if (!vcard) return 0;
         }
-        else {
-            error->precond = CARDDAV_SUPP_FILTER;
-            error->desc = "Unsupported element in filter";
-            error->node = xmlCopyNode(root, 1);
-        }
+
+        prop = vcardcomponent_get_first_property(vcard, propfilter->kind);
     }
 
-    return error->precond ? HTTP_FORBIDDEN : 0;
+    if (!prop) return propfilter->not_defined;
+    if (propfilter->not_defined) return 0;
+    if (!(propfilter->match || propfilter->param)) return 1;
+
+    /* Test each instance of this property (logical OR) */
+    do {
+        const char *prop_name = vcardproperty_get_property_name(prop);
+        struct text_match_t *match;
+        struct param_filter *paramfilter;
+
+        if (!pass && strcasecmpsafe(prop_name, (char *) propfilter->name)) {
+            /* Skip property if name doesn't match */
+            continue;
+        }
+    
+        pass = propfilter->allof;
+
+        /* Apply each text-match, breaking if allof fails or anyof succeeds */
+        for (match = propfilter->match;
+             match && (pass == propfilter->allof);
+             match = match->next) {
+
+            int n = 0;
+            const char *text;
+            vcardstrarray *array = NULL;
+
+            if (vcardproperty_is_multivalued(propfilter->kind) &&
+                !vcardproperty_is_structured(propfilter->kind)) {
+                array = vcardproperty_get_nickname(prop);
+                text = vcardstrarray_element_at(array, n);
+            }
+            else {
+                text = vcardvalue_as_vcard_string(vcardproperty_get_value(prop));
+            }
+
+            /* Test each value of this property (logical OR) */
+            do {
+                pass = dav_apply_textmatch(BAD_CAST text, match);
+
+            } while (!pass &&
+                     array && (text = vcardstrarray_element_at(array, ++n)));
+        }
+
+        /* Apply each param-filter, breaking if allof fails or anyof succeeds */
+        for (paramfilter = propfilter->param;
+             paramfilter && (pass == propfilter->allof);
+             paramfilter = paramfilter->next) {
+
+            pass = apply_paramfilter(paramfilter, prop);
+        }
+
+    } while (!pass && !myprop &&
+             (prop = vcardcomponent_get_next_property(vcard, propfilter->kind)));
+
+    if (myprop) vcardproperty_free(myprop);
+
+    return pass;
 }
 
+#else /* !HAVE_LIBICALVCARD */
+
+typedef enum vcardproperty_kind {
+    VCARD_ANY_PROPERTY = 0,
+    VCARD_FN_PROPERTY = 1,
+    VCARD_N_PROPERTY = 2,
+    VCARD_NICKNAME_PROPERTY = 3,
+    VCARD_UID_PROPERTY = 4,
+    VCARD_NO_PROPERTY = 1000
+} vcardproperty_kind;
+
+static unsigned vcardproperty_string_to_kind(const char *str)
+{
+    if (!strcasecmp(str, "FN")) return VCARD_FN_PROPERTY;
+    else if (!strcasecmp(str, "N")) return VCARD_N_PROPERTY;
+    else if (!strcasecmp(str, "NICKNAME")) return VCARD_NICKNAME_PROPERTY;
+    else if (!strcasecmp(str, "UID")) return VCARD_UID_PROPERTY;
+    else return VCARD_ANY_PROPERTY;
+}
 
 static int apply_paramfilter(struct param_filter *paramfilter,
                              struct vparse_entry *prop)
@@ -2572,15 +2655,15 @@ static int apply_propfilter(struct prop_filter *propfilter,
 
     if (!propfilter->param) {
         switch (propfilter->kind) {
-        case MY_VCARD_FN_PROPERTY:
+        case VCARD_FN_PROPERTY:
             if (cdata->fullname) myprop.v.value = (char *) cdata->fullname;
             break;
 
-        case MY_VCARD_N_PROPERTY:
+        case VCARD_N_PROPERTY:
             if (cdata->name) myprop.v.value = (char *) cdata->name;
             break;
 
-        case MY_VCARD_NICKNAME_PROPERTY:
+        case VCARD_NICKNAME_PROPERTY:
             if (cdata->nickname) {
                 if (propfilter->match) {
                     myprop.multivaluesep = ',';
@@ -2591,7 +2674,7 @@ static int apply_propfilter(struct prop_filter *propfilter,
             }
             break;
 
-        case MY_VCARD_UID_PROPERTY:
+        case VCARD_UID_PROPERTY:
             if (cdata->vcard_uid) myprop.v.value = (char *) cdata->vcard_uid;
             break;
 
@@ -2602,7 +2685,7 @@ static int apply_propfilter(struct prop_filter *propfilter,
         if (myprop.v.value) prop = &myprop;
     }
 
-    if (propfilter->param || (propfilter->kind == MY_VCARD_ANY_PROPERTY)) {
+    if (propfilter->param || (propfilter->kind == VCARD_ANY_PROPERTY)) {
         /* Load message containing the resource and parse vcard data */
         if (!vcard) {
             if (!fctx->msg_buf.len) {
@@ -2641,15 +2724,29 @@ static int apply_propfilter(struct prop_filter *propfilter,
              match = match->next) {
 
             int n = 0;
-            const char *text = prop->multivaluesep ?
-                strarray_nth(prop->v.values, n) : prop->v.value;
+            const char *text;
+            char *freeme = NULL;
+            strarray_t *array = NULL;
+
+            if (prop->multivaluesep == ';') {
+                text = freeme = vparse_get_value(prop);
+            }
+            else if (prop->multivaluesep == ',') {
+                array = prop->v.values;
+                text = strarray_nth(array, n);
+            }
+            else {
+                text = prop->v.value;
+            }
 
             /* Test each value of this property (logical OR) */
             do {
                 pass = dav_apply_textmatch(BAD_CAST text, match);
 
-            } while (!pass && prop->multivaluesep &&
-                     (text = strarray_nth(prop->v.values, ++n)));
+            } while (!pass &&
+                     array && (text = strarray_nth(array, ++n)));
+
+            free(freeme);
         }
 
         /* Apply each param-filter, breaking if allof fails or anyof succeeds */
@@ -2665,6 +2762,54 @@ static int apply_propfilter(struct prop_filter *propfilter,
     if (myprop.multivaluesep) strarray_free(myprop.v.values);
 
     return pass;
+}
+
+#endif /* HAVE_LIBICALVCARD */
+
+static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
+                            struct error_t *error)
+{
+    xmlChar *attr;
+    xmlNodePtr node;
+    struct filter_profile_t profile =
+        { 0 /* anyof */, COLLATION_UNICODE,
+          CARDDAV_SUPP_FILTER, CARDDAV_SUPP_COLLATION,
+          vcardproperty_string_to_kind, VCARD_NO_PROPERTY,
+          NULL /* param_string_to_kind */, 0 /* no_param_value */,
+          NULL /* parse_propfilter */ };
+
+    /* Parse elements of filter */
+    attr = xmlGetProp(root, BAD_CAST "test");
+    if (attr) {
+        if (!xmlStrcmp(attr, BAD_CAST "allof")) filter->allof = 1;
+        else if (xmlStrcmp(attr, BAD_CAST "anyof")) {
+            error->precond = CARDDAV_SUPP_FILTER;
+            error->desc = "Unsupported test";
+            error->node = xmlCopyNode(root, 2);
+        }
+        xmlFree(attr);
+    }
+
+    for (node = xmlFirstElementChild(root); node && !error->precond;
+         node = xmlNextElementSibling(node)) {
+
+        if (!xmlStrcmp(node->name, BAD_CAST "prop-filter")) {
+            struct prop_filter *prop = NULL;
+
+            dav_parse_propfilter(node, &prop, &profile, error);
+            if (prop) {
+                if (filter->prop) prop->next = filter->prop;
+                filter->prop = prop;
+            }
+        }
+        else {
+            error->precond = CARDDAV_SUPP_FILTER;
+            error->desc = "Unsupported element in filter";
+            error->node = xmlCopyNode(root, 1);
+        }
+    }
+
+    return error->precond ? HTTP_FORBIDDEN : 0;
 }
 
 /* See if the current resource matches the specified filter.
