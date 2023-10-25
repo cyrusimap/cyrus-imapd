@@ -2223,8 +2223,8 @@ EXPORTED void mboxname_todeleted(const char *name, char *result, int withtime)
     if (withtime) {
         struct timeval tv;
         gettimeofday( &tv, NULL );
-        snprintf(result+domainlen, MAX_MAILBOX_BUFFER-domainlen, "%s.%s.%X",
-                 deletedprefix, name+domainlen, (unsigned) tv.tv_sec);
+        snprintf(result+domainlen, MAX_MAILBOX_BUFFER-domainlen, "%s.%s.%llX",
+                 deletedprefix, name+domainlen, (unsigned long long) tv.tv_sec);
     } else {
         snprintf(result+domainlen, MAX_MAILBOX_BUFFER-domainlen, "%s.%s",
                  deletedprefix, name+domainlen);

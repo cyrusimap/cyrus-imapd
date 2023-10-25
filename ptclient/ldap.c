@@ -255,8 +255,8 @@ static int ptsmodule_connect(void)
 
         rc = ldap_set_option(ptsm->ld, LDAP_OPT_NETWORK_TIMEOUT, &(ptsm->timeout));
         if (rc != LDAP_OPT_SUCCESS) {
-                syslog(LOG_WARNING, "Unable to set LDAP_OPT_NETWORK_TIMEOUT %ld.%06d.",
-                       (long)ptsm->timeout.tv_sec, (int)ptsm->timeout.tv_usec);
+                syslog(LOG_WARNING, "Unable to set LDAP_OPT_NETWORK_TIMEOUT " TIME_T_FMT ".%06d.",
+                       ptsm->timeout.tv_sec, (int)ptsm->timeout.tv_usec);
         }
 
         rc = ldap_set_option(ptsm->ld, LDAP_OPT_SIZELIMIT, &(ptsm->size_limit));
