@@ -44,6 +44,7 @@
 
 #include <errno.h>
 #include <getopt.h>
+#include <libgen.h>
 #include <stdlib.h>
 #include <sysexits.h>
 
