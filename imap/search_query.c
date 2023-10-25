@@ -135,6 +135,11 @@ EXPORTED void search_query_free(search_query_t *query)
 
 /* ====================================================================== */
 
+static int subquery_run_one_folder(search_query_t *query,
+                                   const char *mboxname,
+                                   search_expr_t *e);
+
+/* ---------------------------------------------------------------------- */
 
 /*
  * Find the named folder folder.  Returns NULL if there are no
@@ -481,6 +486,25 @@ static void subquery_post_enginesearch(const char *key, void *data, void *rock)
     if (query->error) return;
     if (!folder->found_dirty) return;
 
+    if (config_getenum(IMAPOPT_SEARCH_ENGINE) == IMAP_ENUM_SEARCH_ENGINE_SQUAT) {
+        /*
+         * When using the squat backend, the search expression is inside
+         * sub->indexed, while sub->expr holds a constant SEOP_TRUE.
+         * In this case let sub->expr point to sub->indexed.
+         */
+        assert(sub->expr && sub->expr->op == SEOP_TRUE);
+        search_expr_t *parent = NULL;
+        if (sub->expr->parent) {
+            parent = sub->expr->parent;
+            search_expr_detach(sub->expr->parent, sub->expr);
+        }
+        search_expr_free(sub->expr);
+        sub->expr = search_expr_duplicate(sub->indexed);
+        if (parent) {
+            search_expr_append(parent, sub->expr);
+        }
+    }
+
     if (sub->expr && query->verbose) {
         char *s = search_expr_serialise(sub->expr);
         syslog(LOG_INFO, "Folder %s: applying scan expression: %s",
@@ -707,7 +731,12 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
 
     bx = search_begin_search(query->state->mailbox, opts);
     if (!bx) {
-        r = IMAP_INTERNAL;
+        if (config_getenum(IMAPOPT_SEARCH_ENGINE) == IMAP_ENUM_SEARCH_ENGINE_SQUAT) {
+            r = subquery_run_one_folder(query, index_mboxname(query->state), sub->indexed);
+        }
+        else {
+            r = IMAP_INTERNAL;
+        }
         goto out;
     }
 
