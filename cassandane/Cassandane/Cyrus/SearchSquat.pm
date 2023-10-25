@@ -438,4 +438,28 @@ sub test_relocate_legacy_nosearchdb
     $self->assert_equals(0, scalar @files);
 }
 
+sub test_unindexed
+    :SearchEngineSquat :min_version_3_4
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message("needle 1", body => "needle") || die;
+    $self->make_message("xxxxxx 2", body => "xxxxxx") || die;
+
+    $self->run_squatter;
+
+    my $uids = $imap->search('fuzzy', 'body', 'needle') || die;
+    $self->assert_deep_equals([1], $uids);
+
+    $self->make_message("needle 3", body => "needle") || die;
+    $self->make_message("xxxxxx 4", body => "xxxxxx") || die;
+
+    # Do not rerun squatter. Make sure search only returns
+    # a matching unindexed message.
+
+    $uids = $imap->search('fuzzy', 'body', 'needle') || die;
+    $self->assert_deep_equals([1,3], $uids);
+}
+
 1;
