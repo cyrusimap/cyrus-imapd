@@ -127,7 +127,7 @@ static void prometheus_init(void)
         fatal("unable to register stats for prometheus", EX_CONFIG);
 
     r = cyrus_mkdir(fname, 0755);
-    if (r) return;
+    if (r) goto error;;
 
     handle = xzmalloc(sizeof(*handle));
     r = mappedfile_open(&handle->mf, fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
@@ -163,6 +163,7 @@ error:
         free(handle);
     }
     promhandle = NULL;
+    prometheus_enabled = 0;
 }
 
 static void prometheus_done(void *rock __attribute__((unused)))
