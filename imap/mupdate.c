@@ -1629,7 +1629,7 @@ static void cmd_set(struct conn *C,
              * deactivation twice. Suppress bailing out on the second one
              * (the replica).
              */
-            if (strcmp(m->location, location)) {
+            if (!m || strcmp(m->location, location)) {
                 /* failed; mailbox not currently active */
                 msg = NOTACTIVE;
                 goto done;
@@ -1640,14 +1640,15 @@ static void cmd_set(struct conn *C,
     }
 
     if (t == SET_DELETE) {
-        if (!m) {
+        if (!m) { // XXX <- m is NULL!
             /* Check if we run in a discrete murder topology */
             if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) {
                 /* Replicated backends with the same server name issue
                  * deletion twice. Suppress bailing out on the second one
                  * (the replica).
                  */
-                if (strcmp(m->location, location)) {
+                /* XXX makes no sense to examine m->location when m is NULL! */
+                if (m && strcmp(m->location, location)) {
                     /* failed; mailbox doesn't exist */
                     msg = DOESNTEXIST;
                     goto done;
@@ -1746,6 +1747,8 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
               int send_ok, int send_delete)
 {
     struct mbent *m;
+
+    assert(mailbox != NULL);
 
     syslog(LOG_DEBUG, "cmd_find(fd:%d, %s)", C->fd, mailbox);
 
