@@ -126,6 +126,7 @@ typedef struct sieve_duplicate {
 } sieve_duplicate_t;
 
 typedef struct sieve_imip_context {
+    unsigned allow_public    : 1;
     unsigned invites_only    : 1;
     unsigned updates_only    : 1;
     unsigned delete_canceled : 1;

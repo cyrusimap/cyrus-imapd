@@ -2518,6 +2518,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
         case B_PROCESSIMIP:
             if (i->imip) {
                 sieve_imip_context_t imip_ctx = {
+                    !!cmd.u.imip.allow_public,
                     !!cmd.u.imip.invites_only,
                     !!cmd.u.imip.updates_only,
                     !!cmd.u.imip.delete_canceled,

@@ -382,10 +382,13 @@ ws              [ \t]+
 <INITIAL>jmapquery             return JMAPQUERY;
 
     /* vnd.cyrus.imip */
-<INITIAL>processimip          return PROCESSIMIP;
-<INITIAL>:invitesonly         return INVITESONLY;
+<INITIAL>processcalendar      return PROCESSIMIP;
+<INITIAL>processimip          return PROCESSIMIP;     /* legacy */
+<INITIAL>:allowpublic         return ALLOWPUBLIC;
+<INITIAL>:invitesonly         return INVITESONLY;     /* FM-specific */
 <INITIAL>:updatesonly         return UPDATESONLY;
-<INITIAL>:deletecanceled      return DELETECANCELED;
+<INITIAL>:deletecancelled     return DELETECANCELED;
+<INITIAL>:deletecanceled      return DELETECANCELED;  /* legacy */
 <INITIAL>:calendarid          return CALENDARID;
 <INITIAL>:outcome             return OUTCOME;
 <INITIAL>:errstr              return ERRSTR;

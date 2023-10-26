@@ -341,7 +341,7 @@ extern void sieverestart(FILE *f);
 %token JMAPQUERY
 
 /* vnd.cyrus.imip */
-%token PROCESSIMIP INVITESONLY UPDATESONLY DELETECANCELED CALENDARID
+%token PROCESSIMIP ALLOWPUBLIC INVITESONLY UPDATESONLY DELETECANCELED CALENDARID
 %token OUTCOME ERRSTR
 %type <cl> imiptags
 
@@ -1221,6 +1221,16 @@ time: STRING                     { $$ = verify_time(sscript, $1); }
 
 /* PROCESSIMIP tagged arguments */
 imiptags: /* empty */            { $$ = new_command(B_PROCESSIMIP, sscript); }
+        | imiptags ALLOWPUBLIC   {
+                                     if ($$->u.imip.allow_public) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":allowpublic");
+                                     }
+
+                                     $$->u.imip.allow_public = 1;
+                                 }
+
         | imiptags INVITESONLY   {
                                      if ($$->u.imip.invites_only) {
                                          sieveerror_c(sscript,
@@ -2817,6 +2827,7 @@ static commandlist_t *build_imip(sieve_script_t *sscript, commandlist_t *c)
 
     assert(c && c->type == B_PROCESSIMIP);
 
+    if (c->u.imip.allow_public) flags |= IMIP_ALLOWPUBLIC;
     if (c->u.imip.invites_only) flags |= IMIP_INVITESONLY;
     if (c->u.imip.updates_only) flags |= IMIP_UPDATESONLY;
     if (c->u.imip.delete_canceled) flags |= IMIP_DELETECANCELED;

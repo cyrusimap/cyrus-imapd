@@ -49,7 +49,7 @@
 #include "strarray.h"
 #include "arrayu64.h"
 
-#define MAX_ARGS  10  /* vacation currently uses 9 */
+#define MAX_ARGS  12  /* processimip currently uses 11 */
 
 struct args_t {
     unsigned type;
@@ -281,8 +281,9 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.v.handle),
         offsetof(struct Commandlist, u.v.fcc)
       } },
-    { B_PROCESSIMIP,             "B3sss",                                /* 46 */
-      { offsetof(struct Commandlist, u.imip.updates_only),    IMIP_UPDATESONLY,
+    { B_PROCESSIMIP,             "B4sss",                                /* 46 */
+      { offsetof(struct Commandlist, u.imip.allow_public),    IMIP_ALLOWPUBLIC,
+        offsetof(struct Commandlist, u.imip.updates_only),    IMIP_UPDATESONLY,
         offsetof(struct Commandlist, u.imip.invites_only),    IMIP_INVITESONLY,
         offsetof(struct Commandlist, u.imip.delete_canceled), IMIP_DELETECANCELED,
         offsetof(struct Commandlist, u.imip.calendarid),

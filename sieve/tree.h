@@ -259,6 +259,7 @@ struct Commandlist {
             char *tzid;
         } sn;
         struct {
+            int allow_public;
             int invites_only;
             int updates_only;
             int delete_canceled;
