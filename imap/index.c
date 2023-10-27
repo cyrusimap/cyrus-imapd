@@ -7133,6 +7133,7 @@ static void index_thread_orderedsubj(struct index_state *state,
             }
             /* otherwise, add to siblings */
             else {
+                assert(last != NULL);
                 last->next = newnode;
                 last = last->next;
             }
@@ -7141,6 +7142,7 @@ static void index_thread_orderedsubj(struct index_state *state,
         else {
             cur->next = newnode;        /* create and start a new thread */
             parent = cur = cur->next;   /* now work with the new thread */
+            /* XXX reset last ? */
         }
 
         psubj_hash = msg->xsubj_hash;
