@@ -1222,9 +1222,9 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
                 if (!icaltime_is_null_time(due)) {
                     /* Has DUE (DTEND for VPOLL) */
                     if (icaltime_compare(due, period.start) < 0)
-                        memcpy(&period.start, &due, sizeof(struct icaltimetype));
+                        period.start = due;
                     if (icaltime_compare(due, period.end) > 0)
-                        memcpy(&period.end, &due, sizeof(struct icaltimetype));
+                        period.end = due;
                 }
             }
         }
@@ -1250,9 +1250,9 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
                     struct icaltimetype created =
                         icaltime_convert_to_utc(icalproperty_get_created(prop), NULL);
                     if (icaltime_compare(created, period.start) < 0)
-                        memcpy(&period.start, &created, sizeof(struct icaltimetype));
+                        period.start = created;
                     if (icaltime_compare(created, period.end) > 0)
-                        memcpy(&period.end, &created, sizeof(struct icaltimetype));
+                        period.end = created;
                 }
             }
             else if ((prop =
