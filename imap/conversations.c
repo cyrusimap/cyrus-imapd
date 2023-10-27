@@ -2654,6 +2654,8 @@ EXPORTED int conversation_update(struct conversations_state *state,
 {
     conv_folder_t *folder = conversation_get_folder(conv, ecounts->foldernum, /*create*/1);
 
+    assert(folder != NULL); /* should only fire if ecounts->foldernum is negative */
+
     // only count one per instance of the GUID in each folder, and in total
     int delta_num_records = !!ecounts->post.numrecords - !!ecounts->pre.numrecords;
     int delta_exists = !!ecounts->post.exists - !!ecounts->pre.exists;
