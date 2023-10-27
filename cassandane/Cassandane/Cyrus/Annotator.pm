@@ -495,7 +495,7 @@ sub test_log_missing_acl
         my @logs = $self->{instance}->getsyslog();
         my $wantLog = "could not write flag due missing ACL: "
                     . "flag=<\\$_->{flag}> need_rights=<$_->{need_rights}>";
-        $self->assert(grep /$wantLog/, @logs);
+        $self->assert_matches(qr{$wantLog}, join("\n", @logs));
     }
 }
 

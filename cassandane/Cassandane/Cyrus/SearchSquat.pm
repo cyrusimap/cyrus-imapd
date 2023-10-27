@@ -144,7 +144,7 @@ sub test_simple
         $self->assert_deep_equals($_->{wantUids}, $uids);
 
         my @lines = $self->{instance}->getsyslog();
-        $self->assert(grep /Squat run/, @lines);
+        $self->assert_matches(qr{Squat run}, join("\n", @lines));
     }
 }
 
@@ -247,12 +247,13 @@ sub test_skip_unmodified
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
     my @lines = $self->{instance}->getsyslog();
-    $self->assert(not grep /Squat skipping mailbox/, @lines);
+    $self->assert_does_not_match(qr{Squat skipping mailbox},
+                                 join("\n", @lines));
 
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-s', '0');
     @lines = $self->{instance}->getsyslog();
-    $self->assert(grep /Squat skipping mailbox/, @lines);
+    $self->assert_matches(qr{Squat skipping mailbox}, join("\n", @lines));
 }
 
 sub test_nonincremental
