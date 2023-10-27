@@ -902,8 +902,10 @@ static int subquery_run_one_folder(search_query_t *query,
         folder_add_uid(folder, im->uid);
         folder_add_modseq(folder, im->modseq);
 
-        if (query->sortcrit)
+        if (query->sortcrit) {
+            assert(msgno_list != NULL);
             msgno_list[nmsgs++] = msgno;
+        }
 
         /* track first and last for MIN/MAX queries */
         if (!folder->first_modseq) folder->first_modseq = im->modseq;
