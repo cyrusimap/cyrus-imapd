@@ -320,11 +320,22 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
 
                     ddata.alive = 1;
                     ddata.imap_uid = mailbox->i.last_uid;
-                    dav_get_validators(mailbox, &ddata, txn->userid, &newrecord,
-                                       &etag, &txn->resp_body.lastmod);
-                    strncpy(etagbuf, etag, 255);
-                    etagbuf[255] = 0;
-                    txn->resp_body.etag = etagbuf;
+                    assert(ddata.imap_uid != 0);
+                    r = dav_get_validators(mailbox, &ddata, txn->userid, &newrecord,
+                                           &etag, &txn->resp_body.lastmod);
+                    if (r) {
+                        xsyslog(LOG_ERR, "read index record failed",
+                                         "mailbox=<%s> uid=<%u>",
+                                         mailbox_name(mailbox),
+                                         ddata.imap_uid);
+                        txn->error.desc = error_message(r);
+                        ret = HTTP_SERVER_ERROR;
+                    }
+                    else {
+                        strncpy(etagbuf, etag, 255);
+                        etagbuf[255] = 0;
+                        txn->resp_body.etag = etagbuf;
+                    }
                 }
             }
         }
