@@ -396,6 +396,7 @@ static char *activefile_path(const char *mboxname, const char *part, const char 
     char *dest = NULL;
     struct activeitem *ai = activeitem_parse(item);
 
+    if (!ai) goto out;
     xapian_basedir(ai->tier, mboxname, part, NULL, &basedir);
     if (!basedir) goto out;
     buf_printf(&buf, "%s%s", basedir, XAPIAN_DIRNAME);
@@ -2854,6 +2855,8 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
     uint32_t uid = 0;
     message_get_uid(msg, &uid);
 
+    assert(tr != NULL);
+
     /* bail early if we've already indexed this message in THIS run */
     if (seqset_ismember(tr->indexed, uid))
         return 1;
@@ -3500,7 +3503,7 @@ static int reindex_mb(void *rock,
         goto done;
     }
     else if (mbkey[0] != '#') {
-        // read <mboxname>:<uidvalidity>
+        // read <mboxname>.<uidvalidity>
         char *dot = strrchr(mbkey, '.');
         if (dot) {
             *dot++ = '\0';
@@ -3510,6 +3513,10 @@ static int reindex_mb(void *rock,
                 /* returns 0, nothing to index */
                 goto done;
             }
+        }
+        else {
+            /* XXX what does it mean if we didn't find a dot? */
+            r = IMAP_INTERNAL;
         }
     }
     else goto done;
@@ -3525,6 +3532,8 @@ static int reindex_mb(void *rock,
     }
 
     if (!seq) goto done;
+
+    assert(mbentry != NULL);
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -3558,6 +3567,7 @@ static int reindex_mb(void *rock,
 
     /* open the DB */
     tr = (xapian_update_receiver_t *)begin_update(verbose);
+    if (!tr) goto done;
     tr->mode = XAPIAN_DBW_XAPINDEXED; // always use XAPINDEXED for reindex, so we reindex the same emails
     tr->super.mailbox = mailbox;
     tr->activedirs = strarray_dup(filter->destpaths);
