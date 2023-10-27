@@ -48,6 +48,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "assert.h"
 #include "md5.h"
 #include "sieve_interface.h"
 #include "interp.h"
@@ -62,6 +63,8 @@
 int do_reject(action_list_t *a, int action, const char *msg)
 {
     action_list_t *b = NULL;
+
+    assert(a != NULL);
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
@@ -106,6 +109,8 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, const char *awaken_mbox
               strarray_t *imapflags, struct buf *headers)
 {
     action_list_t *b = NULL;
+
+    assert(a != NULL);
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
@@ -173,6 +178,8 @@ int do_fileinto(sieve_interp_t *i, void *sc,
     int ret;
 
     if (!i->fileinto) return SIEVE_INTERNAL_ERROR;
+
+    assert(a != NULL);
 
     new = new_action_list();
     new->a = ACTION_FILEINTO;
@@ -242,6 +249,8 @@ int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
 {
     action_list_t *b = NULL;
 
+    assert(a != NULL);
+
     /* xxx we should validate addr */
 
     /* see if this conflicts with any previous actions taken on this message */
@@ -279,6 +288,8 @@ int do_keep(sieve_interp_t *i, void *sc, unsigned flags,
     action_list_t *new, *b = NULL;
     const char *errmsg;
     int ret;
+
+    assert(a != NULL);
 
     new = new_action_list();
     new->a = ACTION_KEEP;
@@ -340,6 +351,8 @@ int do_discard(action_list_t *a)
 {
     action_list_t *b = NULL;
 
+    assert(a != NULL);
+
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         if (a->a == ACTION_DISCARD) /* don't bother doing twice */
@@ -379,6 +392,8 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
                 const sieve_fileinto_context_t *fcc)
 {
     action_list_t *b = NULL;
+
+    assert(a != NULL);
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
@@ -422,6 +437,8 @@ int do_mark(action_list_t *a)
 {
     action_list_t *b = NULL;
 
+    assert(a != NULL);
+
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
@@ -450,6 +467,8 @@ int do_unmark(action_list_t *a)
 
     action_list_t *b = NULL;
 
+    assert(a != NULL);
+
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
@@ -477,6 +496,8 @@ int do_notify(notify_list_t *n, const char *id, const char *from,
               const char *priority, const char *message)
 {
     notify_list_t *b = NULL;
+
+    assert(n != NULL);
 
     /* find the end of the notify list */
     while (n != NULL) {
@@ -522,6 +543,8 @@ int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
 int do_duptrack(duptrack_list_t *d, sieve_duplicate_context_t *dc)
 {
     duptrack_list_t *b = NULL;
+
+    assert(d != NULL);
 
     /* find the end of the duptrack list */
     while (d != NULL) {
