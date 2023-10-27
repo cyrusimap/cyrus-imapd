@@ -1050,12 +1050,18 @@ EXPORTED struct vparse_entry *vparse_add_entry(struct vparse_card *card, const c
     return entry;
 }
 
+/*
+ * If group == NULL, return first named property regardless of group
+ * If group == "", return named property having NO group
+ * Otherwise, return named property with matching group
+ */
 EXPORTED struct vparse_entry *vparse_get_entry(struct vparse_card *card, const char *group, const char *name)
 {
     struct vparse_entry *entry = NULL;
 
     for (entry = card->properties; entry; entry = entry->next) {
-        if (!strcasecmpsafe(entry->group, group) && !strcasecmpsafe(entry->name, name))
+        if (!strcasecmpsafe(entry->name, name) &&
+            (!group || !strcasecmpsafe(entry->group, group)))
             break;
     }
 
