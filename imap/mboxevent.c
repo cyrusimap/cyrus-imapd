@@ -1937,8 +1937,9 @@ static json_t *json_formatter(enum event_type type, struct event_parameter param
         switch (params[param].id) {
         case EVENT_CLIENT_ADDRESS:
             /* come from saslprops structure */
-            val = strdup(params[param].value.s);
+            val = xstrdup(params[param].value.s);
             ptr = strchr(val, ';');
+            assert(ptr != NULL);
             *ptr++ = '\0';
 
             json_object_set_new(event_json, "clientIP", json_string(val));
@@ -1950,8 +1951,9 @@ static json_t *json_formatter(enum event_type type, struct event_parameter param
             break;
         case EVENT_SERVER_ADDRESS:
             /* come from saslprops structure */
-            val = strdup(params[param].value.s);
+            val = xstrdup(params[param].value.s);
             ptr = strchr(val, ';');
+            assert(ptr != NULL);
             *ptr++ = '\0';
 
             json_object_set_new(event_json, "serverDomain", json_string(val));
