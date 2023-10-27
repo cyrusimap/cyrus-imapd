@@ -7092,8 +7092,11 @@ static void index_thread_orderedsubj(struct index_state *state,
     char *psubj;
     Thread *head, *newnode, *cur, *parent, *last;
 
+    if (nmsg == 0) return; /* nothing to do here */
+
     /* Create/load the msgdata array */
     msgdata = index_msgdata_load(state, msgno_list, nmsg, sortcrit, 0, NULL);
+    assert(msgdata != NULL);
 
     /* Sort messages by subject and date */
     index_msgdata_sort(msgdata, nmsg, sortcrit);
@@ -7751,8 +7754,11 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
     struct hash_table id_table;
     struct rootset rootset;
 
+    if (nmsg == 0) return; /* nothing to do here */
+
     /* Create/load the msgdata array */
     msgdata = index_msgdata_load(state, msgno_list, nmsg, loadcrit, 0, NULL);
+    assert(msgdata != NULL);
 
     /* calculate the sum of the number of references for all messages */
     for (mi = 0, tref = 0 ; mi < nmsg ; mi++)
