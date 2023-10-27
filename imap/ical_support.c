@@ -1524,6 +1524,9 @@ static int parse_target_path(char *path, struct path_segment_t **path_seg,
     char *p, sep;
     struct path_segment_t *tail = NULL, *new;
 
+    assert(path_seg != NULL);
+    assert(*path_seg == NULL);
+
     for (sep = *path++; sep == '/';) {
         p = path + strcspn(path, "[/#");
         if ((sep = *p)) *p++ = '\0';
@@ -1536,9 +1539,17 @@ static int parse_target_path(char *path, struct path_segment_t **path_seg,
            since NULL time is used for empty RID (master component) */
         new->match.comp.rid.year = -1;
 
-        if (!*path_seg) *path_seg = new;
-        else tail->child = new;
-        tail = new;
+        if (!*path_seg) {
+            *path_seg = tail = new;
+        }
+        else {
+            if (!tail) {
+                /* XXX shouldn't be able to get here anyway? */
+                tail = *path_seg;
+            }
+            tail->child = new;
+            tail = new;
+        }
 
         path = p;
 
@@ -1599,9 +1610,17 @@ static int parse_target_path(char *path, struct path_segment_t **path_seg,
         new->kind = icalproperty_string_to_kind(path);
         if (new->kind == ICAL_X_PROPERTY) new->xname = xstrdup(path);
 
-        if (!*path_seg) *path_seg = new;
-        else tail->child = new;
-        tail = new;
+        if (!*path_seg) {
+            *path_seg = tail = new;
+        }
+        else {
+            if (!tail) {
+                /* XXX shouldn't be able to get here anyway? */
+                tail = *path_seg;
+            }
+            tail->child = new;
+            tail = new;
+        }
 
         path = p;
 
@@ -1659,6 +1678,9 @@ static int parse_target_path(char *path, struct path_segment_t **path_seg,
         *errstr = "Invalid separator following comp-segment";
         return -1;
     }
+
+    /* XXX what does it mean if we get here and haven't set tail? */
+    assert(tail != NULL);
 
     tail->action = action;
     if (!tail->data) tail->data = data;
