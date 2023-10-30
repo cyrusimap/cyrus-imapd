@@ -196,14 +196,12 @@ static int delannot_cb(const char *mboxname,
 	remove = 0;
 
         // is the value this CID, remove this
-        if (value->len == 16) {
-            cid = strtoull(value->s, 0, 16);
-            if (zerocid == cid) remove = 1;
-        }
+        parsehex(value->s, NULL, 16, &cid);
+        if (zerocid == cid) remove = 1;
 
         // is the key this CID, remove this, 
-        if (conversation_id_decode(&cid, entry + strlen(IMAP_ANNOT_NS) + strlen("newcid/")))
-            if (zerocid == cid) remove = 1;
+	parsehex(entry + strlen(IMAP_ANNOT_NS) + 7, NULL, 16, &cid);
+        if (zerocid == cid) remove = 1;
     }
     if (!remove) return 0;
     return annotatemore_write(mboxname, entry, userid, (const struct buf *)rock);
