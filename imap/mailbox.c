@@ -1402,7 +1402,8 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
 
             /* zero out the rest */
             while (rock->nflags < MAX_USER_FLAGS) {
-                xzfree(rock->h->flagname[rock->nflags++]);
+                xzfree(rock->h->flagname[rock->nflags]);
+                rock->nflags++;
             }
         }
         break;
