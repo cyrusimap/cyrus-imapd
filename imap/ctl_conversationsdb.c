@@ -79,6 +79,7 @@ int mode = UNKNOWN;
 static const char *audit_temp_directory;
 
 int recalc_silent = 1;
+conversation_id_t zerocid = 0;
 
 static int do_dump(const char *fname, const char *userid)
 {
@@ -164,6 +165,9 @@ static int zero_cid_cb(const mbentry_t *mbentry,
         /* already zero, fine */
         if (record->cid == NULLCONVERSATION)
             continue;
+        /* if we're just doing one cid, only do this one */
+        if (zerocid && record->cid != zerocid)
+            continue;
 
         struct index_record oldrecord = *record;
         oldrecord.cid = NULLCONVERSATION;
@@ -182,10 +186,26 @@ static int delannot_cb(const char *mboxname,
                        uint32_t uid __attribute__((unused)),
                        const char *entry,
                        const char *userid,
-                       const struct buf *value __attribute__((unused)),
+                       const struct buf *value,
                        const struct annotate_metadata *mdata __attribute__((unused)),
                        void *rock)
 {
+    int remove = 1;
+    if (zerocid) {
+        conversation_id_t cid = NULLCONVERSATION;
+	remove = 0;
+
+        // is the value this CID, remove this
+        if (value->len == 16) {
+            cid = strtoull(value->s, 0, 16);
+            if (zerocid == cid) remove = 1;
+        }
+
+        // is the key this CID, remove this, 
+        if (conversation_id_decode(&cid, entry + strlen(IMAP_ANNOT_NS) + strlen("newcid/")))
+            if (zerocid == cid) remove = 1;
+    }
+    if (!remove) return 0;
     return annotatemore_write(mboxname, entry, userid, (const struct buf *)rock);
 }
 
@@ -854,7 +874,7 @@ int main(int argc, char **argv)
     int recursive = 0;
 
     /* keep in alphabetical order */
-    static const char short_options[] = "AC:FRST:bdruvz";
+    static const char short_options[] = "AC:FRST:bdruvzZ:";
 
     static const struct option long_options[] = {
         { "audit", no_argument, NULL, 'A' },
@@ -869,6 +889,7 @@ int main(int argc, char **argv)
         { "undump", no_argument, NULL, 'u' },
         { "verbose", no_argument, NULL, 'v' },
         { "clear", no_argument, NULL, 'z' },
+        { "clearcid", required_argument, NULL, 'Z' },
         { 0, 0, 0, 0 },
     };
 
@@ -896,6 +917,14 @@ int main(int argc, char **argv)
             if (mode != UNKNOWN)
                 usage(argv[0]);
             mode = ZERO;
+            break;
+
+        case 'Z':
+            if (mode != UNKNOWN)
+                usage(argv[0]);
+            mode = ZERO;
+            if (!conversation_id_decode(&zerocid, optarg))
+                usage(argv[0]);
             break;
 
         case 'b':
