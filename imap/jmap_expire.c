@@ -134,11 +134,11 @@ static void print_lock(const char *mboxname,
 {
     struct timespec now;
     if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
-        verbosep("%s: lock info: start=%lld.%ld until=%lld.%ld now=%lld.%ld",
+        verbosep("%s: lock info: start=" TIME_T_FMT ".%.3ld until=" TIME_T_FMT ".%03ld now=" TIME_T_FMT ".%.3ld",
                 mboxname,
-                (long long)start.tv_sec, start.tv_nsec / 1000000L,
-                (long long)until.tv_sec, until.tv_nsec / 1000000L,
-                (long long)now.tv_sec, now.tv_nsec / 1000000L);
+                start.tv_sec, start.tv_nsec / 1000000L,
+                until.tv_sec, until.tv_nsec / 1000000L,
+                now.tv_sec, now.tv_nsec / 1000000L);
     }
 }
 
