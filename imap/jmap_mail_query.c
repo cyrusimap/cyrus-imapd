@@ -909,7 +909,6 @@ static int _email_matchmime_evaluate(json_t *filter,
                 case SEARCH_PART_TYPE:
                 case SEARCH_PART_LANGUAGE:
                 case SEARCH_PART_PRIORITY:
-                case SEARCH_PART_ATTACHMENTBODY:
                     continue;
             }
             void *xq = xapian_query_new_match(db, i, match);
@@ -987,6 +986,10 @@ static int _email_matchmime_evaluate(json_t *filter,
     }
     if ((match = json_string_value(json_object_get(filter, "attachmentType")))) {
         xapian_query_t *xq = build_type_query(db, match);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
+    }
+    if ((match = json_string_value(json_object_get(filter, "attachmentBody")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_ATTACHMENTBODY, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "listId")))) {
