@@ -83,6 +83,16 @@ Options
     information can all be recalculated (eventually) from message
     headers, using the **-b** option.
 
+.. option:: -Z, --clearcids cid,...
+
+    Remove all conversation information from the conversations database
+    for user *userid*, and from all the user's mailboxes for conversations
+    matching the comma separated list of cids in hex format.  Can be
+    specified more than once.
+
+    The information can all be recalculated (eventually) from message
+    headers, using the **-b** option.
+
 .. option:: -b, --rebuild
 
     Rebuild all conversation information in the conversations database

@@ -79,6 +79,7 @@ int mode = UNKNOWN;
 static const char *audit_temp_directory;
 
 int recalc_silent = 1;
+hashu64_table *zerocids = NULL;
 
 static int do_dump(const char *fname, const char *userid)
 {
@@ -165,6 +166,10 @@ static int zero_cid_cb(const mbentry_t *mbentry,
         if (record->cid == NULLCONVERSATION)
             continue;
 
+        /* if we're only doing some cids, check if this is one */
+        if (zerocids && !hashu64_lookup(record->cid, zerocids))
+            continue;
+
         struct index_record oldrecord = *record;
         oldrecord.cid = NULLCONVERSATION;
         oldrecord.basecid = NULLCONVERSATION;
@@ -182,10 +187,21 @@ static int delannot_cb(const char *mboxname,
                        uint32_t uid __attribute__((unused)),
                        const char *entry,
                        const char *userid,
-                       const struct buf *value __attribute__((unused)),
+                       const struct buf *value,
                        const struct annotate_metadata *mdata __attribute__((unused)),
                        void *rock)
 {
+    if (zerocids) {
+        conversation_id_t keycid = NULLCONVERSATION;
+        conversation_id_t valuecid = NULLCONVERSATION;
+
+        parsehex(entry + strlen(IMAP_ANNOT_NS) + 7, NULL, 16, &keycid);
+        parsehex(value->s, NULL, 16, &valuecid);
+
+        // if neither are being zeroed, leave them
+        if (!hashu64_lookup(keycid, zerocids) && !hashu64_lookup(valuecid, zerocids))
+            return 0;
+    }
     return annotatemore_write(mboxname, entry, userid, (const struct buf *)rock);
 }
 
@@ -854,7 +870,7 @@ int main(int argc, char **argv)
     int recursive = 0;
 
     /* keep in alphabetical order */
-    static const char short_options[] = "AC:FRST:bdruvz";
+    static const char short_options[] = "AC:FRST:bdruvzZ:";
 
     static const struct option long_options[] = {
         { "audit", no_argument, NULL, 'A' },
@@ -869,6 +885,7 @@ int main(int argc, char **argv)
         { "undump", no_argument, NULL, 'u' },
         { "verbose", no_argument, NULL, 'v' },
         { "clear", no_argument, NULL, 'z' },
+        { "clearcid", required_argument, NULL, 'Z' },
         { 0, 0, 0, 0 },
     };
 
@@ -896,6 +913,26 @@ int main(int argc, char **argv)
             if (mode != UNKNOWN)
                 usage(argv[0]);
             mode = ZERO;
+            break;
+
+        case 'Z':
+            if (mode != UNKNOWN && mode != ZERO)
+                usage(argv[0]);
+            mode = ZERO;
+            if (!zerocids) {
+                zerocids = xzmalloc(sizeof(hashu64_table));
+                construct_hashu64_table(zerocids, 256, 0);
+            }
+            strarray_t *ids = strarray_split(optarg, ",", 0);
+            int i;
+            for (i = 0; i < strarray_size(ids); i++) {
+                conversation_id_t cid = NULLCONVERSATION;
+                if (!conversation_id_decode(&cid, strarray_nth(ids, i)))
+                    usage(argv[0]);
+                if (cid)
+                    hashu64_insert(cid, (void*)1, zerocids);
+            }
+            strarray_free(ids);
             break;
 
         case 'b':
@@ -964,6 +1001,11 @@ int main(int argc, char **argv)
     }
     else {
         do_user(userid, NULL);
+    }
+
+    if (zerocids) {
+        free_hashu64_table(zerocids, NULL);
+        free(zerocids);
     }
 
     shut_down(0);

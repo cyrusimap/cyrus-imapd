@@ -401,7 +401,25 @@ sub test_reconstruct_splitconv
     $self->check_messages(\%exp, keyed_on => 'uid');
     $talk->select("foo");
     $self->check_messages(\%exp, keyed_on => 'uid');
-    #$talk->select("INBOX");
+    $talk->select("INBOX");
+
+    # support for -Z was added after 3.8
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    return if ($maj < 3 or ($maj == 3 and $min < 8));
+
+    # zero out ONLY two CIDs
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb',
+                                    '-Z' => $exp{"A15"}->make_cid(),
+                                    '-Z' => $exp{"A10"}->make_cid(),
+                                    'cassandane');
+    for (10..19) {
+      $exp{"A$_"}->set_attributes(cid => undef, basecid => undef);
+    }
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
 }
 
 #
