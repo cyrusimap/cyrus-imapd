@@ -418,6 +418,7 @@ static void build_batch(search_text_receiver_t *rx,
             syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
                     batch->count, mailbox_name(mailbox));
             *is_incomplete = 1;
+            break;
         }
 
         message_t *msg = message_new_from_record(mailbox, record);
