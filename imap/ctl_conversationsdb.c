@@ -916,7 +916,7 @@ int main(int argc, char **argv)
             break;
 
         case 'Z':
-            if (mode != UNKNOWN)
+            if (mode != UNKNOWN && mode != ZERO)
                 usage(argv[0]);
             mode = ZERO;
             if (!zerocids) {
