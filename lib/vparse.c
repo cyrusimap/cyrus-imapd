@@ -820,8 +820,11 @@ static void _checkwrap(unsigned char c, struct vparse_target *tgt)
     buf_putc(tgt->buf, ' ');
 }
 
+#define VALUE_ENCODE (1<<0)
+#define VALUE_FOLD   (1<<1)
+
 static void _value_to_tgt(const char *value, struct vparse_target *tgt,
-                          int encode)
+                          unsigned flags)
 {
     if (!value) return; /* null fields or array items are empty string */
     for (; *value; value++) {
@@ -831,7 +834,7 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt,
          *  0
          * UID:[...]
          * which is totally valid, but it was barfing and saying there was no UID */
-        if (value[1]) _checkwrap(*value, tgt);
+        if (value[1] && (flags & VALUE_FOLD)) _checkwrap(*value, tgt);
         switch (*value) {
         case '\r':
             break;
@@ -842,7 +845,7 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt,
         case ';':
         case ',':
         case '\\':
-            if (encode) buf_putc(tgt->buf, '\\');
+            if (flags & VALUE_ENCODE) buf_putc(tgt->buf, '\\');
             /* fall through */
         default:
             buf_putc(tgt->buf, *value);
@@ -931,17 +934,20 @@ static const struct prop_encode {
 };
 
 static void _entry_value_to_tgt(const struct vparse_entry *entry,
-                                struct vparse_target *tgt, int is_uri)
+                                struct vparse_target *tgt, int is_uri,
+                                unsigned flags)
 {
     if (entry->multivaluesep) {
         int i;
+
+        flags |= VALUE_ENCODE;
         for (i = 0; i < entry->v.values->count; i++) {
             if (i) buf_putc(tgt->buf, entry->multivaluesep);
-            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, 1);
+            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, flags);
         }
     }
     else if (is_uri == 1) {
-        _value_to_tgt(entry->v.value, tgt, 0);
+        _value_to_tgt(entry->v.value, tgt, flags);
     }
     else {
         const struct prop_encode *prop;
@@ -954,7 +960,8 @@ static void _entry_value_to_tgt(const struct vparse_entry *entry,
             }
         }
 
-        _value_to_tgt(entry->v.value, tgt, encode);
+        if (encode) flags |= VALUE_ENCODE;
+        _value_to_tgt(entry->v.value, tgt, flags);
     }
 }
 
@@ -991,7 +998,7 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
 
     buf_putc(tgt->buf, ':');
 
-    _entry_value_to_tgt(entry, tgt, is_uri);
+    _entry_value_to_tgt(entry, tgt, is_uri, VALUE_FOLD);
 
     _endline(tgt);
 }
@@ -1112,7 +1119,7 @@ EXPORTED char *vparse_get_value(struct vparse_entry *entry)
     struct buf buf = BUF_INITIALIZER;
     struct vparse_target tgt = { &buf, 0 };
 
-    _entry_value_to_tgt(entry, &tgt, is_uri);
+    _entry_value_to_tgt(entry, &tgt, is_uri, 0);
 
     return buf_release(&buf);
 }
