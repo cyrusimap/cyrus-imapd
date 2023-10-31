@@ -1227,4 +1227,50 @@ EOF
     $self->assert_deep_equals($errors, []);
 }
 
+sub test_dblookup_email2uids
+    :needs_component_httpd :min_version_3_9
+{
+
+    my ($self) = @_;
+    my $carddav = $self->{carddav};
+
+    my @testCases = ({
+        uid => '05d07827-b63e-4dd8-9c99-eae2a2fde81b',
+        email => 'test1@local',
+    }, {
+        uid => '6badd234-32c0-47ed-8c2e-a036ce5f245e',
+        email => "randomemail_7246_1_1698767683\@subdomain1-cef511bc-7805-11ee-9a8d-1695e2485a5b.example.com",
+    });
+
+    for my $tc (@testCases) {
+        my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+UID:$tc->{uid}
+FN:Test1
+EMAIL:$tc->{email}
+REV:20220217T152253Z
+END:VCARD
+EOF
+
+        $card =~ s/\r?\n/\r\n/gs;
+        $carddav->Request('PUT', "Default/$tc->{uid}.vcf",
+            $card, 'Content-Type' => 'text/vcard');
+
+        my $httpService = $self->{instance}->get_service("http");
+        my $dbLookupUrl = "http://"
+        . $httpService->host . ":" . $httpService->port
+        . "/dblookup/email2uids";
+        my $httpRes = $carddav->ua->get($dbLookupUrl, {
+                headers => {
+                    User => 'cassandane',
+                    Key => $tc->{email},
+                    Mailbox => 'Default',
+                },
+            });
+        $self->assert_deep_equals([$tc->{uid}],
+            decode_json($httpRes->{content}));
+    }
+}
+
 1;
