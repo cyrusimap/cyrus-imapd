@@ -468,6 +468,95 @@ EOF
                              $res->{"{DAV:}response"}[1]{"{DAV:}href"}{content});
 }
 
+sub test_filter_x_props
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+
+    my $uid1 = "addr1\@example.com";
+    my $uid2 = "addr2\@example.com";
+    my $uid3 = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+
+    my $xml1 = <<EOF;
+<C:addressbook-query xmlns:D="DAV:"
+                    xmlns:C="urn:ietf:params:xml:ns:carddav">
+     <C:filter>
+       <C:prop-filter name="X-ADDRESSBOOKSERVER-KIND">
+         <C:text-match collation="i;unicode-casemap" match-type="equals"
+           >group</C:text-match>
+       </C:prop-filter>
+     </C:filter>
+</C:addressbook-query>
+EOF
+
+    my $xml2 = <<"EOF";
+<C:addressbook-query xmlns:D="DAV:"
+                    xmlns:C="urn:ietf:params:xml:ns:carddav">
+     <C:filter>
+       <C:prop-filter name="X-ADDRESSBOOKSERVER-MEMBER">
+         <C:text-match collation="i;unicode-casemap" match-type="equals"
+           >$uid2</C:text-match>
+       </C:prop-filter>
+     </C:filter>
+</C:addressbook-query>
+EOF
+
+    my $homeset = "/dav/addressbooks/user/cassandane";
+    my $bookId = "Default";
+
+    my $vcard1 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+BEGIN:VCARD
+VERSION:3.0
+UID:$uid1
+N:Gump;Forrest;;Mr.
+FN;FOO=bar:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    my $vcard2 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+BEGIN:VCARD
+VERSION:4.0
+NICKNAME:me
+UID:$uid2
+FN:Cyrus Daboo
+EMAIL:cdaboo\@example.com
+END:VCARD
+EOF
+
+    my $vcard3 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+BEGIN:VCARD
+VERSION:3.0
+X-ADDRESSBOOKSERVER-KIND:group
+UID:$uid3
+FN:The Doe Family
+N:;;;;
+X-ADDRESSBOOKSERVER-MEMBER:$uid1
+X-ADDRESSBOOKSERVER-MEMBER:$uid2
+END:VCARD
+EOF
+
+    my $href1 = $CardDAV->NewContact($bookId, $vcard1);
+    my $href2 = $CardDAV->NewContact($bookId, $vcard2);
+    my $href3 = $CardDAV->NewContact($bookId, $vcard3);
+
+    my $res = $CardDAV->Request('REPORT', "$homeset/$bookId",
+                                $xml1, Depth => 0, 'Content-Type' => 'text/xml');
+
+    $self->assert_str_equals("$homeset/$href3",
+                             $res->{"{DAV:}response"}[0]{"{DAV:}href"}{content});
+
+    $res = $CardDAV->Request('REPORT', "$homeset/$bookId",
+                             $xml2, Depth => 0, 'Content-Type' => 'text/xml');
+
+    $self->assert_str_equals("$homeset/$href3",
+                             $res->{"{DAV:}response"}[0]{"{DAV:}href"}{content});
+}
+
 sub test_multiget
     :needs_component_httpd :min_version_3_7
 {
