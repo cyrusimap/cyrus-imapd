@@ -927,7 +927,7 @@ int main(int argc, char **argv)
             int i;
             for (i = 0; i < strarray_size(ids); i++) {
                 conversation_id_t cid = NULLCONVERSATION;
-                if (!conversation_id_decode(&cid, optarg))
+                if (!conversation_id_decode(&cid, strarray_nth(ids, i)))
                     usage(argv[0]);
                 if (cid)
                     hashu64_insert(cid, (void*)1, zerocids);
