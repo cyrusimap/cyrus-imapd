@@ -2725,7 +2725,7 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
         if (!old || !new) {
             /* Change subscription */
             r = mboxlist_changesub(irock->mboxname, userid, httpd_authstate,
-                                   access != SHARE_NONE, 0, /*notify*/1);
+                                   access != SHARE_NONE, 0, /*notify*/1, /*silent*/0);
         }
 
         if (!r) {

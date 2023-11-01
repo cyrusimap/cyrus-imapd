@@ -2335,7 +2335,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     /* Write annotations and isSubscribed */
     r = _mbox_set_annots(req, args, mboxname);
     if (!r && args->is_subscribed > 0) {
-        r = mboxlist_changesub(mboxname, req->userid, httpd_authstate, 1, 0, 0);
+        r = mboxlist_changesub(mboxname, req->userid, httpd_authstate, 1, 0, 0, 0);
     }
     if (r) goto done;
 
@@ -2739,7 +2739,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
     if (!r && args->is_subscribed >= 0) {
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
-                               args->is_subscribed, 0, 0);
+                               args->is_subscribed, 0, 0, 0);
     }
     if (!r && (args->shareWith || args->is_seenshared >= 0)) {
         struct mailbox *mbox = NULL;
@@ -3033,7 +3033,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
             mbentry->uniqueid, msgcount);
 
     /* Remove subscription */
-    int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 0, 0);
+    int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 1, 0, 1);
     if (r2) {
         syslog(LOG_ERR, "jmap: mbox_destroy: can't unsubscribe %s:%s",
                 mbentry->name, error_message(r2));

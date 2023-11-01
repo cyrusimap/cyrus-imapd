@@ -1090,7 +1090,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
 
     /* [Un]subscribe */
     r = mboxlist_changesub(mboxname, txn->req_tgt.userid,
-                           httpd_authstate, add, 0, 0);
+                           httpd_authstate, add, 0, 0, 0);
     if (r) {
         syslog(LOG_ERR, "mboxlist_changesub(%s, %s) failed: %s",
                mboxname, txn->req_tgt.userid, error_message(r));

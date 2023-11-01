@@ -379,7 +379,7 @@ static int user_renamesub(const char *name, void* rock)
         name = newname;
     }
 
-    return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1, 1);
+    return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1, 1, /*silent*/1);
 }
 
 static int user_renamesieve(const char *olduser, const char *newuser)

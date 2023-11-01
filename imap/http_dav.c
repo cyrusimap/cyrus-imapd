@@ -4943,7 +4943,7 @@ static int meth_delete_collection(struct transaction_t *txn,
             /* Unsubscribe */
             r = mboxlist_changesub(txn->req_tgt.mbentry->name,
                                    txn->req_tgt.userid,
-                                   httpd_authstate, 0 /* remove */, 0, 0);
+                                   httpd_authstate, 0 /* remove */, 0, 0, 0);
             if (r) {
                 syslog(LOG_ERR, "mboxlist_changesub(%s, %s) failed: %s",
                        txn->req_tgt.mbentry->name, txn->req_tgt.userid,

@@ -5111,7 +5111,7 @@ static int setaddressbook_writeprops(jmap_req_t *req,
     if (!r && props->isSubscribed >= 0) {
         /* Update subscription database */
         r = mboxlist_changesub(mboxname, req->userid, req->authstate,
-                               props->isSubscribed, 0, /*notify*/1);
+                               props->isSubscribed, 0, /*notify*/1, /*silent*/0);
 
         /* Set invite status for CalDAV */
         buf_setcstr(&val, props->isSubscribed ? "invite-accepted" : "invite-declined");
@@ -5207,7 +5207,7 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
     jmap_myrights_delete(req, mboxname);
 
     /* Remove from subscriptions db */
-    mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0);
+    mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0, 1);
 
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {

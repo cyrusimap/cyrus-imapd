@@ -2897,13 +2897,13 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     /* Move subscription */
     if (move_subscription) {
         int is_subscribed = mboxlist_checksub(oldname, userid) == 0;
-        int r2 = mboxlist_changesub(oldname, userid, auth_state, 0, 0, 0);
+        int r2 = mboxlist_changesub(oldname, userid, auth_state, 0, 0, 0, silent);
         if (r2) {
             syslog(LOG_ERR, "CHANGESUB: can't unsubscribe %s: %s",
                     oldname, error_message(r2));
         }
         if (is_subscribed) {
-            r2 = mboxlist_changesub(newname, userid, auth_state, 1, 0, 0);
+            r2 = mboxlist_changesub(newname, userid, auth_state, 1, 0, 0, silent);
             if (r2) {
                 syslog(LOG_ERR, "CHANGESUB: can't subscribe %s: %s",
                         newname, error_message(r2));
@@ -5134,13 +5134,12 @@ EXPORTED int mboxlist_checksub(const char *name, const char *userid)
  */
 EXPORTED int mboxlist_changesub(const char *name, const char *userid,
                                 const struct auth_state *auth_state,
-                                int add, int force, int notify)
+                                int add, int force, int notify, int silent)
 {
     struct buf key = BUF_INITIALIZER;
     mbentry_t *mbentry = NULL;
     int r;
     struct db *subs;
-    struct mboxevent *mboxevent;
 
     init_internal();
 
@@ -5150,15 +5149,12 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
 
     char *dbname = mboxname_to_dbname(name);
 
+    mboxlist_mylookup(dbname, &mbentry, NULL, 0, 0);
+
     if (add && !force) {
         /* Ensure mailbox exists and can be seen by user */
-        if ((r = mboxlist_mylookup(dbname, &mbentry, NULL, 0, 0))!=0) {
+        if (!mbentry || (cyrus_acl_myrights(auth_state, mbentry->acl) & ACL_LOOKUP) == 0) {
             mboxlist_closesubs(subs);
-            goto done;
-        }
-        if ((cyrus_acl_myrights(auth_state, mbentry->acl) & ACL_LOOKUP) == 0) {
-            mboxlist_closesubs(subs);
-            mboxlist_entry_free(&mbentry);
             r = IMAP_MAILBOX_NONEXISTENT;
             goto done;
         }
@@ -5185,11 +5181,26 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
 
     sync_log_subscribe(userid, name);
     mboxlist_closesubs(subs);
-    mboxlist_entry_free(&mbentry);
     buf_free(&key);
 
+    if (r) goto done;
+
+    // bump the modseq on the folder if one exists
+    if (!silent && mbentry && !(mbentry->mbtype & MBTYPE_REMOTE)) {
+        struct mailbox *mailbox = NULL;
+        r = mailbox_open_iwl(name, &mailbox);
+        if (!r) {
+            mailbox_modseq_dirty(mailbox);
+            mboxlist_update_foldermodseq(name, mailbox->i.highestmodseq);
+            r = mailbox_commit(mailbox);
+            mailbox_close(&mailbox);
+        }
+        if (r) goto done;
+    }
+
     /* prepare a MailboxSubscribe or MailboxUnSubscribe event notification */
-    if (notify && r == 0) {
+    if (notify) {
+        struct mboxevent *mboxevent;
         mboxevent = mboxevent_new(add ? EVENT_MAILBOX_SUBSCRIBE :
                                         EVENT_MAILBOX_UNSUBSCRIBE);
 
@@ -5199,6 +5210,7 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
     }
 
   done:
+    mboxlist_entry_free(&mbentry);
     free(dbname);
     return r;
 }
