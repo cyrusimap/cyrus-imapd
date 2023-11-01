@@ -891,7 +891,7 @@ HIDDEN int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
 {
     struct mailbox *mailbox = NULL;
     struct webdav_db *webdavdb = NULL;
-    struct transaction_t txn;
+    struct transaction_t txn = { 0 };
     mbentry_t mbentry;
     int r;
 
@@ -922,7 +922,6 @@ HIDDEN int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
     }
 
     /* Start with an empty (clean) transaction */
-    memset(&txn, 0, sizeof(struct transaction_t));
     txn.userid = httpd_userid;
     txn.authstate = httpd_authstate;
 
