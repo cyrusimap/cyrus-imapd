@@ -1141,6 +1141,7 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
             int want_subscribed = json_boolean_value(filter->is_subscribed);
             int is_subscribed = strarray_find(query->sublist, rec->mboxname, 0);
             if (want_subscribed && is_subscribed < 0) return 0;
+            if (!want_subscribed && is_subscribed >= 0) return 0;
         }
         return 1;
     }
