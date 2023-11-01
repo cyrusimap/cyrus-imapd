@@ -5072,8 +5072,13 @@ static struct partial_comp_t *parse_partial_comp(xmlNodePtr node)
         }
         else if (!xmlStrcmp(node->name, BAD_CAST "comp")) {
             struct partial_comp_t *child = parse_partial_comp(node);
-            child->sibling = pcomp->child;
-            pcomp->child = child;
+            if (child) {
+                child->sibling = pcomp->child;
+                pcomp->child = child;
+            }
+            else {
+                /* XXX what does it mean if we get here? */
+            }
         }
     }
 
