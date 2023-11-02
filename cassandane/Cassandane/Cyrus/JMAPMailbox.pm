@@ -915,10 +915,9 @@ sub test_mailbox_query_name
 }
 
 sub test_mailbox_query_filteroperator
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
 {
     my ($self) = @_;
-    return;
 
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
@@ -947,6 +946,15 @@ sub test_mailbox_query_filteroperator
     ]);
     $self->assert(exists $res->[0][1]{updated}{$mboxids{'Ham'}});
 
+    xlog $self, "make sure subscribing changed state";
+    $self->assert_not_equals($res->[0][1]{oldState}, $res->[0][1]{newState});
+
+    my $state = $res->[0][1]{oldState};
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_equals($res->[0][1]{updated}[0], $mboxids{'Ham'});
+    $self->assert_null($res->[0][1]{updatedProperties});
+
     xlog $self, "list mailboxes filtered by parentId OR role";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {
@@ -959,10 +967,11 @@ sub test_mailbox_query_filteroperator
         },
         sort => [{ property => "name" }],
     }, "R1"]]);
-    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Bonk'}, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[1]);
-    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[2]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[2]);
+    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[3]);
 
     xlog $self, "list mailboxes filtered by name";
     $res = $jmap->CallMethods([['Mailbox/query', {
@@ -978,9 +987,10 @@ sub test_mailbox_query_filteroperator
         filter => {
             isSubscribed => JSON::true,
         },
+        sort => [{ property => "name" }],
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
-    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Ham'}, $res->[0][1]{ids}[0]);
 
     xlog $self, "list mailboxes filtered by isSubscribed is false";
     $res = $jmap->CallMethods([['Mailbox/query', {
@@ -1000,7 +1010,7 @@ sub test_mailbox_query_filteroperator
         filter => {
             operator => "AND",
             conditions => [{
-                parentId => $mboxids{'Inbox'},
+                parentId => JSON::null,
             }, {
                 hasAnyRole => JSON::false,
             }],
@@ -1014,22 +1024,21 @@ sub test_mailbox_query_filteroperator
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {
             operator => "NOT",
-            conditions => [
+            conditions => [{
                 operator => "AND",
                 conditions => [{
-                    parentId => $mboxids{'Inbox'},
+                    parentId => JSON::null,
                 }, {
                     hasAnyRole => JSON::true,
                 }],
-            ],
+            }],
         },
         sort => [{ property => "name" }],
     }, "R1"]]);
-    $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Bonk'}, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
-    $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[2]);
-    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[3]);
+    $self->assert_str_equals($mboxids{'Ham'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[2]);
 }
 
 sub test_mailbox_query_issue2286
