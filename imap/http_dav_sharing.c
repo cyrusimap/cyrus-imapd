@@ -2092,6 +2092,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
                 }
                 else {
                     /* Notify sharee */
+                    assert(notify == NULL);
                     r = dav_create_invite(&notify, ns, &txn->req_tgt,
                                           pparams->propfind.lprops,
                                           userid, access, content);
