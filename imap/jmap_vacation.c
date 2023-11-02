@@ -99,6 +99,19 @@ HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
 {
     if (!config_getswitch(IMAPOPT_JMAP_VACATION)) return;
 
+    if (config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
+        xsyslog(LOG_WARNING,
+                "can't use home directories -- disabling module", NULL);
+        return;
+    }
+
+    if (!sievedir_valid_path(config_getstring(IMAPOPT_SIEVEDIR))) {
+        xsyslog(LOG_WARNING,
+                "sievedir option is not defined or invalid -- disabling module",
+                NULL);
+        return;
+    }
+
 #ifdef USE_SIEVE
     unsigned long config_ext = config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
     unsigned long required =
@@ -187,19 +200,14 @@ static const jmap_property_t vacation_props[] = {
     " because the active Sieve script does not" \
     " properly include the '" JMAP_URN_VACATION "' script."
 
-static json_t *vacation_read(jmap_req_t *req,
+static json_t *vacation_read(jmap_req_t *req, struct mailbox *mailbox,
                              struct sieve_data *sdata, unsigned *status)
 {
     const char *sieve_dir = user_sieve_path(req->accountid);
-    struct mailbox *mailbox = NULL;
     struct buf content = BUF_INITIALIZER;
     json_t *vacation = NULL;
 
-    int r = jmap_openmbox(req, sdata->mailbox, &mailbox, 0);
-    if (!r) {
-        r = sieve_script_fetch(mailbox, sdata, &content);
-        jmap_closembox(req, &mailbox);
-    }
+    sieve_script_fetch(mailbox, sdata, &content);
 
     /* Parse JMAP from vacation script */
     if (buf_len(&content)) {
@@ -272,11 +280,11 @@ static json_t *vacation_read(jmap_req_t *req,
     return vacation;
 }
 
-static void vacation_get(jmap_req_t *req,
+static void vacation_get(jmap_req_t *req, struct mailbox *mailbox,
                          struct sieve_data *sdata, struct jmap_get *get)
 {
     /* Read script */
-    json_t *vacation = vacation_read(req, sdata, NULL);
+    json_t *vacation = vacation_read(req, mailbox, sdata, NULL);
 
     /* Strip unwanted properties */
     if (!jmap_wantprop(get->props, "isEnabled"))
@@ -314,6 +322,11 @@ static int jmap_vacation_get(jmap_req_t *req)
         goto done;
     }
 
+    r = sieve_ensure_folder(req->accountid, &mailbox);
+    if (r) goto done;
+
+    mailbox_unlock_index(mailbox, NULL);
+
     db = sievedb_open_userid(req->accountid);
     if (!db) {
         r = IMAP_INTERNAL;
@@ -338,12 +351,12 @@ static int jmap_vacation_get(jmap_req_t *req)
             const char *id = json_string_value(jval);
 
             if (!strcmp(id, "singleton"))
-                vacation_get(req, sdata, &get);
+                vacation_get(req, mailbox, sdata, &get);
             else
                 json_array_append(get.not_found, jval);
         }
     }
-    else vacation_get(req, sdata, &get);
+    else vacation_get(req, mailbox, sdata, &get);
 
     /* Build response */
     struct buf buf = BUF_INITIALIZER;
@@ -375,7 +388,7 @@ static void vacation_update(struct jmap_req *req,
     const char *err = NULL;
     int r;
 
-    vacation = vacation_read(req, sdata, &status);
+    vacation = vacation_read(req, mailbox, sdata, &status);
 
     prop = json_object_get(patch, "isEnabled");
     if (!json_is_boolean(prop))
