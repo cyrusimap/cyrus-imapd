@@ -2534,7 +2534,7 @@ static int apply_propfilter(struct prop_filter *propfilter,
         }
     }
 
-    if (propfilter->param || (propfilter->kind == VCARD_ANY_PROPERTY)) {
+    if (!prop) {
         /* Load message containing the resource and parse vcard data */
         if (!vcard) {
             if (!fctx->msg_buf.len) {
@@ -2549,6 +2549,13 @@ static int apply_propfilter(struct prop_filter *propfilter,
         }
 
         prop = vcardcomponent_get_first_property(vcard, propfilter->kind);
+
+        if (prop && propfilter->kind == VCARD_X_PROPERTY) {
+            while (strcasecmpsafe((char *) propfilter->name,
+                                  vcardproperty_get_x_name(prop)) &&
+                   (prop = vcardcomponent_get_next_property(vcard,
+                                                            VCARD_X_PROPERTY)));
+        }
     }
 
     if (!prop) return propfilter->not_defined;
