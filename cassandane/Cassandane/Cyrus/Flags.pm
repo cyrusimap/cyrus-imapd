@@ -1551,4 +1551,62 @@ sub test_setseen_notify
     $self->assert($payload2->{modseq} > $payload1->{modseq}, "modseq has increased: $payload2->{modseq} > $payload1->{modseq}");
 }
 
+sub test_userflags_crash
+    :Conversations
+    :LowEmailLimits
+    :min_version_3_6
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    my $folder = 'foo';
+
+    # make two messages
+    my %msg;
+    $msg{1} = $self->make_message('Message 1');
+    $msg{2} = $self->make_message('Message 2');
+    $self->check_messages(\%msg);
+
+    # make a second mailbox
+    $talk->create($folder) or die;
+
+    # set a bunch of flags on first message
+    $talk->store('1', '+flags', qw(a b c d e f g h i j k l));
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # set some different flags on second message
+    $talk->store('2', '+flags', qw(what the heck));
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # duplicate messages into other folder until duplicate limit reached
+    my $limit = 100; # just in case
+    do {
+        $talk->copy('1:*', $folder);
+    } while (--$limit && 'ok' eq $talk->get_last_completion_response());
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    # should have got a syslog message about conversations GUID limit
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/IOERROR: conversations GUID limit/, "@lines");
+    }
+
+    # change some flags on the first message
+    $talk->store('1', '-flags', qw(a b c d));
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->store('1', '+flags', qw(this is new stuff));
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # duplicate messages again
+    $talk->copy('1:*', $folder);
+    # --- better not have crashed here! ---
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    # should have got a syslog message about conversations GUID limit
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/IOERROR: conversations GUID limit/, "@lines");
+    }
+}
+
 1;
