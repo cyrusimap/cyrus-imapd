@@ -96,11 +96,13 @@ static json_t *buildinfo()
     json_t *hardware = json_object();
     json_t *buildconf = json_object();
     json_t *version = json_object();
+    json_t *ical = json_object();
 
     json_object_set_new(buildconf, "component", component);
     json_object_set_new(buildconf, "dependency", dependency);
     json_object_set_new(buildconf, "database", database);
     json_object_set_new(buildconf, "search", search);
+    json_object_set_new(buildconf, "ical", ical);
     json_object_set_new(buildconf, "hardware", hardware);
     json_object_set_new(buildconf, "version", version);
 
@@ -295,6 +297,13 @@ static json_t *buildinfo()
     json_object_set_new(search, "xapian", json_false());
 #endif
     json_object_set_new(search, "xapian_cjk_tokens", json_string(XAPIAN_CJK_TOKENS));
+
+    /* iCalendar features */
+#ifdef HAVE_ICALPARSER_CTRL
+    json_object_set_new(ical, "ctrl", json_true());
+#else
+    json_object_set_new(ical, "ctrl", json_false());
+#endif
 
     /* Internal version numbers */
 #ifdef USE_SIEVE
