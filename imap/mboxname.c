@@ -3104,9 +3104,16 @@ static modseq_t mboxname_domodseq(const char *fname,
     return counters.highestmodseq;
 }
 
+static void mboxname_assert_canadd(mbname_t *mbname)
+{
+    assert(!config_getswitch(IMAPOPT_REPLICA_ONLY));
+    // add code for suppressing particular users by filename
+}
+
 EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int flags)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
+    mboxname_assert_canadd(mbname);
     char *fname = mboxname_conf_getpath(mbname, "counters");
 
     modseq_t modseq = mboxname_domodseq(fname, mboxname, last, MBOXMODSEQ, mbtype, flags, 1);
@@ -3152,6 +3159,7 @@ EXPORTED modseq_t mboxname_readquotamodseq(const char *mboxname)
 EXPORTED modseq_t mboxname_nextquotamodseq(const char *mboxname, modseq_t last)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
+    mboxname_assert_canadd(mbname);
     char *fname = mboxname_conf_getpath(mbname, "counters");
 
     modseq_t modseq = mboxname_domodseq(fname, mboxname, last, QUOTAMODSEQ, 0, 0, 1);
@@ -3200,6 +3208,7 @@ EXPORTED modseq_t mboxname_readraclmodseq(const char *mboxname)
 EXPORTED modseq_t mboxname_nextraclmodseq(const char *mboxname, modseq_t last)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
+    mboxname_assert_canadd(mbname);
     char *fname = mboxname_conf_getpath(mbname, "counters");
 
     modseq_t modseq = mboxname_domodseq(fname, mboxname, last, RACLMODSEQ, 0, 0, 1);
@@ -3243,6 +3252,7 @@ EXPORTED uint32_t mboxname_readuidvalidity(const char *mboxname)
 
 EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
 {
+    mboxname_assert_canadd(mbname);
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return last + 1;
 
@@ -3281,6 +3291,7 @@ EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
     int fd = -1;
     int dirty = 0;
     mbname_t *mbname = mbname_from_intname(mboxname);
+    mboxname_assert_canadd(mbname);
     char *fname = mboxname_conf_getpath(mbname, "counters");
 
     if (mboxname_load_fcounters(fname, &counters, &fd)) {
