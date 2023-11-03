@@ -3106,7 +3106,7 @@ static modseq_t mboxname_domodseq(const char *fname,
 
 static void mboxname_assert_canadd(mbname_t *mbname)
 {
-    assert(!config_getswitch(IMAPOPT_REPLICA_ONLY));
+    assert(!config_getswitch(IMAPOPT_REPLICAONLY));
     // add code for suppressing particular users by filename
 }
 
