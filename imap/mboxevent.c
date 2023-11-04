@@ -232,7 +232,8 @@ EXPORTED int mboxevent_init(void)
     const char *options;
     int groups;
 
-    if (!(notifier = config_getstring(IMAPOPT_EVENT_NOTIFIER))) return 0;
+    if (!(notifier = config_getstring(IMAPOPT_EVENT_NOTIFIER)) && !idle_notifier)
+        return 0;
 
     /* some don't want to notify events for some IMAP flags */
     options = config_getstring(IMAPOPT_EVENT_EXCLUDE_FLAGS);
