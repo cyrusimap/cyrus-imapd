@@ -606,6 +606,8 @@ int fixquota_finish(int thisquota)
                 localq.scanuseds[res]);
             if (!flag_reportonly)
                 localq.useds[res] = localq.scanuseds[res];
+            // need to bump modseq, we changed something
+            localq.dirty = 1;
         }
     }
 

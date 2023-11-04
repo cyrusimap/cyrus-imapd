@@ -83,6 +83,8 @@ struct quota {
     char *scanmbox;
     quota_t scanuseds[QUOTA_NUMRESOURCES];
 
+    /* inforation for changes */
+    int dirty;
     modseq_t modseq;
 };
 

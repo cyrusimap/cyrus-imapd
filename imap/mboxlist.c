@@ -4438,15 +4438,13 @@ EXPORTED int mboxlist_setquotas(const char *root,
     r = quota_read(&q, &tid, 1);
 
     if (!r) {
-        int changed = 0;
-        int underquota;
         quota_t oldquotas[QUOTA_NUMRESOURCES];
 
         /* has it changed? */
         for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
             oldquotas[res] = q.limits[res];
             if (q.limits[res] != newquotas[res]) {
-                underquota = 0;
+                int underquota = 0;
 
                 /* Prepare a QuotaChange event notification *now*.
                  *
@@ -4468,14 +4466,14 @@ EXPORTED int mboxlist_setquotas(const char *root,
                 }
 
                 q.limits[res] = newquotas[res];
-                changed++;
+                q.dirty = 1;
 
                 mboxevent_extract_quota(quotachange_event, &q, res);
                 if (underquota)
                     mboxevent_extract_quota(quotawithin_event, &q, res);
             }
         }
-        if (changed) {
+        if (q.dirty) {
             if (quotamodseq)
                 q.modseq = quotamodseq;
             r = quota_write(&q, silent, &tid);
@@ -4542,6 +4540,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
     memcpy(q.limits, newquotas, sizeof(q.limits));
     if (quotamodseq)
         q.modseq = quotamodseq;
+    q.dirty = 1;
     r = quota_write(&q, silent, &tid);
     if (r) goto done;
 
