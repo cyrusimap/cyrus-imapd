@@ -259,6 +259,8 @@ static int build_cid_cb(const mbentry_t *mbentry,
             r = mailbox_cacherecord(mailbox, &oldrecord);
             if (r) goto done;
 
+            oldrecord.ignorelimits = 1;
+
             r = message_update_conversations(cstate, mailbox, &oldrecord, NULL);
             if (r) goto done;
 
