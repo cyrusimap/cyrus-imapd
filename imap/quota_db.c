@@ -352,6 +352,8 @@ EXPORTED int quota_check(const struct quota *q,
 EXPORTED void quota_use(struct quota *q,
                enum quota_resource res, quota_t delta)
 {
+    if (delta)
+        q->dirty = 1;
     /* prevent underflow */
     if ((delta < 0) && (-delta > q->useds[res])) {
         syslog(LOG_INFO, "Quota underflow for root %s, resource %s,"
@@ -458,7 +460,7 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
     qrlen = strlen(quota->root);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
 
-    if (mboxname_isusermailbox(quota->root, /*isinbox*/0)) {
+    if (quota->dirty && mboxname_isusermailbox(quota->root, /*isinbox*/0)) {
         if (silent)
             quota->modseq = mboxname_setquotamodseq(quota->root, quota->modseq);
         else

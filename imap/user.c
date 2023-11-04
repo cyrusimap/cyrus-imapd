@@ -593,7 +593,7 @@ static int find_cb(void *rockp __attribute__((unused)),
     int r;
 
     root = xstrndup(key, keylen);
-    r = quota_deleteroot(root, 0);
+    r = quota_deleteroot(root, 1);
     free(root);
 
     return r;
