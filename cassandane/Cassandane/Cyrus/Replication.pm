@@ -2122,7 +2122,7 @@ sub test_connect_once
 # Test empty mailbox gets overwritten
 #
 sub test_splitbrain_different_uniqueid_unused
-    :min_version_3_5 :needs_component_replication
+    :min_version_3_5 :needs_component_replication :NoReplicaonly
 {
     my ($self) = @_;
 
@@ -2161,7 +2161,7 @@ sub test_splitbrain_different_uniqueid_unused
 # Test non-empty mailbox causes replication to abort
 #
 sub test_splitbrain_different_uniqueid_nonempty
-    :min_version_3_5 :needs_component_replication
+    :min_version_3_5 :needs_component_replication :NoReplicaonly
 {
     my ($self) = @_;
 
@@ -2218,7 +2218,7 @@ sub test_splitbrain_different_uniqueid_nonempty
 # Test mailbox that's had email but is now empty again
 #
 sub test_splitbrain_different_uniqueid_used
-    :min_version_3_5 :needs_component_replication
+    :min_version_3_5 :needs_component_replication :NoReplicaonly
 {
     my ($self) = @_;
 
