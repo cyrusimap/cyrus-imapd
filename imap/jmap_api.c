@@ -388,36 +388,12 @@ HIDDEN int jmap_error_response(struct transaction_t *txn,
 HIDDEN int jmap_initreq(jmap_req_t *req)
 {
     memset(req, 0, sizeof(struct jmap_req));
-    req->mboxes = ptrarray_new();
     return 0;
 }
 
-struct _mboxcache_rec {
-    struct mailbox *mbox;
-    int refcount;
-    int rw;
-};
-
 HIDDEN void jmap_finireq(jmap_req_t *req)
 {
-    int i;
-
-    for (i = 0; i < req->mboxes->count; i++) {
-        struct _mboxcache_rec *rec = ptrarray_nth(req->mboxes, i);
-        syslog(LOG_ERR, "jmap: force-closing mailbox %s (refcount=%d)",
-                        mailbox_name(rec->mbox), rec->refcount);
-        mailbox_close(&rec->mbox);
-        free(rec);
-    }
-    /* Fail after cleaning up open mailboxes */
-    if (req->mboxes->count) {
-        json_t *jdebug = json_pack("[s,s,s,o,o]", req->method, req->userid, req->accountid, req->args, req->response);
-        char *debug = json_dumps(jdebug, JSON_INDENT(2));
-        assert(!debug);
-    }
-
-    ptrarray_free(req->mboxes);
-    req->mboxes = NULL;
+    assert(!open_mailboxes_exist());
 
     jmap_mbentry_cache_free(req);
 
@@ -1080,25 +1056,7 @@ void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
 HIDDEN int jmap_openmbox(jmap_req_t *req, const char *name,
                          struct mailbox **mboxp, int rw)
 {
-    int i, r;
-    struct _mboxcache_rec *rec;
-
-    for (i = 0; i < req->mboxes->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
-        if (!strcmp(name, mailbox_name(rec->mbox))) {
-            if (rw && !rec->rw) {
-                /* Lock promotions are not supported */
-                syslog(LOG_ERR, "jmapmbox: failed to grab write-lock"
-                       " on cached read-only mailbox %s", name);
-                return IMAP_INTERNAL;
-            }
-            /* Found a cached mailbox. Increment refcount. */
-            rec->refcount++;
-            *mboxp = rec->mbox;
-
-            return 0;
-        }
-    }
+    int r;
 
     /* Add mailbox to cache */
     if (req->force_openmbox_rw)
@@ -1108,11 +1066,6 @@ HIDDEN int jmap_openmbox(jmap_req_t *req, const char *name,
         syslog(LOG_ERR, "jmap_openmbox(%s): %s", name, error_message(r));
         return r;
     }
-    rec = xzmalloc(sizeof(struct _mboxcache_rec));
-    rec->mbox = *mboxp;
-    rec->refcount = 1;
-    rec->rw = rw;
-    ptrarray_add(req->mboxes, rec);
 
     return 0;
 }
@@ -1128,41 +1081,9 @@ HIDDEN int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
         return IMAP_MAILBOX_NONEXISTENT;
 }
 
-HIDDEN int jmap_isopenmbox(jmap_req_t *req, const char *name)
+HIDDEN void jmap_closembox(jmap_req_t *req __attribute__((unused)), struct mailbox **mboxp)
 {
-
-    int i;
-    struct _mboxcache_rec *rec;
-
-    for (i = 0; i < req->mboxes->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
-        if (!strcmp(name, mailbox_name(rec->mbox)))
-            return 1;
-    }
-
-    return 0;
-}
-
-HIDDEN void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp)
-{
-    struct _mboxcache_rec *rec = NULL;
-    int i;
-
-    if (mboxp == NULL || *mboxp == NULL) return;
-
-    for (i = 0; i < req->mboxes->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
-        if (rec->mbox == *mboxp) {
-            if (!(--rec->refcount)) {
-                ptrarray_remove(req->mboxes, i);
-                mailbox_close(&rec->mbox);
-                free(rec);
-            }
-            *mboxp = NULL;
-            return;
-        }
-    }
-    syslog(LOG_INFO, "jmap: ignoring non-cached mailbox %s", mailbox_name(*mboxp));
+    mailbox_close(mboxp);
 }
 
 struct findblob_data {

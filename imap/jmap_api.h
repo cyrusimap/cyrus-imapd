@@ -165,7 +165,6 @@ typedef struct jmap_req {
     int force_openmbox_rw;
 
     /* Internal state */
-    ptrarray_t *mboxes;
     hash_table *mbstates;
     hash_table *created_ids;
     hash_table *inmemory_blobs;
@@ -278,11 +277,10 @@ extern void jmap_admin_capabilities(json_t *account_capabilities);
 extern void jmap_accounts(json_t *accounts, json_t *primary_accounts);
 
 /* Request-scoped mailbox cache */
-extern int  jmap_openmbox(jmap_req_t *req, const char *name,
-                          struct mailbox **mboxp, int rw);
+extern int jmap_openmbox(jmap_req_t *req, const char *name,
+                         struct mailbox **mboxp, int rw);
 extern int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
                                      struct mailbox **mboxp, int rw);
-extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
 
 extern int jmap_mboxlist_lookup(const char *name,
