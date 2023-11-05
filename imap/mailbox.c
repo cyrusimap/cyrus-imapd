@@ -6107,6 +6107,7 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
         if (r == IMAP_NO_MSGGONE) {
             if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
                 /* Already expunged */
+                r = 0;
                 continue;
             }
 
