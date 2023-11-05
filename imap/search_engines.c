@@ -187,7 +187,7 @@ static int flush_batch(search_text_receiver_t *rx,
     }
 
     if (flags & SEARCH_UPDATE_ALLOW_PARTIALS)
-        indexflags |= INDEX_GETSEARCHTEXT_PARTIALS;
+        indexflags |= INDEX_GETSEARCHTEXT_ALLOW_PARTIALS;
 
     for (i = 0 ; i < batch->count ; i++) {
         message_t *msg = ptrarray_nth(batch, i);

@@ -3579,7 +3579,7 @@ static int reindex_mb(void *rock,
     int getsearchtext_flags = 0;
     if (filter->flags & SEARCH_COMPACT_ALLOW_PARTIALS) {
         allow_partials = 1;
-        getsearchtext_flags |= INDEX_GETSEARCHTEXT_PARTIALS;
+        getsearchtext_flags |= INDEX_GETSEARCHTEXT_ALLOW_PARTIALS;
     }
 
     int base = 0;

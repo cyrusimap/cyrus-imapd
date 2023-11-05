@@ -5858,32 +5858,42 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             goto done;
         }
 
-        /* Extract text from attachment */
-        struct attachextract_record axrecord = {
-            .type = type, .subtype = subtype,
-            .guid = message_guid_clone(content_guid),
-        };
-
-        r = attachextract_extract(&axrecord, data, encoding, &text);
-
-        if (!r && buf_len(&text)) {
-            /* Append extracted text */
-            str->receiver->begin_part(str->receiver, SEARCH_PART_ATTACHMENTBODY);
-            str->receiver->append_text(str->receiver, &text);
-            str->receiver->end_part(str->receiver, SEARCH_PART_ATTACHMENTBODY);
-        }
-        else if (r) {
-            syslog(LOG_ERR, "IOERROR index: can't extract attachment %s (%s/%s): %s",
+        if (str->flags & INDEX_GETSEARCHTEXT_NOCALL_ATTACHEXTRACT) {
+            syslog(LOG_DEBUG, "attachextract disabled for "
+                    "attachment %s (%s/%s)",
                     message_guid_encode(content_guid),
-                    type, subtype, error_message(r));
+                    type, subtype);
 
-            if (str->flags & INDEX_GETSEARCHTEXT_PARTIALS) {
-                /* mark message as partially indexed and continue */
-                str->indexlevel |= SEARCH_INDEXLEVEL_PARTIAL;
-                r = 0;
-            }
+            str->indexlevel |= SEARCH_INDEXLEVEL_PARTIAL;
         }
-        buf_free(&text);
+        else {
+            /* Extract text from attachment */
+            struct attachextract_record axrecord = {
+                .type = type, .subtype = subtype,
+                .guid = message_guid_clone(content_guid),
+            };
+
+            r = attachextract_extract(&axrecord, data, encoding, &text);
+
+            if (!r && buf_len(&text)) {
+                /* Append extracted text */
+                str->receiver->begin_part(str->receiver, SEARCH_PART_ATTACHMENTBODY);
+                str->receiver->append_text(str->receiver, &text);
+                str->receiver->end_part(str->receiver, SEARCH_PART_ATTACHMENTBODY);
+            }
+            else if (r) {
+                syslog(LOG_ERR, "IOERROR index: can't extract attachment %s (%s/%s): %s",
+                        message_guid_encode(content_guid),
+                        type, subtype, error_message(r));
+
+                if (str->flags & INDEX_GETSEARCHTEXT_ALLOW_PARTIALS) {
+                    str->indexlevel |= SEARCH_INDEXLEVEL_PARTIAL;
+                    r = 0;
+                }
+            }
+
+            buf_free(&text);
+        }
     }
 
 done:
@@ -6094,7 +6104,8 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     if (r == IMAP_OK_COMPLETED) r = 0;
 
     /* Log erroneous or partially indexed message */
-    if (r || (str.indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) {
+    if ((r || (str.indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) &&
+        !(flags & INDEX_GETSEARCHTEXT_NOLOG_PARTIALS)) {
         struct mailbox *mailbox = msg_mailbox(msg);
         uint32_t uid = 0;
         message_get_uid(msg, &uid);
