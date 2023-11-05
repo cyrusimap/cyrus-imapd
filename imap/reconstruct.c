@@ -521,21 +521,35 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
 
     if (setversion) {
-        r = mailbox_open_iwl(name, &mailbox);
+        r = mailbox_open_exclusive(name, &mailbox);
         if (r) {
             com_err(name, r, "Failed to open mailbox to set version");
             mboxname_release(&namespacelock);
             return 0;
         }
-    }
-    else {
-        r = mailbox_reconstruct(name, reconstruct_flags, &mailbox);
-        if (r) {
-            com_err(name, r, "%s",
-                    (r == IMAP_IOERROR) ? error_message(errno) : "Failed to reconstruct mailbox");
-            mboxname_release(&namespacelock);
-            return 0;
+        if (setversion != mailbox->i.minor_version) {
+            int oldversion = mailbox->i.minor_version;
+            /* need to re-set the version! */
+            int r = mailbox_setversion(mailbox, setversion);
+            char *extname = mboxname_to_external(name, &recon_namespace, NULL);
+            if (r) {
+                printf("FAILED TO REPACK %s with new version %s\n", extname, error_message(r));
+            }
+            else {
+                printf("Converted %s version %d to %d\n", extname, oldversion, setversion);
+            }
+	    free(extname);
         }
+        mboxname_release(&namespacelock);
+        return 0;
+    }
+
+    r = mailbox_reconstruct(name, reconstruct_flags, &mailbox);
+    if (r) {
+        com_err(name, r, "%s",
+                (r == IMAP_IOERROR) ? error_message(errno) : "Failed to reconstruct mailbox");
+        mboxname_release(&namespacelock);
+        return 0;
     }
 
     mbentry_t *mbentry_byid = NULL;
@@ -660,17 +674,6 @@ static int do_reconstruct(struct findall_data *data, void *rock)
 
     strncpy(outpath, mailbox_meta_fname(mailbox, META_HEADER), MAX_MAILBOX_NAME);
 
-    if (setversion && setversion != mailbox->i.minor_version) {
-        int oldversion = mailbox->i.minor_version;
-        /* need to re-set the version! */
-        int r = mailbox_setversion(mailbox, setversion);
-        if (r) {
-            printf("FAILED TO REPACK %s with new version %s\n", extname, error_message(r));
-        }
-        else {
-            printf("Converted %s version %d to %d\n", extname, oldversion, setversion);
-        }
-    }
     if (make_changes) {
         mailbox_commit(mailbox);
     }
