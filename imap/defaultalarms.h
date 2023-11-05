@@ -80,8 +80,7 @@ extern void defaultalarms_insert(struct defaultalarms *defalarms,
 extern void defaultalarms_caldav_get(struct defaultalarms *defalarms,
                                      icalcomponent *ical);
 
-extern void defaultalarms_caldav_put(struct defaultalarms *defalarms,
-                                     icalcomponent *ical, int is_update);
+extern int defaultalarms_matches_atag(icalcomponent *comp, const char *atag);
 
 // Migration functions for Cyrus version 3.9
 
