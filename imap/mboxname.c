@@ -3110,10 +3110,7 @@ static void mboxname_assert_canadd(mbname_t *mbname)
     // add code for suppressing particular users by filename
     const char *userid = mbname_userid(mbname);
     if (!userid) return;
-    char *path = strconcat(config_dir, "/replicaonly/", userid, (char *)NULL);
-    struct stat sbuf;
-    assert(stat(path, &sbuf) == -1); // file must not exist
-    free(path);
+    assert(!user_isreplicaonly(userid));
 }
 
 EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int flags)
