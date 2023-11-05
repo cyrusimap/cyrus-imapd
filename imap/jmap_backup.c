@@ -1801,7 +1801,7 @@ static void restore_mailbox_plan_cb(const char *guid __attribute__((unused)),
     struct message_t *message = (struct message_t *) data;
     ptrarray_t *deleted = &message->deleted;
     hash_table *mailboxes = (hash_table *) rock;
-    time_t last_removed;
+    time_t last_removed = 0;
     int i;
 
     if (!message->ignore) ptrarray_sort(deleted, &rmail_cmp);
