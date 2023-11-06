@@ -2514,8 +2514,10 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             /* higher modseq on the replica is an error */
             if (rrecord->modseq > mrecord.modseq) {
                 if (opt_force) {
-                    syslog(LOG_NOTICE, "forcesync: higher modseq on replica %s %u (" MODSEQ_FMT " > " MODSEQ_FMT ")",
-                           mailbox_name(mailbox), mrecord.uid, rrecord->modseq, mrecord.modseq);
+                    if (doupdate)
+                        syslog(LOG_NOTICE, "forcesync: higher modseq on replica %s %u "
+                               "(" MODSEQ_FMT " > " MODSEQ_FMT ")",
+                               mailbox_name(mailbox), mrecord.uid, rrecord->modseq, mrecord.modseq);
                 }
                 else {
                     xsyslog(LOG_ERR, "SYNCNOTICE: higher modseq on replica",
