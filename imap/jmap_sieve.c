@@ -372,7 +372,7 @@ static const char *script_findblob(struct jmap_req *req, const char *id,
     const char *content = NULL;
     int r = IMAP_NOTFOUND;
 
-    if (id[0] == '#') {
+    if (id && id[0] == '#') {
         id = jmap_lookup_id(req, id + 1);
     }
 
