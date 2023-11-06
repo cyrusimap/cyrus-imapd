@@ -1987,6 +1987,9 @@ static int jmap_sieve_test(struct jmap_req *req)
         goto done;
     }
 
+    /* XXX shush analyzer fp */
+    assert(scriptid != NULL);
+
     if (scriptid[0] == 'S') {
         const char *sievedir = user_sieve_path(req->accountid);
         struct sieve_data *sdata = NULL;
