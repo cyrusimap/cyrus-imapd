@@ -9290,6 +9290,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
                     _jsunknown_to_vcard(parser, key, jsubprop, myprops, card);
                 }
 
+                /* XXX ckind may still be NULL here! */
                 fields[ckind->idx] = json_string_value(jsubprop);
                 last_field = MAX(last_field, ckind->idx);
             }
