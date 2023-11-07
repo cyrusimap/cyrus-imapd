@@ -446,6 +446,8 @@ struct client_behavior_registry {
     unsigned int did_searchres    : 1;   /* used SAVE on SEARCH */
     unsigned int did_replace      : 1;   /* used REPLACE */
     unsigned int did_imap4rev2    : 1;   /* used ENABLE IMAP4rev2  */
+    unsigned int did_binary       : 1;   /* fetched BINARY or APPEND literal8  */
+    unsigned int did_catenate     : 1;   /* used CATENATE on APPEND  */
 };
 
 #endif /* INCLUDED_IMAPD_H */

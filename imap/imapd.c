@@ -887,27 +887,29 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
-                        "%s%s",
+                        "%s%s%s%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
                         id_name,
 
                         client_behavior.did_annotate    ? " annotate=<1>"     : "",
+                        client_behavior.did_binary      ? " binary=<1>"       : "",
+                        client_behavior.did_catenate    ? " catenate=<1>"     : "",
                         client_behavior.did_compress    ? " compress=<1>"     : "",
+
                         client_behavior.did_condstore   ? " condstore=<1>"    : "",
                         client_behavior.did_idle        ? " idle=<1>"         : "",
-
                         client_behavior.did_imap4rev2   ? " imap4rev2=<1>"    : "",
                         client_behavior.did_metadata    ? " metadata=<1>"     : "",
+
                         client_behavior.did_move        ? " move=<1>"         : "",
                         client_behavior.did_multisearch ? " multisearch=<1>"  : "",
-
                         client_behavior.did_notify      ? " notify=<1>"       : "",
                         client_behavior.did_preview     ? " preview=<1>"      : "",
+
                         client_behavior.did_qresync     ? " qresync=<1>"      : "",
                         client_behavior.did_replace     ? " replace=<1>"      : "",
-
                         client_behavior.did_savedate    ? " savedate=<1>"     : "",
                         client_behavior.did_searchres   ? " searchres=<1>"    : "");
 }
@@ -3791,7 +3793,7 @@ static int getliteralsize(const char *p, int c, size_t maxsize,
     /* Check for literal8 */
     if (*p == '~') {
         p++;
-        *binary = 1;
+        *binary = client_behavior.did_binary = 1;
     }
 
     /* check for start of literal */
@@ -4269,6 +4271,8 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         /* now parsing "append-data" in the ABNF */
 
         if (!strcasecmp(arg.s, "CATENATE")) {
+            client_behavior.did_catenate = 1;
+
             if (c != ' ' || (c = prot_getc(imapd_in) != '(')) {
                 parseerr = "Missing message part(s) in Append command";
                 r = IMAP_PROTOCOL_ERROR;
@@ -5591,6 +5595,9 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
 
     if (fetchargs.fetchitems & FETCH_SAVEDATE)
         client_behavior.did_savedate = 1;
+
+    if (fetchargs.binsections || fetchargs.sizesections)
+        client_behavior.did_binary = 1;
 
     r = index_fetch(imapd_index, sequence, usinguid, &fetchargs,
                 &fetchedsomething);
