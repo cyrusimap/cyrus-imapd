@@ -194,7 +194,7 @@ Other
     to enable **ptloader** to interface with LDAP directly, for canonification
     of login usernames to mailbox names, and verification of login usernames,
     ACL subjects and group membership. Configure option: ``--with-ldap``."
-    `pcre`_, libpcre3-dev, pcre-devel, "yes", "PCRE 1 (8.x) - for utf-8/unicode
+    `pcre2`_, libpcre2-dev, pcre2-devel, "yes", "PCRE 2 (10.x) - for utf-8/unicode
     regular expression matching. Could be replaced by something else in the
     future. See `issues/1731`_ for more information."
     `perl(Term::ReadLine)`_,,, "no", "Perl library needed by **cyradm**."
@@ -219,6 +219,7 @@ Other
 .. _nghttp2: https://nghttp2.org/
 .. _openldap: http://www.openldap.org/
 .. _pcre: http://www.pcre.org/
+.. _pcre2: http://www.pcre.org/
 .. _perl(Term::ReadLine): https://metacpan.org/pod/Term::ReadLine
 .. _perl(ExtUtils::MakeMaker): http://search.cpan.org/dist/ExtUtils-MakeMaker/
 .. _perl(Pod::POM::View::Restructured): https://metacpan.org/pod/Pod::POM::View::Restructured
