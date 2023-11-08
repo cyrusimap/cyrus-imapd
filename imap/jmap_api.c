@@ -1053,21 +1053,10 @@ void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
     hash_insert(creation_id, xstrdup(id), req->created_ids);
 }
 
-HIDDEN int jmap_openmbox(jmap_req_t *req, const char *name,
+HIDDEN int jmap_openmbox(jmap_req_t *req __attribute__((unused)), const char *name,
                          struct mailbox **mboxp, int rw)
 {
-    int r;
-
-    /* Add mailbox to cache */
-    if (req->force_openmbox_rw)
-        rw = 1;
-    r = rw ? mailbox_open_iwl(name, mboxp) : mailbox_open_irl(name, mboxp);
-    if (r) {
-        syslog(LOG_ERR, "jmap_openmbox(%s): %s", name, error_message(r));
-        return r;
-    }
-
-    return 0;
+    return rw ? mailbox_open_iwl(name, mboxp) : mailbox_open_irl(name, mboxp);
 }
 
 HIDDEN int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
