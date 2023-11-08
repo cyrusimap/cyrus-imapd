@@ -2691,9 +2691,10 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 
     if (mailbox->local_cstate) {
         int r = conversations_commit(&mailbox->local_cstate);
-        if (r)
-            syslog(LOG_ERR, "Error committing to conversations database for mailbox %s: %s",
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: Error committing to conversations database for mailbox %s: %s",
                    mailbox_name(mailbox), error_message(r));
+        }
     }
 
     // release the namespacelock here
