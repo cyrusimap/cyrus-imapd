@@ -2766,7 +2766,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 mboxlist_update_foldermodseq(mailbox_name(mbox), mbox->i.highestmodseq);
             }
         }
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
     }
     if (r) goto done;
 
@@ -2898,8 +2898,8 @@ done:
     if (r && !result->err) {
         result->err = jmap_server_error(r);
     }
-    jmap_closembox(req, &dst_mbox);
-    jmap_closembox(req, &src_mbox);
+    mailbox_close(&dst_mbox);
+    mailbox_close(&src_mbox);
     ptrarray_fini(&move_msgrecs);
     return r;
 }
@@ -2978,7 +2978,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
                 result->err = json_pack("{s:s}", "type", "mailboxHasEmail");
             }
             mailbox_iter_done(&iter);
-            jmap_closembox(req, &mbox);
+            mailbox_close(&mbox);
             if (result->err) goto done;
         }
     }

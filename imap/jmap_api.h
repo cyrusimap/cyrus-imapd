@@ -281,8 +281,6 @@ extern int jmap_openmbox(jmap_req_t *req, const char *name,
                          struct mailbox **mboxp, int rw);
 extern int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
                                      struct mailbox **mboxp, int rw);
-extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
-
 extern int jmap_mboxlist_lookup(const char *name,
                                 mbentry_t **entryptr, struct txn **tid);
 

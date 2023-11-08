@@ -793,7 +793,7 @@ static void _emailsubmission_create(jmap_req_t *req,
      * message open. But we don't want to long-lock the
      * mailbox while sending the mail over to a SMTP host */
     msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
     if (!*sm) {
         /* Open the SMTP connection */
@@ -917,7 +917,7 @@ done:
     if (fd_msg != -1) close(fd_msg);
     if (msg) json_decref(msg);
     if (mr) msgrecord_unref(&mr);
-    if (mbox) jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     if (myenvelope) json_decref(myenvelope);
     free(mboxname);
     buf_free(&buf);
@@ -1370,7 +1370,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         mailbox_iter_done(&iter);
     }
 
-    if (mbox) jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
     /* Build response */
     get.state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT,
@@ -1645,7 +1645,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     }
 
 done:
-    jmap_closembox(req, &submbox);
+    mailbox_close(&submbox);
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     json_decref(success_emailids);
@@ -1723,7 +1723,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     }
     mailbox_iter_done(&iter);
 
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
     /* Set new state */
     // XXX - this is wrong!  If we want to do this, we need to sort all the changes by
@@ -2206,7 +2206,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     }
     mailbox_iter_done(&iter);
 
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
     /* Sort results */
     if (sortcrit) {

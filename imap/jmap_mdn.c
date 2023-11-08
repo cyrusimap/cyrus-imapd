@@ -420,7 +420,7 @@ static json_t *generate_mdn(struct jmap_req *req,
   done:
     if (r && err == NULL) err = jmap_server_error(r);
     if (mr) msgrecord_unref(&mr);
-    if (mbox) jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     free(mboxname);
     buf_free(&buf);
 
@@ -644,7 +644,7 @@ static int jmap_mdn_parse(jmap_req_t *req)
             json_array_append_new(parse.not_parsable, json_string(blobid));
         }
         msgrecord_unref(&mr);
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
         message_free_body(body);
         free(body);
         buf_free(&buf);

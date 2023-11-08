@@ -344,7 +344,7 @@ done:
     message_free_body(body);
     free(body);
     msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     return r;
 }
 
@@ -946,7 +946,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
         if (caldav_db) caldav_close(caldav_db);
         if (carddav_db) carddav_close(carddav_db);
         mbname_free(&mbname);
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
     }
 
     /* Clean up memory */

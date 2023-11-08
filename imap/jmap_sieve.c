@@ -397,7 +397,7 @@ static const char *script_findblob(struct jmap_req *req, const char *id,
             content += record.header_size;
 
             msgrecord_unref(&mr);
-            jmap_closembox(req, &mbox);
+            mailbox_close(&mbox);
         }
     }
 
@@ -2023,7 +2023,7 @@ static int jmap_sieve_test(struct jmap_req *req)
 
         r = sieve_script_parse_string(NULL, content, &errors, &s);
         msgrecord_unref(&mr);
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
 
         if (r != SIEVE_OK) {
             err = json_pack("{s:s, s:s}", "type", "invalidScript",
@@ -2141,7 +2141,7 @@ static int jmap_sieve_test(struct jmap_req *req)
 
             free_msg(&m);
             msgrecord_unref(&mr);
-            jmap_closembox(req, &mbox);
+            mailbox_close(&mbox);
             if (!envelope) {
                 strarray_fini(&env_from);
                 strarray_fini(&env_to);

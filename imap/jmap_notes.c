@@ -503,7 +503,7 @@ static int jmap_note_get(jmap_req_t *req)
     get.state = buf_release(&buf);
     jmap_ok(req, jmap_get_reply(&get));
 
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
 done:
     jmap_parser_fini(&parser);
@@ -955,7 +955,7 @@ static int jmap_note_set(jmap_req_t *req)
     jmap_ok(req, jmap_set_reply(&set));
 
 done:
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     return 0;
@@ -1057,7 +1057,7 @@ static int jmap_note_changes(jmap_req_t *req)
         }
     }
     mailbox_iter_done(&iter);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     buf_free(&buf);
 
     if (changes.max_changes) {

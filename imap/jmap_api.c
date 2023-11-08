@@ -1081,11 +1081,6 @@ HIDDEN int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
         return IMAP_MAILBOX_NONEXISTENT;
 }
 
-HIDDEN void jmap_closembox(jmap_req_t *req __attribute__((unused)), struct mailbox **mboxp)
-{
-    mailbox_close(mboxp);
-}
-
 struct findblob_data {
     jmap_req_t *req;
     const char *from_accountid;
@@ -1129,7 +1124,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
 
     r = msgrecord_find(d->mbox, rec->uid, &d->mr);
     if (r) {
-        jmap_closembox(req, &d->mbox);
+        mailbox_close(&d->mbox);
         d->mr = NULL;
         return r;
     }
@@ -1247,7 +1242,7 @@ done:
         conversations_commit(&mycstate);
     }
     if (r) {
-        if (data.mbox) jmap_closembox(req, &data.mbox);
+        mailbox_close(&data.mbox);
         if (mybody) {
             message_free_body(mybody);
             free(mybody);

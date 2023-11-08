@@ -389,7 +389,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                mailbox_name(rrock->mailbox), rrock->jrestore->cutoff,
                rrock->mailbox->i.changes_epoch);
 
-        jmap_closembox(rrock->req, &rrock->mailbox);
+        mailbox_close(&rrock->mailbox);
         return HTTP_UNPROCESSABLE;
     }
 
@@ -497,7 +497,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             /* Close and re-open mailbox (to avoid deadlocks).
                We also do this on initial entry into the loop
                to switch from a read lock to a write lock. */
-            jmap_closembox(rrock->req, &rrock->mailbox);
+            mailbox_close(&rrock->mailbox);
             r = jmap_openmbox(rrock->req, mbentry->name, &rrock->mailbox, /*rw*/1);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
@@ -517,7 +517,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         rrock->deletedmodseq = rrock->mailbox->i.deletedmodseq;
 
     if (!rrock->keep_open)
-        jmap_closembox(rrock->req, &rrock->mailbox);
+        mailbox_close(&rrock->mailbox);
 
     return r;
 }
@@ -881,7 +881,7 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
 #endif
     crock->group_vcard = NULL;
 
-    jmap_closembox(rrock->req, mailboxp);
+    mailbox_close(mailboxp);
 
     return r;
 }
@@ -1308,7 +1308,7 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
             message_get_uid((message_t *) nextmsg, &nextuid);
 
             mailbox_iter_done(&iter);
-            jmap_closembox(req, &mailbox);
+            mailbox_close(&mailbox);
             r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
@@ -1322,7 +1322,7 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
     }
     mailbox_iter_done(&iter);
 
-    jmap_closembox(req, &mailbox);
+    mailbox_close(&mailbox);
 
     return 0;
 }
@@ -1781,7 +1781,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     }
 
     mailbox_iter_done(&iter);
-    jmap_closembox(rrock->req, &mailbox);
+    mailbox_close(&mailbox);
 
     return 0;
 }
@@ -2042,7 +2042,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 
         if (++count % BATCH_SIZE == 0) {
             /* Close and re-open mailboxes (to avoid deadlocks) */
-            jmap_closembox(req, &mailbox);
+            mailbox_close(&mailbox);
 
             if (newmailbox) {
                 mailbox_close(&newmailbox);
@@ -2113,9 +2113,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
         mailbox_commit(mailbox);
     }
 
-    jmap_closembox(req, &mailbox);
-
   done:
+    mailbox_close(&mailbox);
     mailbox_close(&newmailbox);
     mbname_free(&mbname);
     rrock->result = r;

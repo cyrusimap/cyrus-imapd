@@ -816,7 +816,7 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
 
 done:
     if (mr) msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     return r;
 }
 
@@ -1114,7 +1114,7 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
 
 done:
     mboxlist_entry_free(&mbentry);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     return d->mboxname ? IMAP_OK_COMPLETED : 0;
 }
 
@@ -1256,7 +1256,7 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
         }
     }
 
-    jmap_closembox(check->req, &mbox);
+    mailbox_close(&mbox);
     return 0;
 }
 
@@ -3906,7 +3906,7 @@ static int guidsearch_run_xapian(jmap_req_t *req, struct emailsearch *search,
 
 done:
     if (bx) search_end_search(bx);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     mbname_free(&mbname);
     return r;
 }
@@ -5850,7 +5850,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
 
 doneloop:
         if (mr) msgrecord_unref(&mr);
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
         free(mboxname);
         mboxname = NULL;
         if (r) goto done;
@@ -5866,7 +5866,7 @@ done:
     if (snippet) json_decref(snippet);
     if (intquery) search_free_internalised(intquery);
     if (mboxname) free(mboxname);
-    if (mbox) jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     if (searchargs) freesearchargs(searchargs);
     strarray_fini(&perf_filters);
     if (ptrarray_size(&search_attrs)) {
@@ -6441,7 +6441,7 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *vrock)
 
 done:
     msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     return r;
 }
 
@@ -6998,7 +6998,7 @@ static int _email_get_createdmodseq_cb(const conv_guidrec_t *rec, void *vrock)
                 rock->modseq = index_record.createdmodseq;
             }
         }
-        jmap_closembox(rock->req, &mbox);
+        mailbox_close(&mbox);
     }
 
 done:
@@ -8111,7 +8111,7 @@ static int _warmup_mboxcache_cb(const conv_guidrec_t *rec, void* vrock)
         if (!mboxname_isnondeliverymailbox(mailbox_name(mbox), mailbox_mbtype(mbox))) {
             ptrarray_append(&rock->mboxes, mbox);
         }
-        else jmap_closembox(rock->req, &mbox);
+        else mailbox_close(&mbox);
     }
     return r;
 }
@@ -8154,7 +8154,7 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
                 if (!r) {
                     r = _email_from_record(req, args, mr, &msg);
                 }
-                jmap_closembox(req, &mbox);
+                mailbox_close(&mbox);
             }
         }
         if (!r && msg) {
@@ -8174,7 +8174,7 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
     /* Close cached mailboxes */
     struct mailbox *mbox = NULL;
     while ((mbox = ptrarray_pop(&rock.mboxes))) {
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
     }
     ptrarray_fini(&rock.mboxes);
 }
@@ -8570,7 +8570,7 @@ static int jmap_email_parse(jmap_req_t *req)
             json_array_append_new(parse.not_parsable, json_string(blobid));
         }
         msgrecord_unref(&mr);
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
         message_free_body(body);
         free(body);
     }
@@ -8986,7 +8986,7 @@ static void _email_append(jmap_req_t *req,
         r = _copy_msgrecord(httpd_authstate, req->userid, &jmap_namespace,
                             mbox, dst, mr);
 
-        jmap_closembox(req, &dst);
+        mailbox_close(&dst);
         if (r) goto done;
     }
 
@@ -8994,7 +8994,7 @@ done:
     if (f) fclose(f);
     append_removestage(stage);
     msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     free(mboxname);
     json_decref(mailboxes);
     if (r && *err == NULL) {
@@ -11447,7 +11447,7 @@ void _email_bulkupdate_close(struct email_bulkupdate *bulk)
     hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
     while (hash_iter_next(iter)) {
         struct email_updateplan *plan = hash_iter_val(iter);
-        jmap_closembox(bulk->req, &plan->mbox);
+        mailbox_close(&plan->mbox);
     }
     seen_close(&bulk->seendb); /* force-close on error */
     hash_iter_free(&iter);
@@ -12277,7 +12277,7 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
             const char *mbox_id = strarray_nth(erroneous_mboxids, i);
             struct email_updateplan *plan = hash_del(mbox_id, &bulk->plans_by_mbox_id);
             if (!plan) continue;
-            jmap_closembox(bulk->req, &plan->mbox);
+            mailbox_close(&plan->mbox);
             _email_updateplan_free_p(plan);
         }
         strarray_free(erroneous_mboxids);
@@ -12485,7 +12485,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
                     ptrarray_append(bulk->new_mboxrecs, mboxrec);
                     _email_bulkupdate_addplan(bulk, mbox, mboxrec);
                 }
-                else jmap_closembox(req, &mbox); // already reference counted
+                else mailbox_close(&mbox); // already reference counted
             }
             else {
                 json_object_set_new(bulk->set_errors, update->email_id,
@@ -13100,7 +13100,7 @@ static void _email_destroy_bulk(jmap_req_t *req,
                 }
             }
         }
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
     }
 
     /* An email not reported was not found (already expunged) */
@@ -13273,7 +13273,7 @@ static void _email_import(jmap_req_t *req,
     buf_reset(&content);
     sourcefile = NULL;
     msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
     struct body *body = NULL;
     const struct body *part = NULL;
@@ -13367,7 +13367,7 @@ gotrecord:
             has_attachment, sourcefile, _email_import_cb, &content, &detail, err);
 
     msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
     if (*err) goto done;
 
@@ -13715,7 +13715,7 @@ done:
     mboxevent_free(&flagsset);
     mboxevent_free(&flagsclear);
     if (mr) msgrecord_unref(&mr);
-    jmap_closembox(rock->req, &mbox);
+    mailbox_close(&mbox);
     return r;
 }
 
@@ -13759,7 +13759,7 @@ static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
 done:
     if (mr) msgrecord_unref(&mr);
     mboxlist_entry_free(&mbentry);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     return r;
 }
 
@@ -13826,7 +13826,7 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
 
 done:
     msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     return r;
 }
 
@@ -13969,7 +13969,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
                 r = _copy_msgrecord(httpd_authstate, req->accountid,
                         &jmap_namespace, src_mbox, dst_mbox, src_mr);
             }
-            jmap_closembox(req, &dst_mbox);
+            mailbox_close(&dst_mbox);
             free(dst_mboxname);
         }
         mboxlist_entry_free(&mbentry);
@@ -14003,7 +14003,7 @@ done:
     free(blob_id);
     strarray_fini(&dst_mboxnames);
     if (src_mr) msgrecord_unref(&src_mr);
-    jmap_closembox(req, &src_mbox);
+    mailbox_close(&src_mbox);
     json_decref(new_keywords);
 }
 
@@ -14338,7 +14338,7 @@ done:
         }
         ctx->errstr = desc;
     }
-    if (mailbox) jmap_closembox(req, &mailbox);
+    mailbox_close(&mailbox);
     free(emailid);
     free(mboxname);
     return res;
