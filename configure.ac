@@ -670,6 +670,8 @@ AC_ARG_ENABLE(sieve,
         [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])
 AC_ARG_ENABLE(pcre,
         [AS_HELP_STRING([--disable-pcre], [disable PCRE library])],[cyrus_cv_pcre_utf8="$enableval"])
+AC_ARG_ENABLE(pcre2,
+        [AS_HELP_STRING([--disable-pcre2], [disable PCRE2 library])],[cyrus_cv_pcre2_utf8="$enableval"])
 
 if test "$enable_sieve" != "no"; then
         AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
@@ -703,11 +705,29 @@ if test "$enable_pcre" != "no"; then
         fi
 fi
 
+if test "$enable_pcre2" != "no"; then
+        AC_CHECK_HEADER(pcre2posix.h)
+        if test "$ac_cv_header_pcre2posix_h" = "yes"; then
+            AC_MSG_CHECKING(for utf8 enabled pcre2)
+            AC_CACHE_VAL(cyrus_cv_pcre2_utf8, AC_TRY_CPP([#include <pcre2posix.h>
+#ifndef REG_UTF
+#include </nonexistent>
+#endif],cyrus_cv_pcre2_utf8=yes,cyrus_cv_pcre2_utf8=no))
+            AC_MSG_RESULT($cyrus_cv_pcre2_utf8)
+        else
+            cyrus_cv_pcre2_utf8="no"
+        fi
+fi
+
 LIB_REGEX=
 if test "$cyrus_cv_pcre_utf8" = "yes"; then
         LIB_REGEX="-lpcre -lpcreposix";
         AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
         AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
+elif test "$cyrus_cv_pcre2_utf8" = "yes"; then
+        LIB_REGEX="-lpcre2-posix -lpcre2-8";
+        AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
+        AC_DEFINE(HAVE_PCRE2POSIX_H, [], [Do we have usable pcre2 library?])
 else
         AC_CHECK_HEADERS(rxposix.h)
         if test "$ac_cv_header_rxposix_h" = "yes"; then
@@ -2461,6 +2481,7 @@ External dependencies:
    zlib:               $with_zlib
    jansson:            $with_jansson
    pcre:               $cyrus_cv_pcre_utf8
+   pcre2:              $cyrus_cv_pcre2_utf8
    clamav:             $with_clamav
    snmp:               $with_snmp
    -----------------------

@@ -47,17 +47,20 @@
 #include <sys/types.h>
 
 #ifdef ENABLE_REGEX
-# ifdef HAVE_PCREPOSIX_H
+# if defined HAVE_PCREPOSIX_H
 #  include <pcre.h>
 #  include <pcreposix.h>
-# else /* !HAVE_PCREPOSIX_H */
-#  ifdef HAVE_RXPOSIX_H
-#   include <rxposix.h>
-#  else /* !HAVE_RXPOSIX_H */
-#   include <regex.h>
-#  endif /* HAVE_RXPOSIX_H */
-# endif /* HAVE_PCREPOSIX_H */
-#endif /* ENABLE_REGEX */
+# elif defined HAVE_PCRE2POSIX_H
+#  ifndef PCRE2POSIX_H_INCLUDED
+#   include <pcre2posix.h>
+#   define PCRE2POSIX_H_INCLUDED
+#  endif
+# elif defined HAVE_RXPOSIX_H
+#  include <rxposix.h>
+# else
+#  include <regex.h>
+# endif
+#endif
 
 #include "sieve_interface.h"
 #include "strarray.h"
