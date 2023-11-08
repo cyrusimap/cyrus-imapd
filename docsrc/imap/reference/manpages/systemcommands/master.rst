@@ -64,7 +64,8 @@ Options
 .. option:: -p  pidfile
 
     Use *pidfile* as the pidfile.  If not specified, defaults to
-    ``/var/run/master.pid``
+    ``master_pid_file`` from :cyrusman:`imapd.conf(5)`, which
+    defaults to ``{configdirectory}/master.pid``
 
 .. option:: -r  ready_file
 

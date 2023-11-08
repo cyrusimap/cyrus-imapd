@@ -2886,7 +2886,7 @@ int main(int argc, char **argv)
 {
     static const char lock_suffix[] = ".lock";
 
-    const char *pidfile = MASTER_PIDFILE;
+    const char *pidfile = NULL;
     char *pidfile_lock = NULL;
     const char *ready_file = NULL;
 
@@ -2982,6 +2982,9 @@ int main(int argc, char **argv)
                 fatalf(2, "couldn't open %s: %m", file);
         }
     }
+
+    if (!pidfile) pidfile = config_getstring(IMAPOPT_MASTER_PID_FILE);
+    if (!pidfile) fatal("couldn't determine pidfile name", EX_CONFIG);
 
     /* Pidfile Algorithm in Daemon Mode.  This is a little subtle because
      * we want to ensure that we can report an error to our parent if the

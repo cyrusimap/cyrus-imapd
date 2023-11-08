@@ -1550,16 +1550,6 @@ AC_SUBST([GUESSTZ_CFLAGS])
 AM_CONDITIONAL([HAVE_GUESSTZ], [test "x$with_guesstz" = xyes])
 
 dnl
-dnl Set pidfile location
-dnl
-AC_ARG_WITH(pidfile,
-        [AS_HELP_STRING([--with-pidfile=DIR], [pidfile in DIR [/var/run/cyrus-master.pid]])],
-        [MASTERPIDFILE="$withval"],
-        [MASTERPIDFILE="/var/run/cyrus-master.pid"])
-MASTERPIDFILE="\"$MASTERPIDFILE\""
-AC_DEFINE_UNQUOTED(MASTER_PIDFILE, $MASTERPIDFILE,[Name of the pidfile for master])
-
-dnl
 dnl see if we're compiling with autocreate support
 dnl
 AC_ARG_ENABLE(autocreate,

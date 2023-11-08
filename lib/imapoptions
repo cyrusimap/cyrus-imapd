@@ -1701,6 +1701,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    come up in response to a reconfig+SIGHUP will just be logged and disabled
    like the default behaviour, without causing master to exit. */
 
+{ "master_pid_file", "{configdirectory}/master.pid", STRING, "UNRELEASED" }
+/* The path to a file that master(8) will write its PID to when running
+   as a daemon. */
+
 { "master_ready_file", "{configdirectory}/master.ready", STRING, "UNRELEASED" }
 /* The path to a file that master(8) will update to indicate that it is
    ready to accept client connections.  This file will be created if it does
