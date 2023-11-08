@@ -142,16 +142,7 @@ struct mailbox_iter {
     unsigned nchecktime;
 };
 
-
-struct mailboxlist {
-    struct mailboxlist *next;
-    char *name;
-    struct mailbox m;
-    struct mboxlock *l;
-    int nopen;
-};
-
-static struct mailboxlist *open_mailboxes = NULL;
+static struct mailbox *open_mailboxes = NULL;
 
 #define zeromailbox(m) do { memset(&m, 0, sizeof(struct mailbox)); \
                             (m).index_fd = -1; \
@@ -245,17 +236,16 @@ EXPORTED int open_mailboxes_exist()
     return open_mailboxes ? 1 : 0;
 }
 
-static struct mailboxlist *create_listitem(const char *name)
+static struct mailbox *create_listitem()
 {
-    struct mailboxlist *item = xzmalloc(sizeof(struct mailboxlist));
+    struct mailbox *item = xzmalloc(sizeof(struct mailbox));
+    zeromailbox(*item);
+
     item->next = open_mailboxes;
     open_mailboxes = item;
 
-    item->nopen = 1;
-    zeromailbox(item->m);
-    item->name = xstrdup(name);
-    /* ensure we never print insane times */
-    gettimeofday(&item->m.starttime, 0);
+    item->refcount = 1;
+    gettimeofday(&item->starttime, 0);
 
 #if defined ENABLE_OBJECTSTORE
     if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))
@@ -265,32 +255,32 @@ static struct mailboxlist *create_listitem(const char *name)
     return item;
 }
 
-static struct mailboxlist *find_listitem(const char *name)
+static struct mailbox *find_listitem(const char *lockname)
 {
-    struct mailboxlist *item;
+    struct mailbox *item;
 
     for (item = open_mailboxes; item; item = item->next) {
-        if (!strcmp(name, item->name))
+        if (!strcmp(lockname, item->lockname))
             return item;
     }
 
     return NULL;
 }
 
-static void remove_listitem(struct mailboxlist *remitem)
+static void remove_listitem(struct mailbox *remitem)
 {
-    struct mailboxlist *item;
-    struct mailboxlist *previtem = NULL;
+    struct mailbox *item;
+    struct mailbox *previtem = NULL;
 
     for (item = open_mailboxes; item; item = item->next) {
         if (item == remitem) {
-
             if (previtem)
                 previtem->next = item->next;
             else
                 open_mailboxes = item->next;
-            free(item->name);
-            free(item);
+
+            free(remitem->lockname);
+            free(remitem);
 
 #if defined ENABLE_OBJECTSTORE
             if (!open_mailboxes && config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED))  // time to close the database
@@ -910,10 +900,10 @@ static void mailbox_release_resources(struct mailbox *mailbox)
     xclose(mailbox->header_fd);
 
     /* release and unmap index */
-    xclose(mailbox->index_fd);
-    mailbox->index_locktype = 0; /* lock was released by closing fd */
     if (mailbox->index_base)
         map_free(&mailbox->index_base, &mailbox->index_len);
+    xclose(mailbox->index_fd);
+    mailbox->index_locktype = 0; /* lock was released by closing fd */
 
     /* release caches */
     for (i = 0; i < mailbox->caches.count; i++) {
@@ -926,12 +916,12 @@ static void mailbox_release_resources(struct mailbox *mailbox)
 /*
  * Open the index file for 'mailbox'
  */
-static int mailbox_open_index(struct mailbox *mailbox)
+static int mailbox_open_index(struct mailbox *mailbox, int index_locktype)
 {
-    struct stat sbuf;
     const char *fname;
-    int openflags = mailbox->is_readonly ? O_RDONLY : O_RDWR;
+    int openflags = index_locktype == LOCK_SHARED ? O_RDONLY : O_RDWR;
 
+    assert(!mailbox->index_locktype);
     mailbox_release_resources(mailbox);
 
     /* open and map the index file */
@@ -943,46 +933,35 @@ static int mailbox_open_index(struct mailbox *mailbox)
     if (mailbox->index_fd == -1)
         return IMAP_IOERROR;
 
-    /* don't open the cache yet, it will be loaded by lazy-loading
-     * later */
-
-    fstat(mailbox->index_fd, &sbuf);
-    mailbox->index_ino = sbuf.st_ino;
-    mailbox->index_mtime = sbuf.st_mtime;
-    mailbox->index_size = sbuf.st_size;
-    map_refresh(mailbox->index_fd, 0, &mailbox->index_base,
-                &mailbox->index_len, mailbox->index_size,
-                "index", mailbox_name(mailbox));
-
     return 0;
 }
 
-static int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype, int index_locktype)
+
+static int mailbox_relock(struct mailbox *mailbox, int locktype, int index_locktype)
 {
-    struct mailbox *mailbox = &listitem->m;
-    uint32_t legacy_dirs = (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS);
-    int r;
+    int r = 0;
 
+    mailbox_unlock_index(mailbox, NULL);
     mailbox_release_resources(mailbox);
-
-    mboxname_release(&listitem->l);
+    mboxname_release(&mailbox->namelock);
     mboxname_release(&mailbox->local_namespacelock);
-
+    r = mboxname_lock(mailbox->lockname, &mailbox->namelock, locktype);
+    if (r) return r;
+    r = mailbox_open_index(mailbox, index_locktype);
+    if (r) return r;
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
     if (userid) {
         int haslock = user_isnamespacelocked(userid);
         if (haslock) {
-            if (index_locktype != LOCK_SHARED) assert(haslock != LOCK_SHARED);
+            if (haslock == LOCK_SHARED)
+                assert(index_locktype == LOCK_SHARED);
         }
         else {
             mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
         }
         free(userid);
     }
-
-    r = mboxname_lock(legacy_dirs ? mailbox_name(mailbox) : mailbox_uniqueid(mailbox), &listitem->l, locktype);
-    if (r) return r;
-
+    r = mailbox_lock_index_internal(mailbox, index_locktype);
     return r;
 }
 
@@ -996,34 +975,31 @@ static int mailbox_open_advanced(const char *name,
                                  const mbentry_t *mbe,
                                  struct mailbox **mailboxptr)
 {
-    mbentry_t *mbentry = NULL;
-    struct mailboxlist *listitem;
-    struct mailbox *mailbox = NULL;
-    int r = 0;
-
     assert(*mailboxptr == NULL);
 
-    listitem = find_listitem(name);
+    struct mailbox *mailbox = find_listitem(name);
+    mbentry_t *mbentry = NULL;
+    int r = 0;
+
 
     /* already open?  just use this one */
-    if (listitem) {
+    if (mailbox) {
         /* can't reuse an exclusive locked mailbox */
-        if (listitem->l->locktype & LOCK_EXCLUSIVE)
-            return IMAP_MAILBOX_LOCKED;
-        if (locktype & LOCK_EXCLUSIVE)
-            return IMAP_MAILBOX_LOCKED;
-        /* can't reuse an already locked index */
-        if (listitem->m.index_locktype)
+        if (mailbox->namelock->locktype & LOCK_EXCLUSIVE)
             return IMAP_MAILBOX_LOCKED;
 
-        listitem->nopen++;
-        mailbox = &listitem->m;
+        /* can't promote a readonly index */
+        if (mailbox->index_locktype == LOCK_SHARED && locktype == LOCK_EXCLUSIVE)
+            return IMAP_MAILBOX_LOCKED;
 
-        goto lockindex;
+        mailbox->refcount++;
+
+        if (!mailbox->index_locktype) goto lockindex;
+
+        goto done;
     }
 
-    listitem = create_listitem(name);
-    mailbox = &listitem->m;
+    mailbox = create_listitem();
 
     // lock the user namespace FIRST before the mailbox namespace
     char *userid = mboxname_to_userid(name);
@@ -1054,10 +1030,9 @@ static int mailbox_open_advanced(const char *name,
         r = IMAP_MAILBOX_NONEXISTENT;
 
     if (r) {
-        if (mailbox->local_namespacelock)
-            mboxname_release(&mailbox->local_namespacelock);
+        mboxname_release(&mailbox->local_namespacelock);
         mboxlist_entry_free(&mbentry);
-        remove_listitem(listitem);
+        remove_listitem(mailbox);
         return r;
     }
 
@@ -1071,27 +1046,24 @@ static int mailbox_open_advanced(const char *name,
     }
 
     uint32_t legacy_dirs = (mbentry->mbtype & MBTYPE_LEGACY_DIRS);
-    r = mboxname_lock(legacy_dirs ? name : mbentry->uniqueid, &listitem->l, locktype);
+    mailbox->lockname = xstrdup(legacy_dirs ? name : mbentry->uniqueid);
+    r = mboxname_lock(mailbox->lockname, &mailbox->namelock, locktype);
     if (r) {
         /* locked is not an error - just means we asked for NONBLOCKING */
         if (r != IMAP_MAILBOX_LOCKED)
             xsyslog(LOG_ERR, "IOERROR: lock failed",
                              "mailbox=<%s> error=<%s>",
                              name, error_message(r));
-        if (mailbox->local_namespacelock)
-            mboxname_release(&mailbox->local_namespacelock);
+        mboxname_release(&mailbox->local_namespacelock);
         mboxlist_entry_free(&mbentry);
-        remove_listitem(listitem);
+        remove_listitem(mailbox);
         return r;
     }
 
     if (!mbentry->name) mbentry->name = xstrdup(name);
     mailbox->mbentry = mbentry;
 
-    if (index_locktype == LOCK_SHARED)
-        mailbox->is_readonly = 1;
-
-    r = mailbox_open_index(mailbox);
+    r = mailbox_open_index(mailbox, index_locktype);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: opening index failed",
                          "mailbox=<%s> error=<%s>",
@@ -1257,35 +1229,20 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
 {
     int flag;
     struct mailbox *mailbox = *mailboxptr;
-    struct mailboxlist *listitem;
 
     /* be safe against double-close */
     if (!mailbox) return;
 
-    listitem = find_listitem(mailbox_name(mailbox));
-    assert(listitem && &listitem->m == mailbox);
-
     *mailboxptr = NULL;
 
     /* open multiple times?  Just close this one */
-    if (listitem->nopen > 1) {
-        listitem->nopen--;
-        mailbox_unlock_index(mailbox, NULL);
+    if (mailbox->refcount > 1) {
+        mailbox->refcount--;
         return;
     }
 
-    if (mailbox->index_fd != -1) {
-        /* drop the index lock here because we'll lose our right to it
-         * when try to upgrade the mboxlock anyway. */
-        mailbox_unlock_index(mailbox, NULL);
-    }
-
     if (mailbox->i.options & OPT_MAILBOX_DELETED) {
-        int r = mailbox_mboxlock_reopen(listitem, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE);
-        if (!r) r = mailbox_open_index(mailbox);
-        /* lock_internal so DELETED doesn't cause it to appear to be
-         * NONEXISTENT - but we still need conversations so we can write changes! */
-        if (!r) r = mailbox_lock_index_internal(mailbox, LOCK_EXCLUSIVE);
+        int r = mailbox_relock(mailbox, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE);
         /* double check just in case a new mailbox with the same name got created
          * in a race condition and isn't deleted! */
         if (!r && (mailbox->i.options & OPT_MAILBOX_DELETED)) {
@@ -1293,7 +1250,6 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
                                    (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) ?
                                    NULL : mailbox_uniqueid(mailbox));
         }
-        mailbox_unlock_index(mailbox, NULL);
     }
     else if (!in_shutdown && (mailbox->i.options & MAILBOX_CLEANUP_MASK)) {
         // there's cleanup to do!  Schedule it for after we've replied to the user
@@ -1301,6 +1257,8 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
                                 _delayed_cleanup, free, xstrdup(mailbox_name(mailbox)));
     }
 
+    /* drop the index lock */
+    mailbox_unlock_index(mailbox, NULL);
     mailbox_release_resources(mailbox);
 
     mboxlist_entry_free(&mailbox->mbentry);
@@ -1313,12 +1271,10 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
         xzfree(mailbox->h.flagname[flag]);
     }
 
-    if (listitem->l) mboxname_release(&listitem->l);
+    mboxname_release(&mailbox->namelock);
+    mboxname_release(&mailbox->local_namespacelock);
 
-    if (mailbox->local_namespacelock)
-        mboxname_release(&mailbox->local_namespacelock);
-
-    remove_listitem(listitem);
+    remove_listitem(mailbox);
 }
 
 struct parseentry_rock {
@@ -1992,11 +1948,6 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
     if (!mailbox->index_base)
         return IMAP_MAILBOX_BADFORMAT;
 
-    /* need to make sure we're reading fresh data! */
-    map_refresh(mailbox->index_fd, 1, &mailbox->index_base,
-                &mailbox->index_len, mailbox->index_size,
-                "index", mailbox_name(mailbox));
-
     r = mailbox_buf_to_index_header(mailbox->index_base, mailbox->index_len,
                                     &mailbox->i);
     if (r) return r;
@@ -2271,6 +2222,7 @@ static int _commit_changes(struct mailbox *mailbox)
     int r;
 
     if (!mailbox->index_change_count) return 0;
+    assert(mailbox_index_islocked(mailbox, 1));
     mailbox->i.dirty = 1;
 
     /* in which we throw away all our next pointers, but we don't care any more.
@@ -2509,30 +2461,28 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     const char *index_fname = mailbox_meta_fname(mailbox, META_INDEX);
 
     assert(mailbox->index_fd != -1);
-    assert(!mailbox->index_locktype);
+
+    // if we're already locked, don't need to lock again!
+    if (mailbox->index_locktype) {
+        if (mailbox->index_locktype == LOCK_SHARED && locktype != LOCK_SHARED)
+            return IMAP_MAILBOX_LOCKED;
+        return 0;
+    }
 
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
     if (userid) {
         if (!user_isnamespacelocked(userid)) {
-            struct mailboxlist *listitem = find_listitem(mailbox_name(mailbox));
-            assert(listitem);
-            assert(&listitem->m == mailbox);
-            r = mailbox_mboxlock_reopen(listitem, LOCK_SHARED, locktype);
-            if (locktype == LOCK_SHARED)
-                mailbox->is_readonly = 1;
-            if (!r) r = mailbox_open_index(mailbox);
+            free(userid);
+            return mailbox_relock(mailbox, LOCK_SHARED, locktype);
         }
         free(userid);
-        if (r) return r;
     }
 
     if (locktype == LOCK_EXCLUSIVE) {
-        /* handle read-only case cleanly - we need to re-open read-write first! */
-        if (mailbox->is_readonly) {
-            mailbox->is_readonly = 0;
-            r = mailbox_open_index(mailbox);
-        }
-        if (!r) r = lock_blocking(mailbox->index_fd, index_fname);
+        /* we can't upgrade a readonly mailbox */
+        if (mailbox->is_readonly)
+            return IMAP_MAILBOX_LOCKED;
+        r = lock_blocking(mailbox->index_fd, index_fname);
     }
     else if (locktype == LOCK_SHARED) {
         r = lock_shared(mailbox->index_fd, index_fname);
@@ -2542,18 +2492,25 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
         fatal("invalid locktype for index", EX_SOFTWARE);
     }
 
-    /* double check that the index exists and has at least enough
-     * data to check the version number */
     if (!r) {
-        if (!mailbox->index_base)
+        if (fstat(mailbox->index_fd, &sbuf) != 0) {
             r = IMAP_MAILBOX_BADFORMAT;
-        else if (mailbox->index_size < OFFSET_NUM_RECORDS)
+        }
+        else if (sbuf.st_size < OFFSET_NUM_RECORDS) {
             r = IMAP_MAILBOX_BADFORMAT;
-        if (r)
-            lock_unlock(mailbox->index_fd, index_fname);
+        }
+        else {
+            mailbox->index_ino = sbuf.st_ino;
+            mailbox->index_mtime = sbuf.st_mtime;
+            mailbox->index_size = sbuf.st_size;
+            map_refresh(mailbox->index_fd, 0, &mailbox->index_base,
+                        &mailbox->index_len, mailbox->index_size,
+                        "index", mailbox_name(mailbox));
+        }
     }
 
     if (r) {
+        lock_unlock(mailbox->index_fd, index_fname);
         xsyslog(LOG_ERR, "IOERROR: lock index failed",
                          "mailbox=<%s> error=<%s>",
                          mailbox_name(mailbox), error_message(r));
@@ -2561,6 +2518,7 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     }
 
     mailbox->index_locktype = locktype;
+    mailbox->is_readonly = (locktype == LOCK_SHARED) ? 1 : 0;
     gettimeofday(&mailbox->starttime, 0);
 
     r = stat(header_fname, &sbuf);
@@ -2583,14 +2541,6 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
             return r;
         }
     }
-
-    /* release caches */
-    int i;
-    for (i = 0; i < mailbox->caches.count; i++) {
-        struct mappedfile *cachefile = ptrarray_nth(&mailbox->caches, i);
-        mappedfile_close(&cachefile);
-    }
-    ptrarray_fini(&mailbox->caches);
 
     /* note: it's guaranteed by our outer cyrus.lock lock that the
      * cyrus.index and cyrus.cache files are never rewritten, so
@@ -2645,6 +2595,9 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
     int r;
     const char *index_fname = mailbox_meta_fname(mailbox, META_INDEX);
 
+    if (mailbox->refcount > 1)
+        return;
+
     /* this is kinda awful, but too much code expects it to work, and the
      * refcounting isn't good about partial commit/abort and all the
      * unwinding, so here you are.  At least if you mailbox_abort, then
@@ -2680,6 +2633,7 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
                              "mailbox=<%s>",
                              mailbox_name(mailbox));
         mailbox->index_locktype = 0;
+        mailbox->is_readonly = 0;
 
         gettimeofday(&endtime, 0);
         timediff = timesub(&mailbox->starttime, &endtime);
@@ -2697,10 +2651,16 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
         }
     }
 
-    // release the namespacelock here
-    if (mailbox->local_namespacelock) {
-        mboxname_release(&mailbox->local_namespacelock);
+    /* release caches */
+    int i;
+    for (i = 0; i < mailbox->caches.count; i++) {
+        struct mappedfile *cachefile = ptrarray_nth(&mailbox->caches, i);
+        mappedfile_close(&cachefile);
     }
+    ptrarray_fini(&mailbox->caches);
+
+    // release the namespacelock here
+    mboxname_release(&mailbox->local_namespacelock);
 }
 
 static char *mailbox_header_data_cstring(struct mailbox *mailbox)
@@ -2997,6 +2957,9 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
 {
     int r;
 
+    // we can't abort with additional references, just have to die
+    assert(mailbox->refcount == 1);
+
 #ifdef WITH_DAV
     r = mailbox_abort_dav(mailbox);
     if (r) return r;
@@ -3045,6 +3008,10 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
  */
 EXPORTED int mailbox_commit(struct mailbox *mailbox)
 {
+    /* open multiple times?  we can't commit yet, so just skip committing */
+    if (mailbox->refcount > 1)
+        return 0;
+
     /* XXX - ibuf for alignment? */
     static unsigned char buf[INDEX_HEADER_SIZE];
     int n, r;
@@ -3072,6 +3039,9 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
     r = mailbox_commit_header(mailbox);
     if (r) return r;
 
+    r = _commit_changes(mailbox);
+    if (r) return r;
+
     if (!mailbox->i.dirty)
         return 0;
 
@@ -3080,11 +3050,6 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
                            mailbox->i.highestmodseq,
                            mailbox_mbtype(mailbox), /*flags*/0);
     }
-
-    assert(mailbox_index_islocked(mailbox, 1));
-
-    r = _commit_changes(mailbox);
-    if (r) return r;
 
     /* always update xconvmodseq, it might have been done by annotations */
     r = mailbox_update_xconvmodseq(mailbox, mailbox->i.highestmodseq, /*force*/0);
@@ -4349,17 +4314,12 @@ EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mai
 
     /* already exists, use that one */
     struct conversations_state *cstate = conversations_get_mbox(mailbox_name(mailbox));
-    if (cstate) {
-        /* but make sure it's not read-only unless we are */
-        if (!mailbox->is_readonly) assert (!cstate->is_shared);
-        return cstate;
-    }
+    if (cstate) return cstate;
 
     /* open the conversations DB - don't bother checking return code since it'll
      * only be set if it opens successfully, and we can only return NULL or an
      * object */
     conversations_open_mbox(mailbox_name(mailbox), mailbox->is_readonly, &mailbox->local_cstate);
-
     return mailbox->local_cstate;
 }
 
@@ -5830,31 +5790,28 @@ EXPORTED int mailbox_create(const char *name,
     struct mailbox *mailbox = NULL;
     int n;
     int createfnames[] = { META_INDEX, META_HEADER, 0 };
-    struct mailboxlist *listitem;
 
     assert(uniqueid);
 
     /* if we already have this name open then that's an error too */
-    listitem = find_listitem(name);
-    if (listitem) return IMAP_MAILBOX_LOCKED;
+    uint32_t legacy_dirs = (mbtype & MBTYPE_LEGACY_DIRS);
+    mailbox = find_listitem(legacy_dirs ? name : uniqueid);
+    if (mailbox) return IMAP_MAILBOX_LOCKED;
 
-    listitem = create_listitem(name);
-    mailbox = &listitem->m;
+    mailbox = create_listitem();
 
     /* needs to be an exclusive namelock to create a mailbox */
     char *userid = mboxname_to_userid(name);
-    if (userid) {
-        int haslock = user_isnamespacelocked(userid);
-        assert(haslock == LOCK_EXCLUSIVE);
-        free(userid);
-    }
+    int haslock = user_isnamespacelocked(userid);
+    syslog(LOG_ERR, "CREATING MAILBOX %s", name);
+    assert(haslock == LOCK_EXCLUSIVE);
+    free(userid);
 
-    uint32_t legacy_dirs = (mbtype & MBTYPE_LEGACY_DIRS);
-    r = mboxname_lock(legacy_dirs ? name : uniqueid, &listitem->l, LOCK_EXCLUSIVE);
+    mailbox->lockname = xstrdup(legacy_dirs ? name : uniqueid);
+    r = mboxname_lock(mailbox->lockname, &mailbox->namelock, LOCK_EXCLUSIVE);
     if (r) {
-        if (mailbox->local_namespacelock)
-            mboxname_release(&mailbox->local_namespacelock);
-        remove_listitem(listitem);
+        mboxname_release(&mailbox->local_namespacelock);
+        remove_listitem(mailbox);
         return r;
     }
 
@@ -6674,21 +6631,9 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
                            NULL : mailbox_uniqueid(newmailbox));
     if (r) goto fail;
 
-    /* Re-open index file  */
-    r = mailbox_open_index(newmailbox);
+    /* we have new files in place, so redo all the locks */
+    r = mailbox_relock(newmailbox, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE);
     if (r) goto fail;
-
-    /* cyrus.header has been copied with old uniqueid.
-       make a copy of new uniqueid so we can reset it */
-    newuniqueid = xstrdup(mailbox_uniqueid(newmailbox));
-
-    /* Re-lock index */
-    r = mailbox_lock_index_internal(newmailbox, LOCK_EXCLUSIVE);
-
-    /* Reset new uniqueid */
-    free(newmailbox->h.uniqueid);
-    newmailbox->h.uniqueid = xstrdup(newuniqueid);
-    newmailbox->header_dirty = 1;
 
     /* update mailbox annotations if necessary */
     r = annotate_rename_mailbox(oldmailbox, newmailbox);
@@ -7027,16 +6972,14 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
                 | OPT_POP3_NEW_UIDL;
     mbentry_t *mbentry = NULL;
-    struct mailboxlist *listitem;
     int r;
 
     /* make sure it's not already open.  Very odd, since we already
      * discovered it's not openable! */
-    listitem = find_listitem(name);
-    if (listitem) return IMAP_MAILBOX_LOCKED;
+    mailbox = find_listitem(name);
+    if (mailbox) return IMAP_MAILBOX_LOCKED;
 
-    listitem = create_listitem(name);
-    mailbox = &listitem->m;
+    mailbox = create_listitem();
 
     // lock the user namespace FIRST before the mailbox namespace
     char *userid = mboxname_to_userid(name);
@@ -7060,7 +7003,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     /* if we can't get an exclusive lock first try, there's something
      * racy going on! */
     uint32_t legacy_dirs = (mbentry->mbtype & MBTYPE_LEGACY_DIRS);
-    r = mboxname_lock(legacy_dirs ? name : mbentry->uniqueid, &listitem->l, LOCK_EXCLUSIVE);
+    r = mboxname_lock(legacy_dirs ? name : mbentry->uniqueid, &mailbox->namelock, LOCK_EXCLUSIVE);
     if (r) goto done;
 
     mailbox->mbentry = mboxlist_entry_copy(mbentry);
@@ -7068,7 +7011,8 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     syslog(LOG_NOTICE, "create new mailbox %s", name);
 
     /* Attempt to open index */
-    r = mailbox_open_index(mailbox);
+    r = mailbox_open_index(mailbox, LOCK_EXCLUSIVE);
+    if (!r) r = mailbox_lock_index_internal(mailbox, LOCK_EXCLUSIVE);
     if (!r) r = mailbox_read_index_header(mailbox);
     if (r) {
         printf("%s: failed to read index header\n", mailbox_name(mailbox));
