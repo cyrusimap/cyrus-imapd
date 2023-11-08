@@ -1053,19 +1053,14 @@ void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
     hash_insert(creation_id, xstrdup(id), req->created_ids);
 }
 
-HIDDEN int jmap_openmbox(jmap_req_t *req __attribute__((unused)), const char *name,
-                         struct mailbox **mboxp, int rw)
-{
-    return rw ? mailbox_open_iwl(name, mboxp) : mailbox_open_irl(name, mboxp);
-}
-
 HIDDEN int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
                                      struct mailbox **mboxp, int rw)
 {
     const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, id);
 
     if (mbentry)
-        return jmap_openmbox(req, mbentry->name, mboxp, rw);
+        return rw ? mailbox_open_iwl(mbentry->name, mboxp)
+                  : mailbox_open_irl(mbentry->name, mboxp);
     else
         return IMAP_MAILBOX_NONEXISTENT;
 }
@@ -1107,7 +1102,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
         }
     }
 
-    r = jmap_openmbox(req, mbentry->name, &d->mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &d->mbox);
     mboxlist_entry_free(&mbentry);
     if (r) return r;
 

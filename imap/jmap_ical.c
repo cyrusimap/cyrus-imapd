@@ -440,8 +440,9 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
 
     if (!jmapctx->attachments.mbox) {
         char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
-        int r = jmap_openmbox(req, mboxname, &jmapctx->attachments.mbox,
-                jmapctx->attachments.lock);
+	int rw = jmapctx->attachments.lock;
+        int r = rw ? mailbox_open_iwl(mboxname, &jmapctx->attachments.mbox)
+                   : mailbox_open_irl(mboxname, &jmapctx->attachments.mbox);
         if (r) {
             xsyslog(LOG_ERR, "can't open attachments",
                     "mboxname=<%s> err<%s>", mboxname, error_message(r));

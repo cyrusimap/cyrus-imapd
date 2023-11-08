@@ -667,7 +667,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     }
 
     /* Open the mailboxes */
-    r = jmap_openmbox(req, mboxname, &mbox, 1);
+    r = mailbox_open_iwl(mboxname, &mbox);
     if (r) goto done;
 
     /* Load the message */
@@ -1329,7 +1329,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         goto done;
     }
     else {
-        r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+        r = mailbox_open_irl(mbentry->name, &mbox);
     }
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
@@ -1509,7 +1509,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         goto done;
     }
 
-    r = jmap_openmbox(req, mbentry->name, &submbox, 1);
+    r = mailbox_open_iwl(mbentry->name, &submbox);
     assert(submbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
@@ -1682,7 +1682,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
         goto done;
     }
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
@@ -2147,7 +2147,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         goto done;
     }
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 

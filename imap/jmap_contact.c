@@ -1282,7 +1282,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
 
         if (!mailbox || strcmp(mailbox_name(mailbox), mbentry->name)) {
             mailbox_close(&mailbox);
-            r = jmap_openmbox(req, mbentry->name, &mailbox, 1);
+            r = mailbox_open_iwl(mbentry->name, &mailbox);
         }
         mboxlist_entry_free(&mbentry);
         if (r) goto done;
@@ -4046,7 +4046,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
     /* we need to create and append a record */
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mboxname)) {
         mailbox_close(mailbox);
-        r = jmap_openmbox(req, mboxname, mailbox, 1);
+        r = mailbox_open_iwl(mboxname, mailbox);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             json_array_append_new(invalid, json_string("addressbookId"));
             r = 0;
@@ -4180,7 +4180,7 @@ static int _contact_set_update(jmap_req_t *req, unsigned kind,
                 json_array_append_new(invalid, json_string("addressbookId"));
                 r = HTTP_FORBIDDEN;
             }
-            else if ((r = jmap_openmbox(req, mboxname, &newmailbox, 1))) {
+            else if ((r = mailbox_open_iwl(mboxname, &newmailbox))) {
                 syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
             }
             else {
@@ -4203,7 +4203,7 @@ static int _contact_set_update(jmap_req_t *req, unsigned kind,
 
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mbentry->name)) {
         mailbox_close(mailbox);
-        r = jmap_openmbox(req, mbentry->name, mailbox, 1);
+        r = mailbox_open_iwl(mbentry->name, mailbox);
     }
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open %s",
@@ -4448,7 +4448,7 @@ static void _contact_copy(jmap_req_t *req,
     }
 
     /* Read source event */
-    r = jmap_openmbox(req, mbentry->name, &src_mbox, /*rw*/0);
+    r = mailbox_open_irl(mbentry->name, &src_mbox);
     if (r) goto done;
 
     struct index_record record;
@@ -5081,12 +5081,8 @@ static int setaddressbook_writeprops(jmap_req_t *req,
     if (!jmap_hasrights(req, mboxname, JACL_READITEMS) && !ignore_acl)
         return IMAP_MAILBOX_NONEXISTENT;
 
-    r = jmap_openmbox(req, mboxname, &mbox, 1);
-    if (r) {
-        syslog(LOG_ERR, "jmap_openmbox(req, %s) failed: %s",
-                mboxname, error_message(r));
-        return r;
-    }
+    r = mailbox_open_iwl(mboxname, &mbox);
+    if (r) return r;
 
     r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) {
@@ -11110,7 +11106,7 @@ static int _card_set_create(jmap_req_t *req,
     /* we need to create and append a record */
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mboxname)) {
         mailbox_close(mailbox);
-        r = jmap_openmbox(req, mboxname, mailbox, 1);
+        r = mailbox_open_iwl(mboxname, mailbox);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             json_array_append_new(invalid, json_string("addressbookId"));
             r = 0;
@@ -11267,7 +11263,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                 json_array_append_new(invalid, json_string("addressBookId"));
                 r = HTTP_FORBIDDEN;
             }
-            else if ((r = jmap_openmbox(req, mboxname, &newmailbox, 1))) {
+            else if ((r = mailbox_open_iwl(mboxname, &newmailbox))) {
                 syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
             }
             else {
@@ -11290,7 +11286,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
 
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mbentry->name)) {
         mailbox_close(mailbox);
-        r = jmap_openmbox(req, mbentry->name, mailbox, 1);
+        r = mailbox_open_iwl(mbentry->name, mailbox);
     }
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open %s",
@@ -11721,7 +11717,8 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     }
 
     /* Open mailbox, we need it now */
-    if ((r = jmap_openmbox(req, mbentry->name, &mailbox, 0))) {
+    r = mailbox_open_irl(mbentry->name, &mailbox);
+    if (r) {
         ctx->errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
         goto done;
@@ -11876,7 +11873,8 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     }
 
     /* Open mailbox, we need it now */
-    if ((r = jmap_openmbox(req, mbentry->name, &mailbox, 0))) {
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
+    if (r) {
         ctx->errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
         goto done;

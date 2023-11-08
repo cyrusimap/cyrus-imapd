@@ -275,7 +275,7 @@ static json_t *generate_mdn(struct jmap_req *req,
     }
 
     /* Open the mailbox */
-    r = jmap_openmbox(req, mboxname, &mbox, 1);
+    r = mailbox_open_iwl(mboxname, &mbox);
     if (r) goto done;
 
     /* Load the message */

@@ -2745,7 +2745,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         struct mailbox *mbox = NULL;
         uint32_t newopts;
 
-        r = jmap_openmbox(req, mboxname, &mbox, 1);
+        r = mailbox_open_iwl(mboxname, &mbox);
         if (r) goto done;
 
         if (args->shareWith) {
@@ -2824,12 +2824,12 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
         r = IMAP_NOTFOUND;
         goto done;
     }
-    r = jmap_openmbox(req, src_mbentry->name, &src_mbox, 0);
+    r = mailbox_open_irl(src_mbentry->name, &src_mbox);
     if (r) {
         syslog(LOG_ERR, "%s: can't open %s", __func__, src_mbentry->name);
         goto done;
     }
-    r = jmap_openmbox(req, dst_mbentry->name, &dst_mbox, 1);
+    r = mailbox_open_iwl(dst_mbentry->name, &dst_mbox);
     if (r) {
         syslog(LOG_ERR, "%s: can't open %s", __func__, dst_mbentry->name);
         goto done;
@@ -2971,7 +2971,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
             struct mailbox *mbox = NULL;
             struct mailbox_iter *iter = NULL;
 
-            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+            r = mailbox_open_irl(mbentry->name, &mbox);
             if (r) goto done;
             iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
             if (mailbox_iter_step(iter) != NULL) {

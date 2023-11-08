@@ -832,7 +832,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
             r = IMAP_PERMISSION_DENIED;
         }
         else {
-            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+            r = mailbox_open_irl(mbentry->name, &mbox);
             if (r) {
                 syslog(LOG_ERR, "jmap_blob_get: can't open mailbox %s: %s",
                        mbentry->name, error_message(r));

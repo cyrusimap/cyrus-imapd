@@ -274,7 +274,8 @@ static struct email_sortfield email_sortfields[] = {
 #define jmap_openmbox_by_guidrec(req, rec, mbox, rw)           \
     ((rec->version > CONV_GUIDREC_BYNAME_VERSION) ?            \
      jmap_openmbox_by_uniqueid(req, conv_guidrec_uniqueid(rec), mbox, rw) :  \
-     jmap_openmbox(req, conv_guidrec_mboxname(rec), mbox, rw))
+     rw ? mailbox_open_iwl(conv_guidrec_mboxname(rec), mbox) \
+        : mailbox_open_irl(conv_guidrec_mboxname(rec), mbox))
 
 
 #define JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL 20
@@ -756,7 +757,7 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
         return 0;
     }
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
@@ -1081,7 +1082,7 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
 
     int r = 0;
     struct mailbox *mbox = NULL;
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     if (r) {
         // we want to keep looking and see if we can find a mailbox we can open
         syslog(LOG_ERR, "IOERROR: email_find_cb failed to open %s: %s",
@@ -3862,10 +3863,10 @@ static int guidsearch_run_xapian(jmap_req_t *req, struct emailsearch *search,
     mbname_t *mbname = mbname_from_userid(req->accountid);
 
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_JMAPUPLOADFOLDER));
-    int r = jmap_openmbox(req, mbname_intname(mbname), &mbox, 0);
+    int r = mailbox_open_irl(mbname_intname(mbname), &mbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         free(mbname_pop_boxes(mbname));
-        r = jmap_openmbox(req, mbname_intname(mbname), &mbox, 0);
+        r = mailbox_open_irl(mbname_intname(mbname), &mbox);
     }
     if (r) goto done;
 
@@ -5797,7 +5798,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
             continue;
         }
 
-        r = jmap_openmbox(req, mboxname, &mbox, 0);
+        r = mailbox_open_irl(mboxname, &mbox);
         if (r) goto doneloop;
 
         r = msgrecord_find(mbox, uid, &mr);
@@ -6430,7 +6431,7 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *vrock)
     }
 
     /* Fetch system flags */
-    int r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    int r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) return r;
 
@@ -8148,7 +8149,7 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
         uint32_t uid;
         int r = jmap_email_find(req, NULL, id, &mboxname, &uid);
         if (!r) {
-            r = jmap_openmbox(req, mboxname, &mbox, 0);
+            r = mailbox_open_irl(mboxname, &mbox);
             if (!r) {
                 r = msgrecord_find(mbox, uid, &mr);
                 if (!r) {
@@ -8836,7 +8837,7 @@ static void _email_append(jmap_req_t *req,
     }
 
     /* Create the message in the destination mailbox */
-    r = jmap_openmbox(req, mboxname, &mbox, 1);
+    r = mailbox_open_iwl(mboxname, &mbox);
     if (r) goto done;
 
     if (sourcefile) {
@@ -8980,7 +8981,7 @@ static void _email_append(jmap_req_t *req,
         if (!strcmp(mboxname, dstname))
             continue;
 
-        r = jmap_openmbox(req, dstname, &dst, 1);
+        r = mailbox_open_iwl(dstname, &dst);
         if (r) goto done;
 
         r = _copy_msgrecord(httpd_authstate, req->userid, &jmap_namespace,
@@ -12400,7 +12401,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
             else if (!mbentry) {
                 r = IMAP_MAILBOX_NONEXISTENT;
             }
-            if (!r) r = jmap_openmbox(req, mboxrec->mboxname, &mbox, /*rw*/1);
+            if (!r) r = mailbox_open_iwl(mboxrec->mboxname, &mbox);
             if (r) {
                 int j;
                 for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
@@ -12475,7 +12476,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
                     r = mboxlist_promote_intermediary(mbentry->name);
                     mboxname_release(&namespacelock);
                 }
-                if (!r) jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
+                if (!r) r = mailbox_open_iwl(mbentry->name, &mbox);
             }
             if (mbox) {
                 if (!hash_lookup(mailbox_uniqueid(mbox), &bulk->plans_by_mbox_id)) {
@@ -13085,7 +13086,7 @@ static void _email_destroy_bulk(jmap_req_t *req,
         struct email_mboxrec *mboxrec = ptrarray_nth(mboxrecs, i);
         struct mailbox *mbox = NULL;
         int j;
-        int r = jmap_openmbox(req, mboxrec->mboxname, &mbox, 1);
+        int r = mailbox_open_iwl(mboxrec->mboxname, &mbox);
         if (!r) {
             /* Expunge messages one by one, marking any failed/expunged message */
             _email_multiexpunge(req, mbox, &mboxrec->uidrecs, not_destroyed, destroyed);
@@ -13727,7 +13728,6 @@ struct _email_exists_rock {
 static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct _email_exists_rock *data = (struct _email_exists_rock*) rock;
-    jmap_req_t *req = data->req;
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
     uint32_t internal_flags;
@@ -13740,7 +13740,7 @@ static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
         goto done;
     }
     if (rec->version < 1) {
-        r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+        r = mailbox_open_irl(mbentry->name, &mbox);
         if (r) goto done;
 
         r = msgrecord_find(mbox, rec->uid, &mr);
@@ -13789,7 +13789,7 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
     }
 
     /* Lookup record */
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
     r = msgrecord_find(mbox, rec->uid, &mr);
@@ -13964,7 +13964,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
         }
         if (!r) {
             struct mailbox *dst_mbox = NULL;
-            r = jmap_openmbox(req, dst_mboxname, &dst_mbox, /*rw*/1);
+            r = mailbox_open_iwl(dst_mboxname, &dst_mbox);
             if (!r) {
                 r = _copy_msgrecord(httpd_authstate, req->accountid,
                         &jmap_namespace, src_mbox, dst_mbox, src_mr);
@@ -14271,7 +14271,8 @@ static int jmap_emailheader_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx
     else if (mimetype) buf_setcstr(&ctx->content_type, mimetype);
 
     /* Open mailbox, we need it now */
-    if ((r = jmap_openmbox(req, mboxname, &mailbox, 0))) {
+    r = mailbox_open_irl(mboxname, &mailbox);
+    if (r) {
         ctx->errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
         goto done;

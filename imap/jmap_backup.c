@@ -375,7 +375,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    r = jmap_openmbox(rrock->req, mbentry->name, &rrock->mailbox, /*rw*/0);
+    r = mailbox_open_irl(mbentry->name, &rrock->mailbox);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for reading",
                mbentry->name);
@@ -498,7 +498,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                We also do this on initial entry into the loop
                to switch from a read lock to a write lock. */
             mailbox_close(&rrock->mailbox);
-            r = jmap_openmbox(rrock->req, mbentry->name, &rrock->mailbox, /*rw*/1);
+            r = mailbox_open_iwl(mbentry->name, &rrock->mailbox);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
                        mbentry->name);
@@ -1279,7 +1279,7 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
     jmap_req_t *req = rrock->req;
     int r;
 
-    r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
         return r;
@@ -1309,7 +1309,7 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
 
             mailbox_iter_done(&iter);
             mailbox_close(&mailbox);
-            r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
+            r = mailbox_open_iwl(mbentry->name, &mailbox);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
                        mbentry->name);
@@ -1623,7 +1623,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         isdestroyed_mbox = 1;
     }
 
-    r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/0);
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
         return r;
@@ -2004,8 +2004,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     }
 
     if (!r) {
-        r = jmap_openmbox(req, mboxname, &mailbox,
-                          /*rw*/newmailbox == NULL || num_unflag);
+        int rw = (newmailbox == NULL || num_unflag);
+        r = rw ? mailbox_open_iwl(mboxname, &mailbox) : mailbox_open_irl(mboxname, &mailbox);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
                    mboxname, error_message(r));
@@ -2055,8 +2055,9 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                 }
             }
 
-            r = jmap_openmbox(req, mboxname, &mailbox,
-                              /*rw*/newmailbox == NULL || num_unflag);
+            int rw = (newmailbox == NULL || num_unflag);
+            r = rw ? mailbox_open_iwl(mboxname, &mailbox)
+                   : mailbox_open_irl(mboxname, &mailbox);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
                        mboxname, error_message(r));

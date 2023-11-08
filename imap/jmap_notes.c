@@ -472,7 +472,7 @@ static int jmap_note_get(jmap_req_t *req)
 
     rights = jmap_myrights_mbentry(req, mbentry);
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
@@ -867,7 +867,7 @@ static int jmap_note_set(jmap_req_t *req)
 
     rights = jmap_myrights_mbentry(req, mbentry);
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 1);
+    r = mailbox_open_iwl(mbentry->name, &mbox);
     assert(mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
@@ -999,7 +999,7 @@ static int jmap_note_changes(jmap_req_t *req)
         goto done;
     }
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
 
     r = mailbox_user_flag(mbox, DFLAG_UNBIND, &userflag, 0);
