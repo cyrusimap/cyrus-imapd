@@ -6611,9 +6611,6 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
     return r;
 }
 
-/* if 'userid' is set, we perform the funky RENAME INBOX INBOX.old
-   semantics, regardless of whether or not the name of the mailbox is
-   'user.foo'.*/
 /* requires a write-locked oldmailbox pointer, since we delete it
    immediately afterwards */
 /* This function ONLY WORKS if the type is legacy */
