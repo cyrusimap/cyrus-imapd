@@ -1041,7 +1041,7 @@ static int jmap_calendar_get(struct jmap_req *req)
                 }
             }
 
-            if (mbentry) mboxlist_entry_free(&mbentry);
+            mboxlist_entry_free(&mbentry);
             free(mboxname);
             if (r) goto done;
         }
@@ -4108,8 +4108,8 @@ done:
     jmap_get_fini(&get);
     if (db) caldav_close(db);
     mailbox_close(&rock.mailbox);
-    if (rock.mbentry) mboxlist_entry_free(&rock.mbentry);
-    if (rock.mbname) mbname_free(&rock.mbname);
+    mboxlist_entry_free(&rock.mbentry);
+    mbname_free(&rock.mbname);
     if (rock.ical) icalcomponent_free(rock.ical);
     if (rock.ical_instances_by_recurid.size)
         free_hash_table(&rock.ical_instances_by_recurid, _icalcomponent_free_cb);
@@ -9556,9 +9556,7 @@ static void principal_getavailability(jmap_req_t *req,
     caldav_jscal_filter_fini(&jscal_filter);
     if (r) jmap_error(req, jmap_server_error(r));
     mailbox_close(&rock.mbox);
-    if (rock.mbentry) {
-        mboxlist_entry_free(&rock.mbentry);
-    }
+    mboxlist_entry_free(&rock.mbentry);
     if (rock.floatingtz) {
         icaltimezone_free(rock.floatingtz, 1);
         rock.floatingtz = NULL;
