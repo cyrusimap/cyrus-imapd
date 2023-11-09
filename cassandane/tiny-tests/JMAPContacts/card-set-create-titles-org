@@ -40,7 +40,7 @@ sub test_card_set_create_titles_org
                             '@type' => 'Title',
                             kind => 'role',
                             name => 'Research Scientist',
-                            organization => 'ORG-1'
+                            organizationId => 'ORG-1'
                         }
                     },
                     organizations => {

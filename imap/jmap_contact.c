@@ -6901,7 +6901,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                             json_pack("{s:s* s:o s:s*}",
                                       "kind", kind,
                                       "name", jmap_utf8string(prop_value),
-                                      "organization", org));
+                                      "organizationId", org));
         break;
     }
 
@@ -9608,7 +9608,7 @@ static vcardproperty *_jstitle_to_vcard(struct jmap_parser *parser, json_t *obj,
             jmap_parser_invalid(parser, "name");
         }
         else {
-            json_t *jprop = json_object_get(obj, "organization");
+            json_t *jprop = json_object_get(obj, "organizationId");
 
             prop = vcardproperty_new(kind);
             vcardproperty_set_value_from_string(prop, val, "TEXT");
@@ -9623,10 +9623,10 @@ static vcardproperty *_jstitle_to_vcard(struct jmap_parser *parser, json_t *obj,
                 }
                 ptrarray_append(props, prop);
 
-                json_object_del(obj, "organization");
+                json_object_del(obj, "organizationId");
             }
             else if (jprop) {
-                jmap_parser_invalid(parser, "organization");
+                jmap_parser_invalid(parser, "organizationId");
             }
 
             json_object_del(obj, "kind");
