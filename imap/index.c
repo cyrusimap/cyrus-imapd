@@ -6138,6 +6138,7 @@ MsgData **index_msgdata_load(struct index_state *state,
     struct conversations_state *cstate = NULL;
     conversation_t conv = CONVERSATION_INIT;
     int *preload = NULL;
+    int n_sortcrit;
 
     if (!n) return NULL;
 
@@ -6150,9 +6151,9 @@ MsgData **index_msgdata_load(struct index_state *state,
         *found_anchor = 0;
 
     /* set mailbox level states */
-    for (j = 0; sortcrit[j].key; j++); // count how many we need
-    if (j) preload = xzmalloc(j * sizeof(int));
-    for (j = 0; sortcrit[j].key; j++) {
+    for (n_sortcrit = 0; sortcrit[n_sortcrit].key; n_sortcrit++); // count how many we need
+    if (n_sortcrit) preload = xzmalloc(n_sortcrit * sizeof(int));
+    for (j = 0; j < n_sortcrit; j++) {
         label = sortcrit[j].key;
         switch(label) {
         case SORT_SAVEDATE:

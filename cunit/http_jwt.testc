@@ -102,7 +102,7 @@ static void test_init_nokeys(void)
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
-    CU_ASSERT_PTR_NOT_NULL(fp);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
     fputs("xxx", fp);
     fclose(fp);
 
@@ -161,7 +161,7 @@ static void test_validate(void)
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
-    CU_ASSERT_PTR_NOT_NULL(fp);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
     fputs(HMAC_PEM, fp);
     fclose(fp);
 
@@ -342,7 +342,7 @@ static void test_validate_claims_no_max_age(void)
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
-    CU_ASSERT_PTR_NOT_NULL(fp);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
     fputs(HMAC_PEM, fp);
     fclose(fp);
 
@@ -397,7 +397,7 @@ static void test_validate_claims_with_max_age(void)
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
-    CU_ASSERT_PTR_NOT_NULL(fp);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
     fputs(HMAC_PEM, fp);
     fclose(fp);
 

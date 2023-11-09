@@ -4396,9 +4396,10 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
         }
     }
 
-    for (node = xmlFirstElementChild(root); node && !error->precond;
-         node = xmlNextElementSibling(node)) {
-
+    for (node = xmlFirstElementChild(root);
+         node && *comp && !error->precond;
+         node = xmlNextElementSibling(node)
+    ) {
         if ((*comp)->not_defined) {
             error->precond = CALDAV_SUPP_FILTER;
             error->desc = DAV_FILTER_ISNOTDEF_ERR;

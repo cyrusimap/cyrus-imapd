@@ -8801,9 +8801,10 @@ static void dav_parse_paramfilter(xmlNodePtr root, struct param_filter **param,
         }
     }
 
-    for (node = xmlFirstElementChild(root); node && !error->precond;
-         node = xmlNextElementSibling(node)) {
-
+    for (node = xmlFirstElementChild(root);
+         node && *param && !error->precond;
+         node = xmlNextElementSibling(node)
+    ) {
         if ((*param)->not_defined) {
             error->precond = profile->filter_precond;
             error->desc = DAV_FILTER_ISNOTDEF_ERR;

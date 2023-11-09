@@ -60,6 +60,7 @@
 #include "lib/retry.h"
 #include "lib/strarray.h"
 #include "lib/util.h"
+#include "lib/xmalloc.h"
 #include "lib/xunlink.h"
 
 #include "imap/global.h"
@@ -342,8 +343,7 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
 
     pdata = hash_lookup(data->mbentry->partition, h);
     if (!pdata) {
-        pdata = malloc(sizeof *pdata);
-        memset(pdata, 0, sizeof *pdata);
+        pdata = xzmalloc(sizeof *pdata);
         construct_hash_table(&pdata->shared, 10, 0); /* 10 shared namespaces probably enough */
         hash_insert(data->mbentry->partition, pdata, h);
     }
@@ -357,8 +357,7 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
         const char *namespace = strarray_nth(mbname_boxes(data->mbname), 0);
         int64_t *n_shared = hash_lookup(namespace, &pdata->shared);
         if (!n_shared) {
-            n_shared = malloc(sizeof *n_shared);
-            *n_shared = 0;
+            n_shared = xzmalloc(sizeof *n_shared);
             hash_insert(namespace, n_shared, &pdata->shared);
         }
 

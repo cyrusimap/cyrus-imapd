@@ -745,6 +745,8 @@ static int cmd_lock_one(void *rock,
     char *fname = NULL;
     int r = 0;
 
+    assert(data != NULL && data_len > 0);
+
     /* input args might not be 0-terminated, so make a safe copy */
     if (key_len)
         userid = xstrndup(key, key_len);

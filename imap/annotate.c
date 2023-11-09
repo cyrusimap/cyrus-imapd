@@ -4215,6 +4215,8 @@ EXPORTED int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 
     init_internal();
 
+    assert(newmailbox != NULL);
+
     r = _annotate_getdb(mailbox_uniqueid(newmailbox), newmailbox, newuid, CYRUSDB_CREATE, &d);
     if (r) return r;
 
@@ -4252,6 +4254,7 @@ HIDDEN int annotate_msg_cleanup(struct mailbox *mailbox, unsigned int uid)
     int r = 0;
     annotate_db_t *d = NULL;
 
+    assert(mailbox != NULL);
     assert(uid);
 
     r = _annotate_getdb(mailbox_uniqueid(mailbox), mailbox, uid, 0, &d);

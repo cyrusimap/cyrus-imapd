@@ -1718,7 +1718,7 @@ static int open_group(const char *name, int has_prefix, struct backend **ret,
         mboxlist_entry_free(&mbentry);
         if (!backend_next) return IMAP_SERVER_UNAVAILABLE;
 
-        *ret = backend_next;
+        if (ret) *ret = backend_next;
     }
     else {
         /* local group */

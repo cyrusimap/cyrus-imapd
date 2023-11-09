@@ -3495,6 +3495,10 @@ static int reindex_mb(void *rock,
             r = mboxlist_lookup_by_uniqueid(mbkey + 3, &mbentry, NULL);
         }
     }
+    else if (mbkey[0] == '*' && mbkey[1] == 'V' && mbkey[2] == '*') {
+        // ignore *V* version key
+        goto done;
+    }
     else if (mbkey[0] != '#') {
         // read <mboxname>:<uidvalidity>
         char *dot = strrchr(mbkey, '.');

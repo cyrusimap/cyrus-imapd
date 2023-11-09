@@ -2009,7 +2009,7 @@ static int create_messages(struct mailbox *mailbox, int count)
         /* Write the message to the filesystem */
         if (!(fp = append_newstage(mailbox_name(mailbox), internaldate, 0, &stage))) {
             fprintf(stderr, "append_newstage(%s) failed", mailbox_name(mailbox));
-            return r;
+            return IMAP_IOERROR;
         }
         buf_printf(&buf, msgtmpl, i, mailbox_name(mailbox), i, i, mailbox_name(mailbox));
         fwrite(buf_base(&buf), 1, buf_len(&buf), fp);

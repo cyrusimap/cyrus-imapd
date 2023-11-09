@@ -618,6 +618,8 @@ static struct mappedfile *cache_getfile(ptrarray_t *list, const char *fname,
     int openflags = readonly ? 0 : MAPPEDFILE_CREATE | MAPPEDFILE_RW;
     int i;
 
+    assert(fname != NULL);
+
     for (i = 0; i < list->count; i++) {
         cachefile = ptrarray_nth(list, i);
         if (!strcmp(fname, mappedfile_fname(cachefile)))
@@ -1483,6 +1485,7 @@ static int mailbox_read_header(struct mailbox *mailbox, const char *fname)
     xclose(mailbox->header_fd);
 
     if (!fname) fname = mailbox_meta_fname(mailbox, META_HEADER);
+    assert(fname != NULL);
     mailbox->header_fd = open(fname, O_RDONLY, 0);
 
     if (mailbox->header_fd == -1) {

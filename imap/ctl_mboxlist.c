@@ -725,11 +725,11 @@ static void do_undump_legacy(void)
             continue;
         }
 
-        char *partition = strchr(newmbentry->partition, '!');
-        if (partition) {
+        char *server_sep = strchr(newmbentry->partition, '!');
+        if (server_sep) {
+            *server_sep = '\0';
             newmbentry->server = newmbentry->partition;
-            newmbentry->partition = strdup(partition + 1);
-            *partition = '\0';
+            newmbentry->partition = xstrdup(server_sep + 1);
         }
 
         if (strlen(newmbentry->name) >= MAX_MAILBOX_BUFFER) {
@@ -968,7 +968,7 @@ static void add_path(ptrarray_t *found, int type,
 {
     struct found_data *new;
 
-    new = malloc(sizeof(struct found_data));
+    new = xmalloc(sizeof(struct found_data));
     new->type = type;
     strcpy(new->mboxname, name);
     strcpy(new->partition, part);
