@@ -420,6 +420,7 @@ enum {
     CAPA_CONDSTORE =    (1<<0),  /* RFC 7162 */
     CAPA_QRESYNC =      (1<<1),  /* RFC 7162 */
     CAPA_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
+    CAPA_UIDONLY =      (1<<3),  /* draft-ietf-extra-imap-uidonly */
 };
 
 /* Bitmask for urlfetch params (RFC 5524) */
@@ -448,6 +449,7 @@ struct client_behavior_registry {
     unsigned int did_imap4rev2    : 1;   /* used ENABLE IMAP4rev2  */
     unsigned int did_binary       : 1;   /* fetched BINARY or APPEND literal8  */
     unsigned int did_catenate     : 1;   /* used CATENATE on APPEND  */
+    unsigned int did_uidonly      : 1;   /* used ENABLE UIDONLY  */
 };
 
 #endif /* INCLUDED_IMAPD_H */

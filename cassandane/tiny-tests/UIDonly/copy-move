@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_copy_move
+    :min_version_3_9 :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $folder = 'INBOX.foo';
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 10;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    xlog $self, "create a second mailbox";
+    my $res =$imaptalk->create($folder);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "ENABLE UIDONLY";
+    $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
+    $self->assert_num_equals(1, $res->{uidonly});
+
+    xlog $self, "attempt COPY";
+    $res = $imaptalk->copy(1, $folder);
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+    # get_response_code() doesn't (yet) handle [UIDREQUIRED]
+    $self->assert_matches(qr/[UIDREQUIRED]/, $imaptalk->get_last_error());
+
+    xlog $self, "attempt MOVE";
+    $res = $imaptalk->move(1, $folder);
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+    # get_response_code() doesn't (yet) handle [UIDREQUIRED]
+    $self->assert_matches(qr/[UIDREQUIRED]/, $imaptalk->get_last_error());
+
+    xlog $self, "UID MOVE";
+    $res = $imaptalk->_imap_cmd('UID MOVE', 1, 'vanished', '1', $folder);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('1', $res->[0]);
+}
+
+1;

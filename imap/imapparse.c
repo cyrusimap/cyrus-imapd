@@ -992,6 +992,14 @@ static int get_search_criterion(struct protstream *pin,
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
     case '*':                                           /* RFC 3501 */
+        if (client_capa & CAPA_UIDONLY) {
+            prot_printf(pout,
+                        "%s BAD [UIDREQUIRED] Message numbers are not allowed in"
+                        " Search after UIDONLY is enabled\r\n", base->tag);
+            if (c != EOF) prot_ungetc(c, pin);
+            return EOF;
+        }
+
         if (imparse_issequence(criteria.s)) {
             seqset_t *seq;
             e = search_expr_new(parent, SEOP_MATCH);

@@ -458,6 +458,7 @@ static struct capa_struct base_capabilities[] = {
     { "STATUS=SIZE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 8438 */
     { "THREAD=ORDEREDSUBJECT", CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
     { "THREAD=REFERENCES",     CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
+    { "UIDONLY",               CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-uidonly */
     { "UIDPLUS",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4315 */
     { "UNAUTHENTICATE",        CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8437 */
       { .statep = &imapd_userisadmin }                        },
@@ -887,7 +888,8 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
-                        "%s%s%s%s",
+                        "%s%s%s%s"
+                        "%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
@@ -911,7 +913,9 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_qresync     ? " qresync=<1>"      : "",
                         client_behavior.did_replace     ? " replace=<1>"      : "",
                         client_behavior.did_savedate    ? " savedate=<1>"     : "",
-                        client_behavior.did_searchres   ? " searchres=<1>"    : "");
+                        client_behavior.did_searchres   ? " searchres=<1>"    : "",
+
+                        client_behavior.did_uidonly     ? " uidonly=<1>"      : "");
 }
 
 static void imapd_reset(void)
@@ -1668,6 +1672,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Copy")) {
                 if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
+                if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             copy:
@@ -1794,6 +1799,7 @@ static void cmdloop(void)
         case 'F':
             if (!strcmp(cmd.s, "Fetch")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
+                if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             fetch:
@@ -2021,6 +2027,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Move")) {
                 if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
+                if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             move:
@@ -2238,6 +2245,7 @@ static void cmdloop(void)
             } else if (!strcmp(cmd.s, "Store")) {
                 if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
+                if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             store:
@@ -2262,6 +2270,7 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Search")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
+                if (client_capa & CAPA_UIDONLY) goto uidonly;
                 if (c != ' ') goto missingargs;
             search:
 
@@ -2333,6 +2342,7 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Sort")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
+                if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             sort:
@@ -2414,6 +2424,7 @@ static void cmdloop(void)
         case 'T':
             if (!strcmp(cmd.s, "Thread")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
+                if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             thread:
@@ -2843,6 +2854,13 @@ static void cmdloop(void)
         prot_printf(imapd_out,
                     "%s BAD Replication parse failure in %s\r\n", tag.s, cmd.s);
         /* n.b. sync_parseline already ate the bad line */
+        continue;
+
+    uidonly:
+        prot_printf(imapd_out,
+                    "%s BAD [UIDREQUIRED] Message numbers are not allowed in %s"
+                    " after UIDONLY is enabled\r\n", tag.s, cmd.s);
+        eatline(imapd_in, c);
         continue;
     }
 
@@ -4595,7 +4613,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
                             if (c != '(') goto badqresync;
                         }
                     }
-                    if (c == '(') {
+                    if (c == '(' && !(client_capa & CAPA_UIDONLY)) {
                         /* optional sequence match data */
                         c = getword(imapd_in, &parm1);
                         if (!imparse_issequence(parm1.s)) goto badqresync;
@@ -15224,6 +15242,10 @@ static void cmd_enable(char *tag)
             client_behavior.did_imap4rev2 = 1;
             new_capa |= CAPA_IMAP4REV2;
         }
+        else if (!strcasecmp(arg.s, "uidonly")) {
+            client_behavior.did_uidonly = 1;
+            new_capa |= CAPA_UIDONLY;
+        }
     } while (c == ' ');
 
     /* check for CRLF */
@@ -15254,6 +15276,9 @@ static void cmd_enable(char *tag)
     }
     if (new_capa & CAPA_QRESYNC) {
         prot_printf(imapd_out, " QRESYNC");
+    }
+    if (new_capa & CAPA_UIDONLY) {
+        prot_printf(imapd_out, " UIDONLY");
     }
     prot_printf(imapd_out, "\r\n");
 

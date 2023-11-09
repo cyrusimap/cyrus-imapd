@@ -913,6 +913,10 @@ draft-ietf-extra-sieve-snooze
 
     Sieve Email Filtering: Snooze Extension
 
+draft-ietf-extra-imap-uidonly
+
+    IMAP Extension for only using and returning UIDs
+
 draft-ietf-jmap-calendars
 
     JMAP for Calendars

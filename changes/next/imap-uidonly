@@ -1,0 +1,14 @@
+
+Description:
+
+Adds support for IMAP UIDONLY extension (draft-ietf-extra-imap-uidonly)
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None

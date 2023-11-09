@@ -3987,7 +3987,7 @@ static void index_tellexpunge(struct index_state *state)
             if (msgno > state->oldexists)
                 continue;
             state->oldexists--;
-            if ((client_capa & CAPA_QRESYNC))
+            if (client_capa & (CAPA_QRESYNC|CAPA_UIDONLY))
                 seqset_add(vanishedlist, im->uid, 1);
             else
                 prot_printf(state->out, "* %u EXPUNGE\r\n", msgno);
@@ -4310,20 +4310,47 @@ static void index_printflags(struct index_state *state,
 {
     struct index_map *im = &state->map[msgno-1];
     int sepchar = '(';
+    const char *resp;
+    unsigned id;
 
-    prot_printf(state->out, "* %u FETCH ", msgno);
+    if (client_capa & CAPA_UIDONLY) {
+        /* draft-ietf-extra-imap-uidonly, Section 4:
+         * UID msg-att is never used.
+         * It is replaced by the uniqueid at the beginning
+         * of the UIDFETCH response.
+         */
+        tell_flags &= ~TELL_UID;
+
+        resp = "UIDFETCH";
+        id = im->uid;
+    }
+    else {
+        if (client_capa & CAPA_QRESYNC) {
+            /* RFC 7162, Section 3.2.4:
+             * MUST send UID to all untagged FETCH unsolicited responses */
+            tell_flags |= TELL_UID;
+        }
+
+        resp = "FETCH";
+        id = msgno;
+    }
+    if (client_capa & CAPA_CONDSTORE) {
+        /* RFC 7162, Section 3.1 & draft-ietf-extra-imap-uidonly, Section 3.7:
+         * MUST send MODSEQ to all untagged [UID]FETCH unsolicited responses */
+        tell_flags |= TELL_MODSEQ;
+    }
+
+    prot_printf(state->out, "* %u %s ", id, resp);
     if (!(tell_flags & TELL_SILENT)) {
         prot_putc('(', state->out);
         index_fetchflags(state, msgno);
         sepchar = ' ';
     }
-    /* RFC 7162, Section 3.1 - MUST send UID and MODSEQ to all
-     * untagged FETCH unsolicited responses */
-    if ((tell_flags & TELL_UID) || (client_capa & CAPA_QRESYNC)) {
+    if (tell_flags & TELL_UID) {
         prot_printf(state->out, "%cUID %u", sepchar, im->uid);
         sepchar = ' ';
     }
-    if ((tell_flags & TELL_MODSEQ) || (client_capa & CAPA_CONDSTORE)) {
+    if (tell_flags & TELL_MODSEQ) {
         prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
                     sepchar, im->modseq);
         sepchar = ' ';
@@ -4407,17 +4434,34 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         }
     }
     int ischanged = im->told_modseq < record.modseq;
+    const char *resp;
+    unsigned id;
+
+    if (client_capa & CAPA_UIDONLY) {
+        /* draft-ietf-extra-imap-uidonly, Section 4:
+         * UID msg-att is never used.  It is replaced by the uniqueid
+         * at the beginning of the UIDFETCH response.
+         */
+        fetchitems &= ~FETCH_UID;
+
+        resp = "UIDFETCH";
+        id = record.uid;
+    }
+    else {
+        resp = "FETCH";
+        id = msgno;
+    }
 
     /* display flags if asked _OR_ if they've changed */
     if (fetchitems & FETCH_FLAGS || ischanged) {
-        prot_printf(state->out, "* %u FETCH (", msgno);
+        prot_printf(state->out, "* %u %s (", id, resp);
         index_fetchflags(state, msgno);
         sepchar = ' ';
     }
     else if ((fetchitems & ~FETCH_SETSEEN) || fetchargs->fsections ||
              fetchargs->headers.count || fetchargs->headers_not.count) {
         /* these fetch items will always succeed, so start the response */
-        prot_printf(state->out, "* %u FETCH ", msgno);
+        prot_printf(state->out, "* %u %s ", id, resp);
         started = 1;
     }
     if (fetchitems & FETCH_UID || (ischanged && (client_capa & CAPA_QRESYNC))) {
@@ -4711,7 +4755,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         respbuf[0] = 0;
         if (sepchar == '(' && !started) {
             /* we haven't output a fetch item yet, so start the response */
-            snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
+            snprintf(respbuf, sizeof(respbuf), "* %u %s ", id, resp);
         }
         snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
                  "%cBODY[%s ", sepchar, section->name);
@@ -4735,7 +4779,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         respbuf[0] = 0;
         if (sepchar == '(' && !started) {
             /* we haven't output a fetch item yet, so start the response */
-            snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
+            snprintf(respbuf, sizeof(respbuf), "* %u %s ", id, resp);
         }
         snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
                  "%cBINARY[%s ", sepchar, section->name);
@@ -4758,7 +4802,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         respbuf[0] = 0;
         if (sepchar == '(' && !started) {
             /* we haven't output a fetch item yet, so start the response */
-            snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
+            snprintf(respbuf, sizeof(respbuf), "* %u %s ", id, resp);
         }
         snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
                  "%cBINARY.SIZE[%s ", sepchar, section->name);
