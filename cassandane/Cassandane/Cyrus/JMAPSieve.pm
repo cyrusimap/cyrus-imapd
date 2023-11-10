@@ -1202,4 +1202,55 @@ sub test_deliver_compile
     $self->check_messages({ 1 => $msg1, 2 => $msg2 }, check_guid => 0);
 }
 
+sub test_getmetadata
+    :min_version_3_6 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Install a no-op sieve script";
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{'data:asText' => "keep;\r\n"}] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => JSON::null,
+                    blobId => "#A"
+                }
+            },
+            onSuccessActivateScript => "#1"
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_equals(JSON::true, $res->[1][1]{created}{1}{isActive});
+    $self->assert_null($res->[1][1]{updated});
+    $self->assert_null($res->[1][1]{destroyed});
+
+    my $id = $res->[1][1]{created}{"1"}{id};
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # LIST doesn't show DAV mailboxes
+    $res = $imaptalk->list('', '*');
+    $self->assert_mailbox_structure($res, '.', {
+        'INBOX' => [ '\\HasNoChildren' ],
+    });
+
+    # better not see any DAV mailboxes via GETMETADATA either
+    $res = $imaptalk->getmetadata('*', '/private/comment');
+    $self->assert_deep_equals({ 'INBOX' => { '/private/comment' => undef } },
+                              $res);
+}
+
 1;
