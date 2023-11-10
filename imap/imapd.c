@@ -10330,6 +10330,7 @@ struct apply_rock {
     void *data;
     char lastname[MAX_MAILBOX_PATH+1];
     unsigned int nseen;
+    unsigned want_dav : 1;
 };
 
 static int apply_cb(struct findall_data *data, void* rock)
@@ -10340,6 +10341,10 @@ static int apply_cb(struct findall_data *data, void* rock)
     struct apply_rock *arock = (struct apply_rock *)rock;
     annotate_state_t *state = arock->state;
     int r;
+
+    if (!arock->want_dav && mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL) {
+        return 0;
+    }
 
     strlcpy(arock->lastname, mbname_intname(data->mbname), sizeof(arock->lastname));
 
@@ -10372,6 +10377,7 @@ static int apply_mailbox_pattern(annotate_state_t *state,
     arock.state = state;
     arock.proc = proc;
     arock.data = data;
+    arock.want_dav = !strcasecmpsafe(imapd_magicplus, "+dav");
 
     r = mboxlist_findall(&imapd_namespace,
                          pattern,
