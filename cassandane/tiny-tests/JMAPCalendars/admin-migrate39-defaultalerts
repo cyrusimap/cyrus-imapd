@@ -452,7 +452,9 @@ sub create_legacy_calendar
 {
     my ($self, $name) = @_;
     my $caldav = $self->{caldav};
-    my $imap = $self->{store}->get_client();
+    my $plusstore = $self->{instance}->get_service('imap'
+        )->create_store(username => 'cassandane+dav');
+    my $imap = $plusstore->get_client();
 
     xlog $self, "Create calendar named $name";
     my $calendarId = $caldav->NewCalendar({name => $name});
@@ -469,7 +471,9 @@ sub create_legacy_calendar
 sub set_caldav_datetime_alarms
 {
     my ($self, $calendarId, $valarms) = @_;
-    my $imap = $self->{store}->get_client();
+    my $plusstore = $self->{instance}->get_service('imap'
+        )->create_store(username => 'cassandane+dav');
+    my $imap = $plusstore->get_client();
 
     my $mboxname = '#calendars';
     $mboxname .= ".$calendarId" if $calendarId;
