@@ -1503,9 +1503,7 @@ sub _check_syslog
 {
     my ($self) = @_;
 
-    my @lines = $self->getsyslog();
-
-    my @errors = grep { m/ERROR|TRACELOG|Unknown code ____/ } @lines;
+    my @errors = $self->getsyslog(qr/ERROR|TRACELOG|Unknown code ____/);
 
     @errors = grep { not m/DBERROR.*skipstamp/ } @errors;
 
@@ -2272,15 +2270,11 @@ sub setup_syslog_replacement
 
     $self->{_syslogfh} = IO::File->new($self->{syslog_fname}, 'r');
 
-    my @lines;
-
     if ($self->{_syslogfh}) {
         $self->{_syslogfh}->seek($syslog_start, 0);
         $self->{_syslogfh}->blocking(0);
 
-        @lines = $self->getsyslog();
-
-        if (not scalar grep { m/\bthe magic word\b/ } @lines) {
+        if (not scalar $self->getsyslog(qr/\bthe magic word\b/)) {
             xlog "didn't find the magic word when probing syslog";
             xlog "tests will not examine syslog output";
 
@@ -2305,8 +2299,16 @@ sub setup_syslog_replacement
 # fail on systems where the syslog replacement doesn't work.
 sub getsyslog
 {
-    my ($self) = @_;
+    my ($self, $pattern) = @_;
+
+    if (defined $pattern) {
+        # pattern is optional but must be a regex if present
+        die "getsyslog: pattern is not a regular expression"
+            if lc ref($pattern) ne 'regexp';
+    }
     my $logname = $self->{name};
+    my @lines;
+
     if ($self->{have_syslog_replacement} && $self->{_syslogfh}) {
         # https://github.com/Perl/perl5/issues/21240
         # eof status is no longer cleared automatically in newer perls
@@ -2319,11 +2321,16 @@ sub getsyslog
 
         # hopefully unobtrusively, let busy log finish writing
         usleep(100_000); # 100ms (0.1s) as us
-        my @lines = grep { m/$logname/ } $self->{_syslogfh}->getlines();
+        @lines = grep { m/$logname/ } $self->{_syslogfh}->getlines();
+
+        if (defined $pattern) {
+            @lines = grep { m/$pattern/ } @lines;
+        }
+
         chomp for @lines;
-        return @lines;
     }
-    return ();
+
+    return @lines;
 }
 
 sub _get_sqldb
