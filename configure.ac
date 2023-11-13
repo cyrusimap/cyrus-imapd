@@ -754,18 +754,18 @@ fi
 
 LIB_REGEX=
 CFLAGS_REGEX=
-if test "$cyrus_cv_pcre_utf8" = "yes"; then
-    CFLAGS_REGEX="$PCRE_CFLAGS"
-    LIB_REGEX="$PCRE_LIBS";
-    AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
-    AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
-    cyrus_cv_pcre2_utf8="no"
-elif test "$cyrus_cv_pcre2_utf8" = "yes"; then
+if test "$cyrus_cv_pcre2_utf8" = "yes"; then
     CFLAGS_REGEX="$PCRE2_CFLAGS"
     LIB_REGEX="$PCRE2_LIBS"
     AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
     AC_DEFINE(HAVE_PCRE2POSIX_H, [], [Do we have usable pcre2 library?])
     cyrus_cv_pcre_utf8="no"
+elif test "$cyrus_cv_pcre_utf8" = "yes"; then
+    CFLAGS_REGEX="$PCRE_CFLAGS"
+    LIB_REGEX="$PCRE_LIBS";
+    AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
+    AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
+    cyrus_cv_pcre2_utf8="no"
 else
     AC_CHECK_HEADERS(rxposix.h)
     if test "$ac_cv_header_rxposix_h" = "yes"; then
