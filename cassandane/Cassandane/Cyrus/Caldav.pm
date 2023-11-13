@@ -5916,13 +5916,15 @@ EOF
 }
 
 sub test_get_legacy_defaultalarm_no_uid
-    :min_version_3_9 :needs_component_jmap
+    :min_version_3_9 :needs_component_jmap :MagicPlus
 {
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
-    my $imap = $self->{store}->get_client();
+    my $plusstore = $self->{instance}->get_service('imap'
+        )->create_store(username => 'cassandane+dav');
+    my $imap = $plusstore->get_client();
 
     xlog $self, "Pretend as if JMAP default alarm migration never happened";
     $imap->setmetadata("#calendars.Default",
