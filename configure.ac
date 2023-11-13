@@ -693,42 +693,65 @@ AC_ARG_ENABLE(pcre2,
     [AS_HELP_STRING([--disable-pcre2], [disable PCRE2 library])],[cyrus_cv_pcre2_utf8="$enableval"])
 
 if test "$enable_pcre" != "no"; then
-    AC_CHECK_HEADER(pcreposix.h)
-    if test "$ac_cv_header_pcreposix_h" = "yes"; then
-        AC_MSG_CHECKING(for utf8 enabled pcre)
-        AC_CACHE_VAL(cyrus_cv_pcre_utf8, AC_TRY_CPP([#include <pcreposix.h>
-#ifndef REG_UTF8
-#include </nonexistent>
-#endif],cyrus_cv_pcre_utf8=yes,cyrus_cv_pcre_utf8=no))
-        AC_MSG_RESULT($cyrus_cv_pcre_utf8)
-    else
-        cyrus_cv_pcre_utf8="no"
-    fi
+    PKG_CHECK_MODULES([PCRE],
+                      [libpcreposix libpcre],
+                      [ AC_MSG_CHECKING(for utf8 enabled pcre)
+                        saved_CFLAGS="$CFLAGS"
+                        saved_LIBS="$LIBS"
+                        CFLAGS="$CFLAGS PCRE_CFLAGS"
+                        LIBS="$LIBS PCRE_LIBS"
+                        AC_CACHE_VAL(cyrus_cv_pcre_utf8,
+                                     AC_TRY_CPP([   #include <pcreposix.h>
+                                                    #ifndef REG_UTF8
+                                                    #include </nonexistent>
+                                                    #endif
+                                                ],
+                                                [cyrus_cv_pcre_utf8=yes],
+                                                [cyrus_cv_pcre_utf8=no]))
+                        AC_MSG_RESULT($cyrus_cv_pcre_utf8)
+                        CFLAGS="$saved_CFLAGS"
+                        LIBS="$saved_LIBS"
+                      ],
+                      [cyrus_cv_pcre_utf8="no"])
 fi
 
 if test "$enable_pcre2" != "no"; then
-    AC_CHECK_HEADER(pcre2posix.h)
-    if test "$ac_cv_header_pcre2posix_h" = "yes"; then
-        AC_MSG_CHECKING(for utf8 enabled pcre2)
-        AC_CACHE_VAL(cyrus_cv_pcre2_utf8, AC_TRY_CPP([#include <pcre2posix.h>
-#ifndef REG_UTF
-#include </nonexistent>
-#endif],cyrus_cv_pcre2_utf8=yes,cyrus_cv_pcre2_utf8=no))
-        AC_MSG_RESULT($cyrus_cv_pcre2_utf8)
-    else
-        cyrus_cv_pcre2_utf8="no"
-    fi
+    PKG_CHECK_MODULES([PCRE2],
+                      [libpcre2-posix libpcre2-8],
+                      [ AC_MSG_CHECKING(for utf8 enabled pcre2)
+                        saved_CFLAGS="$CFLAGS"
+                        saved_LIBS="$LIBS"
+                        CFLAGS="$CFLAGS PCRE2_CFLAGS"
+                        LIBS="$LIBS PCRE2_LIBS"
+                        AC_CACHE_VAL(cyrus_cv_pcre2_utf8,
+                                     AC_TRY_CPP([   #include <pcre2posix.h>
+                                                    #ifndef REG_UTF
+                                                    #include </nonexistent>
+                                                    #endif
+                                                ],
+                                                [cyrus_cv_pcre2_utf8=yes],
+                                                [cyrus_cv_pcre2_utf8=no]))
+                        AC_MSG_RESULT($cyrus_cv_pcre2_utf8)
+                        CFLAGS="$saved_CFLAGS"
+                        LIBS="$saved_LIBS"
+                      ],
+                      [cyrus_cv_pcre2_utf8="no"])
 fi
 
 LIB_REGEX=
+CFLAGS_REGEX=
 if test "$cyrus_cv_pcre_utf8" = "yes"; then
-    LIB_REGEX="-lpcre -lpcreposix";
+    CFLAGS_REGEX="$PCRE_CFLAGS"
+    LIB_REGEX="$PCRE_LIBS";
     AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
     AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
+    cyrus_cv_pcre2_utf8="no"
 elif test "$cyrus_cv_pcre2_utf8" = "yes"; then
-    LIB_REGEX="-lpcre2-posix -lpcre2-8";
+    CFLAGS_REGEX="$PCRE2_CFLAGS"
+    LIB_REGEX="$PCRE2_LIBS"
     AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
     AC_DEFINE(HAVE_PCRE2POSIX_H, [], [Do we have usable pcre2 library?])
+    cyrus_cv_pcre_utf8="no"
 else
     AC_CHECK_HEADERS(rxposix.h)
     if test "$ac_cv_header_rxposix_h" = "yes"; then
@@ -740,7 +763,9 @@ else
     fi
 fi
 AC_SUBST(LIB_REGEX)
+AC_SUBST(CFLAGS_REGEX)
 LIBS="$LIBS $LIB_REGEX"
+CFLAGS="$CFLAGS $CFLAGS_REGEX"
 
 dnl
 dnl see if we're compiling with SRS
