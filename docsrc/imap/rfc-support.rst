@@ -901,6 +901,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 IETF RFC Drafts
 ===============
 
+draft-ietf-extra-imap-list-metadata
+
+    IMAP4 Extension for Returning Mailbox METADATA in Extended LIST
+
 draft-ietf-extra-sieve-mailboxid
 
     Sieve Email Filtering: delivery by mailboxid
