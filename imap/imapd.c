@@ -416,6 +416,7 @@ static struct capa_struct base_capabilities[] = {
     { "IMAPSIEVE=",            0, /* not implemented */ { 0 } }, /* RFC 6785 */
     { "LANGUAGE",              0, /* not implemented */ { 0 } }, /* RFC 5255 */
     { "LIST-EXTENDED",         CAPA_POSTAUTH,           { 0 } }, /* RFC 5258 */
+    { "LIST-METADATA",         CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-list-metadata */
     { "LIST-MYRIGHTS",         CAPA_POSTAUTH,           { 0 } }, /* RFC 8440 */
     { "LIST-STATUS",           CAPA_POSTAUTH,           { 0 } }, /* RFC 5819 */
     { "LITERAL+",              CAPA_OMNIAUTH|CAPA_REVCONFIG,     /* RFC 7888 */
@@ -474,7 +475,6 @@ static struct capa_struct base_capabilities[] = {
     { "ANNOTATEMORE",          CAPA_POSTAUTH|CAPA_CONFIG,        /* draft-daboo-imap-annotatemore-08 */
       { .config = IMAPOPT_ANNOTATION_ENABLE_LEGACY_COMMANDS } },
     { "DIGEST=SHA1",           CAPA_POSTAUTH,           { 0 } }, /* CY */
-    { "LIST-METADATA",         CAPA_POSTAUTH,           { 0 } }, /* draft-murchison-imap-list-metadata */
     { "MUPDATE=",              CAPA_OMNIAUTH|CAPA_VALUE,         /* CY */
       { .value = { "mupdate://%1$s/", .strp = &config_mupdate_server } } },
     { "NO_ATOMIC_RENAME",      CAPA_POSTAUTH,           { 0 } }, /* CY */
