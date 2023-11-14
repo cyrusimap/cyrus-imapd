@@ -236,7 +236,7 @@ EXPORTED int open_mailboxes_exist()
     return open_mailboxes ? 1 : 0;
 }
 
-static struct mailbox *create_listitem()
+static struct mailbox *create_listitem(const char *lockname)
 {
     struct mailbox *item = xzmalloc(sizeof(struct mailbox));
     zeromailbox(*item);
@@ -245,6 +245,7 @@ static struct mailbox *create_listitem()
     open_mailboxes = item;
 
     item->refcount = 1;
+    item->lockname = xstrdup(lockname);
     gettimeofday(&item->starttime, 0);
 
 #if defined ENABLE_OBJECTSTORE
@@ -975,19 +976,38 @@ static int mailbox_open_advanced(const char *name,
                                  const mbentry_t *mbe,
                                  struct mailbox **mailboxptr)
 {
-    assert(*mailboxptr == NULL);
-
-    struct mailbox *mailbox = find_listitem(name);
-    mbentry_t *mbentry = NULL;
     int r = 0;
+    assert(*mailboxptr == NULL);
+    struct mboxlock *local_namespacelock = NULL;
 
+    // lock the user namespace FIRST before anything else
+    char *userid = mboxname_to_userid(name);
+    int haslock = user_isnamespacelocked(userid);
+    if (haslock) {
+        if (index_locktype & LOCK_EXCLUSIVE && !(haslock & LOCK_EXCLUSIVE))
+            r = IMAP_MAILBOX_LOCKED;
+    }
+    else {
+        local_namespacelock = user_namespacelock_full(userid, index_locktype);
+    }
+    free(userid);
+    if (r) return r;
+
+    mbentry_t *mbentry = NULL;
+    if (mbe) mbentry = mboxlist_entry_copy(mbe);
+    else r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+    if (r) {
+        mboxname_release(&local_namespacelock);
+        return r;
+    }
+
+    uint32_t legacy_dirs = (mbentry->mbtype & MBTYPE_LEGACY_DIRS);
+    const char *lockname = legacy_dirs ? name : mbentry->uniqueid;
+    struct mailbox *mailbox = find_listitem(lockname);
 
     /* already open?  just use this one */
     if (mailbox) {
-        /* can't reuse an exclusive locked mailbox */
-        if (mailbox->namelock->locktype & LOCK_EXCLUSIVE)
-            return IMAP_MAILBOX_LOCKED;
-
+        mboxlist_entry_free(&mbentry);
         /* can't promote a readonly index */
         if (mailbox->index_locktype == LOCK_SHARED && locktype == LOCK_EXCLUSIVE)
             return IMAP_MAILBOX_LOCKED;
@@ -999,21 +1019,7 @@ static int mailbox_open_advanced(const char *name,
         goto done;
     }
 
-    mailbox = create_listitem();
-
-    // lock the user namespace FIRST before the mailbox namespace
-    char *userid = mboxname_to_userid(name);
-    int haslock = user_isnamespacelocked(userid);
-    if (haslock) {
-        if (index_locktype & LOCK_EXCLUSIVE) assert(haslock & LOCK_EXCLUSIVE);
-    }
-    else {
-        mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
-    }
-    free(userid);
-
-    if (mbe) mbentry = mboxlist_entry_copy(mbe);
-    else r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+    mailbox = create_listitem(lockname);
 
     /* pre-check for some conditions which mean that we don't want
        to go ahead and open this mailbox */
@@ -1030,7 +1036,7 @@ static int mailbox_open_advanced(const char *name,
         r = IMAP_MAILBOX_NONEXISTENT;
 
     if (r) {
-        mboxname_release(&mailbox->local_namespacelock);
+        mboxname_release(&local_namespacelock);
         mboxlist_entry_free(&mbentry);
         remove_listitem(mailbox);
         return r;
@@ -1045,8 +1051,6 @@ static int mailbox_open_advanced(const char *name,
                          "mboxname=<%s>", name);
     }
 
-    uint32_t legacy_dirs = (mbentry->mbtype & MBTYPE_LEGACY_DIRS);
-    mailbox->lockname = xstrdup(legacy_dirs ? name : mbentry->uniqueid);
     r = mboxname_lock(mailbox->lockname, &mailbox->namelock, locktype);
     if (r) {
         /* locked is not an error - just means we asked for NONBLOCKING */
@@ -1054,7 +1058,7 @@ static int mailbox_open_advanced(const char *name,
             xsyslog(LOG_ERR, "IOERROR: lock failed",
                              "mailbox=<%s> error=<%s>",
                              name, error_message(r));
-        mboxname_release(&mailbox->local_namespacelock);
+        mboxname_release(&local_namespacelock);
         mboxlist_entry_free(&mbentry);
         remove_listitem(mailbox);
         return r;
@@ -1079,6 +1083,7 @@ lockindex:
         cleanup_stale_expunged(mailbox);
 
 done:
+    if (local_namespacelock) mailbox->local_namespacelock = local_namespacelock;
     if (r) mailbox_close(&mailbox);
     else *mailboxptr = mailbox;
 
@@ -5795,22 +5800,19 @@ EXPORTED int mailbox_create(const char *name,
 
     /* if we already have this name open then that's an error too */
     uint32_t legacy_dirs = (mbtype & MBTYPE_LEGACY_DIRS);
-    mailbox = find_listitem(legacy_dirs ? name : uniqueid);
+    const char *lockname = legacy_dirs ? name : uniqueid;
+    mailbox = find_listitem(lockname);
     if (mailbox) return IMAP_MAILBOX_LOCKED;
-
-    mailbox = create_listitem();
+    mailbox = create_listitem(lockname);
 
     /* needs to be an exclusive namelock to create a mailbox */
     char *userid = mboxname_to_userid(name);
     int haslock = user_isnamespacelocked(userid);
-    syslog(LOG_ERR, "CREATING MAILBOX %s", name);
     assert(haslock == LOCK_EXCLUSIVE);
     free(userid);
 
-    mailbox->lockname = xstrdup(legacy_dirs ? name : uniqueid);
     r = mboxname_lock(mailbox->lockname, &mailbox->namelock, LOCK_EXCLUSIVE);
     if (r) {
-        mboxname_release(&mailbox->local_namespacelock);
         remove_listitem(mailbox);
         return r;
     }
@@ -6971,42 +6973,46 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     struct mailbox *mailbox = NULL;
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
                 | OPT_POP3_NEW_UIDL;
+    struct mboxlock *local_namespacelock = NULL;
     mbentry_t *mbentry = NULL;
-    int r;
-
-    /* make sure it's not already open.  Very odd, since we already
-     * discovered it's not openable! */
-    mailbox = find_listitem(name);
-    if (mailbox) return IMAP_MAILBOX_LOCKED;
-
-    mailbox = create_listitem();
+    int r = 0;
 
     // lock the user namespace FIRST before the mailbox namespace
     char *userid = mboxname_to_userid(name);
     if (userid) {
         int haslock = user_isnamespacelocked(userid);
-        if (haslock) {
-            assert(haslock != LOCK_SHARED);
-        }
+	if (haslock) {
+            if (!(haslock & LOCK_EXCLUSIVE))
+	        r = IMAP_MAILBOX_LOCKED;
+	}
         else {
-            int locktype = LOCK_EXCLUSIVE;
-            mailbox->local_namespacelock = user_namespacelock_full(userid, locktype);
+            local_namespacelock = user_namespacelock_full(userid, LOCK_EXCLUSIVE);
         }
-        free(userid);
     }
+    free(userid);
+    if (r) return r;
 
     /* Start by looking up current data in mailbox list */
     /* XXX - no mboxlist entry?  Can we recover? */
     r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) goto done;
+    if (r) return r;
+
+    /* make sure it's not already open.  Very odd, since we already
+     * discovered it's not openable! */
+    uint32_t legacy_dirs = (mbentry->mbtype & MBTYPE_LEGACY_DIRS);
+    const char *lockname = legacy_dirs ? name : mbentry->uniqueid;
+    mailbox = find_listitem(lockname);
+    if (mailbox) return IMAP_MAILBOX_LOCKED;
+
+    mailbox = create_listitem(lockname);
 
     /* if we can't get an exclusive lock first try, there's something
      * racy going on! */
-    uint32_t legacy_dirs = (mbentry->mbtype & MBTYPE_LEGACY_DIRS);
-    r = mboxname_lock(legacy_dirs ? name : mbentry->uniqueid, &mailbox->namelock, LOCK_EXCLUSIVE);
+    r = mboxname_lock(mailbox->lockname, &mailbox->namelock, LOCK_EXCLUSIVE);
     if (r) goto done;
 
     mailbox->mbentry = mboxlist_entry_copy(mbentry);
+    if (local_namespacelock) mailbox->local_namespacelock = local_namespacelock;
 
     syslog(LOG_NOTICE, "create new mailbox %s", name);
 
