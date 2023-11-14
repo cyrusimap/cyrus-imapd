@@ -905,6 +905,7 @@ static void mailbox_release_resources(struct mailbox *mailbox)
         map_free(&mailbox->index_base, &mailbox->index_len);
     xclose(mailbox->index_fd);
     mailbox->index_locktype = 0; /* lock was released by closing fd */
+    mailbox->is_readonly = 0; /* no longer have a readonly fd */
 
     /* release caches */
     for (i = 0; i < mailbox->caches.count; i++) {
@@ -919,18 +920,16 @@ static void mailbox_release_resources(struct mailbox *mailbox)
  */
 static int mailbox_open_index(struct mailbox *mailbox, int index_locktype)
 {
-    const char *fname;
-    int openflags = index_locktype == LOCK_SHARED ? O_RDONLY : O_RDWR;
-
     assert(!mailbox->index_locktype);
     mailbox_release_resources(mailbox);
 
     /* open and map the index file */
-    fname = mailbox_meta_fname(mailbox, META_INDEX);
+    const char *fname = mailbox_meta_fname(mailbox, META_INDEX);
     if (!fname)
         return IMAP_MAILBOX_BADNAME;
 
-    mailbox->index_fd = open(fname, openflags, 0);
+    mailbox->is_readonly = (index_locktype == LOCK_SHARED) ? 1 : 0;
+    mailbox->index_fd = open(fname, mailbox->is_readonly ? O_RDONLY : O_RDWR, 0);
     if (mailbox->index_fd == -1)
         return IMAP_IOERROR;
 
@@ -996,7 +995,29 @@ static int mailbox_open_advanced(const char *name,
     mbentry_t *mbentry = NULL;
     if (mbe) mbentry = mboxlist_entry_copy(mbe);
     else r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
+
+    /* pre-check for some conditions which mean that we don't want
+       to go ahead and open this mailbox */
+    if (!r && mbentry->mbtype & MBTYPE_DELETED)
+        r = IMAP_MAILBOX_NONEXISTENT;
+    if (!r && mbentry->mbtype & MBTYPE_MOVING)
+        r = IMAP_MAILBOX_MOVED;
+    if (!r && mbentry->mbtype & MBTYPE_INTERMEDIATE)
+        r = IMAP_MAILBOX_NONEXISTENT;
+    if (!r && !mbentry->partition)
+        r = IMAP_MAILBOX_NONEXISTENT;
+
+    /* XXX can we even get here for remote mbentries? */
+    if (!r && !mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
+        /* Theoretically it shouldn't be possible for an mbentry to not
+         * have a uniqueid... so if it happens, complain loudly.
+         */
+        xsyslog(LOG_ERR, "mbentry has no uniqueid, needs reconstruct",
+                         "mboxname=<%s>", name);
+    }
+
     if (r) {
+        mboxlist_entry_free(&mbentry);
         mboxname_release(&local_namespacelock);
         return r;
     }
@@ -1007,10 +1028,17 @@ static int mailbox_open_advanced(const char *name,
 
     /* already open?  just use this one */
     if (mailbox) {
+        if (local_namespacelock) mailbox->local_namespacelock = local_namespacelock;
         mboxlist_entry_free(&mbentry);
         /* can't promote a readonly index */
-        if (mailbox->index_locktype == LOCK_SHARED && locktype == LOCK_EXCLUSIVE)
+        if (mailbox->index_locktype == LOCK_SHARED && index_locktype != LOCK_SHARED)
             return IMAP_MAILBOX_LOCKED;
+
+        /* if we have a readonly FD, we need to reopen */
+        if (mailbox->is_readonly && index_locktype != LOCK_SHARED) {
+            r = mailbox_open_index(mailbox, index_locktype);
+            if (r) return r;
+        }
 
         mailbox->refcount++;
 
@@ -1020,36 +1048,6 @@ static int mailbox_open_advanced(const char *name,
     }
 
     mailbox = create_listitem(lockname);
-
-    /* pre-check for some conditions which mean that we don't want
-       to go ahead and open this mailbox */
-    if (!r && mbentry->mbtype & MBTYPE_DELETED)
-        r = IMAP_MAILBOX_NONEXISTENT;
-
-    if (!r && mbentry->mbtype & MBTYPE_MOVING)
-        r = IMAP_MAILBOX_MOVED;
-
-    if (!r && mbentry->mbtype & MBTYPE_INTERMEDIATE)
-        r = IMAP_MAILBOX_NONEXISTENT;
-
-    if (!r && !mbentry->partition)
-        r = IMAP_MAILBOX_NONEXISTENT;
-
-    if (r) {
-        mboxname_release(&local_namespacelock);
-        mboxlist_entry_free(&mbentry);
-        remove_listitem(mailbox);
-        return r;
-    }
-
-    /* XXX can we even get here for remote mbentries? */
-    if (!mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
-        /* Theoretically it shouldn't be possible for an mbentry to not
-         * have a uniqueid... so if it happens, complain loudly.
-         */
-        xsyslog(LOG_ERR, "mbentry has no uniqueid, needs reconstruct",
-                         "mboxname=<%s>", name);
-    }
 
     r = mboxname_lock(mailbox->lockname, &mailbox->namelock, locktype);
     if (r) {
@@ -1063,6 +1061,7 @@ static int mailbox_open_advanced(const char *name,
         remove_listitem(mailbox);
         return r;
     }
+    if (local_namespacelock) mailbox->local_namespacelock = local_namespacelock;
 
     if (!mbentry->name) mbentry->name = xstrdup(name);
     mailbox->mbentry = mbentry;
@@ -1083,7 +1082,6 @@ lockindex:
         cleanup_stale_expunged(mailbox);
 
 done:
-    if (local_namespacelock) mailbox->local_namespacelock = local_namespacelock;
     if (r) mailbox_close(&mailbox);
     else *mailboxptr = mailbox;
 
@@ -2484,9 +2482,6 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     }
 
     if (locktype == LOCK_EXCLUSIVE) {
-        /* we can't upgrade a readonly mailbox */
-        if (mailbox->is_readonly)
-            return IMAP_MAILBOX_LOCKED;
         r = lock_blocking(mailbox->index_fd, index_fname);
     }
     else if (locktype == LOCK_SHARED) {
@@ -2523,7 +2518,6 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     }
 
     mailbox->index_locktype = locktype;
-    mailbox->is_readonly = (locktype == LOCK_SHARED) ? 1 : 0;
     gettimeofday(&mailbox->starttime, 0);
 
     r = stat(header_fname, &sbuf);
@@ -2638,7 +2632,6 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
                              "mailbox=<%s>",
                              mailbox_name(mailbox));
         mailbox->index_locktype = 0;
-        mailbox->is_readonly = 0;
 
         gettimeofday(&endtime, 0);
         timediff = timesub(&mailbox->starttime, &endtime);
