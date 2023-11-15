@@ -648,7 +648,8 @@ static struct mappedfile *mailbox_cachefile(struct mailbox *mailbox,
     else
         fname = mailbox_meta_fname(mailbox, META_CACHE);
 
-    return cache_getfile(&mailbox->caches, fname, mailbox->is_readonly, mailbox->i.generation_no);
+    int is_readonly = mailbox->is_readonly || mailbox->index_locktype == LOCK_SHARED;
+    return cache_getfile(&mailbox->caches, fname, is_readonly, mailbox->i.generation_no);
 }
 
 static struct mappedfile *repack_cachefile(struct mailbox_repack *repack,
@@ -4318,7 +4319,8 @@ EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mai
     /* open the conversations DB - don't bother checking return code since it'll
      * only be set if it opens successfully, and we can only return NULL or an
      * object */
-    conversations_open_mbox(mailbox_name(mailbox), mailbox->is_readonly, &mailbox->local_cstate);
+    int is_readonly = mailbox->is_readonly || mailbox->index_locktype == LOCK_SHARED;
+    conversations_open_mbox(mailbox_name(mailbox), is_readonly, &mailbox->local_cstate);
     return mailbox->local_cstate;
 }
 
