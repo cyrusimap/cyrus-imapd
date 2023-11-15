@@ -11873,7 +11873,7 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     }
 
     /* Open mailbox, we need it now */
-    r = mailbox_open_iwl(mbentry->name, &mailbox);
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r) {
         ctx->errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
