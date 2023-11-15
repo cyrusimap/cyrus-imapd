@@ -580,8 +580,8 @@ EXPORTED char *mailbox_cache_get_env(struct mailbox *mailbox,
 
 EXPORTED int mailbox_index_islocked(struct mailbox *mailbox, int write)
 {
-    if (mailbox->index_locktype == LOCK_EXCLUSIVE) return 1;
-    if (mailbox->index_locktype == LOCK_SHARED && !write) return 1;
+    if (mailbox->index_locktype & LOCK_EXCLUSIVE) return 1;
+    if (mailbox->index_locktype & LOCK_SHARED && !write) return 1;
     return 0;
 }
 
@@ -929,7 +929,7 @@ static int mailbox_open_index(struct mailbox *mailbox, int index_locktype)
     if (!fname)
         return IMAP_MAILBOX_BADNAME;
 
-    mailbox->is_readonly = (index_locktype == LOCK_SHARED) ? 1 : 0;
+    mailbox->is_readonly = (index_locktype & LOCK_SHARED) ? 1 : 0;
     mailbox->index_fd = open(fname, mailbox->is_readonly ? O_RDONLY : O_RDWR, 0);
     if (mailbox->index_fd == -1)
         return IMAP_IOERROR;
@@ -954,14 +954,15 @@ static int mailbox_relock(struct mailbox *mailbox, int locktype, int index_lockt
     if (userid) {
         int haslock = user_isnamespacelocked(userid);
         if (haslock) {
-            if (haslock == LOCK_SHARED)
-                assert(index_locktype == LOCK_SHARED);
+            if ((haslock & LOCK_SHARED) && (index_locktype & LOCK_EXCLUSIVE))
+                r = IMAP_MAILBOX_LOCKED;
         }
         else {
             mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
         }
         free(userid);
     }
+    if (r) return r;
     r = mailbox_lock_index_internal(mailbox, index_locktype);
     return r;
 }
@@ -984,7 +985,7 @@ static int mailbox_open_advanced(const char *name,
     char *userid = mboxname_to_userid(name);
     int haslock = user_isnamespacelocked(userid);
     if (haslock) {
-        if (index_locktype & LOCK_EXCLUSIVE && !(haslock & LOCK_EXCLUSIVE))
+        if ((haslock & LOCK_SHARED) && (index_locktype & LOCK_EXCLUSIVE))
             r = IMAP_MAILBOX_LOCKED;
     }
     else {
@@ -1032,7 +1033,7 @@ static int mailbox_open_advanced(const char *name,
         if (local_namespacelock) mailbox->local_namespacelock = local_namespacelock;
         mboxlist_entry_free(&mbentry);
         /* can't promote a readonly index */
-        if (mailbox->index_locktype == LOCK_SHARED && index_locktype != LOCK_SHARED)
+        if ((mailbox->index_locktype & LOCK_SHARED) && (index_locktype & LOCK_EXCLUSIVE))
             return IMAP_MAILBOX_LOCKED;
 
         /* if we have a readonly FD, we need to reopen */
@@ -2457,7 +2458,7 @@ EXPORTED int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
 /*
  * Lock the index file for 'mailbox'.  Reread index file header if necessary.
  */
-static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
+static int mailbox_lock_index_internal(struct mailbox *mailbox, int index_locktype)
 {
     struct stat sbuf;
     int r = 0;
@@ -2468,7 +2469,7 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
 
     // if we're already locked, don't need to lock again!
     if (mailbox->index_locktype) {
-        if (mailbox->index_locktype == LOCK_SHARED && locktype != LOCK_SHARED)
+        if ((mailbox->index_locktype & LOCK_SHARED) && (index_locktype & LOCK_EXCLUSIVE))
             return IMAP_MAILBOX_LOCKED;
         return 0;
     }
@@ -2477,15 +2478,15 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     if (userid) {
         if (!user_isnamespacelocked(userid)) {
             free(userid);
-            return mailbox_relock(mailbox, LOCK_SHARED, locktype);
+            return mailbox_relock(mailbox, LOCK_SHARED, index_locktype);
         }
         free(userid);
     }
 
-    if (locktype == LOCK_EXCLUSIVE) {
+    if (index_locktype == LOCK_EXCLUSIVE) {
         r = lock_blocking(mailbox->index_fd, index_fname);
     }
-    else if (locktype == LOCK_SHARED) {
+    else if (index_locktype == LOCK_SHARED) {
         r = lock_shared(mailbox->index_fd, index_fname);
     }
     else {
@@ -2518,7 +2519,7 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
         return IMAP_IOERROR;
     }
 
-    mailbox->index_locktype = locktype;
+    mailbox->index_locktype = index_locktype;
     gettimeofday(&mailbox->starttime, 0);
 
     r = stat(header_fname, &sbuf);
@@ -2565,11 +2566,11 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     return 0;
 }
 
-EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int locktype)
+EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int index_locktype)
 {
     int r = 0;
 
-    r = mailbox_lock_index_internal(mailbox, locktype);
+    r = mailbox_lock_index_internal(mailbox, index_locktype);
     if (r) return r;
 
     /* otherwise, sanity checks for regular use, but not for internal
