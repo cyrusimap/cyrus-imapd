@@ -27,9 +27,10 @@ jobs:
         git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
         echo "building cyrus version" $(./tools/git-version.sh)
         ./tools/build-with-cyruslibs.sh
-    - name: report cyrus version
+    - name: report version information
       shell: bash
       run: |
+        echo "debian" $(cat /etc/debian_version)
         /usr/cyrus/libexec/master -V
         /usr/cyrus/sbin/cyr_buildinfo
     - name: update jmap test suite
