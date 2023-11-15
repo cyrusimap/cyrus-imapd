@@ -32,13 +32,13 @@ sub test_copy_move
     $res = $imaptalk->copy(1, $folder);
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
     # get_response_code() doesn't (yet) handle [UIDREQUIRED]
-    $self->assert_matches(qr/[UIDREQUIRED]/, $imaptalk->get_last_error());
+    $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
 
     xlog $self, "attempt MOVE";
     $res = $imaptalk->move(1, $folder);
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
     # get_response_code() doesn't (yet) handle [UIDREQUIRED]
-    $self->assert_matches(qr/[UIDREQUIRED]/, $imaptalk->get_last_error());
+    $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
 
     xlog $self, "UID MOVE";
     $res = $imaptalk->_imap_cmd('UID MOVE', 1, 'vanished', '1', $folder);

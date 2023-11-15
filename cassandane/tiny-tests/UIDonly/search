@@ -44,7 +44,7 @@ sub test_search
     $res = $imaptalk->search('not', 'deleted');
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
     # get_response_code() doesn't (yet) handle [UIDREQUIRED]
-    $self->assert_matches(qr/[UIDREQUIRED]/, $imaptalk->get_last_error());
+    $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
 
     xlog $self, "attempt UID SEARCH with msgnos";
     $res = $imaptalk->_imap_cmd('UID SEARCH', 1, 'search', '1:10');
