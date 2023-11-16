@@ -8197,7 +8197,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
     int rename_user = 0;
     int mbtype = 0;
     mbentry_t *mbentry = NULL;
-    struct renrock rock;
+    struct renrock rock = {0};
     const char *orig_oldname = oldname;
     const char *orig_newname = newname;
     struct listargs listargs = {
