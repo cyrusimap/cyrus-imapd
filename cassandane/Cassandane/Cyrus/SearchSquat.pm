@@ -143,8 +143,7 @@ sub test_simple
         my $uids = $imap->search(@{$_->{search}}) || die;
         $self->assert_deep_equals($_->{wantUids}, $uids);
 
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr{Squat run}, join("\n", @lines));
+        $self->assert_syslog_matches($self->{instance}, qr{Squat run});
     }
 }
 
@@ -190,8 +189,7 @@ sub test_one_doc_per_message
         my $uids = $imap->search(@{$_->{search}}) || die;
         $self->assert_deep_equals($_->{wantUids}, $uids);
 
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert(grep /Squat run/, @lines);
+        $self->assert_syslog_matches($self->{instance}, qr/Squat run/);
     }
 
     # make some more messages
@@ -227,8 +225,7 @@ sub test_one_doc_per_message
         my $uids = $imap->search(@{$_->{search}}) || die;
         $self->assert_deep_equals($_->{wantUids}, $uids);
 
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert(grep /Squat run/, @lines);
+        $self->assert_syslog_matches($self->{instance}, qr/Squat run/);
     }
 }
 
@@ -246,14 +243,13 @@ sub test_skip_unmodified
 
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_does_not_match(qr{Squat skipping mailbox},
-                                 join("\n", @lines));
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr{Squat skipping mailbox});
 
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-s', '0');
-    @lines = $self->{instance}->getsyslog();
-    $self->assert_matches(qr{Squat skipping mailbox}, join("\n", @lines));
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{Squat skipping mailbox});
 }
 
 sub test_nonincremental
