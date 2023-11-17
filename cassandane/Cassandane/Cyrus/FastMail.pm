@@ -578,9 +578,11 @@ sub test_rename_deepuser_standardfolders
     $self->assert(not $admintalk->get_last_error());
 
     xlog $self, "Make sure we didn't create intermediates in the process!";
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    my $syslog = join "\n", $self->{instance}->getsyslog();
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     $res = $admintalk->select("user.newuser.bar.sub");
     $self->assert(not $admintalk->get_last_error());
@@ -594,10 +596,12 @@ sub test_rename_deepuser_standardfolders
     # replicate and check the renames
     $self->{replica}->getsyslog();
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
-    @syslog = $self->{replica}->getsyslog();
+    $syslog = join "\n", $self->{replica}->getsyslog();
 
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     # check replication is clean
     $self->check_replication('newuser');
@@ -680,9 +684,11 @@ sub test_rename_deepfolder_intermediates
     $self->assert(not $admintalk->get_last_error());
 
     xlog $self, "Make sure we didn't create intermediates in the process!";
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    my $syslog = join "\n", $self->{instance}->getsyslog();
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     $data = $self->_fmjmap_ok('Mailbox/get', properties => ['name']);
     my %byname_new = map { $_->{name} => $_->{id} } @{$data->{list}};
@@ -695,10 +701,12 @@ sub test_rename_deepfolder_intermediates
     # replicate and check the renames
     $self->{replica}->getsyslog();
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
-    @syslog = $self->{replica}->getsyslog();
+    $syslog = join "\n", $self->{replica}->getsyslog();
 
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     # check replication is clean
     $self->check_replication('cassandane');
@@ -713,9 +721,11 @@ sub test_rename_deepfolder_intermediates
     $admintalk->delete("user.cassandane");
 
     xlog $self, "Make sure we didn't create intermediates in the process!";
-    @syslog = $self->{instance}->getsyslog();
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    $syslog = join "\n", $self->{instance}->getsyslog();
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     xlog $self, "Make sure there are no files left with cassandane in the name";
     $self->assert_str_equals(q{}, join(q{ }, glob "$self->{instance}{basedir}/conf/user/c/cassandane.*"));
@@ -724,9 +734,11 @@ sub test_rename_deepfolder_intermediates
 
     # replicate and check the renames
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
-    @syslog = $self->{replica}->getsyslog();
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    $syslog = join "\n", $self->{replica}->getsyslog();
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     xlog $self, "Make sure there are no files left with cassandane in the name on the replica";
     $self->assert_str_equals(q{}, join(q{ }, glob "$self->{replica}{basedir}/conf/user/c/cassandane.*"));
@@ -1185,9 +1197,11 @@ sub test_rename_deepuser_standardfolders_rightnow
     $self->assert(not $admintalk->get_last_error());
 
     xlog $self, "Make sure we didn't create intermediates in the process!";
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    my $syslog = join "\n", $self->{instance}->getsyslog();
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     $res = $admintalk->select("user.newuser.bar.sub");
     $self->assert(not $admintalk->get_last_error());
@@ -1199,9 +1213,11 @@ sub test_rename_deepuser_standardfolders_rightnow
     $self->assert_deep_equals(\%byname, \%byname_new);
 
     # check nothing got logged on the replica
-    @syslog = $self->{replica}->getsyslog();
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    $syslog = join "\n", $self->{replica}->getsyslog();
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     # check replication is clean
     $self->check_replication('newuser');
@@ -1282,9 +1298,11 @@ sub test_rename_deepfolder_intermediates_rightnow
     $self->assert(not $admintalk->get_last_error());
 
     xlog $self, "Make sure we didn't create intermediates in the process!";
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    my $syslog = join "\n", $self->{instance}->getsyslog();
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     $data = $self->_fmjmap_ok('Mailbox/get', properties => ['name']);
     my %byname_new = map { $_->{name} => $_->{id} } @{$data->{list}};
@@ -1295,10 +1313,12 @@ sub test_rename_deepfolder_intermediates_rightnow
     $self->assert_deep_equals(\%byname, \%byname_new);
 
     # replicate and check the renames
-    @syslog = $self->{replica}->getsyslog();
+    $syslog = join "\n", $self->{replica}->getsyslog();
 
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     # check replication is clean
     $self->check_replication('cassandane');
@@ -1313,9 +1333,11 @@ sub test_rename_deepfolder_intermediates_rightnow
     $admintalk->delete("user.cassandane");
 
     xlog $self, "Make sure we didn't create intermediates in the process!";
-    @syslog = $self->{instance}->getsyslog();
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    $syslog = join "\n", $self->{instance}->getsyslog();
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     xlog $self, "Make sure there are no files left with cassandane in the name";
     $self->assert_str_equals(q{}, join(q{ }, glob "$self->{instance}{basedir}/conf/user/c/cassandane.*"));
@@ -1323,9 +1345,11 @@ sub test_rename_deepfolder_intermediates_rightnow
     $self->assert_not_file_test("$self->{instance}{basedir}/conf/quota/c/user.cassandane", "-d");
 
     # replicate and check the renames
-    @syslog = $self->{replica}->getsyslog();
-    $self->assert_null(grep { m/creating intermediate with children/ } @syslog);
-    $self->assert_null(grep { m/deleting intermediate with no children/ } @syslog);
+    $syslog = join "\n", $self->{replica}->getsyslog();
+    $self->assert_does_not_match(qr/creating intermediate with children/,
+                                 $syslog);
+    $self->assert_does_not_match(qr/deleting intermediate with no children/,
+                                 $syslog);
 
     xlog $self, "Make sure there are no files left with cassandane in the on the replica";
     $self->assert_str_equals(q{}, join(q{ }, glob "$self->{replica}{basedir}/conf/user/c/cassandane.*"));
