@@ -827,8 +827,8 @@ sub test_mailbox_rename_to_inbox_sub
     $self->assert_null($res->{notUpdated});
 
     # make sure we didn't create the deep tree!
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert(not grep { m/INBOX\.INBOX\.INBOX/ } @syslog);
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/INBOX\.INBOX\.INBOX/);
 }
 
 sub test_mailbox_rename_sub_inbox_both
@@ -869,8 +869,8 @@ sub test_mailbox_rename_sub_inbox_both
     $self->assert_null($res->{notUpdated});
 
     # make sure we didn't create the deep tree!
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert(not grep { m/INBOX\.INBOX\.INBOX/ } @syslog);
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/INBOX\.INBOX\.INBOX/);
 }
 
 sub test_mailbox_rename_inside_deep
@@ -949,8 +949,8 @@ sub test_mailbox_rename_to_clash_parent_only
     $self->assert_not_null($res->{notUpdated}{$mboxids{B}});
 
     # there were no renames
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert(not grep { m/auditlog: rename/ } @syslog);
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/auditlog: rename/);
 }
 
 sub test_mailbox_rename_to_clash_name_only_deep
@@ -993,8 +993,8 @@ sub test_mailbox_rename_to_clash_name_only_deep
     $self->assert_not_null($res->{notUpdated}{$mboxids{B}});
 
     # there were no renames
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert(not grep { m/auditlog: rename/ } @syslog);
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/auditlog: rename/);
 }
 
 sub test_mailbox_rename_to_clash_name_only
@@ -1038,8 +1038,8 @@ sub test_mailbox_rename_to_clash_name_only
     $self->assert_deep_equals(\%mboxids, \%mboxids2);
 
     # there were no renames
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert(not grep { m/auditlog: rename/ } @syslog);
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/auditlog: rename/);
 }
 
 sub test_mailbox_rename_to_clash_both
@@ -1085,8 +1085,8 @@ sub test_mailbox_rename_to_clash_both
     $self->assert_deep_equals(\%mboxids, \%mboxids2);
 
     # there were no renames
-    my @syslog = $self->{instance}->getsyslog();
-    $self->assert(not grep { m/auditlog: rename/ } @syslog);
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/auditlog: rename/);
 }
 
 sub test_mailbox_case_difference
