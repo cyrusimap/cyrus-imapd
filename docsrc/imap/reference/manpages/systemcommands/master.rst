@@ -16,7 +16,7 @@ Synopsis
 .. parsed-literal::
 
     **master** [ **-C** *config-file* ] [ **-M** *alternate cyrus.conf* ]
-        [ **-l** *listen queue* ] [ **-p** *pidfile* ]
+        [ **-l** *listen queue* ] [ **-p** *pidfile* ] [ **-r** *ready_file* ]
         [ **-j** *janitor period* ] [ **-d** | **-D** ] [ **-L** *logfile* ]
 
 Description
@@ -64,7 +64,14 @@ Options
 .. option:: -p  pidfile
 
     Use *pidfile* as the pidfile.  If not specified, defaults to
-    ``/var/run/master.pid``
+    ``master_pid_file`` from :cyrusman:`imapd.conf(5)`, which
+    defaults to ``{configdirectory}/master.pid``
+
+.. option:: -r  ready_file
+
+    Use *ready_file* as the ready file.  If not specified, uses
+    ``master_ready_file`` from :cyrusman:`imapd.conf(5)`, which
+    defaults to ``{configdirectory}/master.ready``
 
 .. option:: -d
 

@@ -1,0 +1,28 @@
+Description:
+
+master(8) now touches a ready file to indicate it is "ready for work"
+master(8) now gets its pidfile name from master_pid_file imapd.conf option
+
+
+Config changes:
+
+* master_pid_file
+* master_ready_file
+
+
+Upgrade instructions:
+
+If you have something that monitors syslog looking for master's
+"ready for work" message, you might consider switching to monitoring
+the master.ready file instead, perhaps using Linux inotify.
+
+The master pidfile name is now read from imapd.conf, and defaults
+to ``{configdirectory}/master.pid``.  If you have something that
+looks for this file, you should either update it to look in the new
+default location, or set ``master_pid_file`` in :cyrusman:`imapd.conf(5)`
+to override the default.  The ``-p`` option to :cyrusman:`master(8)`
+can still be used to override it.
+
+GitHub issue:
+
+N/A

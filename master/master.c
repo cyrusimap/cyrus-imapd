@@ -530,7 +530,7 @@ static void service_create(struct service *s, int is_startup)
         res0 = (struct addrinfo *)xzmalloc(sizeof(struct addrinfo));
         res0->ai_flags = AI_PASSIVE;
         res0->ai_family = PF_UNIX;
-        if(!strcmp(s->proto, "tcp")) {
+        if (!strcmp(s->proto, "tcp")) {
             res0->ai_socktype = SOCK_STREAM;
         } else {
             /* udp */
@@ -725,7 +725,7 @@ static void service_create(struct service *s, int is_startup)
         nsocket++;
     }
     if (res0) {
-        if(res0_is_local)
+        if (res0_is_local)
             free(res0);
         else
             freeaddrinfo(res0);
@@ -1274,7 +1274,7 @@ static void spawn_schedule(struct timeval now)
     while (a && a != schedule) {
         /* if a->exec is NULL, we just used the event to wake up,
          * so we actually don't need to exec anything at the moment */
-        if(a->exec) {
+        if (a->exec) {
             get_executable(path, sizeof(path), a->exec);
             switch (p = fork()) {
             case -1:
@@ -1328,7 +1328,7 @@ static void spawn_schedule(struct timeval now)
         /* reschedule as needed */
         b = a->next;
         if (a->period) {
-            if(a->periodic) {
+            if (a->periodic) {
                 a->mark = now;
                 a->mark.tv_sec += a->period;
             } else {
@@ -2238,8 +2238,8 @@ static void add_service(const char *name, struct entry *e, void *rock)
     int reconfig = 0;
     int i, j;
 
-    if(babysit && prefork == 0) prefork = 1;
-    if(babysit && maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
+    if (babysit && prefork == 0) prefork = 1;
+    if (babysit && maxforkrate == 0) maxforkrate = 10; /* reasonable safety */
 
     if (!strcmp(cmd,"") || !strcmp(listen,"")) {
         char buf[256];
@@ -2856,12 +2856,39 @@ static void check_undermanned(struct service *s, int si, int wdi)
     }
 }
 
+static void master_ready(const char *ready_file)
+{
+    int fd;
+
+    syslog(LOG_DEBUG, "ready for work");
+
+    if (!ready_file) ready_file = config_getstring(IMAPOPT_MASTER_READY_FILE);
+    if (!ready_file) return;
+
+    if (cyrus_mkdir(ready_file, 0755 /* ignored */)) return;
+
+    fd = creat(ready_file, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (fd >= 0) {
+        fsync(fd);
+        close(fd);
+    }
+    else {
+        xsyslog(LOG_ERR, "unable to create ready file",
+                         "fname=<%s>",
+                         ready_file);
+    }
+
+    /* we did our best */
+    errno = 0;
+}
+
 int main(int argc, char **argv)
 {
     static const char lock_suffix[] = ".lock";
 
-    const char *pidfile = MASTER_PIDFILE;
+    const char *pidfile = NULL;
     char *pidfile_lock = NULL;
+    const char *ready_file = NULL;
 
     int startup_pipe[2] = { -1, -1 };
     int pidlock_fd = -1;
@@ -2881,7 +2908,7 @@ int main(int argc, char **argv)
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
-    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:vV")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:L:M:p:r:l:Ddj:vV")) != EOF) {
         switch (opt) {
         case 'C': /* alt imapd.conf file */
             alt_config = optarg;
@@ -2896,6 +2923,10 @@ int main(int argc, char **argv)
         case 'p':
             /* Set the pidfile name */
             pidfile = optarg;
+            break;
+        case 'r':
+            /* Set the ready file name */
+            ready_file = optarg;
             break;
         case 'd':
             /* Daemon Mode */
@@ -2912,7 +2943,7 @@ int main(int argc, char **argv)
         case 'j':
             /* Janitor frequency */
             janitor_frequency = atoi(optarg);
-            if(janitor_frequency < 1)
+            if (janitor_frequency < 1)
                 fatal("The janitor period must be at least 1 second", EX_CONFIG);
             break;
         case 'v':
@@ -2952,6 +2983,9 @@ int main(int argc, char **argv)
         }
     }
 
+    if (!pidfile) pidfile = config_getstring(IMAPOPT_MASTER_PID_FILE);
+    if (!pidfile) fatal("couldn't determine pidfile name", EX_CONFIG);
+
     /* Pidfile Algorithm in Daemon Mode.  This is a little subtle because
      * we want to ensure that we can report an error to our parent if the
      * child fails to lock the pidfile.
@@ -2967,25 +3001,25 @@ int main(int argc, char **argv)
      * [A] xunlink pidfile.lock and exit(code read from pipe)
      *
      */
-    if(daemon_mode) {
+    if (daemon_mode) {
         /* Daemonize */
         pid_t pid = -1;
 
         pidfile_lock = strconcat(pidfile, lock_suffix, (char *)NULL);
 
         pidlock_fd = open(pidfile_lock, O_CREAT|O_TRUNC|O_RDWR, 0644);
-        if(pidlock_fd == -1) {
+        if (pidlock_fd == -1) {
             syslog(LOG_ERR, "can't open pidfile lock: %s (%m)", pidfile_lock);
             exit(EX_OSERR);
         } else {
-            if(lock_nonblocking(pidlock_fd, pidfile)) {
+            if (lock_nonblocking(pidlock_fd, pidfile)) {
                 syslog(LOG_ERR, "can't get exclusive lock on %s",
                        pidfile_lock);
                 exit(EX_TEMPFAIL);
             }
         }
 
-        if(pipe(startup_pipe) == -1) {
+        if (pipe(startup_pipe) == -1) {
             syslog(LOG_ERR, "can't create startup pipe (%m)");
             exit(EX_OSERR);
         }
@@ -3016,7 +3050,7 @@ int main(int argc, char **argv)
             int exit_code;
 
             /* Parent, wait for child */
-            if(read(startup_pipe[0], &exit_code, sizeof(exit_code)) == -1) {
+            if (read(startup_pipe[0], &exit_code, sizeof(exit_code)) == -1) {
                 syslog(LOG_ERR, "could not read from startup_pipe (%m)");
                 xunlink(pidfile_lock);
                 exit(EX_OSERR);
@@ -3049,7 +3083,7 @@ int main(int argc, char **argv)
 
     /* Write out the pidfile */
     pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
-    if(pidfd == -1) {
+    if (pidfd == -1) {
         int exit_result = EX_OSERR;
 
         syslog(LOG_ERR, "can't open pidfile: %m");
@@ -3063,7 +3097,7 @@ int main(int argc, char **argv)
     } else {
         char buf[100];
 
-        if(lock_nonblocking(pidfd, pidfile)) {
+        if (lock_nonblocking(pidfd, pidfile)) {
             int exit_result = EX_OSERR;
 
             /* Tell our parent that we failed. */
@@ -3092,9 +3126,10 @@ int main(int argc, char **argv)
 
             /* Write PID */
             snprintf(buf, sizeof(buf), "%lu\n", (unsigned long int)getpid());
-            if(lseek(pidfd, 0, SEEK_SET) == -1 ||
-               ftruncate(pidfd, 0) == -1 ||
-               write(pidfd, buf, strlen(buf)) == -1) {
+            if (lseek(pidfd, 0, SEEK_SET) == -1 ||
+                ftruncate(pidfd, 0) == -1 ||
+                write(pidfd, buf, strlen(buf)) == -1)
+            {
                 int exit_result = EX_OSERR;
 
                 syslog(LOG_ERR, "unable to write to pidfile: %m");
@@ -3111,7 +3146,7 @@ int main(int argc, char **argv)
         }
     }
 
-    if(daemon_mode) {
+    if (daemon_mode) {
         int exit_result = 0;
 
         /* success! */
@@ -3170,7 +3205,7 @@ int main(int argc, char **argv)
     }
 
     /* ok, we're going to start spawning like mad now */
-    syslog(LOG_DEBUG, "ready for work");
+    master_ready(ready_file); /* ready for work */
 
     for (;;) {
         int i, maxfd, ready_fds, total_children = 0;
