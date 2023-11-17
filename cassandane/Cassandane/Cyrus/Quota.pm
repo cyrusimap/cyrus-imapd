@@ -2672,11 +2672,9 @@ sub test_reconstruct
         $res_annot_storage => int($expected_annotation_storage/1024),
     );
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # We should have generated a SYNCERROR or two
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: opening index/, "@lines");
-    }
+    # We should have generated a SYNCERROR or two
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: opening index/);
 }
 
 sub test_reconstruct_orphans
@@ -2814,11 +2812,9 @@ sub test_reconstruct_orphans
         $res_annot_storage => int($expected_annotation_storage/1024),
     );
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # We should have generated a SYNCERROR or two
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: opening index/, "@lines");
-    }
+    # We should have generated a SYNCERROR or two
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: opening index/);
 }
 
 Cassandane::Cyrus::TestCase::magic(Bug3735 => sub {
