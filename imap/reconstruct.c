@@ -540,6 +540,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             }
 	    free(extname);
         }
+        mailbox_close(&mailbox);
         mboxname_release(&namespacelock);
         return 0;
     }
