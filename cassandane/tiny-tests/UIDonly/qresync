@@ -1,0 +1,53 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_qresync
+    :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    $imaptalk->select("INBOX");
+    my $uidvalidity = $imaptalk->get_response_code('uidvalidity');
+
+    xlog $self, "ENABLE QRESYNC";
+    my $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'QRESYNC');
+    $self->assert_num_equals(1, $res->{qresync});
+
+    xlog "QResync mailbox with message sequence map";
+    $imaptalk->unselect();
+    $imaptalk->select("INBOX", "(QRESYNC ($uidvalidity 0 1 (1 1)))" => 1);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $res = $imaptalk->get_response_code('fetch');
+    $self->assert_not_null($res);
+    $self->assert(exists $res->{'1'}{'flags'});
+    $self->assert(exists $res->{'1'}{'modseq'});
+    $self->assert(exists $res->{'1'}{'uid'});
+
+    xlog $self, "ENABLE UIDONLY";
+    $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
+    $self->assert_num_equals(1, $res->{uidonly});
+
+    xlog "attenpt to QResync mailbox with message sequence map";
+    $imaptalk->unselect();
+    $imaptalk->select("INBOX", "(QRESYNC ($uidvalidity 0 1 (1 1)))" => 1);
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    xlog "QResync mailbox";
+    $imaptalk->unselect();
+    $imaptalk->select("INBOX", "(QRESYNC ($uidvalidity 0 1))" => 1);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $res = $imaptalk->get_response_code('uidfetch');
+    # make sure UID isn't in the response
+    $self->assert_not_null($res);
+    $self->assert_num_equals(4, scalar @{$res});
+    $self->assert_str_equals('FLAGS', $res->[0]);
+    $self->assert_str_equals('MODSEQ', $res->[2]);
+}
+
+1;

@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_fetch
+    :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 10;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    xlog $self, "EXPUNGE the 1st and 6th";
+    $imaptalk->store('1,6', '+FLAGS', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $imaptalk->expunge();
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "FETCH all";
+    my $res = $imaptalk->fetch('1:*', '(UID FLAGS)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'1'}->{uid}, "2");
+    $self->assert_str_equals($res->{'2'}->{uid}, "3");
+    $self->assert_str_equals($res->{'3'}->{uid}, "4");
+    $self->assert_str_equals($res->{'4'}->{uid}, "5");
+    $self->assert_str_equals($res->{'5'}->{uid}, "7");
+    $self->assert_str_equals($res->{'6'}->{uid}, "8");
+    $self->assert_str_equals($res->{'7'}->{uid}, "9");
+    $self->assert_str_equals($res->{'8'}->{uid}, "10");
+
+    xlog $self, "ENABLE UIDONLY";
+    $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
+    $self->assert_num_equals(1, $res->{uidonly});
+
+    xlog $self, "attempt FETCH again";
+    $res = $imaptalk->fetch('1:*', '(UID FLAGS)');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+    # get_response_code() doesn't (yet) handle [UIDREQUIRED]
+    $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
+
+    my %fetched= {};
+    my %handlers =
+    (
+        uidfetch => sub
+        {
+            my (undef, undef, $uid) = @_;
+
+            $fetched{$uid} = $imaptalk->_next_atom();
+        },
+    );
+
+    xlog $self, "UID FETCH all";
+    $res = $imaptalk->_imap_cmd("UID FETCH", 1, \%handlers,
+                                '1:10', '(UID FLAGS)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert(exists $fetched{'2'});
+    # make sure UID isn't in the response
+    $self->assert_num_equals(2, scalar @{$fetched{'2'}});
+    $self->assert_str_equals('FLAGS', $fetched{'2'}->[0]);
+    $self->assert(exists $fetched{'3'});
+    $self->assert(exists $fetched{'4'});
+    $self->assert(exists $fetched{'5'});
+    $self->assert(exists $fetched{'7'});
+    $self->assert(exists $fetched{'8'});
+    $self->assert(exists $fetched{'9'});
+    $self->assert(exists $fetched{'10'});
+}
+
+1;
