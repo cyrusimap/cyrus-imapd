@@ -30,8 +30,8 @@ EOF
     xlog "Assert indexer only processes maxsize bytes of text";
     $self->{instance}->getsyslog(); # clear syslog
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_num_equals(1, scalar grep { m/Xapian: truncating/ } @lines);
+    my @lines = $self->{instance}->getsyslog(qr/Xapian: truncating/);
+    $self->assert_num_equals(1, scalar @lines);
 
     my $res = $jmap->CallMethods([
         ['Email/query', {
@@ -62,8 +62,8 @@ EOF
         }, 'R3'],
     ]);
     $self->assert_not_null($res->[0][1]{list}[0]{preview});
-    @lines = $self->{instance}->getsyslog();
-    $self->assert_num_equals(1, scalar grep { m/Xapian: truncating/ } @lines);
+    @lines = $self->{instance}->getsyslog(qr/Xapian: truncating/);
+    $self->assert_num_equals(1, scalar @lines);
 
     xlog "Assert snippet generator only processes maxsize bytes of text";
     $self->{instance}->getsyslog(); # clear syslog
@@ -76,6 +76,6 @@ EOF
         }, 'R3'],
     ]);
     $self->assert_null($res->[0][1]{list}[0]{preview});
-    @lines = $self->{instance}->getsyslog();
-    $self->assert_num_equals(1, scalar grep { m/Xapian: truncating/ } @lines);
+    @lines = $self->{instance}->getsyslog(qr/Xapian: truncating/);
+    $self->assert_num_equals(1, scalar @lines);
 }
