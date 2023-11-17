@@ -673,8 +673,8 @@ sub test_service_dup_port
 
     if ($self->{instance}->{have_syslog_replacement}) {
         # check syslog for the expected error
-        my @lines = grep { m/unable to create (?:A|B) listener socket:/ }
-                        $self->{instance}->getsyslog();
+        my $pat = qr/unable to create (?:A|B) listener socket:/;
+        my @lines = $self->{instance}->getsyslog($pat);
         $self->assert_num_equals(1, scalar @lines);
         $self->assert_matches(qr/Address already in use/, $lines[0]);
     }
