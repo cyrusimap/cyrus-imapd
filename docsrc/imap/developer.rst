@@ -41,4 +41,6 @@ Releasing
 
 .. toctree::
     developer/releasing
+    developer/major-releasing
+    developer/snapshot-releasing
     developer/ancient-releasing
