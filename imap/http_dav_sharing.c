@@ -365,15 +365,15 @@ int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentry)
     return r;
 }
 
-static int _create_notify_collection(const char *userid, struct mailbox **mailbox)
+static int _create_notify_collection(const char *userid, mbentry_t **mbentryp) 
 {
     /* lock the namespace lock and try again */
     struct mboxlock *namespacelock = user_namespacelock(userid);
 
-    mbentry_t *mbentry = NULL;
-    int r = dav_lookup_notify_collection(userid, &mbentry);
+    int r = dav_lookup_notify_collection(userid, mbentryp);
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mbentry_t *mbentry = *mbentryp;
         if (!mbentry) goto done;
         else if (mbentry->server) {
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
@@ -383,44 +383,35 @@ static int _create_notify_collection(const char *userid, struct mailbox **mailbo
 
         r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
                                    1/*isadmin*/, userid, NULL/*authstate*/,
-                                   0/*flags*/, mailbox);
-        /* we lost the race, that's OK */
-        if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                                   0/*flags*/, NULL);
+
+        if (r) xsyslog(LOG_ERR, "IOERROR: failed to create notify collection"
+                      "mailbox=<%s> error=<%s>",
                       mbentry->name, error_message(r));
-    }
-    else if (!r && mailbox) {
-        /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailbox);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mbentry->name, error_message(r));
-        }
     }
 
  done:
     mboxname_release(&namespacelock);
-    mboxlist_entry_free(&mbentry);
     return r;
 }
 
-static int create_notify_collection(const char *userid, struct mailbox **mailbox)
+static int create_notify_collection(const char *userid, struct mailbox **mailboxp)
 {
     /* notifications collection */
     mbentry_t *mbentry = NULL;
     int r = dav_lookup_notify_collection(userid, &mbentry);
-    if (r) {
+
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
         mboxlist_entry_free(&mbentry);
-        return _create_notify_collection(userid, mailbox);
+        r = _create_notify_collection(userid, &mbentry);
     }
 
-    if (mailbox) {
+    if (!r && mailboxp) {
         /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailbox);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mbentry->name, error_message(r));
-        }
+        r = mailbox_open_iwl(mbentry->name, mailboxp);
+        if (r) xsyslog(LOG_ERR, "IOERROR: failed to open notify collection",
+                       "mailbox=<%s> error=<%s>",
+                       mbentry->name, error_message(r));
     }
 
     mboxlist_entry_free(&mbentry);
