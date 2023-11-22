@@ -894,7 +894,7 @@ AC_CACHE_VAL(cyrus_cv_sys_nonblock,AC_TRY_LINK([#include <sys/types.h>
 #include <fcntl.h>
 #ifndef FNDELAY
 #define FNDELAY         O_NDELAY
-#endif],[fcntl(0, F_GETFL, 0)&FNDELAY],
+#endif],[(void)(fcntl(0, F_GETFL, 0) & FNDELAY)],
 cyrus_cv_sys_nonblock=fcntl,cyrus_cv_sys_nonblock=ioctl))
 AM_CONDITIONAL([NONBLOCK_FCNTL], [test "$cyrus_cv_sys_nonblock" = "fcntl"])
 AC_MSG_RESULT($cyrus_cv_sys_nonblock)
@@ -903,6 +903,7 @@ AC_MSG_CHECKING(timezone GMT offset method)
 AC_CACHE_VAL(cyrus_cv_struct_sys_gmtoff,AC_TRY_COMPILE([
 #include <time.h>],[struct tm tm;
 tm.tm_gmtoff = 0;
+(void) tm;
 ],cyrus_cv_struct_sys_gmtoff=tm,cyrus_cv_struct_sys_gmtoff=gmtime))
 AM_CONDITIONAL([GMTOFF_TM], [test "$cyrus_cv_struct_sys_gmtoff" = "tm"])
 AC_MSG_RESULT($cyrus_cv_struct_sys_gmtoff)
