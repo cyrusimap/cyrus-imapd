@@ -479,6 +479,16 @@ sub badscript_common
         "require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\";\n");
     $self->assert_str_equals('success', $res);
 
+    my $badregex1 = << 'EOF';
+require ["regex"];
+if header :regex "Subject" "Message (x)?(.*" {
+    stop;
+}
+EOF
+    ($res, $errs) = $self->compile_sieve_script('badregex1', $badregex1);
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/unbalanced/, $errs);
+
     # TODO: test UTF-8 verification of the string parameter
 }
 
