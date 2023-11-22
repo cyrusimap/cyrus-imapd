@@ -646,7 +646,7 @@ static void test_replace_all(void)
         CU_ASSERT_STRING_EQUAL(b.s, _in); \
  \
         r = regcomp(&re, _reg, REG_EXTENDED); \
-        CU_ASSERT_EQUAL(r, 0);
+        CU_ASSERT_EQUAL_FATAL(r, 0);
 #define TESTCASE_MIDDLE \
         n = buf_replace_one_re(&b, &re, _rep);
 #define TESTCASE_END \
