@@ -596,6 +596,8 @@ out:
  */
 static void callout_encode_args(struct buf *args,
                                 const char *fname,
+                                const char *username,
+                                const char *accountid,
                                 const struct body *body,
                                 struct entryattlist *annotations,
                                 strarray_t *flags)
@@ -607,6 +609,12 @@ static void callout_encode_args(struct buf *args,
 
     buf_printf(args, "FILENAME ");
     message_write_nstring(args, fname);
+
+    buf_printf(args, " USERNAME ");
+    message_write_nstring(args, username);
+
+    buf_printf(args, " ACCOUNTID ");
+    message_write_nstring(args, accountid);
 
     buf_printf(args, " ANNOTATIONS (");
     for (ee = annotations ; ee ; ee = ee->next) {
@@ -743,6 +751,8 @@ error:
 }
 
 static int callout_run(const char *fname,
+                       const char *username,
+                       const char *accountid,
                        const struct body *body,
                        struct entryattlist **user_annots,
                        struct entryattlist **system_annots,
@@ -758,7 +768,8 @@ static int callout_run(const char *fname,
     assert(callout);
     assert(flags);
 
-    callout_encode_args(&args, fname, body, *user_annots, flags);
+    callout_encode_args(&args, fname, username, accountid,
+                        body, *user_annots, flags);
 
     if (stat(callout, &sb) < 0) {
         syslog(LOG_ERR, "cannot stat annotation_callout %s: %m", callout);
@@ -1109,11 +1120,16 @@ havefile:
     }
 
     if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT)) {
+        char *owner = mboxname_to_userid(mailbox_name(as->mailbox));
+        const char *userid = as->userid;
+
         if (flags)
             newflags = strarray_dup(flags);
         else
             newflags = strarray_new();
-        r = callout_run(fname, *body, &user_annots, &system_annots, newflags);
+        r = callout_run(fname, userid, owner,
+                        *body, &user_annots, &system_annots, newflags);
+        free(owner);
         if (r) {
             syslog(LOG_ERR, "Annotation callout failed, ignoring");
             r = 0;
@@ -1375,7 +1391,11 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     fclose(f);
     f = NULL;
 
-    r = callout_run(fname, body, &user_annots, &system_annots, flags);
+    char *owner = mboxname_to_userid(mailbox_name(as->mailbox));
+    const char *userid = as->userid;
+    r = callout_run(fname, userid, owner,
+                    body, &user_annots, &system_annots, flags);
+    free(owner);
     if (r) goto out;
 
     /* Reset system flags */
