@@ -2140,7 +2140,6 @@ static int verify_regexlist(sieve_script_t *sscript,
                             const strarray_t *sa, int collation)
 {
     int i, ret = 0;
-    regex_t reg;
     int cflags = REG_EXTENDED | REG_NOSUB;
 
     /* support UTF8 comparisons */
@@ -2156,6 +2155,7 @@ static int verify_regexlist(sieve_script_t *sscript,
 
     for (i = 0 ; !ret && i < strarray_size(sa) ; i++) {
         const char *s = strarray_nth(sa, i);
+        regex_t reg = {0};
 
         /* Don't try to validate a regex that includes variables */
         if (supported(SIEVE_CAPA_VARIABLES) && strstr(s, "${")) continue;
