@@ -556,7 +556,9 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
     strarray_fini(&related_uids);
 }
 
-static void insert_alarms(struct defaultalarms *defalarms, icalcomponent *ical, int set_atag)
+EXPORTED void defaultalarms_insert(struct defaultalarms *defalarms,
+                                   icalcomponent *ical,
+                                   int set_atag)
 {
     if (!defalarms || (!defalarms->with_time.ical && !defalarms->with_date.ical))
         return;
@@ -574,19 +576,7 @@ static void insert_alarms(struct defaultalarms *defalarms, icalcomponent *ical, 
         // Remove any atag that was set before
         icalcomponent_set_usedefaultalerts(comp, 1, NULL);
 
-        // Determine which default alarms to add
-        int is_date;
-        if (kind == ICAL_VTODO_COMPONENT) {
-            if (icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))
-                is_date = icalcomponent_get_dtstart(comp).is_date;
-            else if (icalcomponent_get_first_property(comp, ICAL_DUE_PROPERTY))
-                is_date = icalcomponent_get_due(comp).is_date;
-            else
-                is_date = 1;
-        }
-        else is_date = icalcomponent_get_dtstart(comp).is_date;
-
-        struct defaultalarms_record *rec = is_date ?
+        struct defaultalarms_record *rec = icalcomponent_temporal_is_date(comp) ?
             &defalarms->with_date : &defalarms->with_time;
 
         if (set_atag)
@@ -594,17 +584,6 @@ static void insert_alarms(struct defaultalarms *defalarms, icalcomponent *ical, 
 
         merge_alarms(comp, rec->ical);
     }
-}
-
-EXPORTED void defaultalarms_insert(struct defaultalarms *defalarms, icalcomponent *ical)
-{
-    insert_alarms(defalarms, ical, 0);
-}
-
-EXPORTED void defaultalarms_caldav_get(struct defaultalarms *defalarms,
-                                       icalcomponent *ical)
-{
-    insert_alarms(defalarms, ical, 1);
 }
 
 EXPORTED int defaultalarms_matches_atag(icalcomponent *comp, const char *atag)

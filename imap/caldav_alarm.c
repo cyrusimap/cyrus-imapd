@@ -925,7 +925,7 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
 
         if (!defaultalarms_load(mboxname, userid, &defalarms)) {
             myical = icalcomponent_clone(ical);
-            defaultalarms_insert(&defalarms, myical);
+            defaultalarms_insert(&defalarms, myical, 0);
             ical = myical;
         }
 

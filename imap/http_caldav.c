@@ -2453,7 +2453,7 @@ static void personalize_and_add_defaultalarms(struct mailbox *mailbox,
             defaultalarms_load(mailbox_name(mailbox), httpd_userid, defalarms);
         }
 
-        defaultalarms_caldav_get(defalarms, ical);
+        defaultalarms_insert(defalarms, ical, /*set_atag*/1);
 
         /* Pass default alarms to caller or free them */
         if (defalarms) {
@@ -3853,6 +3853,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     char *cal_ownerid = NULL;
     int remove_etag = 0;
     int is_draft = 0;
+    const char **hdr;
 
     /* Validate the iCal data */
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
@@ -4149,7 +4150,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
 
     /* Set SENT-BY property */
-    const char **hdr;
     if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-Address"))) {
         const char *sentby = *hdr;
         if (!strncasecmp(sentby, "mailto:", 7)) {
@@ -4185,17 +4185,33 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             // always force the client to re-read the event
             remove_etag = 1;
 
-            if (cdata->dav.imap_uid) {
-                // rewrite usedefaultalerts for updates: a user may have
-                // set non-default alarms or changed any default alarms for
-                // this event using their CalDAV client, but that client
-                // kept our X-JMAP-USEDEFAULTALERTS property set to true.
-                // We need to turn off default alarms for such events.
-                caldav_put_rewrite_usedefaultalerts(ical);
+            int rewrite_usedefaultalerts = 1;
+            if ((hdr = spool_getheader(txn->req_hdrs, "X-Cyrus-rewrite-usedefaultalerts"))) {
+                rewrite_usedefaultalerts = strcasecmpsafe("f", *hdr) &&
+                                           strcasecmpsafe("false", *hdr);
             }
-            else {
-                // make sure we remove any defaultalarm atag
-                icalcomponent_set_usedefaultalerts(ical, 1, NULL);
+
+            if (rewrite_usedefaultalerts) {
+                if (!cdata->dav.imap_uid) {
+                    // This is a new event. Disable default alerts if
+                    // this calendar does not have default alerts set.
+                    struct defaultalarms defalarms = DEFAULTALARMS_INITIALIZER;
+                    comp = icalcomponent_get_first_real_component(ical);
+                    if (comp && !defaultalarms_load(mailbox_name(mailbox), httpd_userid, &defalarms)) {
+                        use_defaultalerts = icalcomponent_temporal_is_date(comp) ?
+                            !!defalarms.with_date.ical : !!defalarms.with_time.ical;
+                    }
+                    // Remove any stale ATAG parameter in any case.
+                    icalcomponent_set_usedefaultalerts(ical, use_defaultalerts, NULL);
+                }
+                else {
+                    // This updates an existing event. A user may have
+                    // set non-default alarms or changed any default alarms for
+                    // this event using their CalDAV client, but that client
+                    // kept our X-JMAP-USEDEFAULTALERTS property set to true.
+                    // We need to turn off default alarms for such events.
+                    caldav_put_rewrite_usedefaultalerts(ical);
+                }
             }
         }
     }

@@ -234,6 +234,9 @@ extern int ical_categories_is_color(icalproperty *cprop);
 /* Normalizes both standard and cyrus-extensions */
 extern void icalcomponent_normalize_x(icalcomponent *ical);
 
+/* Returns true if the component's main temporal such as dtstart is of type DATE */
+extern int icalcomponent_temporal_is_date(icalcomponent *comp);
+
 #ifdef WITH_JMAP
 extern const char *icalcomponent_get_jmapid(icalcomponent *comp);
 extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);

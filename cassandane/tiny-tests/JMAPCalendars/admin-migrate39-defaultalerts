@@ -281,7 +281,10 @@ END:VCALENDAR
 EOF
         $self->{shareeCaldav}->Request('PUT',
             "cassandane.$state->{calendarA}{id}/$eventUidA1.ics",
-            $ical, 'Content-Type' => 'text/calendar');
+            $ical,
+            'Content-Type' => 'text/calendar',
+            'X-Cyrus-rewrite-usedefaultalerts' => 'false',
+        );
 
         xlog $self, "Create sharee per-user prop in calendar A";
         my $ical = <<EOF;
@@ -302,7 +305,10 @@ END:VCALENDAR
 EOF
         $self->{shareeCaldav}->Request('PUT',
             "cassandane.$state->{calendarA}{id}/$eventUidA2.ics",
-            $ical, 'Content-Type' => 'text/calendar');
+            $ical,
+            'Content-Type' => 'text/calendar',
+            'X-Cyrus-rewrite-usedefaultalerts' => 'false',
+        );
 
         xlog $self, "Create sharee useDefaultAlerts=true in calendar B";
         $ical = <<EOF;
@@ -323,7 +329,10 @@ END:VCALENDAR
 EOF
         $self->{shareeCaldav}->Request('PUT',
             "cassandane.$state->{calendarB}{id}/$eventUidB1.ics",
-            $ical, 'Content-Type' => 'text/calendar');
+            $ical,
+            'Content-Type' => 'text/calendar',
+            'X-Cyrus-rewrite-usedefaultalerts' => 'false',
+        );
 
         xlog $self, "Create sharee per-user prop in calendar B";
         $ical = <<EOF;
@@ -344,7 +353,10 @@ END:VCALENDAR
 EOF
         $self->{shareeCaldav}->Request('PUT',
             "cassandane.$state->{calendarB}{id}/$eventUidB2.ics",
-            $ical, 'Content-Type' => 'text/calendar');
+            $ical,
+            'Content-Type' => 'text/calendar',
+            'X-Cyrus-rewrite-usedefaultalerts' => 'false',
+        );
     }
 
     my $res = $self->{shareeJmap}->CallMethods([
