@@ -8,26 +8,15 @@ sub test_calendarevent_defaultalerts_calalarmd
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
 
-    my $calendarId = $caldav->NewCalendar({name => 'foo'});
-    $self->assert_not_null($calendarId);
-
+    xlog $self, "Create calendar without default alarms";
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
             create => {
                 1 => {
                     name => 'test',
-                    defaultAlertsWithTime => {
-                        alert1 => {
-                            '@type' => 'Alert',
-                            trigger => {
-                                '@type' => 'OffsetTrigger',
-                                relativeTo => 'start',
-                                offset => 'PT0S',
-                            },
-                            action => 'display',
-                        },
-                    }
                 },
             }
         }, 'R1'],
@@ -35,17 +24,22 @@ sub test_calendarevent_defaultalerts_calalarmd
     my $calendarId = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($calendarId);
 
-    my $now = DateTime->now();
-    $now->set_time_zone('Australia/Sydney');
+    xlog $self, "Remove any default alarms";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarId => {
+                    defaultAlertsWithTime => undef,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarId});
 
-    # define the event to start in a few seconds
+    xlog $self, "Create event that starts in an hour, ocurring daily";
     my $startdt = $now->clone();
-    $startdt->add(DateTime::Duration->new(seconds => 2));
+    $startdt->add(DateTime::Duration->new(hours => 1));
     my $start = $startdt->strftime('%Y%m%dT%H%M%S');
-
-    my $enddt = $startdt->clone();
-    $enddt->add(DateTime::Duration->new(seconds => 15));
-    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
 
     my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
     my $href = "$calendarId/$uuid.ics";
@@ -72,45 +66,54 @@ END:VTIMEZONE
 BEGIN:VEVENT
 CREATED:20150806T234327Z
 UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
-DTEND;TZID=Australia/Sydney:$end
 TRANSP:OPAQUE
 SUMMARY:Simple
 DTSTART;TZID=Australia/Sydney:$start
+DURATION:PT15S
+RRULE:FREQ=DAILY
 DTSTAMP:20150806T234327Z
 SEQUENCE:0
 X-JMAP-USEDEFAULTALERTS;VALUE=BOOLEAN:TRUE
+BEGIN:VALARM
+UID:e01ddb42-f2f1-4e39-9d94-17fcc5aa320c
+TRIGGER:-PT30M
+ACTION:DISPLAY
+SUMMARY:Hello
+END:VALARM
 END:VEVENT
 END:VCALENDAR
 EOF
 
     $caldav->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
+    xlog $self, "Assert that useDefaultAlerts got rewritten to false";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['useDefaultAlerts'],
+        }, 'R1'],
+    ]);
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{useDefaultAlerts});
+    my $eventId = $res->[0][1]{list}[0]{id};
+
     # clean notification cache
     $self->{instance}->getnotify();
 
-    xlog "No alarm triggered before the event";
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() - 60 );
-    $self->assert_alarms();
-
-    xlog "Alarm triggered in the first minute after the event";
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+    xlog "Custom alarm triggers half an hour before event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch - 1800);
     $self->assert_alarms({summary => 'Simple', start => $start});
 
-    xlog "No further alarm triggered for the event";
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 120 );
-    $self->assert_alarms();
-
-    my $res = $jmap->CallMethods([
+    xlog $self, "Set default alarms to trigger at start of event";
+    $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
                 $calendarId => {
                     defaultAlertsWithTime => {
-                        alert2 => {
+                        alert1 => {
                             '@type' => 'Alert',
                             trigger => {
                                 '@type' => 'OffsetTrigger',
                                 relativeTo => 'start',
-                                offset => 'PT1M',
+                                offset => 'PT0S',
                             },
                             action => 'display',
                         },
@@ -121,11 +124,103 @@ EOF
     ]);
     $self->assert(exists $res->[0][1]{updated}{$calendarId});
 
-    xlog "Assert alarm gets triggered two minutes after the event";
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 120 );
-    $self->assert_alarms({summary => 'Simple', start => $start});
-}
+    xlog $self, "Set useDefaultAlerts=true for event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    useDefaultAlerts => JSON::true,
+                }
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
 
+    xlog $self, "Forward clock by one day";
+    $now->add(DateTime::Duration->new(days => 1));
+    $startdt->add(DateTime::Duration->new(days => 1));
+    $start = $startdt->strftime('%Y%m%dT%H%M%S');
+    $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "Custom alarm does not trigger half an hour before event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch - 1800);
+    $self->assert_alarms();
+
+    xlog "Default alarm triggers at start of event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch);
+    $self->assert_alarms({summary => 'Simple', start => $start});
+
+    xlog $self, "Update default alarms to trigger half an hour after event";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarId => {
+                    defaultAlertsWithTime => {
+                        alert2 => {
+                            '@type' => 'Alert',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => 'PT30M',
+                            },
+                            action => 'display',
+                        },
+                    }
+                },
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarId});
+
+    xlog $self, "Forward clock by one day";
+    $now->add(DateTime::Duration->new(days => 1));
+    $startdt->add(DateTime::Duration->new(days => 1));
+    $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    xlog "Custom alarm does not trigger half an hour before event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch - 1800);
+    $self->assert_alarms();
+
+    xlog "Former default alarm does not trigger at start of event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch);
+    $self->assert_alarms();
+
+    xlog "Current default alarm gets triggered half an hour after the event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch + 1800 );
+    $self->assert_alarms({summary => 'Simple', start => $start});
+
+    xlog $self, "Forward clock by one day";
+    $now->add(DateTime::Duration->new(days => 1));
+    $startdt->add(DateTime::Duration->new(days => 1));
+    $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    xlog $self, "Remove default alarms again";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarId => {
+                    defaultAlertsWithTime => undef,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarId});
+
+    xlog "Custom alarm does not trigger half an hour before event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch - 1800);
+    $self->assert_alarms();
+
+    xlog "Former default alarm does not trigger at start of event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch);
+    $self->assert_alarms();
+
+    xlog "Former default alarm does not trigger half an hour after the event";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch + 1800 );
+    $self->assert_alarms();
+}
 
 sub _can_match {
     my $event = shift;

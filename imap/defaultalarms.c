@@ -560,9 +560,6 @@ EXPORTED void defaultalarms_insert(struct defaultalarms *defalarms,
                                    icalcomponent *ical,
                                    int set_atag)
 {
-    if (!defalarms || (!defalarms->with_time.ical && !defalarms->with_date.ical))
-        return;
-
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
     if (kind != ICAL_VEVENT_COMPONENT && kind != ICAL_VTODO_COMPONENT)
