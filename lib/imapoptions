@@ -1293,6 +1293,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, kibibytes is assumed.
    */
 
+{ "jmap_max_calendareventnotifs", 200, INT, "UNRELEASED" }
+/* The maximum count of CalendarEventNotification objects to keep per account.
+   Any notifications exceeding this count are expunged to make room for new
+   ones. Zero or any negative number disables this limit.
+    */
+
 { "jmap_max_concurrent_upload", 5, INT, "3.1.6" }
 /* The value to return for the maxConcurrentUpload property of
    the JMAP \"urn:ietf:params:jmap:core\" capabilities object. The Cyrus JMAP
