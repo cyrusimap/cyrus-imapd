@@ -160,18 +160,15 @@ EOF
                             exited\swith\scode/x,
                           $e->to_string());
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # sync_client should have logged the BAD response
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: received bad response/, "@lines");
+    # sync_client should have logged the BAD response
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: received bad response/);
 
-        # sync server should have logged the write error
-        @lines = $self->{replica}->getsyslog();
-        $self->assert_matches(qr{IOERROR:\sfailed\sto\supload\sfile
-                                 (?:\s\(simulated\))?:\sguid=<$canaryguid>
-                              }x,
-                              "@lines");
-    }
+    # sync server should have logged the write error
+    $self->assert_syslog_matches($self->{replica},
+                                 qr{IOERROR:\sfailed\sto\supload\sfile
+                                    (?:\s\(simulated\))?:\sguid=<$canaryguid>
+                                 }x);
 }
 
 #
@@ -238,13 +235,13 @@ EOF
                             exited\swith\scode/x,
                           $e->to_string());
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # sync_client should have logged the BAD response
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: received bad response/, "@lines");
+    # sync_client should have logged the BAD response
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: received bad response/);
 
+    if ($self->{instance}->{have_syslog_replacement}) {
         # sync server should have logged the write error
-        @lines = $self->{replica}->getsyslog();
+        my @lines = $self->{replica}->getsyslog();
         $self->assert_matches(qr{IOERROR:\sfailed\sto\supload\sfile
                                  (?:\s\(simulated\))?:\sguid=<$canaryguid>
                               }x,
@@ -350,18 +347,15 @@ EOF
                             exited\swith\scode/x,
                           $e->to_string());
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # sync_client should have logged the BAD response
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: received bad response/, "@lines");
+    # sync_client should have logged the BAD response
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: received bad response/);
 
-        # sync server should have logged the write error
-        @lines = $self->{replica}->getsyslog();
-        $self->assert_matches(qr{IOERROR:\sfailed\sto\supload\sfile
-                                 (?:\s\(simulated\))?:\sguid=<$canaryguid>
-                              }x,
-                              "@lines");
-    }
+    # sync server should have logged the write error
+    $self->assert_syslog_matches($self->{replica},
+                                 qr{IOERROR:\sfailed\sto\supload\sfile
+                                    (?:\s\(simulated\))?:\sguid=<$canaryguid>
+                                 }x);
 
     xlog $self, "Check that cassandane user wasn't updated, both others were";
     $self->check_replication('a_early');
@@ -421,19 +415,16 @@ sub test_splitbrain
     $self->check_messages(\%rexp, store => $replica_store);
 
     $self->run_replication();
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # replication will generate a couple of SYNCERRORS in syslog
-        my @syslog = $self->{instance}->getsyslog();
 
-        my $pattern = qr{
-            \bSYNCERROR:\sguid\smismatch
-            (?: \suser\.cassandane\s5\b
-              | :\smailbox=<user\.cassandane>\suid=<5>
-            )
-        }x;
+    # replication will generate a couple of SYNCERRORS in syslog
+    my $pattern = qr{
+        \bSYNCERROR:\sguid\smismatch
+        (?: \suser\.cassandane\s5\b
+            | :\smailbox=<user\.cassandane>\suid=<5>
+        )
+    }x;
+    $self->assert_syslog_matches($self->{instance}, $pattern);
 
-        $self->assert_matches($pattern, "@syslog");
-    }
     $self->check_replication('cassandane');
 
 
@@ -478,25 +469,19 @@ sub test_splitbrain_mailbox
     eval { $self->run_replication(mailbox => 'user.cassandane.dest-name') };
     $self->assert_matches(qr/exited with code 1/, "$@");
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @mastersyslog = $self->{instance}->getsyslog();
-        my @replicasyslog = $self->{replica}->getsyslog();
+    my $master_pattern = qr{
+        \bMAILBOX\sreceived\sNO\sresponse:\sIMAP_MAILBOX_MOVED\b
+    }x;
+    $self->assert_syslog_matches($self->{instance}, $master_pattern);
 
-        my $master_pattern = qr{
-            \bMAILBOX\sreceived\sNO\sresponse:\sIMAP_MAILBOX_MOVED\b
-        }x;
-
-        my $replica_pattern = qr{
-            (?: \bSYNCNOTICE:\sfailed\sto\screate\smailbox
-                \suser\.cassandane\.dest-name\b
-              | \bSYNCNOTICE:\smailbox\suniqueid\salready\sin\suse:
-                \smailbox=<user\.cassandane\.dest-name>
-            )
-        }x;
-
-        $self->assert_matches($master_pattern, "@mastersyslog");
-        $self->assert_matches($replica_pattern, "@replicasyslog");
-    }
+    my $replica_pattern = qr{
+        (?: \bSYNCNOTICE:\sfailed\sto\screate\smailbox
+            \suser\.cassandane\.dest-name\b
+            | \bSYNCNOTICE:\smailbox\suniqueid\salready\sin\suse:
+            \smailbox=<user\.cassandane\.dest-name>
+        )
+    }x;
+    $self->assert_syslog_matches($self->{replica}, $replica_pattern);
 
     xlog $self, "Run a full user replication to repair";
     $self->run_replication();
@@ -612,15 +597,11 @@ sub test_splitbrain_masterexpunge
     xlog $self, "After replication, the replica should have the same 5 messages";
     $self->check_messages(\%exp, store => $replica_store);
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # We should have generated a SYNCERROR/SYNCNOTICE or two
-        my @master_lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/SYNC(?:ERROR|NOTICE): guid mismatch/,
-                              "@master_lines");
-        my @replica_lines = $self->{replica}->getsyslog();
-        $self->assert_matches(qr/SYNC(?:ERROR|NOTICE): guid mismatch/,
-                              "@replica_lines");
-    }
+    # We should have generated a SYNCERROR/SYNCNOTICE or two
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/SYNC(?:ERROR|NOTICE): guid mismatch/);
+    $self->assert_syslog_matches($self->{replica},
+                                 qr/SYNC(?:ERROR|NOTICE): guid mismatch/);
 }
 
 #
@@ -689,11 +670,9 @@ sub test_splitbrain_replicaexpunge
     xlog $self, "After replication, the replica should have the same 5 messages";
     $self->check_messages(\%exp, store => $replica_store);
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # We should have generated a SYNCERROR or two
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/SYNCERROR: guid mismatch/, "@lines");
-    }
+    # We should have generated a SYNCERROR or two
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/SYNCERROR: guid mismatch/);
 }
 
 #
@@ -1840,19 +1819,13 @@ sub test_reset_on_master
     xlog $self, "Run replication from a file with just the mailbox name in it";
     $self->run_replication(inputfile => $file, rolling => 1);
 
-    # XXX is this test useless if we can't check syslog?
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @mastersyslog = $self->{instance}->getsyslog();
-
-        my $pattern = qr{
-            \bSYNCNOTICE:\sattempt\sto\sUNMAILBOX\swithout\sa\stombstone
-            (?: \suser\.user2\.no\b
-              | :\smailbox=<user\.user2\.no>
-            )
-        }x;
-
-        $self->assert_matches($pattern, "@mastersyslog");
-    }
+    my $pattern = qr{
+        \bSYNCNOTICE:\sattempt\sto\sUNMAILBOX\swithout\sa\stombstone
+        (?: \suser\.user2\.no\b
+            | :\smailbox=<user\.user2\.no>
+        )
+    }x;
+    $self->assert_syslog_matches($self->{instance}, $pattern);
 }
 
 # this is testing a bug where sync_client would abort on zero-length file
@@ -2220,16 +2193,19 @@ sub test_splitbrain_different_uniqueid_nonempty
         $self->run_replication();
     };
 
+    # sync_client should have logged the failure
     if ($self->{instance}->{have_syslog_replacement}) {
-        # sync_client should have logged the failure
         my @mlines = $self->{instance}->getsyslog();
         $self->assert_matches(qr/IOERROR: user replication failed/, "@mlines");
         $self->assert_matches(qr/MAILBOX received NO response: IMAP_MAILBOX_MOVED/, "@mlines");
 
-        # sync server should have logged the failure
-        my @rlines = $self->{replica}->getsyslog();
-        $self->assert_matches(qr/SYNCERROR: mailbox uniqueid changed - retry/, "@rlines");
     }
+
+    # sync server should have logged the failure
+    $self->assert_syslog_matches(
+        $self->{replica},
+        qr/SYNCERROR: mailbox uniqueid changed - retry/
+    );
 
     $rtalk = $replica_store->get_client();
     $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
@@ -2283,11 +2259,13 @@ sub test_splitbrain_different_uniqueid_used
         my @mlines = $self->{instance}->getsyslog();
         $self->assert_matches(qr/IOERROR: user replication failed/, "@mlines");
         $self->assert_matches(qr/MAILBOX received NO response: IMAP_MAILBOX_MOVED/, "@mlines");
-
-        # sync server should have logged the failure
-        my @rlines = $self->{replica}->getsyslog();
-        $self->assert_matches(qr/SYNCERROR: mailbox uniqueid changed - retry/, "@rlines");
     }
+
+    # sync server should have logged the failure
+    $self->assert_syslog_matches(
+        $self->{replica},
+        qr/SYNCERROR: mailbox uniqueid changed - retry/
+    );
 
     $rtalk = $replica_store->get_client();
     $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
@@ -2404,9 +2382,7 @@ sub test_toarchive
             $repcfg->get('archivepartition-default')
         );
 
-        my @choices = grep {
-            m{debug_log_sync_partition_choice: chose reserve path}
-        } $self->{replica}->getsyslog();
+        my @choices = $self->{replica}->getsyslog(qr{debug_log_sync_partition_choice: chose reserve path});
 
         $self->assert_num_equals(scalar(keys %msg), scalar @choices);
 
@@ -2501,9 +2477,7 @@ sub test_toarchive_noarchive
             $repcfg->get('partition-default')
         );
 
-        my @choices = grep {
-            m{debug_log_sync_partition_choice: chose reserve path}
-        } $self->{replica}->getsyslog();
+        my @choices = $self->{replica}->getsyslog(qr{debug_log_sync_partition_choice: chose reserve path});
 
         $self->assert_num_equals(scalar(keys %msg), scalar @choices);
 

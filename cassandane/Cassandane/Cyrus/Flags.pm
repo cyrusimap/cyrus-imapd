@@ -626,11 +626,9 @@ sub test_max_userflags
     $self->assert_null($res);
     $self->assert_matches(qr/Too many user flags in mailbox/, $e);
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # We should have generated an IOERROR
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: out of flags/, "@lines");
-    }
+    # We should have generated an IOERROR
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: out of flags/);
 
     xlog $self, "Can set all the flags at once";
     my @flags = sort { $allflags{$a} <=> $allflags{$b} } (keys %allflags);
@@ -1586,10 +1584,8 @@ sub test_userflags_crash
     $self->assert_str_equals('no', $talk->get_last_completion_response());
 
     # should have got a syslog message about conversations GUID limit
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: conversations GUID limit/, "@lines");
-    }
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: conversations GUID limit/);
 
     # change some flags on the first message
     $talk->store('1', '-flags', qw(a b c d));
@@ -1603,10 +1599,8 @@ sub test_userflags_crash
     $self->assert_str_equals('no', $talk->get_last_completion_response());
 
     # should have got a syslog message about conversations GUID limit
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: conversations GUID limit/, "@lines");
-    }
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: conversations GUID limit/);
 }
 
 1;

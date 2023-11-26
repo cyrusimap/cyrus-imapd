@@ -88,9 +88,7 @@ sub test_cmd_id
         $imaptalk->logout();
         undef $imaptalk;
 
-        my @lines = $self->{instance}->getsyslog();
-
-        my (@behavior_lines) = grep { /session ended/ } @lines;
+        my @behavior_lines = $self->{instance}->getsyslog(qr/session ended/);
 
         $self->assert_num_gte(1, scalar @behavior_lines);
 

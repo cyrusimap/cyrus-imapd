@@ -2241,9 +2241,7 @@ sub test_squatter_attachextract_nolock
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v');
 
     xlog $self, "Inspect syslog and extractor trace files";
-    my @log = grep {
-        /squatter\[\d+\]: (released|reacquired) mailbox lock/
-    } $self->{instance}->getsyslog();
+    my @log = $self->{instance}->getsyslog(qr/squatter\[\d+\]: (released|reacquired) mailbox lock/);
 
     my ($released_timestamp) = ($log[0] =~ /released.+unixepoch=<(\d+)>/);
     $self->assert_not_null($released_timestamp);
@@ -2299,9 +2297,6 @@ sub test_squatter_attachextract_timeout
         ."\r\n"
         ."attachterm"
         ."\r\n--123456789abcdef--\r\n");
-
-    xlog $self, "Clear syslog";
-    $self->{instance}->getsyslog();
 
     xlog $self, "Run squatter (allowing partials)";
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-p');
@@ -2397,9 +2392,6 @@ sub test_squatter_attachextract_unprocessable_content
         ."attachterm"
         ."\r\n--123456789abcdef--\r\n");
 
-    xlog $self, "Clear syslog";
-    $self->{instance}->getsyslog();
-
     xlog $self, "Run squatter (allowing partials)";
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-p');
 
@@ -2434,6 +2426,5 @@ sub test_squatter_attachextract_unprocessable_content
     $self->assert_matches(qr/req1_GET_/, $tracefiles[0]);
     $self->assert_matches(qr/req2_PUT_/, $tracefiles[1]);
 }
-
 
 1;

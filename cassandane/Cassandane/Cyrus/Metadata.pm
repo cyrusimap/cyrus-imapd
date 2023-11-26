@@ -1571,19 +1571,14 @@ sub test_msg_replication_new_bot_mse_gul
     xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # We should have generated a SYNCERROR or two
-        my @lines = $self->{instance}->getsyslog();
-
-        my $pattern = qr{
-            \bSYNCERROR:\sguid\smismatch
-            (?: \suser\.cassandane\s1\b
-              | :\smailbox=<user\.cassandane>\suid=<1>
-            )
-        }x;
-
-        $self->assert_matches($pattern, "@lines");
-    }
+    # We should have generated a SYNCERROR or two
+    my $pattern = qr{
+        \bSYNCERROR:\sguid\smismatch
+        (?: \suser\.cassandane\s1\b
+            | :\smailbox=<user\.cassandane>\suid=<1>
+        )
+    }x;
+    $self->assert_syslog_matches($self->{instance}, $pattern);
 }
 
 sub test_msg_replication_new_bot_mse_guh
@@ -1641,19 +1636,14 @@ sub test_msg_replication_new_bot_mse_guh
     xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # We should have generated a SYNCERROR or two
-        my @lines = $self->{instance}->getsyslog();
-
-        my $pattern = qr{
-            \bSYNCERROR:\sguid\smismatch
-            (?: \suser\.cassandane\s1\b
-              | :\smailbox=<user\.cassandane>\suid=<1>
-            )
-        }x;
-
-        $self->assert_matches($pattern, "@lines");
-    }
+    # We should have generated a SYNCERROR or two
+    my $pattern = qr{
+        \bSYNCERROR:\sguid\smismatch
+        (?: \suser\.cassandane\s1\b
+            | :\smailbox=<user\.cassandane>\suid=<1>
+        )
+    }x;
+    $self->assert_syslog_matches($self->{instance}, $pattern);
 }
 
 

@@ -2659,9 +2659,10 @@ sub test_mailbox_set_destroy_removemsgs
 
     my ($maj, $min) = Cassandane::Instance->get_version();
     if ($maj > 3 || ($maj == 3 && $min >= 7)) {
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr{Destroyed mailbox: mboxid=<$mboxId> msgcount=<1>},
-                              join("\n", @lines));
+        $self->assert_syslog_matches(
+            $self->{instance},
+            qr{Destroyed mailbox: mboxid=<$mboxId> msgcount=<1>}
+        );
     }
 }
 

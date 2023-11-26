@@ -173,11 +173,9 @@ sub test_reconstruct_truncated
     $self->assert(grep { $_ == 6 } @records);
     $self->assert(not grep { $_ == 11 } @records);
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # We should have generated a SYNCERROR or two
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: refreshing index/, "@lines");
-    }
+    # We should have generated a SYNCERROR or two
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: refreshing index/);
 }
 #
 # Test removed file
@@ -271,8 +269,7 @@ sub test_reconstruct_snoozed
     # the reconstruct shouldn't change anything
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_does_not_match(qr/mismatch/, "@lines");
+    $self->assert_syslog_does_not_match($self->{instance}, qr/mismatch/);
 
     xlog $self, "update some \\Snoozed flags";
     $fh = IO::File->new($file, "+<");
@@ -301,7 +298,7 @@ sub test_reconstruct_snoozed
     # this reconstruct should change things back!
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
-    @lines = $self->{instance}->getsyslog();
+    my @lines = $self->{instance}->getsyslog();
     $self->assert_matches(qr/uid 5 snoozed mismatch/, "@lines");
     $self->assert_matches(qr/uid 6 snoozed mismatch/, "@lines");
 
@@ -368,11 +365,12 @@ sub test_reconstruct_uniqueid_from_header_path_legacymb
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({ cyrus => 1 },
                                    'reconstruct', '-P', $cyrus_header);
-    my $syslog = join(q{}, $self->{instance}->getsyslog());
 
     # should not have existed in cyrus.header, get from mbentry
-    $self->assert_matches(
-        qr{mailbox header had no uniqueid, setting from mbentry}, $syslog);
+    $self->assert_syslog_matches(
+        $self->{instance},
+        qr{mailbox header had no uniqueid, setting from mbentry}
+    );
 
     # bring service back up
     $self->{instance}->start();
@@ -451,11 +449,12 @@ sub test_reconstruct_uniqueid_from_header_path_uuidmb
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({ cyrus => 1 },
                                    'reconstruct', '-P', $cyrus_header);
-    my $syslog = join(q{}, $self->{instance}->getsyslog());
 
     # should not have existed in cyrus.header, get from path
-    $self->assert_matches(
-        qr{mailbox header had no uniqueid, setting from path}, $syslog);
+    $self->assert_syslog_matches(
+        $self->{instance},
+        qr{mailbox header had no uniqueid, setting from path}
+    );
 
     # bring service back up
     $self->{instance}->start();

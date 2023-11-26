@@ -567,9 +567,7 @@ sub test_auditlog_size
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 
     xlog $self, "Check the correct size was auditlogged";
-    my @appends = grep {
-        m/auditlog: append .* uid=<1>/
-    } $self->{instance}->getsyslog();
+    my @appends = $self->{instance}->getsyslog(qr/auditlog: append .* uid=<1>/);
     $self->assert_num_equals(1, scalar @appends);
 
     # delivery will add some headers, so it will be larger

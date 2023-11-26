@@ -45,9 +45,6 @@ sub test_email_set_update_too_many_mailboxes_lowlimit
     }, 'R1']]);
     $self->assert_str_equals('tooManyMailboxes', $res->[0][1]{notUpdated}{$emailId}{type});
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr{IOERROR: conversations GUID limit},
-                              join("\n", @lines));
-    }
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{IOERROR: conversations GUID limit});
 }

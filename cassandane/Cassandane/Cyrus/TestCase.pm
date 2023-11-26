@@ -1601,6 +1601,26 @@ sub assert_sieve_matches
                              digest_file_hex($filename, "MD5"));
 }
 
+sub assert_syslog_matches
+{
+    my ($self, $instance, $pattern) = @_;
+
+    if ($instance->{have_syslog_replacement}) {
+        $self->assert((scalar $instance->getsyslog($pattern) >= 1),
+                      "syslog does not match pattern $pattern");
+    }
+}
+
+sub assert_syslog_does_not_match
+{
+    my ($self, $instance, $pattern) = @_;
+
+    if ($instance->{have_syslog_replacement}) {
+        $self->assert((scalar $instance->getsyslog($pattern) == 0),
+                      "syslog matches pattern $pattern");
+    }
+}
+
 # create a bunch of mailboxes and messages with various flags and annots,
 # returning a hash of what to expect to find there later
 sub populate_user

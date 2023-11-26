@@ -977,11 +977,8 @@ sub test_guid_duplicate_same_folder
     $self->assert_null($r3);
     $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr{IOERROR: conversations GUID limit},
-                              join("\n", @lines));
-    }
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{IOERROR: conversations GUID limit});
 
     $talk->select("INBOX.dest");
     my $data = $talk->fetch("1:*", "(emailid threadid uid)");
@@ -1023,12 +1020,8 @@ sub test_guid_duplicate_total_count
     $self->assert_not_null($r4);
     $self->assert_null($r5);
     $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
-
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr{IOERROR: conversations GUID limit},
-                              join("\n", @lines));
-    }
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{IOERROR: conversations GUID limit});
 }
 
 #
@@ -1063,11 +1056,8 @@ sub test_guid_duplicate_expunges
     $self->assert_null($r);
     $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr{IOERROR: conversations GUID limit},
-                              join("\n", @lines));
-    }
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{IOERROR: conversations GUID limit});
 }
 
 # Test APPEND of two messages, the second of which has a different subject,

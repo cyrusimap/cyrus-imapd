@@ -492,10 +492,9 @@ sub test_log_missing_acl
         $self->{store}->set_folder('Other Users.other');
         $self->make_message("Email", body => "set_flag $_->{flag}\r\n",
             store => $self->{store}) or die;
-        my @logs = $self->{instance}->getsyslog();
         my $wantLog = "could not write flag due missing ACL: "
                     . "flag=<\\$_->{flag}> need_rights=<$_->{need_rights}>";
-        $self->assert_matches(qr{$wantLog}, join("\n", @logs));
+        $self->assert_syslog_matches($self->{instance}, qr{$wantLog});
     }
 }
 

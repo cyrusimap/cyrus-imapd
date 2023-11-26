@@ -595,14 +595,11 @@ sub test_require_conversations
     my ($response, undef) = $jmap->Request($JMAPRequest);
     $self->assert(not $response->{success});
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # httpd should syslog an error
-        my @syslog = $self->{instance}->getsyslog();
-        $self->assert_matches(
-            qr/ERROR: cannot enable \w+ module with conversations disabled/,
-            "@syslog"
-        );
-    }
+    # httpd should syslog an error
+    $self->assert_syslog_matches(
+        $self->{instance},
+        qr/ERROR: cannot enable \w+ module with conversations disabled/,
+    );
 }
 
 sub test_eventsource
