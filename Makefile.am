@@ -185,6 +185,7 @@ sbin_PROGRAMS += \
 	imap/cyr_df \
 	imap/cyr_ls \
 	imap/cyr_pwd \
+	imap/cyr_withlock_run \
 	imap/cyrdump \
 	imap/cyr_dbtool \
 	imap/cyr_deny \
@@ -924,6 +925,9 @@ imap_cyr_ls_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_pwd_SOURCES = imap/cli_fatal.c imap/cyr_pwd.c imap/mutex_fake.c
 imap_cyr_pwd_LDADD = $(LD_UTILITY_ADD)
+
+imap_cyr_withlock_run_SOURCES = imap/cli_fatal.c imap/cyr_withlock_run.c imap/mutex_fake.c
+imap_cyr_withlock_run_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_expire_SOURCES = imap/cli_fatal.c imap/cyr_expire.c imap/mutex_fake.c
 imap_cyr_expire_LDADD = $(LD_UTILITY_ADD)
