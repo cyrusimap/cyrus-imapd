@@ -2467,22 +2467,6 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int index_lockty
 
     assert(mailbox->index_fd != -1);
 
-    // if we're already locked, don't need to lock again!
-    if (mailbox->index_locktype) {
-        if ((mailbox->index_locktype & LOCK_SHARED) && (index_locktype & LOCK_EXCLUSIVE))
-            return IMAP_MAILBOX_LOCKED;
-        return 0;
-    }
-
-    char *userid = mboxname_to_userid(mailbox_name(mailbox));
-    if (userid) {
-        if (!user_isnamespacelocked(userid)) {
-            free(userid);
-            return mailbox_relock(mailbox, LOCK_SHARED, index_locktype);
-        }
-        free(userid);
-    }
-
     if (index_locktype == LOCK_EXCLUSIVE) {
         r = lock_blocking(mailbox->index_fd, index_fname);
     }
@@ -2569,6 +2553,26 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int index_lockty
 EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int index_locktype)
 {
     int r = 0;
+    int need_relock = 0;
+
+    if (mailbox->index_locktype) {
+	if (mailbox->index_locktype & LOCK_EXCLUSIVE)
+            return 0; // exclusive lock is good for anything
+	if (index_locktype & LOCK_SHARED)
+            return 0; // shared lock is OK if that's all we need
+        // we're going to need to re-lock
+        need_relock = 1;
+    }
+    else {
+        // if the user isn't locked, we always need to relock
+        char *userid = mboxname_to_userid(mailbox_name(mailbox));
+        if (!user_isnamespacelocked(userid))
+            need_relock = 1;
+        free(userid);
+    }
+
+    if (need_relock)
+        return mailbox_relock(mailbox, LOCK_SHARED, index_locktype);
 
     r = mailbox_lock_index_internal(mailbox, index_locktype);
     if (r) return r;
