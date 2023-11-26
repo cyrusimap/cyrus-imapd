@@ -722,6 +722,14 @@ EXPORTED struct mboxlock *user_namespacelock_full(const char *userid, int lockty
     return namelock;
 }
 
+EXPORTED int user_run_with_lock(const char *userid, int (*cb)(void *), void *rock)
+{
+    struct mboxlock *userlock = user_namespacelock(userid);
+    int r = cb(rock);
+    mboxname_release(&userlock);
+    return r;
+}
+
 EXPORTED int user_isnamespacelocked(const char *userid)
 {
     const char *name = _namelock_name_from_userid(userid);
