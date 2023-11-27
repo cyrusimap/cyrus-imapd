@@ -247,6 +247,8 @@ struct dlist *dlist_getkvchild_bykey(struct dlist *dl,
 
 void dlist_rename(struct dlist *dl, const char *name);
 
+struct dlist *dlist_copy(const struct dlist *dl);
+
 const char *dlist_lastkey(void);
 
 /* print a dlist iteratively rather than recursively */
