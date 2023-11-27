@@ -169,7 +169,7 @@ static jmap_method_t jmap_mail_methods_standard[] = {
         "Email/copy",
         JMAP_URN_MAIL,
         &jmap_email_copy,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_READ_WRITE // don't want cstate, we need to take locks in order
     },
     {
         "SearchSnippet/get",
@@ -9774,7 +9774,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
     /* type */
     json_t *jtype = json_object_get(jpart, "type");
     if (JNOTNULL(jtype) && json_is_string(jtype) && !have_type_header) {
-		const char *type = json_string_value(jtype);
+                const char *type = json_string_value(jtype);
         struct param *type_params = NULL;
         /* Validate type value */
         message_parse_type(type, &part->type, &part->subtype, &type_params);
@@ -14093,6 +14093,8 @@ static int jmap_email_copy(jmap_req_t *req)
     json_t *destroy_emails = json_array();
     const char *scheduled_uniqueid = NULL;
     const mbentry_t *scheduled_mbe = NULL;
+    struct mboxlock *srcnamespacelock = NULL;
+    struct mboxlock *dstnamespacelock = NULL;
 
     /* Parse request */
     jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
@@ -14101,7 +14103,33 @@ static int jmap_email_copy(jmap_req_t *req)
         goto done;
     }
 
-    int r = seen_open(req->userid, SEEN_CREATE, &seendb);
+    if (open_mboxlocks_exist()) {
+        abort();
+    }
+
+    char *srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
+    char *dstinbox = mboxname_user_mbox(req->accountid, NULL);
+    if (strcmp(srcinbox, dstinbox) < 0) {
+        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
+        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
+    }
+    else {
+        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
+        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
+    }
+    free(srcinbox);
+    free(dstinbox);
+
+    // now we can open the cstate
+    int r = conversations_open_user(req->accountid, 0, &req->cstate);
+    if (r) {
+        syslog(LOG_ERR, "jmap_email_copy: can't open converstaions: %s",
+                        error_message(r));
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+
+    r = seen_open(req->userid, SEEN_CREATE, &seendb);
     if (r) {
         syslog(LOG_ERR, "jmap_email_copy: can't open seen.db: %s",
                         error_message(r));
@@ -14157,6 +14185,8 @@ static int jmap_email_copy(jmap_req_t *req)
     }
 
 done:
+    mboxname_release(&srcnamespacelock);
+    mboxname_release(&dstnamespacelock);
     json_decref(destroy_emails);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);

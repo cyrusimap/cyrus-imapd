@@ -180,7 +180,7 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         "ContactCard/copy",
         JMAP_URN_CONTACTS,
         &jmap_card_copy,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_READ_WRITE // need to do lock ordering before opening conversations
     },
     {
         "ContactCard/parse",
@@ -245,7 +245,7 @@ static jmap_method_t jmap_contact_methods_nonstandard[] = {
         "Contact/copy",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contact_copy,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_READ_WRITE // can't open conversations until we get locks ordered
     },
     { NULL, NULL, NULL, 0}
 };
@@ -4523,11 +4523,35 @@ static int _contacts_copy(struct jmap_req *req,
     json_t *err = NULL;
     struct carddav_db *src_db = NULL;
     json_t *destroy_cards = json_array();
+    struct mboxlock *srcnamespacelock = NULL;
+    struct mboxlock *dstnamespacelock = NULL;
 
     /* Parse request */
     jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
     if (err) {
         jmap_error(req, err);
+        goto done;
+    }
+
+    char *srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
+    char *dstinbox = mboxname_user_mbox(req->accountid, NULL);
+    if (strcmp(srcinbox, dstinbox) < 0) {
+        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
+        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
+    }
+    else {
+        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
+        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
+    }
+    free(srcinbox);
+    free(dstinbox);
+
+    // now we can open the cstate
+    int r = conversations_open_user(req->accountid, 0, &req->cstate);
+    if (r) {
+        syslog(LOG_ERR, "jmap_email_copy: can't open converstaions: %s",
+                        error_message(r));
+        jmap_error(req, jmap_server_error(r));
         goto done;
     }
 
@@ -4577,6 +4601,8 @@ static int _contacts_copy(struct jmap_req *req,
 done:
     json_decref(destroy_cards);
     if (src_db) carddav_close(src_db);
+    mboxname_release(&srcnamespacelock);
+    mboxname_release(&dstnamespacelock);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
     return 0;
