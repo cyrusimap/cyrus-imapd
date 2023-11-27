@@ -1725,6 +1725,7 @@ EXPORTED void dlist_rename(struct dlist *dl, const char *name)
 
 EXPORTED struct dlist *dlist_copy(const struct dlist *dl)
 {
+    if (!dl) return NULL;
     struct buf buf = BUF_INITIALIZER;
     struct dlist *new = NULL;
     dlist_printbuf(dl, 1, &buf);

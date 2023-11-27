@@ -57,6 +57,8 @@
 #include "bsearch.h"
 #include "cyr_qsort_r.h"
 #include "http_jmap.h"
+#include "http_dav.h"
+#include "http_dav_sharing.h"
 #include "jmap_mail.h"
 #include "json_support.h"
 #include "mailbox.h"
@@ -4122,6 +4124,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     _mboxset(req, &set);
     mboxname_release(&namespacelock);
+    dav_run_notifications();
     jmap_ok(req, jmap_set_reply(&set.super));
 
 done:

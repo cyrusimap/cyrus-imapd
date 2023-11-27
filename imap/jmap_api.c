@@ -2740,8 +2740,8 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
             dlist_setatom(extradata, "OLD", rights);
             cyrus_acl_masktostr(change->newrights, rights);
             dlist_setatom(extradata, "NEW", rights);
-            r = dav_send_notification(irock->notify->doc, extradata,
-                    userid, buf_cstring(&irock->resource));
+            r = dav_schedule_notification(irock->notify->doc, extradata,
+                                          userid, buf_cstring(&irock->resource));
         }
     }
 }

@@ -59,6 +59,7 @@
 #include "hash.h"
 #include "http_carddav.h"
 #include "http_dav.h"
+#include "http_dav_sharing.h"
 #include "http_jmap.h"
 #include "json_support.h"
 #include "mailbox.h"
@@ -5546,6 +5547,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
 
 done:
     mboxname_release(&namespacelock);
+    dav_run_notifications();
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
     return r;

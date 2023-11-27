@@ -879,7 +879,7 @@ done:
     return r;
 }
 
-HIDDEN int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
+static int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
                                  const char *userid, const char *resource)
 {
     struct mailbox *mailbox = NULL;
@@ -949,6 +949,44 @@ HIDDEN int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
     mailbox_close(&mailbox);
 
     return r;
+}
+
+struct scheduled_notification {
+    xmlDocPtr doc;
+    struct dlist *extradata;
+    char *userid;
+    char *resource;
+    struct scheduled_notification *next;
+};
+
+static struct scheduled_notification *scheduled_notifications = NULL;
+
+HIDDEN int dav_schedule_notification(xmlDocPtr doc, struct dlist *extradata,
+                                     const char *userid, const char *resource)
+{
+    struct scheduled_notification *new = xzmalloc(sizeof(struct scheduled_notification));
+    new->doc = xmlCopyDoc(doc, 1);
+    new->extradata = extradata;  // not a copy, eaten by dav_send_notification
+    new->userid = xstrdupnull(userid);
+    new->resource = xstrdupnull(resource);
+    new->next = scheduled_notifications;
+    scheduled_notifications = new;
+    return 0;
+}
+
+HIDDEN void dav_run_notifications()
+{
+    struct scheduled_notification *next = NULL;
+    struct scheduled_notification *item;
+    for (item = scheduled_notifications; item; item = next) {
+        next = item->next;
+        dav_send_notification(item->doc, item->extradata, item->userid, item->resource);
+	xmlFreeDoc(item->doc);
+	free(item->userid);
+	free(item->resource);
+	free(item);
+    }
+    scheduled_notifications = NULL;
 }
 
 
@@ -2105,8 +2143,8 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
                                strhash(txn->req_tgt.mbentry->name),
                                strhash(userid));
 
-                    r = dav_send_notification(notify->doc, extradata,
-                                              userid, buf_cstring(&resource));
+                    r = dav_schedule_notification(notify->doc, extradata,
+                                                  userid, buf_cstring(&resource));
                 }
 
                 free(userid);
@@ -2124,6 +2162,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     if (notify) xmlFreeDoc(notify->doc);
     buf_free(&resource);
     mboxname_release(&namespacelock);
+    dav_run_notifications();
 
     return ret;
 }
