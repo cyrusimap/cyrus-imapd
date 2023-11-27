@@ -131,6 +131,19 @@ EXPORTED int open_mboxlocks_exist(void)
 
 static struct mboxlocklist *create_lockitem(const char *name)
 {
+#if 0
+    // disable this log tracking!
+    if (!strncmp(name, "*U*", 3)) {
+        // LOCK ORDERING!
+        struct mboxlocklist *item;
+        for (item = open_mboxlocks; item; item = item->next) {
+             if (strncmp(item->l.name, "*U*", 3)) continue;
+             if (strcmp(name, item->l.name) < 0) {
+                syslog(LOG_ERR, "IOERROR: namelock ordering wrong %s < %s", name, item->l.name);
+             }
+        }
+    }
+#endif
     struct mboxlocklist *item = xmalloc(sizeof(struct mboxlocklist));
     item->next = open_mboxlocks;
     open_mboxlocks = item;
