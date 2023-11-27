@@ -52,6 +52,8 @@
 
 #include <libical/ical.h>
 
+#include <libxml/parser.h>
+
 #include "global.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
