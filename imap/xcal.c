@@ -47,6 +47,7 @@
 #include <stddef.h> /* for offsetof() macro */
 #include <syslog.h>
 
+#include <libxml/parser.h>
 #include <libxml/tree.h>
 
 #include "global.h"

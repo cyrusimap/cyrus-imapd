@@ -93,6 +93,7 @@
 #include "imap/imap_err.h"
 
 #include <errno.h>
+#include <libxml/parser.h>
 #include <libxml/uri.h>
 
 static const struct dav_namespace_t {

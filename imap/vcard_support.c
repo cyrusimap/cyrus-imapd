@@ -42,6 +42,7 @@
  */
 
 #include <config.h>
+#include <libxml/parser.h>
 #include <libxml/tree.h>
 
 #include "vcard_support.h"

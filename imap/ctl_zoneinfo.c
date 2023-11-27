@@ -57,6 +57,7 @@
 #include <sys/types.h>
 
 #include <libical/ical.h>
+#include <libxml/parser.h>
 #include <libxml/tree.h>
 
 #include "annotate.h" /* for strlist functionality */

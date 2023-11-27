@@ -59,6 +59,8 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
+#include <libxml/parser.h>
+
 #define DAVNOTIFICATION_CONTENT_TYPE \
     "application/davnotification+xml; charset=utf-8"
 
