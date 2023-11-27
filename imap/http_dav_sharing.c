@@ -318,7 +318,7 @@ static void my_dav_init(struct buf *serverinfo __attribute__((unused)))
 }
 
 
-int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentry)
+int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentryp)
 {
     mbname_t *mbname;
     const char *notifyname;
@@ -341,22 +341,22 @@ int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentry)
 
     /* Locate the mailbox */
     notifyname = mbname_intname(mbname);
-    r = proxy_mlookup(notifyname, mbentry, NULL, NULL);
+    r = proxy_mlookup(notifyname, mbentryp, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(userid, NULL);
 
-        int r1 = proxy_mlookup(inboxname, mbentry, NULL, NULL);
+        int r1 = proxy_mlookup(inboxname, mbentryp, NULL, NULL);
         free(inboxname);
         if (r1 == IMAP_MAILBOX_NONEXISTENT) {
             r = IMAP_INVALID_USER;
             goto done;
         }
 
-        mboxlist_entry_free(mbentry);
-        *mbentry = mboxlist_entry_create();
-        (*mbentry)->name = xstrdup(notifyname);
-        (*mbentry)->mbtype = MBTYPE_COLLECTION;
+        mboxlist_entry_free(mbentryp);
+        *mbentryp = mboxlist_entry_create();
+        (*mbentryp)->name = xstrdup(notifyname);
+        (*mbentryp)->mbtype = MBTYPE_COLLECTION;
     }
 
   done:
