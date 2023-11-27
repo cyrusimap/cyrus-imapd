@@ -50,6 +50,7 @@ foo.TZ:America/Montreal
 URL;PROP-ID=L1;TYPE=home:http://nomis80.org
 PHOTO;PROP-ID=P1:data:image/jpeg;base64,c29tZSBwaG90bw==
 LOGO;PROP-ID=L1;MEDIATYPE=image/png:http://example.org/logo.png
+SOUND;VALUE=X;PROP-ID=S1:data:audio/mpeg;base64,c29tZSBzb3VuZA==
 IMPP;PROP-ID=OS1;PREF=1:xmpp:simon\@example.com
 SOCIALPROFILE;PROP-ID=OS2;SERVICE-TYPE=Mastodon;USERNAME="Simon P.":https://example.com/\@simon
 REV:20230422T194639Z
@@ -196,19 +197,26 @@ EOF
                 kind => 'photo',
                 mediaType => 'image/jpeg',
             },
+            S1 => {
+                kind => 'sound',
+                mediaType => 'audio/mpeg',
+            },
         },
     };
 
 
     my $have_jscard = $res->[0][1]{list}[0];
 
-    # Get media blob id before we delete it
-    my $blobid = $have_jscard->{media}{P1}{blobId};
-    $self->assert_not_null($blobid);
+    # Get media blob ids before we delete them
+    my $p_blobid = $have_jscard->{media}{P1}{blobId};
+    $self->assert_not_null($p_blobid);
+    my $s_blobid = $have_jscard->{media}{S1}{blobId};
+    $self->assert_not_null($s_blobid);
 
     # Delete generated fields
     delete $have_jscard->{blobId};
     delete $have_jscard->{media}{P1}{blobId};
+    delete $have_jscard->{media}{S1}{blobId};
     delete $have_jscard->{'cyrusimap.org:blobId'};
     delete $have_jscard->{'cyrusimap.org:size'};
 
@@ -217,8 +225,13 @@ EOF
     normalize_jscard($have_jscard);
     $self->assert_deep_equals($want_jscard, $have_jscard);
 
-    $res = $jmap->Download('cassandane', $blobid);
+    $res = $jmap->Download('cassandane', $p_blobid);
 
     $self->assert_str_equals('image/jpeg', $res->{headers}{'content-type'});
     $self->assert_str_equals('some photo', $res->{content});
+
+    $res = $jmap->Download('cassandane', $s_blobid);
+
+    $self->assert_str_equals('audio/mpeg', $res->{headers}{'content-type'});
+    $self->assert_str_equals('some sound', $res->{content});
 }
