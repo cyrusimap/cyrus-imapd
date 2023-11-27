@@ -839,6 +839,9 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         }
         conversations_commit(&req.cstate);
 
+	// run any notification updates after conversations are released
+	dav_run_notifications();
+
         json_decref(args);
     }
 

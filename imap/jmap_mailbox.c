@@ -4124,7 +4124,6 @@ static int jmap_mailbox_set(jmap_req_t *req)
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     _mboxset(req, &set);
     mboxname_release(&namespacelock);
-    dav_run_notifications();
     jmap_ok(req, jmap_set_reply(&set.super));
 
 done:

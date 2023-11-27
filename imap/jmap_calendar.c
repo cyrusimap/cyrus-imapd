@@ -2308,7 +2308,6 @@ static int jmap_calendar_set(struct jmap_req *req)
 
 done:
     mboxname_release(&namespacelock);
-    dav_run_notifications(); // after releasing lock
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
     return r;
