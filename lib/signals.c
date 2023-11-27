@@ -51,6 +51,7 @@
 #include <errno.h>
 
 #include "assert.h"
+#include "libconfig.h"
 #include "signals.h"
 #include "xmalloc.h"
 #include "util.h"
@@ -104,6 +105,13 @@ EXPORTED void signals_add_handlers(int alarm)
         fatal("unable to install signal handler for SIGTERM", EX_TEMPFAIL);
     if (sigaction(SIGUSR2, &action, NULL) < 0)
         fatal("unable to install signal handler for SIGUSR2", EX_TEMPFAIL);
+
+    /* don't reset SIGUSR1 handler on signal */
+#ifdef SA_RESETHAND
+    action.sa_flags &= ~SA_RESETHAND;
+#endif
+    if (sigaction(SIGUSR1, &action, NULL) < 0)
+        fatal("unable to install signal handler for SIGUSR1", EX_TEMPFAIL);
 
     signals_reset_sighup_handler(1);
 }
@@ -204,9 +212,19 @@ static int signals_poll_mask(sigset_t *oldmaskp)
         else exit(EX_TEMPFAIL);
     }
     for (sig = 1 ; sig < _NSIG ; sig++) {
-        if (sig == SIGUSR2) continue; /* only ever polled explicitly */
-        if (gotsignal[sig])
-            return sig;
+        switch (sig) {
+        case SIGUSR1:
+            if (gotsignal[sig]) {
+                gotsignal[sig] = 0;
+                config_toggle_debug();
+            }
+            break;
+        case SIGUSR2:
+            continue; /* only ever polled explicitly */
+        default:
+            if (gotsignal[sig]) return sig;
+            break;
+        }
     }
     return 0;
 }

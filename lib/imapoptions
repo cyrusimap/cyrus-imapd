@@ -804,8 +804,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
-{ "debug", 0, SWITCH, "2.5.0" }
-/* If enabled, allow syslog() to pass LOG_DEBUG messages. */
+{ "debug", 0, SWITCH, "UNRELEASED" }
+/* If enabled, allow syslog() to pass LOG_DEBUG messages.
+.PP
+   This can be toggled for a running process by sending it SIGUSR1.
+   */
 
 { "debug_command", NULL, STRING, "2.3.17" }
 /* Debug command to be used by processes started with -D option.  The string
