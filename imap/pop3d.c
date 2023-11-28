@@ -2073,6 +2073,9 @@ static int blat(int msgno, int lines)
     /* Protect against messages not ending in CRLF */
     if (buf[strlen(buf)-1] != '\n') prot_printf(popd_out, "\r\n");
 
+    /* Clients may become confused when the .\r\n sequence gets split
+     * up across packets.  Flush first to prevent that. */
+    prot_flush(popd_out);
     prot_printf(popd_out, ".\r\n");
 
     /* Reset inactivity timer in case we spend a long time
