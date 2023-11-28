@@ -46,6 +46,7 @@
 #include <config.h>
 #include <stdio.h>
 #include <string.h>
+#include "assert.h"
 #include "util.h"
 #include "glob.h"
 #include "xmalloc.h"
