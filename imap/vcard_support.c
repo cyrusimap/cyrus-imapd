@@ -491,11 +491,20 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
                                           char **content_type,
                                           struct message_guid *guid)
 {
-    const char *data = vcardvalue_get_uri(vcardproperty_get_value(prop));
+    const char *data = NULL;
+    const vcardvalue *val;
     vcardparameter *param;
     const char *mt, *b64;
 
     if (!prop) return 0;
+
+    val = vcardproperty_get_value(prop);
+    if (vcardvalue_isa(val) == VCARD_X_VALUE)
+        data = vcardvalue_get_x(val);
+    else
+        data = vcardvalue_get_uri(val);
+
+    if (!data) return 0;
 
     if (content_type) *content_type = NULL;
 
