@@ -1727,9 +1727,6 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
         struct mime_type_t *mime = *out_type;
         char *freeme = NULL;
 
-        prop = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
-                            &propstat[PROPSTAT_OK], name, ns, NULL, 0);
-
         if (mime != mime_types) {
             /* Not the storage format - convert into requested MIME type */
             struct buf inbuf = BUF_INITIALIZER;
@@ -1740,23 +1737,32 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
                 buf_free(&inbuf);
             }
 
+            if (!fctx->obj) return HTTP_UNPROCESSABLE;
+
             struct buf *outbuf = mime->from_object(fctx->obj);
             datalen = buf_len(outbuf);
-            data = freeme = buf_release(outbuf);
+            data = freeme = buf_releasenull(outbuf);
             buf_destroy(outbuf);
 
-            xmlSetProp(prop,
-                       BAD_CAST "content-type", BAD_CAST mime->content_type);
-            if (mime->version)
-                xmlSetProp(prop, BAD_CAST "version", BAD_CAST mime->version);
+            if (!data) return HTTP_UNPROCESSABLE;
         }
+
+        prop = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                            &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
         xmlAddChild(prop,
                     xmlNewCDataBlock(fctx->root->doc, BAD_CAST data, datalen));
 
         fctx->flags.fetcheddata = 1;
 
-        if (freeme) free(freeme);
+        if (freeme) {
+            xmlSetProp(prop,
+                       BAD_CAST "content-type", BAD_CAST mime->content_type);
+            if (mime->version)
+                xmlSetProp(prop, BAD_CAST "version", BAD_CAST mime->version);
+
+            free(freeme);
+        }
     }
 
     return ret;

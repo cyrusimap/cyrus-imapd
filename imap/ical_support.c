@@ -764,7 +764,7 @@ EXPORTED struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
     char *str = icalcomponent_as_ical_string_r(comp);
     struct buf *ret = buf_new();
 
-    buf_initm(ret, str, strlen(str));
+    if (str) buf_initm(ret, str, strlen(str));
 
     return ret;
 }

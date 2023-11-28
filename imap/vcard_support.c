@@ -465,7 +465,7 @@ EXPORTED struct buf *vcard_as_buf_x(vcardcomponent *vcard)
     char *str = vcardcomponent_as_vcard_string_r(vcard);
     struct buf *ret = buf_new();
 
-    buf_initm(ret, str, strlen(str));
+    if (str) buf_initm(ret, str, strlen(str));
 
     return ret;
 }
