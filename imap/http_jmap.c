@@ -1041,7 +1041,7 @@ static int jmap_upload(struct transaction_t *txn)
 
     if (datalen > (size_t) my_jmap_settings.limits[MAX_SIZE_UPLOAD]) {
         txn->error.desc = "JSON upload byte size exceeds maxSizeUpload";
-        return HTTP_PAYLOAD_TOO_LARGE;
+        return HTTP_CONTENT_TOO_LARGE;
     }
 
     /* Resource must be {accountId}/ with no trailing path */
