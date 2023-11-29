@@ -2567,7 +2567,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
     struct dlist *ki;
     struct sync_annot_list *mannots = NULL;
     struct sync_annot_list *rannots = NULL;
-    int r;
+    int r = 0;
     int i;
     int has_append = 0;
 
@@ -2605,7 +2605,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             /* GUID mismatch is an error straight away, it only ever happens if we
              * had a split brain - and it will take a full sync to sort out the mess */
             if (!message_guid_equal(&mrecord.guid, &rrecord->guid)) {
-                xsyslog(LOG_ERR, "SYNCNOTICE: guid mismatch",
+                xsyslog(LOG_ERR, "SYNCERROR: guid mismatch",
                                  "mailbox=<%s> uid=<%u>",
                                  mailbox_name(mailbox), mrecord.uid);
                 r = IMAP_SYNC_CHECKSUM;
@@ -2621,7 +2621,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
                                mailbox_name(mailbox), mrecord.uid, rrecord->modseq, mrecord.modseq);
                 }
                 else {
-                    xsyslog(LOG_ERR, "SYNCNOTICE: higher modseq on replica",
+                    xsyslog(LOG_ERR, "SYNCERROR: higher modseq on replica",
                                      "mailbox=<%s> uid=<%u>"
                                         " replicamodseq=<" MODSEQ_FMT ">"
                                         " mastermodseq=<" MODSEQ_FMT ">",
@@ -2636,7 +2636,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
              * that's bad */
             if (!(mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED) &&
                 (rrecord->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-                xsyslog(LOG_ERR, "SYNCNOTICE: expunged on replica",
+                xsyslog(LOG_ERR, "SYNCERROR: expunged on replica",
                                  "mailbox=<%s> uid=<%u>",
                                  mailbox_name(mailbox), mrecord.uid);
                 r = IMAP_SYNC_CHECKSUM;
@@ -2667,16 +2667,22 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             r = read_annotations(mailbox, &copy, &rannots, rrecord->modseq,
                                  /*XXX ANNOTATE_TOMBSTONES*/0);
             if (r) {
-                syslog(LOG_ERR, "Failed to read local annotations %s %u: %s",
-                       mailbox_name(mailbox), rrecord->recno, error_message(r));
+                xsyslog(LOG_ERR, "SYNCERROR: failed to read local annotations",
+                                 "mailbox=<%s> recno=<%u> error=<%s>",
+                                 mailbox_name(mailbox),
+                                 rrecord->recno,
+                                 error_message(r));
                 goto out;
             }
 
             int hadsnoozed = 0;
             r = apply_annotations(mailbox, &copy, rannots, mannots, 0, &hadsnoozed);
             if (r) {
-                syslog(LOG_ERR, "Failed to write merged annotations %s %u: %s",
-                       mailbox_name(mailbox), rrecord->recno, error_message(r));
+                xsyslog(LOG_ERR, "SYNCERROR: failed to write merged annotations"
+                                 "mailbox=<%s> recno=<%u> error=<%s>",
+                                 mailbox_name(mailbox),
+                                 rrecord->recno,
+                                 error_message(r));
                 goto out;
             }
 
@@ -2697,6 +2703,11 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
         else if (mrecord.uid <= mailbox->i.last_uid) {
             /* Expunged, just skip it */
             if (!(mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+                xsyslog(LOG_ERR, "SYNCERROR: not found and less than LAST_UID, bogus",
+                                 "mailbox=<%s> uid=<%u> last_uid=<%u>",
+                                 mailbox_name(mailbox),
+                                 mrecord.uid,
+                                 mailbox->i.last_uid);
                 r = IMAP_SYNC_CHECKSUM;
                 goto out;
             }
@@ -2732,8 +2743,6 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
 
     if (has_append)
         sync_log_append(mailbox_name(mailbox));
-
-    r = 0;
 
 out:
     mailbox_iter_done(&iter);
@@ -3155,8 +3164,9 @@ static int sync_apply_mailbox(struct dlist *kin,
     if (!r) r = apply_annotations(mailbox, NULL, rannots, mannots, 0, NULL);
 
     if (r) {
-        syslog(LOG_ERR, "syncerror: annotations failed to apply to %s",
-               mailbox_name(mailbox));
+        xsyslog(LOG_ERR, "SYNCERROR: annotations failed to apply",
+                         "mailbox=<%s>",
+                          mailbox_name(mailbox));
         goto done;
     }
 
@@ -3183,8 +3193,9 @@ static int sync_apply_mailbox(struct dlist *kin,
     r = sync_mailbox_compare_update(mailbox, kr, 1, part_list);
     if (r) {
         /* SHOULD never happen */
-        syslog(LOG_ERR, "syncerror: mailbox compare update failed for %s: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog(LOG_ERR, "SYNCERROR: mailbox compare update failed",
+                         "mailbox=<%s> error=<%s>",
+                         mailbox_name(mailbox), error_message(r));
         abort();
         return r;
     }
