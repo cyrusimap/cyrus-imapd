@@ -88,14 +88,18 @@ EXPORTED void closelog(void)
     is_opened = 0;
 }
 
-static void fake_vsyslog(int priority __attribute__((unused)),
-                         const char *format, va_list ap)
+static void fake_vsyslog(int priority, const char *format, va_list ap)
 {
     struct timeval now = {0};
     char timestamp[16] = {0};
     int saved_errno = errno;
+    int logmask;
 
     if (!is_opened) return; /* no file to write to */
+
+    logmask = setlogmask(0); /* get the real syslog's current mask */
+    if (!(logmask & LOG_MASK(LOG_PRI(priority))))
+        return; /* do not want messages of this priority logged */
 
     gettimeofday(&now, NULL);
 
