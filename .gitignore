@@ -34,7 +34,11 @@ backup/ctl_backups
 backup/cyr_backup
 backup/restore
 bench/cyrdbbench
-cmulocal/
+cmulocal/libtool.m4
+cmulocal/ltoptions.m4
+cmulocal/ltsugar.m4
+cmulocal/ltversion.m4
+cmulocal/lt~obsolete.m4
 compile
 confdefs.h
 config.guess

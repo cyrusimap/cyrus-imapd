@@ -130,9 +130,16 @@ fi
 dnl for some reason AC_PROG_CXX can succeed even though c++ compiler is missing
 dnl if it is invoked after AC_PROG_CC, so instead invoke it first
 dnl ref: https://lists.gnu.org/archive/html/bug-autoconf/2010-05/msg00001.html
+saved_CFLAGS="$CFLAGS"
+saved_CXXFLAGS="$CXXFLAGS"
+CFLAGS="$CFLAGS -Wno-error"
+CXXFLAGS="$CXXFLAGS -Wno-error"
 AC_PROG_CXX
 AC_PROG_CC
 AM_PROG_CC_C_O
+CFLAGS="$saved_CFLAGS"
+CXXFLAGS="$saved_CXXFLAGS"
+
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AC_PROG_INSTALL
@@ -172,7 +179,13 @@ AH_BOTTOM([#if defined __GNUC__ &&  __GNUC__ > 6
 ])
 
 LT_PREREQ([2.2.6])
+saved_CFLAGS="$CFLAGS"
+saved_CXXFLAGS="$CXXFLAGS"
+CFLAGS="$CFLAGS -Wno-error"
+CXXFLAGS="$CXXFLAGS -Wno-error"
 LT_INIT([disable-static])
+CFLAGS="$saved_CFLAGS"
+CXXFLAGS="$saved_CXXFLAGS"
 AC_SUBST([LIBTOOL_DEPS])
 
 dnl Check the size of various types
@@ -203,10 +216,16 @@ AC_CHECK_ALIGNOF(uint32_t)
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
 
+saved_CFLAGS="$CFLAGS"
+saved_CXXFLAGS="$CXXFLAGS"
+CFLAGS="$CFLAGS -Wno-error"
+CXXFLAGS="$CXXFLAGS -Wno-error"
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdalign.h stdarg.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror posix_fadvise strsep memmem memrchr)
 AC_CHECK_FUNCS(strlcat strlcpy strnchr getgrouplist fmemopen pselect futimens futimes getline)
 AC_HEADER_DIRENT
+CFLAGS="$saved_CFLAGS"
+CXXFLAGS="$saved_CXXFLAGS"
 
 dnl check whether to use getpassphrase or getpass
 AC_CHECK_HEADERS(stdlib.h)
@@ -253,7 +272,13 @@ AC_CHECK_FUNCS(timegm)
 
 AC_SUBST(CPPFLAGS)
 AC_SUBST(LOCALDEFS)
+saved_CFLAGS="$CFLAGS"
+saved_CXXFLAGS="$CXXFLAGS"
+CFLAGS="$CFLAGS -Wno-error"
+CXXFLAGS="$CXXFLAGS -Wno-error"
 AC_FUNC_VPRINTF
+CFLAGS="$saved_CFLAGS"
+CXXFLAGS="$saved_CXXFLAGS"
 
 CYR_INTTYPE([time_t], [#include <time.h>])
 AC_DEFINE_UNQUOTED([TIME_T_FMT], ["$cyr_cv_format_time_t"],
@@ -894,7 +919,7 @@ AC_CACHE_VAL(cyrus_cv_sys_nonblock,AC_TRY_LINK([#include <sys/types.h>
 #include <fcntl.h>
 #ifndef FNDELAY
 #define FNDELAY         O_NDELAY
-#endif],[fcntl(0, F_GETFL, 0)&FNDELAY],
+#endif],[(void)(fcntl(0, F_GETFL, 0) & FNDELAY)],
 cyrus_cv_sys_nonblock=fcntl,cyrus_cv_sys_nonblock=ioctl))
 AM_CONDITIONAL([NONBLOCK_FCNTL], [test "$cyrus_cv_sys_nonblock" = "fcntl"])
 AC_MSG_RESULT($cyrus_cv_sys_nonblock)
@@ -903,6 +928,7 @@ AC_MSG_CHECKING(timezone GMT offset method)
 AC_CACHE_VAL(cyrus_cv_struct_sys_gmtoff,AC_TRY_COMPILE([
 #include <time.h>],[struct tm tm;
 tm.tm_gmtoff = 0;
+(void) tm;
 ],cyrus_cv_struct_sys_gmtoff=tm,cyrus_cv_struct_sys_gmtoff=gmtime))
 AM_CONDITIONAL([GMTOFF_TM], [test "$cyrus_cv_struct_sys_gmtoff" = "tm"])
 AC_MSG_RESULT($cyrus_cv_struct_sys_gmtoff)
