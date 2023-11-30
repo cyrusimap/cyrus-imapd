@@ -351,7 +351,7 @@ HIDDEN int jmap_error_response(struct transaction_t *txn,
         break;
 
     case JMAP_LIMIT_SIZE:
-        http_code = HTTP_PAYLOAD_TOO_LARGE;
+        http_code = HTTP_CONTENT_TOO_LARGE;
 
         GCC_FALLTHROUGH
 

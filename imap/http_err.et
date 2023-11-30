@@ -166,8 +166,8 @@ ec HTTP_LENGTH_REQUIRED,
 ec HTTP_PRECOND_FAILED,
    "412 Precondition Failed"
 
-ec HTTP_PAYLOAD_TOO_LARGE,
-   "413 Payload Too Large"
+ec HTTP_CONTENT_TOO_LARGE,
+   "413 Content Too Large"
 
 ec HTTP_URI_TOO_LONG,
    "414 URI Too Long"

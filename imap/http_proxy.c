@@ -757,7 +757,7 @@ static int pipe_resp_body(struct protstream *pin, struct transaction_t *txn,
                 /* XXX  Do we need to parse chunk-ext? */
             }
             else if (chunk > resp_body->max - resp_body->len)
-                return HTTP_PAYLOAD_TOO_LARGE;
+                return HTTP_CONTENT_TOO_LARGE;
 
             if (chunk) {
                 /* Read 'chunk' octets */
