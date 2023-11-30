@@ -25,7 +25,7 @@ sub test_fetch
     $imaptalk->expunge();
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog $self, "FETCH all";
+    xlog $self, "FETCH all UID + FLAGS";
     my $res = $imaptalk->fetch('1:*', '(UID FLAGS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_str_equals($res->{'1'}->{uid}, "2");
@@ -58,9 +58,9 @@ sub test_fetch
         },
     );
 
-    xlog $self, "UID FETCH all";
+    xlog $self, "UID FETCH all FLAGS";
     $res = $imaptalk->_imap_cmd("UID FETCH", 1, \%handlers,
-                                '1:10', '(UID FLAGS)');
+                                '1:10', '(FLAGS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert(exists $fetched{'2'});
     # make sure UID isn't in the response
@@ -73,6 +73,17 @@ sub test_fetch
     $self->assert(exists $fetched{'8'});
     $self->assert(exists $fetched{'9'});
     $self->assert(exists $fetched{'10'});
+
+    xlog $self, "UID FETCH 2 UID";
+    %fetched= {};
+    $res = $imaptalk->_imap_cmd("UID FETCH", 1, \%handlers,
+                                '2', '(UID)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert(exists $fetched{'2'});
+    # make sure UID is in the response
+    $self->assert_num_equals(2, scalar @{$fetched{'2'}});
+    $self->assert_str_equals('UID', $fetched{'2'}->[0]);
+    $self->assert_str_equals('2', $fetched{'2'}->[1]);
 }
 
 1;

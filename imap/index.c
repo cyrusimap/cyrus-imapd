@@ -4314,8 +4314,8 @@ static void index_printflags(struct index_state *state,
     unsigned id;
 
     if (client_capa & CAPA_UIDONLY) {
-        /* draft-ietf-extra-imap-uidonly, Section 4:
-         * UID msg-att is never used.
+        /* draft-ietf-extra-imap-uidonly, Section 3.3:
+         * UID msg-att is redundant.
          * It is replaced by the uniqueid at the beginning
          * of the UIDFETCH response.
          */
@@ -4438,12 +4438,6 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     unsigned id;
 
     if (client_capa & CAPA_UIDONLY) {
-        /* draft-ietf-extra-imap-uidonly, Section 4:
-         * UID msg-att is never used.  It is replaced by the uniqueid
-         * at the beginning of the UIDFETCH response.
-         */
-        fetchitems &= ~FETCH_UID;
-
         resp = "UIDFETCH";
         id = record.uid;
     }
