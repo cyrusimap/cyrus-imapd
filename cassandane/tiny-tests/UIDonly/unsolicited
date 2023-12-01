@@ -6,20 +6,26 @@ sub test_unsolicited
 {
     my ($self) = @_;
 
-    xlog $self, "Deliver a message";
+    xlog $self, "Deliver some messages";
     my $msg = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg);
-
-    my $admintalk = $self->{adminstore}->get_client();
-    my $res = $admintalk->select('user.cassandane');
+    $msg = $self->{gen}->generate(subject => "Message 2");
+    $self->{instance}->deliver($msg);
 
     my $imaptalk = $self->{store}->get_client();
-    $res = $imaptalk->select('INBOX');
+    my $res = $imaptalk->select('INBOX');
+
+    xlog $self, "Expunge first message";
+    $imaptalk->store('1', '+flags', '\\deleted');
+    $imaptalk->expunge();
 
     xlog $self, "ENABLE UIDONLY & CONDSTORE";
     $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY', 'CONDSTORE');
     $self->assert_num_equals(1, $res->{uidonly});
     $self->assert_num_equals(1, $res->{uidonly});
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $res = $admintalk->select('user.cassandane');
 
     xlog $self, "set flag in another session";
     $admintalk->store('1', '+flags', '\\flagged');
@@ -38,11 +44,11 @@ sub test_unsolicited
     xlog $self, "poll for changes";
     $res = $imaptalk->_imap_cmd('NOOP', 0, \%handlers);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert(exists $fetched{'1'});
+    $self->assert(exists $fetched{'2'});
     # make sure UID isn't in the response
-    $self->assert_num_equals(4, scalar @{$fetched{'1'}});
-    $self->assert_str_equals('FLAGS', $fetched{'1'}->[0]);
-    $self->assert_str_equals('MODSEQ', $fetched{'1'}->[2]);
+    $self->assert_num_equals(4, scalar @{$fetched{'2'}});
+    $self->assert_str_equals('FLAGS', $fetched{'2'}->[0]);
+    $self->assert_str_equals('MODSEQ', $fetched{'2'}->[2]);
 }
 
 1;
