@@ -3642,7 +3642,7 @@ static int extract_convdata(struct conversations_state *state,
                             arrayu64_t *matchlist,
                             char **msubjp)
 {
-    char *hdrs[4];
+    char *hdrs[4] = {0};
     char *c_refs = NULL, *c_env = NULL, *c_me_msgid = NULL;
     char *c_inreplyto = NULL, *c_msgid = NULL;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
