@@ -5595,15 +5595,17 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     /* local mailbox */
     memset(&fetchargs, 0, sizeof(struct fetchargs));
 
-    if (usinguid && (client_capa & CAPA_QRESYNC))
-        flags |= FETCH_ALLOW_VANISHED;
+    if (usinguid) {
+        if (client_capa & CAPA_QRESYNC)
+            flags |= FETCH_ALLOW_VANISHED;
+
+        if (!(client_capa & CAPA_UIDONLY))
+            fetchargs.fetchitems |= FETCH_UID;
+    }
 
     r = parse_fetch_args(tag, cmd, flags, &fetchargs);
     if (r)
         goto freeargs;
-
-    if (usinguid)
-        fetchargs.fetchitems |= FETCH_UID;
 
     if (fetchargs.fetchitems & FETCH_ANNOTATION)
         client_behavior.did_annotate = 1;
