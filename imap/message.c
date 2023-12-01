@@ -3457,7 +3457,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
                                           struct index_record *record,
                                           conversation_t **convp)
 {
-    char *hdrs[4];
+    char *hdrs[4] = {0};
     char *c_refs = NULL, *c_env = NULL, *c_me_msgid = NULL;
     struct buf msubject = BUF_INITIALIZER;
     strarray_t msgidlist = STRARRAY_INITIALIZER;
