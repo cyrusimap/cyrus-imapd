@@ -1095,4 +1095,88 @@ sub test_x_me_message_id_nomatch_threading
     $self->check_messages(\%exp);
 }
 
+sub test_rename_between_users
+	:NoAltNameSpace
+{
+    my ($self) = @_;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "create shared account";
+    $admintalk->create("user.manifold");
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", cassandane => 'lrswipkxtecdn');
+
+    my $talk = $self->{store}->get_client();
+
+    $self->{store}->set_folder("INBOX");
+    $self->make_message("Inbox Msg");
+
+    $talk->create("INBOX.foo");
+    $self->{store}->set_folder("INBOX.foo");
+    $self->make_message("Foo Msg");
+
+    $talk->create("INBOX.bar");
+    $self->{store}->set_folder("INBOX.bar");
+    $self->make_message("Bar Msg");
+
+    $self->{store}->set_folder("user.manifold");
+    $self->make_message("Man Msg");
+
+    my $dirs = $self->{instance}->run_mbpath(-u => 'cassandane');
+    my $mdirs = $self->{instance}->run_mbpath(-u => 'manifold');
+
+    # folder IDs should be "INBOX", "foo", "bar"
+
+    my $res = $talk->status('INBOX.foo', ['mailboxid']);
+    my $fooid = $res->{'mailboxid'}->[0];
+
+    my %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    my %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, 'twoskip', ['SHOW']);
+
+    my $folders = Cyrus::DList->parse_string($data{'$FOLDER_IDS'})->as_perl;
+    my $mfolders = Cyrus::DList->parse_string($mdata{'$FOLDER_IDS'})->as_perl;
+
+    $self->assert_num_equals(3, scalar @$folders);
+    $self->assert_num_equals(1, scalar @$mfolders);
+    $self->assert_str_equals($fooid, $folders->[1]);
+
+    xlog $self, "Rename folder to other user";
+    $talk->rename("INBOX.foo", "user.manifold.foo");
+
+    $admintalk->create('user.manifold.extra');
+    $self->{store}->set_folder("user.manifold.extra");
+    $self->make_message("Extra Msg");
+
+    %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, 'twoskip', ['SHOW']);
+
+    $folders = Cyrus::DList->parse_string($data{'$FOLDER_IDS'})->as_perl;
+    $mfolders = Cyrus::DList->parse_string($mdata{'$FOLDER_IDS'})->as_perl;
+    $self->assert_num_equals(3, scalar @$folders);
+    $self->assert_num_equals(3, scalar @$mfolders);
+    $self->assert_str_equals('-', $folders->[1]);
+    $self->assert_str_equals($fooid, $mfolders->[1]);
+
+    $talk->create("INBOX.again");
+    $self->{store}->set_folder("INBOX.again");
+    $self->make_message("Again Msg");
+
+    $res = $talk->status('INBOX.again', ['mailboxid']);
+    my $againid = $res->{'mailboxid'}->[0];
+
+    $talk->rename("user.manifold.foo", "INBOX.foo");
+
+    %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    $folders = Cyrus::DList->parse_string($data{'$FOLDER_IDS'})->as_perl;
+    $mfolders = Cyrus::DList->parse_string($mdata{'$FOLDER_IDS'})->as_perl;
+    $self->assert_num_equals(4, scalar @$folders);
+    $self->assert_num_equals(3, scalar @$mfolders);
+    $self->assert_str_equals($againid, $folders->[1]);
+    $self->assert_str_equals($fooid, $folders->[3]);
+    $self->assert_str_equals('-', $mfolders->[1]);
+}
+
 1;
