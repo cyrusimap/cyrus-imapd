@@ -6667,15 +6667,6 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     assert(mailbox_index_islocked(oldmailbox, 1));
     assert(mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS);
 
-    /* we can't rename back from a deleted mailbox, because the conversations
-     * information will be wrong.  Ideally we might re-calculate, but for now
-     * we just throw a big fat error */
-    if (config_getswitch(IMAPOPT_CONVERSATIONS) &&
-        mboxname_isdeletedmailbox(mailbox_name(oldmailbox), NULL)) {
-        syslog(LOG_ERR, "can't rename a deleted mailbox %s", mailbox_name(oldmailbox));
-        return IMAP_MAILBOX_BADNAME;
-    }
-
     /* create uidvalidity if not explicitly requested */
     if (!uidvalidity)
         uidvalidity = mboxname_nextuidvalidity(newname, oldmailbox->i.uidvalidity);
