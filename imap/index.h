@@ -349,8 +349,19 @@ extern int index_search_evaluate(struct index_state *state, const search_expr_t 
 extern int index_expunge(struct index_state *state, char *uidsequence,
                          int need_deleted);
 
+/* Extract text for snippets: first look in message bodies, then attachments */
 #define INDEX_GETSEARCHTEXT_SNIPPET  (1<<0)
-#define INDEX_GETSEARCHTEXT_PARTIALS (1<<1)
+/* Allow messages being indexed partially, if the attachment extractor
+ * returned an error. If this flag is not set, then the first attachment
+ * extractor error causes getsearchtext to return with an error. */
+#define INDEX_GETSEARCHTEXT_ALLOW_PARTIALS (1<<1)
+/* Do not log a warning if messages could only be indexed partially
+ * (implies allowing partial message indexes) */
+#define INDEX_GETSEARCHTEXT_NOLOG_PARTIALS \
+    (INDEX_GETSEARCHTEXT_ALLOW_PARTIALS | (1<<2))
+/* Disable calling the attachment extractor. The message is marked as
+ * partially indexed, regardless of the ALLOW_PARTIALs flag. */
+#define INDEX_GETSEARCHTEXT_NOCALL_ATTACHEXTRACT (1<<3)
 extern int index_getsearchtext(struct message *msg, const strarray_t *partids,
                                struct search_text_receiver *receiver,
                                int flag);

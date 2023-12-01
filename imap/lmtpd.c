@@ -67,6 +67,7 @@
 #include "annotate.h"
 #include "append.h"
 #include "assert.h"
+#include "attachextract.h"
 #include "auth.h"
 #ifdef USE_AUTOCREATE
 #include "autocreate.h"
@@ -288,8 +289,12 @@ int service_main(int argc, char **argv,
     /* count the connection, now that it's established */
     prometheus_increment(CYRUS_LMTP_CONNECTIONS_TOTAL);
 
+    attachextract_init(deliver_in);
+
     lmtpmode(&mylmtp, deliver_in, deliver_out, 0);
     libcyrus_run_delayed();
+
+    attachextract_destroy();
 
     prometheus_decrement(CYRUS_LMTP_ACTIVE_CONNECTIONS);
 

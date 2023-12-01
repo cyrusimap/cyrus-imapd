@@ -53,6 +53,7 @@
 #include "jmap_util.h"
 #include "json_support.h"
 #include "search_engines.h"
+#include "xapian_wrap.h"
 
 #include "imap/imap_err.h"
 
@@ -470,9 +471,18 @@ HIDDEN int jmap_emailbodies_extract(const struct body *root,
             &bodies->attslist);
 }
 
+struct matchmime {
+    char *dbpath;
+    xapian_dbw_t *dbw;
+    message_t *m;
+    const struct buf *mime;
+    void *convmatch;
+    uint8_t indexlevel;
+};
+
 struct matchmime_receiver {
     struct search_text_receiver super;
-    xapian_dbw_t *dbw;
+    struct matchmime *matchmime;
     struct buf buf;
 };
 
@@ -501,7 +511,7 @@ static int _matchmime_tr_begin_message(search_text_receiver_t *rx, message_t *ms
     if (r) return r;
 
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
-    return xapian_dbw_begin_doc(tr->dbw, guid, 'G');
+    return xapian_dbw_begin_doc(tr->matchmime->dbw, guid, 'G');
 }
 
 static int _matchmime_tr_begin_bodypart(search_text_receiver_t *rx __attribute__((unused)),
@@ -545,7 +555,7 @@ static int _matchmime_tr_append_text(search_text_receiver_t *rx,
 static void _matchmime_tr_end_part(search_text_receiver_t *rx, int part)
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
-    xapian_dbw_doc_part(tr->dbw, &tr->buf, part);
+    xapian_dbw_doc_part(tr->matchmime->dbw, &tr->buf, part);
     buf_reset(&tr->buf);
 }
 
@@ -556,7 +566,8 @@ static void _matchmime_tr_end_bodypart(search_text_receiver_t *rx __attribute__(
 static int _matchmime_tr_end_message(search_text_receiver_t *rx, uint8_t indexlevel)
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
-    return xapian_dbw_end_doc(tr->dbw, indexlevel);
+    tr->matchmime->indexlevel = indexlevel;
+    return xapian_dbw_end_doc(tr->matchmime->dbw, indexlevel);
 }
 
 static int _matchmime_tr_end_mailbox(search_text_receiver_t *rx __attribute__((unused)),
@@ -909,7 +920,6 @@ static int _email_matchmime_evaluate(json_t *filter,
                 case SEARCH_PART_TYPE:
                 case SEARCH_PART_LANGUAGE:
                 case SEARCH_PART_PRIORITY:
-                case SEARCH_PART_ATTACHMENTBODY:
                     continue;
             }
             void *xq = xapian_query_new_match(db, i, match);
@@ -987,6 +997,10 @@ static int _email_matchmime_evaluate(json_t *filter,
     }
     if ((match = json_string_value(json_object_get(filter, "attachmentType")))) {
         xapian_query_t *xq = build_type_query(db, match);
+        ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
+    }
+    if ((match = json_string_value(json_object_get(filter, "attachmentBody")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_ATTACHMENTBODY, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
     if ((match = json_string_value(json_object_get(filter, "listId")))) {
@@ -1183,6 +1197,77 @@ HIDDEN void jmap_email_filtercondition_validate(const char *field, json_t *arg,
     }
 }
 
+static int _matchmime_need_attachextract(json_t *jfilter)
+{
+    if (!jfilter) return 0;
+
+    const char *criteria;
+    json_t *jval;
+    json_object_foreach(jfilter, criteria, jval) {
+        if (!strcmp("text", criteria) ||
+            !strcmp("attachmentBody", criteria)) {
+            return 1;
+        }
+    }
+
+    size_t i;
+    json_array_foreach(json_object_get(jfilter, "conditions"), i, jval) {
+        if (_matchmime_need_attachextract(jval))
+            return 1;
+    }
+
+    return 0;
+}
+
+static int _matchmime_index_message(matchmime_t *matchmime, json_t *jfilter)
+{
+    if (matchmime->indexlevel &&
+            !(matchmime->indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) {
+        /* This message already got fully indexed */
+        return 0;
+    }
+
+    struct matchmime_receiver tr = {
+        {
+            _matchmime_tr_begin_mailbox,
+            _matchmime_tr_first_unindexed_uid,
+            _matchmime_tr_is_indexed,
+            _matchmime_tr_begin_message,
+            _matchmime_tr_begin_bodypart,
+            _matchmime_tr_begin_part,
+            _matchmime_tr_append_text,
+            _matchmime_tr_end_part,
+            _matchmime_tr_end_bodypart,
+            _matchmime_tr_end_message,
+            _matchmime_tr_end_mailbox,
+            _matchmime_tr_flush,
+            _matchmime_tr_audit_mailbox,
+            _matchmime_tr_index_charset_flags,
+            _matchmime_tr_index_message_format
+        },
+        matchmime, BUF_INITIALIZER
+    };
+
+    /* Determine if we need to extract text from attachments for this
+     * filter. Since matchmime may evaluate multiple filters for the
+     * same message, we may end up indexing the same message twice:
+     * first without calling the attachment extractor, then again with
+     * calling it. This may result in two documents being indexed
+     * for the same MIME message in the throwaway Xapian database. */
+    int need_attachextract = _matchmime_need_attachextract(jfilter);
+    int flags = INDEX_GETSEARCHTEXT_ALLOW_PARTIALS|
+                INDEX_GETSEARCHTEXT_NOLOG_PARTIALS;
+    if (!need_attachextract) {
+        // suppress calling the attachment extractor
+        flags |= INDEX_GETSEARCHTEXT_NOCALL_ATTACHEXTRACT;
+    }
+
+    int r = index_getsearchtext(matchmime->m, NULL,
+            (struct search_text_receiver*) &tr, flags);
+    buf_free(&tr.buf);
+    return r;
+}
+
 HIDDEN matchmime_t *jmap_email_matchmime_new(const struct buf *mime, json_t **err)
 {
     matchmime_t *matchmime = xzmalloc(sizeof(matchmime_t));
@@ -1215,37 +1300,6 @@ HIDDEN matchmime_t *jmap_email_matchmime_new(const struct buf *mime, json_t **er
     r = xapian_dbw_open(paths, &matchmime->dbw, /*mode*/0, /*nosync*/1);
     if (r) {
         syslog(LOG_ERR, "jmap_matchmime: can't open search backend: %s",
-                error_message(r));
-        *err = jmap_server_error(r);
-        jmap_email_matchmime_free(&matchmime);
-        return NULL;
-    }
-
-    /* Index message bodies in-memory */
-    struct matchmime_receiver tr = {
-        {
-            _matchmime_tr_begin_mailbox,
-            _matchmime_tr_first_unindexed_uid,
-            _matchmime_tr_is_indexed,
-            _matchmime_tr_begin_message,
-            _matchmime_tr_begin_bodypart,
-            _matchmime_tr_begin_part,
-            _matchmime_tr_append_text,
-            _matchmime_tr_end_part,
-            _matchmime_tr_end_bodypart,
-            _matchmime_tr_end_message,
-            _matchmime_tr_end_mailbox,
-            _matchmime_tr_flush,
-            _matchmime_tr_audit_mailbox,
-            _matchmime_tr_index_charset_flags,
-            _matchmime_tr_index_message_format
-        },
-        matchmime->dbw, BUF_INITIALIZER
-    };
-    r = index_getsearchtext(matchmime->m, NULL, (struct search_text_receiver*) &tr, 0);
-    buf_free(&tr.buf);
-    if (r) {
-        syslog(LOG_ERR, "jmap_matchmime: can't index MIME message: %s",
                 error_message(r));
         *err = jmap_server_error(r);
         jmap_email_matchmime_free(&matchmime);
@@ -1336,6 +1390,15 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
     else if (json_array_size(unsupported)) {
         *err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
                          "filters", unsupported);
+        goto done;
+    }
+
+    /* Make sure the index is set up for this filter */
+    r = _matchmime_index_message(matchmime, jfilter);
+    if (r) {
+        syslog(LOG_ERR, "jmap_matchmime: can't index MIME message: %s",
+                error_message(r));
+        *err = jmap_server_error(r);
         goto done;
     }
 
