@@ -3669,6 +3669,56 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
+sub test_jmapquery_missing_in_reply_to
+    :min_version_3_9 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $imap = $self->{store}->get_client();
+    $imap->create("INBOX.matches") or die;
+
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  jmapquery text:
+  {
+      "noneInThreadHaveKeyword" : "$seen"
+  }
+.
+{
+  fileinto "INBOX.matches";
+}
+EOF
+    );
+
+    my $body = << 'EOF';
+--047d7b33dd729737fe04d3bde348
+Content-Type: text/plain; charset=UTF-8
+
+plain
+
+--047d7b33dd729737fe04d3bde348
+Content-Type: image/tiff
+Content-Transfer-Encoding: base64
+
+abc=
+
+--047d7b33dd729737fe04d3bde348--
+EOF
+    $body =~ s/\r?\n/\r\n/gs;
+
+    xlog $self, "Deliver a message without in-reply-to";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+    $msg1->set_attribute(uid => 1);
+
+    # better not have just crashed!
+
+    xlog "Assert that message got moved into INBOX.matches";
+    $self->{store}->set_folder('INBOX.matches');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
 sub test_enotify
     :needs_component_sieve :min_version_3_2
 {
