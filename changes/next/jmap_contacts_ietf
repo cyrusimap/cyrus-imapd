@@ -1,0 +1,18 @@
+
+Description:
+
+Adds support for JMAP Contacts per upcoming IETF standards.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Requires the not-yet-released libicalvcard:
+https://github.com/libical/libical/pull/584
+
+This code should be considered experimental
+until libicalvcard is actually released.
