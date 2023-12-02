@@ -2821,11 +2821,6 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->foldermodseq = newmailbox->i.highestmodseq;
     }
     else {
-        /* Rename the mailbox metadata */
-        r = mailbox_rename_nocopy(oldmailbox, newname, silent);
-
-        if (r) goto done;
-
         /* rewrite entry with new name */
         newmbentry = mboxlist_entry_create();
         newmbentry->name = xstrdupnull(newname);
@@ -2836,6 +2831,10 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(oldmailbox));
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
         newmbentry->foldermodseq = oldmailbox->i.highestmodseq;
+
+        /* Rename the mailbox metadata */
+        r = mailbox_rename_nocopy(oldmailbox, newmbentry, silent);
+        if (r) goto done;
     }
 
     syslog(LOG_INFO, "Rename: %s -> %s", oldname, newname);
