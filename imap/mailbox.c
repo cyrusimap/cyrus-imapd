@@ -6554,28 +6554,22 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
      * don't rename the conversations DB - instead we re-create
      * the records in the target user.  Sorry, was too complex
      * otherwise handling all the special cases */
-    if (mailbox_has_conversations(oldmailbox)) {
-        oldcstate = mailbox_get_cstate(oldmailbox);
-        assert(oldcstate);
-    }
-
-    if (mailbox_has_conversations(newmailbox)) {
-        newcstate = mailbox_get_cstate(newmailbox);
-        assert(newcstate);
-    }
+    oldcstate = mailbox_get_cstate(oldmailbox);
+    newcstate = mailbox_get_cstate(newmailbox);
 
     if (oldcstate && newcstate && !strcmp(oldcstate->path, newcstate->path)) {
         /* we can just rename within the same user */
         if (oldcstate->folders_byname) {
             r = conversations_rename_folder(oldcstate, mailbox_name(oldmailbox), newname);
         }
+        /* otherwise it's got the same key, so nothing to do */
     }
     else {
         /* have to handle each one separately */
-        if (newcstate)
-            r = mailbox_add_conversations(newmailbox, /*silent*/0);
         if (oldcstate)
             r = mailbox_delete_conversations(oldmailbox);
+        if (!r && newcstate)
+            r = mailbox_add_conversations(newmailbox, /*silent*/0);
     }
     if (r) goto fail;
 
