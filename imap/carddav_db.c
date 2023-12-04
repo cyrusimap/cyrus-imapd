@@ -1160,16 +1160,19 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
         }
         else if (!strcasecmp(name, "member") ||
                  !strcasecmp(name, "x-addressbookserver-member")) {
-            if (strncmp(propval, "urn:uuid:", 9)) continue;
-            strarray_append(&member_uids, propval+9);
-            strarray_append(&member_uids, "");
+            if (!strncmp(propval, "urn:uuid:", 9)) {
+                strarray_append(&member_uids, propval+9);
+                strarray_append(&member_uids, "");
+            }
         }
         else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
-            if (strncmp(propval, "urn:uuid:", 9)) continue;
-            struct vparse_param *param = vparse_get_param(ventry, "userid");
-            if (!param) continue;
-            strarray_append(&member_uids, propval+9);
-            strarray_append(&member_uids, param->value);
+            if (!strncmp(propval, "urn:uuid:", 9)) {
+                struct vparse_param *param = vparse_get_param(ventry, "userid");
+                if (param) {
+                    strarray_append(&member_uids, propval+9);
+                    strarray_append(&member_uids, param->value);
+                }
+            }
         }
         else if (!strcasecmp(name, "kind") ||
                  !strcasecmp(name, "x-addressbookserver-kind")) {
