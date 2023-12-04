@@ -142,6 +142,9 @@ static char *conversations_path(mbname_t *mbname)
      * it's hard-coded as the user */
     if (!mbname_userid(mbname))
         return NULL;
+    // deleted mailboxes don't have a conversations database
+    if (mbname_isdeleted(mbname))
+	return NULL;
     if (convdir)
         return strconcat(convdir, "/", mbname_userid(mbname), ".", suff, (char *)NULL);
     return mboxname_conf_getpath(mbname, suff);
