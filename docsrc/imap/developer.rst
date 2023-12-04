@@ -15,6 +15,7 @@ Getting Started
     developer/compiling
     installing
     developer/developer-testing
+    developer/coverage
     developer/jmap
 
 .. toctree::
