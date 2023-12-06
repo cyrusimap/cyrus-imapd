@@ -1141,9 +1141,7 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
         else if (!strcasecmp(name, "nickname")) {
             if (buf_len(&nicknames)) buf_putc(&nicknames, ',');
             buf_appendcstr(&nicknames, propval);
-            cdata->nickname = buf_cstring(&nicknames);;
-            strarray_appendm(&values, propval);
-            propval = NULL;
+            cdata->nickname = buf_cstring(&nicknames);
         }
         else if (!strcasecmp(name, "email")) {
             /* XXX - insert if primary */
@@ -1420,6 +1418,7 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
                                  int ispinned)
 {
     struct buf nicknames = BUF_INITIALIZER;
+    strarray_t values = STRARRAY_INITIALIZER;
     strarray_t emails = STRARRAY_INITIALIZER;
     strarray_t member_uids = STRARRAY_INITIALIZER;
     vcardproperty *prop;
@@ -1427,26 +1426,41 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
          prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
-        const char *propval = vcardproperty_get_value_as_string(prop);
+        /* The libical BUFFER_RING_SIZE used by *_get_value_as_string()
+         * is 2500 entries.
+         * A vCard with more than 2500 properties (E.g. a large group card)
+         * will cause some of our value pointers to be freed out from under us.
+         * So, we use vcardproperty_get_value_as_string_r() here instead
+         * and manage the memory ourselves.
+         */
+        char *propval = vcardproperty_get_value_as_string_r(prop);
         const char *userid = "";
+
+        if (!propval) continue;
 
         switch (vcardproperty_isa(prop)) {
         case VCARD_UID_PROPERTY:
             cdata->vcard_uid = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
             break;
 
         case VCARD_N_PROPERTY:
             cdata->name = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
             break;
 
         case VCARD_FN_PROPERTY:
             cdata->fullname = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
             break;
 
         case VCARD_NICKNAME_PROPERTY:
             if (buf_len(&nicknames)) buf_putc(&nicknames, ',');
             buf_appendcstr(&nicknames, propval);
-            cdata->nickname = buf_cstring(&nicknames);;
+            cdata->nickname = buf_cstring(&nicknames);
             break;
 
         case VCARD_EMAIL_PROPERTY: {
@@ -1471,8 +1485,9 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
                     }
                 }
             }
-            strarray_append(&emails, propval);
+            strarray_appendm(&emails, propval);
             strarray_append(&emails, ispref ? "1" : "");
+            propval = NULL;
             break;
         }
 
@@ -1511,6 +1526,8 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
         default:
             break;
         }
+
+        free(propval);
     }
 
     int r;
@@ -1529,6 +1546,7 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
     if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
 
     buf_free(&nicknames);
+    strarray_fini(&values);
     strarray_fini(&emails);
     strarray_fini(&member_uids);
 

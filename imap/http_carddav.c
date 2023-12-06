@@ -602,9 +602,10 @@ static int carddav_store_resource(struct transaction_t *txn,
 {
     vcardproperty *prop;
     struct carddav_data *cdata;
-    const char *version = NULL, *uid = NULL, *fullname = NULL;
+    char *version = NULL, *uid = NULL, *fullname = NULL;
     struct index_record *oldrecord = NULL, record;
     char *mimehdr;
+    int r;
 
     /* Validate the vCard data */
     if (!vcard) {
@@ -620,15 +621,15 @@ static int carddav_store_resource(struct transaction_t *txn,
 
         switch (vcardproperty_isa(prop)) {
         case VCARD_VERSION_PROPERTY:
-            version = propval;
+            version = xstrdup(propval);
             break;
 
         case VCARD_UID_PROPERTY:
-            uid = propval;
+            uid = xstrdup(propval);
             break;
 
         case VCARD_FN_PROPERTY:
-            fullname = propval;
+            fullname = xstrdup(propval);
             break;
 
         default:
@@ -666,7 +667,8 @@ static int carddav_store_resource(struct transaction_t *txn,
     if (buf_len(buf) > max_size) {
         buf_destroy(buf);
         txn->error.precond = CARDDAV_MAX_SIZE;
-        return HTTP_FORBIDDEN;
+        r = HTTP_FORBIDDEN;
+        goto done;
     }
 
     /* Create and cache RFC 5322 header fields for resource */
@@ -694,10 +696,16 @@ static int carddav_store_resource(struct transaction_t *txn,
     spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
 
     /* Store the resource */
-    int r = dav_store_resource(txn, buf_cstring(buf), 0,
-                              mailbox, oldrecord, cdata->dav.createdmodseq,
-                              NULL, NULL);
+    r = dav_store_resource(txn, buf_cstring(buf), 0,
+                           mailbox, oldrecord, cdata->dav.createdmodseq,
+                           NULL, NULL);
     buf_destroy(buf);
+
+  done:
+    free(version);
+    free(uid);
+    free(fullname);
+
     return r;
 }
 
@@ -1363,6 +1371,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     vcardcomponent *vcard = (vcardcomponent *)obj;
+    char *uid = NULL, *fullname = NULL;
     char *type = NULL, *subtype = NULL;
     struct param *params = NULL;
     const char *want_ver = NULL;
@@ -1446,7 +1455,6 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 
     /* Sanity check vCard data */
     vcardproperty *prop;
-    const char *uid = NULL, *fullname = NULL;
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
          prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
@@ -1469,11 +1477,11 @@ static int carddav_put(struct transaction_t *txn, void *obj,
             break;
 
         case VCARD_UID_PROPERTY:
-            uid = propval;
+            uid = xstrdup(propval);
             break;
 
         case VCARD_FN_PROPERTY:
-            fullname = propval;
+            fullname = xstrdup(propval);
             break;
 
         default:
@@ -1527,6 +1535,8 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 
   done:
     param_free(&params);
+    free(uid);
+    free(fullname);
     free(subtype);
     free(type);
 

@@ -1422,4 +1422,49 @@ EOF
     $self->check_replication('cassandane');
 }
 
+# If we handle the large number of properties properly, this test will succeed.
+# If we overrun the libical ring buffer, this test might fail,
+# but it will definitely cause valgrind errors.
+sub test_huge_group
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+
+    my $members;
+
+    for (1..2500) {
+        my $ug = Data::UUID->new;
+        my $uuid = $ug->create_str();
+        $members .= "MEMBER:urn:uuid:$_\r\n";
+    }
+
+    my $uid = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+    my $href = "Default/group.ics";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+KIND:group
+UID:$uid
+N:;;;;
+FN:My Group
+$members
+END:VCARD
+EOF
+
+    $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+    my $response = $CardDAV->Request('GET', $href);
+    my $value = $response->{content};
+    $self->assert_matches(qr/$uid/, $value);
+
+    $card =~ s/FN:/NOTE:2500 members\r\nFN:/;
+
+    $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+    $response = $CardDAV->Request('GET', $href);
+    $value = $response->{content};
+    $self->assert_matches(qr/$uid/, $value);
+    $self->assert_matches(qr/2500 members/, $value);
+}
+
 1;
