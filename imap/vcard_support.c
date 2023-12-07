@@ -452,7 +452,12 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
 
 EXPORTED  vcardcomponent *vcard_parse_string_x(const char *str)
 {
-    return vcardcomponent_new_from_string(str);
+    vcardcomponent *vcard = vcardcomponent_new_from_string(str);
+
+    /* Remove all X-LIC-ERROR properties */
+    if (vcard) vcardcomponent_strip_errors(vcard);
+
+    return vcard;
 }
 
 EXPORTED vcardcomponent *vcard_parse_buf_x(const struct buf *buf)
@@ -476,10 +481,9 @@ EXPORTED vcardcomponent *record_to_vcard_x(struct mailbox *mailbox,
     struct buf buf = BUF_INITIALIZER;
     vcardcomponent *vcard = NULL;
 
-    /* Load message containing the resource and parse vcard data */
+    /* Load message containing the resource and parse vCard data */
     if (!mailbox_map_record(mailbox, record, &buf)) {
-        vcard = vcardcomponent_new_from_string(buf_cstring(&buf) +
-                                               record->header_size);
+        vcard = vcard_parse_string_x(buf_cstring(&buf) + record->header_size);
         buf_free(&buf);
     }
 

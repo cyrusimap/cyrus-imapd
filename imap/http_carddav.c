@@ -1375,6 +1375,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     char *type = NULL, *subtype = NULL;
     struct param *params = NULL;
     const char *want_ver = NULL;
+    int error_count = 0;
 
     /* Sanity check Content-Type */
     const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
@@ -1451,6 +1452,12 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         txn->error.precond = CARDDAV_VALID_DATA;
         txn->error.desc = "Failed restriction checks";
         goto done;
+    }
+
+    error_count = vcardcomponent_count_errors(vcard);
+    if (error_count) {
+        /* Remove all X-LIC-ERROR properties */
+        vcardcomponent_strip_errors(vcard);
     }
 
     /* Sanity check vCard data */
@@ -1543,7 +1550,15 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 
     if (txn->error.precond) return HTTP_FORBIDDEN;
 
-    return carddav_store_resource(txn, vcard, mailbox, resource, db);
+    int ret = carddav_store_resource(txn, vcard, mailbox, resource, db);
+
+    if (error_count && !(flags & PREFER_REP)) {
+        /* vCard data has been rewritten - don't return validators */
+        txn->resp_body.lastmod = 0;
+        txn->resp_body.etag = NULL;
+    }
+
+    return ret;
 }
 
 /* Perform a bulk import */
@@ -2194,7 +2209,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Translate between vCard versions */
             vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcardparser_parse_string(data);
+            if (!vcard) vcard = fctx->obj = vcard_parse_string_x(data);
 
             if (want_ver == 4) vcard_to_v4_x(vcard);
             else vcard_to_v3_x(vcard);
@@ -2204,7 +2219,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Limit returned properties */
             vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcardparser_parse_string(data);
+            if (!vcard) vcard = fctx->obj = vcard_parse_string_x(data);
             prune_properties(vcard, partial);
         }
 
