@@ -679,6 +679,7 @@ EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
             vcardproperty_set_x_name(new, key);
             vcardcomponent_add_property(vcard, new);
             vcardcomponent_remove_property(vcard, prop);
+            vcardproperty_free(prop);
             break;
 
         default:
