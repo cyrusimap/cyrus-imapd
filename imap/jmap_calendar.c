@@ -52,6 +52,8 @@
 #include <unistd.h>
 #endif
 
+#include <libxml/parser.h>
+
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
