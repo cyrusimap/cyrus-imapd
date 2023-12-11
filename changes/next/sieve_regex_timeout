@@ -1,0 +1,14 @@
+
+Description:
+
+Allow limiting Sieve :regex execution time.
+
+
+Config changes:
+
+Adds 'sieve_regex_timeout' option.
+
+
+Upgrade instructions:
+
+None.
