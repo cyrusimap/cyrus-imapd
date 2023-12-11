@@ -437,7 +437,7 @@ static struct capa_struct base_capabilities[] = {
     { "NOTIFY",                CAPA_POSTAUTH|CAPA_STATE,         /* RFC 5465 */
       { .statep = &imapd_notify_enabled }                     },
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
-    { "PARTIAL",               0, /* not implemented */ { 0 } }, /* RFC 9394 */
+    { "PARTIAL",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9394 */
     { "PREVIEW",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8970 */
     { "QRESYNC",               CAPA_POSTAUTH,           { 0 } }, /* RFC 7162 */
     { "QUOTA",                 CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
@@ -889,7 +889,7 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
-                        "%s",
+                        "%s%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
@@ -908,13 +908,14 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_move        ? " move=<1>"         : "",
                         client_behavior.did_multisearch ? " multisearch=<1>"  : "",
                         client_behavior.did_notify      ? " notify=<1>"       : "",
-                        client_behavior.did_preview     ? " preview=<1>"      : "",
+                        client_behavior.did_partial     ? " partial=<1>"      : "",
 
+                        client_behavior.did_preview     ? " preview=<1>"      : "",
                         client_behavior.did_qresync     ? " qresync=<1>"      : "",
                         client_behavior.did_replace     ? " replace=<1>"      : "",
                         client_behavior.did_savedate    ? " savedate=<1>"     : "",
-                        client_behavior.did_searchres   ? " searchres=<1>"    : "",
 
+                        client_behavior.did_searchres   ? " searchres=<1>"    : "",
                         client_behavior.did_uidonly     ? " uidonly=<1>"      : "");
 }
 
@@ -5001,6 +5002,8 @@ static int parse_fetch_args(const char *tag, const char *cmd,
     struct octetinfo oi;
     strarray_t *newfields = strarray_new();
 
+    fa->partial.high = UINT32_MAX;
+
     c = getword(imapd_in, &fetchatt);
     if (c == '(' && !fetchatt.s[0]) {
         inlist = 1;
@@ -5487,6 +5490,19 @@ badannotation:
                      !strcmp(fetchatt.s, "VANISHED")) {
                 fa->vanished = 1;
             }
+            else if (!strcmp(fetchatt.s, "PARTIAL")) {   /* RFC 9394 */
+                int r = -1;
+
+                if (c == ' ') {
+                    c = getword(imapd_in, &fieldname);
+                    r = imparse_range(fieldname.s, &fa->partial);
+                }
+                if (r) {
+                    prot_printf(imapd_out, "%s BAD Invalid range in %s\r\n",
+                                tag, cmd);
+                    goto freeargs;
+                }
+            }
             else {
                 prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
                             tag, cmd, fetchatt.s);
@@ -5618,6 +5634,9 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
 
     if (fetchargs.binsections || fetchargs.sizesections)
         client_behavior.did_binary = 1;
+
+    if (fetchargs.partial.low)
+        client_behavior.did_partial = 1;
 
     r = index_fetch(imapd_index, sequence, usinguid, &fetchargs,
                 &fetchedsomething);

@@ -1107,6 +1107,8 @@ EXPORTED int index_fetchresponses(struct index_state *state,
     struct index_map *im;
     int fetched = 0;
     int r = 0;
+    int inc;
+    unsigned long count = 0;
     annotate_db_t *annot_db = NULL;
 
     /* Keep an open reference on the per-mailbox db to avoid
@@ -1152,13 +1154,24 @@ EXPORTED int index_fetchresponses(struct index_state *state,
     if (start < 1) start = 1;
     if (end > state->exists) end = state->exists;
 
-    for (msgno = start; msgno <= end; msgno++) {
+    if (fetchargs->partial.is_last) {
+        msgno = end;
+        inc = -1;
+    }
+    else {
+        msgno = start;
+        inc = 1;
+    }
+    for (; msgno >= start && msgno <= end &&
+             count < fetchargs->partial.high; msgno += inc) {
         im = &state->map[msgno-1];
         if (seq && !seqset_ismember(seq, usinguid ? im->uid : msgno)) {
             if (im->told_modseq !=0 && im->modseq > im->told_modseq)
                 index_printflags(state, msgno, (usinguid ? TELL_UID : 0));
             continue;
         }
+
+        if (++count < fetchargs->partial.low) continue;
 
         if ((r = index_fetchreply(state, msgno, fetchargs)))
             break;
