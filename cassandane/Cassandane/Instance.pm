@@ -1501,9 +1501,18 @@ sub _check_sanity
 
 sub _check_syslog
 {
-    my ($self) = @_;
+    my ($self, $pattern) = @_;
 
-    my @errors = $self->getsyslog(qr/ERROR|TRACELOG|Unknown code ____/);
+    if (defined $pattern) {
+        # pattern is optional but must be a regex if present
+        die "getsyslog: pattern is not a regular expression"
+            if lc ref($pattern) ne 'regexp';
+    }
+
+    my @lines = $self->getsyslog();
+    my @errors = grep {
+        m/ERROR|TRACELOG|Unknown code ____/ || ($pattern && m/$pattern/)
+    } @lines;
 
     @errors = grep { not m/DBERROR.*skipstamp/ } @errors;
 

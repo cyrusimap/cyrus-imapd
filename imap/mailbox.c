@@ -6085,7 +6085,7 @@ static void mailbox_delete_files(const char *path)
     }
 }
 
-/* Callback for use by cmd_delete */
+/* Callback for use by mailbox_delete_cleanup */
 static int chkchildren(const mbentry_t *mbentry,
                        void *rock)
 {
@@ -6412,7 +6412,11 @@ static struct meta_file meta_files[] = {
  * try to create a mailbox while the delete is underway.
  * VERY tight race condition exists right now... */
 /* we need an exclusive namelock for this */
-HIDDEN int mailbox_delete_cleanup(struct mailbox *mailbox, const char *part, const char *name, const char *uniqueid)
+/* XXX uniqueid here must be NULL if this is a legacy mailbox */
+HIDDEN int mailbox_delete_cleanup(struct mailbox *mailbox,
+                                  const char *part,
+                                  const char *name,
+                                  const char *uniqueid)
 {
     strarray_t paths = STRARRAY_INITIALIZER;
     int i;
@@ -6432,7 +6436,7 @@ HIDDEN int mailbox_delete_cleanup(struct mailbox *mailbox, const char *part, con
     ntail = nbuf + strlen(nbuf);
 
     if (mailbox && object_storage_enabled){
-        mailbox_remove_files_from_object_storage (mailbox, 0) ;
+        mailbox_remove_files_from_object_storage(mailbox, 0);
     }
 
     /* XXX - double XXX - this is a really ugly function.  It should be
@@ -6465,13 +6469,35 @@ HIDDEN int mailbox_delete_cleanup(struct mailbox *mailbox, const char *part, con
         for (i = 0; i < paths.count; i++) {
             char *path = paths.data[i]; /* need direct reference, because we're fiddling */
             r = rmdir(path);
-            if (r && errno != ENOENT)
+            if (r && errno != ENOENT) {
                 syslog(LOG_NOTICE,
                        "Remove of supposedly empty directory %s failed: %m",
                        path);
-            p = strrchr(path, '/');
-            if (p) *p = '\0';
+            }
+
+            if (!uniqueid) {
+                p = strrchr(path, '/');
+                if (p) *p = '\0';
+            }
         }
+
+        if (uniqueid) {
+            /* n.b. careful here -- legacy mailboxes will also have uniqueids,
+             * but we don't pass the uniqueid to this function for those, so
+             * uniqueid being non-NULL here means we're dealing with a UUID
+             * mailbox.
+             * UUID mailboxes have a flat on disk structure, so once we've
+             * removed the listed paths we're done, no hierarchy walk needed.
+             */
+            goto done;
+        }
+
+        /* XXX For legacy mailboxes, this hierarchy walk might have been
+         * XXX intended to remove intermediate mailboxes after their
+         * XXX last child was removed.  In which case, the hierarchy walk
+         * XXX might be obsolete for legacy mailboxes too, since we no
+         * XXX longer create intermediate mailboxes.
+         */
 
         /* Check if parent mailbox exists */
         ntail = strrchr(nbuf, '.');
@@ -6496,6 +6522,7 @@ HIDDEN int mailbox_delete_cleanup(struct mailbox *mailbox, const char *part, con
         }
     } while (r == IMAP_MAILBOX_NONEXISTENT);
 
+done:
     strarray_fini(&paths);
 
     return 0;
