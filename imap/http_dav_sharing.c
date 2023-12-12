@@ -385,7 +385,7 @@ static int _create_notify_collection(const char *userid, mbentry_t **mbentryp)
                                    1/*isadmin*/, userid, NULL/*authstate*/,
                                    0/*flags*/, NULL);
 
-        if (r) xsyslog(LOG_ERR, "IOERROR: failed to create notify collection"
+        if (r) xsyslog(LOG_ERR, "IOERROR: failed to create notify collection",
                       "mailbox=<%s> error=<%s>",
                       mbentry->name, error_message(r));
     }
