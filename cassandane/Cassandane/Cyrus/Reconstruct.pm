@@ -613,7 +613,7 @@ sub test_downgrade_upgrade
 
     for my $version (12, 14, 16, 'max') {
         xlog $self, "Set to version $version";
-        eval { $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', $version) };
+        $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', $version);
 
         xlog $self, "Reconnect, \\Seen should still be on message A";
         $self->{store}->disconnect();
