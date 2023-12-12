@@ -254,7 +254,7 @@ done:
 EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
                            int locktype_and_flags)
 {
-    if (config_getswitch(IMAPOPT_GLOBAL_LOCK) && locktype_and_flags & LOCK_EXCLUSIVE) {
+    if (config_take_globallock && locktype_and_flags & LOCK_EXCLUSIVE) {
         // if we have an exclusive lock, we MUST already be holding
 	// the shared global lock, or we have to open it.
 	if (!mboxname_islocked(GLOBAL_LOCKNAME)) {
@@ -267,9 +267,7 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 
 EXPORTED int mboxname_run_with_lock(int (*cb)(void *), void *rock)
 {
-    // we could avoid reusing this infrasturcture since this SHOULD be the only lock,
-    // but it's simpler to
-    if (!config_getswitch(IMAPOPT_GLOBAL_LOCK)) return IMAP_MAILBOX_BADNAME;
+    if (!config_take_globallock) return IMAP_MAILBOX_BADNAME;
     if (open_mboxlocks) return IMAP_MAILBOX_LOCKED;
     struct mboxlock *global_lock = NULL;
     int r = mboxname_lock_item(GLOBAL_LOCKNAME, &global_lock, LOCK_EXCLUSIVE);
@@ -299,8 +297,8 @@ EXPORTED void mboxname_release(struct mboxlock **mboxlockptr)
     remove_lockitem(lockitem);
 
     // if the top item is the global lock, remove that now - since
-    // everything it was protected has already closed
-    if (!config_getswitch(IMAPOPT_GLOBAL_LOCK)) return;
+    // everything it was protecting has already closed
+    if (!config_take_globallock) return;
     if (!open_mboxlocks) return;
     if (strcmpsafe(open_mboxlocks->l.name, GLOBAL_LOCKNAME)) return;
     remove_lockitem(open_mboxlocks);

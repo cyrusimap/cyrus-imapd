@@ -117,6 +117,8 @@ EXPORTED int charset_flags;
 EXPORTED int charset_snippet_flags;
 EXPORTED size_t config_search_maxsize;
 EXPORTED int config_httpprettytelemetry;
+EXPORTED int config_take_globallock;
+EXPORTED char *config_skip_userlock;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
@@ -413,6 +415,17 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     const char *locktime = config_getstring(IMAPOPT_LOCK_DEBUGTIME);
     if (locktime) {
         debug_locks_longer_than = atof(locktime);
+    }
+
+    const char *locked_user = getenv("CYRUS_HAVELOCK_USER");
+    if (locked_user) {
+        config_skip_userlock = xstrdup(locked_user);
+    }
+
+    const char *locked_global = getenv("CYRUS_HAVELOCK_GLOBAL");
+    config_take_globallock = config_getswitch(IMAPOPT_GLOBAL_LOCK);
+    if (locked_global && config_parse_switch(locked_global)) {
+        config_take_globallock = 0;
     }
 
 #ifdef HAVE_ICAL
@@ -806,6 +819,8 @@ EXPORTED void cyrus_done(void)
 
     if (!cyrus_init_nodb)
         libcyrus_done();
+
+    xzfree(config_skip_userlock);
 }
 
 /*

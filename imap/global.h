@@ -179,6 +179,8 @@ extern const char *config_userdeny_db;
 extern const char *config_zoneinfo_db;
 extern const char *config_conversations_db;
 extern const char *config_backup_db;
+extern int config_take_globallock;
+extern char *config_skip_userlock;
 extern int config_httpprettytelemetry;
 extern int charset_flags;
 extern int charset_snippet_flags;
