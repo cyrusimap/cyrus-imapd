@@ -2835,6 +2835,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         /* Rename the mailbox metadata */
         r = mailbox_rename_nocopy(oldmailbox, newmbentry, silent);
         if (r) goto done;
+
+        // foldermodseq gets updated by the rename
+        newmbentry->foldermodseq = oldmailbox->i.highestmodseq;
     }
 
     syslog(LOG_INFO, "Rename: %s -> %s", oldname, newname);
