@@ -9691,6 +9691,9 @@ static int jmap_principal_getavailability(struct jmap_req *req)
         json_object_del(myargs, "showDetails");
     }
 
+    /* XXX what if these fields were missing? */
+    assert(principalid != NULL);
+
     json_t *jprops = json_object_get(myargs, "eventProperties");
     if (json_is_array(jprops)) {
         props = xzmalloc(sizeof(hash_table));

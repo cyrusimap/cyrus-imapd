@@ -637,6 +637,11 @@ static int carddav_store_resource(struct transaction_t *txn,
         }
     }
 
+    /* XXX better have got those important properties */
+    assert(version != NULL);
+    assert(uid != NULL);
+    assert(fullname != NULL);
+
     /* Check for an existing resource */
     /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
        XXX  because we may have been called as part of a COPY/MOVE */

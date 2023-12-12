@@ -1415,6 +1415,8 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
     }
     else error = xmlNewChild(root, NULL, BAD_CAST "error", NULL);
 
+    if (!error) fatal("Virtual memory exhausted", EX_TEMPFAIL);
+
     ensure_ns(avail_ns, precond->ns, root, known_namespaces[precond->ns].href,
               known_namespaces[precond->ns].prefix);
     node = xmlNewChild(error, avail_ns[precond->ns],

@@ -4206,6 +4206,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         }
     }
 
+    assert(scheme != NULL);
+
     /* Parse any auth parameters, if necessary */
     if (clientin && (scheme->flags & AUTH_DATA_PARAM)) {
         const char *sid = NULL;

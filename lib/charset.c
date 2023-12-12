@@ -3160,8 +3160,10 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
     /* set up the conversion path */
     if (flags & CHARSET_MIME_UTF8) {
         defaultcs = charset_lookupname("utf-8");
+        assert(defaultcs != CHARSET_UNKNOWN_CHARSET);
     } else {
         defaultcs = charset_lookupname("us-ascii");
+        assert(defaultcs != CHARSET_UNKNOWN_CHARSET);
     }
     input = convert_init(defaultcs, 1/*to_uni*/, target);
 

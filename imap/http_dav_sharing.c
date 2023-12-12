@@ -1844,6 +1844,9 @@ static xmlNodePtr get_props(struct request_target_t *req_tgt,
 
     buf_free(&fctx.buf);
 
+    /* XXX better have gotten something */
+    assert(propstat.root != NULL);
+
     node = propstat.root->children;
     xmlUnlinkNode(node);
     xmlFreeNode(propstat.root);
@@ -2091,6 +2094,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
                 }
                 else {
                     /* Notify sharee */
+                    assert(notify == NULL);
                     r = dav_create_invite(&notify, ns, &txn->req_tgt,
                                           pparams->propfind.lprops,
                                           userid, access, content);

@@ -413,6 +413,11 @@ static int login(struct backend *s, const char *userid,
             if (serverin) {
                 /* Perform the next step in the auth exchange */
 
+                /* XXX if we got here via the 'goto challenge' in 'case 200:',
+                 * XXX then scheme might still be null
+                 */
+                assert(scheme != NULL);
+
                 if (scheme->id == AUTH_BASIC) {
                     /* Don't care about "realm" in server challenge */
                     const char *authid =
@@ -1410,7 +1415,7 @@ EXPORTED int http_proxy_check_input(struct http_connection *conn,
                     if (pin == txn->be->in) break;
                 }
 
-                if (pin != txn->be->in) {
+                if (!txn || pin != txn->be->in) {
                     /* XXX shouldn't get here !!! */
                     fatal("unknown protstream returned"
                           " by prot_select() in http_proxy_check_input()",

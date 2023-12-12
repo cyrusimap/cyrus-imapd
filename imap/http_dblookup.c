@@ -131,11 +131,11 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
 {
     struct carddav_db *db = NULL;
     strarray_t *array = NULL;
-    char *result = NULL;
     json_t *json;
     int ret = HTTP_NO_CONTENT;
     int i;
     char *mboxname = NULL;
+    char *result = NULL;
     const char **mailboxhdrs;
     const char *mailbox = "Default";
     mbentry_t *mbentry = NULL;
@@ -173,8 +173,8 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     ret = 0;
 
 done:
-    free(mboxname);
-    free(result);
+    if (mboxname) free(mboxname);
+    if (result) free(result);
     mboxlist_entry_free(&mbentry);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
@@ -231,8 +231,8 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
     ret = 0;
 
 done:
-    free(mboxname);
-    free(result);
+    if (mboxname) free(mboxname);
+    if (result) free(result);
     mboxlist_entry_free(&mbentry);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
@@ -293,8 +293,8 @@ static int get_uid2groups(struct transaction_t *txn,
     ret = 0;
 
 done:
-    free(mboxname);
-    free(result);
+    if (mboxname) free(mboxname);
+    if (result) free(result);
     mboxlist_entry_free(&mbentry);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
