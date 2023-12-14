@@ -6061,6 +6061,11 @@ static void mailbox_delete_files(const char *path)
     dirp = opendir(path);
     if (dirp) {
         while ((f = readdir(dirp))!=NULL) {
+            if (f->d_type == DT_DIR) {
+                /* xunlink() will fail on a directory and create syslog noise.
+                   We rmdir() later in mailbox_delete_cleanup() anyways */
+                continue;
+            }
             if (f->d_name[0] == '.'
                 && (f->d_name[1] == '\0'
                     || (f->d_name[1] == '.' &&
