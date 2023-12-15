@@ -6506,9 +6506,6 @@ static void cmd_search(char *tag, char *cmd)
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
 
-    if (searchargs->returnopts & SEARCH_RETURN_SAVE)
-      client_behavior.did_searchres = 1;
-
     /* Set FUZZY search according to config and quirks */
     static const char *annot = IMAP_ANNOT_NS "search-fuzzy-always";
     char *inbox = mboxname_user_mbox(imapd_userid, NULL);
@@ -6550,6 +6547,9 @@ static void cmd_search(char *tag, char *cmd)
                error_message(IMAP_UNRECOGNIZED_CHARSET));
         goto done;
     }
+
+    if (searchargs->returnopts & SEARCH_RETURN_SAVE)
+        client_behavior.did_searchres = 1;
 
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
