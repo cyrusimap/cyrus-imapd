@@ -6569,6 +6569,9 @@ static void cmd_search(char *tag, char *cmd)
     if (searchargs->returnopts & SEARCH_RETURN_SAVE)
         client_behavior.did_searchres = 1;
 
+    if (searchargs->returnopts & SEARCH_RETURN_PARTIAL)
+        client_behavior.did_partial = 1;
+
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
 
@@ -6583,19 +6586,27 @@ static void cmd_search(char *tag, char *cmd)
                         "%s BAD Please select a mailbox first\r\n", tag);
             goto done;
         }
-        if ((searchargs->filter & ~SEARCH_SOURCE_SELECTED) &&
-            (searchargs->returnopts & SEARCH_RETURN_SAVE)) {
-            /* RFC 7377: 2.2
-             * If the server supports the SEARCHRES [RFC5182] extension, then the
-             * "SAVE" result option is valid only if "selected" is specified or
-             * defaulted to as the sole mailbox to be searched.  If any source
-             * option other than "selected" is specified, the ESEARCH command MUST
-             * return a "BAD" result.
-             */
-            prot_printf(imapd_out,
-                        "%s BAD Search results requested for unselected mailbox(es)\r\n",
-                        tag);
-            goto done;
+        if (searchargs->filter & ~SEARCH_SOURCE_SELECTED) {
+            if (searchargs->returnopts & SEARCH_RETURN_SAVE) {
+                /* RFC 7377: 2.2
+                 * If the server supports the SEARCHRES [RFC5182] extension,
+                 * then the "SAVE" result option is valid only if "selected"
+                 * is specified or defaulted to as the sole mailbox to be
+                 * searched.
+                 * If any source option other than "selected" is specified,
+                 * the ESEARCH command MUST return a "BAD" result.
+                 */
+                prot_printf(imapd_out,
+                            "%s BAD Search results requested for unselected mailbox(es)\r\n",
+                            tag);
+                goto done;
+            }
+            if (searchargs->returnopts & SEARCH_RETURN_PARTIAL) {
+                prot_printf(imapd_out,
+                            "%s NO [CANNOT] Unsupported Search criteria\r\n",
+                            tag);
+                goto done;
+            }
         }
 
         struct multisearch_rock mrock = {

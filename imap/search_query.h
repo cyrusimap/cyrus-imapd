@@ -66,14 +66,22 @@ struct search_folder_partnum {
 struct search_folder {
     char *mboxname;
     uint32_t uidvalidity;
-    uint64_t highest_modseq; /* of returned messages, not the folder */
-    uint64_t first_modseq; /* of returned messages, not the folder */
-    uint64_t last_modseq; /* of returned messages, not the folder */
     int id;
     bitvector_t uids;
     bitvector_t found_uids;
     int found_dirty;
     dynarray_t partnums; /* list of struct search_folder_partnum */
+    struct {
+        /* RFC 4731 result items */
+        bitvector_t all_uids;    /* for SAVE + ALL and/or COUNT) */
+        uint32_t all_count;      /* for COUNT (of all matching messages) */
+        uint32_t uid_count;      /* number of returned messages */
+        uint32_t min_uid;        /* for MIN */
+        uint32_t max_uid;        /* for MAX */
+        uint64_t first_modseq;   /* of min_uid, not the folder */
+        uint64_t last_modseq;    /* of max_uid, not the folder */
+        uint64_t highest_modseq; /* of returned messages, not the folder */
+    } esearch;
 };
 
 struct search_subquery {
@@ -185,10 +193,12 @@ extern search_folder_t *search_query_find_folder(search_query_t *query,
                                                  const char *mboxname);
 extern void search_folder_use_msn(search_folder_t *, struct index_state *);
 extern seqset_t *search_folder_get_seqset(const search_folder_t *);
+extern seqset_t *search_folder_get_all_seqset(const search_folder_t *);
 extern int search_folder_get_array(const search_folder_t *, unsigned int **);
 extern uint32_t search_folder_get_min(const search_folder_t *);
 extern uint32_t search_folder_get_max(const search_folder_t *);
 extern unsigned int search_folder_get_count(const search_folder_t *);
+extern unsigned int search_folder_get_all_count(const search_folder_t *);
 #define search_folder_foreach(folder, u) \
     for ((u) = bv_next_set(&(folder)->uids, 0) ; \
          (u) != -1 ; \

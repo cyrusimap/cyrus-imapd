@@ -228,7 +228,8 @@ enum {
     SEARCH_RETURN_ALL =         (1<<2),
     SEARCH_RETURN_COUNT =       (1<<3),
     SEARCH_RETURN_SAVE =        (1<<4),  /* RFC 5182 */
-    SEARCH_RETURN_RELEVANCY =   (1<<5)   /* RFC 6203 */
+    SEARCH_RETURN_RELEVANCY =   (1<<5),  /* RFC 6203 */
+    SEARCH_RETURN_PARTIAL =     (1<<6),  /* RFC 9394 */
 };
 
 /* Things that may be searched for */
@@ -255,6 +256,9 @@ struct searchargs {
 
     /* For SEARCHRES */
     ptrarray_t result_vars;
+
+    /* For PARTIAL */
+    range_t partial;
 };
 
 /* Windowing arguments for the XCONVSORT command */

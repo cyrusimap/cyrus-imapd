@@ -1967,13 +1967,14 @@ static int needs_modseq(const struct searchargs *searchargs,
 
 static void begin_esearch_response(struct index_state *state,
                                    struct searchargs *searchargs,
-                                   int usinguid, search_folder_t *folder,
-                                   int nmsg)
+                                   int usinguid, search_folder_t *folder)
 
 {
     /*
      * Implement RFC 4731 return options.
      */
+    unsigned nmsg = folder ? search_folder_get_count(folder) : 0;
+
     prot_printf(state->out, "* ESEARCH");
     if (searchargs->tag) {
         prot_printf(state->out, " (TAG \"%s\"", searchargs->tag);
@@ -1997,9 +1998,13 @@ static void begin_esearch_response(struct index_state *state,
      * the UID indicator present. */
     if (usinguid) prot_printf(state->out, " UID");
     if (searchargs->returnopts & SEARCH_RETURN_COUNT) {
-        prot_printf(state->out, " COUNT %u", nmsg);
+        unsigned count = folder ? search_folder_get_all_count(folder) : 0;
+
+        prot_printf(state->out, " COUNT %u", count);
     }
     if (nmsg) {
+        if (!usinguid) search_folder_use_msn(folder, state);
+
         if (searchargs->returnopts & SEARCH_RETURN_MIN) {
             prot_printf(state->out, " MIN %u", search_folder_get_min(folder));
         }
@@ -2016,18 +2021,28 @@ static void esearch_modseq_response(struct index_state *state,
 {
     if (!highestmodseq) return;
 
-    // restrict modseq to the returned items only
-    if (searchargs->returnopts == SEARCH_RETURN_MIN) {
-        highestmodseq = search_folder_get_first_modseq(folder);
-    }
-    if (searchargs->returnopts == SEARCH_RETURN_MAX) {
-        highestmodseq = search_folder_get_last_modseq(folder);
-    }
-    if (searchargs->returnopts == (SEARCH_RETURN_MIN|SEARCH_RETURN_MAX)) {
-        /* special case min and max should be greatest of the two */
-        uint64_t last = search_folder_get_last_modseq(folder);
-        highestmodseq = search_folder_get_first_modseq(folder);
-        if (last > highestmodseq) highestmodseq = last;
+    /* RFC 4731:
+     * If the SEARCH/UID SEARCH command contained a single MIN or MAX result
+     * option, the MODSEQ result option contains the mod-sequence for the
+     * found message.  If the SEARCH/UID SEARCH command contained both MIN
+     * and MAX result options and no ALL/COUNT option, the MODSEQ result
+     * option contains the highest mod-sequence for the two returned
+     * messages.  Otherwise the MODSEQ result option contains the highest
+     * mod-sequence for all messages being returned.
+     */
+    if (!(searchargs->returnopts & (SEARCH_RETURN_ALL | SEARCH_RETURN_COUNT))) {
+        if (searchargs->returnopts & SEARCH_RETURN_MIN) {
+            if (searchargs->returnopts & SEARCH_RETURN_MAX) {
+                highestmodseq = MAX(search_folder_get_first_modseq(folder),
+                                    search_folder_get_last_modseq(folder));
+            }
+            else {
+                highestmodseq = search_folder_get_first_modseq(folder);
+            }
+        }
+        else if (searchargs->returnopts & SEARCH_RETURN_MAX) {
+            highestmodseq = search_folder_get_last_modseq(folder);
+        }
     }
 
     if (highestmodseq)
@@ -2077,8 +2092,6 @@ EXPORTED int index_search(struct index_state *state,
     folder = search_query_find_folder(query, index_mboxname(state));
 
     if (folder) {
-        if (!usinguid)
-            search_folder_use_msn(folder, state);
         if (highestmodseq)
             highestmodseq = search_folder_get_highest_modseq(folder);
         nmsg = search_folder_get_count(folder);
@@ -2088,57 +2101,64 @@ EXPORTED int index_search(struct index_state *state,
 
     if (searchargs->returnopts) {
         seqset_t *seq = NULL;
+        char *seqstr = NULL;
 
         if (searchargs->returnopts & SEARCH_RETURN_SAVE) {
+            /*
+             * RFC 5182, Section 2.4 & RFC 9394, Section 3.2:
+             *
+             * +------------------------+-----------------------+
+             * | Combination of         | "$" marker value      |
+             * |  Result options        |                       |
+             * +------------------------+-----------------------+
+             * | SAVE PARTIAL           | PARTIAL               |
+             * +------------------------+-----------------------+
+             * | SAVE [PARTIAL] MIN     | [PARTIAL &] MIN       |
+             * +------------------------+-----------------------+
+             * | SAVE [PARTIAL] MAX     | [PARTIAL &] MAX       |
+             * +------------------------+-----------------------+
+             * | SAVE [PARTIAL] MIN MAX | [PARTIAL &] MIN & MAX |
+             * +------------------------+-----------------------+
+             * | SAVE [PARTIAL] * [m]   | all found messages    |
+             * +------------------------+-----------------------+
+             *
+             * where  '*'  means "ALL" and/or "COUNT"
+             *        '[m]' means optional "MIN" and/or "MAX"
+             */
+
             seqset_free(&state->searchres);
 
-            if (!(searchargs->returnopts &
-                  (SEARCH_RETURN_MIN | SEARCH_RETURN_MAX))) {
-                /* RFC 5182: 2.4:
-                 * If the SAVE result option is combined with the ALL and/or
-                 * COUNT result option(s), the "$" marker would always contain
-                 * all messages found by the SEARCH or UID SEARCH command.
-                 */
-                seq = folder ? search_folder_get_seqset(folder) :
-                               seqset_init(1, SEQ_SPARSE);
+            if (searchargs->returnopts & (SEARCH_RETURN_ALL | SEARCH_RETURN_COUNT)) {
+                state->searchres = folder ?
+                    search_folder_get_all_seqset(folder) :
+                    seqset_init(0, SEQ_SPARSE);
+
+                if (usinguid &&
+                    !(searchargs->returnopts & SEARCH_RETURN_PARTIAL)) {
+                    /* can use seq for ALL result */
+                    seq = state->searchres;
+                }
             }
             else if (nmsg) {
-                /* RFC 5182: 2.4
-                 * When the SAVE result option is combined with the MIN or MAX
-                 * result option, and none of the other ESEARCH result options
-                 * are present, the corresponding MIN/MAX is returned
-                 * (if the search result is not empty), but the "$" marker would
-                 * contain a single message as returned in the MIN/MAX return
-                 * item.
-                 *
-                 * If the SAVE result option is combined with both MIN and MAX
-                 * result options, and none of the other ESEARCH result options
-                 * are present, the "$" marker would contain one or two messages
-                 * as returned in the MIN/MAX return items.
-                 */
-                seq = seqset_init(0, SEQ_SPARSE);
+                if (searchargs->returnopts & SEARCH_RETURN_PARTIAL) {
+                    state->searchres = search_folder_get_seqset(folder);
+                    if (usinguid) {
+                        /* might be able to use seq for PARTIAL result */
+                        seq = state->searchres;
+                    }
+                }
+                else {
+                    state->searchres = seqset_init(0, SEQ_SPARSE);
+                }
 
                 if (searchargs->returnopts & SEARCH_RETURN_MIN) {
-                    seqset_add(seq, search_folder_get_min(folder), 1);
+                    seqset_add(state->searchres, search_folder_get_min(folder), 1);
+                    seq = NULL; // can't use seq for PARTIAL result
                 }
                 if (searchargs->returnopts & SEARCH_RETURN_MAX) {
-                    seqset_add(seq, search_folder_get_max(folder), 1);
+                    seqset_add(state->searchres, search_folder_get_max(folder), 1);
+                    seq = NULL; // can't use seq for PARTIAL result
                 }
-            }
-
-            if (usinguid) {
-                state->searchres = seq;
-            }
-            else {
-                /* Convert message number set to UID set */
-                uint32_t msgno;
-
-                state->searchres = seqset_init(0, SEQ_SPARSE);
-                for (seqset_reset(seq); (msgno = seqset_getnext(seq)) > 0; ) {
-                    seqset_add(state->searchres, state->map[msgno-1].uid, 1);
-                }
-                seqset_free(&seq);
-                seq = state->searchres;
             }
         }
 
@@ -2150,16 +2170,17 @@ EXPORTED int index_search(struct index_state *state,
             goto out;
         }
 
-        begin_esearch_response(state, searchargs, usinguid, folder, nmsg);
+        begin_esearch_response(state, searchargs, usinguid, folder);
 
         if (nmsg) {
-            if (searchargs->returnopts & SEARCH_RETURN_ALL) {
+            if (searchargs->returnopts & (SEARCH_RETURN_ALL | SEARCH_RETURN_PARTIAL)) {
                 if (!seq) seq = search_folder_get_seqset(folder);
 
                 if (seqset_first(seq)) {
-                    char *str = seqset_cstring(seq);
-                    prot_printf(state->out, " ALL %s", str);
-                    free(str);
+                    seqstr = seqset_cstring(seq);
+
+                    if (searchargs->returnopts & SEARCH_RETURN_ALL)
+                        prot_printf(state->out, " ALL %s", seqstr);
                 }
 
                 if (seq != state->searchres) seqset_free(&seq);
@@ -2176,11 +2197,24 @@ EXPORTED int index_search(struct index_state *state,
 
             esearch_modseq_response(state, searchargs, folder, highestmodseq);
         }
+
+        if (searchargs->returnopts & SEARCH_RETURN_PARTIAL) {
+            const char *sign = searchargs->partial.is_last ? "-" : "";
+
+            prot_printf(state->out, " PARTIAL (%s%u:%s%u %s)",
+                        sign, searchargs->partial.low,
+                        sign, searchargs->partial.high,
+                        seqstr ? seqstr : "NIL");
+        }
+
+        free(seqstr);
     }
     else {
         prot_printf(state->out, "* SEARCH");
 
         if (nmsg) {
+            if (!usinguid) search_folder_use_msn(folder, state);
+
             search_folder_foreach(folder, i) {
                 prot_printf(state->out, " %u", i);
             }
@@ -2231,7 +2265,7 @@ EXPORTED int index_sort(struct index_state *state,
     }
 
     if (searchargs->returnopts) {
-        begin_esearch_response(state, searchargs, usinguid, folder, nmsg);
+        begin_esearch_response(state, searchargs, usinguid, folder);
 
         if (nmsg) {
             if (searchargs->returnopts & SEARCH_RETURN_ALL) {
