@@ -314,10 +314,6 @@ endif # SERVER
 
 endif # SIEVE
 
-if JMAP
-sbin_PROGRAMS += imap/jmap_expire
-endif # JMAP
-
 EXTRA_DIST = \
 	COPYING \
 	README.md \
@@ -964,9 +960,6 @@ imap_idled_LDADD = $(LD_UTILITY_ADD)
 
 imap_calalarmd_SOURCES = imap/calalarmd.c imap/mutex_fake.c
 imap_calalarmd_LDADD = $(LD_SERVER_ADD)
-
-imap_jmap_expire_SOURCES = imap/cli_fatal.c imap/jmap_expire.c imap/mutex_fake.c
-imap_jmap_expire_LDADD = $(LD_UTILITY_ADD)
 
 imap_imapd_SOURCES = \
 	imap/imap_proxy.c \

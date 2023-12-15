@@ -112,7 +112,6 @@ imap/imapd
 imap/ipurge
 imap/jmap_err.c
 imap/jmap_err.h
-imap/jmap_expire
 imap/lmtp_err.c
 imap/lmtp_err.h
 imap/lmtpd

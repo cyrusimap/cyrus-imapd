@@ -458,6 +458,11 @@ magic(NoCheckSyslog => sub {
     my $self = shift;
     $self->{no_check_syslog} = 1;
 });
+magic(JmapMaxCalendarEventNotifs => sub {
+    my $conf = shift;
+    # set to some small number
+    $conf->config_set('jmap_max_calendareventnotifs' => 10);
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic

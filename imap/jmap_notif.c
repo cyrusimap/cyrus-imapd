@@ -114,6 +114,27 @@ HIDDEN char *jmap_caleventnotif_format_fromheader(const char *userid)
     return notfrom;
 }
 
+static void prune_notifications(struct mailbox *notifmbox,
+                                size_t notifications_max)
+{
+    struct mailbox_iter *iter = mailbox_iter_init(notifmbox, 0,
+            ITER_STEP_BACKWARD|ITER_SKIP_UNLINKED|
+            ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
+
+    // Remove all but the last notifications_max messages.
+    size_t n_notifications = 0;
+    message_t *msg;
+    while ((msg = (message_t *) mailbox_iter_step(iter))) {
+        if (++n_notifications >= notifications_max) {
+            struct index_record record = *msg_record(msg);
+            record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+            mailbox_rewrite_index_record(notifmbox, &record);
+        }
+    }
+
+    mailbox_iter_done(&iter);
+}
+
 static int append_eventnotif(const char *from,
                              const char *authuserid,
                              const struct auth_state *authstate,
@@ -128,12 +149,31 @@ static int append_eventnotif(const char *from,
     struct buf buf = BUF_INITIALIZER;
     const char *type = json_string_value(json_object_get(jnotif, "type"));
     const char *ical_uid = json_string_value(json_object_get(jnotif, "calendarEventId"));
+    int notifications_max = config_getint(IMAPOPT_JMAP_MAX_CALENDAREVENTNOTIFS);
+    if (notifications_max < 0) notifications_max = 0;
 
+    // Prune notifications each time we create a new one.
+    if (notifications_max) {
+        prune_notifications(notifmbox, (size_t) notifications_max);
+    }
+
+    // Expunge all former notifications for destroyed events.
     if (!strcmp(type, "destroyed")) {
-        /* Expunge all former event notifications for this UID */
-        struct mailbox_iter *iter = mailbox_iter_init(notifmbox, 0, 0);
+        struct mailbox_iter *iter = mailbox_iter_init(notifmbox, 0,
+                ITER_STEP_BACKWARD|ITER_SKIP_UNLINKED|
+                ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
+        size_t n_notifications = 0;
+
         message_t *msg;
         while ((msg = (message_t *) mailbox_iter_step(iter))) {
+
+            // Notifications exceeding notifications_max must
+            // have been pruned already, no need to check.
+            if (notifications_max &&
+                    (++n_notifications >= (size_t) notifications_max)) {
+                break;
+            }
+
             buf_reset(&buf);
             if (message_get_subject(msg, &buf) ||
                     strcmp(JMAP_NOTIF_CALENDAREVENT, buf_cstring(&buf))) {
@@ -165,6 +205,7 @@ static int append_eventnotif(const char *from,
     }
     buf_reset(&buf);
 
+    // Append new notification.
     FILE *fp = append_newstage(mailbox_name(notifmbox), created,
             strhash(ical_uid), &stage);
     if (!fp) {
