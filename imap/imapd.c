@@ -6553,20 +6553,19 @@ static void cmd_search(char *tag, char *cmd)
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) {
         eatline(imapd_in, ' ');
-        freesearchargs(searchargs);
-        return;
+        goto done;
     }
 
     if (!IS_EOL(c, imapd_in)) {
-        prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Search\r\n", tag);
+        prot_printf(imapd_out,
+                    "%s BAD Unexpected extra arguments to Search\r\n", tag);
         eatline(imapd_in, c);
-        freesearchargs(searchargs);
-        return;
+        goto done;
     }
 
     if (searchargs->charset == CHARSET_UNKNOWN_CHARSET) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag,
-               error_message(IMAP_UNRECOGNIZED_CHARSET));
+                    error_message(IMAP_UNRECOGNIZED_CHARSET));
         goto done;
     }
 
