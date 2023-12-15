@@ -474,9 +474,10 @@ static int _subquery_run_one_folder(search_query_t *query,
                                     search_expr_t *e)
 {
     struct index_state *state = NULL;
-    unsigned msgno;
+    unsigned msgno, start, end, range_size;
     unsigned nmsgs = 0;
     unsigned *msgno_list = NULL;
+    search_expr_t *child;
     int r = 0;
 
     if (e && query->verbose) {
@@ -506,12 +507,38 @@ static int _subquery_run_one_folder(search_query_t *query,
     if (!state->exists) goto out;
 
     search_expr_internalise(state, e);
+ 
+    start = 1;
+    end = state->exists;
+
+    /* Compress the search range down if a sequence was given at toplevel */
+    for (child = e->children ; child ; child = child->next) {
+        if (child->op == SEOP_MATCH && child->attr &&
+            (!strcmp("uid", child->attr->name) ||
+             !strcmp("msgno", child->attr->name))) {
+            seqset_t *seq = child->internalised;
+            unsigned first = seqset_first(seq);
+            unsigned last = seqset_last(seq);
+
+            if (child->attr->name[0] == 'u') {
+                if (first > 1)
+                    first = index_finduid(state, first, FIND_LE);
+                if (last < state->last_uid)
+                    last = index_finduid(state, last, FIND_LE);
+            }
+
+            if (first > start) start = first;
+            if (last < end) end = last;
+        }
+    }
+
+    range_size = end - start + 1;
 
     if (query->sortcrit)
-        msgno_list = (unsigned *) xmalloc(state->exists * sizeof(unsigned));
+        msgno_list = (unsigned *) xmalloc(range_size * sizeof(unsigned));
 
     /* One pass through the folder's message list */
-    for (msgno = 1 ; msgno <= state->exists ; msgno++) {
+    for (msgno = start ; msgno <= end ; msgno++) {
         struct index_map *im = &state->map[msgno-1];
 
         if (!(msgno % 128)) {
