@@ -1980,7 +1980,7 @@ static void begin_esearch_response(struct index_state *state,
     if (searchargs->tag) {
         prot_printf(state->out, " (TAG \"%s\"", searchargs->tag);
 
-        if (searchargs->filter) {
+        if (searchargs->multi.filter) {
             /* RFC 7377: 2.1
              * Each ESEARCH response MUST contain the MAILBOX, TAG,
              * and UIDVALIDITY correlators. */
@@ -2186,7 +2186,7 @@ EXPORTED int index_search(struct index_state *state,
             }
         }
 
-        if (searchargs->filter && !nmsg) {
+        if (searchargs->multi.filter && !nmsg) {
             /* RFC 7377: 2.1
              * An ESEARCH response MUST NOT be returned for
              * mailboxes that contain no matching messages.
@@ -8335,7 +8335,7 @@ EXPORTED struct searchargs *new_searchargs(const char *tag, int state,
          * If the source options are not present, the value "selected" is
          * assumed -- that is, only the currently selected mailbox is searched.
          */
-        sa->filter = SEARCH_SOURCE_SELECTED;
+        sa->multi.filter = SEARCH_SOURCE_SELECTED;
     }
 
     return sa;
@@ -8350,9 +8350,9 @@ EXPORTED void freesearchargs(struct searchargs *s)
 
     charset_free(&s->charset);
     search_expr_free(s->root);
-    strarray_fini(&s->subtree);
-    strarray_fini(&s->subtree_one);
-    strarray_fini(&s->mailboxes);
+    strarray_fini(&s->multi.subtree);
+    strarray_fini(&s->multi.subtree_one);
+    strarray_fini(&s->multi.mailboxes);
     ptrarray_fini(&s->result_vars);
     free(s);
 }

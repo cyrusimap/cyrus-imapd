@@ -6575,9 +6575,9 @@ static void cmd_search(char *tag, char *cmd)
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
 
-    if (searchargs->filter) {
+    if (searchargs->multi.filter) {
         /* Multisearch */
-        if ((searchargs->filter & SEARCH_SOURCE_SELECTED) && !imapd_index) {
+        if ((searchargs->multi.filter & SEARCH_SOURCE_SELECTED) && !imapd_index) {
             /* RFC 7377: 2.2
              * If the source options include (or default to) "selected", the IMAP
              * session MUST be in "selected" state.
@@ -6586,7 +6586,7 @@ static void cmd_search(char *tag, char *cmd)
                         "%s BAD Please select a mailbox first\r\n", tag);
             goto done;
         }
-        if (searchargs->filter & ~SEARCH_SOURCE_SELECTED) {
+        if (searchargs->multi.filter & ~SEARCH_SOURCE_SELECTED) {
             if (searchargs->returnopts & SEARCH_RETURN_SAVE) {
                 /* RFC 7377: 2.2
                  * If the server supports the SEARCHRES [RFC5182] extension,
@@ -6633,7 +6633,7 @@ static void cmd_search(char *tag, char *cmd)
         for (mrock.filter = SEARCH_SOURCE_SELECTED;
              mrock.filter <= SEARCH_SOURCE_MAILBOXES; mrock.filter <<= 1) {
 
-            if (!(searchargs->filter & mrock.filter)) continue;
+            if (!(searchargs->multi.filter & mrock.filter)) continue;
 
             switch (mrock.filter) {
             case SEARCH_SOURCE_SELECTED:
@@ -6662,17 +6662,17 @@ static void cmd_search(char *tag, char *cmd)
 
                 switch (mrock.filter) {
                 case SEARCH_SOURCE_SUBTREE:
-                    mailboxes = &searchargs->subtree;
+                    mailboxes = &searchargs->multi.subtree;
                     break;
 
                 case SEARCH_SOURCE_SUBTREE_ONE:
-                    mailboxes = &searchargs->subtree_one;
+                    mailboxes = &searchargs->multi.subtree_one;
                     break;
 
                 case SEARCH_SOURCE_MAILBOXES:
                     /* Just the mailbox - no children */
                     flags = MBOXTREE_SKIP_CHILDREN;
-                    mailboxes = &searchargs->mailboxes;
+                    mailboxes = &searchargs->multi.mailboxes;
                     break;
                 }
                 

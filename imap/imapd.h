@@ -249,10 +249,12 @@ struct searchargs {
     int isadmin;
 
     /* For MULTISEARCH */
-    unsigned filter;
-    strarray_t subtree;
-    strarray_t subtree_one;
-    strarray_t mailboxes;
+    struct {
+        unsigned filter;
+        strarray_t subtree;
+        strarray_t subtree_one;
+        strarray_t mailboxes;
+    } multi;
 
     /* For SEARCHRES */
     ptrarray_t result_vars;

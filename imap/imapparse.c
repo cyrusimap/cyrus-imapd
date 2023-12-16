@@ -633,7 +633,7 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
     static struct buf opt;
 
     /* Client specified source opts, so clear default of "selected" */
-    searchargs->filter = 0;
+    searchargs->multi.filter = 0;
 
     c = prot_getc(pin);
     if (c != '(') {
@@ -649,31 +649,31 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
 
         lcase(opt.s);
         if (!strcmp(opt.s, "selected")) {
-            searchargs->filter |= SEARCH_SOURCE_SELECTED;
+            searchargs->multi.filter |= SEARCH_SOURCE_SELECTED;
         }
         else if (!strcmp(opt.s, "inboxes")) {
-            searchargs->filter |= SEARCH_SOURCE_INBOXES;
+            searchargs->multi.filter |= SEARCH_SOURCE_INBOXES;
         }
         else if (!strcmp(opt.s, "personal")) {
-            searchargs->filter |= SEARCH_SOURCE_PERSONAL;
+            searchargs->multi.filter |= SEARCH_SOURCE_PERSONAL;
         }
         else if (!strcmp(opt.s, "subscribed")) {
-            searchargs->filter |= SEARCH_SOURCE_SUBSCRIBED;
+            searchargs->multi.filter |= SEARCH_SOURCE_SUBSCRIBED;
         }
         else if (!strcmp(opt.s, "subtree")) {
-            searchargs->filter |= SEARCH_SOURCE_SUBTREE;
-            c = get_search_source_mboxes(pin, pout,
-                                         searchargs, &searchargs->subtree);
+            searchargs->multi.filter |= SEARCH_SOURCE_SUBTREE;
+            c = get_search_source_mboxes(pin, pout, searchargs,
+                                         &searchargs->multi.subtree);
         }
         else if (!strcmp(opt.s, "subtree-one")) {
-            searchargs->filter |= SEARCH_SOURCE_SUBTREE_ONE;
-            c = get_search_source_mboxes(pin, pout,
-                                         searchargs, &searchargs->subtree_one);
+            searchargs->multi.filter |= SEARCH_SOURCE_SUBTREE_ONE;
+            c = get_search_source_mboxes(pin, pout, searchargs,
+                                         &searchargs->multi.subtree_one);
         }
         else if (!strcmp(opt.s, "mailboxes")) {
-            searchargs->filter |= SEARCH_SOURCE_MAILBOXES;
-            c = get_search_source_mboxes(pin, pout,
-                                         searchargs, &searchargs->mailboxes);
+            searchargs->multi.filter |= SEARCH_SOURCE_MAILBOXES;
+            c = get_search_source_mboxes(pin, pout, searchargs,
+                                         &searchargs->multi.mailboxes);
         }
         else {
             prot_printf(pout,
