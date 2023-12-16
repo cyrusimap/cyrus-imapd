@@ -414,6 +414,7 @@ static struct capa_struct base_capabilities[] = {
     { "IDLE",                  CAPA_POSTAUTH|CAPA_STATE,         /* RFC 2177 */
       { .statep = &imapd_idle_enabled }                       },
     { "IMAPSIEVE=",            0, /* not implemented */ { 0 } }, /* RFC 6785 */
+    { "INPROGRESS",            CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-inprogress */
     { "LANGUAGE",              0, /* not implemented */ { 0 } }, /* RFC 5255 */
     { "LIST-EXTENDED",         CAPA_POSTAUTH,           { 0 } }, /* RFC 5258 */
     { "LIST-METADATA",         CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-list-metadata */
@@ -8108,6 +8109,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
 struct renrock
 {
+    const char *tag;
     const struct namespace *namespace;
     int ol;
     int nl;
@@ -8198,8 +8200,10 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
 
         // non-standard output item, but it helps give progress
 	if (text->noisy) {
-           prot_printf(imapd_out, "* OK rename %s %s\r\n",
-                       oldextname, newextname);
+            prot_printf(imapd_out,
+                        "* OK [INPROGRESS (\"%s\" NIL NIL)] rename %s %s\r\n",
+                        text->tag, oldextname, newextname);
+            prot_flush(imapd_out);
 	}
     }
 
@@ -8542,6 +8546,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
         strcat(nmbn, ".");
 
         /* setup the rock */
+        rock.tag = tag;
         rock.namespace = &imapd_namespace;
         rock.found = 0;
         rock.newmailboxname = nmbn;
@@ -8624,17 +8629,19 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
 
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
-        if (noisy) {
-            prot_printf(imapd_out, "* OK rename %s %s\r\n",
-                        oldextname, newextname);
-        }
-        prot_flush(imapd_out);
+	if (noisy) {
+            prot_printf(imapd_out,
+                        "* OK [INPROGRESS (\"%s\" NIL NIL)] rename %s %s\r\n",
+                        tag, oldextname, newextname);
+            prot_flush(imapd_out);
+	}
 
 submboxes:
         strcat(oldmailboxname, ".");
         strcat(newmailboxname, ".");
 
         /* setup the rock */
+        rock.tag = tag;
         rock.namespace = &imapd_namespace;
         rock.newmailboxname = newmailboxname;
         rock.ol = omlen + 1;
