@@ -122,4 +122,50 @@ sub test_xrename
     $self->assert_str_equals('INBOX.dst.child.grand', $resp[2][5]);
 }
 
+sub test_copy_slow
+    :NoAltNameSpace :min_version_3_9
+{
+    my ($self) = @_;
+
+    my @resp;
+    my %handlers =
+    (
+        ok => sub
+        {
+            my (undef, $ok) = @_;
+            push(@resp, $ok);
+        },
+    );
+
+    xlog "extract messages into INBOX";
+    $self->{instance}->unpackfile(abs_path('data/cyrus/15k_messages.tar.gz'),
+                                  'data/user/cassandane');
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'reconstruct', 'q', 'user.cassandane');
+
+    xlog $self, "Create another folder";
+    my $talk = $self->{store}->get_client();
+    $talk->create("INBOX.dst");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "copy messages";
+    @resp = ();
+    $talk->select("INBOX");
+    $talk->_imap_cmd('COPY', 0, \%handlers, '1:15000', 'INBOX.dst');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_str_equals('[INPROGRESS', $resp[0][0]);
+    # we don't know what the exact count will be, be we know the total
+    $self->assert_matches(qr/^[0-9]+$/, $resp[0][1][1]);
+    $self->assert_str_equals('15000', $resp[0][1][2]);
+
+    xlog $self, "rename INBOX";
+    @resp = ();
+    $talk->_imap_cmd('RENAME', 0, \%handlers, 'INBOX', 'INBOX.Archive');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_str_equals('[INPROGRESS', $resp[0][0]);
+    # we don't know what the exact count will be, be we know the total
+    $self->assert_matches(qr/^[0-9]+$/, $resp[0][1][1]);
+    $self->assert_str_equals('15000', $resp[0][1][2]);
+}
+
 1;

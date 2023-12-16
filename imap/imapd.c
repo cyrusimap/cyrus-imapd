@@ -6434,6 +6434,33 @@ notflagsdammit:
     free(modified);
 }
 
+static void progress_cb(unsigned count, unsigned total, void *rock)
+{
+    struct progress_rock *prock = (struct progress_rock *) rock;
+    static time_t interval = -1;
+    time_t now;
+
+    if (interval == -1) {
+        interval = config_getduration(IMAPOPT_IMAP_INPROGRESS_INTERVAL, 's');
+        if (interval < 0) interval = 0;
+    }
+
+    now = time(0);
+    if (interval && now - prock->last_resp > interval) {
+        prock->last_resp = now;
+
+        prot_printf(imapd_out, "* OK [INPROGRESS (\"%s\" ", prock->tag);
+        if (prock->no_count)
+            prot_puts(imapd_out, "NIL NIL");
+        else {
+            prot_printf(imapd_out, "%u ", count);
+            prot_printf(imapd_out, total ? "%u" : "NIL", total);
+        }
+        prot_puts(imapd_out, ")] Still processing...\r\n");
+        prot_flush(imapd_out);
+    }
+}
+
 struct multisearch_rock {
     struct searchargs *args;
     search_expr_t *expr;  // pristine copy
@@ -7351,11 +7378,13 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 
     /* local mailbox -> local mailbox */
     if (!r) {
+        struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
+
         r = index_copy(imapd_index, sequence, usinguid, intname,
                        &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
                        &imapd_namespace,
                        (imapd_userisadmin || imapd_userisproxyadmin), ismove,
-                       ignorequota);
+                       ignorequota, &prock);
     }
 
     if (ismove && copyuid && !r) {
@@ -8492,11 +8521,15 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
 
         /* move all the emails to the new folder */
         char *copyuid = NULL;
-        if (!r) r = index_copy(state, "1:*", 1 /*usinguid*/, newmailboxname,
-                               &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
-                               &imapd_namespace,
-                               (imapd_userisadmin || imapd_userisproxyadmin), 1/*ismove*/,
-                               1/*ignorequota*/);
+        if (!r) {
+            struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
+
+            r = index_copy(state, "1:*", 1 /*usinguid*/, newmailboxname,
+                           &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
+                           &imapd_namespace,
+                           (imapd_userisadmin || imapd_userisproxyadmin), 1/*ismove*/,
+                           1/*ignorequota*/, &prock);
+        }
         free(copyuid); // we don't care, but the API requires it
 
         if (state != imapd_index)

@@ -1439,7 +1439,8 @@ out:
  * contains the name of the user whose \Seen flag gets set.
  */
 EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
-                         ptrarray_t *msgrecs, int nolink, int is_same_user)
+                         ptrarray_t *msgrecs, int nolink, int is_same_user,
+                         struct progress_rock *prock)
 {
     int msg;
     char *srcfname = NULL;
@@ -1470,6 +1471,8 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         uint32_t src_uid;
         uint32_t src_system_flags;
         uint32_t src_internal_flags;
+
+        if (prock) prock->cb(msg, msgrecs->count, prock);
 
         r = msgrecord_get_uid(src_msgrec, &src_uid);
         if (r) goto out;

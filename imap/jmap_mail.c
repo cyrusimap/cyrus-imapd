@@ -8617,7 +8617,8 @@ static int _copy_msgrecords(struct auth_state *authstate,
     if (r) goto done;
 
     r = append_copy(src, &as, msgrecs, nolink,
-                    mboxname_same_userid(mailbox_name(src), mailbox_name(dst)));
+                    mboxname_same_userid(mailbox_name(src), mailbox_name(dst)),
+                    NULL);
     if (r) {
         append_abort(&as);
         goto done;

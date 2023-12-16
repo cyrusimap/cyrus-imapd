@@ -2878,7 +2878,9 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
                               EVENT_MESSAGE_COPY);
         if (!r) {
             r = append_copy(src_mbox, &as, &move_msgrecs, nolink,
-                    mboxname_same_userid(mailbox_name(src_mbox), mailbox_name(dst_mbox)));
+                            mboxname_same_userid(mailbox_name(src_mbox),
+                                                 mailbox_name(dst_mbox)),
+                            NULL);
             if (!r) {
                 r = append_commit(&as);
                 if (!r) sync_log_append(mailbox_name(dst_mbox));

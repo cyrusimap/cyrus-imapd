@@ -244,6 +244,13 @@ enum index_changes_flags
     TELL_SILENT             = (1<<3),
 };
 
+struct progress_rock {
+    void (*cb)(unsigned count, unsigned total, void *rock);
+    const char *tag;
+    time_t last_resp;
+    unsigned no_count : 1;
+};
+
 /* non-locking, non-updating - just do a fetch on the state
  * we already have */
 int index_fetchresponses(struct index_state *state,
@@ -295,7 +302,8 @@ extern int index_copy(struct index_state *state,
                       struct namespace *namespace,
                       int isadmin,
                       int ismove,
-                      int ignorequota);
+                      int ignorequota,
+                      struct progress_rock *prock);
 extern int find_thread_algorithm(char *arg);
 
 extern int index_open(const char *name, struct index_init *init,

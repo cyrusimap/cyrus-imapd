@@ -3198,7 +3198,8 @@ index_copy(struct index_state *state,
            struct namespace *namespace,
            int isadmin,
            int ismove,
-           int ignorequota)
+           int ignorequota,
+           struct progress_rock *prock)
 {
     struct copyargs copyargs;
     int i;
@@ -3295,7 +3296,7 @@ index_copy(struct index_state *state,
         msgrecord_t *mr = msgrecord_from_index_record(srcmailbox, &copyargs.records[i]);
         ptrarray_append(msgrecs, mr);
     }
-    r = append_copy(srcmailbox, &appendstate, msgrecs, nolink, is_same_user);
+    r = append_copy(srcmailbox, &appendstate, msgrecs, nolink, is_same_user, prock);
     if (r) {
         append_abort(&appendstate);
         goto done;
