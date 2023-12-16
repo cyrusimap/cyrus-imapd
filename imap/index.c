@@ -2056,7 +2056,8 @@ static void esearch_modseq_response(struct index_state *state,
  */
 EXPORTED int index_search(struct index_state *state,
                           struct searchargs *searchargs,
-                          int usinguid)
+                          int usinguid,
+                          struct progress_rock *prock)
 {
     search_query_t *query = NULL;
     search_folder_t *folder;
@@ -2099,6 +2100,7 @@ EXPORTED int index_search(struct index_state *state,
     }
 
     query = search_query_new(state, searchargs);
+    query->prock = prock;
     r = search_query_run(query);
     if (r) {
         /* search failed */
@@ -2270,8 +2272,9 @@ out:
  * Performs a SORT command
  */
 EXPORTED int index_sort(struct index_state *state,
-               const struct sortcrit *sortcrit,
-               struct searchargs *searchargs, int usinguid)
+                        const struct sortcrit *sortcrit,
+                        struct searchargs *searchargs, int usinguid,
+                        struct progress_rock *prock)
 {
     int i;
     int nmsg = 0;
@@ -2289,6 +2292,7 @@ EXPORTED int index_sort(struct index_state *state,
     /* Search for messages based on the given criteria */
     query = search_query_new(state, searchargs);
     query->sortcrit = sortcrit;
+    query->prock = prock;
     r = search_query_run(query);
     if (r) goto out;        /* search failed */
     folder = search_query_find_folder(query, index_mboxname(state));
@@ -3125,7 +3129,8 @@ out:
  * Performs a THREAD command
  */
 EXPORTED int index_thread(struct index_state *state, int algorithm,
-                 struct searchargs *searchargs, int usinguid)
+                          struct searchargs *searchargs, int usinguid,
+                          struct progress_rock *prock)
 {
     search_query_t *query = NULL;
     search_folder_t *folder;
@@ -3146,6 +3151,7 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
 
     /* Search for messages based on the given criteria */
     query = search_query_new(state, searchargs);
+    query->prock = prock;
     r = search_query_run(query);
     if (r) goto out;        /* search failed */
     folder = search_query_find_folder(query, index_mboxname(state));

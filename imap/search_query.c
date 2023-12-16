@@ -602,6 +602,13 @@ static int _subquery_run_one_folder(search_query_t *query,
          msgno += inc) {
         struct index_map *im = &state->map[msgno-1];
 
+        if (query->prock) {
+            if (inc < 0)
+                query->prock->cb(end - msgno, range_size, query->prock);
+            else
+                query->prock->cb(msgno - start, range_size, query->prock);
+        }
+
         if (!(msgno % 128)) {
             r = cmd_cancelled(!query->ignore_timer);
             if (r) goto out;

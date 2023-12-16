@@ -43,6 +43,7 @@
 #ifndef __CYRUS_SEARCH_RESULT_H__
 #define __CYRUS_SEARCH_RESULT_H__
 
+#include "index.h"
 #include "mailbox.h"
 #include "message.h"
 #include "conversations.h"
@@ -183,6 +184,8 @@ struct search_query {
     hash_table partnum_by_id;
     uint32_t partnum_seq;
 
+    /* For INPROGRESS responses during IMAP SEARCH */
+    struct progress_rock *prock;
 };
 
 extern search_query_t *search_query_new(struct index_state *state,

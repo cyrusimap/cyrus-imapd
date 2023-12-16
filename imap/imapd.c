@@ -6469,6 +6469,7 @@ struct multisearch_rock {
     int root_depth;       // for subtree-one
     int *n;
     struct index_init init;
+    struct progress_rock prock;
 };
 
 static int multisearch_cb(const mbentry_t *mbentry, void *rock)
@@ -6509,8 +6510,11 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
     if (mrock->args->root) search_expr_free(mrock->args->root);
     mrock->args->root = search_expr_duplicate(mrock->expr);
 
-    *mrock->n += index_search(state, mrock->args, /*usinguid*/1);
+    *mrock->n += index_search(state, mrock->args, /*usinguid*/1, &mrock->prock);
     index_close(&state);
+
+    /* Reset inprogress timer after ESEARCH response */
+    mrock->prock.last_resp =  time(0);
 
     /* Keep track of each mailbox we search */
     hash_insert(mbentry->name, (void *) 1, &mrock->mailboxes);
@@ -6644,7 +6648,9 @@ static void cmd_search(char *tag, char *cmd)
               .authstate    = imapd_authstate,
               .out          = imapd_out,
               .examine_mode = 1
-            }
+            },
+            { &progress_cb, tag, time(0),
+              searchargs->multi.filter != SEARCH_SOURCE_SELECTED }
         };
 
         construct_hash_table(&mrock.mailboxes, 100, 0);  // arbitrary size
@@ -6666,7 +6672,11 @@ static void cmd_search(char *tag, char *cmd)
             switch (mrock.filter) {
             case SEARCH_SOURCE_SELECTED:
                 if (!index_check(imapd_index, 0)) {  /* update the index */
-                    n += index_search(imapd_index, searchargs, /* usinguid */1);
+                    n += index_search(imapd_index, searchargs, /* usinguid */1,
+                                      &mrock.prock);
+
+                    /* Reset inprogress timer after ESEARCH response */
+                    mrock.prock.last_resp = time(0);
 
                     hash_insert(index_mboxname(imapd_index),
                                 (void *) 1, &mrock.mailboxes);
@@ -6726,6 +6736,8 @@ static void cmd_search(char *tag, char *cmd)
         free_hash_table(&mrock.mailboxes, NULL);
     }
     else {
+        struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
+
         if ((client_capa & CAPA_IMAP4REV2) && !searchargs->returnopts) {
             /* RFC 9051: Appendix E.4
              * SEARCH command now requires to return the ESEARCH response
@@ -6734,7 +6746,7 @@ static void cmd_search(char *tag, char *cmd)
             searchargs->returnopts = SEARCH_RETURN_ALL;
         }
 
-        n = index_search(imapd_index, searchargs, usinguid);
+        n = index_search(imapd_index, searchargs, usinguid, &prock);
     }
 
     if (searchargs->state & GETSEARCH_MODSEQ)
@@ -6807,7 +6819,9 @@ static void cmd_sort(char *tag, int usinguid)
         goto error;
     }
 
-    n = index_sort(imapd_index, sortcrit, searchargs, usinguid);
+    struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
+
+    n = index_sort(imapd_index, sortcrit, searchargs, usinguid, &prock);
 
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("SORT MODSEQ");
@@ -7226,7 +7240,9 @@ static void cmd_thread(char *tag, int usinguid)
         return;
     }
 
-    n = index_thread(imapd_index, alg, searchargs, usinguid);
+    struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
+
+    n = index_thread(imapd_index, alg, searchargs, usinguid, &prock);
 
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("THREAD MODSEQ");

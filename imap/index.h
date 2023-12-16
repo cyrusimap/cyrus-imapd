@@ -272,7 +272,8 @@ extern int index_run_annotator(struct index_state *state,
 extern int index_warmup(struct mboxlist_entry *, unsigned int warmup_flags,
                         seqset_t *uids);
 extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit,
-                      struct searchargs *searchargs, int usinguid);
+                      struct searchargs *searchargs, int usinguid,
+                      struct progress_rock *prock);
 extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
                       struct searchargs *searchargs,
                       const struct windowargs * windowargs);
@@ -287,10 +288,11 @@ extern int index_convupdates(struct index_state *state, struct sortcrit *sortcri
                       struct searchargs *searchargs,
                       const struct windowargs * windowargs);
 extern int index_thread(struct index_state *state, int algorithm,
-                        struct searchargs *searchargs, int usinguid);
+                        struct searchargs *searchargs, int usinguid,
+                        struct progress_rock *prock);
 extern int index_search(struct index_state *state,
-                        struct searchargs *searchargs,
-                        int usinguid);
+                        struct searchargs *searchargs, int usinguid,
+                        struct progress_rock *prock);
 extern int index_scan(struct index_state *state,
                       const char *contents);
 extern int index_copy(struct index_state *state,
