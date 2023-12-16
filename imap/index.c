@@ -294,6 +294,7 @@ EXPORTED void index_close(struct index_state **stateptr)
     free(state->mboxid);
     free(state->userid);
     seqset_free(&state->searchres);
+    free(state->last_partial.expr);
     for (i = 0; i < MAX_USER_FLAGS; i++)
         free(state->flagname[i]);
     free(state);
@@ -2062,6 +2063,7 @@ EXPORTED int index_search(struct index_state *state,
     int nmsg = 0;
     int i;
     modseq_t highestmodseq = 0;
+    char *partial_expr = NULL;
     int r;
 
     highestmodseq = needs_modseq(searchargs, NULL);
@@ -2072,6 +2074,28 @@ EXPORTED int index_search(struct index_state *state,
 
         e->value.s = seqset_cstring(state->searchres);
         if (!e->value.s) e->value.s = xstrdup("0");  /* force no match */
+    }
+
+    if (SEARCH_RETURN_PARTIAL ==
+        (searchargs->returnopts & ~(SEARCH_RETURN_SAVE | SEARCH_RETURN_RELEVANCY))) {
+        search_expr_t *e = search_expr_duplicate(searchargs->root);
+
+        search_expr_normalise(&e);
+        partial_expr = search_expr_serialise(e);
+        search_expr_free(e);
+
+        /* Can we use the last PARTIAL params/results to inform this one? */
+        if (state->last_partial.highestmodseq == state->highestmodseq &&
+            state->last_partial.range.is_last == searchargs->partial.range.is_last &&
+            state->last_partial.range.high < searchargs->partial.range.low &&
+            !strcmpnull(partial_expr, state->last_partial.expr)) {
+
+            searchargs->partial.start_msgno =
+                state->last_partial.last_match +
+                (searchargs->partial.range.is_last ? -1 : 1);
+            searchargs->partial.start_count =
+                state->last_partial.range.high;
+        }
     }
 
     query = search_query_new(state, searchargs);
@@ -2199,12 +2223,22 @@ EXPORTED int index_search(struct index_state *state,
         }
 
         if (searchargs->returnopts & SEARCH_RETURN_PARTIAL) {
-            const char *sign = searchargs->partial.is_last ? "-" : "";
+            const char *sign = searchargs->partial.range.is_last ? "-" : "";
 
             prot_printf(state->out, " PARTIAL (%s%u:%s%u %s)",
-                        sign, searchargs->partial.low,
-                        sign, searchargs->partial.high,
+                        sign, searchargs->partial.range.low,
+                        sign, searchargs->partial.range.high,
                         seqstr ? seqstr : "NIL");
+
+            /* Save search params/results for subsequent PARTIAL */
+            memcpy(&state->last_partial.range,
+                   &searchargs->partial.range, sizeof(range_t));
+            state->last_partial.last_match = folder->esearch.last_match;
+            state->last_partial.highestmodseq = state->highestmodseq;
+
+            free(state->last_partial.expr);
+            state->last_partial.expr = partial_expr;
+            partial_expr = NULL;
         }
 
         free(seqstr);
@@ -2228,6 +2262,7 @@ EXPORTED int index_search(struct index_state *state,
 
 out:
     search_query_free(query);
+    free(partial_expr);
     return nmsg;
 }
 

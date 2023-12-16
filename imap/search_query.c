@@ -565,12 +565,12 @@ static int _subquery_run_one_folder(search_query_t *query,
     switch (searchargs->returnopts & ~(SEARCH_RETURN_SAVE | SEARCH_RETURN_RELEVANCY)) {
 
     case SEARCH_RETURN_MAX:
-        searchargs->partial.is_last = 1;
+        searchargs->partial.range.is_last = 1;
 
         GCC_FALLTHROUGH
 
     case SEARCH_RETURN_MIN:
-        searchargs->partial.low = searchargs->partial.high = 1;
+        searchargs->partial.range.low = searchargs->partial.range.high = 1;
 
         GCC_FALLTHROUGH
 
@@ -578,20 +578,27 @@ static int _subquery_run_one_folder(search_query_t *query,
         do_all = 0;
 
         /* Reverse the iterator? */
-        if (searchargs->partial.is_last) {
+        if (searchargs->partial.range.is_last) {
             msgno = end;
             inc = -1;
+        }
+
+        if (searchargs->partial.start_msgno) {
+            /* Use the last PARTIAL params/results to inform this one */
+            msgno = searchargs->partial.start_msgno;
+            count = searchargs->partial.start_count;
         }
         break;
 
     default:
-        if (!searchargs->partial.high) searchargs->partial.high = UINT32_MAX;
+        if (!searchargs->partial.range.high)
+            searchargs->partial.range.high = UINT32_MAX;
         break;
     }
 
     /* One pass through the folder's message list */
     for (; msgno >= start && msgno <= end &&
-             (do_all || (count < searchargs->partial.high));
+             (do_all || (count < searchargs->partial.range.high));
          msgno += inc) {
         struct index_map *im = &state->map[msgno-1];
 
@@ -653,11 +660,12 @@ static int _subquery_run_one_folder(search_query_t *query,
         }
 
         /* don't add anything outside of the PARTIAL range */
-        if (++count < searchargs->partial.low) continue;
-        if (count > searchargs->partial.high) continue;
+        if (++count < searchargs->partial.range.low) continue;
+        if (count > searchargs->partial.range.high) continue;
 
         folder_add_uid(&folder->uids, im->uid);
         folder_add_modseq(folder, im->modseq);
+        folder->esearch.last_match = msgno;
         folder->esearch.uid_count++;
 
         if (query->sortcrit)

@@ -258,7 +258,11 @@ struct searchargs {
     ptrarray_t result_vars;
 
     /* For PARTIAL */
-    range_t partial;
+    struct {
+        range_t range;
+        uint32_t start_msgno; /* based on last PARTIAL of same search */
+        uint32_t start_count; /* based on last PARTIAL of same search */
+    } partial;
 };
 
 /* Windowing arguments for the XCONVSORT command */

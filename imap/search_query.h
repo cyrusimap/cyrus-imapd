@@ -78,6 +78,7 @@ struct search_folder {
         uint32_t uid_count;      /* number of returned messages */
         uint32_t min_uid;        /* for MIN */
         uint32_t max_uid;        /* for MAX */
+        uint32_t last_match;     /* msgno of last match (to inform next PARTIAL) */
         uint64_t first_modseq;   /* of min_uid, not the folder */
         uint64_t last_modseq;    /* of max_uid, not the folder */
         uint64_t highest_modseq; /* of returned messages, not the folder */

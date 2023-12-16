@@ -745,7 +745,7 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
 
             if (c == ' ') {
                 c = getword(pin, &arg);
-                r = imparse_range(arg.s, &searchargs->partial);
+                r = imparse_range(arg.s, &searchargs->partial.range);
             }
             if (r) {
                 prot_printf(pout, "%s BAD Invalid range in Search\r\n",
