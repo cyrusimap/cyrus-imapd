@@ -898,12 +898,20 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP QUOTA Extension
 
+:rfc:`9394`
+
+    IMAP PARTIAL Extension for Paged SEARCH and FETCH
+
 IETF RFC Drafts
 ===============
 
 draft-ietf-extra-imap-list-metadata
 
     IMAP4 Extension for Returning Mailbox METADATA in Extended LIST
+
+draft-ietf-extra-imap-inprogress
+
+   IMAP4 Response Code for Command Progress Notifications
 
 draft-ietf-extra-sieve-mailboxid
 
