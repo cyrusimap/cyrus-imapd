@@ -1391,4 +1391,17 @@ static void test_parse_bogus_charset_params(void)
 #undef TESTCASE
 }
 
+/*
+ * Verifies that message_parse_received_date() does not read
+ * uninitialized data in the second call to message_parse_string()
+ */
+static void test_parse_received_semicolon(void)
+{
+   static const char msg[] = "Received: abc;\r\n\r\nd";
+   struct body body;
+   memset(&body, 0x45, sizeof(body));
+   CU_ASSERT_EQUAL(message_parse_mapped(msg, sizeof(msg)-1, &body, NULL), 0);
+   CU_ASSERT_PTR_NULL(body.received_date);
+   message_free_body(&body);
+}
 /* vim: set ft=c: */
