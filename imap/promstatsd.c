@@ -690,7 +690,7 @@ int main(int argc, char **argv)
 
     if (!config_getswitch(IMAPOPT_PROMETHEUS_ENABLED)) {
         fatal("Prometheus metrics are not being tracked."
-              "  Set prometheus_enable in imapd.conf",
+              "  Set prometheus_enabled in imapd.conf",
               EX_CONFIG);
     }
 
