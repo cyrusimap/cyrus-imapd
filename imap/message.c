@@ -2010,9 +2010,16 @@ static void message_parse_received_date(const char *hdr, char **hdrp)
     curp--;
 
   /* Didn't find ; - fill in hdrp so we don't look at next received header */
-  if (curp == hdrbuf || curp[1] == '\0') {
+  if (curp == hdrbuf) {
     *hdrp = hdrbuf;
     return;
+  }
+
+  /* No date string after ; - treat as non-existent */
+  if (curp[1] == '\0') {
+      free(hdrbuf);
+      *hdrp = NULL;
+      return;
   }
 
   /* Found it, copy out date string part */
