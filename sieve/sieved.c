@@ -851,9 +851,9 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 
         case B_PROCESSIMIP:
-            printf("PROCESSIMIP INVITESONLY(%d)"
-                   " UPDATESONLY(%d) DELETECANCELED(%d)",
-                   !!cmd.u.imip.invites_only,
+            printf("PROCESSCALENDAR ALLOWPUBLIC(%d) INVITESONLY(%d)"
+                   " UPDATESONLY(%d) DELETECANCELLED(%d)",
+                   !!cmd.u.imip.allow_public, !!cmd.u.imip.invites_only,
                    !!cmd.u.imip.updates_only, !!cmd.u.imip.delete_canceled);
             print_string(" CALENDARID", cmd.u.imip.calendarid);
             print_string(" OUTCOME", cmd.u.imip.outcome_var);
@@ -1676,10 +1676,11 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
 
         case B_PROCESSIMIP:
             *requires |= SIEVE_CAPA_IMIP;
-            generate_token("processimip", 0, buf);
+            generate_token("processcalendar", 0, buf);
+            generate_switch(":allowpublic", cmd.u.imip.allow_public, buf);
             generate_switch(":invitesonly", cmd.u.imip.invites_only, buf);
             generate_switch(":updatesonly", cmd.u.imip.updates_only, buf);
-            generate_switch(":deletecanceled", cmd.u.imip.delete_canceled, buf);
+            generate_switch(":deletecancelled", cmd.u.imip.delete_canceled, buf);
             generate_string(":calendarid", cmd.u.imip.calendarid, buf);
             generate_string(":outcome", cmd.u.imip.outcome_var, buf);
             generate_string(":errstr", cmd.u.imip.errstr_var, buf);

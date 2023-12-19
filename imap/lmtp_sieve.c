@@ -1475,10 +1475,13 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
 
     meth = icalcomponent_get_method(itip);
     if (meth == ICAL_METHOD_NONE) {
-        buf_setcstr(&imip->errstr, "missing METHOD property");
-        syslog(LOG_NOTICE, "Sieve: message %s contains non-iTIP iCalendar data",
-               mydata->m->id ? mydata->m->id : "<no-msgid>");
-        goto done;
+        if (imip->allow_public) meth = ICAL_METHOD_PUBLISH;
+        else {
+            buf_setcstr(&imip->errstr, "missing METHOD property");
+            syslog(LOG_NOTICE, "Sieve: message %s contains non-iTIP iCalendar data",
+                   mydata->m->id ? mydata->m->id : "<no-msgid>");
+            goto done;
+        }
     }
 
     comp = first = icalcomponent_get_first_real_component(itip);
@@ -1597,6 +1600,13 @@ static int sieve_imip(void *ac, void *ic, void *sc, void *mc,
                 buf_setcstr(&imip->outcome, "error");
                 buf_setcstr(&imip->errstr,
                             "could not find matching ATTENDEE property");
+                goto done;
+            }
+
+            if (imip->allow_public) sched_flags |= SCHEDFLAG_ALLOW_PUBLIC;
+            else if (meth == ICAL_METHOD_PUBLISH) {
+                buf_setcstr(&imip->errstr,
+                            "configured to NOT process public events");
                 goto done;
             }
 

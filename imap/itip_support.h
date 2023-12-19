@@ -96,6 +96,7 @@ struct sched_data {
 #define SCHEDFLAG_INVITES_ONLY     (1<<3)
 #define SCHEDFLAG_UPDATES_ONLY     (1<<4)
 #define SCHEDFLAG_DELETE_CANCELED  (1<<5)
+#define SCHEDFLAG_ALLOW_PUBLIC     (1<<6)
 
 #define SCHED_ISCHEDULE(sched)        (sched->flags & SCHEDFLAG_ISCHEDULE)
 #define SCHED_IS_REPLY(sched)         (sched->flags & SCHEDFLAG_IS_REPLY)
@@ -103,6 +104,7 @@ struct sched_data {
 #define SCHED_INVITES_ONLY(sched)     (sched->flags & SCHEDFLAG_INVITES_ONLY)
 #define SCHED_UPDATES_ONLY(sched)     (sched->flags & SCHEDFLAG_UPDATES_ONLY)
 #define SCHED_DELETE_CANCELED(sched)  (sched->flags & SCHEDFLAG_DELETE_CANCELED)
+#define SCHED_ALLOW_PUBLIC(sched)     (sched->flags & SCHEDFLAG_ALLOW_PUBLIC)
 
 #define SCHED_STATUS(sched, isched, ical) \
     (sched->status = SCHED_ISCHEDULE(sched) ? isched : ical)
