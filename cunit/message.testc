@@ -1392,16 +1392,31 @@ static void test_parse_bogus_charset_params(void)
 }
 
 /*
- * Verifies that message_parse_received_date() does not read
- * uninitialized data in the second call to message_parse_string()
+ * Verifies that message_parse_received_date() does not
+ * read any but the first Received header for invalid values.
  */
 static void test_parse_received_semicolon(void)
 {
-   static const char msg[] = "Received: abc;\r\n\r\nd";
+   static const char msg_emptydate[] =
+       "Received: abc;\r\n"
+       "Received: from foo by bar; Fri, 29 Oct 2010 13:05:01 +1100\r\n"
+       "\r\n";
    struct body body;
    memset(&body, 0x45, sizeof(body));
-   CU_ASSERT_EQUAL(message_parse_mapped(msg, sizeof(msg)-1, &body, NULL), 0);
-   CU_ASSERT_PTR_NULL(body.received_date);
+   CU_ASSERT_EQUAL(message_parse_mapped(msg_emptydate,
+               sizeof(msg_emptydate)-1, &body, NULL), 0);
+   CU_ASSERT_STRING_EQUAL(body.received_date, "");
    message_free_body(&body);
+
+   static const char msg_nodate[] =
+       "Received: abc\r\n"
+       "Received: from foo by bar; Fri, 29 Oct 2010 13:05:01 +1100\r\n"
+       "\r\n";
+   memset(&body, 0x45, sizeof(body));
+   CU_ASSERT_EQUAL(message_parse_mapped(msg_nodate,
+               sizeof(msg_nodate)-1, &body, NULL), 0);
+   CU_ASSERT_STRING_EQUAL(body.received_date, "abc");
+   message_free_body(&body);
+
 }
 /* vim: set ft=c: */
