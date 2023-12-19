@@ -788,8 +788,18 @@ sub test_partial
         },
     );
 
-    # search and return all messages
+    # search and return non-existent messages
+    @results = ();
     my $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                   'RETURN', '(PARTIAL -100:-1)', '100:300');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('PARTIAL', $results[0][1]);
+    $self->assert_str_equals('-1:-100', $results[0][2][0]);
+    $self->assert_null($results[0][2][1]);
+
+    # search and return all messages
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
                                 'RETURN', '()', 'UNDELETED');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_str_equals('2:5,7:10', $results[0][2]);

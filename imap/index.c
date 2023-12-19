@@ -2232,15 +2232,17 @@ EXPORTED int index_search(struct index_state *state,
                         sign, searchargs->partial.range.high,
                         seqstr ? seqstr : "NIL");
 
-            /* Save search params/results for subsequent PARTIAL */
-            memcpy(&state->last_partial.range,
-                   &searchargs->partial.range, sizeof(range_t));
-            state->last_partial.last_match = folder->esearch.last_match;
-            state->last_partial.highestmodseq = state->highestmodseq;
-
-            free(state->last_partial.expr);
-            state->last_partial.expr = partial_expr;
-            partial_expr = NULL;
+            if (folder) {
+                /* Save search params/results for subsequent PARTIAL */
+                memcpy(&state->last_partial.range,
+                       &searchargs->partial.range, sizeof(range_t));
+                state->last_partial.last_match = folder->esearch.last_match;
+                state->last_partial.highestmodseq = state->highestmodseq;
+                
+                free(state->last_partial.expr);
+                state->last_partial.expr = partial_expr;
+                partial_expr = NULL;
+            }
         }
 
         free(seqstr);
