@@ -2242,7 +2242,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* If enabled, all IMAP, POP and JMAP connections are read-only,
  * no writes allowed. */
 
-{ "replicaonly", 0, SWITCH, "3.9.0" }
+{ "replicaonly", 0, SWITCH, "UNRELEASED" }
 /* If enabled, nothing is allowed to increase modseq or uidvalidity,
  * no writes allowed at all. */
 
