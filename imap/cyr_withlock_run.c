@@ -125,16 +125,16 @@ int main(int argc, char **argv)
     for (i = optind; i < argc; i++)
         strarray_append(&args, argv[i]);
     if (userid) {
-        static char env_havelock[100];
-        snprintf(env_havelock, sizeof(env_havelock), "CYRUS_HAVELOCK_GLOBAL=1");
-        putenv(env_havelock);
-        r = mboxname_run_with_lock(runcmd, &args);
-    }
-    else {
         static char env_userlock[MAX_MAILBOX_NAME+30];
         snprintf(env_userlock, sizeof(env_userlock), "CYRUS_HAVELOCK_USER=%s", userid);
         putenv(env_userlock);
         r = user_run_with_lock(userid, runcmd, &args);
+    }
+    else {
+        static char env_havelock[100];
+        snprintf(env_havelock, sizeof(env_havelock), "CYRUS_HAVELOCK_GLOBAL=1");
+        putenv(env_havelock);
+        r = mboxname_run_with_lock(runcmd, &args);
     }
     strarray_fini(&args);
 
