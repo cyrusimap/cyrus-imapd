@@ -654,6 +654,7 @@ cunit_TESTS = \
 	cunit/rfc822tok.testc \
 	cunit/search_expr.testc \
 	cunit/seqset.testc \
+	cunit/slowio.testc \
 	cunit/smallarrayu64.testc
 
 if SIEVE
@@ -833,6 +834,7 @@ noinst_HEADERS += \
 	lib/md5.h \
 	lib/prot.h \
 	lib/ptrarray.h \
+	lib/slowio.h \
 	lib/util.h \
 	lib/xsha1.h \
 	lib/xstrlcat.h \
@@ -1593,6 +1595,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/proc.c \
 	lib/retry.c \
 	lib/setproctitle.c \
+	lib/slowio.c \
 	lib/smallarrayu64.c \
 	lib/strarray.c \
 	lib/strhash.c \
