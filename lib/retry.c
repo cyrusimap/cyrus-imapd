@@ -50,6 +50,7 @@
 #endif
 
 #include "retry.h"
+#include "slowio.h"
 #include "xmalloc.h"
 
 /*
@@ -74,6 +75,8 @@ EXPORTED ssize_t retry_read(int fd, void *vbuf, size_t nbyte)
         }
 
         nread += n;
+
+        slowio_maybe_delay_read(n);
     }
 
     return nread;
@@ -99,6 +102,8 @@ EXPORTED ssize_t retry_write(int fd, const void *vbuf, size_t nbyte)
         }
 
         written += n;
+
+        slowio_maybe_delay_write(n);
     }
 
     return written;
@@ -150,6 +155,8 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
         }
 
         written += n;
+
+        slowio_maybe_delay_write(n);
 
         if (written == len) break;
 
