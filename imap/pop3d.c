@@ -650,6 +650,9 @@ void shut_down(int code)
     saslprops_free(&saslprops);
 
     cyrus_done();
+    cyrus_close_sock(0);
+    cyrus_close_sock(1);
+    cyrus_close_sock(2);
 
     if (config_iolog) {
         read_io_count(io_count_stop);
