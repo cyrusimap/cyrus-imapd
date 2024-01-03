@@ -43,6 +43,8 @@ use warnings;
 use Cwd qw(abs_path);
 use DateTime;
 use Data::Dumper;
+use MIME::Base64 qw(encode_base64);
+use Encode qw(decode encode);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -50,10 +52,19 @@ use Cassandane::Util::Log;
 
 sub new
 {
+
     my ($class, @args) = @_;
     my $config = Cassandane::Config->default()->clone();
-    $config->set(conversations => 'on');
-    return $class->SUPER::new({ config => $config }, @args);
+    $config->set(
+        conversations => 'on',
+        httpallowcompress => 'no',
+        httpmodules => 'jmap',
+    );
+    return $class->SUPER::new({
+        config => $config,
+        jmap => 1,
+        services => [ 'imap', 'http' ]
+    }, @args);
 }
 
 sub set_up
@@ -134,6 +145,55 @@ sub create_testmessages
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 }
 
+sub get_snippets
+{
+    # Previous versions of this test module used XSNIPPETS to
+    # assert snippets but this command got removed from Cyrus.
+    # Use JMAP instead.
+
+    my ($self, $folder, $uids, $filter) = @_;
+
+    my $imap = $self->{store}->get_client();
+    my $jmap = $self->{jmap};
+
+    $self->assert_not_null($jmap);
+
+    $imap->select($folder);
+    my $res = $imap->fetch($uids, ['emailid']);
+    my %emailIdToImapUid = map { $res->{$_}{emailid}[0] => $_ } keys %$res;
+
+    $res = $jmap->CallMethods([
+        ['SearchSnippet/get', {
+            filter => $filter,
+            emailIds => [ keys %emailIdToImapUid ],
+        }, 'R1'],
+    ]);
+
+    my @snippets;
+    foreach (@{$res->[0][1]{list}}) {
+        if ($_->{subject}) {
+            push(@snippets, [
+                0,
+                $emailIdToImapUid{$_->{emailId}},
+                'SUBJECT',
+                $_->{subject},
+            ]);
+        }
+        if ($_->{preview}) {
+            push(@snippets, [
+                0,
+                $emailIdToImapUid{$_->{emailId}},
+                'BODY',
+                $_->{preview},
+            ]);
+        }
+    }
+
+    return {
+        snippets => [ sort { $a->[1] <=> $b->[1] } @snippets ],
+    };
+}
+
 sub test_copy_messages
     :needs_search_xapian
 {
@@ -151,12 +211,13 @@ sub test_copy_messages
 }
 
 sub test_stem_verbs
-    :min_version_3_0 :needs_search_xapian
+    :min_version_3_0 :needs_search_xapian :JMAPExtensions
 {
     my ($self) = @_;
     $self->create_testmessages();
 
     my $talk = $self->{store}->get_client();
+    $self->assert_not_null($self->{jmap});
 
     xlog $self, "Select INBOX";
     my $r = $talk->select("INBOX") || die;
@@ -175,11 +236,8 @@ sub test_stem_verbs
     $r = $talk->search('fuzzy', ['subject', { Quote => "runs" }]) || die;
     $self->assert_num_equals(3, scalar @$r);
 
-    xlog $self, 'XSNIPPETS for FUZZY subject "runs"';
-    $r = $talk->xsnippets(
-        [['INBOX', $uidvalidity, $uids]], 'utf-8',
-        ['fuzzy', 'subject', { Quote => 'runs' }]
-    ) || die;
+    xlog $self, 'Get snippets for FUZZY subject "runs"';
+    $r = $self->get_snippets('INBOX', $uids, { subject => 'runs' });
     $self->assert_num_equals(3, scalar @{$r->{snippets}});
 }
 
@@ -250,12 +308,8 @@ sub test_snippet_wildcard
     $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
 
-    xlog $self, "XSNIPPETS for $term";
-    $r = $talk->xsnippets(
-        [['INBOX', $uidvalidity, $uids]], 'utf-8',
-        ['fuzzy', 'text', { Quote => "$term*" }]
-    ) || die;
-    xlog $self, Dumper($r);
+    xlog $self, "Get snippets for $term";
+    $r = $self->get_snippets('INBOX', $uids, { 'text' => "$term*" });
     $self->assert_num_equals(2, scalar @{$r->{snippets}});
 }
 
@@ -358,13 +412,17 @@ sub test_normalize_snippets
     my ($self) = @_;
 
     # Set up test message with funny characters
-    my $body = "foo gären советской diĝir naïve léger";
-    my @terms = split / /, $body;
+use utf8;
+    my @terms = ( "gären", "советской", "diĝir", "naïve", "léger" );
+no utf8;
+    my $body = encode_base64(encode('UTF-8', join(' ', @terms)));
+    $body =~ s/\r?\n/\r\n/gs;
 
     xlog $self, "Generate and index test messages.";
     my %params = (
         mime_charset => "utf-8",
-        body => $body
+        mime_encoding => 'base64',
+        body => $body,
     );
     $self->make_message("1", %params) || die;
 
@@ -380,24 +438,20 @@ sub test_normalize_snippets
 
     # Assert that diacritics are matched and returned
     foreach my $term (@terms) {
-        xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
-        $r = $talk->xsnippets(
-            [['INBOX', $uidvalidity, $uids]], 'utf-8',
-            ['fuzzy', 'text', { Quote => $term }]
-        ) || die;
-        $self->assert_num_not_equals(index($r->{snippets}[0][3], "<b>$term</b>"), -1);
+        $r = $self->get_snippets('INBOX', $uids, { text => $term });
+        $self->assert_num_not_equals(index($r->{snippets}[0][3], "<mark>$term</mark>"), -1);
     }
 
     # Assert that search without diacritics matches
     if ($self->{skipdiacrit}) {
         my $term = "naive";
-        xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
-        $r = $talk->xsnippets(
-            [['INBOX', $uidvalidity, $uids]], 'utf-8',
-            ['fuzzy', 'text', { Quote => $term }]
-        ) || die;
-        $self->assert_num_not_equals(index($r->{snippets}[0][3], "<b>naïve</b>"), -1);
+        xlog $self, "Get snippets for FUZZY text \"$term\"";
+        $r = $self->get_snippets('INBOX', $uids, { 'text' => $term });
+use utf8;
+        $self->assert_num_not_equals(index($r->{snippets}[0][3], "<mark>naïve</mark>"), -1);
+no utf8;
     }
+
 }
 
 sub test_skipdiacrit
@@ -499,38 +553,23 @@ sub test_snippets_termcover
     my $r = $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
-    my $want = "<b>favourite</b> <b>cereal</b>";
+    my $want = "<mark>favourite</mark> <mark>cereal</mark>";
 
-    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
-       'utf-8', [
-           'fuzzy', 'text', 'favourite',
-           'fuzzy', 'text', 'cereal',
-           'fuzzy', 'text', { Quote => 'bogus gnarly' }
-        ]
-    ) || die;
+    $r = $self->get_snippets('INBOX', $uids, {
+        operator => 'AND',
+        conditions => [{
+            text => 'favourite',
+        }, {
+           text => 'cereal',
+        }, {
+           text => '"bogus gnarly"'
+        }],
+    });
     $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], $want));
 
-    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
-       'utf-8', [
-           'fuzzy', 'text', 'favourite cereal'
-        ]
-    ) || die;
-    $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], $want));
-
-    # Regression - a phrase is treated as a loose term
-    $r = $talk->xsnippets( [ [ 'INBOX', $uidvalidity, $uids ] ],
-       'utf-8', [
-           'fuzzy', 'text', { Quote => 'favourite nope cereal' },
-           'fuzzy', 'text', { Quote => 'bogus gnarly' }
-        ]
-    ) || die;
-    $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], $want));
-
-    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
-       'utf-8', [
-           'fuzzy', 'text', { Quote => 'favourite cereal' }
-        ]
-    ) || die;
+    $r = $self->get_snippets('INBOX', $uids, {
+        text => 'favourite cereal',
+    });
     $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], $want));
 }
 
@@ -542,18 +581,28 @@ sub test_cjk_words
 
     xlog $self, "Generate and index test messages.";
 
+use utf8;
     my $body = "明末時已經有香港地方的概念";
+no utf8;
+    $body = encode_base64(encode('UTF-8', $body));
+    $body =~ s/\r?\n/\r\n/gs;
     my %params = (
         mime_charset => "utf-8",
-        body => $body
+        mime_encoding => 'base64',
+        body => $body,
     );
     $self->make_message("1", %params) || die;
 
     # Splits into the words: "み, 円, 月額, 申込
+use utf8;
     $body = "申込み！月額円";
+no utf8;
+    $body = encode_base64(encode('UTF-8', $body));
+    $body =~ s/\r?\n/\r\n/gs;
     %params = (
         mime_charset => "utf-8",
-        body => $body
+        mime_encoding => 'base64',
+        body => $body,
     );
     $self->make_message("2", %params) || die;
 
@@ -569,50 +618,45 @@ sub test_cjk_words
 
     my $term;
     # Search for a two-character CJK word
+use utf8;
     $term = "已經";
-    xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
-    $r = $talk->xsnippets(
-        [['INBOX', $uidvalidity, $uids]], 'utf-8',
-        ['fuzzy', 'text', { Quote => $term }]
-    ) || die;
-    $self->assert_num_not_equals(index($r->{snippets}[0][3], "<b>$term</b>"), -1);
+no utf8;
+    xlog $self, "Get snippets for FUZZY text \"$term\"";
+    $r = $self->get_snippets('INBOX', $uids, { text => $term });
+    $self->assert_num_not_equals(index($r->{snippets}[0][3], "<mark>$term</mark>"), -1);
 
     # Search for the CJK words 明末 and 時, note that the
     # word order is reversed to the original message
+use utf8;
     $term = "時明末";
-    xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
-    $r = $talk->xsnippets(
-        [['INBOX', $uidvalidity, $uids]], 'utf-8',
-        ['fuzzy', 'text', { Quote => $term }]
-    ) || die;
+no utf8;
+    xlog $self, "Get snippets for FUZZY text \"$term\"";
+    $r = $self->get_snippets('INBOX', $uids, { text => $term });
     $self->assert_num_equals(scalar @{$r->{snippets}}, 1);
 
     # Search for the partial CJK word 月
+use utf8;
     $term = "月";
-    xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
-    $r = $talk->xsnippets(
-        [['INBOX', $uidvalidity, $uids]], 'utf-8',
-        ['fuzzy', 'text', { Quote => $term }]
-    ) || die;
+no utf8;
+    xlog $self, "Get snippets for FUZZY text \"$term\"";
+    $r = $self->get_snippets('INBOX', $uids, { text => $term });
     $self->assert_num_equals(scalar @{$r->{snippets}}, 0);
 
     # Search for the interleaved, partial CJK word 額申
+use utf8;
     $term = "額申";
-    xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
-    $r = $talk->xsnippets(
-        [['INBOX', $uidvalidity, $uids]], 'utf-8',
-        ['fuzzy', 'text', { Quote => $term }]
-    ) || die;
+no utf8;
+    xlog $self, "Get snippets for FUZZY text \"$term\"";
+    $r = $self->get_snippets('INBOX', $uids, { text => $term });
     $self->assert_num_equals(scalar @{$r->{snippets}}, 0);
 
     # Search for three of four words: "み, 月額, 申込",
     # in different order than the original.
+use utf8;
     $term = "月額み申込";
-    xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
-    $r = $talk->xsnippets(
-        [['INBOX', $uidvalidity, $uids]], 'utf-8',
-        ['fuzzy', 'text', { Quote => $term }]
-    ) || die;
+no utf8;
+    xlog $self, "Get snippets for FUZZY text \"$term\"";
+    $r = $self->get_snippets('INBOX', $uids, { text => $term });
     $self->assert_num_equals(scalar @{$r->{snippets}}, 1);
 }
 
@@ -805,86 +849,6 @@ sub test_xattachmentname
 }
 
 
-sub test_xapianv2
-    :min_version_3_0 :needs_search_xapian
-{
-    my ($self) = @_;
-
-    my $talk = $self->{store}->get_client();
-
-    # This is a smallish regression test to check if we break something
-    # obvious by moving Xapian indexing from folder:uid to message guids.
-    #
-    # Apart from the tests in this module, at least also the following
-    # imodules are relevant: Metadata for SORT, Thread for THREAD.
-
-    xlog $self, "Generate message";
-    my $r = $self->make_message("I run", body => "Run, Forrest! Run!" ) || die;
-    my $uid = $r->{attrs}->{uid};
-
-    xlog $self, "Copy message into INBOX";
-    $talk->copy($uid, "INBOX");
-
-    xlog $self, "Run squatter";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
-
-    $r = $talk->xconvmultisort(
-        [ qw(reverse arrival) ],
-        [ 'conversations', position => [1,10] ],
-        'utf-8', 'fuzzy', 'text', "run",
-    );
-    $self->assert_num_equals(2, scalar @{$r->{sort}[0]} - 1);
-    $self->assert_num_equals(1, scalar @{$r->{sort}});
-
-    xlog $self, "Create target mailbox";
-    $talk->create("INBOX.target");
-
-    xlog $self, "Copy message into INBOX.target";
-    $talk->copy($uid, "INBOX.target");
-
-    xlog $self, "Run squatter";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
-
-    $r = $talk->xconvmultisort(
-        [ qw(reverse arrival) ],
-        [ 'conversations', position => [1,10] ],
-        'utf-8', 'fuzzy', 'text', "run",
-    );
-    $self->assert_num_equals(3, scalar @{$r->{sort}[0]} - 1);
-    $self->assert_num_equals(1, scalar @{$r->{sort}});
-
-    xlog $self, "Generate message";
-    $self->make_message("You run", body => "A running joke" ) || die;
-
-    xlog $self, "Run squatter";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
-
-    $r = $talk->xconvmultisort(
-        [ qw(reverse arrival) ],
-        [ 'conversations', position => [1,10] ],
-        'utf-8', 'fuzzy', 'text', "run",
-    );
-    $self->assert_num_equals(2, scalar @{$r->{sort}});
-
-    xlog $self, "SEARCH FUZZY";
-    $r = $talk->search(
-        "charset", "utf-8", "fuzzy", "text", "run",
-    ) || die;
-    $self->assert_num_equals(3, scalar @$r);
-
-    xlog $self, "Select INBOX";
-    $r = $talk->select("INBOX") || die;
-    my $uidvalidity = $talk->get_response_code('uidvalidity');
-    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
-
-    xlog $self, "XSNIPPETS";
-    $r = $talk->xsnippets(
-        [['INBOX', $uidvalidity, $uids]], 'utf-8',
-        ['fuzzy', 'body', 'run'],
-    ) || die;
-    $self->assert_num_equals(3, scalar @{$r->{snippets}});
-}
-
 sub test_snippets_escapehtml
     :min_version_3_0 :needs_search_xapian
 {
@@ -914,21 +878,15 @@ sub test_snippets_escapehtml
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
     my %m;
 
-    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
-       'utf-8', [ 'fuzzy', 'text', 'test1' ]
-    ) || die;
-
+    $r = $self->get_snippets('INBOX', $uids, { 'text' => 'test1' });
     %m = map { lc($_->[2]) => $_->[3] } @{ $r->{snippets} };
-    $self->assert_str_equals("<b>Test1</b> body with the same tag as snippets", $m{body});
-    $self->assert_str_equals("<b>Test1</b> subject with an unescaped &amp; in it", $m{subject});
+    $self->assert_str_equals("<mark>Test1</mark> body with the same tag as snippets", $m{body});
+    $self->assert_str_equals("<mark>Test1</mark> subject with an unescaped &amp; in it", $m{subject});
 
-    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
-       'utf-8', [ 'fuzzy', 'text', 'test2' ]
-    ) || die;
-
+    $r = $self->get_snippets('INBOX', $uids, { 'text' => 'test2' });
     %m = map { lc($_->[2]) => $_->[3] } @{ $r->{snippets} };
-    $self->assert_str_equals("<b>Test2</b> body with a &lt;tag/&gt;, although it's plain text", $m{body});
-    $self->assert_str_equals("<b>Test2</b> subject with a &lt;tag&gt; in it", $m{subject});
+    $self->assert_str_equals("<mark>Test2</mark> body with a &lt;tag/&gt;, although it's plain text", $m{body});
+    $self->assert_str_equals("<mark>Test2</mark> subject with a &lt;tag&gt; in it", $m{subject});
 }
 
 sub test_search_exactmatch
@@ -963,13 +921,10 @@ sub test_search_exactmatch
     $self->assert_num_equals(1, scalar @$uids);
 
     my %m;
-    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
-       'utf-8', [ 'fuzzy', 'body', $query ]
-    ) || die;
-
+    $r = $self->get_snippets('INBOX', $uids, { body => $query });
     %m = map { lc($_->[2]) => $_->[3] } @{ $r->{snippets} };
-    $self->assert(index($m{body}, "<b>some text</b>") != -1);
-    $self->assert(index($m{body}, "<b>some</b> long <b>text</b>") == -1);
+    $self->assert(index($m{body}, "<mark>some text</mark>") != -1);
+    $self->assert(index($m{body}, "<mark>some</mark> long <mark>text</mark>") == -1);
 }
 
 sub test_search_subjectsnippet
@@ -1004,10 +959,7 @@ sub test_search_subjectsnippet
     $self->assert_num_equals(1, scalar @$uids);
 
     my %m;
-    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
-       'utf-8', [ 'fuzzy', 'text', $query ]
-    ) || die;
-
+    $r = $self->get_snippets('INBOX', $uids, { text => $query });
     %m = map { lc($_->[2]) => $_->[3] } @{ $r->{snippets} };
     $self->assert_matches(qr/^\[plumbing\]/, $m{subject});
 }
@@ -1317,11 +1269,10 @@ sub test_detect_language
     $self->assert_deep_equals([1], $uids);
 
     my $r = $talk->select("INBOX") || die;
-    my $uidvalidity = $talk->get_response_code('uidvalidity');
-    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
-       'utf-8', [ 'fuzzy', 'body', 'atmet' ]
-    ) || die;
-    $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], ' Höhe <b>atmeten</b>.'));
+    $r = $self->get_snippets('INBOX', $uids, { body => 'atmet' });
+use utf8;
+    $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], ' Höhe <mark>atmeten</mark>.'));
+no utf8;
 }
 
 sub test_detect_language_subject
@@ -1377,12 +1328,9 @@ sub test_detect_language_subject
     $self->assert_deep_equals([1], $uids);
 
     my $r = $talk->select("INBOX") || die;
-    my $uidvalidity = $talk->get_response_code('uidvalidity');
-    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
-       'utf-8', [ 'fuzzy', 'subject', 'Landschaft' ]
-    ) || die;
+    $r = $self->get_snippets('INBOX', $uids, { subject => 'Landschaft' });
     $self->assert_str_equals(
-        'A subject with the German word <b>Landschaften</b>',
+        'A subject with the German word <mark>Landschaften</mark>',
         $r->{snippets}[0][3]
     );
 }
