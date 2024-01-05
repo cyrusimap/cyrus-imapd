@@ -1415,11 +1415,13 @@ static int _submission_setargs_parse(jmap_req_t *req,
         else if (JNOTNULL(arg)) r = 0;
     }
 
-    else if (!strcmp(key, "onSuccessDestroyEmail") && JNOTNULL(arg)) {
+    else if (!strcmp(key, "onSuccessDestroyEmail")) {
         // need urn:ietf:params:jmap:mail to destroy emails
         if (!jmap_is_using(req, JMAP_URN_MAIL)) return 0;
-        jmap_parse_strings(arg, parser, "onSuccessDestroyEmail");
-        set->onSuccessDestroy = arg;
+        if (JNOTNULL(arg)) {
+            if (jmap_parse_strings(arg, parser, "onSuccessDestroyEmail"))
+                set->onSuccessDestroy = arg;
+        }
     }
 
     else r = 0;
