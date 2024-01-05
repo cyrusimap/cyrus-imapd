@@ -168,6 +168,12 @@ EXPORTED void search_folder_use_msn(search_folder_t *folder, struct index_state 
     }
     bv_fini(&folder->uids);
     folder->uids = msns;
+
+    msgno = index_finduid(state, folder->esearch.min_uid, FIND_EQ);
+    folder->esearch.min_uid = msgno;
+
+    msgno = index_finduid(state, folder->esearch.max_uid, FIND_EQ);
+    folder->esearch.max_uid = msgno;
 }
 
 /*
@@ -175,17 +181,27 @@ EXPORTED void search_folder_use_msn(search_folder_t *folder, struct index_state 
  * MSNs if search_folder_use_msn() has been called).  The caller is
  * responsible for freeing the result using seqset_free()
  */
-EXPORTED seqset_t *search_folder_get_seqset(const search_folder_t *folder)
+static seqset_t *_search_folder_get_seqset(const bitvector_t *uids)
 {
     seqset_t *seq = seqset_init(0, SEQ_SPARSE);
     int uid;
 
-    for (uid = bv_next_set(&folder->uids, 0) ;
+    for (uid = bv_next_set(uids, 0) ;
          uid != -1 ;
-         uid = bv_next_set(&folder->uids, uid+1))
+         uid = bv_next_set(uids, uid+1))
         seqset_add(seq, uid, 1);
 
     return seq;
+}
+
+EXPORTED seqset_t *search_folder_get_seqset(const search_folder_t *folder)
+{
+    return _search_folder_get_seqset(&folder->uids);
+}
+
+EXPORTED seqset_t *search_folder_get_all_seqset(const search_folder_t *folder)
+{
+    return _search_folder_get_seqset(&folder->esearch.all_uids);
 }
 
 /*
@@ -218,7 +234,7 @@ EXPORTED int search_folder_get_array(const search_folder_t *folder, unsigned int
  */
 EXPORTED uint32_t search_folder_get_min(const search_folder_t *folder)
 {
-    return bv_first_set(&folder->uids);
+    return folder->esearch.min_uid;
 }
 
 /*
@@ -227,7 +243,7 @@ EXPORTED uint32_t search_folder_get_min(const search_folder_t *folder)
  */
 EXPORTED uint32_t search_folder_get_max(const search_folder_t *folder)
 {
-    return bv_last_set(&folder->uids);
+    return folder->esearch.max_uid;
 }
 
 /*
@@ -235,22 +251,27 @@ EXPORTED uint32_t search_folder_get_max(const search_folder_t *folder)
  */
 EXPORTED unsigned int search_folder_get_count(const search_folder_t *folder)
 {
-    return bv_count(&folder->uids);
+    return folder->esearch.uid_count;
+}
+
+EXPORTED unsigned int search_folder_get_all_count(const search_folder_t *folder)
+{
+    return folder->esearch.all_count;
 }
 
 EXPORTED uint64_t search_folder_get_highest_modseq(const search_folder_t *folder)
 {
-    return folder->highest_modseq;
+    return folder->esearch.highest_modseq;
 }
 
 EXPORTED uint64_t search_folder_get_first_modseq(const search_folder_t *folder)
 {
-    return folder->first_modseq;
+    return folder->esearch.first_modseq;
 }
 
 EXPORTED uint64_t search_folder_get_last_modseq(const search_folder_t *folder)
 {
-    return folder->last_modseq;
+    return folder->esearch.last_modseq;
 }
 
 /* ====================================================================== */
@@ -317,15 +338,15 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
     return folder;
 }
 
-static void folder_add_uid(search_folder_t *folder, uint32_t uid)
+static void folder_add_uid(bitvector_t *uids, uint32_t uid)
 {
-    bv_set(&folder->uids, uid);
+    bv_set(uids, uid);
 }
 
 static void folder_add_modseq(search_folder_t *folder, uint64_t modseq)
 {
-    if (modseq > folder->highest_modseq)
-        folder->highest_modseq = modseq;
+    if (modseq > folder->esearch.highest_modseq)
+        folder->esearch.highest_modseq = modseq;
 }
 
 static int query_begin_index(search_query_t *query,
@@ -467,6 +488,208 @@ static int folder_partnum_cmp QSORT_R_COMPAR_ARGS(const void *va,
     else return a->uid < b->uid ? -1 : 1;
 }
 
+static int _subquery_run_one_folder(search_query_t *query,
+                                    struct subquery_rock *qr,
+                                    search_folder_t *folder,
+                                    const char *mboxname,
+                                    search_expr_t *e)
+{
+    struct searchargs *searchargs = query->searchargs;
+    struct index_state *state = NULL;
+    unsigned msgno, start, end, range_size;
+    unsigned count = 0;
+    unsigned nmsgs = 0;
+    unsigned *msgno_list = NULL;
+    search_expr_t *child;
+    int inc = 1, do_all = 1;
+    int r = 0;
+
+    if (e && query->verbose) {
+        char *s = search_expr_serialise(e);
+        syslog(LOG_INFO, "Folder %s: applying scan expression: %s",
+                mboxname, s);
+        free(s);
+    }
+
+    if (query->sortcrit && query->verbose) {
+        char *s = sortcrit_as_string(query->sortcrit);
+        syslog(LOG_INFO, "Folder %s: loading MsgData for sort criteria %s",
+               mboxname, s);
+        free(s);
+    }
+
+    r = query_begin_index(query, mboxname, &state);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* Silently swallow mailboxes which have been deleted, renamed,
+         * or had their ACL changed to prevent us reading them, after
+         * the index was constructed [IRIS-2469].  */
+        r = 0;
+        goto out;
+    }
+    if (r) goto out;
+
+    if (!state->exists) goto out;
+
+    search_expr_internalise(state, e);
+ 
+    start = 1;
+    end = state->exists;
+
+    /* Compress the search range down if a sequence was given at toplevel */
+    for (child = e->children ; child ; child = child->next) {
+        if (child->op == SEOP_MATCH && child->attr &&
+            (!strcmp("uid", child->attr->name) ||
+             !strcmp("msgno", child->attr->name))) {
+            seqset_t *seq = child->internalised;
+            unsigned first = seqset_first(seq);
+            unsigned last = seqset_last(seq);
+
+            if (child->attr->name[0] == 'u') {
+                if (first > 1)
+                    first = index_finduid(state, first, FIND_LE);
+                if (last < state->last_uid)
+                    last = index_finduid(state, last, FIND_LE);
+            }
+
+            if (first > start) start = first;
+            if (last < end) end = last;
+        }
+    }
+
+    range_size = end - start + 1;
+    msgno = start;
+
+    if (query->sortcrit)
+        msgno_list = (unsigned *) xmalloc(range_size * sizeof(unsigned));
+
+    switch (searchargs->returnopts & ~(SEARCH_RETURN_SAVE | SEARCH_RETURN_RELEVANCY)) {
+
+    case SEARCH_RETURN_MAX:
+        searchargs->partial.range.is_last = 1;
+
+        GCC_FALLTHROUGH
+
+    case SEARCH_RETURN_MIN:
+        searchargs->partial.range.low = searchargs->partial.range.high = 1;
+
+        GCC_FALLTHROUGH
+
+    case SEARCH_RETURN_PARTIAL:
+        do_all = 0;
+
+        /* Reverse the iterator? */
+        if (searchargs->partial.range.is_last) {
+            msgno = end;
+            inc = -1;
+        }
+
+        if (searchargs->partial.start_msgno) {
+            /* Use the last PARTIAL params/results to inform this one */
+            msgno = searchargs->partial.start_msgno;
+            count = searchargs->partial.start_count;
+        }
+        break;
+
+    default:
+        if (!searchargs->partial.range.high)
+            searchargs->partial.range.high = UINT32_MAX;
+        break;
+    }
+
+    /* One pass through the folder's message list */
+    for (; msgno >= start && msgno <= end &&
+             (do_all || (count < searchargs->partial.range.high));
+         msgno += inc) {
+        struct index_map *im = &state->map[msgno-1];
+
+        if (query->prock) {
+            if (inc < 0)
+                query->prock->cb(end - msgno, range_size, query->prock);
+            else
+                query->prock->cb(msgno - start, range_size, query->prock);
+        }
+
+        if (!(msgno % 128)) {
+            r = cmd_cancelled(!query->ignore_timer);
+            if (r) goto out;
+        }
+
+        /* we only want to look at found UIDs */
+        if (qr &&
+            ((!qr->is_excluded && !bv_isset(&folder->found_uids, im->uid)) ||
+             (qr->is_excluded && bv_isset(&folder->found_uids, im->uid)))) {
+            continue;
+        }
+
+        /* moot if already in the uids set */
+        if (folder && bv_isset(&folder->uids, im->uid))
+            continue;
+
+        /* can happen if we didn't "tellchanges" yet */
+        if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED) && !query->want_expunged)
+            continue;
+
+        /* run the search program */
+        if (!index_search_evaluate(state, e, msgno))
+            continue;
+
+        if (!folder) {
+            folder = query_get_valid_folder(query, mboxname, state->uidvalidity);
+            if (!folder) {
+                if (query->checkfolder) {
+                    /* filtered out */
+                    continue;
+                }
+                else {
+                    r = IMAP_INTERNAL;
+                    goto out;   /* can't happen */
+                }
+            }
+
+            memset(&folder->esearch, 0, sizeof(folder->esearch));
+            folder->esearch.min_uid = state->last_uid + 1;
+        }
+
+        /* we have a new UID that needs to be merged in */
+
+        /* track ALL matches separately (for SAVE + ALL and/or COUNT) */
+        folder_add_uid(&folder->esearch.all_uids, im->uid);
+        folder->esearch.all_count++;
+
+        /* track first and last for MIN/MAX queries */
+        if (im->uid < folder->esearch.min_uid) {
+            folder->esearch.min_uid = im->uid;
+            folder->esearch.first_modseq = im->modseq;
+        }
+        if (im->uid > folder->esearch.max_uid) {
+            folder->esearch.max_uid = im->uid;
+            folder->esearch.last_modseq = im->modseq;
+        }
+
+        /* don't add anything outside of the PARTIAL range */
+        if (++count < searchargs->partial.range.low) continue;
+        if (count > searchargs->partial.range.high) continue;
+
+        folder_add_uid(&folder->uids, im->uid);
+        folder_add_modseq(folder, im->modseq);
+        folder->esearch.last_match = msgno;
+        folder->esearch.uid_count++;
+
+        if (query->sortcrit)
+            msgno_list[nmsgs++] = msgno;
+    }
+
+    /* msgno_list contains only the MSNs for newly
+     * checked messages */
+    if (query->sortcrit && nmsgs)
+        query_load_msgdata(query, folder, state, msgno_list, nmsgs);
+
+out:
+    if (state) query_end_index(query, &state);
+    free(msgno_list);
+    return r;
+}
+
 /*
  * After an indexed subquery is run, we have accumulated a number of
  * found UID hits in folders.  Here we check those UIDs for a) not
@@ -481,10 +704,6 @@ static void subquery_post_enginesearch(const char *key, void *data, void *rock)
     struct subquery_rock *qr = rock;
     search_query_t *query = qr->query;
     search_subquery_t *sub = qr->sub;
-    struct index_state *state = NULL;
-    unsigned msgno;
-    unsigned nmsgs = 0;
-    unsigned *msgno_list = NULL;
     int r = 0;
 
     if (query->error) return;
@@ -509,78 +728,11 @@ static void subquery_post_enginesearch(const char *key, void *data, void *rock)
         }
     }
 
-    if (sub->expr && query->verbose) {
-        char *s = search_expr_serialise(sub->expr);
-        syslog(LOG_INFO, "Folder %s: applying scan expression: %s",
-                folder->mboxname, s);
-        free(s);
+    r = _subquery_run_one_folder(query, qr, folder, mboxname, sub->expr);
+    if (r) {
+        query->error = r;
+        return;
     }
-    if (query->sortcrit && query->verbose) {
-        char *s = sortcrit_as_string(query->sortcrit);
-        syslog(LOG_INFO, "Folder %s: loading MsgData for sort criteria %s",
-                folder->mboxname, s);
-        free(s);
-    }
-
-    r = query_begin_index(query, mboxname, &state);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* Silently swallow mailboxes which have been deleted, renamed,
-         * or had their ACL changed to prevent us reading them, after
-         * the index was constructed [IRIS-2469].  */
-        r = 0;
-        goto out;
-    }
-    if (r) goto out;
-
-    if (!state->exists) goto out;
-
-    search_expr_internalise(state, sub->expr);
-
-    if (query->sortcrit)
-        msgno_list = (unsigned *) xmalloc(state->exists * sizeof(unsigned));
-
-    /* One pass through the folder's message list */
-    for (msgno = 1 ; msgno <= state->exists ; msgno++) {
-        struct index_map *im = &state->map[msgno-1];
-
-        if (!(msgno % 128)) {
-            r = cmd_cancelled(!query->ignore_timer);
-            if (r) goto out;
-        }
-
-        /* we only want to look at found UIDs */
-        if ((!qr->is_excluded && !bv_isset(&folder->found_uids, im->uid)) ||
-             (qr->is_excluded && bv_isset(&folder->found_uids, im->uid))) {
-            continue;
-        }
-
-        /* moot if already in the uids set */
-        if (bv_isset(&folder->uids, im->uid))
-            continue;
-
-        /* can happen if we didn't "tellchanges" yet */
-        if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED) && !query->want_expunged)
-            continue;
-
-        /* run the search program */
-        if (!index_search_evaluate(state, sub->expr, msgno))
-            continue;
-
-        /* we have a new UID that needs to be merged in */
-
-        folder_add_uid(folder, im->uid);
-        folder_add_modseq(folder, im->modseq);
-        if (query->sortcrit)
-            msgno_list[nmsgs++] = msgno;
-        /* track first and last for MIN/MAX queries */
-        if (!folder->first_modseq) folder->first_modseq = im->modseq;
-        folder->last_modseq = im->modseq;
-    }
-
-    /* msgno_list contains only the MSNs for newly
-     * checked messages */
-    if (query->sortcrit && nmsgs)
-        query_load_msgdata(query, folder, state, msgno_list, nmsgs);
 
     /* sort partnums by uid */
     if (dynarray_size(&folder->partnums)) {
@@ -590,12 +742,6 @@ static void subquery_post_enginesearch(const char *key, void *data, void *rock)
     }
 
     folder->found_dirty = 0;
-    r = 0;
-
-out:
-    query_end_index(query, &state);
-    free(msgno_list);
-    if (r) query->error = r;
 }
 
 static int subquery_post_excluded(const mbentry_t *mbentry, void *rock)
@@ -812,30 +958,10 @@ static int subquery_run_one_folder(search_query_t *query,
                                    const char *mboxname,
                                    search_expr_t *e)
 {
-    struct index_state *state = NULL;
-    unsigned msgno;
-    search_folder_t *folder = NULL;
-    unsigned nmsgs = 0;
-    unsigned *msgno_list = NULL;
-    int r = 0;
-
-    if (query->verbose) {
-        char *s = search_expr_serialise(e);
-        syslog(LOG_INFO, "Folder %s: running folder scan subquery: %s",
-                mboxname, s);
-        free(s);
-    }
-    if (query->sortcrit && query->verbose) {
-        char *s = sortcrit_as_string(query->sortcrit);
-        syslog(LOG_INFO, "Folder %s: loading MsgData for sort criteria %s",
-                mboxname, s);
-        free(s);
-    }
-
     // check if we want to process this mailbox
     if (query->checkfolder &&
         !query->checkfolder(mboxname, query->checkfolderrock)) {
-        goto out;
+        return 0;
     }
 
     modseq_t sincemodseq = _get_sincemodseq(e);
@@ -844,81 +970,10 @@ static int subquery_run_one_folder(search_query_t *query,
         int r = status_lookup_mboxname(mboxname, query->state->userid,
                                        STATUS_HIGHESTMODSEQ, &sdata);
         // if unchangedsince, then we can skip the index query
-        if (!r && sdata.highestmodseq <= sincemodseq) goto out;
+        if (!r && sdata.highestmodseq <= sincemodseq) return 0;
     }
 
-    r = query_begin_index(query, mboxname, &state);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        /* Silently swallow mailboxes which have been deleted, renamed,
-         * or had their ACL changed to prevent us reading them, after
-         * the index was constructed [IRIS-2469].  */
-        r = 0;
-        goto out;
-    }
-    if (r) goto out;
-
-    if (!state->exists) goto out;
-
-    search_expr_internalise(state, e);
-
-    if (query->sortcrit)
-        msgno_list = (unsigned *) xmalloc(state->exists * sizeof(unsigned));
-
-    /* One pass through the folder's message list */
-    for (msgno = 1 ; msgno <= state->exists ; msgno++) {
-        struct index_map *im = &state->map[msgno-1];
-
-        if (!(msgno % 128)) {
-            r = cmd_cancelled(!query->ignore_timer);
-            if (r) goto out;
-        }
-
-        /* can happen if we didn't "tellchanges" yet */
-        if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED) && !query->want_expunged)
-            continue;
-
-        /* run the search program */
-        if (!index_search_evaluate(state, e, msgno))
-            continue;
-
-        if (!folder) {
-            folder = query_get_valid_folder(query, mboxname, state->uidvalidity);
-            if (!folder) {
-                if (query->checkfolder) {
-                    /* filtered out */
-                    continue;
-                }
-                else {
-                    r = IMAP_INTERNAL;
-                    goto out;   /* can't happen */
-                }
-            }
-        }
-
-        /* moot if already in the uids set */
-        if (bv_isset(&folder->uids, im->uid))
-            continue;
-
-        folder_add_uid(folder, im->uid);
-        folder_add_modseq(folder, im->modseq);
-
-        if (query->sortcrit)
-            msgno_list[nmsgs++] = msgno;
-
-        /* track first and last for MIN/MAX queries */
-        if (!folder->first_modseq) folder->first_modseq = im->modseq;
-        folder->last_modseq = im->modseq;
-    }
-
-    if (query->sortcrit && nmsgs)
-        query_load_msgdata(query, folder, state, msgno_list, nmsgs);
-
-    r = 0;
-
-out:
-    if (state) query_end_index(query, &state);
-    free(msgno_list);
-    return r;
+    return _subquery_run_one_folder(query, NULL, NULL, mboxname, e);
 }
 
 static void subquery_run_folder(const char *key, void *data, void *rock)

@@ -633,7 +633,7 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
     static struct buf opt;
 
     /* Client specified source opts, so clear default of "selected" */
-    searchargs->filter = 0;
+    searchargs->multi.filter = 0;
 
     c = prot_getc(pin);
     if (c != '(') {
@@ -649,31 +649,31 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
 
         lcase(opt.s);
         if (!strcmp(opt.s, "selected")) {
-            searchargs->filter |= SEARCH_SOURCE_SELECTED;
+            searchargs->multi.filter |= SEARCH_SOURCE_SELECTED;
         }
         else if (!strcmp(opt.s, "inboxes")) {
-            searchargs->filter |= SEARCH_SOURCE_INBOXES;
+            searchargs->multi.filter |= SEARCH_SOURCE_INBOXES;
         }
         else if (!strcmp(opt.s, "personal")) {
-            searchargs->filter |= SEARCH_SOURCE_PERSONAL;
+            searchargs->multi.filter |= SEARCH_SOURCE_PERSONAL;
         }
         else if (!strcmp(opt.s, "subscribed")) {
-            searchargs->filter |= SEARCH_SOURCE_SUBSCRIBED;
+            searchargs->multi.filter |= SEARCH_SOURCE_SUBSCRIBED;
         }
         else if (!strcmp(opt.s, "subtree")) {
-            searchargs->filter |= SEARCH_SOURCE_SUBTREE;
-            c = get_search_source_mboxes(pin, pout,
-                                         searchargs, &searchargs->subtree);
+            searchargs->multi.filter |= SEARCH_SOURCE_SUBTREE;
+            c = get_search_source_mboxes(pin, pout, searchargs,
+                                         &searchargs->multi.subtree);
         }
         else if (!strcmp(opt.s, "subtree-one")) {
-            searchargs->filter |= SEARCH_SOURCE_SUBTREE_ONE;
-            c = get_search_source_mboxes(pin, pout,
-                                         searchargs, &searchargs->subtree_one);
+            searchargs->multi.filter |= SEARCH_SOURCE_SUBTREE_ONE;
+            c = get_search_source_mboxes(pin, pout, searchargs,
+                                         &searchargs->multi.subtree_one);
         }
         else if (!strcmp(opt.s, "mailboxes")) {
-            searchargs->filter |= SEARCH_SOURCE_MAILBOXES;
-            c = get_search_source_mboxes(pin, pout,
-                                         searchargs, &searchargs->mailboxes);
+            searchargs->multi.filter |= SEARCH_SOURCE_MAILBOXES;
+            c = get_search_source_mboxes(pin, pout, searchargs,
+                                         &searchargs->multi.mailboxes);
         }
         else {
             prot_printf(pout,
@@ -708,7 +708,7 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
                                     struct searchargs *searchargs)
 {
     int c;
-    static struct buf opt;
+    static struct buf opt, arg;
 
     c = prot_getc(pin);
     if (c != '(') {
@@ -740,6 +740,21 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
         else if (!strcmp(opt.s, "relevancy")) { /* RFC 6203 */
             searchargs->returnopts |= SEARCH_RETURN_RELEVANCY;
         }
+        else if (!strcmp(opt.s, "partial")) {   /* RFC 9394 */
+            int r = -1;
+
+            if (c == ' ') {
+                c = getword(pin, &arg);
+                r = imparse_range(arg.s, &searchargs->partial.range);
+            }
+            if (r) {
+                prot_printf(pout, "%s BAD Invalid range in Search\r\n",
+                            searchargs->tag);
+                goto bad;
+            }
+
+            searchargs->returnopts |= SEARCH_RETURN_PARTIAL;
+        }
         else {
             prot_printf(pout,
                         "%s BAD Invalid Search return option %s\r\n",
@@ -749,13 +764,25 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
 
     } while (c == ' ');
 
-    if (!(searchargs->returnopts & ~(SEARCH_RETURN_SAVE|SEARCH_RETURN_RELEVANCY))) {
+    if (!(searchargs->returnopts & ~(SEARCH_RETURN_SAVE | SEARCH_RETURN_RELEVANCY))) {
         /* RFC 4731:
          * If the list of result options is empty, that requests the server to
          * return an ESEARCH response instead of the SEARCH response.  This is
          * equivalent to "(ALL)".
          */
         searchargs->returnopts |= SEARCH_RETURN_ALL;
+    }
+    else if ((searchargs->returnopts & SEARCH_RETURN_ALL) &&
+             (searchargs->returnopts & SEARCH_RETURN_PARTIAL)) {
+        /* RFC 9394, Section 3.1:
+         * A single command MUST NOT contain more than one PARTIAL or ALL
+         * search return option; that is, either one PARTIAL, one ALL,
+         * or neither PARTIAL nor ALL is allowed.
+         */
+        prot_printf(pout,
+                    "%s BAD Invalid return options in Search\r\n",
+                    searchargs->tag);
+        goto bad;
     }
 
     if (c != ')') {

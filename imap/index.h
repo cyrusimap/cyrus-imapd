@@ -138,7 +138,13 @@ struct index_state {
     int want_expunged;
     unsigned num_expunged;
     message_t *m;
-    seqset_t *searchres; /* RFC 5182 search results */
+    seqset_t *searchres; /* RFC 5182 SEARCH results */
+    struct {             /* RFC 9394 last SEARCH PARTIAL (to inform next one) */
+        char *expr;
+        range_t range;
+        uint32_t last_match;
+        uint64_t highestmodseq; /* of the folder */
+    } last_partial;
 };
 
 struct copyargs {
@@ -238,6 +244,13 @@ enum index_changes_flags
     TELL_SILENT             = (1<<3),
 };
 
+struct progress_rock {
+    void (*cb)(unsigned count, unsigned total, void *rock);
+    const char *tag;
+    time_t last_resp;
+    unsigned no_count : 1;
+};
+
 /* non-locking, non-updating - just do a fetch on the state
  * we already have */
 int index_fetchresponses(struct index_state *state,
@@ -259,7 +272,8 @@ extern int index_run_annotator(struct index_state *state,
 extern int index_warmup(struct mboxlist_entry *, unsigned int warmup_flags,
                         seqset_t *uids);
 extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit,
-                      struct searchargs *searchargs, int usinguid);
+                      struct searchargs *searchargs, int usinguid,
+                      struct progress_rock *prock);
 extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
                       struct searchargs *searchargs,
                       const struct windowargs * windowargs);
@@ -274,10 +288,11 @@ extern int index_convupdates(struct index_state *state, struct sortcrit *sortcri
                       struct searchargs *searchargs,
                       const struct windowargs * windowargs);
 extern int index_thread(struct index_state *state, int algorithm,
-                        struct searchargs *searchargs, int usinguid);
+                        struct searchargs *searchargs, int usinguid,
+                        struct progress_rock *prock);
 extern int index_search(struct index_state *state,
-                        struct searchargs *searchargs,
-                        int usinguid);
+                        struct searchargs *searchargs, int usinguid,
+                        struct progress_rock *prock);
 extern int index_scan(struct index_state *state,
                       const char *contents);
 extern int index_copy(struct index_state *state,
@@ -289,7 +304,8 @@ extern int index_copy(struct index_state *state,
                       struct namespace *namespace,
                       int isadmin,
                       int ismove,
-                      int ignorequota);
+                      int ignorequota,
+                      struct progress_rock *prock);
 extern int find_thread_algorithm(char *arg);
 
 extern int index_open(const char *name, struct index_init *init,

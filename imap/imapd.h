@@ -46,6 +46,7 @@
 #include "annotate.h"
 #include "bufarray.h"
 #include "hash.h"
+#include "imparse.h"
 #include "mailbox.h"
 #include "message.h"
 #include "prot.h"
@@ -107,6 +108,8 @@ struct fetchargs {
     struct auth_state *authstate;
     hash_table *cidhash;          /* for XCONVFETCH */
     struct conversations_state *convstate; /* for FETCH_MAILBOXIDS */
+
+    range_t partial;              /* For PARTIAL */
 };
 
 /* Bitmasks for fetchitems */
@@ -225,7 +228,8 @@ enum {
     SEARCH_RETURN_ALL =         (1<<2),
     SEARCH_RETURN_COUNT =       (1<<3),
     SEARCH_RETURN_SAVE =        (1<<4),  /* RFC 5182 */
-    SEARCH_RETURN_RELEVANCY =   (1<<5)   /* RFC 6203 */
+    SEARCH_RETURN_RELEVANCY =   (1<<5),  /* RFC 6203 */
+    SEARCH_RETURN_PARTIAL =     (1<<6),  /* RFC 9394 */
 };
 
 /* Things that may be searched for */
@@ -245,13 +249,22 @@ struct searchargs {
     int isadmin;
 
     /* For MULTISEARCH */
-    unsigned filter;
-    strarray_t subtree;
-    strarray_t subtree_one;
-    strarray_t mailboxes;
+    struct {
+        unsigned filter;
+        strarray_t subtree;
+        strarray_t subtree_one;
+        strarray_t mailboxes;
+    } multi;
 
     /* For SEARCHRES */
     ptrarray_t result_vars;
+
+    /* For PARTIAL */
+    struct {
+        range_t range;
+        uint32_t start_msgno; /* based on last PARTIAL of same search */
+        uint32_t start_count; /* based on last PARTIAL of same search */
+    } partial;
 };
 
 /* Windowing arguments for the XCONVSORT command */
@@ -434,21 +447,22 @@ extern struct protstream *imapd_out, *imapd_in;
 
 struct client_behavior_registry {
     unsigned int did_annotate     : 1;   /* used SETANNOTATION or FETCH-ed ANNOTATION */
+    unsigned int did_binary       : 1;   /* fetched BINARY or APPEND literal8  */
+    unsigned int did_catenate     : 1;   /* used CATENATE on APPEND  */
     unsigned int did_condstore    : 1;   /* gave CONDSTORE on SELECT */
     unsigned int did_compress     : 1;   /* started COMPRESS */
     unsigned int did_idle         : 1;   /* used IDLE */
+    unsigned int did_imap4rev2    : 1;   /* used ENABLE IMAP4rev2  */
     unsigned int did_metadata     : 1;   /* called GETMETADATA or SETMETADATA */
     unsigned int did_multisearch  : 1;   /* called ESEARCH */
     unsigned int did_move         : 1;   /* used MOVE */
     unsigned int did_notify       : 1;   /* used NOTIFY */
+    unsigned int did_partial      : 1;   /* used SEARCH/FETCH PARTIAL */
     unsigned int did_preview      : 1;   /* fetched PREVIEW */
     unsigned int did_qresync      : 1;   /* gave QRESYNC on SELECT */
     unsigned int did_savedate     : 1;   /* fetched SAVEDATE */
     unsigned int did_searchres    : 1;   /* used SAVE on SEARCH */
     unsigned int did_replace      : 1;   /* used REPLACE */
-    unsigned int did_imap4rev2    : 1;   /* used ENABLE IMAP4rev2  */
-    unsigned int did_binary       : 1;   /* fetched BINARY or APPEND literal8  */
-    unsigned int did_catenate     : 1;   /* used CATENATE on APPEND  */
     unsigned int did_uidonly      : 1;   /* used ENABLE UIDONLY  */
 };
 

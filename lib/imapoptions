@@ -1191,6 +1191,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    Using userid+ (with an empty namespace) will list only subscribed
    mailboxes. */
 
+{ "imap_inprogress_interval", "10s", DURATION, "UNRELEASED" }
+/* The interval after which the server will send an "INPROGRESS"
+   response code to the client during a long-running imap command
+   (e.g. search, copy).
+   The default is 10 seconds.
+   The minimum value is 0, which will disable "INPROGRESS" response codes. */
+
 { "imipnotifier", NULL, STRING, "3.0.0" }
 /* Notifyd(8) method to use for "IMIP" notifications which are based on
    the RFC 6047.  If not set, "IMIP" notifications are disabled. */

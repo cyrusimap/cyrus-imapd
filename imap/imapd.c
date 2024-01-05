@@ -414,6 +414,7 @@ static struct capa_struct base_capabilities[] = {
     { "IDLE",                  CAPA_POSTAUTH|CAPA_STATE,         /* RFC 2177 */
       { .statep = &imapd_idle_enabled }                       },
     { "IMAPSIEVE=",            0, /* not implemented */ { 0 } }, /* RFC 6785 */
+    { "INPROGRESS",            CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-inprogress */
     { "LANGUAGE",              0, /* not implemented */ { 0 } }, /* RFC 5255 */
     { "LIST-EXTENDED",         CAPA_POSTAUTH,           { 0 } }, /* RFC 5258 */
     { "LIST-METADATA",         CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-list-metadata */
@@ -437,7 +438,7 @@ static struct capa_struct base_capabilities[] = {
     { "NOTIFY",                CAPA_POSTAUTH|CAPA_STATE,         /* RFC 5465 */
       { .statep = &imapd_notify_enabled }                     },
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
-    { "PARTIAL",               0, /* not implemented */ { 0 } }, /* RFC 9394 */
+    { "PARTIAL",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9394 */
     { "PREVIEW",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8970 */
     { "QRESYNC",               CAPA_POSTAUTH,           { 0 } }, /* RFC 7162 */
     { "QUOTA",                 CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
@@ -889,7 +890,7 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
-                        "%s",
+                        "%s%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
@@ -908,13 +909,14 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_move        ? " move=<1>"         : "",
                         client_behavior.did_multisearch ? " multisearch=<1>"  : "",
                         client_behavior.did_notify      ? " notify=<1>"       : "",
-                        client_behavior.did_preview     ? " preview=<1>"      : "",
+                        client_behavior.did_partial     ? " partial=<1>"      : "",
 
+                        client_behavior.did_preview     ? " preview=<1>"      : "",
                         client_behavior.did_qresync     ? " qresync=<1>"      : "",
                         client_behavior.did_replace     ? " replace=<1>"      : "",
                         client_behavior.did_savedate    ? " savedate=<1>"     : "",
-                        client_behavior.did_searchres   ? " searchres=<1>"    : "",
 
+                        client_behavior.did_searchres   ? " searchres=<1>"    : "",
                         client_behavior.did_uidonly     ? " uidonly=<1>"      : "");
 }
 
@@ -5001,6 +5003,8 @@ static int parse_fetch_args(const char *tag, const char *cmd,
     struct octetinfo oi;
     strarray_t *newfields = strarray_new();
 
+    fa->partial.high = UINT32_MAX;
+
     c = getword(imapd_in, &fetchatt);
     if (c == '(' && !fetchatt.s[0]) {
         inlist = 1;
@@ -5487,6 +5491,19 @@ badannotation:
                      !strcmp(fetchatt.s, "VANISHED")) {
                 fa->vanished = 1;
             }
+            else if (!strcmp(fetchatt.s, "PARTIAL")) {   /* RFC 9394 */
+                int r = -1;
+
+                if (c == ' ') {
+                    c = getword(imapd_in, &fieldname);
+                    r = imparse_range(fieldname.s, &fa->partial);
+                }
+                if (r) {
+                    prot_printf(imapd_out, "%s BAD Invalid range in %s\r\n",
+                                tag, cmd);
+                    goto freeargs;
+                }
+            }
             else {
                 prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
                             tag, cmd, fetchatt.s);
@@ -5618,6 +5635,9 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
 
     if (fetchargs.binsections || fetchargs.sizesections)
         client_behavior.did_binary = 1;
+
+    if (fetchargs.partial.low)
+        client_behavior.did_partial = 1;
 
     r = index_fetch(imapd_index, sequence, usinguid, &fetchargs,
                 &fetchedsomething);
@@ -6414,6 +6434,33 @@ notflagsdammit:
     free(modified);
 }
 
+static void progress_cb(unsigned count, unsigned total, void *rock)
+{
+    struct progress_rock *prock = (struct progress_rock *) rock;
+    static time_t interval = -1;
+    time_t now;
+
+    if (interval == -1) {
+        interval = config_getduration(IMAPOPT_IMAP_INPROGRESS_INTERVAL, 's');
+        if (interval < 0) interval = 0;
+    }
+
+    now = time(0);
+    if (interval && now - prock->last_resp > interval) {
+        prock->last_resp = now;
+
+        prot_printf(imapd_out, "* OK [INPROGRESS (\"%s\" ", prock->tag);
+        if (prock->no_count)
+            prot_puts(imapd_out, "NIL NIL");
+        else {
+            prot_printf(imapd_out, "%u ", count);
+            prot_printf(imapd_out, total ? "%u" : "NIL", total);
+        }
+        prot_puts(imapd_out, ")] Still processing...\r\n");
+        prot_flush(imapd_out);
+    }
+}
+
 struct multisearch_rock {
     struct searchargs *args;
     search_expr_t *expr;  // pristine copy
@@ -6422,6 +6469,7 @@ struct multisearch_rock {
     int root_depth;       // for subtree-one
     int *n;
     struct index_init init;
+    struct progress_rock prock;
 };
 
 static int multisearch_cb(const mbentry_t *mbentry, void *rock)
@@ -6462,8 +6510,11 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
     if (mrock->args->root) search_expr_free(mrock->args->root);
     mrock->args->root = search_expr_duplicate(mrock->expr);
 
-    *mrock->n += index_search(state, mrock->args, /*usinguid*/1);
+    *mrock->n += index_search(state, mrock->args, /*usinguid*/1, &mrock->prock);
     index_close(&state);
+
+    /* Reset inprogress timer after ESEARCH response */
+    mrock->prock.last_resp =  time(0);
 
     /* Keep track of each mailbox we search */
     hash_insert(mbentry->name, (void *) 1, &mrock->mailboxes);
@@ -6506,9 +6557,6 @@ static void cmd_search(char *tag, char *cmd)
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
 
-    if (searchargs->returnopts & SEARCH_RETURN_SAVE)
-      client_behavior.did_searchres = 1;
-
     /* Set FUZZY search according to config and quirks */
     static const char *annot = IMAP_ANNOT_NS "search-fuzzy-always";
     char *inbox = mboxname_user_mbox(imapd_userid, NULL);
@@ -6534,29 +6582,34 @@ static void cmd_search(char *tag, char *cmd)
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) {
         eatline(imapd_in, ' ');
-        freesearchargs(searchargs);
-        return;
+        goto done;
     }
 
     if (!IS_EOL(c, imapd_in)) {
-        prot_printf(imapd_out, "%s BAD Unexpected extra arguments to Search\r\n", tag);
+        prot_printf(imapd_out,
+                    "%s BAD Unexpected extra arguments to Search\r\n", tag);
         eatline(imapd_in, c);
-        freesearchargs(searchargs);
-        return;
+        goto done;
     }
 
     if (searchargs->charset == CHARSET_UNKNOWN_CHARSET) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag,
-               error_message(IMAP_UNRECOGNIZED_CHARSET));
+                    error_message(IMAP_UNRECOGNIZED_CHARSET));
         goto done;
     }
+
+    if (searchargs->returnopts & SEARCH_RETURN_SAVE)
+        client_behavior.did_searchres = 1;
+
+    if (searchargs->returnopts & SEARCH_RETURN_PARTIAL)
+        client_behavior.did_partial = 1;
 
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
 
-    if (searchargs->filter) {
+    if (searchargs->multi.filter) {
         /* Multisearch */
-        if ((searchargs->filter & SEARCH_SOURCE_SELECTED) && !imapd_index) {
+        if ((searchargs->multi.filter & SEARCH_SOURCE_SELECTED) && !imapd_index) {
             /* RFC 7377: 2.2
              * If the source options include (or default to) "selected", the IMAP
              * session MUST be in "selected" state.
@@ -6565,19 +6618,27 @@ static void cmd_search(char *tag, char *cmd)
                         "%s BAD Please select a mailbox first\r\n", tag);
             goto done;
         }
-        if ((searchargs->filter & ~SEARCH_SOURCE_SELECTED) &&
-            (searchargs->returnopts & SEARCH_RETURN_SAVE)) {
-            /* RFC 7377: 2.2
-             * If the server supports the SEARCHRES [RFC5182] extension, then the
-             * "SAVE" result option is valid only if "selected" is specified or
-             * defaulted to as the sole mailbox to be searched.  If any source
-             * option other than "selected" is specified, the ESEARCH command MUST
-             * return a "BAD" result.
-             */
-            prot_printf(imapd_out,
-                        "%s BAD Search results requested for unselected mailbox(es)\r\n",
-                        tag);
-            goto done;
+        if (searchargs->multi.filter & ~SEARCH_SOURCE_SELECTED) {
+            if (searchargs->returnopts & SEARCH_RETURN_SAVE) {
+                /* RFC 7377: 2.2
+                 * If the server supports the SEARCHRES [RFC5182] extension,
+                 * then the "SAVE" result option is valid only if "selected"
+                 * is specified or defaulted to as the sole mailbox to be
+                 * searched.
+                 * If any source option other than "selected" is specified,
+                 * the ESEARCH command MUST return a "BAD" result.
+                 */
+                prot_printf(imapd_out,
+                            "%s BAD Search results requested for unselected mailbox(es)\r\n",
+                            tag);
+                goto done;
+            }
+            if (searchargs->returnopts & SEARCH_RETURN_PARTIAL) {
+                prot_printf(imapd_out,
+                            "%s NO [CANNOT] Unsupported Search criteria\r\n",
+                            tag);
+                goto done;
+            }
         }
 
         struct multisearch_rock mrock = {
@@ -6587,7 +6648,9 @@ static void cmd_search(char *tag, char *cmd)
               .authstate    = imapd_authstate,
               .out          = imapd_out,
               .examine_mode = 1
-            }
+            },
+            { &progress_cb, tag, time(0),
+              searchargs->multi.filter != SEARCH_SOURCE_SELECTED }
         };
 
         construct_hash_table(&mrock.mailboxes, 100, 0);  // arbitrary size
@@ -6604,12 +6667,16 @@ static void cmd_search(char *tag, char *cmd)
         for (mrock.filter = SEARCH_SOURCE_SELECTED;
              mrock.filter <= SEARCH_SOURCE_MAILBOXES; mrock.filter <<= 1) {
 
-            if (!(searchargs->filter & mrock.filter)) continue;
+            if (!(searchargs->multi.filter & mrock.filter)) continue;
 
             switch (mrock.filter) {
             case SEARCH_SOURCE_SELECTED:
                 if (!index_check(imapd_index, 0)) {  /* update the index */
-                    n += index_search(imapd_index, searchargs, /* usinguid */1);
+                    n += index_search(imapd_index, searchargs, /* usinguid */1,
+                                      &mrock.prock);
+
+                    /* Reset inprogress timer after ESEARCH response */
+                    mrock.prock.last_resp = time(0);
 
                     hash_insert(index_mboxname(imapd_index),
                                 (void *) 1, &mrock.mailboxes);
@@ -6633,17 +6700,17 @@ static void cmd_search(char *tag, char *cmd)
 
                 switch (mrock.filter) {
                 case SEARCH_SOURCE_SUBTREE:
-                    mailboxes = &searchargs->subtree;
+                    mailboxes = &searchargs->multi.subtree;
                     break;
 
                 case SEARCH_SOURCE_SUBTREE_ONE:
-                    mailboxes = &searchargs->subtree_one;
+                    mailboxes = &searchargs->multi.subtree_one;
                     break;
 
                 case SEARCH_SOURCE_MAILBOXES:
                     /* Just the mailbox - no children */
                     flags = MBOXTREE_SKIP_CHILDREN;
-                    mailboxes = &searchargs->mailboxes;
+                    mailboxes = &searchargs->multi.mailboxes;
                     break;
                 }
                 
@@ -6669,6 +6736,8 @@ static void cmd_search(char *tag, char *cmd)
         free_hash_table(&mrock.mailboxes, NULL);
     }
     else {
+        struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
+
         if ((client_capa & CAPA_IMAP4REV2) && !searchargs->returnopts) {
             /* RFC 9051: Appendix E.4
              * SEARCH command now requires to return the ESEARCH response
@@ -6677,7 +6746,7 @@ static void cmd_search(char *tag, char *cmd)
             searchargs->returnopts = SEARCH_RETURN_ALL;
         }
 
-        n = index_search(imapd_index, searchargs, usinguid);
+        n = index_search(imapd_index, searchargs, usinguid, &prock);
     }
 
     if (searchargs->state & GETSEARCH_MODSEQ)
@@ -6750,7 +6819,9 @@ static void cmd_sort(char *tag, int usinguid)
         goto error;
     }
 
-    n = index_sort(imapd_index, sortcrit, searchargs, usinguid);
+    struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
+
+    n = index_sort(imapd_index, sortcrit, searchargs, usinguid, &prock);
 
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("SORT MODSEQ");
@@ -7169,7 +7240,9 @@ static void cmd_thread(char *tag, int usinguid)
         return;
     }
 
-    n = index_thread(imapd_index, alg, searchargs, usinguid);
+    struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
+
+    n = index_thread(imapd_index, alg, searchargs, usinguid, &prock);
 
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("THREAD MODSEQ");
@@ -7321,11 +7394,13 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 
     /* local mailbox -> local mailbox */
     if (!r) {
+        struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
+
         r = index_copy(imapd_index, sequence, usinguid, intname,
                        &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
                        &imapd_namespace,
                        (imapd_userisadmin || imapd_userisproxyadmin), ismove,
-                       ignorequota);
+                       ignorequota, &prock);
     }
 
     if (ismove && copyuid && !r) {
@@ -8079,6 +8154,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
 struct renrock
 {
+    const char *tag;
     const struct namespace *namespace;
     int ol;
     int nl;
@@ -8169,8 +8245,10 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
 
         // non-standard output item, but it helps give progress
 	if (text->noisy) {
-           prot_printf(imapd_out, "* OK rename %s %s\r\n",
-                       oldextname, newextname);
+            prot_printf(imapd_out,
+                        "* OK [INPROGRESS (\"%s\" NIL NIL)] rename %s %s\r\n",
+                        text->tag, oldextname, newextname);
+            prot_flush(imapd_out);
 	}
     }
 
@@ -8459,11 +8537,15 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
 
         /* move all the emails to the new folder */
         char *copyuid = NULL;
-        if (!r) r = index_copy(state, "1:*", 1 /*usinguid*/, newmailboxname,
-                               &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
-                               &imapd_namespace,
-                               (imapd_userisadmin || imapd_userisproxyadmin), 1/*ismove*/,
-                               1/*ignorequota*/);
+        if (!r) {
+            struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
+
+            r = index_copy(state, "1:*", 1 /*usinguid*/, newmailboxname,
+                           &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
+                           &imapd_namespace,
+                           (imapd_userisadmin || imapd_userisproxyadmin), 1/*ismove*/,
+                           1/*ignorequota*/, &prock);
+        }
         free(copyuid); // we don't care, but the API requires it
 
         if (state != imapd_index)
@@ -8513,6 +8595,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
         strcat(nmbn, ".");
 
         /* setup the rock */
+        rock.tag = tag;
         rock.namespace = &imapd_namespace;
         rock.found = 0;
         rock.newmailboxname = nmbn;
@@ -8595,17 +8678,19 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
 
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
-        if (noisy) {
-            prot_printf(imapd_out, "* OK rename %s %s\r\n",
-                        oldextname, newextname);
-        }
-        prot_flush(imapd_out);
+	if (noisy) {
+            prot_printf(imapd_out,
+                        "* OK [INPROGRESS (\"%s\" NIL NIL)] rename %s %s\r\n",
+                        tag, oldextname, newextname);
+            prot_flush(imapd_out);
+	}
 
 submboxes:
         strcat(oldmailboxname, ".");
         strcat(newmailboxname, ".");
 
         /* setup the rock */
+        rock.tag = tag;
         rock.namespace = &imapd_namespace;
         rock.newmailboxname = newmailboxname;
         rock.ol = omlen + 1;
