@@ -395,7 +395,7 @@ static int zstd_compress(struct transaction_t *txn __attribute__((unused)),
 
 static const char tls_message[] =
     HTML_DOCTYPE
-    "<html>\n<head>\n<title>TLS Required</title>\n</head>\n" \
+    "<html style='color-scheme:dark light'>\n<head>\n<title>TLS Required</title>\n</head>\n" \
     "<body>\n<h2>TLS is required prior to authentication</h2>\n" \
     "Use <a href=\"%s\">%s</a> instead.\n" \
     "</body>\n</html>\n";
@@ -3906,7 +3906,7 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
         }
 
         buf_printf_markup(html, level, HTML_DOCTYPE);
-        buf_printf_markup(html, level++, "<html>");
+        buf_printf_markup(html, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(html, level++, "<head>");
         buf_printf_markup(html, level, "<title>%s</title>",
                           error_message(code));
@@ -4709,7 +4709,7 @@ static int list_well_known(struct transaction_t *txn)
         /* Start HTML */
         buf_reset(&body);
         buf_printf_markup(&body, level, HTML_DOCTYPE);
-        buf_printf_markup(&body, level++, "<html>");
+        buf_printf_markup(&body, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&body, level++, "<head>");
         buf_printf_markup(&body, level,
                           "<title>%s</title>", "Well-Known Locations");
