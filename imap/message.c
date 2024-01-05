@@ -2018,7 +2018,7 @@ static void message_parse_received_date(const char *hdr, char **hdrp)
   /* No date string after ; - treat as non-existent */
   if (curp[1] == '\0') {
       free(hdrbuf);
-      *hdrp = NULL;
+      *hdrp = xzmalloc(1);
       return;
   }
 
