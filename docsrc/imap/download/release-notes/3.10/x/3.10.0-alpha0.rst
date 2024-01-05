@@ -1,0 +1,48 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.10.0 Release Notes
+===============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.10.0/cyrus-imapd-3.10.0.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.10.0/cyrus-imapd-3.10.0.tar.gz.sig
+
+.. _relnotes-3.10.0_changes:
+
+Major changes since the 3.8 series
+==================================
+
+* None so far
+
+.. _relnotes_3.10.0-alpha0_storage_changes:
+
+Storage changes
+===============
+
+* None in 3.10.  But if your upgrade is skipping over 3.6 and 3.8, please do
+  not miss :ref:`3.6.0 Storage changes <relnotes_3.6.0_storage_changes>`
+  and :ref:`3.8.0 Storage changes <relnotes_3.8.0_storage_changes>`
+
+Updates to default configuration
+================================
+
+The :cyrusman:`cyr_info(8)` `conf`, `conf-all` and `conf-default` subcommands
+accept an `-s <version>` argument to highlight :cyrusman:`imapd.conf(5)`
+options that are new or whose behaviour has changed since the specified
+version.  We recommend using this when evaluating a new Cyrus version to
+check which configuration options you will need to examine and maybe set or
+change during the process.
+
+* None so far
+
+Security fixes
+==============
+
+* None so far
+
+Significant bugfixes
+====================
+
+* None so far
