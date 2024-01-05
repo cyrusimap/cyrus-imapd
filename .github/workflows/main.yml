@@ -6,6 +6,7 @@ on:
     branches:
       - master
       - main
+      - cyrus-imapd-3.10
       - cyrus-imapd-3.8
       - cyrus-imapd-3.6
       - cyrus-imapd-3.4
