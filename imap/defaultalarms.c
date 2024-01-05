@@ -556,11 +556,10 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
     strarray_fini(&related_uids);
 }
 
-static void insert_alarms(struct defaultalarms *defalarms, icalcomponent *ical, int set_atag)
+EXPORTED void defaultalarms_insert(struct defaultalarms *defalarms,
+                                   icalcomponent *ical,
+                                   int set_atag)
 {
-    if (!defalarms || (!defalarms->with_time.ical && !defalarms->with_date.ical))
-        return;
-
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
     if (kind != ICAL_VEVENT_COMPONENT && kind != ICAL_VTODO_COMPONENT)
@@ -574,19 +573,7 @@ static void insert_alarms(struct defaultalarms *defalarms, icalcomponent *ical, 
         // Remove any atag that was set before
         icalcomponent_set_usedefaultalerts(comp, 1, NULL);
 
-        // Determine which default alarms to add
-        int is_date;
-        if (kind == ICAL_VTODO_COMPONENT) {
-            if (icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))
-                is_date = icalcomponent_get_dtstart(comp).is_date;
-            else if (icalcomponent_get_first_property(comp, ICAL_DUE_PROPERTY))
-                is_date = icalcomponent_get_due(comp).is_date;
-            else
-                is_date = 1;
-        }
-        else is_date = icalcomponent_get_dtstart(comp).is_date;
-
-        struct defaultalarms_record *rec = is_date ?
+        struct defaultalarms_record *rec = icalcomponent_temporal_is_date(comp) ?
             &defalarms->with_date : &defalarms->with_time;
 
         if (set_atag)
@@ -596,113 +583,18 @@ static void insert_alarms(struct defaultalarms *defalarms, icalcomponent *ical, 
     }
 }
 
-EXPORTED void defaultalarms_insert(struct defaultalarms *defalarms, icalcomponent *ical)
+EXPORTED int defaultalarms_matches_atag(icalcomponent *comp, const char *atag)
 {
-    insert_alarms(defalarms, ical, 0);
-}
+    int matches_atag = 0;
 
-EXPORTED void defaultalarms_caldav_get(struct defaultalarms *defalarms,
-                                       icalcomponent *ical)
-{
-    insert_alarms(defalarms, ical, 1);
-}
+    icalcomponent *mycomp = icalcomponent_clone(comp);
+    icalcomponent_normalize_x(mycomp);
+    char *myatag = generate_atag(mycomp);
+    matches_atag = !strcmpsafe(myatag, atag);
+    icalcomponent_free(mycomp);
+    free(myatag);
 
-
-EXPORTED void defaultalarms_caldav_put(struct defaultalarms *defalarms,
-                                       icalcomponent *ical, int is_update)
-{
-    // Check for sane input
-    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-    if (!comp)
-        return;
-
-    // Do nothing if event doesn't use default alarms
-    if (!icalcomponent_get_usedefaultalerts(ical))
-        return;
-
-    // Insert default alarms in new event
-    if (!is_update) {
-        insert_alarms(defalarms, ical, 0);
-        return;
-    }
-
-    // Handle update
-
-    icalcomponent_kind kind = icalcomponent_isa(comp);
-    int has_anyalarm = 0;
-    int has_useralarm = 0;
-
-    for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
-        icalcomponent *valarm;
-        for (valarm = icalcomponent_get_first_component(comp,
-                    ICAL_VALARM_COMPONENT);
-             valarm;
-             valarm = icalcomponent_get_next_component(comp,
-                 ICAL_VALARM_COMPONENT)) {
-
-            has_anyalarm = 1;
-
-            if (icalcomponent_get_first_property(valarm, ICAL_RELATEDTO_PROPERTY) ||
-                icalcomponent_get_x_property_by_name(valarm, "X-APPLE-DEFAULT-ALARM"))
-                continue;
-
-            if (icalcomponent_get_x_property_by_name(valarm, "X-JMAP-DEFAULT-ALARM"))
-                continue;
-
-            has_useralarm = 1;
-        }
-    }
-
-    // Removing all alarms or adding a user alarm disables default alarms
-    if (!has_anyalarm || has_useralarm) {
-        icalcomponent_set_usedefaultalerts(ical, 0, NULL);
-        return;
-    }
-
-    // Validate if the atag we set on this event still matches
-    // the JMAP default alarms in the event. If it doesn't, then
-    // we the client changed one or more default alarms.
-    int invalid_atag = 0;
-
-    for (comp = icalcomponent_get_first_component(ical, kind);
-         comp && !invalid_atag;
-         comp = icalcomponent_get_next_component(ical, kind)) {
-
-        // Look up the atag parameter for this component
-
-        icalproperty *prop =
-            icalcomponent_get_x_property_by_name(comp, "X-JMAP-USEDEFAULTALERTS");
-        if (!prop) continue;
-
-        const char *atag = NULL;
-        icalparameter *param;
-        for (param = icalproperty_get_first_parameter(prop, ICAL_ANY_PARAMETER);
-             param;
-             param = icalproperty_get_next_parameter(prop, ICAL_ANY_PARAMETER)) {
-
-            if (!strcasecmpsafe(icalparameter_get_xname(param), "X-JMAP-ATAG")) {
-                atag = icalparameter_get_xvalue(param);
-                break;
-            }
-        }
-
-        if (atag) {
-            icalcomponent *mycomp = icalcomponent_clone(comp);
-            icalcomponent_normalize_x(mycomp);
-            char *myatag = generate_atag(mycomp);
-            invalid_atag = !!strcmpsafe(myatag, atag);
-            icalcomponent_free(mycomp);
-            free(myatag);
-        }
-    }
-
-    if (invalid_atag) {
-        icalcomponent_set_usedefaultalerts(ical, 0, NULL);
-        return;
-    }
-
-    // Keep using default alarms
-    insert_alarms(defalarms, ical, 0);
+    return matches_atag;
 }
 
 // Migration code starts - this should be required after version 3.9

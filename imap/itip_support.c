@@ -1457,7 +1457,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         /* Inject default alarms */
         struct defaultalarms defalarms = DEFAULTALARMS_INITIALIZER;
         if (!defaultalarms_load(mailbox_name(mailbox), userid, &defalarms)) {
-            defaultalarms_insert(&defalarms, ical);
+            defaultalarms_insert(&defalarms, ical, 0);
         }
         defaultalarms_fini(&defalarms);
     }

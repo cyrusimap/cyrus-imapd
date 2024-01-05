@@ -1000,7 +1000,9 @@ EXPORTED int icalcomponent_get_usedefaultalerts(icalcomponent *comp)
     return use_defaultalerts;
 }
 
-EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use, const char *atag)
+EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp,
+                                                 int usedefaultalerts,
+                                                 const char *atag)
 {
     icalcomponent *ical = NULL;
     icalcomponent_kind kind = ICAL_NO_COMPONENT;
@@ -1028,8 +1030,10 @@ EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use, c
 
         icalproperty *xprop = icalproperty_new(ICAL_X_PROPERTY);
         icalproperty_set_x_name(xprop, "X-JMAP-USEDEFAULTALERTS");
-        icalproperty_set_value(xprop, icalvalue_new_boolean(use));
-        if (atag) icalproperty_set_xparam(xprop, "X-JMAP-ATAG", atag, 0);
+        icalproperty_set_value(xprop, icalvalue_new_boolean(usedefaultalerts));
+        if (usedefaultalerts && atag) {
+            icalproperty_set_xparam(xprop, "X-JMAP-ATAG", atag, 0);
+        }
         icalcomponent_add_property(comp, xprop);
 
         if (ical) comp = icalcomponent_get_next_component(ical, kind);
@@ -3109,6 +3113,19 @@ EXPORTED void icalcomponent_normalize_x(icalcomponent *ical)
         }
     }
 #endif
+}
+
+EXPORTED int icalcomponent_temporal_is_date(icalcomponent *comp)
+{
+    if (icalcomponent_isa(comp) == ICAL_VTODO_COMPONENT) {
+        if (icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))
+            return icalcomponent_get_dtstart(comp).is_date;
+        else if (icalcomponent_get_first_property(comp, ICAL_DUE_PROPERTY))
+            return icalcomponent_get_due(comp).is_date;
+        else
+            return 1;
+    }
+    else return icalcomponent_get_dtstart(comp).is_date;
 }
 
 

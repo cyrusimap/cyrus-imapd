@@ -5954,7 +5954,10 @@ END:VCALENDAR
 EOF
     my $res = $caldav->Request('PUT',
         "/dav/calendars/user/cassandane/Default/test.ics",
-        $ical, 'Content-Type' => 'text/calendar');
+        $ical,
+        'Content-Type' => 'text/calendar',
+        'X-Cyrus-rewrite-usedefaultalerts' => 'false',
+    );
 
     xlog $self, "Set CalDAV default alarms with VALARM having no UID";
     $imap->setmetadata("#calendars.Default",

@@ -78,6 +78,6 @@ sub test_calendarevent_get_alerts
     };
 
     my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_str_equals(JSON::true, $event->{useDefaultAlerts});
+    $self->assert_str_equals(JSON::false, $event->{useDefaultAlerts});
     $self->assert_deep_equals($alerts, $event->{alerts});
 }
