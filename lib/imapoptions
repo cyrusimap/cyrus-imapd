@@ -854,6 +854,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    specified, the server with the most free space will be used for new
    mailboxes. */
 
+{ "defaultrealm", NULL, STRING, "3.9.0" }
+/* The default realm if the user credentials don't include one. */
+
 { "deletedprefix", "DELETED", STRING, "2.3.17" }
 /*  With \fBdelete_mode\fR set to \fIdelayed\fR, the
     \fBdeletedprefix\fR setting defines the prefix for the hierarchy of
