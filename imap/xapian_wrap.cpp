@@ -728,7 +728,10 @@ static int xapian_dbw_init(xapian_dbw_t *dbw)
     dbw->term_generator = new Xapian::TermGenerator;
     dbw->term_generator->set_max_word_length(XAPIAN_MAX_TERM_LENGTH);
     /* Always enable CJK word tokenization */
-#ifdef USE_XAPIAN_CJK_WORDS
+#if defined(USE_XAPIAN_WORD_BREAKS)
+    dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_WORD_BREAKS,
+            ~Xapian::TermGenerator::FLAG_WORD_BREAKS);
+#elif defined(USE_XAPIAN_CJK_WORDS)
     dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
             ~Xapian::TermGenerator::FLAG_CJK_WORDS);
 #else
@@ -1897,7 +1900,9 @@ xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *
             if (*p > 221) //has highbit
                 return new Xapian::Query {db->parser->parse_query(
                     str,
-#ifdef USE_XAPIAN_CJK_WORDS
+#if defined(USE_XAPIAN_WORD_BREAKS)
+                    Xapian::QueryParser::FLAG_WORD_BREAKS,
+#elif defined(USE_XAPIAN_CJK_WORDS)
                     Xapian::QueryParser::FLAG_CJK_WORDS,
 #else
                     Xapian::QueryParser::FLAG_CJK_NGRAM,
@@ -2182,7 +2187,10 @@ static Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, Xapia
     if (snipgen->loose_terms) {
         /* Add loose query terms */
         term_generator.set_stemmer(stemmer);
-#ifdef USE_XAPIAN_CJK_WORDS
+#if defined(USE_XAPIAN_WORD_BREAKS)
+        term_generator.set_flags(Xapian::TermGenerator::FLAG_WORD_BREAKS,
+                ~Xapian::TermGenerator::FLAG_WORD_BREAKS);
+#elif defined(USE_XAPIAN_CJK_WORDS)
         term_generator.set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
                 ~Xapian::TermGenerator::FLAG_CJK_WORDS);
 #else
@@ -2203,7 +2211,9 @@ static Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, Xapia
         /* Add phrase queries */
         unsigned flags = Xapian::QueryParser::FLAG_PHRASE|
                          Xapian::QueryParser::FLAG_WILDCARD|
-#ifdef USE_XAPIAN_CJK_WORDS
+#if defined(USE_XAPIAN_WORD_BREAKS)
+                         Xapian::QueryParser::FLAG_WORD_BREAKS;
+#elif defined(USE_XAPIAN_CJK_WORDS)
                          Xapian::QueryParser::FLAG_CJK_WORDS;
 #else
                          Xapian::QueryParser::FLAG_CJK_NGRAM;
@@ -2267,7 +2277,9 @@ EXPORTED int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
 
         unsigned flags = Xapian::MSet::SNIPPET_EXHAUSTIVE |
                          Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH;
-#ifdef USE_XAPIAN_CJK_WORDS
+#if defined(USE_XAPIAN_WORD_BREAKS)
+        flags |= Xapian::MSet::SNIPPET_WORD_BREAKS;
+#elif defined(USE_XAPIAN_CJK_WORDS)
         flags |= Xapian::MSet::SNIPPET_CJK_WORDS;
 #endif
 

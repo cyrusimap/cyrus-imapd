@@ -668,16 +668,31 @@ if test "x$enable_xapian" != xno ; then
         AC_LINK_IFELSE(
             [AC_LANG_PROGRAM(
                 [[#include <xapian.h>]],
-                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS | Xapian::MSet::SNIPPET_CJK_WORDS; (void) cjk_flags; ]])],
+                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_WORD_BREAKS | Xapian::QueryParser::FLAG_WORD_BREAKS | Xapian::MSet::SNIPPET_WORD_BREAKS; (void) cjk_flags; ]])],
             [xapian_cjkwords="yes"],
             [xapian_cjkwords="no"])
         AC_MSG_RESULT($xapian_cjkwords)
         if test $xapian_cjkwords = yes; then
-            AC_DEFINE([USE_XAPIAN_CJK_WORDS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
+            AC_DEFINE([USE_XAPIAN_WORD_BREAKS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
             xapian_cjk_tokens=words
         else
-            AC_MSG_NOTICE([Your Xapian does not support CJK word tokenization. CJK ngram tokenization will be used instead.])
-            xapian_cjk_tokens=ngrams
+            dnl Xapian upstream version 1.5 used different flag names to enable
+            dnl word break tokenization until March 2023.
+            dnl See https://github.com/xapian/xapian/commit/13295e9142f56911d4876fb92271df348759c34b
+            AC_LINK_IFELSE(
+                [AC_LANG_PROGRAM(
+                    [[#include <xapian.h>]],
+                    [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS | Xapian::MSet::SNIPPET_CJK_WORDS; (void) cjk_flags; ]])],
+                [xapian_cjkwords="yes"],
+                [xapian_cjkwords="no"])
+            AC_MSG_RESULT($xapian_cjkwords)
+            if test $xapian_cjkwords = yes; then
+                AC_DEFINE([USE_XAPIAN_CJK_WORDS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
+                xapian_cjk_tokens=words
+            else
+                AC_MSG_NOTICE([Your Xapian does not support CJK word tokenization. CJK ngram tokenization will be used instead.])
+                xapian_cjk_tokens=ngrams
+            fi
         fi
         LDFLAGS=$ORIG_LDFLAGS
         CXXFLAGS=$ORIG_CXXFLAGS
