@@ -316,7 +316,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "aps_topic_carddav", NULL, STRING, "3.0.0" }
 /* Topic for Apple Push Service registration for CardDAV. */
 
-{ "aps_expiry", "1d", DURATION, "UNRELEASED" }
+{ "aps_expiry", "1d", DURATION, "3.10.0" }
 /* Time after which a CalDAV/CardDAV push subscription will expire.
    A client will have to refresh the subscription in order to continue to
    receive push notifications. */
@@ -1303,7 +1303,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, kibibytes is assumed.
    */
 
-{ "jmap_max_calendareventnotifs", 200, INT, "UNRELEASED" }
+{ "jmap_max_calendareventnotifs", 200, INT, "3.10.0" }
 /* The maximum count of CalendarEventNotification objects to keep per account.
    Any notifications exceeding this count are expunged to make room for new
    ones. Zero or any negative number disables this limit.
@@ -1717,11 +1717,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    come up in response to a reconfig+SIGHUP will just be logged and disabled
    like the default behaviour, without causing master to exit. */
 
-{ "master_pid_file", "{configdirectory}/master.pid", STRING, "UNRELEASED" }
+{ "master_pid_file", "{configdirectory}/master.pid", STRING, "3.10.0" }
 /* The path to a file that master(8) will write its PID to when running
    as a daemon. */
 
-{ "master_ready_file", "{configdirectory}/master.ready", STRING, "UNRELEASED" }
+{ "master_ready_file", "{configdirectory}/master.ready", STRING, "3.10.0" }
 /* The path to a file that master(8) will update to indicate that it is
    ready to accept client connections.  This file will be created if it does
    not already exist, or truncated if it does.  */
@@ -2393,13 +2393,13 @@ If all partitions are over that limit, this feature is not used anymore.
    to the extractor.
    Xapian only.
  */
-{ "search_attachment_extractor_request_timeout", "5m", DURATION, "UNRELEASED" }
+{ "search_attachment_extractor_request_timeout", "5m", DURATION, "3.10.0" }
 /* Defines the duration after which to cancel non-responding
    requests to the search attachment extractor service.
 
    If no unit is specified, seconds is assumed. */
  */
-{ "search_attachment_extractor_idle_timeout", "5m", DURATION, "UNRELEASED" }
+{ "search_attachment_extractor_idle_timeout", "5m", DURATION, "3.10.0" }
 /* Defines the duration after which to close unused connections to
    the search attachment extractor service. If the idle timeout is
    less than search_attachment_extractor_request_timeout, then it
@@ -2616,7 +2616,7 @@ product version in the capabilities
    assumed. */
 */
 
-{ "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery vnd.cyrus.imip snooze vnd.cyrus.implicit_keep_target", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze", "vnd.cyrus.implicit_keep_target"), "UNRELEASED" }
+{ "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery vnd.cyrus.imip snooze vnd.cyrus.implicit_keep_target", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze", "vnd.cyrus.implicit_keep_target"), "3.10.0" }
 /* Space-separated list of Sieve extensions allowed to be used in
    sieve scripts, enforced at submission by timsieved(8).  Any
    previously installed script will be unaffected by this option and
