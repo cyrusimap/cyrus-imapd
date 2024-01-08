@@ -7708,25 +7708,23 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
                     // special use needs extended support, so pass through extargs
                     if (specialuse.len || uniqueid) {
+                        const char *sep = "";
+
                         prot_printf(s_conn->out, " (");
-                        int printsp = 0;
+
                         if (specialuse.len) {
-                            if (printsp) prot_putc(' ', s_conn->out);
-                            printsp = 1;
                             prot_printf(s_conn->out, "USE (%s)", buf_cstring(&specialuse));
+                            sep = " ";
                         }
 
                         if (partition) {
-                            if (printsp) prot_putc(' ', s_conn->out);
-                            printsp = 1;
-                            prot_printf(s_conn->out, "PARTITION ");
+                            prot_printf(s_conn->out, "%sPARTITION ", sep);
                             prot_printastring(s_conn->out, partition);
+                            sep = " ";
                         }
 
                         if (uniqueid) {
-                            if (printsp) prot_putc(' ', s_conn->out);
-                            printsp = 1;
-                            prot_printf(s_conn->out, "MAILBOXID ");
+                            prot_printf(s_conn->out, "%sMAILBOXID ", sep);
                             prot_printastring(s_conn->out, uniqueid);
                         }
 
