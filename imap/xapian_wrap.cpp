@@ -230,8 +230,6 @@ static void read_language_counts(const Xapian::Database& db,
 
 static void parse_doclangs(const std::string& val, std::set<std::string>& doclangs)
 {
-    if (val.empty() || !isalpha(val[0])) return;
-
     size_t base = 0, pos;
     while ((pos = val.find(',', base)) != std::string::npos) {
         doclangs.insert(val.substr(base, pos - base));
@@ -2322,7 +2320,7 @@ EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
         std::string key = lang_doc_key(snipgen->cyrusid);
         for (const Xapian::Database& subdb : *snipgen->db->subdbs) {
             std::string val = subdb.get_metadata(key);
-            if (!val.empty()) parse_doclangs(val, doclangs);
+            if (!val.empty() && isalpha(val[0])) parse_doclangs(val, doclangs);
             break;
         }
 
