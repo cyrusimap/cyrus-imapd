@@ -11,6 +11,7 @@
 /* need _GNU_SOURCE for RTLD_NEXT */
 #define _GNU_SOURCE
 
+#include <sys/time.h>
 #include <sys/types.h>
 
 #include <dlfcn.h>
@@ -87,18 +88,25 @@ EXPORTED void closelog(void)
     is_opened = 0;
 }
 
-static void fake_vsyslog(int priority __attribute__((unused)),
-                         const char *format, va_list ap)
+static void fake_vsyslog(int priority, const char *format, va_list ap)
 {
-    time_t now = time(NULL);
+    struct timeval now = {0};
     char timestamp[16] = {0};
     int saved_errno = errno;
+    int logmask;
 
     if (!is_opened) return; /* no file to write to */
 
-    strftime(timestamp, sizeof(timestamp), "%b %d %T", localtime(&now));
-    fprintf(out, "%s %s %s[%" PRIdMAX "]: ",
-                 timestamp, hostname, myident, (intmax_t) pid);
+    logmask = setlogmask(0); /* get the real syslog's current mask */
+    if (!(logmask & LOG_MASK(LOG_PRI(priority))))
+        return; /* do not want messages of this priority logged */
+
+    gettimeofday(&now, NULL);
+
+    strftime(timestamp, sizeof(timestamp), "%b %d %T", localtime(&now.tv_sec));
+    fprintf(out, "%s.%06" PRIdMAX " %s %s[%" PRIdMAX "]: ",
+                 timestamp, (intmax_t) now.tv_usec,
+                 hostname, myident, (intmax_t) pid);
     errno = saved_errno;
 
     /* glibc handles %m in vfprintf() so we don't need to do

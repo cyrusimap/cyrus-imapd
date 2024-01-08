@@ -4857,6 +4857,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
                 index_hasrights(imapd_index, ACL_READ_WRITE) ?
                 "WRITE" : "ONLY", error_message(IMAP_OK_COMPLETED));
 
+    /* n.b. this debug log line is now load-bearing -- the cassandane test
+     * Simple.toggleable_debug_logging looks for it
+     */
     syslog(LOG_DEBUG, "open: user %s opened %s", imapd_userid, name);
     goto done;
 

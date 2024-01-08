@@ -183,6 +183,21 @@ static void cyrus_modules_done()
     }
 }
 
+static void debug_toggled(void)
+{
+    int logmask = setlogmask(0); /* gets the current log mask */
+
+    if (config_debug)
+        logmask |= LOG_MASK(LOG_DEBUG);
+    else
+        logmask &= ~LOG_MASK(LOG_DEBUG);
+
+    syslog(LOG_INFO, "debug logging turned %s",
+                     config_debug ? "on" : "off");
+
+    setlogmask(logmask);
+}
+
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
 EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flags, int config_need_data)
@@ -238,6 +253,9 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         openlog(config_ident, syslog_opts, SYSLOG_FACILITY);
     }
 
+    /* allow toggleable debug logging */
+    config_toggle_debug_cb = &debug_toggled;
+
     /* Load configuration file.  This will set config_dir when it finds it */
     config_read(alt_config, config_need_data);
 
@@ -265,10 +283,6 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         openlog(ident_buf, syslog_opts, facnum);
     }
     /* Do not free ident_buf, syslog needs it for the life of this process! */
-
-    /* allow debug logging */
-    if (!config_debug)
-        setlogmask(~LOG_MASK(LOG_DEBUG));
 
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);

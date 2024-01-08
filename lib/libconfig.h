@@ -102,6 +102,11 @@ extern unsigned config_maxword;
 extern int config_qosmarking;
 extern int config_debug;
 
+/* for toggling config_debug and its behaviours at runtime */
+typedef void (*toggle_debug_cb)(void);
+extern toggle_debug_cb config_toggle_debug_cb;
+extern void config_toggle_debug(void);
+
 /* config requirement flags */
 #define CONFIG_NEED_PARTITION_DATA (1<<0)
 
