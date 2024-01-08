@@ -95,6 +95,7 @@ static void folder_free(void *data)
     free(folder->mboxname);
     bv_fini(&folder->uids);
     bv_fini(&folder->found_uids);
+    bv_fini(&folder->esearch.all_uids);
     dynarray_fini(&folder->partnums);
     free(folder);
 }
