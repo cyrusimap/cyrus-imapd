@@ -44,15 +44,17 @@ Major changes since the 3.8 series
   upgrade frontend machines first, then backends
 * Adds support for IMAP REPLACE (:rfc:`8508`)
 * Adds support for IMAP UIDONLY extension (:draft:`draft-ietf-extra-imap-uidonly`)
-* Adds experimental support for JMAP Contacts per upcoming IETF standards
+* Adds experimental support for JMAP Contacts per upcoming IETF standards.
+  Requires the not-yet-released
+  `libicalvcard <https://github.com/libical/libical/pull/584>`_
 * :cyrusman:`squatter(8)` now supports the "wait=y" :cyrusman:`cyrus.conf(5)`
   option when started in rolling mode from the ``DAEMON`` section
 * :cyrusman:`master(8)` now touches a ready file to indicate it is "ready for
-  work".  See :ref:`upgrade_master_pid_ready_files`.
+  work".  See :ref:`upgrade_master_pid_ready_files`
 * :cyrusman:`master(8)` now gets its pidfile name from the ``master_pid_file``
-  :cyrusman:`imapd.conf(5)` option.  See :ref:`upgrade_master_pid_ready_files`.
+  :cyrusman:`imapd.conf(5)` option.  See :ref:`upgrade_master_pid_ready_files`
 * Adds pcre2 support.  Prefers pcre2 over pcre if both are available. See
-  :ref:`upgrade_pcre2_support`.
+  :ref:`upgrade_pcre2_support`
 * The ``proc`` :cyrusman:`cyr_info(8)` subcommand now also reports DAEMON and
   EVENTS processes
 * JMAP CalendarEventNotification objects are now automatically pruned.
@@ -62,7 +64,7 @@ Major changes since the 3.8 series
 * Sieve [current]date ``:zone`` parameter now accepts either a UTC offset or an
   IANA time zone ID
 * Adds an ``implicit_keep_target`` Sieve action to change the target mailbox
-  for an implicit keep.
+  for an implicit keep
 * :cyrusman:`squatter(8)` no longer holds a mailbox lock while extracting text
   from attachments
 * IMAP ``RENAME`` command no longer emits non-standard per-folder updates.  Use
@@ -92,7 +94,7 @@ change during the process.
   looks for this file, you should either update it to look in the new
   default location, or set ``master_pid_file`` in :cyrusman:`imapd.conf(5)`
   to override the default.  The ``-p`` option to :cyrusman:`master(8)`
-  can still be used to override it.
+  can still be used to override it
 
 Security fixes
 ==============
@@ -108,4 +110,4 @@ Significant bugfixes
 * Fixed: squat db out of bounds access in incremental reindex docID map
 * Restored functionality of the sync_client ``-o``/``--connect-once`` option
 * Fixed :issue:`4654`: copying/moving messages from split conversations is now
-  correct.
+  correct

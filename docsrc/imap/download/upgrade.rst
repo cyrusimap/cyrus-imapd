@@ -114,7 +114,7 @@ When upgrading to 3.10, installations that use the experimental JMAP calendars
 API must run a migration tool to separate CalDAV default alarm annotations from
 JMAP annotations.  This tool will remove the annotations from the calendar
 mailbox and move their contents to the Cyrus-internal annotation
-``/vendor/cmu/cyrus-jmap/defaulalerts``
+``/vendor/cmu/cyrus-jmap/defaultalerts``
 
 CalDAV annotations on the calendar home are left as-is and are not migrated.
 Typically, Apple CalDAV clients store default alarms at this location.
