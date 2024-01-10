@@ -206,12 +206,15 @@ int main(int argc, char **argv)
         /* Process each mailbox in reverse order (children first) */
         struct buf part_buf = BUF_INITIALIZER;
         while ((mbentry = ptrarray_pop(mboxlist_rock.mboxlist))) {
+            if (r) {
+                mboxlist_entry_free(&mbentry);
+                continue;
+            }
             const char *partition = mbentry->partition;
             const char *uniqueid = mbentry->uniqueid;
             const char *name = mbentry->name;
             const char *path = NULL;
             char *userid = NULL;
-            char *extname = NULL;
             strarray_t *oldpaths = strarray_new();
             strarray_t *newpaths = strarray_new();
             strarray_t *subs = NULL;
@@ -220,17 +223,11 @@ int main(int argc, char **argv)
                                 const char *, unsigned long) =
                 { &mboxname_datapath, &mboxname_archivepath, NULL };
 
-            if (r) {
-                mboxlist_entry_free(&mbentry);
-                continue;
-            }
-
-            extname = mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
+            char *extname = mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
 
             if (!quiet) printf("\nRelocating: %s\n", extname);
 
-            struct mboxlock *namespacelock = NULL;
-            namespacelock = mboxname_usernamespacelock(mbentry->name);
+            struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
             if (!namespacelock) {
                 fprintf(stderr,
                         "Failed to create namespacelock for %s: %s\n",
