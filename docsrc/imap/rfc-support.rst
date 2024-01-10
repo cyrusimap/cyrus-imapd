@@ -680,6 +680,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     .. versionadded:: 2.5.0
 
+:rfc:`6855`
+
+    IMAP Support for UTF-8
+
 :rfc:`6901`
 
     JavaScript Object Notation (JSON) Pointer
@@ -1008,10 +1012,6 @@ RFC Wishlist
 :rfc:`6785`
 
     Support for Internet Message Access Protocol (IMAP) Events in Sieve
-
-:rfc:`6855`
-
-    IMAP Support for UTF-8
 
 :rfc:`8470`
 

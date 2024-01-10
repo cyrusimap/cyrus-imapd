@@ -196,6 +196,7 @@ static int imapd_idle_enabled = 0;
 static int imapd_notify_enabled = 0;
 static int imapd_login_disabled = 0;
 static int imapd_compress_allowed = 0;
+static int imapd_utf8_allowed = 0;
 static int imapd_tls_allowed = 0;
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 static int imapd_tls_required = 0; /* is tls required? */
@@ -472,8 +473,9 @@ static struct capa_struct base_capabilities[] = {
     { "URLAUTH",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4467 */
     { "URLAUTH=BINARY",        CAPA_POSTAUTH,           { 0 } }, /* RFC 5524 */
 #endif
-    { "UTF8=ACCEPT",           0, /* not implemented */ { 0 } }, /* RFC 6855 */
-    { "UTF8=ONLY",             0, /* not implemented */ { 0 } }, /* RFC 6855 */
+    { "UTF8=ACCEPT",           CAPA_POSTAUTH|CAPA_STATE,         /* RFC 6855 */
+      { .statep = &imapd_utf8_allowed }                       },
+    { "UTF8=ONLY",             0,/*precluded by ACCEPT*/{ 0 } }, /* RFC 6855 */
     { "WITHIN",                CAPA_POSTAUTH,           { 0 } }, /* RFC 5032 */
 
 /* drafts, non-standard (NS), Cyrus custom (CY) */
@@ -893,7 +895,7 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
-                        "%s%s",
+                        "%s%s%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
@@ -920,7 +922,8 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_savedate    ? " savedate=<1>"     : "",
 
                         client_behavior.did_searchres   ? " searchres=<1>"    : "",
-                        client_behavior.did_uidonly     ? " uidonly=<1>"      : "");
+                        client_behavior.did_uidonly     ? " uidonly=<1>"      : "",
+                        client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "");
 }
 
 static void imapd_reset(void)
@@ -1184,6 +1187,9 @@ int service_main(int argc __attribute__((unused)),
         fatal("Failed to set SASL property", EX_TEMPFAIL);
     if (sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
         fatal("Failed to set SASL property", EX_TEMPFAIL);
+
+    imapd_utf8_allowed = !(config_getswitch(IMAPOPT_REJECT8BIT) ||
+                           config_getswitch(IMAPOPT_MUNGE8BIT));
 
     imapd_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
     imapd_login_disabled = imapd_tls_required ||
@@ -4040,6 +4046,28 @@ static int append_catenate(FILE *f, const char *cur_name, size_t maxsize, unsign
             /* Parse newline terminating command */
             c = prot_getc(imapd_in);
         }
+        else if ((client_capa & CAPA_UTF8_ACCEPT) && !strcasecmp(arg.s, "UTF8")) {
+            int r1;
+
+            if (c != ' ' || (c = prot_getc(imapd_in) != '(')) {
+                *parseerr = "Missing UTF8 message part in Append command";
+                return IMAP_PROTOCOL_ERROR;
+            }
+
+            r1 = catenate_text(f, maxsize, totalsize, binary, parseerr);
+            if (r1) return r1;
+
+            if ((c = prot_getc(imapd_in) != ')')) {
+                *parseerr =
+                    "Missing ')' after UTF8 message part in Append command";
+                return IMAP_PROTOCOL_ERROR;
+            }
+
+            /* if we see a SP, we're trying to catenate more than one part */
+
+            /* Parse newline terminating command */
+            c = prot_getc(imapd_in);
+        }
         else if (!strcasecmp(arg.s, "URL")) {
             c = getastring(imapd_in, imapd_out, &arg);
             if (c != ' ' && c != ')') {
@@ -4122,6 +4150,9 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
 
     if (client_capa & CAPA_IMAP4REV2) {
         name = normalize_mboxname(name, &listargs);
+    }
+    else if (client_capa & CAPA_UTF8_ACCEPT) {
+        name = normalize_mboxname(name, NULL);
     }
 
     memset(&appendstate, 0, sizeof(struct appendstate));
@@ -4309,6 +4340,26 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
             if (r) goto done;
         }
         else {
+            int is_utf8 = 0;
+
+            if (!strcasecmp(arg.s, "UTF8")) {
+                if (!(client_capa & CAPA_UTF8_ACCEPT)) {
+                    parseerr = "Invalid argument in Append command";
+                    r = IMAP_PROTOCOL_ERROR;
+                    goto done;
+                }
+
+                is_utf8 = 1;
+
+                if (c != ' ' || (c = prot_getc(imapd_in) != '(')) {
+                    parseerr = "Missing UTF8 message part in Append command";
+                    r = IMAP_PROTOCOL_ERROR;
+                    goto done;
+                }
+
+                c = getword(imapd_in, &arg);
+            }
+
             /* Read size from literal */
             r = getliteralsize(arg.s, c, maxsize, &size, &(curstage->binary), &parseerr);
             if (!r && size == 0) r = IMAP_ZERO_LENGTH_LITERAL;
@@ -4316,6 +4367,13 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
 
             /* Copy message to stage */
             r = message_copy_strict(imapd_in, curstage->f, size, curstage->binary);
+
+            if (is_utf8 && (c = prot_getc(imapd_in) != ')')) {
+                parseerr =
+                    "Missing ')' after UTF8 message part in Append command";
+                r = IMAP_PROTOCOL_ERROR;
+                goto done;
+            }
         }
         qdiffs[QUOTA_STORAGE] += size;
         /* If this is a non-BINARY message, close the stage file.
@@ -4697,6 +4755,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
             /* Always want LIST response even if name was in normal form */
             strarray_append(&listargs.pat, name);
         }
+    }
+    else if (client_capa & CAPA_UTF8_ACCEPT) {
+        name = normalize_mboxname(name, NULL);
     }
 
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
@@ -6535,7 +6596,7 @@ static void cmd_search(char *tag, char *cmd)
     clock_t start = clock();
     char mytime[100];
     int usinguid = 0, n = 0;
-    int state = GETSEARCH_CHARSET_KEYWORD|GETSEARCH_RETURN;
+    int state = GETSEARCH_RETURN;
 
     if (backend_current) {
         /* remote mailbox */
@@ -6556,6 +6617,11 @@ static void cmd_search(char *tag, char *cmd)
     case 'U':  // Uid Search
         usinguid = 1;
         break;
+    }
+
+    /* RFC 9855, Section 3: MUST reject SEARCH with a charset specification */ 
+    if (!(client_capa & CAPA_UTF8_ACCEPT)) {
+        state |= GETSEARCH_CHARSET_KEYWORD;
     }
 
     /* local mailbox */
@@ -7536,6 +7602,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     if (client_capa & CAPA_IMAP4REV2) {
         name = normalize_mboxname(name, &listargs);
     }
+    else if (client_capa & CAPA_UTF8_ACCEPT) {
+        name = normalize_mboxname(name, NULL);
+    }
 
     mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
 
@@ -8009,12 +8078,8 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     struct mboxevent *mboxevent = NULL;
     int delete_user = 0;
     const char *origname = name;
-    struct listargs listargs = {
-        LIST_CMD_EXTENDED, 0, LIST_RET_CHILDREN | LIST_RET_SPECIALUSE,
-        "", STRARRAY_INITIALIZER, NULL, 0, {0}, STRARRAY_INITIALIZER, NULL
-    };
 
-    if (client_capa & CAPA_IMAP4REV2) {
+    if (client_capa & (CAPA_IMAP4REV2 | CAPA_UTF8_ACCEPT)) {
         name = normalize_mboxname(name, NULL);
     }
 
@@ -8139,9 +8204,9 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
-        if (name != origname) {
+        if (name != origname && (client_capa & CAPA_IMAP4REV2)) {
             /* Emit LIST response for name with OLDNAME */
-            print_listresponse(listargs.cmd, name, origname,
+            print_listresponse(LIST_CMD_EXTENDED, name, origname,
                                imapd_namespace.hier_sep,
                                MBOX_ATTRIBUTE_NONEXISTENT, NULL);
         }
@@ -8315,6 +8380,10 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
     if (client_capa & CAPA_IMAP4REV2) {
         oldname = normalize_mboxname(oldname, NULL);
         newname = normalize_mboxname(newname, &listargs);
+    }
+    else if (client_capa & CAPA_UTF8_ACCEPT) {
+        oldname = normalize_mboxname(oldname, NULL);
+        newname = normalize_mboxname(newname, NULL);
     }
 
     if (location && strcmp(oldname, newname)) {
@@ -8737,15 +8806,17 @@ respond:
         index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
-        if (oldname != orig_oldname) {
-            /* Emit LIST response for oldname with OLDNAME */
-            print_listresponse(listargs.cmd, oldname, orig_oldname,
-                               imapd_namespace.hier_sep,
-                               MBOX_ATTRIBUTE_NONEXISTENT, NULL);
-        }
-        if (strarray_size(&listargs.pat)) {
-            /* Emit LIST response for newname with OLDNAME */
-            list_data(&listargs);
+        if (client_capa & CAPA_IMAP4REV2) {
+            if (oldname != orig_oldname) {
+                /* Emit LIST response for oldname with OLDNAME */
+                print_listresponse(listargs.cmd, oldname, orig_oldname,
+                                   imapd_namespace.hier_sep,
+                                   MBOX_ATTRIBUTE_NONEXISTENT, NULL);
+            }
+            if (strarray_size(&listargs.pat)) {
+                /* Emit LIST response for newname with OLDNAME */
+                list_data(&listargs);
+            }
         }
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -15337,6 +15408,10 @@ static void cmd_enable(char *tag)
             client_behavior.did_uidonly = 1;
             new_capa |= CAPA_UIDONLY;
         }
+        else if (imapd_utf8_allowed && !strcasecmp(arg.s, "utf8=accept")) {
+            client_behavior.did_utf8_accept = 1;
+            new_capa |= CAPA_UTF8_ACCEPT;
+        }
     } while (c == ' ');
 
     /* check for CRLF */
@@ -15370,6 +15445,10 @@ static void cmd_enable(char *tag)
     }
     if (new_capa & CAPA_UIDONLY) {
         prot_printf(imapd_out, " UIDONLY");
+    }
+    if (new_capa & CAPA_UTF8_ACCEPT) {
+        prot_printf(imapd_out, " UTF8=ACCEPT");
+        imapd_namespace.isutf8 = 1;
     }
     prot_printf(imapd_out, "\r\n");
 

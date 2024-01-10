@@ -434,6 +434,7 @@ enum {
     CAPA_QRESYNC =      (1<<1),  /* RFC 7162 */
     CAPA_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
     CAPA_UIDONLY =      (1<<3),  /* draft-ietf-extra-imap-uidonly */
+    CAPA_UTF8_ACCEPT =  (1<<4),  /* RFC 6855 */
 };
 
 /* Bitmask for urlfetch params (RFC 5524) */
@@ -464,6 +465,7 @@ struct client_behavior_registry {
     unsigned int did_searchres    : 1;   /* used SAVE on SEARCH */
     unsigned int did_replace      : 1;   /* used REPLACE */
     unsigned int did_uidonly      : 1;   /* used ENABLE UIDONLY  */
+    unsigned int did_utf8_accept  : 1;   /* used ENABLE UTF8=ACCEPT  */
 };
 
 #endif /* INCLUDED_IMAPD_H */
