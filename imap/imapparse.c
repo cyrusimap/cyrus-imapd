@@ -979,6 +979,10 @@ static int get_search_criterion(struct protstream *pin,
         charset_free(&base->charset);
         base->charset = charset_lookupname(arg.s);
         if (base->charset == CHARSET_UNKNOWN_CHARSET) goto badcharset;
+        if ((client_capa & CAPA_UTF8_ACCEPT) &&
+            strcmp("utf-8", charset_canon_name(base->charset))) {
+            goto utf8accept;
+        }
         base->state &= ~GETSEARCH_CHARSET_FIRST;
     }
 
@@ -1610,6 +1614,12 @@ static int get_search_criterion(struct protstream *pin,
  badcharset:
     prot_printf(pout, "%s BAD %s\r\n", base->tag,
                error_message(IMAP_UNRECOGNIZED_CHARSET));
+    if (c != EOF) prot_ungetc(c, pin);
+    return EOF;
+
+ utf8accept:
+    prot_printf(pout, "%s BAD Charset MUST be UTF-8 when using UTF8=ACCEPT\r\n",
+                base->tag);
     if (c != EOF) prot_ungetc(c, pin);
     return EOF;
 }
