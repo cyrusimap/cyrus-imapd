@@ -1574,16 +1574,19 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             const char *pobox = strarray_safenth(a, 0);
             const char *extended = strarray_safenth(a, 1);
             const char *street = strarray_safenth(a, 2);
+            unsigned newline = 0;
+
             buf_reset(&buf);
             if (*pobox) {
                 buf_appendcstr(&buf, pobox);
-                if (extended || street) buf_putc(&buf, '\n');
+                newline++;
             }
             if (*extended) {
+                if (newline++) buf_putc(&buf, '\n');
                 buf_appendcstr(&buf, extended);
-                if (street) buf_putc(&buf, '\n');
             }
             if (*street) {
+                if (newline) buf_putc(&buf, '\n');
                 buf_appendcstr(&buf, street);
             }
 
