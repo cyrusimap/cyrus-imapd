@@ -6,8 +6,8 @@ Cyrus IMAP 3.10.0-alpha0 Release Notes
 
 Download from GitHub:
 
-    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.10.0-alpha0/cyrus-imapd-3.10.0-alpha0.tar.gz
-    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.10.0-alpha0/cyrus-imapd-3.10.0-alpha0.tar.gz.sig
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.10.0-alpha0/cyrus-imapd-3.10.0-alpha0.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.10.0-alpha0/cyrus-imapd-3.10.0-alpha0.tar.gz.sig
 
 .. _relnotes-3.10.0-alpha0_changes:
 
