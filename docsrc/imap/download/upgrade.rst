@@ -167,6 +167,13 @@ to remove them.
 Scripts that contain notify actions using the legacy syntax should be rewritten
 to use the syntax in :rfc:`5435`.
 
+Scripts that contain the deprecated syntax will not be able to replicate, as
+the syntax check on the replica will fail and reject the update.  This usually
+won't be a problem for existing scripts, as they will have previously been
+replicated and not need to replicate again unless they change.  But full user
+replications, such as when moving a user with XFER or similar, will get tripped
+up by this.
+
 .. _upgrade_master_pid_ready_files:
 
 master.pid and master.ready files
