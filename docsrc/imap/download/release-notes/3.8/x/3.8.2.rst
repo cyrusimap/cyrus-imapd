@@ -1,0 +1,71 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.8.2 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.2/cyrus-imapd-3.8.2.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.2/cyrus-imapd-3.8.2.tar.gz.sig
+
+.. _relnotes-3.8.2-changes:
+
+Changes since 3.8.1
+===================
+
+Build changes
+-------------
+
+* Fixed: Cassandane tests now pass on Debian Bookworm
+* PCRE2 is now supported and detected with pkg-config.  If both PCRE and PCRE2
+  are available, the older PCRE will be preferred.  To force use of PCRE2 in
+  this situation, run configure with the ``--disable-pcre`` option.  Please
+  note that on Debian-based systems, PCRE (the old one, no longer maintained)
+  is called "pcre3".  Yes, this is confusing.
+* Fixed :issue:`4770`: missing include when ssl unavailable (thanks Дилян
+  Палаузов)
+
+Bug fixes
+---------
+
+* Fixed :issue:`4650`: :cyrusman:`cyr_info(8)` ``conf``, ``conf-all``, and
+  ``conf-default`` subcommands no longer crash
+* Fixed: squat db reindexes are no longer always incremental
+* Fixed: squat db corruption from unintentional indexing of fields
+  intended to be skipped.  Squat search databases may benefit from a full
+  (non-incremental) reindex
+* Fixed :issue:`4660`: squat db out of bounds access in incremental reindex
+  docID map
+* Fixed :issue:`4692`: squat db searches now handle unindexed messages
+  correctly again (thanks Gabriele Bulfon)
+* Fixed :issue:`4710`: crash on copy/append fail in mailbox with custom
+  user flags
+* Fixed: GETMETADATA no longer shows internal DAV mailboxes (unless
+  ``imapmagicplus`` is enabled and the user is authenticated as
+  ``username+dav@domain``)
+* Fixed :issue:`4717`: pop3d now avoids splitting ``".\r\n"`` across packet
+  boundaries, which can confuse some clients
+* Fixed :issue:`4756`: potential uninitialized access in extract_convdata
+* Fixed :issue:`4771`: potential invalid read in message_parse_received_date
+  (thanks Дилян Палаузов)
+* Fixed :issue:`4663`: strip known-timezones from iCalendar object (thanks
+  Дилян Палаузов)
+* Fixed :issue:`4722`: failure in :cyrusman:`dav_reconstruct(1)` when last
+  message in mailbox was expunged (thanks Дилян Палаузов)
+* Fixed :issue:`4758`: fix renaming mailbox between users
+* Fixed :issue:`4424`: DAV requests now respond with 507 rather than 500 when
+  mailbox_maxmessages limits exceeded
+* Fixed :issue:`4804`: mailbox_maxmessages limits now applied correctly
+* Fixed :issue:`4785`: crashes during TLS shutdown (thanks Дилян Палаузов)
+* Fixed :issue:`4820`: PREVIEW message attribute must be qstring/literal,
+  not an atom
+* Fixed :issue:`4828`: the default addressbook can no longer be deleted
+
+Other changes
+-------------
+
+* Fixed :issue:`4671`: leniently handle unencoded valid UTF-8 strings in MIME
+  headers
+* Fixed :issue:`4790`: some man pages were missing from distribution tarballs
+  (thanks Jakob Gahde)
