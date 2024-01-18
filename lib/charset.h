@@ -202,4 +202,11 @@ extern struct char_counts charset_count_validutf8(const char *data, size_t datal
 extern void charset_write_mime_param(struct buf *buf, int extended, size_t cur_len,
                                      const char *name, const char *value);
 
+/* Transform the UTF-8 string 's' into a titlecased canonicalized UTF-8 string
+ * per the i;unicode-casemap collation.
+ *
+ * https://www.rfc-editor.org/rfc/rfc5051.html
+ */
+extern char *unicode_casemap(const char *s);
+
 #endif /* INCLUDED_CHARSET_H */

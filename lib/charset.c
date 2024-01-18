@@ -60,6 +60,8 @@
 #include <unicode/ustring.h>
 #include <unicode/unorm2.h>
 #include <unicode/utf8.h>
+#include <unicode/ubrk.h>
+#include <unicode/ucasemap.h>
 
 #define U_REPLACEMENT   0xfffd
 
@@ -4515,4 +4517,99 @@ EXPORTED void charset_write_mime_param(struct buf *buf, int extended, size_t cur
 
     buf_free(&valbuf);
     free(xvalue);
+}
+
+EXPORTED char *unicode_casemap(const char *s)
+{
+    int32_t slen = strlen(s), ulen, tlen, nlen, olen;
+    UChar *uni = NULL, *title = NULL, *nfkd = NULL;
+    const UNormalizer2 *norm = NULL;
+    UErrorCode err = U_ZERO_ERROR;
+    UBreakIterator *bi = NULL;
+    UCaseMap *csm = NULL;
+    char *out = NULL;
+
+    /* Step 1a: Convert the UTF-8 string to UChar */
+    u_strFromUTF8(NULL, 0, &ulen, s, slen, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    uni = xmalloc(ulen * sizeof(UChar));
+    u_strFromUTF8(uni, ulen, &ulen, s, slen, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    /* Step 2a: Titlecase each UChar */
+    bi = ubrk_open(UBRK_CHARACTER, "", NULL, 0, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    csm = ucasemap_open("", 0, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    ucasemap_setBreakIterator(csm, bi, &err);
+    tlen = ucasemap_toTitle(csm, NULL, 0, uni, ulen, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    title = xmalloc(tlen * sizeof(UChar));
+    tlen = ucasemap_toTitle(csm, title, tlen, uni, ulen, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    /* Step 2b: Normalize the UChars to Form KD */
+    norm = unorm2_getNFKDInstance(&err);
+    nlen = unorm2_normalize(norm, title, tlen, NULL, 0, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    nfkd = xmalloc(nlen * sizeof(UChar));
+    nlen = unorm2_normalize(norm, title, tlen, nfkd, nlen, &err);
+    
+    /* Step 3: Convert the UChar string back to UTF-8 (NULL-terminated) */
+    u_strToUTF8(NULL, 0, &olen, nfkd, nlen, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    out = xzmalloc((olen+1) * sizeof(char));
+    u_strToUTF8(out, olen, &olen, nfkd, nlen, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+  done:
+    if (csm)
+        ucasemap_close(csm);
+    else if (bi)
+        ubrk_close(bi);
+
+    free(uni);
+    free(title);
+    free(nfkd);
+
+    if (U_FAILURE(err)) {
+        /* Step 1b: use original string */
+        free(out);
+        out = xstrdup(s);
+    }
+
+    return out;
 }
