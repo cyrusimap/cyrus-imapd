@@ -1601,4 +1601,48 @@ static void test_decode_percent(void)
     buf_free(&buf);
 }
 
+static void test_unicode_casemap(void)
+{
+#define TESTCASE(in, want) \
+    { \
+        char *s; \
+        static const char _in[] = (in); \
+        static const char _want[] = (want); \
+        s = unicode_casemap(_in); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        CU_ASSERT_STRING_EQUAL(s, _want); \
+        free(s); \
+    }
+
+    /* Plain US-ASCII: Out = ucase(In) */
+    TESTCASE("Hello, World!", "HELLO, WORLD!");
+
+    /* In:  "Ǆ"
+            LATIN CAPITAL LETTER DZ WITH CARON (U+01C4)
+     * Out: LATIN CAPITAL LETTER D (U+0044)
+            LATIN SMALL LETTER Z (U+007A)
+            COMBINING CARON (U+030C)
+    */
+    TESTCASE("\xC7\x84", "\x44\x7A\xCC\x8C");
+
+    /* In:  "pâté"
+            LATIN CAPITAL SMALL LETTER P (U+0070)
+            LATIN SMALL LETTER A WITH CIRCUMFLEX (U+00E2)
+            LATIN SMALL LETTER T (U+0074)
+            LATIN SMALL LETTER E WITH ACUTE (U+00E9)
+     * Out: LATIN CAPITAL LETTER P (U+0050)
+            LATIN CAPITAL LETTER A (U+0041)
+            COMBINING CIRCUMFLEX ACCENT (U+0302)
+            LATIN CAPITAL LETTER T (U+0054)
+            LATIN CAPITAL LETTER E (U+0045)
+            COMBINING ACUTE ACCENT (U+0301)
+    */
+    TESTCASE("p\xC3\xA2t\xC3\xA9", "PA\xCC\x82TE\xCC\x81");
+
+    /* Invalid UTF-8: Out = In */
+    TESTCASE("junk\xFF", "junk\xFF");
+
+#undef TESTCASE
+}
+
 /* vim: set ft=c: */
