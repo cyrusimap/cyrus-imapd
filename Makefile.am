@@ -367,6 +367,12 @@ EXTRA_DIST = \
 	lib/charset/us-ascii.t \
 	lib/htmlchar.st \
 	lib/imapoptions \
+	man/arbitronsort.pl.1 \
+	man/masssievec.8 \
+	man/mkimap.8 \
+	man/mknewsgroups.8 \
+	man/rehash.8 \
+	man/translatesieve.8 \
 	master/README \
 	netnews/inn.diffs \
 	perl/annotator/Daemon.pm \
@@ -1635,7 +1641,8 @@ dist_man1_MANS = \
 	man/pop3test.1 \
 	man/sieveshell.1 \
 	man/sivtest.1 \
-	man/smtptest.1
+	man/smtptest.1 \
+	man/synctest.1
 
 dist_man3_MANS = \
 	man/imclient.3
@@ -1655,6 +1662,7 @@ dist_man8_MANS = \
 	man/ctl_deliver.8 \
 	man/ctl_mboxlist.8 \
 	man/cvt_cyrusdb.8 \
+	man/cvt_xlist_specialuse.8 \
 	man/cyr_backup.8 \
 	man/cyr_buildinfo.8 \
 	man/cyr_dbtool.8 \
@@ -1662,22 +1670,33 @@ dist_man8_MANS = \
 	man/cyr_df.8 \
 	man/cyr_expire.8 \
 	man/cyr_info.8 \
+	man/cyr_ls.8 \
 	man/cyr_synclog.8 \
+	man/cyr_userseen.8 \
 	man/cyr_virusscan.8 \
+	man/cyrdump.8 \
 	man/deliver.8 \
 	man/fud.8 \
 	man/idled.8 \
 	man/imapd.8 \
 	man/ipurge.8 \
 	man/lmtpd.8 \
+	man/lmtpproxyd.8 \
 	man/master.8 \
 	man/mbexamine.8 \
 	man/mbpath.8 \
 	man/mbtool.8 \
 	man/notifyd.8 \
 	man/pop3d.8 \
+	man/pop3proxyd.8 \
+	man/promstatsd.8 \
+	man/proxyd.8 \
+	man/ptdump.8 \
+	man/ptexpire.8 \
+	man/ptloader.8 \
 	man/quota.8 \
 	man/reconstruct.8 \
+	man/relocate_by_id.8 \
 	man/restore.8 \
 	man/smmapd.8 \
 	man/timsieved.8 \
@@ -1696,6 +1715,8 @@ dist_man8_MANS += \
 endif # NNTPD
 
 if HTTPD
+dist_man1_MANS += \
+	man/dav_reconstruct.1
 dist_man8_MANS += \
 	man/ctl_zoneinfo.8 \
 	man/httpd.8
@@ -1708,13 +1729,35 @@ dist_man8_MANS += \
 	man/sync_server.8
 endif # REPLICATION
 
+if MURDER
+dist_man8_MANS += \
+	man/mupdate.8
+endif # MURDER
+
+if PERL
+dist_man8_MANS += \
+	man/cyradm.8
+endif # PERL
+
+if SIEVE
+dist_man8_MANS += \
+	man/sievec.8 \
+	man/sieved.8
+endif
+
 if MAINTAINER_MODE
 ## make sure feature-dependent man pages are included in distribution
+dist_man1_MANS += \
+	man/dav_reconstruct.1
 dist_man8_MANS += \
 	man/ctl_zoneinfo.8 \
+	man/cyradm.8 \
 	man/fetchnews.8 \
 	man/httpd.8 \
+	man/mupdate.8 \
 	man/nntpd.8 \
+	man/sievec.8 \
+	man/sieved.8 \
 	man/squatter.8 \
 	man/sync_client.8 \
 	man/sync_reset.8 \
