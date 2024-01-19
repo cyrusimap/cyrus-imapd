@@ -4519,9 +4519,9 @@ EXPORTED void charset_write_mime_param(struct buf *buf, int extended, size_t cur
     free(xvalue);
 }
 
-EXPORTED char *unicode_casemap(const char *s)
+EXPORTED char *unicode_casemap(const char *s, ssize_t slen)
 {
-    int32_t slen = strlen(s), ulen, tlen, nlen, olen;
+    int32_t ulen, tlen, nlen, olen;
     UChar *uni = NULL, *title = NULL, *nfkd = NULL;
     const UNormalizer2 *norm = NULL;
     UErrorCode err = U_ZERO_ERROR;
