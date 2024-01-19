@@ -1212,9 +1212,9 @@ sub test_getmetadata
 
     xlog $self, "Install a no-op sieve script";
     my $res = $jmap->CallMethods([
-        ['Blob/upload', {
+        ['Blob/set', {
             create => {
-               "A" => { data => [{'data:asText' => "keep;\r\n"}] }
+               "A" => { 'data:asText' => "keep;\r\n" }
             }
          }, "R0"],
         ['SieveScript/set', {
