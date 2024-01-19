@@ -1608,7 +1608,7 @@ static void test_unicode_casemap(void)
         char *s; \
         static const char _in[] = (in); \
         static const char _want[] = (want); \
-        s = unicode_casemap(_in); \
+        s = unicode_casemap(_in, -1); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _want); \
         free(s); \
