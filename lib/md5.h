@@ -7,7 +7,7 @@
 #include <config.h>
 #endif
 
-#include "lib/assert.h"
+#include "assert.h"
 
 /*
  * This is gnarly, sorry :(  We might have been configured to build
