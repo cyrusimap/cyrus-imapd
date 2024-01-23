@@ -187,6 +187,11 @@ ws              [ \t]+
                                   BEGIN INITIAL;
                                   return yylval->nval = ASCIINUMERIC;
                               }
+    /* RFC 5051 */
+<QCOLLATION>\"i;unicode-casemap\" {
+                                  BEGIN INITIAL;
+                                  return yylval->nval = UNICODECASEMAP;
+                              }
 <QCOLLATION>\"[^\"]*\"        {
                                   BEGIN INITIAL;
                                   sieveerror_f(sscript,

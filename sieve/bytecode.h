@@ -145,8 +145,9 @@ typedef union
  * version 0x1E scripts store [current]date :zone argument as a string
  * version 0x1F scripts implemented vnd.cyrus.imip
  * version 0x20 scripts implemented vnd.cyrus.implicit_keep_target
+ * version 0x21 scripts implemented comparator-i;unicode-casemap (RFC 5051)
 */
-#define BYTECODE_VERSION 0x20
+#define BYTECODE_VERSION 0x21
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -631,11 +632,11 @@ enum bytecode_tags {
     B_ASCIICASEMAP,
     B_OCTET,
     B_ASCIINUMERIC,     /* require comparator-i;ascii-numeric */
+    B_UNICODECASEMAP,   /* require comparator-i;unicode-casemap */
 
     B_COMPARATOR_PLACEHOLDER_1,
     B_COMPARATOR_PLACEHOLDER_2,
     B_COMPARATOR_PLACEHOLDER_3,
-    B_COMPARATOR_PLACEHOLDER_4,
 
     /* Match Types (36-45) */
     B_IS,

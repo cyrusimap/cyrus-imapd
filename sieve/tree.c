@@ -81,8 +81,16 @@ comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script)
         }
     }
     else if (c->match == B_COUNT) {
-        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT, ":count",
-                     c->collation == B_OCTET ? "i;octet" : "i;ascii-casemap");
+        const char *invalid_collation;
+
+        switch (c->collation) {
+        case B_OCTET:          invalid_collation = "i;octet";           break;
+        case B_UNICODECASEMAP: invalid_collation = "i;unicode-casemap"; break;
+        default:               invalid_collation = "i;ascii-casemap";   break;
+        }
+
+        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
+                     ":count", invalid_collation);
     }
 
     return c;

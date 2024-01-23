@@ -752,6 +752,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
             case B_ASCIICASEMAP:
             case B_OCTET:
             case B_ASCIINUMERIC:
+            case B_UNICODECASEMAP:
                 has_index = 0;
                 break;
             default:
@@ -765,6 +766,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
                 case B_ASCIICASEMAP:
                 case B_OCTET:
                 case B_ASCIINUMERIC:
+                case B_UNICODECASEMAP:
                     /* The ambiguous case is B_TIMEZONE as 1st parameter and
                      * B_ORIGINALZONE as second parameter, which could mean
                      * either ':index 60 :originalzone' or ':zone "+0101"'

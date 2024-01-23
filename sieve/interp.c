@@ -100,6 +100,7 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
 
         /* add comparators */
         buf_appendcstr(&buf, " comparator-i;ascii-numeric");
+        buf_appendcstr(&buf, " comparator-i;unicode-casemap");
 
         /* add actions */
         if (i->fileinto &&
@@ -561,6 +562,9 @@ static const struct sieve_capa_t {
     /* vnd.cyrus.implicit_keep_target */
     { "vnd.cyrus.implicit_keep_target", SIEVE_CAPA_IKEEP_TARGET },
 
+    /* i;unicode-casemap - RFC 5051 */
+    { "comparator-i;unicode-casemap", SIEVE_CAPA_COMP_UCASEMAP },
+
     { NULL, 0 }
 };
     
@@ -595,6 +599,7 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
     switch (capa) {
     case SIEVE_CAPA_BASE:
     case SIEVE_CAPA_COMP_NUMERIC:
+    case SIEVE_CAPA_COMP_UCASEMAP:
     case SIEVE_CAPA_ENCODED_CHAR:
         /* always enabled */
         break;
