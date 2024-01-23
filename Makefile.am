@@ -819,6 +819,7 @@ include_HEADERS = \
 	lib/vparse.h \
 	lib/wildmat.h \
 	lib/xmalloc.h \
+	lib/xsha1.h \
 	lib/xunlink.h
 
 nodist_include_HEADERS = \
@@ -836,7 +837,6 @@ noinst_HEADERS += \
 	lib/ptrarray.h \
 	lib/slowio.h \
 	lib/util.h \
-	lib/xsha1.h \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h \
 	lib/xstrnchr.h
