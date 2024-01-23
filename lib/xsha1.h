@@ -45,7 +45,7 @@
 
 #include <config.h>
 
-#include "lib/assert.h"
+#include "assert.h"
 
 #ifdef HAVE_SSL
 
