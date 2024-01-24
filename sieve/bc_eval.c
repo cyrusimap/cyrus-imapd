@@ -318,7 +318,7 @@ out:
     return l;
 }
 
-static int regcomp_flags(int comparator, int requires)
+static int regcomp_flags(int collation, int requires)
 {
     int cflags = REG_EXTENDED;
 
@@ -329,7 +329,7 @@ static int regcomp_flags(int comparator, int requires)
     cflags |= REG_UTF;
 #endif
 
-    if (comparator == B_ASCIICASEMAP) {
+    if (collation == B_ASCIICASEMAP) {
         /* case-insensitive matches */
         cflags |= REG_ICASE;
     }
@@ -343,6 +343,7 @@ static int regcomp_flags(int comparator, int requires)
 
 struct needle_t {
     const char *pat; // original pattern (with variable substitutions)
+    char *uni;       // unicode-casemap(pat)
     regex_t *reg;    // compiled regex
 };
 
@@ -354,12 +355,17 @@ static dynarray_t *prepare_needles(strarray_t *pl, int match, int collation,
 
     for (n = 0; n < numpat; n++) {
         const char *pat = strarray_nth(pl, n);
+        char *uni = NULL;
 
         if (variables && (requires & BFE_VARIABLES)) {
             pat = parse_string(pat, variables);
         }
 
-        struct needle_t needle =  { pat, NULL };
+        if (collation == B_UNICODECASEMAP) {
+            pat = uni = unicode_casemap(pat, strlen(pat));
+        }
+
+        struct needle_t needle =  { pat, uni, NULL };
 
         if (match == B_REGEX) {
             char errbuf[100]; // Basically unused as regex is tested at compile
@@ -392,6 +398,8 @@ static void free_needles(dynarray_t *needles)
             regfree(needle->reg);
             free(needle->reg);
         }
+
+        free(needle->uni);
     }
 
     dynarray_free(&needles);

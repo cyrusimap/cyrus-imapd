@@ -237,9 +237,10 @@ static void print_comparator(comp_t *comp)
     }
 
     switch (comp->collation) {
-    case B_OCTET:        printf(" (octet)");         break;
-    case B_ASCIICASEMAP: printf(" (ascii-casemap)"); break;
-    case B_ASCIINUMERIC: printf(" (ascii-numeric)"); break;
+    case B_OCTET:          printf(" (octet)");         break;
+    case B_ASCIICASEMAP:   printf(" (ascii-casemap)"); break;
+    case B_ASCIINUMERIC:   printf(" (ascii-numeric)"); break;
+    case B_UNICODECASEMAP: printf(" (unicode-casemap)"); break;
     }
 
     printf(" ]");
@@ -1053,6 +1054,10 @@ static void generate_comparator(const comp_t *c,
     case B_ASCIINUMERIC:
         buf_printf(buf, " :comparator \"i;ascii-numeric\"");
         *requires |= SIEVE_CAPA_COMP_NUMERIC;
+        break;
+    case B_UNICODECASEMAP:
+        buf_printf(buf, " :comparator \"i;unicode-casemap\"");
+        *requires |= SIEVE_CAPA_COMP_UCASEMAP;
         break;
     }
 }

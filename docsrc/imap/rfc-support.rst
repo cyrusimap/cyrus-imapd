@@ -390,6 +390,15 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP URL Scheme, updated by :rfc:`5593`.
 
+:rfc:`5051`
+
+    i;unicode-casemap - Simple Unicode Collation Algorithm
+
+    .. NOTE::
+
+        This collation is ONLY supported by Sieve.  Support in IMAP
+        is documented in :rfc:`5255`, which is currently NOT implemented.
+
 :rfc:`5161`
 
     The IMAP ENABLE Extension

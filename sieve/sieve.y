@@ -210,7 +210,7 @@ extern void sieverestart(FILE *f);
 %token <nval> OVER UNDER
 %token <nval> ALL LOCALPART DOMAIN
 %token <nval> IS CONTAINS MATCHES
-%token <nval> OCTET ASCIICASEMAP ASCIINUMERIC
+%token <nval> OCTET ASCIICASEMAP ASCIINUMERIC UNICODECASEMAP
 %type <test> htags atags etags
 %type <nval> matchtag collation sizetag addrparttag
 
@@ -1618,6 +1618,16 @@ collation: OCTET                 { $$ = B_OCTET;        }
                                      }
 
                                      $$ = B_ASCIINUMERIC;
+                                 }
+        | UNICODECASEMAP         {
+                                     if (!supported(SIEVE_CAPA_COMP_UCASEMAP)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "comparator-"
+                                                      "i;unicode-casemap");
+                                     }
+
+                                     $$ = B_UNICODECASEMAP;
                                  }
         ;
 
