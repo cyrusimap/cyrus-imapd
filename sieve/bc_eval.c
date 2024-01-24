@@ -1742,7 +1742,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 
         switch (op) {
         case B_STOP:
-            res = 1;
+            /* Exit the loop directly,
+               as an error will skip filing into a custom implicit keep target */
+            goto done;
             break;
 
 
@@ -2578,7 +2580,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             return SIEVE_FAIL;
         }
 
-        if (res) break;  /* we've either encountered an error or a stop */
+        if (res) break;  /* we've encountered an error */
     }
 
   done:
