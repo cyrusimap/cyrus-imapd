@@ -43,7 +43,9 @@
 #ifndef LIB_XSHA1_H
 #define LIB_XSHA1_H
 
+#if HAVE_CONFIG_H
 #include <config.h>
+#endif
 
 #include "assert.h"
 
