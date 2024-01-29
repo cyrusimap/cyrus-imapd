@@ -775,7 +775,6 @@ include_HEADERS = \
 	lib/bitvector.h \
 	lib/bloom.h \
 	lib/bsearch.h \
-	lib/bufarray.h \
 	lib/charset.h \
 	lib/chartable.h \
 	lib/command.h \
@@ -816,7 +815,6 @@ include_HEADERS = \
 	lib/stristr.h \
 	lib/times.h \
 	lib/tok.h \
-	lib/vparse.h \
 	lib/wildmat.h \
 	lib/xmalloc.h \
 	lib/xsha1.h \
@@ -829,6 +827,7 @@ nobase_include_HEADERS = sieve/sieve_interface.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
 noinst_HEADERS += \
+	lib/bufarray.h \
 	lib/byteorder.h \
 	lib/gai.h \
 	lib/libconfig.h \
@@ -837,6 +836,7 @@ noinst_HEADERS += \
 	lib/ptrarray.h \
 	lib/slowio.h \
 	lib/util.h \
+	lib/vparse.h \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h \
 	lib/xstrnchr.h
