@@ -57,6 +57,7 @@ cunit/unit
 debian/
 depcomp
 doc/examples/imapd_conf/imapd.conf.sample
+doc/examples/libcyrus/example_libcyrus_min
 doc/html/
 doc/legacy/murder.png
 doc/legacy/netnews.png
