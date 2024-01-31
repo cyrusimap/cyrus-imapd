@@ -80,6 +80,9 @@ sub run_pkgconfig
     my $outfname = $self->{instance}->{basedir} . "/pkg-config.out";
     my $errfname = $self->{instance}->{basedir} . "/pkg-config.err";
 
+    my $cassini = Cassandane::Cassini->instance();
+    my $pkgconfig = $cassini->val('paths', 'pkg-config', '/usr/bin/pkg-config');
+
     $self->{instance}->run_command({
             cyrus => 0,
             redirects => {
@@ -87,7 +90,7 @@ sub run_pkgconfig
                 stderr => $errfname,
             },
         },
-        '/usr/bin/pkg-config', @options, $package
+        $pkgconfig, @options, $package
     );
 
     my $val = slurp_file($outfname);
@@ -130,6 +133,8 @@ sub run_test
 {
     my ($self) = @_;
 
+    my $cassini = Cassandane::Cassini->instance();
+
     my $name = $self->name();
     $name =~ s/^test_//;
 
@@ -150,6 +155,7 @@ sub run_test
     my $ldlibs = $self->run_pkgconfig($lib, '--libs-only-l');
 
     my $makeerr = $self->{instance}->{basedir} . "/make.err";
+    my $make = $cassini->val('paths', 'make', '/usr/bin/make');
 
     eval {
         $self->{instance}->run_command({
@@ -158,7 +164,7 @@ sub run_test
                     stderr => $makeerr,
                 },
             },
-            '/usr/bin/make',
+            $make,
             "CFLAGS=-Wall -Wextra -Werror -g -O0 $cflags",
             "LDFLAGS=$ldflags",
             "LDLIBS=$ldlibs",
@@ -174,7 +180,6 @@ sub run_test
     my $runerr = $self->{instance}->{basedir} . "/$name.err";
 
     my @cmd;
-    my $cassini = Cassandane::Cassini->instance();
     if ($cassini->bool_val('valgrind', 'enabled')) {
         push @cmd, $self->{instance}->_valgrind_setup($name);
     }
