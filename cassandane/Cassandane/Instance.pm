@@ -563,6 +563,31 @@ sub _find_binary
     die "Couldn't locate $name under $base";
 }
 
+sub _valgrind_setup
+{
+    my ($self, $name) = @_;
+
+    my @cmd;
+
+    my $cassini = Cassandane::Cassini->instance();
+
+    my $arguments = '-q --tool=memcheck --leak-check=full --run-libc-freeres=no';
+    my $valgrind_logdir = $self->{basedir} . '/vglogs';
+    my $valgrind_suppressions =
+        abs_path($cassini->val('valgrind', 'suppression', 'vg.supp'));
+    mkpath $valgrind_logdir
+        unless ( -d $valgrind_logdir );
+    push(@cmd,
+        $cassini->val('valgrind', 'binary', '/usr/bin/valgrind'),
+        "--log-file=$valgrind_logdir/$name.%p",
+        "--suppressions=$valgrind_suppressions",
+        "--gen-suppressions=all",
+        split(/\s+/, $cassini->val('valgrind', 'arguments', $arguments))
+    );
+
+    return @cmd;
+}
+
 sub _binary
 {
     my ($self, $name) = @_;
@@ -577,19 +602,7 @@ sub _binary
         !($name =~ m/\.pl$/) &&
         !($name =~ m/^\//))
     {
-        my $arguments = '-q --tool=memcheck --leak-check=full --run-libc-freeres=no';
-        my $valgrind_logdir = $self->{basedir} . '/vglogs';
-        my $valgrind_suppressions =
-            abs_path($cassini->val('valgrind', 'suppression', 'vg.supp'));
-        mkpath $valgrind_logdir
-            unless ( -d $valgrind_logdir );
-        push(@cmd,
-            $cassini->val('valgrind', 'binary', '/usr/bin/valgrind'),
-            "--log-file=$valgrind_logdir/$name.%p",
-            "--suppressions=$valgrind_suppressions",
-            "--gen-suppressions=all",
-            split(/\s+/, $cassini->val('valgrind', 'arguments', $arguments))
-        );
+        push @cmd, $self->_valgrind_setup($name);
         $valground = 1;
     }
 
