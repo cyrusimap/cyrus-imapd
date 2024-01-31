@@ -173,6 +173,15 @@ sub run_test
 
     my $runerr = $self->{instance}->{basedir} . "/$name.err";
 
+    my @cmd;
+    my $cassini = Cassandane::Cassini->instance();
+    if ($cassini->bool_val('valgrind', 'enabled')) {
+        push @cmd, $self->{instance}->_valgrind_setup($name);
+    }
+
+    push @cmd, $self->{instance}->{basedir} . "/$name",
+               '-C', $self->{instance}->_imapd_conf();
+
     eval {
         $self->{instance}->run_command({
                 cyrus => 0,
@@ -180,8 +189,7 @@ sub run_test
                     stderr => $runerr,
                 },
             },
-            $self->{instance}->{basedir} . "/$name",
-            '-C', $self->{instance}->_imapd_conf(),
+            @cmd,
         );
     };
     if ($@) {
