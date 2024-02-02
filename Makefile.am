@@ -1549,13 +1549,11 @@ lib_libcyrus_min_la_SOURCES = \
     lib/util.c \
     lib/vparse.c \
     lib/xmalloc.c \
+    lib/xsha1.c \
     lib/xstrlcat.c \
     lib/xstrlcpy.c \
     lib/xstrnchr.c \
     lib/xunlink.c
-if !HAVE_SSL
-lib_libcyrus_min_la_SOURCES += lib/xsha1.c
-endif
 if IPV6_noGETADDRINFO
 lib_libcyrus_min_la_SOURCES += lib/getaddrinfo.c
 endif
