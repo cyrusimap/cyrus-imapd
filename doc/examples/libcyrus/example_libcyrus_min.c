@@ -234,6 +234,22 @@ void test_xmalloc(void)
     free(s);
 }
 
+void test_xsha1(void)
+{
+    SHA1_CTX ctx = {0};
+    unsigned char digest[SHA1_DIGEST_LENGTH];
+    const unsigned char data[] = "this is some data";
+
+    SHA1Init(&ctx);
+    SHA1Update(&ctx, data, sizeof(data));
+    SHA1Final(digest, &ctx);
+
+    memset(&ctx, 0, sizeof(ctx));
+    xsha1(data, sizeof(data), digest);
+
+    puts("xsha1 ok");
+}
+
 /* XXX lib/libconfig.h is not installed, have to provide our own prototype */
 extern void config_read(const char *alt_config, const int config_need_data);
 
@@ -269,4 +285,5 @@ int main(int argc, char **argv)
     test_strhash();
     test_tok();
     test_xmalloc();
+    test_xsha1();
 }
