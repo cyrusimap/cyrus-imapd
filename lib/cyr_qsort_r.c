@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include "cyr_qsort_r.h"
 
 #ifndef cyr_qsort_r
