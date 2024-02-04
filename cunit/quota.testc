@@ -734,8 +734,7 @@ static void notest_foreach(void)
 #endif
 
 /*
- * TODO: should test for quota_foreach() iteration order,
- *  with and without IMAPOPT_IMPROVED_MBOXLIST_SORT set.
+ * TODO: should test for quota_foreach() iteration order.
  *  There is code that depends on it, e.g. for quota -f.
  */
 

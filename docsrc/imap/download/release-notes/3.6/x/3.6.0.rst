@@ -137,6 +137,7 @@ change during the process.
 * The `reverseuniqueids` :cyrusman:`imapd.conf(5)` option is now deprecated
   and unused.  Reverse UNIQUEID records are now standard and cannot be turned
   off.
+* The `improved_mboxlist_sort` :cyrusman:`imapd.conf(5)` option does nothing.
 
 Security fixes
 ==============
@@ -155,10 +156,7 @@ Significant bugfixes
   XML element instead of text. (thanks Дилян Палаузов)
 * Fixed :issue:`3896`: the `-d` (dump) and `-u` (undump) options to
   :cyrusman:`ctl_mboxlist(8)` now correctly dump and undump all fields in
-  mailboxes.db entries.  The intermediary file format is now JSON.  This change
-  makes it possible to follow the procedure
-  for switching `improved_mboxlist_sort` described in
-  :ref:`enabling improved mboxlist sort`.
+  mailboxes.db entries.  The intermediary file format is now JSON.
 * Fixed :issue:`4035`: `ctl_cyrusdb -r` now recovers from mailboxes.db
   records with missing uniqueids, instead of crashing.  A new `-P` option to
   :cyrusman:`reconstruct(8)` enables repairing mailboxes whose header files

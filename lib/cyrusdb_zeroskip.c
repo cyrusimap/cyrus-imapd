@@ -156,21 +156,13 @@ static int cyrusdb_zeroskip_open(const char *fname,
     struct dbengine *dbe;
     int r = CYRUSDB_OK;
     int zsdbflags = MODE_RDWR;
-    zsdb_cmp_fn dbcmpfn = NULL;
-    memtree_search_cb_t btcmpfn = NULL;
 
     dbe = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
 
     if (flags & CYRUSDB_CREATE)
         zsdbflags = MODE_CREATE;
 
-    if (flags & CYRUSDB_MBOXSORT) {
-        zsdbflags |= MODE_CUSTOMSEARCH;
-        dbcmpfn = bsearch_uncompare_mbox;
-        btcmpfn = memtree_memcmp_mbox;
-    }
-
-    if (zsdb_init(&dbe->db, dbcmpfn, btcmpfn) != ZS_OK) {
+    if (zsdb_init(&dbe->db, NULL, NULL) != ZS_OK) {
         r = CYRUSDB_IOERROR;
         goto done;
     }
