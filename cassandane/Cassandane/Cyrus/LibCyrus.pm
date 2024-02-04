@@ -157,6 +157,9 @@ sub run_test
     my $makeerr = $self->{instance}->{basedir} . "/make.err";
     my $make = $cassini->val('paths', 'make', '/usr/bin/make');
 
+    my $warnopts = '-Wall -Wextra -Werror';
+    my $otheropts = '-g -O0 -fdiagnostics-color=always';
+
     eval {
         $self->{instance}->run_command({
                 cyrus => 0,
@@ -165,7 +168,7 @@ sub run_test
                 },
             },
             $make,
-            "CFLAGS=-Wall -Wextra -Werror -g -O0 $cflags",
+            "CFLAGS=$warnopts $otheropts $cflags",
             "LDFLAGS=$ldflags",
             "LDLIBS=$ldlibs",
             '-C', $self->{instance}->{basedir},  # n.b. not cyrus's -C
