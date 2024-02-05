@@ -771,7 +771,6 @@ include_HEADERS = \
 	lib/arrayu64.h \
 	lib/assert.h \
 	lib/auth.h \
-	lib/auth_pts.h \
 	lib/bitvector.h \
 	lib/bloom.h \
 	lib/bsearch.h \
@@ -1514,6 +1513,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/auth_krb5.c \
 	lib/auth_mboxgroups.c \
 	lib/auth_pts.c \
+	lib/auth_pts.h \
 	lib/auth_unix.c \
 	lib/bitvector.c \
 	lib/bloom.c \
