@@ -774,7 +774,6 @@ include_HEADERS = \
 	lib/bloom.h \
 	lib/bsearch.h \
 	lib/charset.h \
-	lib/chartable.h \
 	lib/command.h \
 	lib/crc32.h \
 	lib/cyr_lock.h \
@@ -1514,6 +1513,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/bloom.c \
 	lib/bsearch.c \
 	lib/charset.c \
+	lib/chartable.h \
 	lib/command.c \
 	lib/cyr_qsort_r.c \
 	lib/cyrusdb.c \
