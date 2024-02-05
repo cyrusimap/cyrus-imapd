@@ -9,5 +9,5 @@ URL: http://www.cyrusimap.org/
 Cflags: -I${includedir}/cyrus @SSL_CPPFLAGS@ @SASLFLAGS@
 Version: @PACKAGE_VERSION@
 Requires.private: libcyrus_min = @PACKAGE_VERSION@
-Libs: -L${libdir} -lcyrus
+Libs: -L${libdir} -lcyrus -lcyrus_min
 Libs.private: @LIB_SASL@ @SSL_LIBS@
