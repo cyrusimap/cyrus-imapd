@@ -4680,17 +4680,13 @@ static void cmd_select(char *tag, char *cmd, char *name)
             }
             else if ((client_capa & CAPA_QRESYNC) &&
                      !strcmp(arg.s, "QRESYNC")) {
-                char *p;
-
                 client_behavior.did_qresync = 1;
 
                 if (c != ' ') goto badqresync;
                 c = prot_getc(imapd_in);
                 if (c != '(') goto badqresync;
-                c = getastring(imapd_in, imapd_out, &arg);
-                v->uidvalidity = strtoul(arg.s, &p, 10);
-                if (*p || !v->uidvalidity || v->uidvalidity == ULONG_MAX) goto badqresync;
-                if (c != ' ') goto badqresync;
+                c = getuint32(imapd_in, &v->uidvalidity);
+                if (c != ' ' || !v->uidvalidity) goto badqresync;
                 c = getmodseq(imapd_in, &v->modseq);
                 if (c == EOF) goto badqresync;
                 if (c == ' ') {
@@ -4846,7 +4842,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
         prot_printf(backend_current->out, "%s %s {" SIZE_T_FMT "+}\r\n%s",
                     tag, cmd, strlen(origname), origname);
         if (v->uidvalidity) {
-            prot_printf(backend_current->out, " (QRESYNC (%lu " MODSEQ_FMT,
+            prot_printf(backend_current->out, " (QRESYNC (%u " MODSEQ_FMT,
                         v->uidvalidity, v->modseq);
             if (v->sequence) {
                 prot_printf(backend_current->out, " %s", v->sequence);
