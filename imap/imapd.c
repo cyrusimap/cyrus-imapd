@@ -1190,7 +1190,8 @@ EXPORTED void fatal(const char *s, int code)
     }
     recurse_code = code;
     if (imapd_out) {
-        prot_printf(imapd_out, "* BYE Fatal error: %s\r\n", s);
+        prot_printf(imapd_out, "* BYE %s%s\r\n",
+                    *s == '[' /* resp-text-code */ ? "" : "Fatal error: ", s);
         prot_flush(imapd_out);
     }
     if (stages.count) {
