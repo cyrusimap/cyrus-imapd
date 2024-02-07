@@ -72,7 +72,7 @@ extern unsigned client_capa;
 struct message;
 
 struct vanished_params {
-    unsigned long uidvalidity;
+    uint32_t uidvalidity;
     modseq_t modseq;
     const char *match_seq;
     const char *match_uid;
