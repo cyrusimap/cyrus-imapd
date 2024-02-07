@@ -4483,7 +4483,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
     /* Check mailbox type size limits */
     if (mailbox->i.exists && !record->ignorelimits) {
-        if (mailbox_mbtype(mailbox) & MBTYPE_ADDRESSBOOK) {
+        if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_ADDRESSBOOK) {
             int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_ADDRESSBOOK);
             if (limit > 0 && limit <= (int)mailbox->i.exists) {
                 xsyslog(LOG_ERR, "IOERROR: client hit per-addressbook exists limit",
@@ -4492,7 +4492,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                 return IMAP_NO_OVERQUOTA;
             }
         }
-        else if (mailbox_mbtype(mailbox) & MBTYPE_CALENDAR) {
+        else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_CALENDAR) {
             int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_CALENDAR);
             if (limit > 0 && limit <= (int)mailbox->i.exists) {
                 xsyslog(LOG_ERR, "IOERROR: client hit per-calendar exists limit",
@@ -4501,7 +4501,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                 return IMAP_NO_OVERQUOTA;
             }
         }
-        else if (!mailbox_mbtype(mailbox)) { // default == email
+        else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL) {
             int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_EMAIL);
             if (limit > 0 && limit <= (int)mailbox->i.exists) {
                 xsyslog(LOG_ERR, "IOERROR: client hit per-mailbox exists limit",
