@@ -72,23 +72,7 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-
-    # set up a carddav object, if we already have instances running
-    # N.B. if your test uses :NoStartInstances magic, you will need to
-    # do this bit yourself!
-    if ($self->{_want}->{start_instances}) {
-        my $service = $self->{instance}->get_service("http");
-        $ENV{DEBUGDAV} = 1;
-        $self->{carddav} = Net::CardDAVTalk->new(
-            user => 'cassandane',
-            password => 'pass',
-            host => $service->host(),
-            port => $service->port(),
-            scheme => 'http',
-            url => '/',
-            expandurl => 1,
-        );
-    }
+    $ENV{DEBUGDAV} = 1;
 }
 
 sub tear_down
