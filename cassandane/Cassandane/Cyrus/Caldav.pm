@@ -123,23 +123,8 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-    my $service = $self->{instance}->get_service("http");
     $ENV{DEBUGDAV} = 1;
     $ENV{JMAP_ALWAYS_FULL} = 1;
-    $self->{caldav} = Net::CalDAVTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
-
-    eval {
-        # this fails on older Cyruses -- but don't crash during set_up!
-        $self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
-    };
 }
 
 sub tear_down
