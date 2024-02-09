@@ -51,6 +51,7 @@ use XML::Simple;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Generator;
 use Cassandane::Util::Log;
 
 sub new
@@ -82,6 +83,21 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub _random_vcard
+{
+    my $fn = Cassandane::Generator::make_random_address()->name();
+    my ($first, $middle, $last) = split /[\s\.]+/, $fn;
+    my $n = "$last;$first;$middle;;";
+    my $str = <<"EOF";
+BEGIN:VCARD
+VERSION:3.0
+N:$n
+FN:$fn
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+    return $str;
+}
 
 sub test_carddavcreate
     :needs_component_httpd
@@ -1449,6 +1465,63 @@ EOF
     $value = $response->{content};
     $self->assert_matches(qr/$uid/, $value);
     $self->assert_matches(qr/2500 members/, $value);
+}
+
+sub test_maxmsg_addressbook_limited
+    :needs_component_httpd :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $mailbox_maxmessages_addressbook = 5;
+    $self->{instance}->{config}->set(
+        mailbox_maxmessages_addressbook => $mailbox_maxmessages_addressbook,
+    );
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $carddav = $self->{carddav};
+    my $id = $carddav->NewAddressBook('foo');
+    $self->assert_not_null($id);
+    $self->assert_str_equals($id, 'foo');
+
+    # should be able to upload 5
+    foreach my $i (1..$mailbox_maxmessages_addressbook) {
+        my $vcard = Net::CardDAVTalk::VCard->new_fromstring(_random_vcard());
+
+        $carddav->NewContact($id, $vcard);
+    }
+
+    # but any more should be rejected
+    eval {
+        my $vcard = Net::CardDAVTalk::VCard->new_fromstring(_random_vcard());
+
+        $carddav->NewContact($id, $vcard);
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches(qr{quota-not-exceeded}, $e);
+
+    # should have syslogged about it too
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{client hit per-addressbook exists limit});
+}
+
+sub test_maxmsg_addressbook_unlimited
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $carddav = $self->{carddav};
+    my $id = $carddav->NewAddressBook('foo');
+    $self->assert_not_null($id);
+    $self->assert_str_equals($id, 'foo');
+
+    # no limit, should be able to upload a bunch
+    foreach my $i (1..100) {
+        my $vcard = Net::CardDAVTalk::VCard->new_fromstring(_random_vcard());
+
+        $carddav->NewContact($id, $vcard);
+    }
 }
 
 1;
