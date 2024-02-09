@@ -3104,19 +3104,12 @@ static void cmd_id(char *tag)
 
             /* get field name */
             c = getstring(imapd_in, imapd_out, &field);
-            if (c != ' ') {
+            if (c != ' ' ||
+                /* get field value */
+                (c = getnstring(imapd_in, imapd_out, &arg)) == EOF ||
+                (c != ' ' && c != ')')) {
                 prot_printf(imapd_out,
-                            "%s BAD Invalid/missing field name in Id\r\n",
-                            tag);
-                eatline(imapd_in, c);
-                return;
-            }
-
-            /* get field value */
-            c = getnstring(imapd_in, imapd_out, &arg);
-            if (c != ' ' && c != ')') {
-                prot_printf(imapd_out,
-                            "%s BAD Invalid/missing value in Id\r\n",
+                            "%s BAD Invalid field-value pair in Id\r\n",
                             tag);
                 eatline(imapd_in, c);
                 return;
