@@ -65,6 +65,9 @@ ec IMAP_QUOTA_EXCEEDED,
 ec IMAP_MESSAGE_TOO_LARGE,
    "Message size exceeds fixed limit"
 
+ec IMAP_LITERAL_MINUS_TOO_LARGE,
+   "[TOOBIG] Non-synchronizing literal size exceeds 4K"
+
 ec IMAP_USERFLAG_EXHAUSTED,
    "Too many user flags in mailbox"
 

@@ -155,8 +155,11 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
         buf_reset(buf);
         c = getuint32(pin, &len);
         if (c == '+') {
-            // LITERAL- says maximum size is 4096!
-            if (lminus && len > 4096) return EOF;
+            /* LITERAL- says maximum size is 4096! */
+            if (lminus && len > 4096) {
+                /* Fail per RFC 7888, Section 4, choice 2 */
+                fatal(error_message(IMAP_LITERAL_MINUS_TOO_LARGE), EX_IOERR);
+            }
             isnowait++;
             c = prot_getc(pin);
         }
