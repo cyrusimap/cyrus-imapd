@@ -89,7 +89,7 @@ static int chkmbox(struct findall_data *data, void *rock __attribute__((unused))
     /* xxx reserved mailboxes? */
 
     if (r) {
-        fprintf(stderr, "bad mailbox %s in chkmbox\n", name);
+        fprintf(stderr, "bad mailbox %s in chkmbox: %s\n", name, error_message(r));
         fatal("fatal error",EX_TEMPFAIL);
     }
 
