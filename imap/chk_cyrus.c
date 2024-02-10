@@ -63,6 +63,7 @@
 #include "mailbox.h"
 #include "map.h"
 #include "xmalloc.h"
+#include "imap_err.h"
 
 static void usage(void)
 {
@@ -81,6 +82,9 @@ static int chkmbox(struct findall_data *data, void *rock __attribute__((unused))
     const char *name = mbname_intname(data->mbname);
 
     r = mboxlist_lookup(name, &mbentry, NULL);
+
+    if (r == IMAP_MAILBOX_NONEXISTENT)
+       return 0;
 
     /* xxx reserved mailboxes? */
 
