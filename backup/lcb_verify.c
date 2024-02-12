@@ -228,7 +228,6 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
         if (r) return r;
 
         struct protstream *ps = prot_readcb(_prot_fill_cb, vmrock->gzuc);
-        prot_setisclient(ps, 1); /* don't sync literals */
         r = parse_backup_line(ps, NULL, NULL, &dl);
 
         if (r == EOF) {
@@ -528,7 +527,6 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
         goto done;
     }
     struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
-    prot_setisclient(ps, 1); /* don't sync literals */
 
     struct buf cmd = BUF_INITIALIZER;
     while (1) {
