@@ -595,7 +595,6 @@ EXPORTED int backup_reindex(const char *name,
             fprintf(out, "\nfound chunk at offset " OFF_T_FMT "\n\n", member_offset);
 
         struct protstream *member = prot_readcb(_prot_fill_cb, gzuc);
-        prot_setisclient(member, 1); /* don't sync literals */
 
         // FIXME stricter timestamp sequence checks
         time_t member_start_ts = -1;

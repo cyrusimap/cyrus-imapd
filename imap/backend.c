@@ -955,7 +955,6 @@ EXPORTED struct backend *backend_connect_pipe(int infd, int outfd,
     ret->prot = prot;
 
     /* use literal+ to send literals */
-    prot_setisclient(ret->in, 1);
     prot_setisclient(ret->out, 1);
 
     /* Start TLS if required */
@@ -1153,7 +1152,6 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     ret->prot = prot;
 
     /* use literal+ to send literals */
-    prot_setisclient(ret->in, 1);
     prot_setisclient(ret->out, 1);
 
     /* Start TLS if required */

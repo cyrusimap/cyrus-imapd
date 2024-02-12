@@ -436,7 +436,6 @@ static int callout_receive_reply(const char *callout,
     }
 
     p = prot_new(fd, /*write*/0);
-    prot_setisclient(p, 1);
 
     /* read and parse the reply as a dlist */
     c = dlist_parse(results, /*parsekeys*/0, /*isbackup*/0, p);

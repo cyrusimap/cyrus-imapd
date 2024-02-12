@@ -7516,10 +7516,6 @@ connected:
     if (timeout < 3) timeout = 3;
     prot_settimeout(backend->in, timeout);
 
-    /* Force use of LITERAL+ so we don't need two way communications */
-    prot_setisclient(backend->in, 1);
-    prot_setisclient(backend->out, 1);
-
     sync_cs->backend = backend;
 
     return 0;
