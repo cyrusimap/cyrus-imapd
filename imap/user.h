@@ -50,6 +50,10 @@
 #define FNAME_SUBSSUFFIX     "sub"
 #define FNAME_COUNTERSSUFFIX "counters"
 
+/* check if this user should be treated as being on a replica (for user moves,
+ * or for actual replicas */
+int user_isreplicaonly(const char *userid);
+
 /* path to user's sieve directory */
 const char *user_sieve_path(const char *user);
 

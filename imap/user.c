@@ -733,3 +733,13 @@ EXPORTED int user_isnamespacelocked(const char *userid)
     const char *name = _namelock_name_from_userid(userid);
     return mboxname_islocked(name);
 }
+
+EXPORTED int user_isreplicaonly(const char *userid)
+{
+    int file_exists = 0;
+    char *path = strconcat(config_dir, "/replicaonly/", userid, (char *)NULL);
+    struct stat sbuf;
+    file_exists = !stat(path, &sbuf);
+    free(path);
+    return file_exists;
+}

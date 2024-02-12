@@ -2012,6 +2012,10 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 {
     int i;
 
+    // we don't process alarms on replicas
+    if (config_getswitch(IMAPOPT_REPLICAONLY))
+        return 0;
+
     syslog(LOG_DEBUG, "processing alarms");
 
     if (!runtime) {
@@ -2042,6 +2046,7 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
         int skipped_some = 0;
         int did_some = 0;
         int num_user_records = 0;
+        int skip_user = 0;
         char *userid = NULL;
         struct mboxlock *nslock = NULL;
         for (i = 0; i < rock.list.count; i++) {
@@ -2058,12 +2063,19 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
             // userid will be next to each other
             if (strcmpsafe(userid, mbname_userid(mbname))) {
                 num_user_records = 0;
+                skip_user = 0;
                 free(userid);
                 mboxname_release(&nslock);
                 userid = xstrdup(mbname_userid(mbname));
+                if (user_isreplicaonly(userid)) {
+                    skip_user = 1;
+                    continue;
+                }
                 nslock = user_namespacelock_full(userid, LOCK_NONBLOCKING);
             }
             mbname_free(&mbname);
+
+            if (skip_user) continue;
 
             // if we failed to lock the user, or have done too many for this user, skip
             if (!nslock || ++num_user_records > MAX_CONSECUTIVE_ALARMS_PER_USER) {
@@ -2083,7 +2095,8 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
         mboxname_release(&nslock);
 
         // if we both made some progress AND skipped some, then retry again immediately
-        if (did_some && skipped_some) rock.next = runtime;
+        if (did_some && skipped_some) *intervalp = 0;
+        else *intervalp = rock.next - runtime;
     }
     else {
         // we're testing or reconstructing, run everything!
@@ -2098,8 +2111,6 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
     ptrarray_fini(&rock.list);
 
     syslog(LOG_DEBUG, "done");
-
-    if (intervalp) *intervalp = rock.next - runtime;
 
     return rc;
 }

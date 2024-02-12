@@ -153,7 +153,7 @@ int main(int argc, char **argv)
         struct timeval start, end;
         double totaltime;
         int tosleep;
-        time_t interval = 1;
+        time_t interval = 10;
 
         signals_poll();
 

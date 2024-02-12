@@ -1378,7 +1378,7 @@ EOF
 }
 
 sub test_replication_at1
-    :min_version_3_0 :needs_component_calalarmd
+    :min_version_3_0 :needs_component_calalarmd :NoReplicaOnly
 {
     my ($self) = @_;
 
@@ -1792,7 +1792,7 @@ EOF
 }
 
 sub test_replication_withalarms_in_tz_with_dst
-    :min_version_3_0 :needs_component_calalarmd
+    :min_version_3_0 :needs_component_calalarmd :NoReplicaOnly
 {
     my ($self) = @_;
 
@@ -1901,7 +1901,7 @@ EOF
 }
 
 sub test_replication_withalarms_in_tz_without_dst
-    :min_version_3_0 :needs_component_calalarmd
+    :min_version_3_0 :needs_component_calalarmd :NoReplicaOnly
 {
     my ($self) = @_;
 
