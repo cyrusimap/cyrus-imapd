@@ -211,6 +211,31 @@ sub getinbox
     return $m{"Inbox"};
 }
 
+sub _submissions_mailbox
+{
+    my ($self, $counter) = @_;
+
+    my $jmap = $self->{jmap};
+    my $folder = "submission $counter";
+
+    my $inboxId = $self->getinbox()->{id};
+    $self->assert_not_null($inboxId);
+
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            "m$counter" => {
+                parentId => $inboxId,
+                name => $folder,
+            },
+        },
+    }, "R1"]]);
+
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{created}{"m$counter"}{id});
+
+    return $res->[0][1]{created}{"m$counter"}{id};
+}
+
 # XXX When creating JMAP EmailSubmissions objects, the http service
 # XXX makes a few SMTP connections to verify that from/to addresses
 # XXX are acceptable, that sort of thing.
@@ -240,8 +265,10 @@ sub put_submission
     my $identityId = $res->[0][1]->{list}[0]->{id};
     $self->assert_not_null($identityId);
 
-    my $inboxId = $self->getinbox()->{id};
-    $self->assert_not_null($inboxId);
+    # upload each draft to its own mailbox so that we don't accidentally
+    # exceed mailbox_maxmessages_email
+    my $mailboxId = $self->_submissions_mailbox($counter);
+    $self->assert_not_null($mailboxId);
 
     my $rcpt = Cassandane::Generator::make_random_address();
 
@@ -250,7 +277,7 @@ sub put_submission
             create => {
                 "m$counter" => {
                     mailboxIds => {
-                        $inboxId => JSON::true,
+                        $mailboxId => JSON::true,
                     },
                     from => [{
                         name => 'cassandane',
@@ -299,6 +326,16 @@ sub put_submission
     $self->assert_num_equals(0, scalar keys %{$res->[0][1]{notCreated}});
     $self->assert_num_equals(1, scalar keys %{$res->[1][1]{created}});
     $self->assert_num_equals(0, scalar keys %{$res->[1][1]{notCreated}});
+}
+
+sub put_email
+{
+    my ($self) = @_;
+    state $counter = 0;
+
+    $counter ++;
+
+    $self->make_message(subject => "message $counter");
 }
 
 sub test_maxmsg_addressbook_limited
@@ -352,6 +389,11 @@ sub test_maxmsg_addressbook_limited
     # should be able to upload lots of jmap submissions
     foreach my $i (1..$LOTS) {
         $self->put_submission();
+    }
+
+    # should be able to upload lots of regular emails
+    foreach my $i (1..$LOTS) {
+        $self->put_email();
     }
 }
 
@@ -407,6 +449,69 @@ sub test_maxmsg_calendar_limited
     foreach my $i (1..$LOTS) {
         $self->put_submission();
     }
+
+    # should be able to upload lots of regular emails
+    foreach my $i (1..$LOTS) {
+        $self->put_email();
+    }
+}
+
+sub test_maxmsg_email_limited
+    :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $mailbox_maxmessages_email = $LIMITED;
+    $self->{instance}->{config}->set(
+        mailbox_maxmessages_email => $mailbox_maxmessages_email,
+    );
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    # should be able to upload 5
+    foreach my $i (1..$mailbox_maxmessages_email) {
+        $self->put_email();
+    }
+
+    # but any more should be rejected
+    eval {
+        $self->put_email();
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches(qr{over.*quota}, $e);
+
+    # should have syslogged about it too
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{client hit per-mailbox exists limit});
+
+    # should be able to upload lots of contacts
+    my $carddav = $self->{carddav};
+    my $addrbookid = $carddav->NewAddressBook('foo');
+    $self->assert_not_null($addrbookid);
+    foreach my $i (1..$LOTS) {
+        $self->put_vcard($addrbookid);
+    }
+
+    # should be able to upload lots of calendar events
+    my $caldav = $self->{caldav};
+    my $calendarid = $caldav->NewCalendar({name => 'mycalendar'});
+    $self->assert_not_null($calendarid);
+    foreach my $i (1..$LOTS) {
+        $self->put_vevent($calendarid);
+    }
+
+    # should be able to upload lots of sieve scripts
+    foreach my $i (1..$LOTS) {
+        $self->put_script();
+    }
+
+    # should be able to upload lots of jmap submissions
+    foreach my $i (1..$LOTS) {
+        $self->put_submission();
+    }
 }
 
 sub test_maxmsg_unlimited
@@ -439,6 +544,11 @@ sub test_maxmsg_unlimited
     # should be able to upload lots of jmap submissions
     foreach my $i (1..$LOTS) {
         $self->put_submission();
+    }
+
+    # should be able to upload lots of regular emails
+    foreach my $i (1..$LOTS) {
+        $self->put_email();
     }
 }
 
