@@ -133,7 +133,7 @@ struct protstream {
     int can_unget;
     int bytes_in;
     int bytes_out;
-    int isclient;
+    int isclient; /* read/write IMAP LITERAL+ */
 
     /* Events */
     prot_readcallback_t *readcallback_proc;

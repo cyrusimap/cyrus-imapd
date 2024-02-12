@@ -1236,7 +1236,10 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey, int isbackup,
     struct dlist *dl = NULL;
 
     stream = prot_readmap(base, len);
-    prot_setisclient(stream, 1); /* don't sync literals */
+
+    /* Allow LITERAL+ - this is silly, but required to parse personal CALDATA */
+    prot_setisclient(stream, 1);
+
     c = dlist_parse(&dl, parsekey, /*isarchive*/ 0, isbackup, stream);
     prot_free(stream);
 

@@ -1156,6 +1156,10 @@ int service_main(int argc __attribute__((unused)),
 
     imapd_in = prot_new(0, 0);
     imapd_out = prot_new(1, 1);
+
+    /* Allow LITERAL+ */
+    prot_setisclient(imapd_in, 1);
+
     protgroup_insert(protin, imapd_in);
 
     /* Find out name of client host */

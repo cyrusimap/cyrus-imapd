@@ -249,6 +249,9 @@ static struct conn *conn_new(int fd)
     C->pin = prot_new(C->fd, 0);
     C->pout = prot_new(C->fd, 1);
 
+    /* Allow LITERAL+ */
+    prot_setisclient(C->pin, 1);
+
     prot_setflushonread(C->pin, C->pout);
     prot_settimeout(C->pin, 180*60);
 
