@@ -702,6 +702,12 @@ static const char *_namelock_name_from_userid(const char *userid)
 	free(inbox);
     }
 
+    if (config_skip_userlock && !strcmp(config_skip_userlock, userid)) {
+        // add a trailing character to avoid clashing with wrapping lock
+        buf_putc(&buf, '~');
+    }
+
+
     return buf_cstring(&buf);
 }
 
@@ -712,6 +718,14 @@ EXPORTED struct mboxlock *user_namespacelock_full(const char *userid, int lockty
     int r = mboxname_lock(name, &namelock, locktype);
     if (r) return NULL;
     return namelock;
+}
+
+EXPORTED int user_run_with_lock(const char *userid, int (*cb)(void *), void *rock)
+{
+    struct mboxlock *userlock = user_namespacelock(userid);
+    int r = cb(rock);
+    mboxname_release(&userlock);
+    return r;
 }
 
 EXPORTED int user_isnamespacelocked(const char *userid)

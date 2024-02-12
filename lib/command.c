@@ -62,12 +62,31 @@
 
 static int wait_for_child(const char *argv0, pid_t pid);
 
+EXPORTED int run_command_strarray(const strarray_t *argv)
+{
+    const char *argv0 = strarray_nth(argv, 0);
+    pid_t pid = fork();
+    if (pid < 0) {
+        syslog(LOG_ERR, "Failed to fork: %m");
+        return IMAP_SYS_ERROR;
+    }
+
+    if (!pid) {
+        /* in child */
+        execv(argv0, argv->data);
+        syslog(LOG_ERR, "Failed to execute %s: %m", argv0);
+        exit(1);
+    }
+
+    /* in parent */
+    return wait_for_child(argv0, pid);
+}
+
 EXPORTED int run_command(const char *argv0, ...)
 {
     va_list va;
     const char *p;
     strarray_t argv = STRARRAY_INITIALIZER;
-    pid_t pid;
     int r = 0;
 
     strarray_append(&argv, argv0);
@@ -77,25 +96,8 @@ EXPORTED int run_command(const char *argv0, ...)
         strarray_append(&argv, p);
     va_end(va);
 
-    pid = fork();
-    if (pid < 0) {
-        syslog(LOG_ERR, "Failed to fork: %m");
-        r = IMAP_SYS_ERROR;
-        goto out;
-    }
+    r = run_command_strarray(&argv);
 
-    if (!pid) {
-        /* in child */
-        r = execv(argv0, argv.data);
-        syslog(LOG_ERR, "Failed to execute %s: %m", argv0);
-        exit(1);
-    }
-    else {
-        /* in parent */
-        r = wait_for_child(argv0, pid);
-    }
-
-out:
     strarray_fini(&argv);
     return r;
 }

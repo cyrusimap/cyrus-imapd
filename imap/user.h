@@ -90,6 +90,7 @@ char *user_hash_xapian_byid(const char *mboxid, const char *root);
 struct mboxlock *user_namespacelock_full(const char *userid, int locktype);
 #define user_namespacelock(userid) user_namespacelock_full(userid, LOCK_EXCLUSIVE)
 int user_isnamespacelocked(const char *userid);
+int user_run_with_lock(const char *userid, int (*cb)(void *), void *rock);
 
 int user_sharee_renameacls(const struct namespace *namespace,
                            const char *olduser, const char *newuser);

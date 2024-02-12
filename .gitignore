@@ -94,6 +94,7 @@ imap/cyr_sphinxmgr
 imap/cyr_synclog
 imap/cyr_userseen
 imap/cyr_virusscan
+imap/cyr_withlock_run
 imap/cyrdump
 imap/dav_reconstruct
 imap/deliver

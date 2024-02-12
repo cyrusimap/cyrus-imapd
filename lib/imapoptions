@@ -999,6 +999,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    the ability to use the <host shortname>_mechs option to set preferred
    mechanisms for a specific host. */
 
+{ "global_lock", 1, SWITCH, "UNRELEASED" }
+/* Use a global shared lock for ALL writes, allowing the global lock
+   wrapper tool to freeze the world */
+
 { "fulldirhash", 0, SWITCH, "2.3.17" }
 /* If enabled, uses an improved directory hashing scheme which hashes
    on the entire username instead of using just the first letter as
