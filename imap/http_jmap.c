@@ -630,7 +630,7 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
     }
 
  done:
-    if (mbox) jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     if (body) {
         message_free_body(body);
         free(body);

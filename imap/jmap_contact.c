@@ -59,6 +59,7 @@
 #include "hash.h"
 #include "http_carddav.h"
 #include "http_dav.h"
+#include "http_dav_sharing.h"
 #include "http_jmap.h"
 #include "json_support.h"
 #include "mailbox.h"
@@ -179,7 +180,7 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         "ContactCard/copy",
         JMAP_URN_CONTACTS,
         &jmap_card_copy,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_READ_WRITE // need to do lock ordering before opening conversations
     },
     {
         "ContactCard/parse",
@@ -244,7 +245,7 @@ static jmap_method_t jmap_contact_methods_nonstandard[] = {
         "Contact/copy",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contact_copy,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_READ_WRITE // can't open conversations until we get locks ordered
     },
     { NULL, NULL, NULL, 0}
 };
@@ -1281,8 +1282,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         }
 
         if (!mailbox || strcmp(mailbox_name(mailbox), mbentry->name)) {
-            jmap_closembox(req, &mailbox);
-            r = jmap_openmbox(req, mbentry->name, &mailbox, 1);
+            mailbox_close(&mailbox);
+            r = mailbox_open_iwl(mbentry->name, &mailbox);
         }
         mboxlist_entry_free(&mbentry);
         if (r) goto done;
@@ -1315,8 +1316,8 @@ done:
     if (r) jmap_error(req, jmap_server_error(r));
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
-    jmap_closembox(req, &newmailbox);
-    jmap_closembox(req, &mailbox);
+    mailbox_close(&newmailbox);
+    mailbox_close(&mailbox);
 
     carddav_close(db);
 }
@@ -4045,8 +4046,8 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
 
     /* we need to create and append a record */
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mboxname)) {
-        jmap_closembox(req, mailbox);
-        r = jmap_openmbox(req, mboxname, mailbox, 1);
+        mailbox_close(mailbox);
+        r = mailbox_open_iwl(mboxname, mailbox);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             json_array_append_new(invalid, json_string("addressbookId"));
             r = 0;
@@ -4180,7 +4181,7 @@ static int _contact_set_update(jmap_req_t *req, unsigned kind,
                 json_array_append_new(invalid, json_string("addressbookId"));
                 r = HTTP_FORBIDDEN;
             }
-            else if ((r = jmap_openmbox(req, mboxname, &newmailbox, 1))) {
+            else if ((r = mailbox_open_iwl(mboxname, &newmailbox))) {
                 syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
             }
             else {
@@ -4202,8 +4203,8 @@ static int _contact_set_update(jmap_req_t *req, unsigned kind,
     }
 
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mbentry->name)) {
-        jmap_closembox(req, mailbox);
-        r = jmap_openmbox(req, mbentry->name, mailbox, 1);
+        mailbox_close(mailbox);
+        r = mailbox_open_iwl(mbentry->name, mailbox);
     }
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open %s",
@@ -4371,7 +4372,7 @@ static int _contact_set_update(jmap_req_t *req, unsigned kind,
 
   done:
     mboxlist_entry_free(&mbentry);
-    jmap_closembox(req, &newmailbox);
+    mailbox_close(&newmailbox);
     strarray_free(flags);
     freeentryatts(annots);
     vparse_free_card(vcard);
@@ -4448,7 +4449,7 @@ static void _contact_copy(jmap_req_t *req,
     }
 
     /* Read source event */
-    r = jmap_openmbox(req, mbentry->name, &src_mbox, /*rw*/0);
+    r = mailbox_open_irl(mbentry->name, &src_mbox);
     if (r) goto done;
 
     struct index_record record;
@@ -4500,8 +4501,8 @@ done:
             *set_err = jmap_server_error(r);
     }
     mboxlist_entry_free(&mbentry);
-    jmap_closembox(req, &dst_mbox);
-    jmap_closembox(req, &src_mbox);
+    mailbox_close(&dst_mbox);
+    mailbox_close(&src_mbox);
     json_decref(dst_card);
     jmap_parser_fini(&myparser);
 }
@@ -4522,11 +4523,35 @@ static int _contacts_copy(struct jmap_req *req,
     json_t *err = NULL;
     struct carddav_db *src_db = NULL;
     json_t *destroy_cards = json_array();
+    struct mboxlock *srcnamespacelock = NULL;
+    struct mboxlock *dstnamespacelock = NULL;
 
     /* Parse request */
     jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
     if (err) {
         jmap_error(req, err);
+        goto done;
+    }
+
+    char *srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
+    char *dstinbox = mboxname_user_mbox(req->accountid, NULL);
+    if (strcmp(srcinbox, dstinbox) < 0) {
+        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
+        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
+    }
+    else {
+        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
+        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
+    }
+    free(srcinbox);
+    free(dstinbox);
+
+    // now we can open the cstate
+    int r = conversations_open_user(req->accountid, 0, &req->cstate);
+    if (r) {
+        syslog(LOG_ERR, "jmap_email_copy: can't open converstaions: %s",
+                        error_message(r));
+        jmap_error(req, jmap_server_error(r));
         goto done;
     }
 
@@ -4576,6 +4601,8 @@ static int _contacts_copy(struct jmap_req *req,
 done:
     json_decref(destroy_cards);
     if (src_db) carddav_close(src_db);
+    mboxname_release(&srcnamespacelock);
+    mboxname_release(&dstnamespacelock);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
     return 0;
@@ -4838,7 +4865,7 @@ static int jmap_addressbook_get(struct jmap_req *req)
                 }
             }
 
-            if (mbentry) mboxlist_entry_free(&mbentry);
+            mboxlist_entry_free(&mbentry);
             free(mboxname);
             if (r) goto done;
         }
@@ -5081,12 +5108,8 @@ static int setaddressbook_writeprops(jmap_req_t *req,
     if (!jmap_hasrights(req, mboxname, JACL_READITEMS) && !ignore_acl)
         return IMAP_MAILBOX_NONEXISTENT;
 
-    r = jmap_openmbox(req, mboxname, &mbox, 1);
-    if (r) {
-        syslog(LOG_ERR, "jmap_openmbox(req, %s) failed: %s",
-                mboxname, error_message(r));
-        return r;
-    }
+    r = mailbox_open_iwl(mboxname, &mbox);
+    if (r) return r;
 
     r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) {
@@ -5111,7 +5134,7 @@ static int setaddressbook_writeprops(jmap_req_t *req,
     if (!r && props->isSubscribed >= 0) {
         /* Update subscription database */
         r = mboxlist_changesub(mboxname, req->userid, req->authstate,
-                               props->isSubscribed, 0, /*notify*/1);
+                               props->isSubscribed, 0, /*notify*/1, /*silent*/0);
 
         /* Set invite status for CalDAV */
         buf_setcstr(&val, props->isSubscribed ? "invite-accepted" : "invite-declined");
@@ -5134,7 +5157,7 @@ static int setaddressbook_writeprops(jmap_req_t *req,
     buf_free(&val);
     if (mbox) {
         if (r) mailbox_abort(mbox);
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
     }
     return r;
 }
@@ -5207,7 +5230,7 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
     jmap_myrights_delete(req, mboxname);
 
     /* Remove from subscriptions db */
-    mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0);
+    mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0, 1);
 
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
@@ -11109,8 +11132,8 @@ static int _card_set_create(jmap_req_t *req,
 
     /* we need to create and append a record */
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mboxname)) {
-        jmap_closembox(req, mailbox);
-        r = jmap_openmbox(req, mboxname, mailbox, 1);
+        mailbox_close(mailbox);
+        r = mailbox_open_iwl(mboxname, mailbox);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             json_array_append_new(invalid, json_string("addressbookId"));
             r = 0;
@@ -11267,7 +11290,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                 json_array_append_new(invalid, json_string("addressBookId"));
                 r = HTTP_FORBIDDEN;
             }
-            else if ((r = jmap_openmbox(req, mboxname, &newmailbox, 1))) {
+            else if ((r = mailbox_open_iwl(mboxname, &newmailbox))) {
                 syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
             }
             else {
@@ -11289,8 +11312,8 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     }
 
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mbentry->name)) {
-        jmap_closembox(req, mailbox);
-        r = jmap_openmbox(req, mbentry->name, mailbox, 1);
+        mailbox_close(mailbox);
+        r = mailbox_open_iwl(mbentry->name, mailbox);
     }
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open %s",
@@ -11457,7 +11480,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
 
   done:
     mboxlist_entry_free(&mbentry);
-    jmap_closembox(req, &newmailbox);
+    mailbox_close(&newmailbox);
     freeentryatts(annots);
     vcardcomponent_free(vcard);
     free(resource);
@@ -11662,7 +11685,7 @@ static int jmap_card_parse(jmap_req_t *req)
             json_array_append_new(parse.not_parsable, json_string(blobid));
         }
 
-        if (mailbox) jmap_closembox(req, &mailbox);
+        mailbox_close(&mailbox);
     }
 
     jmap_getblob_ctx_fini(&blob_ctx);
@@ -11721,7 +11744,8 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     }
 
     /* Open mailbox, we need it now */
-    if ((r = jmap_openmbox(req, mbentry->name, &mailbox, 0))) {
+    r = mailbox_open_irl(mbentry->name, &mailbox);
+    if (r) {
         ctx->errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
         goto done;
@@ -11823,7 +11847,7 @@ done:
         ctx->errstr = desc;
     }
     if (vcard) vcardcomponent_free(vcard);
-    if (mailbox) jmap_closembox(req, &mailbox);
+    mailbox_close(&mailbox);
     mboxlist_entry_free(&freeme);
     free(mboxid);
     free(propname);
@@ -11876,7 +11900,8 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     }
 
     /* Open mailbox, we need it now */
-    if ((r = jmap_openmbox(req, mbentry->name, &mailbox, 0))) {
+    r = mailbox_open_irl(mbentry->name, &mailbox);
+    if (r) {
         ctx->errstr = error_message(r);
         res = HTTP_SERVER_ERROR;
         goto done;
@@ -11955,7 +11980,7 @@ done:
         ctx->errstr = desc;
     }
     if (vcard) vparse_free_card(vcard);
-    if (mailbox) jmap_closembox(req, &mailbox);
+    mailbox_close(&mailbox);
     mboxlist_entry_free(&freeme);
     free(mboxid);
     free(prop);

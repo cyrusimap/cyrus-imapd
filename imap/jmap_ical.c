@@ -425,7 +425,7 @@ done:
         message_free_body(body);
         free(body);
     }
-    jmap_closembox(req, &srcmbox);
+    mailbox_close(&srcmbox);
     msgrecord_unref(&mr);
     buf_free(&preamble);
     return r;
@@ -440,8 +440,9 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
 
     if (!jmapctx->attachments.mbox) {
         char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
-        int r = jmap_openmbox(req, mboxname, &jmapctx->attachments.mbox,
-                jmapctx->attachments.lock);
+	int rw = jmapctx->attachments.lock;
+        int r = rw ? mailbox_open_iwl(mboxname, &jmapctx->attachments.mbox)
+                   : mailbox_open_irl(mboxname, &jmapctx->attachments.mbox);
         if (r) {
             xsyslog(LOG_ERR, "can't open attachments",
                     "mboxname=<%s> err<%s>", mboxname, error_message(r));
@@ -457,7 +458,7 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
         if (!jmapctx->attachments.db) {
             xsyslog(LOG_ERR, "mailbox_open_webdav failed",
                     "attachments=<%s>", mailbox_name(jmapctx->attachments.mbox));
-            jmap_closembox(req, &jmapctx->attachments.mbox);
+            mailbox_close(&jmapctx->attachments.mbox);
             jmapctx->attachments.db = NULL;
             jmapctx->attachments.err = IMAP_INTERNAL;
             return jmapctx->attachments.err;
@@ -558,8 +559,7 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
     if (!jmapctx) return;
 
 #ifndef BUILD_LMTPD
-    if (jmapctx->attachments.mbox)
-        jmap_closembox(jmapctx->req, &jmapctx->attachments.mbox);
+    mailbox_close(&jmapctx->attachments.mbox);
     if (jmapctx->attachments.db)
         webdav_close(jmapctx->attachments.db);
 #endif // BUILD_LMTPD

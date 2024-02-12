@@ -3729,7 +3729,7 @@ int sync_apply_changesub(struct dlist *kin, struct sync_state *sstate)
     if (!dlist_getatom(kin, "USERID", &userid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    return mboxlist_changesub(mboxname, userid, sstate->authstate, add, add, 0);
+    return mboxlist_changesub(mboxname, userid, sstate->authstate, add, add, 0, /*silent*/1);
 }
 
 /* ====================================================================== */
@@ -3974,7 +3974,7 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     strarray_t *list = mboxlist_sublist(userid);
     for (i = 0; i < list->count; i++) {
         const char *name = strarray_nth(list, i);
-        mboxlist_changesub(name, userid, sstate->authstate, 0, 0, 0);
+        mboxlist_changesub(name, userid, sstate->authstate, 0, 0, 0, /*silent*/1);
     }
 
     mbentry_t *mbentry = NULL;

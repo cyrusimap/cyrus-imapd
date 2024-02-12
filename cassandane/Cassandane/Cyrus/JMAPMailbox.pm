@@ -946,6 +946,15 @@ sub test_mailbox_query_filteroperator
     ]);
     $self->assert(exists $res->[0][1]{updated}{$mboxids{'Ham'}});
 
+    xlog $self, "make sure subscribing changed state";
+    $self->assert_not_equals($res->[0][1]{oldState}, $res->[0][1]{newState});
+
+    my $state = $res->[0][1]{oldState};
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_equals($res->[0][1]{updated}[0], $mboxids{'Ham'});
+    $self->assert_null($res->[0][1]{updatedProperties});
+
     xlog $self, "list mailboxes filtered by parentId OR role";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {

@@ -318,7 +318,7 @@ static void my_dav_init(struct buf *serverinfo __attribute__((unused)))
 }
 
 
-int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentry)
+int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentryp)
 {
     mbname_t *mbname;
     const char *notifyname;
@@ -341,22 +341,22 @@ int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentry)
 
     /* Locate the mailbox */
     notifyname = mbname_intname(mbname);
-    r = proxy_mlookup(notifyname, mbentry, NULL, NULL);
+    r = proxy_mlookup(notifyname, mbentryp, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(userid, NULL);
 
-        int r1 = proxy_mlookup(inboxname, mbentry, NULL, NULL);
+        int r1 = proxy_mlookup(inboxname, mbentryp, NULL, NULL);
         free(inboxname);
         if (r1 == IMAP_MAILBOX_NONEXISTENT) {
             r = IMAP_INVALID_USER;
             goto done;
         }
 
-        mboxlist_entry_free(mbentry);
-        *mbentry = mboxlist_entry_create();
-        (*mbentry)->name = xstrdup(notifyname);
-        (*mbentry)->mbtype = MBTYPE_COLLECTION;
+        mboxlist_entry_free(mbentryp);
+        *mbentryp = mboxlist_entry_create();
+        (*mbentryp)->name = xstrdup(notifyname);
+        (*mbentryp)->mbtype = MBTYPE_COLLECTION;
     }
 
   done:
@@ -365,15 +365,15 @@ int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentry)
     return r;
 }
 
-static int _create_notify_collection(const char *userid, struct mailbox **mailbox)
+static int _create_notify_collection(const char *userid, mbentry_t **mbentryp) 
 {
     /* lock the namespace lock and try again */
     struct mboxlock *namespacelock = user_namespacelock(userid);
 
-    mbentry_t *mbentry = NULL;
-    int r = dav_lookup_notify_collection(userid, &mbentry);
+    int r = dav_lookup_notify_collection(userid, mbentryp);
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mbentry_t *mbentry = *mbentryp;
         if (!mbentry) goto done;
         else if (mbentry->server) {
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
@@ -383,44 +383,35 @@ static int _create_notify_collection(const char *userid, struct mailbox **mailbo
 
         r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
                                    1/*isadmin*/, userid, NULL/*authstate*/,
-                                   0/*flags*/, mailbox);
-        /* we lost the race, that's OK */
-        if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                                   0/*flags*/, NULL);
+
+        if (r) xsyslog(LOG_ERR, "IOERROR: failed to create notify collection",
+                      "mailbox=<%s> error=<%s>",
                       mbentry->name, error_message(r));
-    }
-    else if (!r && mailbox) {
-        /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailbox);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mbentry->name, error_message(r));
-        }
     }
 
  done:
     mboxname_release(&namespacelock);
-    mboxlist_entry_free(&mbentry);
     return r;
 }
 
-static int create_notify_collection(const char *userid, struct mailbox **mailbox)
+static int create_notify_collection(const char *userid, struct mailbox **mailboxp)
 {
     /* notifications collection */
     mbentry_t *mbentry = NULL;
     int r = dav_lookup_notify_collection(userid, &mbentry);
-    if (r) {
+
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
         mboxlist_entry_free(&mbentry);
-        return _create_notify_collection(userid, mailbox);
+        r = _create_notify_collection(userid, &mbentry);
     }
 
-    if (mailbox) {
+    if (!r && mailboxp) {
         /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailbox);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mbentry->name, error_message(r));
-        }
+        r = mailbox_open_iwl(mbentry->name, mailboxp);
+        if (r) xsyslog(LOG_ERR, "IOERROR: failed to open notify collection",
+                       "mailbox=<%s> error=<%s>",
+                       mbentry->name, error_message(r));
     }
 
     mboxlist_entry_free(&mbentry);
@@ -888,7 +879,7 @@ done:
     return r;
 }
 
-HIDDEN int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
+static int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
                                  const char *userid, const char *resource)
 {
     struct mailbox *mailbox = NULL;
@@ -958,6 +949,44 @@ HIDDEN int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
     mailbox_close(&mailbox);
 
     return r;
+}
+
+struct scheduled_notification {
+    xmlDocPtr doc;
+    struct dlist *extradata;
+    char *userid;
+    char *resource;
+    struct scheduled_notification *next;
+};
+
+static struct scheduled_notification *scheduled_notifications = NULL;
+
+HIDDEN int dav_schedule_notification(xmlDocPtr doc, struct dlist *extradata,
+                                     const char *userid, const char *resource)
+{
+    struct scheduled_notification *new = xzmalloc(sizeof(struct scheduled_notification));
+    new->doc = xmlCopyDoc(doc, 1);
+    new->extradata = extradata;  // not a copy, eaten by dav_send_notification
+    new->userid = xstrdupnull(userid);
+    new->resource = xstrdupnull(resource);
+    new->next = scheduled_notifications;
+    scheduled_notifications = new;
+    return 0;
+}
+
+HIDDEN void dav_run_notifications()
+{
+    struct scheduled_notification *next = NULL;
+    struct scheduled_notification *item;
+    for (item = scheduled_notifications; item; item = next) {
+        next = item->next;
+        dav_send_notification(item->doc, item->extradata, item->userid, item->resource);
+	xmlFreeDoc(item->doc);
+	free(item->userid);
+	free(item->resource);
+	free(item);
+    }
+    scheduled_notifications = NULL;
 }
 
 
@@ -1090,7 +1119,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
 
     /* [Un]subscribe */
     r = mboxlist_changesub(mboxname, txn->req_tgt.userid,
-                           httpd_authstate, add, 0, 0);
+                           httpd_authstate, add, 0, 0, 0);
     if (r) {
         syslog(LOG_ERR, "mboxlist_changesub(%s, %s) failed: %s",
                mboxname, txn->req_tgt.userid, error_message(r));
@@ -2114,8 +2143,8 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
                                strhash(txn->req_tgt.mbentry->name),
                                strhash(userid));
 
-                    r = dav_send_notification(notify->doc, extradata,
-                                              userid, buf_cstring(&resource));
+                    r = dav_schedule_notification(notify->doc, extradata,
+                                                  userid, buf_cstring(&resource));
                 }
 
                 free(userid);
@@ -2133,6 +2162,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     if (notify) xmlFreeDoc(notify->doc);
     buf_free(&resource);
     mboxname_release(&namespacelock);
+    dav_run_notifications();
 
     return ret;
 }

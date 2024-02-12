@@ -2477,7 +2477,7 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
         goto done;
     }
 
-    mboxlist_changesub(internalname, userid, auth_state, 1, 1, 1);
+    mboxlist_changesub(internalname, userid, auth_state, 1, 1, 1, 1);
     syslog(LOG_DEBUG, "autosievefolder: User %s, folder %s creation succeeded",
            userid, internalname);
 

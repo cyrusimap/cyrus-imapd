@@ -257,7 +257,7 @@ struct mailbox {
     size_t index_len;   /* mapped size */
 
     int index_locktype; /* 0 = none, 1 = shared, 2 = exclusive */
-    int is_readonly; /* true = open index and cache files readonly */
+    int is_readonly; /* tells us whether the index_fd is opened RW or RO */
 
     ino_t header_file_ino;
     bit32 header_file_crc;
@@ -310,6 +310,12 @@ struct mailbox {
     struct index_change *index_changes;
     uint32_t index_change_alloc;
     uint32_t index_change_count;
+
+    /* refcounting */
+    int refcount;
+    char *lockname;
+    struct mboxlock *namelock;
+    struct mailbox *next;
 };
 
 #define ITER_SKIP_UNLINKED (1<<0)

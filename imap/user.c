@@ -379,7 +379,7 @@ static int user_renamesub(const char *name, void* rock)
         name = newname;
     }
 
-    return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1, 1);
+    return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1, 1, /*silent*/1);
 }
 
 static int user_renamesieve(const char *olduser, const char *newuser)
@@ -693,21 +693,13 @@ EXPORTED char *user_hash_xapian_byid(const char *mboxid, const char *root)
 
 static const char *_namelock_name_from_userid(const char *userid)
 {
-    const char *p;
     static struct buf buf = BUF_INITIALIZER;
-    if (!userid) userid = ""; // no userid == global lock
 
     buf_setcstr(&buf, "*U*");
-
-    for (p = userid; *p; p++) {
-        switch(*p) {
-            case '.':
-                buf_putc(&buf, '^');
-                break;
-            default:
-                buf_putc(&buf, *p);
-                break;
-        }
+    if (userid) {
+	char *inbox = mboxname_user_mbox(userid, NULL);
+	buf_appendcstr(&buf, inbox);
+	free(inbox);
     }
 
     return buf_cstring(&buf);

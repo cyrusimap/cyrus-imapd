@@ -388,36 +388,12 @@ HIDDEN int jmap_error_response(struct transaction_t *txn,
 HIDDEN int jmap_initreq(jmap_req_t *req)
 {
     memset(req, 0, sizeof(struct jmap_req));
-    req->mboxes = ptrarray_new();
     return 0;
 }
 
-struct _mboxcache_rec {
-    struct mailbox *mbox;
-    int refcount;
-    int rw;
-};
-
 HIDDEN void jmap_finireq(jmap_req_t *req)
 {
-    int i;
-
-    for (i = 0; i < req->mboxes->count; i++) {
-        struct _mboxcache_rec *rec = ptrarray_nth(req->mboxes, i);
-        syslog(LOG_ERR, "jmap: force-closing mailbox %s (refcount=%d)",
-                        mailbox_name(rec->mbox), rec->refcount);
-        mailbox_close(&rec->mbox);
-        free(rec);
-    }
-    /* Fail after cleaning up open mailboxes */
-    if (req->mboxes->count) {
-        json_t *jdebug = json_pack("[s,s,s,o,o]", req->method, req->userid, req->accountid, req->args, req->response);
-        char *debug = json_dumps(jdebug, JSON_INDENT(2));
-        assert(!debug);
-    }
-
-    ptrarray_free(req->mboxes);
-    req->mboxes = NULL;
+    assert(!open_mailboxes_exist());
 
     jmap_mbentry_cache_free(req);
 
@@ -863,6 +839,9 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         }
         conversations_commit(&req.cstate);
 
+	// run any notification updates after conversations are released
+	dav_run_notifications();
+
         json_decref(args);
     }
 
@@ -1077,92 +1056,16 @@ void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
     hash_insert(creation_id, xstrdup(id), req->created_ids);
 }
 
-HIDDEN int jmap_openmbox(jmap_req_t *req, const char *name,
-                         struct mailbox **mboxp, int rw)
-{
-    int i, r;
-    struct _mboxcache_rec *rec;
-
-    for (i = 0; i < req->mboxes->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
-        if (!strcmp(name, mailbox_name(rec->mbox))) {
-            if (rw && !rec->rw) {
-                /* Lock promotions are not supported */
-                syslog(LOG_ERR, "jmapmbox: failed to grab write-lock"
-                       " on cached read-only mailbox %s", name);
-                return IMAP_INTERNAL;
-            }
-            /* Found a cached mailbox. Increment refcount. */
-            rec->refcount++;
-            *mboxp = rec->mbox;
-
-            return 0;
-        }
-    }
-
-    /* Add mailbox to cache */
-    if (req->force_openmbox_rw)
-        rw = 1;
-    r = rw ? mailbox_open_iwl(name, mboxp) : mailbox_open_irl(name, mboxp);
-    if (r) {
-        syslog(LOG_ERR, "jmap_openmbox(%s): %s", name, error_message(r));
-        return r;
-    }
-    rec = xzmalloc(sizeof(struct _mboxcache_rec));
-    rec->mbox = *mboxp;
-    rec->refcount = 1;
-    rec->rw = rw;
-    ptrarray_add(req->mboxes, rec);
-
-    return 0;
-}
-
 HIDDEN int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
                                      struct mailbox **mboxp, int rw)
 {
     const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, id);
 
     if (mbentry)
-        return jmap_openmbox(req, mbentry->name, mboxp, rw);
+        return rw ? mailbox_open_iwl(mbentry->name, mboxp)
+                  : mailbox_open_irl(mbentry->name, mboxp);
     else
         return IMAP_MAILBOX_NONEXISTENT;
-}
-
-HIDDEN int jmap_isopenmbox(jmap_req_t *req, const char *name)
-{
-
-    int i;
-    struct _mboxcache_rec *rec;
-
-    for (i = 0; i < req->mboxes->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
-        if (!strcmp(name, mailbox_name(rec->mbox)))
-            return 1;
-    }
-
-    return 0;
-}
-
-HIDDEN void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp)
-{
-    struct _mboxcache_rec *rec = NULL;
-    int i;
-
-    if (mboxp == NULL || *mboxp == NULL) return;
-
-    for (i = 0; i < req->mboxes->count; i++) {
-        rec = (struct _mboxcache_rec*) ptrarray_nth(req->mboxes, i);
-        if (rec->mbox == *mboxp) {
-            if (!(--rec->refcount)) {
-                ptrarray_remove(req->mboxes, i);
-                mailbox_close(&rec->mbox);
-                free(rec);
-            }
-            *mboxp = NULL;
-            return;
-        }
-    }
-    syslog(LOG_INFO, "jmap: ignoring non-cached mailbox %s", mailbox_name(*mboxp));
 }
 
 struct findblob_data {
@@ -1202,13 +1105,13 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
         }
     }
 
-    r = jmap_openmbox(req, mbentry->name, &d->mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &d->mbox);
     mboxlist_entry_free(&mbentry);
     if (r) return r;
 
     r = msgrecord_find(d->mbox, rec->uid, &d->mr);
     if (r) {
-        jmap_closembox(req, &d->mbox);
+        mailbox_close(&d->mbox);
         d->mr = NULL;
         return r;
     }
@@ -1326,7 +1229,7 @@ done:
         conversations_commit(&mycstate);
     }
     if (r) {
-        if (data.mbox) jmap_closembox(req, &data.mbox);
+        mailbox_close(&data.mbox);
         if (mybody) {
             message_free_body(mybody);
             free(mybody);
@@ -2804,7 +2707,7 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
         if (!old || !new) {
             /* Change subscription */
             r = mboxlist_changesub(irock->mboxname, userid, httpd_authstate,
-                                   access != SHARE_NONE, 0, /*notify*/1);
+                                   access != SHARE_NONE, 0, /*notify*/1, /*silent*/0);
         }
 
         if (!r) {
@@ -2840,8 +2743,8 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
             dlist_setatom(extradata, "OLD", rights);
             cyrus_acl_masktostr(change->newrights, rights);
             dlist_setatom(extradata, "NEW", rights);
-            r = dav_send_notification(irock->notify->doc, extradata,
-                    userid, buf_cstring(&irock->resource));
+            r = dav_schedule_notification(irock->notify->doc, extradata,
+                                          userid, buf_cstring(&irock->resource));
         }
     }
 }

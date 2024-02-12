@@ -163,7 +163,8 @@ Debian/Ubuntu copypasta:
        libdbd-sqlite3-perl libdigest-crc-perl libxml-simple-perl
 
   sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
-       Net::CalDAVTalk Net::CardDAVTalk String::CRC32
+       Net::CalDAVTalk Net::CardDAVTalk String::CRC32 \
+       IO::File::Lockable
 
 Fedora copypasta:
    # there's heaps more to add here... needs to be tested

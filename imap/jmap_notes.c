@@ -472,7 +472,7 @@ static int jmap_note_get(jmap_req_t *req)
 
     rights = jmap_myrights_mbentry(req, mbentry);
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
@@ -503,7 +503,7 @@ static int jmap_note_get(jmap_req_t *req)
     get.state = buf_release(&buf);
     jmap_ok(req, jmap_get_reply(&get));
 
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
 done:
     jmap_parser_fini(&parser);
@@ -867,7 +867,7 @@ static int jmap_note_set(jmap_req_t *req)
 
     rights = jmap_myrights_mbentry(req, mbentry);
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 1);
+    r = mailbox_open_iwl(mbentry->name, &mbox);
     assert(mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
@@ -955,7 +955,7 @@ static int jmap_note_set(jmap_req_t *req)
     jmap_ok(req, jmap_set_reply(&set));
 
 done:
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     return 0;
@@ -999,7 +999,7 @@ static int jmap_note_changes(jmap_req_t *req)
         goto done;
     }
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
 
     r = mailbox_user_flag(mbox, DFLAG_UNBIND, &userflag, 0);
@@ -1057,7 +1057,7 @@ static int jmap_note_changes(jmap_req_t *req)
         }
     }
     mailbox_iter_done(&iter);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     buf_free(&buf);
 
     if (changes.max_changes) {

@@ -152,20 +152,7 @@ typedef struct jmap_req {
     double sys_start;
     json_t *perf_details;
 
-    /* The JMAP request keeps its own cache of opened mailboxes,
-     * which can be used by calling jmap_openmbox. If the
-     * force_openmboxrw is set, this causes all following
-     * mailboxes to be opened read-writeable, irrespective if
-     * the caller asked for a read-only lock. This allows to
-     * prevent lock promotion conflicts, in case a cached mailbox
-     * was opened read-only by a helper but it now asked to be
-     * locked exclusively. Since the mailbox lock does not
-     * support lock promition, this would currently abort with
-     * an error. */
-    int force_openmbox_rw;
-
     /* Internal state */
-    ptrarray_t *mboxes;
     hash_table *mbstates;
     hash_table *created_ids;
     hash_table *inmemory_blobs;
@@ -278,13 +265,8 @@ extern void jmap_admin_capabilities(json_t *account_capabilities);
 extern void jmap_accounts(json_t *accounts, json_t *primary_accounts);
 
 /* Request-scoped mailbox cache */
-extern int  jmap_openmbox(jmap_req_t *req, const char *name,
-                          struct mailbox **mboxp, int rw);
 extern int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
                                      struct mailbox **mboxp, int rw);
-extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
-extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
-
 extern int jmap_mboxlist_lookup(const char *name,
                                 mbentry_t **entryptr, struct txn **tid);
 

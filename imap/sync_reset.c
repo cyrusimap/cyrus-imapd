@@ -140,7 +140,7 @@ static int reset_single(const char *userid)
     /* ignore failures here - the subs file gets deleted soon anyway */
     for (i = sublist->count; i; i--) {
         const char *name = strarray_nth(sublist, i-1);
-        (void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0);
+        (void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0, /*silent*/1);
     }
 
     mbentry_t *mbentry = NULL;

@@ -77,7 +77,7 @@ static jmap_method_t jmap_core_methods_standard[] = {
         "Blob/copy",
         JMAP_URN_CORE,
         &jmap_blob_copy,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_READ_WRITE // no conversations, we need to get lock ordering first
     },
     {
         "Core/echo",
@@ -344,7 +344,7 @@ done:
     message_free_body(body);
     free(body);
     msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     return r;
 }
 
@@ -357,11 +357,35 @@ static int jmap_blob_copy(jmap_req_t *req)
     size_t i = 0;
     int r = 0;
     struct mailbox *to_mbox = NULL;
+    struct mboxlock *srcnamespacelock = NULL;
+    struct mboxlock *dstnamespacelock = NULL;
 
     /* Parse request */
     jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
     if (err) {
         jmap_error(req, err);
+        goto cleanup;
+    }
+
+    char *srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
+    char *dstinbox = mboxname_user_mbox(req->accountid, NULL);
+    if (strcmp(srcinbox, dstinbox) < 0) {
+        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
+        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
+    }
+    else {
+        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
+        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
+    }
+    free(srcinbox);
+    free(dstinbox);
+
+    // now we can open the cstate
+    r = conversations_open_user(req->accountid, 0, &req->cstate);
+    if (r) {
+        syslog(LOG_ERR, "jmap_email_copy: can't open converstaions: %s",
+                        error_message(r));
+        jmap_error(req, jmap_server_error(r));
         goto cleanup;
     }
 
@@ -397,9 +421,11 @@ done:
     r = 0;
 
 cleanup:
+    mailbox_close(&to_mbox);
+    mboxname_release(&srcnamespacelock);
+    mboxname_release(&dstnamespacelock);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
-    mailbox_close(&to_mbox);
     return r;
 }
 
@@ -832,7 +858,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
             r = IMAP_PERMISSION_DENIED;
         }
         else {
-            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+            r = mailbox_open_irl(mbentry->name, &mbox);
             if (r) {
                 syslog(LOG_ERR, "jmap_blob_get: can't open mailbox %s: %s",
                        mbentry->name, error_message(r));
@@ -946,7 +972,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
         if (caldav_db) caldav_close(caldav_db);
         if (carddav_db) carddav_close(carddav_db);
         mbname_free(&mbname);
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
     }
 
     /* Clean up memory */

@@ -1448,7 +1448,11 @@ sub _check_cores
         my $prog = _detect_core_program($core);
 
         xlog "Found core file $core";
-        xlog "   from program $prog" if defined $prog;
+        if (defined $prog) {
+           xlog "   from program $prog";
+           my ($bin) = $prog =~ m/^(\S+)/; # binary only
+           xlog "   debug: sudo gdb $bin $core";
+        }
     }
     closedir CORES;
 

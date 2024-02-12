@@ -57,6 +57,8 @@
 #include "bsearch.h"
 #include "cyr_qsort_r.h"
 #include "http_jmap.h"
+#include "http_dav.h"
+#include "http_dav_sharing.h"
 #include "jmap_mail.h"
 #include "json_support.h"
 #include "mailbox.h"
@@ -2335,7 +2337,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     /* Write annotations and isSubscribed */
     r = _mbox_set_annots(req, args, mboxname);
     if (!r && args->is_subscribed > 0) {
-        r = mboxlist_changesub(mboxname, req->userid, httpd_authstate, 1, 0, 0);
+        r = mboxlist_changesub(mboxname, req->userid, httpd_authstate, 1, 0, 0, 0);
     }
     if (r) goto done;
 
@@ -2739,13 +2741,13 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
     if (!r && args->is_subscribed >= 0) {
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
-                               args->is_subscribed, 0, 0);
+                               args->is_subscribed, 0, 0, 0);
     }
     if (!r && (args->shareWith || args->is_seenshared >= 0)) {
         struct mailbox *mbox = NULL;
         uint32_t newopts;
 
-        r = jmap_openmbox(req, mboxname, &mbox, 1);
+        r = mailbox_open_iwl(mboxname, &mbox);
         if (r) goto done;
 
         if (args->shareWith) {
@@ -2766,7 +2768,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 mboxlist_update_foldermodseq(mailbox_name(mbox), mbox->i.highestmodseq);
             }
         }
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
     }
     if (r) goto done;
 
@@ -2824,12 +2826,12 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
         r = IMAP_NOTFOUND;
         goto done;
     }
-    r = jmap_openmbox(req, src_mbentry->name, &src_mbox, 0);
+    r = mailbox_open_irl(src_mbentry->name, &src_mbox);
     if (r) {
         syslog(LOG_ERR, "%s: can't open %s", __func__, src_mbentry->name);
         goto done;
     }
-    r = jmap_openmbox(req, dst_mbentry->name, &dst_mbox, 1);
+    r = mailbox_open_iwl(dst_mbentry->name, &dst_mbox);
     if (r) {
         syslog(LOG_ERR, "%s: can't open %s", __func__, dst_mbentry->name);
         goto done;
@@ -2898,8 +2900,8 @@ done:
     if (r && !result->err) {
         result->err = jmap_server_error(r);
     }
-    jmap_closembox(req, &dst_mbox);
-    jmap_closembox(req, &src_mbox);
+    mailbox_close(&dst_mbox);
+    mailbox_close(&src_mbox);
     ptrarray_fini(&move_msgrecs);
     return r;
 }
@@ -2971,14 +2973,14 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
             struct mailbox *mbox = NULL;
             struct mailbox_iter *iter = NULL;
 
-            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+            r = mailbox_open_irl(mbentry->name, &mbox);
             if (r) goto done;
             iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
             if (mailbox_iter_step(iter) != NULL) {
                 result->err = json_pack("{s:s}", "type", "mailboxHasEmail");
             }
             mailbox_iter_done(&iter);
-            jmap_closembox(req, &mbox);
+            mailbox_close(&mbox);
             if (result->err) goto done;
         }
     }
@@ -3033,7 +3035,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
             mbentry->uniqueid, msgcount);
 
     /* Remove subscription */
-    int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 0, 0);
+    int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 1, 0, 1);
     if (r2) {
         syslog(LOG_ERR, "jmap: mbox_destroy: can't unsubscribe %s:%s",
                 mbentry->name, error_message(r2));

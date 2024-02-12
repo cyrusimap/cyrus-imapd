@@ -1722,3 +1722,14 @@ EXPORTED void dlist_rename(struct dlist *dl, const char *name)
     free(dl->name);
     dl->name = xstrdup(name);
 }
+
+EXPORTED struct dlist *dlist_copy(const struct dlist *dl)
+{
+    if (!dl) return NULL;
+    struct buf buf = BUF_INITIALIZER;
+    struct dlist *new = NULL;
+    dlist_printbuf(dl, 1, &buf);
+    dlist_parsemap(&new, 1, 0, buf_base(&buf), buf_len(&buf));
+    buf_free(&buf);
+    return new;
+}

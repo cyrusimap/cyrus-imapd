@@ -1529,6 +1529,7 @@ sub assert_user_sub_exists
     my ($self, $instance, $user) = @_;
 
     my $subs = $instance->get_conf_user_file($user, 'sub');
+    $self->assert_not_null($subs);
 
     xlog $self, "Looking for subscriptions file $subs";
 
@@ -1540,6 +1541,7 @@ sub assert_user_sub_not_exists
     my ($self, $instance, $user) = @_;
 
     my $subs = $instance->get_conf_user_file($user, 'sub');
+    return unless $subs;  # user might not exist
 
     xlog $self, "Looking for subscriptions file $subs";
 

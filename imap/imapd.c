@@ -8187,7 +8187,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
     if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
         mboxlist_changesub(mbname_intname(mbname), imapd_userid, imapd_authstate,
-                           /* add */ 0, /* force */ 0, /* notify? */ 1);
+                           /* add */ 0, /* force */ 1, /* notify? */ 0, /*silent*/1);
     }
 
     mboxname_release(&namespacelock);
@@ -8292,7 +8292,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
 
     if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
         mboxlist_changesub(mbentry->name, imapd_userid, imapd_authstate,
-                           /* add */ 0, /* force */ 0, /* notify? */ 0);
+                           /* add */ 0, /* force */ 1, /* notify? */ 0, /*silent*/1);
     }
 
     oldextname =
@@ -8733,7 +8733,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
 
         if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
             mboxlist_changesub(oldmailboxname, imapd_userid, imapd_authstate,
-                               /* add */ 0, /* force */ 0, /* notify? */ 1);
+                               /* add */ 0, /* force */ 1, /* notify? */ 0, /*silent*/1);
         }
     }
 
@@ -8781,7 +8781,6 @@ submboxes:
 
     /* take care of deleting old quotas */
     if (!r && rename_user) {
-        user_sharee_renameacls(&imapd_namespace, olduser, newuser);
         user_deletequotaroots(olduser);
         sync_log_unuser(olduser);
     }
@@ -8826,6 +8825,9 @@ respond:
 done:
     mboxname_release(&oldnamespacelock);
     mboxname_release(&newnamespacelock);
+    // rename acls after the lock is dropped
+    if (!r && rename_user)
+        user_sharee_renameacls(&imapd_namespace, olduser, newuser);
     mboxlist_entry_free(&mbentry);
     if (oldname != orig_oldname) free(oldname);
     if (newname != orig_newname) free(newname);
@@ -9209,7 +9211,7 @@ static void cmd_changesub(char *tag, char *namespace, char *name, int add)
         }
         else {
             char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-            r = mboxlist_changesub(intname, imapd_userid, imapd_authstate, add, force, 1);
+            r = mboxlist_changesub(intname, imapd_userid, imapd_authstate, add, force, 1, 0);
             free(intname);
         }
     }
