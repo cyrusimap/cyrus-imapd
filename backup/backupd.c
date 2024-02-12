@@ -229,9 +229,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     backupd_in = prot_new(0, 0);
     backupd_out = prot_new(1, 1);
 
-    /* Force use of LITERAL+ so we don't need two way communications */
+    /* Allow use of LITERAL+ */
     prot_setisclient(backupd_in, 1);
-    prot_setisclient(backupd_out, 1);
 
     /* Find out name of client host */
     backupd_clienthost = get_clienthost(0, &localip, &remoteip);

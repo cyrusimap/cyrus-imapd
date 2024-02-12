@@ -72,9 +72,6 @@ static int tear_down(void)
 
 /*
  * Run a single testcase.
- *
- * Note: prot_setisclient() turns off off literal synchronising so
- * we don't have to futz around with testing that.
  */
 #define _TESTCASE_PRE(fut, input, retval, consumed)                 \
     do {                                                            \
@@ -84,7 +81,6 @@ static int tear_down(void)
         long long _consumed = (consumed);                           \
         p = prot_readmap(input, sizeof(input)-1);                   \
         CU_ASSERT_PTR_NOT_NULL_FATAL(p);                            \
-        prot_setisclient(p, 1);                                     \
         c = fut(p, NULL, &b);                                       \
         CU_ASSERT_EQUAL(c, retval);                                 \
         if (_consumed >= 0) {                                       \

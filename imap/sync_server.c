@@ -329,9 +329,8 @@ int service_main(int argc __attribute__((unused)),
     sync_in = prot_new(0, 0);
     sync_out = prot_new(1, 1);
 
-    /* Force use of LITERAL+ so we don't need two way communications */
+    /* Allow LITERAL+ */
     prot_setisclient(sync_in, 1);
-    prot_setisclient(sync_out, 1);
 
     /* Find out name of client host */
     sync_clienthost = get_clienthost(0, &localip, &remoteip);

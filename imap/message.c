@@ -3419,7 +3419,6 @@ EXPORTED void message_read_bodystructure(const struct index_record *record, stru
     /* Read envelope response from cache */
     strm = prot_readmap(cacheitem_base(record, CACHE_ENVELOPE),
                         cacheitem_size(record, CACHE_ENVELOPE));
-    prot_setisclient(strm, 1);  /* no-sync literals */
 
     message_read_envelope(strm, *body);
     prot_free(strm);
@@ -3427,7 +3426,6 @@ EXPORTED void message_read_bodystructure(const struct index_record *record, stru
     /* Read bodystructure response from cache */
     strm = prot_readmap(cacheitem_base(record, CACHE_BODYSTRUCTURE),
                         cacheitem_size(record, CACHE_BODYSTRUCTURE));
-    prot_setisclient(strm, 1);  /* no-sync literals */
 
     message_read_body(strm, *body, NULL);
     prot_free(strm);
@@ -4792,7 +4790,6 @@ static int message_parse_cbodystructure(message_t *m)
                         cacheitem_size(&m->record, CACHE_BODYSTRUCTURE));
     if (!prot)
         return IMAP_MAILBOX_BADFORMAT;
-    prot_setisclient(prot, 1);  /* don't crash parsing literals */
 
     m->body = xzmalloc(sizeof(struct body));
     r = parse_bodystructure_part(prot, m->body, NULL);
