@@ -6523,40 +6523,56 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 
 
 HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
-                                 const char *newname, int silent)
+                                 mbentry_t *newmbentry, int silent)
 {
+    const char *newname = newmbentry->name;
     char quotaroot[MAX_MAILBOX_BUFFER];
     int hasquota = quota_findroot(quotaroot, sizeof(quotaroot), newname);
+    struct conversations_state *oldcstate = NULL;
+    struct conversations_state *newcstate = NULL;
+    struct conversations_state *localcstate = NULL;
 
     /* Move any quota usage */
     int r = mailbox_changequotaroot(oldmailbox,
-                                    hasquota ? quotaroot: NULL, silent);
+                                    hasquota ? quotaroot : NULL, silent);
+    if (r) goto done;
 
-    if (!r) {
-        /* copy any mailbox annotations */
-        mbentry_t newmbentry = MBENTRY_INITIALIZER;
-        newmbentry.name = (char *) newname;
-        struct mailbox newmailbox = { .mbentry = &newmbentry,
-                                      .index_locktype = LOCK_EXCLUSIVE };
-        r = annotate_rename_mailbox(oldmailbox, &newmailbox);
+    struct mailbox newmailbox = *oldmailbox;
+    newmailbox.mbentry = newmbentry;
+    r = annotate_rename_mailbox(oldmailbox, &newmailbox);
+    if (r) goto done;
+
+    oldcstate = mailbox_get_cstate(oldmailbox);
+    newcstate = conversations_get_mbox(newname);
+    if (!newcstate) {
+        conversations_open_mbox(newname, 0, &localcstate);
+        newcstate = localcstate;
     }
 
-    if (!r && mailbox_has_conversations(oldmailbox)) {
-        struct conversations_state *oldcstate =
-            mailbox_get_cstate(oldmailbox);
-
-        assert(oldcstate);
-
-        if (mboxname_isdeletedmailbox(newname, NULL)) {
-            /* we never store data about deleted mailboxes */
-            r = mailbox_delete_conversations(oldmailbox);
-        }
-        else if (oldcstate->folders_byname) {
-            /* we can just rename within the same user */
+    if (oldcstate && newcstate && !strcmp(oldcstate->path, newcstate->path)) {
+        /* we can just rename within the same user */
+        if (oldcstate->folders_byname) {
             r = conversations_rename_folder(oldcstate, mailbox_name(oldmailbox), newname);
         }
-        // otherwise, we don't need to rename because it's the same uniqueid
+        /* otherwise it's got the same key, so nothing to do */
     }
+    else {
+        /* have to handle each one separately */
+        if (oldcstate)
+            r = mailbox_delete_conversations(oldmailbox);
+        if (!r && newcstate) {
+            // sub in the values for the new location so we write to the
+            // correct location in the new database!
+            struct conversations_state *tempcs = oldmailbox->local_cstate;
+            mbentry_t *tempmb = oldmailbox->mbentry;
+            oldmailbox->local_cstate = newcstate;
+            oldmailbox->mbentry = newmbentry;
+            r = mailbox_add_conversations(oldmailbox, /*silent*/0);
+            oldmailbox->mbentry = tempmb;
+            oldmailbox->local_cstate = tempcs;
+        }
+    }
+    if (r) goto done;
 
     /* unless on a replica, bump the modseq */
     if (!silent) mailbox_modseq_dirty(oldmailbox);
@@ -6566,6 +6582,11 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
     oldmailbox->h.name = xstrdup(newname);
     oldmailbox->header_dirty = 1;
 
+done:
+    if (localcstate) {
+        if (r) conversations_abort(&localcstate);
+        else conversations_commit(&localcstate);
+    }
     return r;
 }
 
@@ -6588,15 +6609,6 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     assert(mailbox_index_islocked(oldmailbox, 1));
     assert(mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS);
-
-    /* we can't rename back from a deleted mailbox, because the conversations
-     * information will be wrong.  Ideally we might re-calculate, but for now
-     * we just throw a big fat error */
-    if (config_getswitch(IMAPOPT_CONVERSATIONS) &&
-        mboxname_isdeletedmailbox(mailbox_name(oldmailbox), NULL)) {
-        syslog(LOG_ERR, "can't rename a deleted mailbox %s", mailbox_name(oldmailbox));
-        return IMAP_MAILBOX_BADNAME;
-    }
 
     /* create uidvalidity if not explicitly requested */
     if (!uidvalidity)
@@ -6657,28 +6669,22 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
      * don't rename the conversations DB - instead we re-create
      * the records in the target user.  Sorry, was too complex
      * otherwise handling all the special cases */
-    if (mailbox_has_conversations(oldmailbox)) {
-        oldcstate = mailbox_get_cstate(oldmailbox);
-        assert(oldcstate);
-    }
-
-    if (mailbox_has_conversations(newmailbox)) {
-        newcstate = mailbox_get_cstate(newmailbox);
-        assert(newcstate);
-    }
+    oldcstate = mailbox_get_cstate(oldmailbox);
+    newcstate = mailbox_get_cstate(newmailbox);
 
     if (oldcstate && newcstate && !strcmp(oldcstate->path, newcstate->path)) {
         /* we can just rename within the same user */
         if (oldcstate->folders_byname) {
             r = conversations_rename_folder(oldcstate, mailbox_name(oldmailbox), newname);
         }
+        /* otherwise it's got the same key, so nothing to do */
     }
     else {
         /* have to handle each one separately */
-        if (newcstate)
-            r = mailbox_add_conversations(newmailbox, /*silent*/0);
         if (oldcstate)
             r = mailbox_delete_conversations(oldmailbox);
+        if (!r && newcstate)
+            r = mailbox_add_conversations(newmailbox, /*silent*/0);
     }
     if (r) goto fail;
 
