@@ -151,10 +151,11 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
         }
 
         /* Literal */
-        isnowait = pin->isclient;
+        isnowait = !pin->isclient;
         buf_reset(buf);
         c = getuint32(pin, &len);
-        if (c == '+') {
+
+        if (pin->isclient && c == '+') {
             /* LITERAL- says maximum size is 4096! */
             if (lminus && len > 4096) {
                 /* Fail per RFC 7888, Section 4, choice 2 */

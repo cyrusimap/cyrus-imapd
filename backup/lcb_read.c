@@ -113,7 +113,6 @@ EXPORTED int backup_read_message_data(struct backup *backup,
     if (r) return r;
 
     struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
-    prot_setisclient(ps, 1); /* don't sync literals */
     r = parse_backup_line(ps, NULL, NULL, &dl);
     prot_free(ps);
 
@@ -203,7 +202,6 @@ EXPORTED int backup_prepare_message_upload(struct backup *backup,
         if (!r) {
             struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
             int c;
-            prot_setisclient(ps, 1); /* don't sync literals */
             c = parse_backup_line(ps, NULL, NULL, &dl);
             prot_free(ps);
             ps = NULL;
