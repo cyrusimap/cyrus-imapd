@@ -238,11 +238,8 @@ out:
     return r;
 }
 
-EXPORTED int quota_read_withconversations(struct quota *quota)
+static void _quota_read_withconversations(struct quota *quota)
 {
-    int r = quota_read(quota, NULL, 0);
-    if (r) return r;
-
     if (config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS)) {
         struct conversations_state *local_cstate = NULL;
         struct conversations_state *cstate = conversations_get_mbox(quota->root);
@@ -258,6 +255,14 @@ EXPORTED int quota_read_withconversations(struct quota *quota)
         }
         if (local_cstate) conversations_commit(&local_cstate);
     }
+}
+
+EXPORTED int quota_read_withconversations(struct quota *quota)
+{
+    int r = quota_read(quota, NULL, 0);
+    if (r) return r;
+
+    _quota_read_withconversations(quota);
 
     return 0;
 }
@@ -370,6 +375,7 @@ struct quota_foreach_t {
     quotaproc_t *proc;
     void *rock;
     struct txn **tid;
+    int use_conv;
 };
 
 static int do_onequota(void *rock,
@@ -388,6 +394,10 @@ static int do_onequota(void *rock,
 
     /* XXX - error if not parsable? */
     if (datalen && !quota_parseval(data, datalen, &quota, iswrite)) {
+        if (fd->use_conv) {
+            _quota_read_withconversations(&quota);
+        }
+
         r = fd->proc(&quota, fd->rock);
     }
 
@@ -397,8 +407,8 @@ static int do_onequota(void *rock,
     return r;
 }
 
-EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
-                  void *rock, struct txn **tid)
+static int _quota_foreach(const char *prefix, quotaproc_t *proc,
+                          void *rock, struct txn **tid, int use_conv)
 {
     int r;
     char *search = prefix ? (char *)prefix : "";
@@ -409,11 +419,25 @@ EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
     foreach_d.proc = proc;
     foreach_d.rock = rock;
     foreach_d.tid = tid;
+    foreach_d.use_conv = use_conv;
 
     r = cyrusdb_foreach(qdb, search, strlen(search), NULL,
                      do_onequota, &foreach_d, tid);
 
     return r;
+}
+
+EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
+                           void *rock, struct txn **tid)
+{
+    return _quota_foreach(prefix, proc, rock, tid, 0);
+}
+
+EXPORTED int quota_foreach_withconversations(const char *prefix,
+                                             quotaproc_t *proc,
+                                             void *rock, struct txn **tid)
+{
+    return _quota_foreach(prefix, proc, rock, tid, 1);
 }
 
 /*

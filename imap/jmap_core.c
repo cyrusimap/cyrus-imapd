@@ -69,7 +69,6 @@ static int jmap_core_echo(jmap_req_t *req);
 static int jmap_blob_get(jmap_req_t *req);
 static int jmap_blob_lookup(jmap_req_t *req);
 static int jmap_blob_upload(jmap_req_t *req);
-static int jmap_quota_get(jmap_req_t *req);
 static int jmap_usercounters_get(jmap_req_t *req);
 
 static jmap_method_t jmap_core_methods_standard[] = {
@@ -106,12 +105,6 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
         JMAP_BLOB_EXTENSION,
         &jmap_blob_upload,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
-    },
-    {
-        "Quota/get",
-        JMAP_QUOTA_EXTENSION,
-        &jmap_quota_get,
-        JMAP_NEED_CSTATE
     },
     {
         "UserCounters/get",
@@ -190,8 +183,6 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
-                JMAP_QUOTA_EXTENSION, json_object());
-        json_object_set_new(settings->server_capabilities,
                 JMAP_PERFORMANCE_EXTENSION, json_object());
         json_object_set_new(settings->server_capabilities,
                 JMAP_DEBUG_EXTENSION, json_object());
@@ -234,9 +225,6 @@ HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
             JMAP_URN_CORE, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        json_object_set_new(account_capabilities,
-                JMAP_QUOTA_EXTENSION, json_object());
-
         json_object_set_new(account_capabilities,
                 JMAP_PERFORMANCE_EXTENSION, json_object());
 
@@ -1262,87 +1250,6 @@ done:
     return r;
 }
 
-
-/* Quota/get method */
-static const jmap_property_t quota_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "used",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "total",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    { NULL, NULL, 0 }
-};
-
-static int jmap_quota_get(jmap_req_t *req)
-{
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
-    json_t *err = NULL;
-    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-
-    /* Parse request */
-    jmap_get_parse(req, &parser, quota_props, /*allow_null_ids*/1,
-                   NULL, NULL, &get, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
-    }
-
-    int want_mail_quota = !get.ids || json_is_null(get.ids);
-    size_t i;
-    json_t *jval;
-    json_array_foreach(get.ids, i, jval) {
-        if (strcmp("mail", json_string_value(jval))) {
-            json_array_append(get.not_found, jval);
-        }
-        else want_mail_quota = 1;
-    }
-
-    if (want_mail_quota) {
-        struct quota quota;
-        quota_init(&quota, inboxname);
-        int r = quota_read_withconversations(&quota);
-        if (!r) {
-            quota_t total = quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
-            quota_t used = quota.useds[QUOTA_STORAGE];
-            json_t *jquota = json_object();
-            json_object_set_new(jquota, "id", json_string("mail"));
-            json_object_set_new(jquota, "used", json_integer(used));
-            json_object_set_new(jquota, "total", json_integer(total));
-            json_array_append_new(get.list, jquota);
-        }
-        else {
-            syslog(LOG_ERR, "jmap_quota_get: can't read quota for %s: %s",
-                    inboxname, error_message(r));
-            json_array_append_new(get.not_found, json_string("mail"));
-        }
-        quota_free(&quota);
-    }
-
-
-    modseq_t quotamodseq = mboxname_readquotamodseq(inboxname);
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, MODSEQ_FMT, quotamodseq);
-    get.state = buf_release(&buf);
-
-    jmap_ok(req, jmap_get_reply(&get));
-
-done:
-    jmap_parser_fini(&parser);
-    jmap_get_fini(&get);
-    free(inboxname);
-    return 0;
-}
 
 /* UserCounters/get method */
 static const jmap_property_t usercounters_props[] = {
