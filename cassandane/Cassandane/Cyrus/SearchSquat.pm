@@ -487,4 +487,32 @@ sub test_unindexed_fuzzy
     $self->assert_deep_equals([1,3], $uids);
 }
 
+sub test_unindexed_since
+    :SearchEngineSquat :min_version_3_4
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    my $past_dt = DateTime->last_day_of_month(year => 2023, month => 12);
+
+    $self->make_message("needle 1", body => "needle") || die;
+    $self->make_message("xxxxxx 2", body => "xxxxxx") || die;
+    $self->make_message("old 3", date => $past_dt, body => "needle") || die;
+
+    $self->run_squatter;
+
+    my $uids = $imap->search('text', 'needle', 'since', '1-Feb-2024');
+    $self->assert_deep_equals([1], $uids);
+
+    $self->make_message("needle 4", body => "needle") || die;
+    $self->make_message("xxxxxx 5", body => "xxxxxx") || die;
+    $self->make_message("old 6", date => $past_dt, body => "needle") || die;
+
+    # Do not rerun squatter. Make sure search only returns
+    # a matching unindexed message.
+
+    $uids = $imap->search('text', 'needle', 'since', '1-Feb-2024');
+    $self->assert_deep_equals([1,4], $uids);
+}
+
 1;
