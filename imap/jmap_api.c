@@ -2868,6 +2868,12 @@ static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
     /* Skip any special use folders (#jmap, #calendars, #notifications, etc.) */
     switch (mbtype_isa(mbentry->mbtype)) {
     case MBTYPE_EMAIL:
+        if (mboxname_isscheduledmailbox(mbentry->name, MBTYPE_EMAIL)) {
+            /* Skip \Scheduled because it is always read-only,
+               and a sharee would have no need to upload anything */
+            return 0;
+        }
+
     case MBTYPE_CALENDAR:
     case MBTYPE_ADDRESSBOOK:
         break;
