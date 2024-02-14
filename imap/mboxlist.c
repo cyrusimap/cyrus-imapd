@@ -1032,7 +1032,7 @@ static int mboxlist_update_raclmodseq(const char *acluser)
 }
 
 static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
-                                const mbentry_t *newmbentry, struct txn **txn)
+                                const mbentry_t *newmbentry, struct txn **txn, int silent)
 {
     static strarray_t *admins = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -1063,7 +1063,7 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
             mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_delete(mbdb, buf.s, buf.len, txn, /*force*/1);
             if (r) goto done;
-            mboxlist_update_raclmodseq(acluser);
+            if (!silent) mboxlist_update_raclmodseq(acluser);
         }
     }
 
@@ -1077,7 +1077,7 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
             mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);
             if (r) goto done;
-            mboxlist_update_raclmodseq(acluser);
+            if (!silent) mboxlist_update_raclmodseq(acluser);
         }
     }
 
@@ -1155,21 +1155,25 @@ static void assert_namespacelocked(const char *mboxname)
  * DELETED --> {NULL} : Expire
  * DELETED --> RESERVE : Create again (should never happen ideally, but undo/restore)
  */
-static int mboxlist_update_entry(const char *name,
-                                 const mbentry_t *mbentry, struct txn **txn)
+#define mboxlist_update_entry(n, m, t) mboxlist_update_entry_full(n, m, t, 0)
+static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry,
+                                      struct txn **txn, int silent)
 {
-    char *dbname = mboxname_to_dbname(name);
+    mbname_t *mbname = mbname_from_intname(name);
     struct buf key = BUF_INITIALIZER;
     mbentry_t *old = NULL;
     mbentry_t *oldi = NULL;
     int r = 0;
     struct txn *mytid = NULL;
+    const char *dbname = mbname_dbname(mbname);
 
     /* make sure the name is locked first - NOTE, this doesn't guarantee ordering
      * on the I key since we can't tell to lock that (and may be accessing two) so
      * make sure you have all the related name keys locked before entering this
      * function if renaming */
     assert_namespacelocked(name);
+
+    if (!silent) mboxname_assert_canadd(mbname);
 
     /* take a local transaction if there isn't one already - we definitely
      * want all these updates in a single transaction so the mboxlist is
@@ -1183,7 +1187,7 @@ static int mboxlist_update_entry(const char *name,
 
     // if we have RACLs, let's update them first
     if (have_racl) {
-        r = mboxlist_update_racl(dbname, old, mbentry, txn);
+        r = mboxlist_update_racl(dbname, old, mbentry, txn, silent);
         if (r) goto done;
     }
 
@@ -1305,7 +1309,7 @@ static int mboxlist_update_entry(const char *name,
     mboxlist_entry_free(&old);
     mboxlist_entry_free(&oldi);
     buf_free(&key);
-    free(dbname);
+    mbname_free(&mbname);
     return r;
 }
 
@@ -1322,14 +1326,14 @@ EXPORTED int mboxlist_deletelock(const mbentry_t *mbentry)
     return r;
 }
 
-EXPORTED int mboxlist_update(const mbentry_t *mbentry, int localonly)
+EXPORTED int mboxlist_update_full(const mbentry_t *mbentry, int localonly, int silent)
 {
     int r = 0, r2 = 0;
     struct txn *tid = NULL;
 
     init_internal();
 
-    r = mboxlist_update_entry(mbentry->name, mbentry, &tid);
+    r = mboxlist_update_entry_full(mbentry->name, mbentry, &tid, silent);
 
     /* commit the change to mupdate */
     if (!r && !localonly && config_mupdate_server) {
@@ -1759,6 +1763,7 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         newmbentry.createdmodseq = modseq;
         newmbentry.foldermodseq = modseq;
         int flags = MBOXLIST_CREATE_KEEP_INTERMEDIARIES; // avoid infinite looping!
+        flags |= MBOXLIST_CREATE_SYNC; /* for silent */
         r = mboxlist_createmailbox(&newmbentry, 0/*options*/, 0/*highestmodseq*/,
                                    1/*isadmin*/, NULL/*userid*/, NULL/*authstate*/,
                                    flags, NULL/*mailboxptr*/);
@@ -1856,6 +1861,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     struct mailbox *newmailbox = NULL;
     int isremote = mbtype & MBTYPE_REMOTE;
     mbentry_t *usermbentry = NULL, *newmbentry = NULL;
+    int silent = 0;
 
     init_internal();
 
@@ -1865,7 +1871,10 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
 
     assert_namespacelocked(mboxname);
 
-    if (!(flags & MBOXLIST_CREATE_SYNC)) {
+    if ((flags & MBOXLIST_CREATE_SYNC)) {
+        silent = 1;
+    }
+    else {
         options |= config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
             | OPT_POP3_NEW_UIDL;
 
@@ -1928,7 +1937,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
                the uniqueid in the record is required to open
                user metadata files (conversations, counters) */
             newmbentry->mbtype |= MBTYPE_INTERMEDIATE;
-            r = mboxlist_update_entry(mboxname, newmbentry, NULL);
+            r = mboxlist_update_entry_full(mboxname, newmbentry, NULL, silent);
             newmbentry->mbtype &= ~MBTYPE_INTERMEDIATE;
             if (r) goto done;
         }
@@ -1936,7 +1945,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
         /* Filesystem Operations */
         r = mailbox_create(mboxname, mbtype, newpartition, acl, newmbentry->uniqueid,
                            options, uidvalidity, createdmodseq, highestmodseq, &newmailbox);
-        if (!r) r = mailbox_add_conversations(newmailbox, /*silent*/0);
+        if (!r) r = mailbox_add_conversations(newmailbox, silent);
         if (r) {
             /* CREATE failed - remove mbentry */
             mboxlist_delete(newmbentry);
@@ -1950,7 +1959,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = foldermodseq ? foldermodseq : newmailbox->i.highestmodseq;
     }
-    r = mboxlist_update_entry(mboxname, newmbentry, NULL);
+    r = mboxlist_update_entry_full(mboxname, newmbentry, NULL, silent);
 
     if (!r && !(flags & MBOXLIST_CREATE_KEEP_INTERMEDIARIES)) {
         /* create any missing intermediaries */
@@ -1975,7 +1984,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
         if (r) {
             syslog(LOG_ERR, "MUPDATE: can't commit mailbox entry for '%s'",
                    mboxname);
-            mboxlist_update_entry(mboxname, NULL, 0);
+            mboxlist_update_entry_full(mboxname, NULL, 0, silent);
         }
         if (mupdate_h) mupdate_disconnect(&mupdate_h);
         free(loc);
@@ -2348,7 +2357,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
             mboxlist_entry_free(&newmbentry);
         }
         else {
-            r = mboxlist_update_entry(name, NULL, 0);
+            r = mboxlist_update_entry_full(name, NULL, 0, silent);
             if (r) {
                 xsyslog(LOG_ERR, "DBERROR: error deleting",
                                  "mailbox=<%s> error=<%s>",
@@ -2857,13 +2866,13 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         oldmbentry->createdmodseq = mbentry->createdmodseq;
         oldmbentry->foldermodseq = newmbentry->foldermodseq;
 
-        r = mboxlist_update_entry(oldname, oldmbentry, &tid);
+        r = mboxlist_update_entry_full(oldname, oldmbentry, &tid, silent);
 
         mboxlist_entry_free(&oldmbentry);
 
         /* create a new entry */
         if (!r) {
-            r = mboxlist_update_entry(newname, newmbentry, &tid);
+            r = mboxlist_update_entry_full(newname, newmbentry, &tid, silent);
         }
 
         switch (r) {
@@ -3371,7 +3380,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
     if (mbentry->foldermodseq < foldermodseq)
         mbentry->foldermodseq = foldermodseq;
 
-    r = mboxlist_update_entry(name, mbentry, NULL);
+    r = mboxlist_update_entry_full(name, mbentry, NULL, /*silent*/1);
 
     if (r) {
         xsyslog(LOG_ERR, "DBERROR: error updating acl",
@@ -3750,7 +3759,7 @@ static int racls_add_cb(const mbentry_t *mbentry, void *rock)
     struct txn **txn = (struct txn **)rock;
     char *dbname = mboxname_to_dbname(mbentry->name);
 
-    int r = mboxlist_update_racl(dbname, NULL, mbentry, txn);
+    int r = mboxlist_update_racl(dbname, NULL, mbentry, txn, /*silent*/1);
 
     free(dbname);
     return r;

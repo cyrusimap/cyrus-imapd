@@ -2706,7 +2706,10 @@ int sync_apply_mailbox(struct dlist *kin,
         newmbentry->foldermodseq = highestmodseq;
         newmbentry->createdmodseq = createdmodseq;
 
-        r = mboxlist_updatelock(newmbentry, /*localonly*/1);
+        struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
+        r = mboxlist_update_full(newmbentry, /*localonly*/1, /*silent*/1);
+        mboxname_release(&namespacelock);
+
         mboxlist_entry_free(&newmbentry);
 
         return r;

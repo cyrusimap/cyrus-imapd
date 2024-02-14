@@ -388,6 +388,7 @@ struct mboxname_counters {
 int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals);
 #define MBOXMODSEQ_ISFOLDER (1<<0)
 #define MBOXMODSEQ_ISDELETE (1<<1)
+void mboxname_assert_canadd(const mbname_t *mbname);
 modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int flags);
 modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype, int flags);
 uint32_t mboxname_readuidvalidity(const char *mboxname);
