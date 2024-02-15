@@ -149,7 +149,7 @@ static int pick_scheddefault_cb(const mbentry_t *mbentry, void *vrock)
     mbname_t *mbname = NULL;
     int r = 0;
 
-    if (mbentry->mbtype & MBTYPE_CALENDAR) {
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR) {
         mbname = mbname_from_intname(mbentry->name);
         const char *collname = strarray_nth(mbname_boxes(mbname), -1);
         if (strarray_find(&rock->ignore, collname, 0) < 0) {
