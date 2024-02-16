@@ -504,6 +504,9 @@ sub test_unindexed_since
     my $uids = $imap->search('text', 'needle', 'since', '1-Feb-2024');
     $self->assert_deep_equals([1], $uids);
 
+    $uids = $imap->search('text', 'needle', 'not', 'since', '1-Feb-2024');
+    $self->assert_deep_equals([3], $uids);
+
     $self->make_message("needle 4", body => "needle") || die;
     $self->make_message("xxxxxx 5", body => "xxxxxx") || die;
     $self->make_message("old 6", date => $past_dt, body => "needle") || die;
@@ -513,6 +516,9 @@ sub test_unindexed_since
 
     $uids = $imap->search('text', 'needle', 'since', '1-Feb-2024');
     $self->assert_deep_equals([1,4], $uids);
+
+    $uids = $imap->search('text', 'needle', 'not', 'since', '1-Feb-2024');
+    $self->assert_deep_equals([3, 6], $uids);
 }
 
 sub test_since
@@ -532,6 +538,9 @@ sub test_since
     my $uids = $imap->search('since', '1-Feb-2024');
     $self->assert_deep_equals([1,2], $uids);
 
+    $uids = $imap->search('not', 'since', '1-Feb-2024');
+    $self->assert_deep_equals([3], $uids);
+
     $self->make_message("needle 4", body => "needle") || die;
     $self->make_message("xxxxxx 5", body => "xxxxxx") || die;
     $self->make_message("old 6", date => $past_dt, body => "needle") || die;
@@ -541,6 +550,9 @@ sub test_since
 
     $uids = $imap->search('since', '1-Feb-2024');
     $self->assert_deep_equals([1,2,4,5], $uids);
+
+    $uids = $imap->search('not', 'since', '1-Feb-2024');
+    $self->assert_deep_equals([3,6], $uids);
 }
 
 1;
