@@ -1173,7 +1173,8 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
      * function if renaming */
     assert_namespacelocked(name);
 
-    if (!silent) mboxname_assert_canadd(mbname);
+    if (!silent && !(mbentry && (mbentry->mbtype & MBTYPE_DELETED)))
+        mboxname_assert_canadd(mbname);
 
     /* take a local transaction if there isn't one already - we definitely
      * want all these updates in a single transaction so the mboxlist is
