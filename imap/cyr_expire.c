@@ -75,6 +75,7 @@
 #include "mboxevent.h"
 #include "mboxlist.h"
 #include "conversations.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "strarray.h"
@@ -321,6 +322,11 @@ static int noexpire_mailbox(const mbentry_t *mbentry)
             ret = last_seen.has_noexpire;
             goto done;
         }
+
+	if (user_isreplicaonly(mbname_userid(mbname))) {
+            ret = 1;
+            goto done;
+	}
 
         // Determine user inbox name
         if (mbname_isdeleted(mbname)) {
