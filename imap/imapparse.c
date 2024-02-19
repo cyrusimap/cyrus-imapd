@@ -42,7 +42,10 @@
 #include <config.h>
 
 #include <ctype.h>
+#include <errno.h>
 #include <limits.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sysexits.h>
 
@@ -259,183 +262,117 @@ fail:
     return EOF;
 }
 
-EXPORTED int getint32(struct protstream *pin, int32_t *num)
+/* can't flag with -1 if there is no number here, so return EOF */
+static int _getint(struct protstream *pin, uint64_t max, uint64_t *num)
 {
-    int32_t result = 0;
     int c = EOF;
-    int gotchar = 0;
+    static struct buf buf = BUF_INITIALIZER;
 
-    /* INT_MAX == 2147483647 */
+    *num = 0;
+    buf_reset(&buf);
+
     while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
-        if (result > 214748364 || (result == 214748364 && (c > '7')))
-            fatal("num too big", EX_IOERR);
-        result = result * 10 + c - '0';
-        gotchar = 1;
+        buf_putc(&buf, c);
     }
 
-    if (!gotchar) {
+    if (!buf_len(&buf)) {
         if (c != EOF) prot_ungetc(c, pin);
         return EOF;
     }
 
-    *num = result;
+    errno = 0;
+    *num = strtoull(buf_cstring(&buf), NULL, 10);
+
+    if (errno || *num > max)
+        fatal("num too big", EX_IOERR);
 
     return c;
 }
 
-/* Like getint32() but explicitly signed, i.e. negative numbers
- * are accepted */
-EXPORTED int getsint32(struct protstream *pin, int32_t *num)
+/* Like _getint() but explicitly signed, i.e. negative numbers are accepted */
+static int _getsint(struct protstream *pin, uint64_t max, int64_t *num)
 {
     int c;
     int sgn = 1;
+    uint64_t result;
 
     c = prot_getc(pin);
-    if (c == EOF)
+    if (c == EOF) {
+        *num = 0;
         return EOF;
+    }
 
-    if (c == '-')
+    if (c == '-') {
         sgn = -1;
-    else if (c == '+')
-        sgn = 1;
-    else
+        max++; // min = (-max - 1)
+    }
+    else if (c != '+') {
         prot_ungetc(c, pin);
+    }
 
-    c = getint32(pin, num);
-    if (c == EOF)
-        return EOF;
-    /* this is slightly buggy: the number INT_MIN = -2147483648
-     * is a valid signed 32b int but is not accepted */
-    if (sgn < 0)
-        *num = - (*num);
+    c = _getint(pin, max, &result);
+
+    *num = sgn * (int64_t) result;
+
     return c;
 }
 
-/* can't flag with -1 if there is no number here, so return EOF */
+EXPORTED int getint32(struct protstream *pin, int32_t *num)
+{
+    uint64_t result;
+    int c = _getint(pin, INT32_MAX, &result);
+
+    *num = (int32_t) result;
+
+    return c;
+}
+
+EXPORTED int getsint32(struct protstream *pin, int32_t *num)
+{
+    int64_t result;
+    int c = _getsint(pin, INT32_MAX, &result);
+
+    *num = (int32_t) result;
+
+    return c;
+}
+
 EXPORTED int getuint32(struct protstream *pin, uint32_t *num)
 {
-    uint32_t result = 0;
-    int c = EOF;
-    int gotchar = 0;
+    uint64_t result;
+    int c = _getint(pin, UINT32_MAX, &result);
 
-    /* UINT_MAX == 4294967295U */
-    while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
-        if (result > 429496729 || (result == 429496729 && (c > '5')))
-            fatal("num too big", EX_IOERR);
-        result = result * 10 + c - '0';
-        gotchar = 1;
-    }
-
-    if (!gotchar) {
-        if (c != EOF) prot_ungetc(c, pin);
-        return EOF;
-    }
-
-    *num = result;
+    *num = (uint32_t) result;
 
     return c;
 }
 
 EXPORTED int getint64(struct protstream *pin, int64_t *num)
 {
-    int64_t result = 0;
-    int c = EOF;
-    int gotchar = 0;
+    uint64_t result;
+    int c = _getint(pin, INT64_MAX, &result);
 
-    /* LLONG_MAX == 9223372036854775807LL */
-    while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
-        if (result > 922337203685477580LL || (result == 922337203685477580LL && (c > '7')))
-            fatal("num too big", EX_IOERR);
-        result = result * 10 + c - '0';
-        gotchar = 1;
-    }
-
-    if (!gotchar) {
-        if (c != EOF) prot_ungetc(c, pin);
-        return EOF;
-    }
-
-    *num = result;
+    *num = (int64_t) result;
 
     return c;
 }
 
-/* Like getint64() but explicitly signed, i.e. negative numbers
- * are accepted */
 EXPORTED int getsint64(struct protstream *pin, int64_t *num)
 {
-    int c;
-    int sgn = 1;
-
-    c = prot_getc(pin);
-    if (c == EOF)
-        return EOF;
-
-    if (c == '-')
-        sgn = -1;
-    else if (c == '+')
-        sgn = 1;
-    else
-        prot_ungetc(c, pin);
-
-    c = getint64(pin, num);
-    if (c == EOF)
-        return EOF;
-    /* this is slightly buggy: the number LLONG_MIN == -9223372036854775808LL
-     * is a valid signed 64b int but is not accepted */
-    if (sgn < 0)
-        *num = - (*num);
-    return c;
+    return _getsint(pin, INT64_MAX, num);
 }
 
-/* can't flag with -1 if there is no number here, so return EOF */
 EXPORTED int getuint64(struct protstream *pin, uint64_t *num)
 {
-    uint64_t result = 0;
-    int c = EOF;
-    int gotchar = 0;
-
-    /* ULLONG_MAX == 18446744073709551615ULL */
-    while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
-        if (result > 1844674407370955161ULL || (result == 1844674407370955161ULL && (c > '5')))
-            fatal("num too big", EX_IOERR);
-        result = result * 10 + c - '0';
-        gotchar = 1;
-    }
-
-    if (!gotchar) {
-        if (c != EOF) prot_ungetc(c, pin);
-        return EOF;
-    }
-
-    *num = result;
-
-    return c;
+    return _getint(pin, UINT64_MAX, num);
 }
 
-/* This would call getuint64() if
- * all were right with the world */
 EXPORTED int getmodseq(struct protstream *pin, modseq_t *num)
 {
-    int c = EOF;
-    unsigned int i = 0;
-    char buf[32];
-    int gotchar = 0;
+    uint64_t result;
+    int c = _getint(pin, ULLONG_MAX, &result);
 
-    while (i < sizeof(buf) &&
-           (c = prot_getc(pin)) != EOF &&
-           cyrus_isdigit(c)) {
-        buf[i++] = c;
-        gotchar = 1;
-    }
-
-    if (!gotchar || i == sizeof(buf)) {
-        if (c != EOF) prot_ungetc(c, pin);
-        return EOF;
-    }
-
-    buf[i] = '\0';
-    *num = strtoull(buf, NULL, 10);
+    *num = (modseq_t) result;
 
     return c;
 }
@@ -1309,23 +1246,19 @@ static int get_search_criterion(struct protstream *pin,
             indexflag_match(parent, MESSAGE_RECENT, /*not*/1);
         }
         else if (!strcmp(criteria.s, "older")) {    /* RFC 5032 */
-#if SIZEOF_TIME_T >= 8
-            uint64_t uu;
-#endif
             if (c != ' ') goto missingarg;
 #if SIZEOF_TIME_T >= 8
+            uint64_t uu;
             c = getuint64(pin, &uu);
+            end = now - uu;
 #else
             c = getuint32(pin, &u);
+            end = now - u;
 #endif
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_LE);
             e->attr = search_attr_find("internaldate");
-#if SIZEOF_TIME_T >= 8
-            e->value.t = now - uu;
-#else
-            e->value.t = now - u;
-#endif
+            e->value.t = end;
         }
         else if (!strcmp(criteria.s, "on")) {   /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1537,23 +1470,19 @@ static int get_search_criterion(struct protstream *pin,
 
     case 'y':
         if (!strcmp(criteria.s, "younger")) {           /* RFC 5032 */
-#if SIZEOF_TIME_T >= 8
-            uint64_t uu;
-#endif
             if (c != ' ') goto missingarg;
 #if SIZEOF_TIME_T >= 8
+            uint64_t uu;
             c = getuint64(pin, &uu);
+            start = now - uu;
 #else
             c = getuint32(pin, &u);
+            start = now - u;
 #endif
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("internaldate");
-#if SIZEOF_TIME_T >= 8
-            e->value.t = now - uu;
-#else
-            e->value.t = now - u;
-#endif
+            e->value.t = start;
         }
         else goto badcri;
         break;
