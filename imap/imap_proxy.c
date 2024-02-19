@@ -1097,7 +1097,7 @@ int proxy_fetch(char *sequence, int usinguid, unsigned items,
     for (/* each FETCH response */;;) {
         uint32_t seqno = 0, uidno = 0;
         char *flags = NULL, *idate = NULL;
-        int32_t size = 0;
+        uint32_t size = 0;
 
         /* read a line */
         c = prot_getc(backend_current->in);
@@ -1146,7 +1146,7 @@ int proxy_fetch(char *sequence, int usinguid, unsigned items,
                     eatline(backend_current->in, c);
                     c = EOF;
                 }
-                else c = getint32(backend_current->in, &size);
+                else c = getuint32(backend_current->in, &size);
                 if (c == '}') c = prot_getc(backend_current->in);
                 if (c == '\r') c = prot_getc(backend_current->in);
                 if (c != '\n') c = EOF;

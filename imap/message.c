@@ -3205,7 +3205,7 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
 
         if (!strcmp(body->type, "TEXT")) {
             /* body lines */
-            c = getint32(strm, (int32_t *) &body->content_lines);
+            c = getuint32(strm, &body->content_lines);
             if (c == EOF) goto done;
         }
         else if (!strcmp(body->type, "MESSAGE") &&
@@ -3224,7 +3224,7 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
             if (c == EOF) goto done;
 
             /* body lines */
-            c = getint32(strm, (int32_t *) &body->content_lines);
+            c = getuint32(strm, &body->content_lines);
             if (c == EOF) goto done;
         }
 
