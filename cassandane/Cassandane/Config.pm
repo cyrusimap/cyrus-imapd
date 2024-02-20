@@ -139,7 +139,7 @@ sub clone
 sub _explode_bit_string
 {
     my ($s) = @_;
-    return split /[_ ]/, $s;
+    return split / /, $s;
 }
 
 sub set
@@ -173,8 +173,8 @@ sub set_bits
 
     die "$name is not a bitfield option" if not exists $bitfields{$name};
 
-    # explode space- or underscore-delimited list as only bit
-    if (scalar @bits == 1 && $bits[0] =~ m/[_ ]/) {
+    # explode space-delimited list as only bit
+    if (scalar @bits == 1 && $bits[0] =~ m/ /) {
         @bits = _explode_bit_string($bits[0]);
     }
 
@@ -192,8 +192,8 @@ sub clear_bits
 
     die "$name is not a bitfield option" if not exists $bitfields{$name};
 
-    # explode space- or underscore-delimited list as only bit
-    if (scalar @bits == 1 && $bits[0] =~ m/[_ ]/) {
+    # explode space-delimited list as only bit
+    if (scalar @bits == 1 && $bits[0] =~ m/ /) {
         @bits = _explode_bit_string($bits[0]);
     }
 
