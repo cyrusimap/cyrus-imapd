@@ -9,66 +9,74 @@ at all.  This section documents those steps.
 0.  Before doing anything else, make sure you have all the pre-reqs
     listed in README.deps installed.  A good way to check is:
 
-    gnb> cd ~/my/cassandane/workarea
-    gnb> make
-    ...
-    testrunner.pl syntax OK
-    Cassandane/ThreadedGenerator.pm syntax OK
-    Cassandane/MasterEvent.pm syntax OK
-    Cassandane/PortManager.pm syntax OK
-    Cassandane/IMAPMessageStore.pm syntax OK
-    ...
+        $ cd ~/my/cassandane/workarea
+        $ make -j4
+        ...
+        testrunner.pl syntax OK
+        Cassandane/ThreadedGenerator.pm syntax OK
+        Cassandane/MasterEvent.pm syntax OK
+        Cassandane/PortManager.pm syntax OK
+        Cassandane/IMAPMessageStore.pm syntax OK
+        ...
 
-1.  The passwd and group maps need valid entries for user "cyrus"
-    and group "mail".  An easy way is to manually add this line
-    to /etc/passwd
+1.  The passwd and group maps need valid entries for user "cyrus" and group
+    "mail".  If you want to generate coverage reports eventually, you probably
+    also want a group called "cyrus", and make that the "cyrus" user's primary
+    group.  Use your system's adduser/addgroup or equivalent tools for this.
 
-    cyrus:x:501:8::/usr/cyrus:/bin/sh
+    On Debian, something like this:
 
-    and this line to /etc/group (it's likely already there)
-
-    mail:x:8:
-
-    and then add a password for the "cyrus" user
-
-    # passwd cyrus
+        $ sudo adduser --system --group cyrus
+        $ sudo adduser cyrus mail
 
     NOTE: User 'cyrus' must actually be in 'group' mail, or the annotator
     will fail to start.
 
 2.  You need to be able to run a program as the "cyrus" user, preferably
-    without entering your password all the time.  One way of doing this
-    is to add the following at the *end* of your /etc/sudoers file
+    without entering your password all the time.  And you need processes
+    that you start with sudo to inherit your core file settings.  One way of
+    doing this is to add the following at the *end* of your /etc/sudoers file
 
-    gnb ALL = (cyrus) NOPASSWD: ALL
+        Defaults:username rlimit_core=default
+        username ALL = (cyrus) NOPASSWD: ALL
 
-    Obviously, replace 'gnb' with your username.
+    Obviously, replace 'username' with your username.
 
-3.  You need to tell Cassandane how to find Cyrus.  There are two
-    obvious ways of doing this.
+3.  You need to tell Cassandane how to find Cyrus, which means you need to
+    decide where to put Cyrus.  You've got two main options:
 
-     *  Fully installed Cyrus build in /usr/cyrus.  This requires
-        you to do a step as root every time you build Cyrus, which
-        can be a pain.
+     *  Fully installed Cyrus build in some prefix, specified by passing
+        --prefix=/some/prefix to configure.  The default prefix is
+        /usr/local, but that's a nuisance cause you have to install as root.
+        If you do this, you'll need to always pass the correct --prefix
+        argument to configure when building Cyrus for testing.
 
-        gnb> cd ~/my/cyrus/workarea
-        gnb> ./configure --prefix=/usr/cyrus \
-              --with-cyrus-prefix=/usr/cyrus ...
-        gnb> make && sudo make install
+        $ cd ~/my/cyrus/workarea
+        $ ./configure --prefix=/some/prefix \
+            [your other configure options]
+        $ make && make install
 
-     *  Partially installed Cyrus build in a temp directory.  This
-        is what I use.
+     *  Partially installed Cyrus build in a temp directory.  If you do this,
+        you'll need to always pass the correct DESTDIR when installing Cyrus
+        for testing.
 
-        gnb> cd ~/my/cyrus/workarea
-        gnb> ./configure --prefix=/usr/cyrus \
-              --with-cyrus-prefix=/usr/cyrus ...
-        gnb> make && make DESTDIR=/var/tmp/cyrus install
+        $ cd ~/my/cyrus/workarea
+        $ ./configure [your other configure options]
+        $ make && make DESTDIR=/var/tmp/cyrus install
 
-        gnb> cd ~/my/cassandane/workarea
-        gnb> cp cassandane.ini.example cassandane.ini
-        gnb> vi cassandane.ini
+    Whichever you choose, for best results, install Cyrus to a directory
+    on a tmpfs filesystem.  You'll probably end up making a small wrapper
+    script with all your usual configure options anyway, so adding --prefix to
+    that is low additional effort.
+
+    Now copy the cassandane.ini.example from the source tree to a file called
+    "cassandane.ini" in your home directory, and start configuring.
+
+        $ cp /path/to/cyrus-imapd/cassandane/cassandane.ini.example ~/cassandane.ini
+        $ vi ~/cassandane.ini
         [cyrus default]
-        destdir = /var/tmp/cyrus
+        prefix = [the --prefix Cyrus is configured for]
+        destdir = [the DESTDIR you passed to make install, if any]
 
     Also note that you can do other combinations too, the trick is to
     set up the 'cyrus default' section in the cassandane.ini such that
@@ -80,7 +88,28 @@ at all.  This section documents those steps.
      *  'destdir' is the value of DESTDIR when you did 'make install'
         in the Cyrus directory.  Default is empty.
 
-4.  It's also a good idea to set some kernel tunables.
+4.  More cassandane.ini configuration.
+
+    You need to tell Casssandane where to keep its run-time state.  For
+    best performance, this should be a directory on a tmpfs filesystem.
+    You set this in the cassandane.rootdir setting in cassandane.ini
+
+    While you're in there anyway, there's some other things you really ought to
+    set:
+
+    * cassandane.cleanup: default is no, but "yes" is more sensible.  You can
+      always override this as needed with the --no-cleanup option at run time
+    * cassandane.maxworkers: default is "1", but this is excruciatingly slow.
+      Anecdotally, two times the number of CPUs in your system seems about
+      right, if your system is not otherwise heavily loaded.
+    * config.zoneinfo_dir: set this to the path to the zoneinfo directory
+      from the cyrus-timezones package.  If you got this from cyruslibs, it's
+      probably /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
+
+    But for the most part, read the comments from the example file, they are
+    the authoritative documentation here.
+
+5.  It's also a good idea to set some kernel tunables.
 
     When dumping core files, use the PID of the dumping process
     in the name, so that if multiple processes dump core during the
@@ -103,7 +132,7 @@ at all.  This section documents those steps.
 
 Now, to run Cassandane use this command
 
-    gnb> cd ~/my/cassandane/workarea
-    gnb> ./testrunner.pl
+    $ cd ~/my/cassandane/workarea
+    $ ./testrunner.pl
 
     NOTE: Cassandane will internally run 'sudo' to become user 'cyrus'
