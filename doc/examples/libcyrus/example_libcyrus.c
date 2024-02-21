@@ -203,6 +203,20 @@ void test_glob(void)
     puts("glob ok");
 }
 
+void test_imclient(void)
+{
+    /* XXX need somewhere to connect to...  cass already has an imapd running,
+     * right? could get the host:port for that as commandline args i guess
+     */
+    /* XXX though there's already an "example" imclient in the imclient.3 man
+     * page, though the API it demonstrates doesn't match the headers, so i
+     * guess it's bitrotted
+     */
+    /* XXX might need a separate example_imclient.c, which is possible now that
+     * the file name isn't the dependencies list!
+     */
+}
+
 int main(int argc, char **argv)
 {
     const char *alt_config = NULL;
@@ -230,4 +244,5 @@ int main(int argc, char **argv)
     test_cyr_qsort_r();
     test_cyrusdb();
     test_glob();
+    test_imclient();
 }
