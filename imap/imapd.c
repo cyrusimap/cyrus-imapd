@@ -135,7 +135,7 @@ static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
-static int64_t maxsize = 0;
+static int64_t maxmsgsize = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -904,8 +904,8 @@ int service_init(int argc, char **argv, char **envp)
 
     prometheus_increment(CYRUS_IMAP_READY_LISTENERS);
 
-    maxsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
-    if (maxsize <= 0) maxsize = BYTESIZE_UNLIMITED;
+    maxmsgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+    if (maxmsgsize <= 0) maxmsgsize = BYTESIZE_UNLIMITED;
 
     return 0;
 }
@@ -3505,7 +3505,7 @@ static void capa_response(int flags)
         prot_printf(imapd_out, " IDLE");
     }
 
-    prot_printf(imapd_out, " APPENDLIMIT=%" PRIi64, maxsize);
+    prot_printf(imapd_out, " APPENDLIMIT=%" PRIi64, maxmsgsize);
 }
 
 /*
@@ -4025,13 +4025,13 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
 
             /* Catenate the message part(s) to stage */
             size = 0;
-            r = append_catenate(curstage->f, cur_name, maxsize, &size,
+            r = append_catenate(curstage->f, cur_name, maxmsgsize, &size,
                                 &(curstage->binary), &parseerr, &url);
             if (r) goto done;
         }
         else {
             /* Read size from literal */
-            r = getliteralsize(arg.s, c, maxsize, &size, &(curstage->binary), &parseerr);
+            r = getliteralsize(arg.s, c, maxmsgsize, &size, &(curstage->binary), &parseerr);
             if (!r && size == 0) r = IMAP_ZERO_LENGTH_LITERAL;
             if (r) goto done;
 
