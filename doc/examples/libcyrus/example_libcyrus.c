@@ -11,6 +11,8 @@
    ./example_libcyrus
  */
 
+/* DEPS: libcyrus libcyrus_min */
+
 #define _GNU_SOURCE 1
 
 #include "acl.h"
@@ -209,6 +211,9 @@ void test_imclient(void)
     /* XXX though there's already an "example" imclient in the imclient.3 man
      * page, though the API it demonstrates doesn't match the headers, so i
      * guess it's bitrotted
+     */
+    /* XXX might need a separate example_imclient.c, which is possible now that
+     * the file name isn't the dependencies list!
      */
 }
 #endif
