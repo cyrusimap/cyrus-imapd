@@ -131,8 +131,8 @@ struct protstream {
     struct buf *writetobuf;
 
     int can_unget;
-    int bytes_in;
-    int bytes_out;
+    uint64_t bytes_in;
+    uint64_t bytes_out;
     int isclient; /* read/write IMAP LITERAL+ */
 
     /* Events */
@@ -224,8 +224,8 @@ extern int prot_free(struct protstream *s);
 extern int prot_setlog(struct protstream *s, int fd);
 
 /* Get traffic counts */
-extern int prot_bytes_in(struct protstream *s);
-extern int prot_bytes_out(struct protstream *s);
+extern uint64_t prot_bytes_in(struct protstream *s);
+extern uint64_t prot_bytes_out(struct protstream *s);
 #define prot_bytes_in(s) ((s)->bytes_in)
 #define prot_bytes_out(s) ((s)->bytes_out)
 
