@@ -200,7 +200,8 @@ eval
         local *__ANON__ = "runner_xml";
 
         my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
-        my @filters = qw(x skip_version skip_missing_features);
+        my @filters = qw(x skip_version skip_missing_features
+                         enable_wanted_properties);
         push @filters, 'skip_slow' if $plan->{skip_slow};
         push @filters, 'slow_only' if $plan->{slow_only};
         $runner->filter(@filters);
