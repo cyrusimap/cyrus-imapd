@@ -92,9 +92,8 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                         struct buf *buf, enum getxstring_flags flags)
 {
     int c;
-    int i;
     int isnowait;
-    int len;
+    uint32_t i, len;
     static int lminus = -1;
 
     if (lminus == -1) lminus = config_getswitch(IMAPOPT_LITERALMINUS);
@@ -151,14 +150,14 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
         /* Literal */
         isnowait = pin->isclient;
         buf_reset(buf);
-        c = getint32(pin, &len);
+        c = getuint32(pin, &len);
         if (c == '+') {
             // LITERAL- says maximum size is 4096!
             if (lminus && len > 4096) return EOF;
             isnowait++;
             c = prot_getc(pin);
         }
-        if (len == -1 || c != '}') {
+        if (c != '}') {
             buf_cstring(buf);
             if (c != EOF) prot_ungetc(c, pin);
             return EOF;
@@ -1250,7 +1249,7 @@ static int get_search_criterion(struct protstream *pin,
     case 'l':
         if (!strcmp(criteria.s, "larger")) {            /* RFC 3501 */
             if (c != ' ') goto missingarg;
-            c = getint32(pin, (int32_t *)&u);
+            c = getuint32(pin, &u);
             if (c == EOF) goto badnumber;
             e = search_expr_new(parent, SEOP_GT);
             e->attr = search_attr_find("size");
@@ -1311,13 +1310,13 @@ static int get_search_criterion(struct protstream *pin,
         }
         else if (!strcmp(criteria.s, "older")) {    /* RFC 5032 */
 #if SIZEOF_TIME_T >= 8
-            int64_t uu;
+            uint64_t uu;
 #endif
             if (c != ' ') goto missingarg;
 #if SIZEOF_TIME_T >= 8
-            c = getint64(pin, (int64_t *)&uu);
+            c = getuint64(pin, &uu);
 #else
-            c = getint32(pin, (int32_t *)&u);
+            c = getuint32(pin, &u);
 #endif
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_LE);
@@ -1414,7 +1413,7 @@ static int get_search_criterion(struct protstream *pin,
         }
         else if (!strcmp(criteria.s, "smaller")) {  /* RFC 3501 */
             if (c != ' ') goto missingarg;
-            c = getint32(pin, (int32_t *)&u);
+            c = getuint32(pin, &u);
             if (c == EOF) goto badnumber;
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("size");
@@ -1539,13 +1538,13 @@ static int get_search_criterion(struct protstream *pin,
     case 'y':
         if (!strcmp(criteria.s, "younger")) {           /* RFC 5032 */
 #if SIZEOF_TIME_T >= 8
-            int64_t uu;
+            uint64_t uu;
 #endif
             if (c != ' ') goto missingarg;
 #if SIZEOF_TIME_T >= 8
-            c = getint64(pin, (int64_t *)&uu);
+            c = getuint64(pin, &uu);
 #else
-            c = getint32(pin, (int32_t *)&u);
+            c = getuint32(pin, &u);
 #endif
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_GE);
