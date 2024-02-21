@@ -11,6 +11,8 @@
    ./example_libcyrus_min
  */
 
+/* DEPS: libcyrus_min */
+
 #include "arrayu64.h"
 #include "assert.h"
 #include "dynarray.h"
