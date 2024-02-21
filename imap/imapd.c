@@ -140,7 +140,7 @@ static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
-static int64_t maxsize = 0;
+static int64_t maxmsgsize = 0;
 
 static struct client_behavior_registry client_behavior;
 
@@ -395,7 +395,7 @@ static struct capa_struct base_capabilities[] = {
     { "ACL",                   CAPA_POSTAUTH,           { 0 } }, /* RFC 4314 */
     { "ANNOTATE-EXPERIMENT-1", CAPA_POSTAUTH,           { 0 } }, /* RFC 5257 */
     { "APPENDLIMIT=",          CAPA_POSTAUTH|CAPA_VALUE,         /* RFC 7889 */
-      { .value = { "%2$" PRIi64, .i64p = &maxsize } }         },
+      { .value = { "%2$" PRIi64, .i64p = &maxmsgsize } }      },
     { "AUTH=",                 CAPA_OMNIAUTH|CAPA_COMPLEX,       /* RFC 9051 */
       { .complex = &capa_auth }                               },
     { "BINARY",                CAPA_POSTAUTH,           { 0 } }, /* RFC 3516 */
@@ -1127,8 +1127,8 @@ int service_init(int argc, char **argv, char **envp)
 
     prometheus_increment(CYRUS_IMAP_READY_LISTENERS);
 
-    maxsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
-    if (maxsize <= 0) maxsize = BYTESIZE_UNLIMITED;
+    maxmsgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+    if (maxmsgsize <= 0) maxmsgsize = BYTESIZE_UNLIMITED;
 
     return 0;
 }
@@ -4348,7 +4348,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
 
             /* Catenate the message part(s) to stage */
             size = 0;
-            r = append_catenate(curstage->f, cur_name, maxsize, &size,
+            r = append_catenate(curstage->f, cur_name, maxmsgsize, &size,
                                 &(curstage->binary), &parseerr, &url);
             if (r) goto done;
         }
@@ -4374,7 +4374,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
             }
 
             /* Read size from literal */
-            r = getliteralsize(arg.s, c, maxsize, &size, &(curstage->binary), &parseerr);
+            r = getliteralsize(arg.s, c, maxmsgsize, &size, &(curstage->binary), &parseerr);
             if (!r && size == 0) r = IMAP_ZERO_LENGTH_LITERAL;
             if (r) goto done;
 
