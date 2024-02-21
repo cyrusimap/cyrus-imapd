@@ -40,6 +40,7 @@
 package Cassandane::Cyrus::LibCyrus;
 use strict;
 use warnings;
+use v5.010;
 use Cwd qw(abs_path);
 use Data::Dumper;
 use DateTime;
@@ -75,10 +76,13 @@ sub tear_down
 
 sub run_pkgconfig
 {
-    my ($self, $package, @options) = @_;
+    my ($self, %params) = @_;
+    state $counter = 0;
 
-    my $outfname = $self->{instance}->{basedir} . "/pkg-config.out";
-    my $errfname = $self->{instance}->{basedir} . "/pkg-config.err";
+    $counter++;
+
+    my $outfname = $self->{instance}->{basedir} . "/pkg-config$counter.out";
+    my $errfname = $self->{instance}->{basedir} . "/pkg-config$counter.err";
 
     my $cassini = Cassandane::Cassini->instance();
     my $pkgconfig = $cassini->val('paths', 'pkg-config', '/usr/bin/pkg-config');
@@ -90,7 +94,7 @@ sub run_pkgconfig
                 stderr => $errfname,
             },
         },
-        $pkgconfig, @options, $package
+        $pkgconfig, @{$params{options}}, @{$params{packages}},
     );
 
     my $val = slurp_file($outfname);
@@ -129,6 +133,28 @@ sub list_tests
     return @tests;
 }
 
+sub find_deps
+{
+    my ($source) = @_;
+    my @deps;
+
+    open my $fh, '<', $source or die "read $source: $!";
+    while (<$fh>) {
+        if (m/\bDEPS:([-\sA-Za-z_]+)/) {
+            if (get_verbose() > 1) {
+                xlog "found DEPS at line $.: $_";
+            }
+            push @deps, split(q{ }, $1);
+        }
+    }
+    close $fh;
+
+    if (get_verbose() > 1) {
+        xlog "parsed dependencies: " . Dumper \@deps;
+    }
+    return @deps;
+}
+
 sub run_test
 {
     my ($self) = @_;
@@ -138,21 +164,20 @@ sub run_test
     my $name = $self->name();
     $name =~ s/^test_//;
 
-    my $lib;
-    if ($name =~ m/(libcyrus(?:_\w+)?)/) {
-        $lib = $1;
-    }
-    else {
-        die "couldn't determine libcyrus dependency for test_$name";
-    }
+    my $orig_source = "$examples_dir/$name.c";
+    copy($orig_source, $self->{instance}->{basedir})
+        or die "copy $orig_source: $!";
 
-    copy("$examples_dir/$name.c", $self->{instance}->{basedir})
-        or die "copy $examples_dir/$name.c: $!";
+    my @deps = find_deps($orig_source)
+        or die "couldn't determine libcyrus dependencies for test_$name";
 
-    my $cflags = $self->run_pkgconfig($lib, '--cflags');
-    my $ldflags = $self->run_pkgconfig($lib, '--libs-only-L',
-                                             '--libs-only-other');
-    my $ldlibs = $self->run_pkgconfig($lib, '--libs-only-l');
+    my $cflags = $self->run_pkgconfig(packages => \@deps,
+                                      options => [ '--cflags' ]);
+    my $ldflags = $self->run_pkgconfig(packages => \@deps,
+                                       options => [ '--libs-only-L',
+                                                    '--libs-only-other' ]);
+    my $ldlibs = $self->run_pkgconfig(packages => \@deps,
+                                      options => [ '--libs-only-l' ]);
 
     my $makeerr = $self->{instance}->{basedir} . "/make.err";
     my $make = $cassini->val('paths', 'make', '/usr/bin/make');

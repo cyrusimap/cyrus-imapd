@@ -4,12 +4,14 @@
  *
    export LD_LIBRARY_PATH=/path/to/cyrus/lib
    export PKG_CONFIG_PATH=/path/to/cyrus/lib/pkgconfig
-   export CFLAGS=-Wall -Wextra -Werror -g -O0 $(pkg-config --cflags libcyrus_min)
-   export LDFLAGS=$(pkg-config --libs-only-L --libs-only-other libcyrus)
-   export LDLIBS=$(pkg-config --libs-only-l libcyrus)
+   export CFLAGS=-Wall -Wextra -Werror -g -O0 $(pkg-config --cflags libcyrus libcyrus_min)
+   export LDFLAGS=$(pkg-config --libs-only-L --libs-only-other libcyrus libcyrus_min)
+   export LDLIBS=$(pkg-config --libs-only-l libcyrus libcyrus_min)
    make example_libcyrus
    ./example_libcyrus
  */
+
+/* DEPS: libcyrus libcyrus_min */
 
 #define _GNU_SOURCE 1
 
@@ -210,6 +212,9 @@ void test_imclient(void)
     /* XXX though there's already an "example" imclient in the imclient.3 man
      * page, though the API it demonstrates doesn't match the headers, so i
      * guess it's bitrotted
+     */
+    /* XXX might need a separate example_imclient.c, which is possible now that
+     * the file name isn't the dependencies list!
      */
 }
 #endif
