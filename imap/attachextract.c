@@ -259,7 +259,7 @@ static int extractor_httpreq(struct extractor_ctx *ext,
         // Read response
         const char *res_err = NULL;
         *res_statuscode = 599;
-        int prev_bytes_in = be->in->bytes_in;
+        uint64_t prev_bytes_in = be->in->bytes_in;
 
         do {
             r = http_read_response(be,

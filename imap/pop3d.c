@@ -328,8 +328,8 @@ static struct sasl_callback mysasl_cb[] = {
 
 static void popd_reset(void)
 {
-    int bytes_in = 0;
-    int bytes_out = 0;
+    uint64_t bytes_in = 0;
+    uint64_t bytes_out = 0;
 
     proc_cleanup(&proc_handle);
 
@@ -364,8 +364,9 @@ static void popd_reset(void)
     }
 
     if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
-                           session_id(), bytes_in, bytes_out);
+        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s>"
+               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
+               session_id(), bytes_in, bytes_out);
 
     popd_in = popd_out = NULL;
 
@@ -606,8 +607,8 @@ static void usage(void)
  */
 void shut_down(int code)
 {
-    int bytes_in = 0;
-    int bytes_out = 0;
+    uint64_t bytes_in = 0;
+    uint64_t bytes_out = 0;
 
     in_shutdown = 1;
 
@@ -654,8 +655,9 @@ void shut_down(int code)
     }
 
     if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
-                           session_id(), bytes_in, bytes_out);
+        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s>"
+               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
+               session_id(), bytes_in, bytes_out);
 
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
