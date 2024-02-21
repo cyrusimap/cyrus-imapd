@@ -81,6 +81,10 @@ Tests to run are most commonly specified as:
 
     $ ./testrunner.pl Quota.quotarename
 
+Multiple test suites or tests can be specified as well:
+
+    $ ./testrunner.pl Admin Quota.quotarename
+
 Arguments can be negated by using a leading exclamation mark (!) or tilde (~)
 character.  Note that you may need to escape the ! from the shell, so ~ is
 generally preferable:
