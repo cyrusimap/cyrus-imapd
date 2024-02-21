@@ -682,8 +682,8 @@ EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
 static void httpd_reset(struct http_connection *conn)
 {
     int i;
-    int bytes_in = 0;
-    int bytes_out = 0;
+    uint64_t bytes_in = 0;
+    uint64_t bytes_out = 0;
 
     /* run any delayed actions */
     libcyrus_run_delayed();
@@ -725,7 +725,8 @@ static void httpd_reset(struct http_connection *conn)
 
     if (config_auditlog) {
         syslog(LOG_NOTICE,
-               "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
+               "auditlog: traffic sessionid=<%s>"
+               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
                session_id(), bytes_in, bytes_out);
     }
 
@@ -1109,8 +1110,8 @@ void usage(void)
 void shut_down(int code)
 {
     int i;
-    int bytes_in = 0;
-    int bytes_out = 0;
+    uint64_t bytes_in = 0;
+    uint64_t bytes_out = 0;
 
     in_shutdown = 1;
 
@@ -1179,7 +1180,8 @@ void shut_down(int code)
 
     if (config_auditlog)
         syslog(LOG_NOTICE,
-               "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
+               "auditlog: traffic sessionid=<%s>"
+               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
                session_id(), bytes_in, bytes_out);
 
     saslprops_free(&saslprops);
