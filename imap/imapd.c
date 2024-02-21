@@ -730,8 +730,8 @@ static int mlookup(const char *tag, const char *ext_name,
 static void imapd_reset(void)
 {
     int i;
-    int bytes_in = 0;
-    int bytes_out = 0;
+    uint64_t bytes_in = 0;
+    uint64_t bytes_out = 0;
 
     /* run delayed commands first before closing anything */
     libcyrus_run_delayed();
@@ -779,8 +779,9 @@ static void imapd_reset(void)
     }
 
     if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
-                           session_id(), bytes_in, bytes_out);
+        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s>"
+               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
+               session_id(), bytes_in, bytes_out);
 
     imapd_in = imapd_out = NULL;
 
@@ -1074,8 +1075,8 @@ void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     int i;
-    int bytes_in = 0;
-    int bytes_out = 0;
+    uint64_t bytes_in = 0;
+    uint64_t bytes_out = 0;
 
     in_shutdown = 1;
 
@@ -1142,8 +1143,9 @@ void shut_down(int code)
                               : CYRUS_IMAP_SHUTDOWN_TOTAL_STATUS_OK);
 
     if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
-                           session_id(), bytes_in, bytes_out);
+        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s>"
+               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
+               session_id(), bytes_in, bytes_out);
 
     if (protin) protgroup_free(protin);
 
