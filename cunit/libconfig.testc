@@ -232,6 +232,29 @@ static void test_bitfield_value(void)
                     IMAP_ENUM_HTTPMODULES_JMAP);
 }
 
+static void test_bitfield_value_wide(void)
+{
+    unsigned long sieve_extensions = (unsigned long) -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "sieve_extensions: vnd.cyrus.implicit_keep_target\n"
+    );
+
+    /* vnd.cyrus.implicit_keep_target is notable for being bit 33.
+     * Let's make sure we aren't accidentally truncating bitfields to
+     * 32 bits...
+     */
+
+    /* but first let's make sure it is actually bit 33! */
+    CU_ASSERT_EQUAL_FATAL(IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET,
+                          (1LL << 33));
+
+    sieve_extensions = config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
+    CU_ASSERT_EQUAL(sieve_extensions,
+                    IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET);
+}
+
 static void test_bitfield_default(void)
 {
     unsigned long httpmodules = (unsigned long) -1;
