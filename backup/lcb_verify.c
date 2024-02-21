@@ -234,10 +234,10 @@ static int _verify_message_cb(const struct backup_message *message, void *rock)
             const char *error = prot_error(ps);
             if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                 syslog(LOG_ERR,
-                       "%s: error reading message %i at offset " OFF_T_FMT ", byte %i: %s",
+                       "%s: error reading message %i at offset " OFF_T_FMT ", byte %" PRIu64 ": %s",
                        __func__, message->id, message->offset, prot_bytes_in(ps), error);
                 if (out)
-                    fprintf(out, "error reading message %i at offset " OFF_T_FMT ", byte %i: %s",
+                    fprintf(out, "error reading message %i at offset " OFF_T_FMT ", byte %" PRIu64 ": %s",
                             message->id, message->offset, prot_bytes_in(ps), error);
             }
             prot_free(ps);
@@ -539,10 +539,10 @@ static int verify_chunk_mailbox_links(struct backup *backup, struct backup_chunk
             const char *error = prot_error(ps);
             if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                 syslog(LOG_ERR,
-                       "%s: error reading chunk %i data at offset " OFF_T_FMT ", byte %i: %s",
+                       "%s: error reading chunk %i data at offset " OFF_T_FMT ", byte %" PRIu64 ": %s",
                        __func__, chunk->id, chunk->offset, prot_bytes_in(ps), error);
                 if (out)
-                    fprintf(out, "error reading chunk %i data at offset " OFF_T_FMT ", byte %i: %s",
+                    fprintf(out, "error reading chunk %i data at offset " OFF_T_FMT ", byte %" PRIu64 ": %s",
                             chunk->id, chunk->offset, prot_bytes_in(ps), error);
                 r = EOF;
             }

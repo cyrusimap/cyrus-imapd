@@ -609,11 +609,11 @@ EXPORTED int backup_reindex(const char *name,
                 const char *error = prot_error(member);
                 if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                     syslog(LOG_ERR,
-                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
+                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %" PRIu64 ": %s\n",
                            name, member_offset, prot_bytes_in(member), error);
 
                     if (out)
-                        fprintf(out, "error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
+                        fprintf(out, "error reading chunk at offset " OFF_T_FMT ", byte %" PRIu64 ": %s\n",
                                 member_offset, prot_bytes_in(member), error);
 
                     r = IMAP_IOERROR;
