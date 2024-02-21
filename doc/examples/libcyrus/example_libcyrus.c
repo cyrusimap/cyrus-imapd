@@ -11,6 +11,8 @@
    ./example_libcyrus
  */
 
+/* DEPS: libcyrus libcyrus_min */
+
 #define _GNU_SOURCE 1
 
 #include "acl.h"
