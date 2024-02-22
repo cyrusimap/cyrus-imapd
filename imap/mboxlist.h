@@ -182,7 +182,9 @@ int mboxlist_insertremote(mbentry_t *mbentry, struct txn **rettid);
 int mboxlist_deleteremote(const char *name, struct txn **in_tid);
 
 /* Update a mailbox's entry */
-int mboxlist_update(const mbentry_t *mbentry, int localonly);
+#define mboxlist_update(m, l) mboxlist_update_full(m, l, 0)
+int mboxlist_update_full(const mbentry_t *mbentry, int localonly,
+                         int silent);
 /* Update but take the usernamespace lock first */
 int mboxlist_updatelock(const mbentry_t *mbentry, int localonly);
 

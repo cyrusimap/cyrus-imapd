@@ -3154,7 +3154,7 @@ static modseq_t mboxname_domodseq(const char *fname,
     return counters.highestmodseq;
 }
 
-static void mboxname_assert_canadd(mbname_t *mbname)
+EXPORTED void mboxname_assert_canadd(const mbname_t *mbname)
 {
     assert(!config_getswitch(IMAPOPT_REPLICAONLY));
     // add code for suppressing particular users by filename
