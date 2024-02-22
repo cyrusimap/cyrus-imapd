@@ -57,7 +57,7 @@ my %bitfields = (
     'httpmodules' => 'admin caldav carddav cgi domainkey freebusy ischedule jmap prometheus rss tzdist webdav',
     'metapartition_files' => 'header index cache expunge squat annotations lock dav archivecache',
     'newsaddheaders' => 'to replyto',
-    'sieve_extensions' => 'fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags imapflags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log x-cyrus-log vnd.cyrus.jmapquery x-cyrus-jmapquery snooze vnd.cyrus.snooze x-cyrus-snooze vnd.cyrus.imip',
+    'sieve_extensions' => 'fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags imapflags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log x-cyrus-log vnd.cyrus.jmapquery x-cyrus-jmapquery vnd.cyrus.imip snooze vnd.cyrus.snooze x-cyrus-snooze vnd.cyrus.implicit_keep_target',
 );
 my $bitfields_fixed = 0;
 
@@ -139,7 +139,7 @@ sub clone
 sub _explode_bit_string
 {
     my ($s) = @_;
-    return split /[_ ]/, $s;
+    return split / /, $s;
 }
 
 sub set
@@ -173,8 +173,8 @@ sub set_bits
 
     die "$name is not a bitfield option" if not exists $bitfields{$name};
 
-    # explode space- or underscore-delimited list as only bit
-    if (scalar @bits == 1 && $bits[0] =~ m/[_ ]/) {
+    # explode space-delimited list as only bit
+    if (scalar @bits == 1 && $bits[0] =~ m/ /) {
         @bits = _explode_bit_string($bits[0]);
     }
 
@@ -192,8 +192,8 @@ sub clear_bits
 
     die "$name is not a bitfield option" if not exists $bitfields{$name};
 
-    # explode space- or underscore-delimited list as only bit
-    if (scalar @bits == 1 && $bits[0] =~ m/[_ ]/) {
+    # explode space-delimited list as only bit
+    if (scalar @bits == 1 && $bits[0] =~ m/ /) {
         @bits = _explode_bit_string($bits[0]);
     }
 
