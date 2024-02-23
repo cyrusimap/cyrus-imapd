@@ -1,12 +1,13 @@
 Description:
 
-Adds a config option to limit the size of a single literal allowed
-by the IMAP parser.  Also properly applies LITERAL- to IMAP APPEND.
+Adds config options to limit the size of a single literal allowed
+by the IMAP parser and to limit the total size of IMAP command arguments.
+Also properly applies LITERAL- to IMAP APPEND.
 
 
 Config changes:
 
-New 'maxliteral' option.
+New 'maxliteral' and 'maxargssize' options.
 
 
 Upgrade instructions:

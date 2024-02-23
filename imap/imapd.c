@@ -136,6 +136,8 @@ static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
 static size_t maxmsgsize = 0;
+static int64_t maxargssize = 0;
+static uint64_t maxargssize_mark = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -901,6 +903,9 @@ int service_init(int argc, char **argv, char **envp)
     maxmsgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
     if (!maxmsgsize) maxmsgsize = UINT32_MAX;
 
+    maxargssize = config_getint(IMAPOPT_MAXARGSSIZE);
+    if (maxargssize <= 0) maxargssize = UINT32_MAX;
+
     return 0;
 }
 
@@ -1344,6 +1349,9 @@ static void cmdloop(void)
         /* Only Authenticate/Enable/Login/Logout/Noop/Capability/Id/Starttls
            allowed when not logged in */
         if (!imapd_userid && !strchr("AELNCIS", cmd.s[0])) goto nologin;
+
+        /* Set limit on the total number of bytes allowed for arguments */
+        maxargssize_mark = prot_bytes_in(imapd_in) + maxargssize;
 
         /* Start command timer */
         cmdtime_starttimer();
@@ -3902,6 +3910,9 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
         curstage = xzmalloc(sizeof(*curstage));
         ptrarray_push(&stages, curstage);
 
+        /* Set limit on the total number of bytes allowed for mailbox+append-opts */
+        maxargssize_mark = prot_bytes_in(imapd_in) + (maxargssize - strlen(name));
+
         /* now parsing "append-opts" in the ABNF */
 
         /* Parse flags */
@@ -3910,6 +3921,8 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
             strarray_init(&curstage->flags);
             do {
                 c = getword(imapd_in, &arg);
+                if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                    fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
                 if (!curstage->flags.count && !arg.s[0] && c == ')') break; /* empty list */
                 if (!isokflag(arg.s, &sync_seen)) {
                     parseerr = "Invalid flag in Append command";
@@ -4017,15 +4030,23 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
     }
 
  done:
-    if (r) {
-        eatline(imapd_in, c);
-    } else {
+    switch (r) {
+    case IMAP_ZERO_LENGTH_LITERAL:
+    case IMAP_MESSAGE_TOO_LARGE:
+        break;
+
+    case 0:
         /* we should be looking at the end of the line */
-        if (!IS_EOL(c, imapd_in)) {
-            parseerr = "junk after literal";
-            r = IMAP_PROTOCOL_ERROR;
-            eatline(imapd_in, c);
-        }
+        if (IS_EOL(c, imapd_in)) break;
+
+        parseerr = "junk after literal";
+        r = IMAP_PROTOCOL_ERROR;
+
+        GCC_FALLTHROUGH
+
+    default:
+        eatline(imapd_in, c);
+        break;
     }
 
     /* Append from the stage(s) */
@@ -4235,6 +4256,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
         c = getword(imapd_in, &arg);
         if (arg.s[0] == '\0') goto badlist;
         for (;;) {
+            if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+
             ucase(arg.s);
             if (!strcmp(arg.s, "CONDSTORE")) {
                 client_capa |= CAPA_CONDSTORE;
@@ -4609,6 +4633,9 @@ static int parse_fetch_args(const char *tag, const char *cmd,
         c = getword(imapd_in, &fetchatt);
     }
     for (;;) {
+        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+
         ucase(fetchatt.s);
         switch (fetchatt.s[0]) {
         case 'A':
@@ -4739,6 +4766,8 @@ badannotation:
                     }
                     do {
                         c = getastring(imapd_in, imapd_out, &fieldname);
+                        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
                         if (c == IMAP_LITERAL_TOO_LARGE) {
                             prot_printf(imapd_out, "%s NO %s in %s %s\r\n",
                                         tag, error_message(c), cmd, fetchatt.s);
@@ -5073,6 +5102,9 @@ badannotation:
         }
         do {
             c = getword(imapd_in, &fetchatt);
+            if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+
             ucase(fetchatt.s);
             if (!strcmp(fetchatt.s, "CHANGEDSINCE")) {
                 if (c != ' ') {
@@ -5419,6 +5451,9 @@ static void cmd_store(char *tag, char *sequence, int usinguid)
 
         do {
             c = getword(imapd_in, &storemod);
+            if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+
             ucase(storemod.s);
             if (!strcmp(storemod.s, "UNCHANGEDSINCE")) {
                 if (c != ' ') {
@@ -5511,6 +5546,8 @@ static void cmd_store(char *tag, char *sequence, int usinguid)
 
     for (;;) {
         c = getword(imapd_in, &flagname);
+        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
         if (c == '(' && !flagname.s[0] && !flagsparsed && !inlist) {
             inlist = 1;
             continue;
@@ -5639,6 +5676,8 @@ static void cmd_search(char *tag, int usinguid)
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
 
+    searchargs->maxargssize_mark = maxargssize_mark;
+
     /* Set FUZZY search according to config and quirks */
     static const char *annot = IMAP_ANNOT_NS "search-fuzzy-always";
     char *inbox = mboxname_user_mbox(imapd_userid, NULL);
@@ -5730,6 +5769,9 @@ static void cmd_sort(char *tag, int usinguid)
     searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
+
+    searchargs->maxargssize_mark = maxargssize_mark;
+
     if (imapd_id.quirks & QUIRK_SEARCHFUZZY)
         searchargs->fuzzy_depth++;
 
@@ -5846,6 +5888,9 @@ static void cmd_thread(char *tag, int usinguid)
     searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
+
+    searchargs->maxargssize_mark = maxargssize_mark;
+
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) {
         eatline(imapd_in, ' ');
@@ -7409,6 +7454,8 @@ static void getlistargs(char *tag, struct listargs *listargs)
         listargs->cmd = LIST_CMD_EXTENDED;
         for (;;) {
             c = getastring(imapd_in, imapd_out, &buf);
+            if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
             if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
             if (*buf.s)
                 strarray_append(&listargs->pat, buf.s);
@@ -8252,6 +8299,9 @@ void cmd_setquota(const char *tag, const char *quotaroot)
         newquotas[res] = limit;
         if (c == ')') break;
         else if (c != ' ') goto badlist;
+
+        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
     }
     c = prot_getc(imapd_in);
     if (!IS_EOL(c, imapd_in)) {
@@ -8404,6 +8454,9 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
     c = getword(imapd_in, &arg);
     if (arg.s[0] == '\0') goto bad;
     for (;;) {
+        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+
         lcase(arg.s);
         if (!strcmp(arg.s, "messages")) {
             statusitems |= STATUS_MESSAGES;
@@ -8786,6 +8839,9 @@ static int parsecreateargs(struct dlist **extargs)
         /* new style RFC 4466 arguments */
         do {
             c = getword(imapd_in, &arg);
+            if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+
             name = ucase(arg.s);
             if (c != ' ') goto fail;
             c = prot_getc(imapd_in);
@@ -8794,6 +8850,9 @@ static int parsecreateargs(struct dlist **extargs)
                 sub = dlist_newlist(res, name);
                 do {
                     c = getword(imapd_in, &val);
+                    if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                        fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+
                     dlist_setatom(sub, name, val.s);
                 } while (c == ' ');
                 if (c != ')') goto fail;
@@ -8862,6 +8921,8 @@ static int parse_annotate_fetch_data(const char *tag,
                 c = getastring(imapd_in, imapd_out, &arg);
             else
                 c = getqstring(imapd_in, imapd_out, &arg);
+            if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
             if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
             if (c == EOF) {
                 prot_printf(imapd_out,
@@ -8913,6 +8974,8 @@ static int parse_annotate_fetch_data(const char *tag,
                 c = getastring(imapd_in, imapd_out, &arg);
             else
                 c = getqstring(imapd_in, imapd_out, &arg);
+            if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
             if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
             if (c == EOF) {
                 prot_printf(imapd_out,
@@ -8991,6 +9054,8 @@ static int parse_metadata_string_or_list(const char *tag,
         /* entry list */
         do {
             c = getastring(imapd_in, imapd_out, &arg);
+            if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
             if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
             if (c == EOF) {
                 prot_printf(imapd_out,
@@ -9095,6 +9160,8 @@ static int parse_annotate_store_data(const char *tag,
             c = getastring(imapd_in, imapd_out, &entry);
         else
             c = getqstring(imapd_in, imapd_out, &entry);
+        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
         if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
         if (c == EOF) {
             prot_printf(imapd_out,
@@ -9136,6 +9203,9 @@ static int parse_annotate_store_data(const char *tag,
                             "%s BAD Missing annotation value\r\n", tag);
                 goto baddata;
             }
+
+            if (prot_bytes_in(imapd_in) > maxargssize_mark)
+                fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
 
             /* add the attrib-value pair to the list */
             appendattvalue(&attvalues, attrib.s, &value);
@@ -9212,6 +9282,8 @@ static int parse_metadata_store_data(const char *tag,
     do {
         /* get entry */
         c = getastring(imapd_in, imapd_out, &entry);
+        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
         if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
         if (c != ' ') {
             prot_printf(imapd_out,
@@ -9225,6 +9297,8 @@ static int parse_metadata_store_data(const char *tag,
 
         /* get value */
         c = getbnstring(imapd_in, imapd_out, &value);
+        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
         if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
         if (c == EOF) {
             prot_printf(imapd_out,
@@ -11466,6 +11540,9 @@ static int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     nsort = 0;
     n = 0;
     for (;;) {
+        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+
         if (n >= nsort - 1) {   /* leave room for implicit criterion */
             /* (Re)allocate an array for sort criteria */
             nsort += SORTGROWSIZE;
@@ -11615,6 +11692,8 @@ static int getlistselopts(char *tag, struct listargs *args)
     for (;;) {
         c = getword(imapd_in, &buf);
 
+        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
         if (!*buf.s) {
             prot_printf(imapd_out,
                         "%s BAD Invalid syntax in List command\r\n",
@@ -11719,6 +11798,8 @@ static int getlistretopts(char *tag, struct listargs *args)
     for (;;) {
         c = getword(imapd_in, &buf);
 
+        if (prot_bytes_in(imapd_in) > maxargssize_mark)
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
         if (!*buf.s) {
             prot_printf(imapd_out,
                         "%s BAD Invalid syntax in List command\r\n", tag);
