@@ -234,6 +234,7 @@ struct searchargs {
     int state;
     /* used only during parsing */
     int fuzzy_depth;
+    uint64_t maxargssize_mark;
 
     /* For ESEARCH & XCONVMULTISORT */
     const char *tag;
