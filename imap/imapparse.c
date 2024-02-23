@@ -77,7 +77,7 @@ EXPORTED int getword(struct protstream *in, struct buf *buf)
         }
         buf_putc(buf, c);
         if (config_maxword && buf_len(buf) > config_maxword) {
-            fatal("word too long", EX_IOERR);
+            fatal("[TOOBIG] Word too long", EX_IOERR);
         }
     }
 }
@@ -140,7 +140,7 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
             }
             buf_putc(buf, c);
             if (config_maxquoted && buf_len(buf) > config_maxquoted) {
-                fatal("quoted value too long", EX_IOERR);
+                fatal("[TOOBIG] Quoted value too long", EX_IOERR);
             }
         }
 
@@ -214,6 +214,9 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                     return c;
                 }
                 buf_putc(buf, c);
+                if (config_maxword && buf_len(buf) > config_maxword) {
+                    fatal("[TOOBIG] Word too long", EX_IOERR);
+                }
                 c = prot_getc(pin);
             }
             /* never gets here */
