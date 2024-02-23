@@ -1655,6 +1655,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Maximum number of logged in sessions allowed per user,
    zero means no limit */
 
+{ "maxargssize", 0, INT, "UNRELEASED" }
+/* Maximum total size of arguments to an IMAP command that will be
+   accepted by Cyrus.
+   Commands with arguments that exceed this limit will be rejected. 
+
 { "maxmessagesize", 0, INT, "2.3.17" }
 /* Maximum incoming LMTP message size.  If non-zero, lmtpd will reject
    messages larger than \fImaxmessagesize\fR bytes.  If set to 0, this
