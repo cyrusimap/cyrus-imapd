@@ -764,6 +764,11 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
             goto bad;
         }
 
+        if (searchargs->maxargssize_mark &&
+            prot_bytes_in(pin) > searchargs->maxargssize_mark) {
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+        }
+
     } while (c == ' ');
 
     if (!(searchargs->returnopts & ~(SEARCH_RETURN_SAVE|SEARCH_RETURN_RELEVANCY))) {
@@ -1547,6 +1552,11 @@ static int get_search_criterion(struct protstream *pin,
         prot_printf(pout, "%s BAD Invalid Search criteria\r\n", base->tag);
         if (c != EOF) prot_ungetc(c, pin);
         return EOF;
+    }
+
+    if (base->maxargssize_mark &&
+        prot_bytes_in(pin) > base->maxargssize_mark) {
+        fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
     }
 
     if (!keep_charset)
