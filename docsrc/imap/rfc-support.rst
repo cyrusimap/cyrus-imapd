@@ -693,6 +693,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP Support for UTF-8
 
+    .. NOTE::
+
+        This extension will only be advertised and supported
+        if both 'reject8bit' and 'munge8bit' are disabled.
+
 :rfc:`6901`
 
     JavaScript Object Notation (JSON) Pointer
