@@ -637,7 +637,6 @@ static void remove_session_cb(SSL_CTX *ctx __attribute__((unused)),
     session_id = SSL_SESSION_get_id(sess, &session_id_length);
 
     remove_session(session_id, session_id_length);
-    SSL_SESSION_free(sess);
 }
 
 /*
