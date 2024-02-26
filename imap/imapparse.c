@@ -159,6 +159,10 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                 /* Fail per RFC 7888, Section 4, choice 2 */
                 fatal(error_message(IMAP_LITERAL_MINUS_TOO_LARGE), EX_IOERR);
             }
+            if (config_maxliteral && len >= 0 && (unsigned) len > config_maxliteral) {
+                /* Fail per RFC 7888, Section 4, choice 2 */
+                fatal(error_message(IMAP_LITERAL_TOO_LARGE), EX_IOERR);
+            }
             isnowait++;
             c = prot_getc(pin);
         }
@@ -181,6 +185,10 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
         }
 
         if (!isnowait) {
+            if (config_maxliteral && len >= 0 && (unsigned) len > config_maxliteral) {
+                return IMAP_LITERAL_TOO_LARGE;
+            }
+
             prot_printf(pout, "+ go ahead\r\n");
             prot_flush(pout);
         }
@@ -628,6 +636,7 @@ EXPORTED int get_search_source_mboxes(struct protstream *pin,
 
   bad:
     buf_free(&extname);
+    if (c == IMAP_LITERAL_TOO_LARGE) return c;
     if (c != EOF) prot_ungetc(c, pin);
     return EOF;
 }
@@ -691,6 +700,7 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
 
     } while (c == ' ');
 
+    if (c == IMAP_LITERAL_TOO_LARGE) return c;
     if (c != ')') {
         prot_printf(pout,
                     "%s BAD Missing close parenthesis in Search\r\n",
@@ -818,7 +828,7 @@ static int get_search_annotation(struct protstream *pin,
 
     /* parse the value */
     c = getbnstring(pin, pout, &value);
-    if (c == EOF)
+    if (c <= EOF)
         goto bad;
 
     sa = xzmalloc(sizeof(*sa));
@@ -839,6 +849,7 @@ bad:
     buf_free(&attrib);
     buf_free(&value);
 
+    if (c == IMAP_LITERAL_TOO_LARGE) return c;
     if (c != EOF) prot_ungetc(c, pin);
     return EOF;
 }
@@ -971,7 +982,7 @@ static int get_search_criterion(struct protstream *pin,
         do {
             c = get_search_criterion(pin, pout, e, base);
         } while (c == ' ');
-        if (c == EOF) return EOF;
+        if (c <= EOF) return c;
         if (c != ')') {
             prot_printf(pout, "%s BAD Missing required close paren in Search command\r\n",
                    base->tag);
@@ -1022,7 +1033,7 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "annotation")) {   /* RFC 5257 */
             struct searchannot *annot = NULL;
             c = get_search_annotation(pin, pout, base, c, &annot);
-            if (c == EOF)
+            if (c <= EOF)
                 goto badcri;
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find("annotation");
@@ -1043,22 +1054,14 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "bcc")) {      /* RFC 3501 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (!strcmp(criteria.s, "body")) {     /* RFC 3501 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, criteria.s, base);
-        }
-        else if (!strcmp(criteria.s, "fuzzy")) {
-            if (c != ' ') goto missingarg;
-            base->fuzzy_depth++;
-            c = get_search_criterion(pin, pout, parent, base);
-            base->fuzzy_depth--;
-            if (c == EOF) return EOF;
-            break;
         }
         else goto badcri;
         break;
@@ -1067,7 +1070,7 @@ static int get_search_criterion(struct protstream *pin,
         if (!strcmp(criteria.s, "cc")) {            /* RFC 3501 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (hasconv && !strcmp(criteria.s, "convflag")) {  /* nonstandard */
@@ -1130,7 +1133,7 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "deliveredto")) {  /* nonstandard */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, criteria.s, base);
         }
         else goto badcri;
@@ -1140,7 +1143,7 @@ static int get_search_criterion(struct protstream *pin,
         if (!strcmp(criteria.s, "emailid")) {   /* RFC 8474 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             bytestring_match(parent, arg.s, criteria.s, base);
         }
         else goto badcri;
@@ -1153,7 +1156,7 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "folder")) {       /* nonstandard */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find("folder");
             e->value.s = mboxname_from_external(arg.s, base->namespace, base->userid);
@@ -1161,7 +1164,7 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "from")) {         /* RFC 3501 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (!strcmp(criteria.s, "fuzzy")) {        /* RFC 6203 */
@@ -1169,7 +1172,7 @@ static int get_search_criterion(struct protstream *pin,
             base->fuzzy_depth++;
             c = get_search_criterion(pin, pout, parent, base);
             base->fuzzy_depth--;
-            if (c == EOF) return EOF;
+            if (c <= EOF) return c;
         }
         else goto badcri;
         break;
@@ -1180,7 +1183,7 @@ static int get_search_criterion(struct protstream *pin,
             c = getastring(pin, pout, &arg);
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg2);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
 
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find_field(arg.s);
@@ -1197,7 +1200,7 @@ static int get_search_criterion(struct protstream *pin,
         if ((base->state & GETSEARCH_SOURCE) &&
                  !strcmp(criteria.s, "in")) {           /* RFC 7377 */
             c = get_search_source_opts(pin, pout, base);
-            if (c == EOF) return EOF;
+            if (c <= EOF) return c;
             keep_charset = 1;
         }
         else goto badcri;
@@ -1252,7 +1255,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c != ' ') goto missingarg;
             e = search_expr_new(parent, SEOP_NOT);
             c = get_search_criterion(pin, pout, e, base);
-            if (c == EOF) return EOF;
+            if (c <= EOF) return c;
         }
         else if (!strcmp(criteria.s, "new")) {  /* RFC 3501 */
             e = search_expr_new(parent, SEOP_AND);
@@ -1267,10 +1270,10 @@ static int get_search_criterion(struct protstream *pin,
             if (c != ' ') goto missingarg;
             e = search_expr_new(parent, SEOP_OR);
             c = get_search_criterion(pin, pout, e, base);
-            if (c == EOF) return EOF;
+            if (c <= EOF) return c;
             if (c != ' ') goto missingarg;
             c = get_search_criterion(pin, pout, e, base);
-            if (c == EOF) return EOF;
+            if (c <= EOF) return c;
         }
         else if (!strcmp(criteria.s, "old")) {  /* RFC 3501 */
             indexflag_match(parent, MESSAGE_RECENT, /*not*/1);
@@ -1389,6 +1392,7 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "spamabove")) {  /* nonstandard */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
+            if (c == IMAP_LITERAL_TOO_LARGE) return c;
             if (c == EOF) goto badnumber;
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("spamscore");
@@ -1397,6 +1401,7 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "spambelow")) {  /* nonstandard */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
+            if (c == IMAP_LITERAL_TOO_LARGE) return c;
             if (c == EOF) goto badnumber;
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("spamscore");
@@ -1405,7 +1410,7 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "subject")) {  /* RFC 3501 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, criteria.s, base);
         }
         else goto badcri;
@@ -1415,19 +1420,19 @@ static int get_search_criterion(struct protstream *pin,
         if (!strcmp(criteria.s, "to")) {            /* RFC 3501 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (!strcmp(criteria.s, "text")) {     /* RFC 3501 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (!strcmp(criteria.s, "threadid")) {   /* RFC 8474 */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             bytestring_match(parent, arg.s, criteria.s, base);
         }
         else goto badcri;
@@ -1478,25 +1483,25 @@ static int get_search_criterion(struct protstream *pin,
         if (!strcmp(criteria.s, "xattachmentname")) {  /* nonstandard */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, "attachmentname", base);
         }
         else if (!strcmp(criteria.s, "xattachmentbody")) {  /* nonstandard */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, "attachmentbody", base);
         }
         else if (!strcmp(criteria.s, "xlistid")) {           /* nonstandard */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, "listid", base);
         }
         else if (!strcmp(criteria.s, "xcontenttype")) { /* nonstandard */
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
-            if (c == EOF) goto missingarg;
+            if (c <= EOF) goto missingarg;
             string_match(parent, arg.s, "contenttype", base);
         }
         else goto badcri;
@@ -1527,6 +1532,8 @@ static int get_search_criterion(struct protstream *pin,
 
     default:
     badcri:
+        if (c == IMAP_LITERAL_TOO_LARGE) return c;
+
         prot_printf(pout, "%s BAD Invalid Search criteria\r\n", base->tag);
         if (c != EOF) prot_ungetc(c, pin);
         return EOF;
@@ -1542,6 +1549,8 @@ static int get_search_criterion(struct protstream *pin,
     return c;
 
  missingarg:
+    if (c == IMAP_LITERAL_TOO_LARGE) return c;
+
     prot_printf(pout, "%s BAD Missing required argument to Search %s\r\n",
                 base->tag, criteria.s);
     if (c != EOF) prot_ungetc(c, pin);

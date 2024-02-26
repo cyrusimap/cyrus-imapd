@@ -1441,7 +1441,7 @@ static void cmdloop(void)
                 if (c != ' ' || (strcmp("$", arg1.s) && !imparse_issequence(arg1.s)))
                     goto badsequence;
                 c = getastring(imapd_in, imapd_out, &arg2);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/0);
@@ -1454,7 +1454,7 @@ static void cmdloop(void)
 
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (c == ' ') {
                     c = parsecreateargs(&extargs);
                     if (c == EOF) goto badpartition;
@@ -1481,7 +1481,7 @@ static void cmdloop(void)
                 if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_delete(tag.s, arg1.s, 0, 0);
 
@@ -1493,7 +1493,7 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg2);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_setacl(tag.s, arg1.s, arg2.s, NULL);
 
@@ -1545,7 +1545,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Examine")) {
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 prot_ungetc(c, imapd_in);
 
                 cmd_select(tag.s, cmd.s, arg1.s);
@@ -1578,7 +1578,7 @@ static void cmdloop(void)
             if (!strcmp(cmd.s, "Getacl")) {
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_getacl(tag.s, arg1.s);
 
@@ -1603,7 +1603,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Getquota")) {
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_getquota(tag.s, arg1.s);
 
@@ -1612,7 +1612,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Getquotaroot")) {
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_getquotaroot(tag.s, arg1.s);
 
@@ -1737,7 +1737,7 @@ static void cmdloop(void)
 
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (c == ' ') {
                     c = parsecreateargs(&extargs);
                     if (c == EOF) goto badpartition;
@@ -1753,7 +1753,7 @@ static void cmdloop(void)
                 /* delete a mailbox locally only */
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_delete(tag.s, arg1.s, 1, 1);
 
@@ -1766,7 +1766,7 @@ static void cmdloop(void)
             if (!strcmp(cmd.s, "Myrights")) {
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_myrights(tag.s, arg1.s);
 
@@ -1776,7 +1776,7 @@ static void cmdloop(void)
                 if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if(c == EOF) goto missingargs;
+                if(c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_mupdatepush(tag.s, arg1.s);
 
@@ -1794,7 +1794,7 @@ static void cmdloop(void)
                 if (c != ' ' || (strcmp("$", arg1.s) && !imparse_issequence(arg1.s)))
                     goto badsequence;
                 c = getastring(imapd_in, imapd_out, &arg2);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/1);
@@ -1829,7 +1829,7 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg2);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (c == ' ') {
                     havepartition = 1;
                     c = getword(imapd_in, &arg3);
@@ -1902,7 +1902,7 @@ static void cmdloop(void)
                 if (c == ' ') {
                     have_mbox = 1;
                     c = getastring(imapd_in, imapd_out, &arg1);
-                    if (c == EOF) goto missingargs;
+                    if (c <= EOF) goto missingargs;
                     if (c == ' ') {
                         have_mech = 1;
                         c = getword(imapd_in, &arg2);
@@ -1976,7 +1976,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Select")) {
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 prot_ungetc(c, imapd_in);
 
                 cmd_select(tag.s, cmd.s, arg1.s);
@@ -2001,7 +2001,7 @@ static void cmdloop(void)
                     havenamespace = 1;
                     c = getastring(imapd_in, imapd_out, &arg2);
                 }
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 if (havenamespace) {
                     cmd_changesub(tag.s, arg1.s, arg2.s, 1);
@@ -2019,7 +2019,7 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg2);
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg3);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_setacl(tag.s, arg1.s, arg2.s, arg3.s);
 
@@ -2220,7 +2220,7 @@ static void cmdloop(void)
                     havenamespace = 1;
                     c = getastring(imapd_in, imapd_out, &arg2);
                 }
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 if (havenamespace) {
                     cmd_changesub(tag.s, arg1.s, arg2.s, 0);
@@ -2367,7 +2367,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Xmeid")) {
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
+                if (c <= EOF) goto missingargs;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_xmeid(tag.s, arg1.s);
             }
@@ -2379,7 +2379,7 @@ static void cmdloop(void)
 
                 do {
                     c = getastring(imapd_in, imapd_out, &arg1);
-                    if (c == EOF) goto aps_missingargs;
+                    if (c <= EOF) goto aps_missingargs;
 
                     if (!strcmp(arg1.s, "mailboxes")) {
                         c = prot_getc(imapd_in);
@@ -2391,7 +2391,7 @@ static void cmdloop(void)
                             prot_ungetc(c, imapd_in);
                             do {
                                 c = getastring(imapd_in, imapd_out, &arg2);
-                                if (c == EOF) break;
+                                if (c <= EOF) break;
                                 strarray_push(&applepushserviceargs.mailboxes, arg2.s);
                             } while (c == ' ');
                         }
@@ -2477,6 +2477,8 @@ static void cmdloop(void)
         strarray_fini(&applepushserviceargs.mailboxes);
 
     missingargs:
+        if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
+
         prot_printf(imapd_out,
                     "%s BAD Missing required argument to %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
@@ -2489,9 +2491,16 @@ static void cmdloop(void)
         strarray_fini(&applepushserviceargs.mailboxes);
 
     extraargs:
+        if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
+
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to %s\r\n", tag.s, cmd.s);
         eatline(imapd_in, c);
+        continue;
+
+    maxliteral:
+        prot_printf(imapd_out, "%s NO %s in %s\r\n",
+                    tag.s, error_message(IMAP_LITERAL_TOO_LARGE), cmd.s);
         continue;
 
     badsequence:
@@ -2666,10 +2675,14 @@ static void cmd_login(char *tag, char *user)
 
     if (!IS_EOL(c, imapd_in)) {
         buf_free(&passwdbuf);
-        prot_printf(imapd_out,
-                    "%s BAD Unexpected extra arguments to LOGIN\r\n",
-                    tag);
-        eatline(imapd_in, c);
+        if (c == IMAP_LITERAL_TOO_LARGE) {
+            prot_printf(imapd_out, "%s NO %s in LOGIN\r\n", tag, error_message(c));
+        } else {
+            prot_printf(imapd_out,
+                        "%s BAD Unexpected extra arguments to LOGIN\r\n",
+                        tag);
+            eatline(imapd_in, c);
+        }
         return;
     }
 
@@ -3084,10 +3097,16 @@ static void cmd_id(char *tag)
                 /* get field value */
                 (c = getnstring(imapd_in, imapd_out, &arg)) == EOF ||
                 (c != ' ' && c != ')')) {
-                prot_printf(imapd_out,
-                            "%s BAD Invalid field-value pair in Id\r\n",
-                            tag);
-                eatline(imapd_in, c);
+                if (c == IMAP_LITERAL_TOO_LARGE) {
+                    prot_printf(imapd_out, "%s NO %s in Id\r\n",
+                                tag, error_message(c));
+                }
+                else {
+                    prot_printf(imapd_out,
+                                "%s BAD Invalid field-value pair in Id\r\n",
+                                tag);
+                    eatline(imapd_in, c);
+                }
                 return;
             }
 
@@ -3777,6 +3796,7 @@ static int append_catenate(FILE *f, const char *cur_name, size_t maxsize, unsign
         }
         else if (!strcasecmp(arg.s, "URL")) {
             c = getastring(imapd_in, imapd_out, &arg);
+            if (c == IMAP_LITERAL_TOO_LARGE) return c;
             if (c != ' ' && c != ')') {
                 *parseerr = "Missing URL in Append command";
                 return IMAP_PROTOCOL_ERROR;
@@ -3975,8 +3995,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
                 c = parse_annotate_store_data(tag,
                                               /*permessage_flag*/1,
                                               &curstage->annotations);
-                if (c == EOF) {
-                    eatline(imapd_in, c);
+                if (c <= EOF) {
                     goto cleanup;
                 }
                 qdiffs[QUOTA_ANNOTSTORAGE] += sizeentryatts(curstage->annotations);
@@ -4103,6 +4122,8 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
 
     if (r == IMAP_PROTOCOL_ERROR && parseerr) {
         prot_printf(imapd_out, "%s BAD %s\r\n", tag, parseerr);
+    } else if (r == IMAP_LITERAL_TOO_LARGE) {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else if (r == IMAP_BADURL) {
         prot_printf(imapd_out, "%s NO [BADURL \"%s\"] %s\r\n",
                     tag, url, parseerr);
@@ -4647,8 +4668,7 @@ static int parse_fetch_args(const char *tag, const char *cmd,
                                               /*permessage_flag*/1,
                                               &fa->entries,
                                               &fa->attribs);
-                if (c == EOF) {
-                    eatline(imapd_in, c);
+                if (c <= EOF) {
                     goto freeargs;
                 }
                 if (c != ')') {
@@ -4761,6 +4781,11 @@ badannotation:
                     }
                     do {
                         c = getastring(imapd_in, imapd_out, &fieldname);
+                        if (c == IMAP_LITERAL_TOO_LARGE) {
+                            prot_printf(imapd_out, "%s NO %s in %s %s\r\n",
+                                        tag, error_message(c), cmd, fetchatt.s);
+                            goto freeargs;
+                        }
                         for (p = fieldname.s; *p; p++) {
                             if (*p <= ' ' || *p & 0x80 || *p == ':') break;
                         }
@@ -4991,6 +5016,11 @@ badannotation:
                 }
                 do {
                     c = getastring(imapd_in, imapd_out, &fieldname);
+                    if (c == IMAP_LITERAL_TOO_LARGE) {
+                        prot_printf(imapd_out, "%s NO %s in %s %s\r\n",
+                                    tag, error_message(c), cmd, fetchatt.s);
+                        goto freeargs;
+                    }
                     for (p = fieldname.s; *p; p++) {
                         if (*p <= ' ' || *p & 0x80 || *p == ':') break;
                     }
@@ -5506,8 +5536,7 @@ static void cmd_store(char *tag, char *sequence, int usinguid)
 
         c = parse_annotate_store_data(tag, /*permessage_flag*/1,
                                       &storeargs.entryatts);
-        if (c == EOF) {
-            eatline(imapd_in, c);
+        if (c <= EOF) {
             goto freeflags;
         }
         storeargs.namespace = &imapd_namespace;
@@ -5746,6 +5775,11 @@ static void cmd_search(char *tag, char *cmd)
         eatline(imapd_in, ' ');
         freesearchargs(searchargs);
         return;
+    }
+
+    if (c == IMAP_LITERAL_TOO_LARGE) {
+        prot_printf(imapd_out, "%s NO %s in Search\r\n", tag, error_message(c));
+        goto done;
     }
 
     if (!IS_EOL(c, imapd_in)) {
@@ -6044,16 +6078,19 @@ static void cmd_thread(char *tag, int usinguid)
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) {
         eatline(imapd_in, ' ');
-        freesearchargs(searchargs);
-        return;
+        goto done;
+    }
+
+    if (c == IMAP_LITERAL_TOO_LARGE) {
+        prot_printf(imapd_out, "%s NO %s in Thread\r\n", tag, error_message(c));
+        goto done;
     }
 
     if (!IS_EOL(c, imapd_in)) {
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to Thread\r\n", tag);
         eatline(imapd_in, c);
-        freesearchargs(searchargs);
-        return;
+        goto done;
     }
 
     n = index_thread(imapd_index, alg, searchargs, usinguid);
@@ -6062,6 +6099,7 @@ static void cmd_thread(char *tag, int usinguid)
     prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
                 error_message(IMAP_OK_COMPLETED), n, mytime);
 
+  done:
     freesearchargs(searchargs);
     return;
 }
@@ -7635,8 +7673,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
     if (c == '(') {
         listargs->cmd = LIST_CMD_EXTENDED;
         c = getlistselopts(tag, listargs);
-        if (c == EOF) {
-            eatline(imapd_in, c);
+        if (c <= EOF) {
             return;
         }
     }
@@ -7648,6 +7685,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
 
     /* Read in reference name */
     c = getastring(imapd_in, imapd_out, &reference);
+    if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
     if (c == EOF && !*reference.s) {
         prot_printf(imapd_out,
                     "%s BAD Missing required argument to List: reference name\r\n",
@@ -7670,6 +7708,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
         listargs->cmd = LIST_CMD_EXTENDED;
         for (;;) {
             c = getastring(imapd_in, imapd_out, &buf);
+            if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
             if (*buf.s)
                 strarray_append(&listargs->pat, buf.s);
             if (c != ' ') break;
@@ -7685,6 +7724,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
     else {
         prot_ungetc(c, imapd_in);
         c = getastring(imapd_in, imapd_out, &buf);
+        if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
         if (c == EOF) {
             prot_printf(imapd_out,
                         "%s BAD Missing required argument to List: mailbox pattern\r\n",
@@ -7699,8 +7739,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
     if (c == ' ') {
         listargs->cmd = LIST_CMD_EXTENDED;
         c = getlistretopts(tag, listargs);
-        if (c == EOF) {
-            eatline(imapd_in, c);
+        if (c <= EOF) {
             goto freeargs;
         }
     }
@@ -7718,6 +7757,10 @@ static void getlistargs(char *tag, struct listargs *listargs)
 #endif // USE_AUTOCREATE
 
     return;
+
+  maxliteral:
+    prot_printf(imapd_out, "%s NO %s in List\r\n",
+                tag, error_message(IMAP_LITERAL_TOO_LARGE));
 
   freeargs:
     strarray_fini(&listargs->pat);
@@ -9125,6 +9168,7 @@ static int parse_annotate_fetch_data(const char *tag,
                 c = getastring(imapd_in, imapd_out, &arg);
             else
                 c = getqstring(imapd_in, imapd_out, &arg);
+            if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
             if (c == EOF) {
                 prot_printf(imapd_out,
                             "%s BAD Missing annotation entry\r\n", tag);
@@ -9152,6 +9196,7 @@ static int parse_annotate_fetch_data(const char *tag,
             c = getastring(imapd_in, imapd_out, &arg);
         else
             c = getqstring(imapd_in, imapd_out, &arg);
+        if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
         if (c == EOF) {
             prot_printf(imapd_out,
                         "%s BAD Missing annotation entry\r\n", tag);
@@ -9174,6 +9219,7 @@ static int parse_annotate_fetch_data(const char *tag,
                 c = getastring(imapd_in, imapd_out, &arg);
             else
                 c = getqstring(imapd_in, imapd_out, &arg);
+            if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
             if (c == EOF) {
                 prot_printf(imapd_out,
                             "%s BAD Missing annotation attribute(s)\r\n", tag);
@@ -9201,6 +9247,7 @@ static int parse_annotate_fetch_data(const char *tag,
             c = getastring(imapd_in, imapd_out, &arg);
         else
             c = getqstring(imapd_in, imapd_out, &arg);
+        if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
         if (c == EOF) {
             prot_printf(imapd_out,
                         "%s BAD Missing annotation attribute\r\n", tag);
@@ -9213,8 +9260,13 @@ static int parse_annotate_fetch_data(const char *tag,
     return c;
 
   baddata:
-    if (c != EOF) prot_ungetc(c, imapd_in);
+    eatline(imapd_in, c);
     return EOF;
+
+  maxliteral:
+    prot_printf(imapd_out, "%s NO %s in annotation entry\r\n",
+                tag, error_message(IMAP_LITERAL_TOO_LARGE));
+    return IMAP_LITERAL_TOO_LARGE;
 }
 
 /*
@@ -9245,6 +9297,7 @@ static int parse_metadata_string_or_list(const char *tag,
         /* entry list */
         do {
             c = getastring(imapd_in, imapd_out, &arg);
+            if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
             if (c == EOF) {
                 prot_printf(imapd_out,
                             "%s BAD Missing metadata entry\r\n", tag);
@@ -9271,6 +9324,7 @@ static int parse_metadata_string_or_list(const char *tag,
         /* single entry -- add it to the list */
         prot_ungetc(c, imapd_in);
         c = getastring(imapd_in, imapd_out, &arg);
+        if (c == IMAP_LITERAL_TOO_LARGE)  goto maxliteral;
         if (c == EOF) {
             prot_printf(imapd_out,
                         "%s BAD Missing metadata entry\r\n", tag);
@@ -9289,8 +9343,13 @@ static int parse_metadata_string_or_list(const char *tag,
     if (c == ' ' || c == '\r' || c == ')') return c;
 
   baddata:
-    if (c != EOF) prot_ungetc(c, imapd_in);
+    eatline(imapd_in, c);
     return EOF;
+
+  maxliteral:
+    prot_printf(imapd_out, "%s NO %s in metadata entry\r\n",
+                tag, error_message(IMAP_LITERAL_TOO_LARGE));
+    return IMAP_LITERAL_TOO_LARGE;
 }
 
 /*
@@ -9342,6 +9401,7 @@ static int parse_annotate_store_data(const char *tag,
             c = getastring(imapd_in, imapd_out, &entry);
         else
             c = getqstring(imapd_in, imapd_out, &entry);
+        if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
         if (c == EOF) {
             prot_printf(imapd_out,
                         "%s BAD Missing annotation entry\r\n", tag);
@@ -9362,6 +9422,7 @@ static int parse_annotate_store_data(const char *tag,
                 c = getastring(imapd_in, imapd_out, &attrib);
             else
                 c = getqstring(imapd_in, imapd_out, &attrib);
+            if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
             if (c == EOF) {
                 prot_printf(imapd_out,
                             "%s BAD Missing annotation attribute\r\n", tag);
@@ -9375,6 +9436,7 @@ static int parse_annotate_store_data(const char *tag,
                 goto baddata;
             }
             c = getbnstring(imapd_in, imapd_out, &value);
+            if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
             if (c == EOF) {
                 prot_printf(imapd_out,
                             "%s BAD Missing annotation value\r\n", tag);
@@ -9416,8 +9478,14 @@ static int parse_annotate_store_data(const char *tag,
 
   baddata:
     if (attvalues) freeattvalues(attvalues);
-    if (c != EOF) prot_ungetc(c, imapd_in);
+    eatline(imapd_in, c);
     return EOF;
+
+  maxliteral:
+    if (attvalues) freeattvalues(attvalues);
+    prot_printf(imapd_out, "%s NO %s in annotation entry\r\n",
+                tag, error_message(IMAP_LITERAL_TOO_LARGE));
+    return IMAP_LITERAL_TOO_LARGE;
 }
 
 /*
@@ -9450,6 +9518,7 @@ static int parse_metadata_store_data(const char *tag,
     do {
         /* get entry */
         c = getastring(imapd_in, imapd_out, &entry);
+        if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
         if (c != ' ') {
             prot_printf(imapd_out,
                         "%s BAD Missing metadata entry\r\n", tag);
@@ -9462,6 +9531,7 @@ static int parse_metadata_store_data(const char *tag,
 
         /* get value */
         c = getbnstring(imapd_in, imapd_out, &value);
+        if (c == IMAP_LITERAL_TOO_LARGE) goto maxliteral;
         if (c == EOF) {
             prot_printf(imapd_out,
                         "%s BAD Missing metadata value\r\n", tag);
@@ -9502,7 +9572,7 @@ static int parse_metadata_store_data(const char *tag,
 
     if (c != ')') {
         prot_printf(imapd_out,
-                    "%s BAD Missing close paren in annotation entry list \r\n",
+                    "%s BAD Missing close paren in metadata entry list \r\n",
                     tag);
         goto baddata;
     }
@@ -9513,8 +9583,14 @@ static int parse_metadata_store_data(const char *tag,
 
   baddata:
     if (attvalues) freeattvalues(attvalues);
-    if (c != EOF) prot_ungetc(c, imapd_in);
+    eatline(imapd_in, c);
     return EOF;
+
+  maxliteral:
+    if (attvalues) freeattvalues(attvalues);
+    prot_printf(imapd_out, "%s NO %s in metadata entry\r\n",
+                tag, error_message(IMAP_LITERAL_TOO_LARGE));
+    return IMAP_LITERAL_TOO_LARGE;
 }
 
 static void getannotation_response(const char *mboxname,
@@ -9699,8 +9775,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     annotate_state_t *astate = NULL;
 
     c = parse_annotate_fetch_data(tag, /*permessage_flag*/0, &entries, &attribs);
-    if (c == EOF) {
-        eatline(imapd_in, c);
+    if (c <= EOF) {
         goto freeargs;
     }
 
@@ -9934,8 +10009,10 @@ static void cmd_getmetadata(const char *tag)
     while (nlists < 3)
     {
         c = parse_metadata_string_or_list(tag, &lists[nlists], &is_list[nlists]);
+        if (c <= EOF) goto freeargs;
+
         nlists++;
-        if (c == '\r' || c == EOF)
+        if (c == '\r')
             break;
     }
 
@@ -10092,8 +10169,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     annotate_state_t *astate = NULL;
 
     c = parse_annotate_store_data(tag, 0, &entryatts);
-    if (c == EOF) {
-        eatline(imapd_in, c);
+    if (c <= EOF) {
         goto freeargs;
     }
 
@@ -10160,8 +10236,7 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     annotate_state_t *astate = NULL;
 
     c = parse_metadata_store_data(tag, &entryatts);
-    if (c == EOF) {
-        eatline(imapd_in, c);
+    if (c <= EOF) {
         goto freeargs;
     }
 
@@ -10269,6 +10344,10 @@ static void cmd_xwarmup(const char *tag)
     /* parse arguments: expect <mboxname> '('<warmup-items>')' */
 
     c = getastring(imapd_in, imapd_out, &arg);
+    if (c == IMAP_LITERAL_TOO_LARGE) {
+        prot_printf(imapd_out, "%s NO %s in Xwarmup\r\n", tag, error_message(c));
+        goto out_noprint;
+    }
     if (c != ' ') {
 syntax_error:
         prot_printf(imapd_out, "%s BAD syntax error in %s\r\n", tag, cmd);
@@ -11779,9 +11858,11 @@ static int getsortcriteria(char *tag, struct sortcrit **sortcrit)
             (*sortcrit)[n].key = SORT_ANNOTATION;
             if (c != ' ') goto missingarg;
             c = getastring(imapd_in, imapd_out, &criteria);
+            if (c == IMAP_LITERAL_TOO_LARGE) return c;
             if (c != ' ') goto missingarg;
             (*sortcrit)[n].args.annot.entry = xstrdup(criteria.s);
             c = getastring(imapd_in, imapd_out, &criteria);
+            if (c == IMAP_LITERAL_TOO_LARGE) return c;
             if (c == EOF) goto missingarg;
             if (!strcmp(criteria.s, "value.shared"))
                 userid = "";
@@ -11799,6 +11880,7 @@ static int getsortcriteria(char *tag, struct sortcrit **sortcrit)
             (*sortcrit)[n].key = SORT_HASFLAG;
             if (c != ' ') goto missingarg;
             c = getastring(imapd_in, imapd_out, &criteria);
+            if (c == IMAP_LITERAL_TOO_LARGE) return c;
             if (c == EOF) goto missingarg;
             (*sortcrit)[n].args.flag.name = xstrdup(criteria.s);
         }
@@ -11812,6 +11894,7 @@ static int getsortcriteria(char *tag, struct sortcrit **sortcrit)
             (*sortcrit)[n].key = SORT_HASCONVFLAG;
             if (c != ' ') goto missingarg;
             c = getastring(imapd_in, imapd_out, &criteria);
+            if (c == IMAP_LITERAL_TOO_LARGE) return c;
             if (c == EOF) goto missingarg;
             (*sortcrit)[n].args.flag.name = xstrdup(criteria.s);
         }
@@ -11917,10 +12000,10 @@ static int getlistselopts(char *tag, struct listargs *args)
 
             strarray_t options = STRARRAY_INITIALIZER;
             c = parse_metadata_string_or_list(tag, &options, NULL);
+            if (c <= EOF) return c;
             parse_getmetadata_options(&options, &opts);
             args->metaopts = opts;
             strarray_fini(&options);
-            if (c == EOF) return EOF;
         } else {
             prot_printf(imapd_out,
                         "%s BAD Invalid List selection option \"%s\"\r\n",
@@ -11948,7 +12031,7 @@ static int getlistselopts(char *tag, struct listargs *args)
     return prot_getc(imapd_in);
 
 bad:
-    if (c != EOF) prot_ungetc(c, imapd_in);
+    eatline(imapd_in, c);
     return EOF;
 }
 
@@ -12018,7 +12101,7 @@ static int getlistretopts(char *tag, struct listargs *args)
             args->ret |= LIST_RET_METADATA;
             /* outputs the error for us */
             c = parse_metadata_string_or_list(tag, &args->metaitems, NULL);
-            if (c == EOF) return EOF;
+            if (c <= EOF) return c;
         }
         else {
             prot_printf(imapd_out,
@@ -12039,7 +12122,7 @@ static int getlistretopts(char *tag, struct listargs *args)
     return prot_getc(imapd_in);
 
 bad:
-    if (c != EOF) prot_ungetc(c, imapd_in);
+    eatline(imapd_in, c);
     return EOF;
 }
 
@@ -13232,6 +13315,11 @@ static void cmd_urlfetch(char *tag)
         else prot_ungetc(c, imapd_in);
 
         c = getastring(imapd_in, imapd_out, &arg);
+        if (c == IMAP_LITERAL_TOO_LARGE) {
+            prot_printf(imapd_out, "%s NO %s in Urlfetch\r\n",
+                        tag, error_message(c));
+            return;
+        }
         (void)prot_putc(' ', imapd_out);
         prot_printstring(imapd_out, arg.s);
 
@@ -13464,6 +13552,11 @@ static void cmd_genurlauth(char *tag)
         char *intname = NULL;
 
         c = getastring(imapd_in, imapd_out, &arg1);
+        if (c == IMAP_LITERAL_TOO_LARGE) {
+            prot_printf(imapd_out, "%s NO %s in Genurlauth\r\n",
+                        tag, error_message(c));
+            return;
+        }
         if (c != ' ') {
             prot_printf(imapd_out,
                         "%s BAD Missing required argument to Genurlauth\r\n",
