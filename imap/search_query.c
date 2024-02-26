@@ -711,22 +711,36 @@ static void subquery_post_enginesearch(const char *key, void *data, void *rock)
     if (!folder->found_dirty) return;
 
     if (config_getenum(IMAPOPT_SEARCH_ENGINE) == IMAP_ENUM_SEARCH_ENGINE_SQUAT) {
-        /*
-         * When using the squat backend, the search expression is inside
-         * sub->indexed, while sub->expr holds a constant SEOP_TRUE.
-         * In this case let sub->expr point to sub->indexed.
-         */
-        assert(sub->expr && sub->expr->op == SEOP_TRUE);
+        /* The squat engine is unable to evaluate unindexed messages, and so
+         * returns them in the results whether they match or not.  It relies
+         * on this post-processing stage applying the indexed term as well.
+         * So, instead of evaluating only the unindexed subexpression here,
+         * join them both back together and evaluate that. */
+
+        /* search_expr_split_by_folder_and_index promises this is never NULL */
+        assert(sub->expr);
+
+        /* we only get in here after an indexed subquery run, so there should
+         * always be an indexed subquery */
+        assert(sub->indexed);
+
         search_expr_t *parent = NULL;
+        search_expr_t *new_expr = NULL;
+
         if (sub->expr->parent) {
             parent = sub->expr->parent;
             search_expr_detach(sub->expr->parent, sub->expr);
         }
-        search_expr_free(sub->expr);
-        sub->expr = search_expr_duplicate(sub->indexed);
-        if (parent) {
-            search_expr_append(parent, sub->expr);
-        }
+
+        /* rejoin as AND(expr, indexed) */
+        new_expr = search_expr_new(parent, SEOP_AND);
+        search_expr_append(new_expr, sub->expr);
+        search_expr_append(new_expr, search_expr_duplicate(sub->indexed));
+
+        /* XXX do we need to normalise new_expr? doing so doesn't seem to have
+         * XXX any effect, so i guess not
+         */
+        sub->expr = new_expr;
     }
 
     r = _subquery_run_one_folder(query, qr, folder, mboxname, sub->expr);
