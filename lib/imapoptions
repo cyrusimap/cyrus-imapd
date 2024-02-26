@@ -1740,13 +1740,31 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    If no unit is specified, bytes is assumed. */
 
+{ "maxliteral", "128K", BYTESIZE, "UNRELEASED" }
+/* Maximum size of a single literal allowed by the IMAP parser.
+.PP
+   If set to 0, a large internally-defined limit will be applied.
+.PP
+   If no unit is specified, bytes is assumed.
+.PP
+   Literals used for message [part] data in APPEND are only limited by
+   the 'maxmessagesize' option.
+.PP
+   If the 'literalminus' option is enabled, non-synchonizing literals
+   will be limited to the lesser of 4K and either 'maxliteral' or
+   'maxmessagesize', depending on the use-case. */
+
 { "maxquoted", "128K", BYTESIZE, "3.8.0" }
-/* Maximum size of a single quoted string for the parser.
+/* Maximum size of a single quoted string allowed by the IMAP parser.
+.PP
+   If set to 0, a large internally-defined limit will be applied.
 .PP
    If no unit is specified, bytes is assumed. */
 
 { "maxword", "128K", BYTESIZE, "3.8.0" }
-/* Maximum size of a single word for the parser.
+/* Maximum size of a single word allowed by the IMAP parser.
+.PP
+   If set to 0, a large internally-defined limit will be applied.
 .PP
    If no unit is specified, bytes is assumed. */
 
