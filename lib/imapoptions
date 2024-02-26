@@ -1571,11 +1571,21 @@ Blank lines and lines beginning with ``#'' are ignored.
    messages larger than \fImaxmessagesize\fR bytes.  If set to 0, this
    will allow messages of any size (the default). */
 
+{ "maxliteral", 131072, INT, "UNRELEASED" }
+/* Maximum size in bytes of a single literal allowed by the IMAP parser.
+.PP
+   Literals used for message [part] data in APPEND are only limited by
+   the 'maxmessagesize' option.
+.PP
+   If the 'literalminus' option is enabled, non-synchonizing literals
+   will be limited to the lesser of 4K and either 'maxliteral' or
+   'maxmessagesize', depending on the use-case. */
+
 { "maxquoted", 131072, INT, "2.3.17" }
 /* Maximum size of a single quoted string for the parser.  Default 128k */
 
 { "maxword", 131072, INT, "2.3.17" }
-/* Maximum size of a single word for the parser.  Default 128k */
+/* Maximum size of a single word allowed by the IMAP parser.  Default 128k */
 
 { "mboxkey_db", "twoskip", STRINGLIST("skiplist", "twoskip", "zeroskip"), "3.1.6" }
 /* The cyrusdb backend to use for mailbox keys. */

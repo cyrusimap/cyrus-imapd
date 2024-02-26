@@ -84,6 +84,7 @@ EXPORTED int config_auditlog;
 EXPORTED int config_iolog;
 EXPORTED unsigned config_maxword;
 EXPORTED unsigned config_maxquoted;
+EXPORTED unsigned config_maxliteral;
 EXPORTED int config_qosmarking;
 EXPORTED int config_debug;
 
@@ -473,6 +474,7 @@ EXPORTED void config_reset(void)
     config_defdomain = NULL;
     config_auditlog = 0;
     config_serverinfo = 0;
+    config_maxliteral = 0;
     config_maxquoted = 0;
     config_maxword = 0;
     config_qosmarking = 0;
@@ -659,6 +661,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     config_serverinfo = config_getenum(IMAPOPT_SERVERINFO);
 
     /* set some limits */
+    config_maxliteral = config_getint(IMAPOPT_MAXLITERAL);
     config_maxquoted = config_getint(IMAPOPT_MAXQUOTED);
     config_maxword = config_getint(IMAPOPT_MAXWORD);
 
