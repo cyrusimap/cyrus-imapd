@@ -4599,6 +4599,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_PREVIEW) {
+        /* Per RFC 8970, Section 6: "PREVIEW" SP nstring */
         prot_printf(state->out, "%cPREVIEW ", sepchar);
         const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
         if (annot && !strncmp(annot, "/shared/", 8)) {
@@ -4607,7 +4608,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                                     /*userid*/"", &previewbuf);
             if (buf_len(&previewbuf) > 256)
                 buf_truncate(&previewbuf, 256); // XXX - utf8 chars
-            prot_printastring(state->out, buf_cstring(&previewbuf));
+            prot_printstring(state->out, buf_cstring(&previewbuf));
             buf_free(&previewbuf);
         }
         else {
