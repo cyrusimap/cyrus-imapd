@@ -1007,6 +1007,43 @@ int sync_sieve_delete(const char *userid, const char *fname)
 
     return r;
 }
+
+static int sync_sieve_validate(struct index_record *record,
+                               struct sync_msgid_list *part_list)
+{
+    struct sync_msgid *item = sync_msgid_lookup(part_list, &record->guid);
+    FILE *f = NULL;
+    struct body *body = NULL;
+    const char *msg_base = NULL;
+    size_t msg_len;
+    int r = SIEVE_OK;
+    
+    if (!(item && item->fname && (f = fopen(item->fname, "r")))) return r;
+
+    if (!message_parse_file(f, &msg_base, &msg_len, &body, item->fname)) {
+        sieve_script_t *s = NULL;
+        char *err = NULL;
+
+        r = sieve_script_parse_string(NULL,
+                                      msg_base + body->header_size, &err, &s);
+        sieve_script_free(&s);
+
+        if (r == SIEVE_OK) {
+            // create the record now to avoid a re-parse in sync_append_copyfile
+            message_create_record(record, body);
+        }
+    }
+
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+
+    map_free(&msg_base, &msg_len);
+    fclose(f);
+
+    return r;
+}
 #else  /* !USE_SIEVE */
 int sync_sieve_activate(const char *userid __attribute__((unused)),
                         const char *bcname __attribute__((unused)))
@@ -2162,7 +2199,7 @@ int sync_append_copyfile(struct mailbox *mailbox,
 
     if (!item || !item->fname)
         r = IMAP_IOERROR;
-    else
+    else if (!record->cache_version)  // don't parse again if we validated Sieve
         r = message_parse(item->fname, record);
 
     if (r) {
@@ -2604,7 +2641,17 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
         /* after LAST_UID, it's an append, that's OK */
         else {
             /* skip out on the first pass */
-            if (!doupdate) continue;
+            if (!doupdate) {
+#ifdef USE_SIEVE
+                /* do we have valid Sieve (e.g. no deprecated extensions)? */
+                if ((mbtype_isa(mailbox->h.mbtype) == MBTYPE_SIEVE) &&
+                    sync_sieve_validate(&mrecord, part_list) != SIEVE_OK) {
+                    r = IMAP_SYNC_BADSIEVE;
+                    goto out;
+                }
+#endif
+                continue;
+            }
 
             mrecord.silentupdate = 1;
             r = sync_append_copyfile(mailbox, &mrecord, mannots, part_list);

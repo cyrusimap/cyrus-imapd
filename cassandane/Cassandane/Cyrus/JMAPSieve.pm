@@ -48,6 +48,7 @@ use Data::Dumper;
 use Storable 'dclone';
 use File::Basename;
 use IO::File;
+use Cwd qw(abs_path getcwd);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -1251,6 +1252,44 @@ sub test_getmetadata
     $res = $imaptalk->getmetadata('*', '/private/comment');
     $self->assert_deep_equals({ 'INBOX' => { '/private/comment' => undef } },
                               $res);
+}
+
+sub test_legacy_sieve_replication
+    :min_version_3_9 :MailboxLegacyDirs :ImmediateDelete
+{
+    my ($self) = @_;
+
+    # can't do anything without captured syslog
+    if (!$self->{instance}->{have_syslog_replacement}) {
+        xlog $self, "can't examine syslog, test is useless";
+        return;
+    }
+
+    # create #sieve mailbox
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->_imap_cmd('CREATE', 0, '',
+                          "user.cassandane.#sieve", [ 'TYPE', 'SIEVE' ]);
+
+    # extract #sieve mailbox containing legacy Sieve code
+    $self->{instance}->unpackfile(abs_path('data/cyrus/legacy_sieve.tar.gz'),
+                                  'data/user/cassandane');
+
+    # this will fail due to replica being unable to compile the legacy Sieve
+    eval {
+        $self->run_replication();
+    };
+
+    # sync_client should have logged the failure
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @mlines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/IOERROR: user replication failed/, "@mlines");
+        $self->assert_matches(qr/MAILBOX received NO response: IMAP_SYNC_BADSIEVE/, "@mlines");
+    }
+
+    # immediately delete the #sieve mailbox to prevent _check_sanity()
+    # from complaining about INCONSISTENCIES and failing the test
+    $admintalk = $self->{adminstore}->get_client();
+    $admintalk->delete("user.cassandane.#sieve");
 }
 
 1;

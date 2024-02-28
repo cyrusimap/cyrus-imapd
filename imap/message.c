@@ -703,8 +703,8 @@ EXPORTED void message_fetch_part(struct message_content *msg,
  * and fills in appropriate information in the index record pointed to
  * by 'record'.
  */
-HIDDEN int message_create_record(struct index_record *record,
-                          const struct body *body)
+EXPORTED int message_create_record(struct index_record *record,
+                                   const struct body *body)
 {
     /* used for sent time searching, truncated to day with no TZ */
     if (time_from_rfc5322(body->date, &record->sentdate, DATETIME_DATE_ONLY) < 0)
