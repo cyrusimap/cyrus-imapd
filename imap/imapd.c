@@ -7619,6 +7619,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
         if (!strcasecmp(type, "CALENDAR")) mbtype = MBTYPE_CALENDAR;
         else if (!strcasecmp(type, "COLLECTION")) mbtype = MBTYPE_COLLECTION;
         else if (!strcasecmp(type, "ADDRESSBOOK")) mbtype = MBTYPE_ADDRESSBOOK;
+        else if (!strcasecmp(type, "SIEVE")) mbtype = MBTYPE_SIEVE;
         else {
             r = IMAP_MAILBOX_BADTYPE;
             goto err;

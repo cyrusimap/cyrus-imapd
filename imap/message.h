@@ -141,6 +141,8 @@ extern int message_copy_strict(struct protstream *from, FILE *to,
                                unsigned size, int allow_null);
 
 extern int message_parse(const char *fname, struct index_record *record);
+extern int message_create_record(struct index_record *record,
+                                 const struct body *body);
 
 struct message_content {
     struct buf map;
