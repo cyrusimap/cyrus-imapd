@@ -4187,7 +4187,7 @@ int meth_acl(struct transaction_t *txn, void *params)
         }
     }
 
-    r = mboxlist_sync_setacls(txn->req_tgt.mbentry->name, buf_cstring(&acl), mailbox_modseq_dirty(mailbox));
+    r = mboxlist_setacls(txn->req_tgt.mbentry->name, buf_cstring(&acl), mailbox_modseq_dirty(mailbox), /*silent*/0);
     if (!r) {
         mailbox_set_acl(mailbox, buf_cstring(&acl));
         char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
@@ -4195,7 +4195,7 @@ int meth_acl(struct transaction_t *txn, void *params)
         free(userid);
     }
     if (r) {
-        syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+        syslog(LOG_ERR, "mboxlist_setacls(%s) failed: %s",
                txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;

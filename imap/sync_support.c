@@ -3048,7 +3048,7 @@ int sync_apply_mailbox(struct dlist *kin,
     mailbox->silentchanges = 1;
 
     /* always take the ACL from the master, it's not versioned */
-    r = mboxlist_sync_setacls(mboxname, acl, foldermodseq ? foldermodseq : highestmodseq);
+    r = mboxlist_setacls(mboxname, acl, foldermodseq ? foldermodseq : highestmodseq, /*silent*/1);
     if (r) goto done;
     mailbox_set_acl(mailbox, acl);
 
@@ -6029,7 +6029,7 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     if (foldermodseq) {
         // by writing the same ACL with the updated foldermodseq, this will bounce it
         // if needed
-        r = mboxlist_sync_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), foldermodseq);
+        r = mboxlist_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), foldermodseq, /*silent*/1);
         if (r) goto done;
     }
 
@@ -6271,7 +6271,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
 
     /* bump the foldermodseq if it's higher on the replica */
     if (remote && remote->foldermodseq > mailbox_foldermodseq(mailbox)) {
-        mboxlist_sync_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), remote->foldermodseq);
+        mboxlist_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), remote->foldermodseq, /*silent*/1);
         mailbox->mbentry->foldermodseq = remote->foldermodseq;
     }
 
