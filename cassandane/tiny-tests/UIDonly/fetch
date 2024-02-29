@@ -47,25 +47,12 @@ sub test_fetch
     # get_response_code() doesn't (yet) handle [UIDREQUIRED]
     $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
 
-    my %fetched= {};
-    my %handlers =
-    (
-        uidfetch => sub
-        {
-            my (undef, undef, $uid) = @_;
-
-            $fetched{$uid} = $imaptalk->_next_atom();
-        },
-    );
-
     xlog $self, "UID FETCH all FLAGS";
-    $res = $imaptalk->_imap_cmd("UID FETCH", 1, \%handlers,
-                                '1:10', '(FLAGS)');
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    my %fetched = $self->uidonly_cmd($imaptalk, 'UID FETCH', '1:10', '(FLAGS)');
     $self->assert(exists $fetched{'2'});
     # make sure UID isn't in the response
-    $self->assert_num_equals(2, scalar @{$fetched{'2'}});
-    $self->assert_str_equals('FLAGS', $fetched{'2'}->[0]);
+    $self->assert(not exists $fetched{'2'}->{uid});
+    $self->assert(exists $fetched{'2'}->{flags});
     $self->assert(exists $fetched{'3'});
     $self->assert(exists $fetched{'4'});
     $self->assert(exists $fetched{'5'});
@@ -75,15 +62,10 @@ sub test_fetch
     $self->assert(exists $fetched{'10'});
 
     xlog $self, "UID FETCH 2 UID";
-    %fetched= {};
-    $res = $imaptalk->_imap_cmd("UID FETCH", 1, \%handlers,
-                                '2', '(UID)');
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    %fetched = $self->uidonly_cmd($imaptalk, 'UID FETCH', '2', '(UID)');
     $self->assert(exists $fetched{'2'});
     # make sure UID is in the response
-    $self->assert_num_equals(2, scalar @{$fetched{'2'}});
-    $self->assert_str_equals('UID', $fetched{'2'}->[0]);
-    $self->assert_str_equals('2', $fetched{'2'}->[1]);
+    $self->assert_num_equals(2, $fetched{'2'}->{uid});
 }
 
 1;

@@ -30,30 +30,16 @@ sub test_store
     # get_response_code() doesn't (yet) handle [UIDREQUIRED]
     $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
 
-    my %fetched= {};
-    my %handlers =
-    (
-        uidfetch => sub
-        {
-            my (undef, undef, $uid) = @_;
-
-            $fetched{$uid} = $imaptalk->_next_atom();
-        },
-    );
-
     xlog $self, "UID STORE";
-    $res = $imaptalk->_imap_cmd("UID STORE", 1, \%handlers,
-                                '1,6', '+FLAGS', '(\\Deleted)');
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    my %fetched = $self->uidonly_cmd($imaptalk, 'UID STORE',
+                                     '1,6', '+FLAGS', '(\\Deleted)');
     $self->assert(exists $fetched{'1'});
-    $self->assert_str_equals('FLAGS', $fetched{'1'}->[0]);
-    $self->assert_str_equals('\\Deleted', $fetched{'1'}->[1][0]);
+    $self->assert_str_equals('\\Deleted', $fetched{'1'}->{flags}[0]);
     # make sure that MODSEQ is also in the response
-    $self->assert_str_equals('MODSEQ', $fetched{'1'}->[2]);
+    $self->assert(exists $fetched{'1'}->{modseq});
     $self->assert(exists $fetched{'6'});
-    $self->assert_str_equals('FLAGS', $fetched{'6'}->[0]);
-    $self->assert_str_equals('\\Deleted', $fetched{'6'}->[1][0]);
-    $self->assert_str_equals('MODSEQ', $fetched{'6'}->[2]);
+    $self->assert_str_equals('\\Deleted', $fetched{'6'}->{flags}[0]);
+    $self->assert(exists $fetched{'6'}->{modseq});
 }
 
 1;
