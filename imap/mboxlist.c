@@ -2433,7 +2433,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
             newmbentry->createdmodseq = mailbox->i.createdmodseq;
             newmbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
         }
-        r = mboxlist_update(newmbentry, /*localonly*/1);
+        r = mboxlist_update_full(newmbentry, /*localonly*/1, silent);
 
         /* any other updated intermediates get the same modseq */
         if (!r && !keep_intermediaries) {
@@ -2452,7 +2452,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     else {
         /* delete entry (including DELETED.* mailboxes, no need
          * to keep that rubbish around) */
-        r = mboxlist_update_entry(name, NULL, 0);
+        r = mboxlist_update_entry_full(name, NULL, 0, silent);
         if (r) {
             xsyslog(LOG_ERR, "DBERROR: error deleting",
                              "mailbox=<%s> error=<%s>",
