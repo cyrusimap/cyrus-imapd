@@ -1316,7 +1316,9 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
 
 EXPORTED int mboxlist_delete(const mbentry_t *mbentry)
 {
-    return mboxlist_update_entry(mbentry->name, NULL, NULL);
+    // removing an already deleted entry is silent
+    int silent = mbentry->mbtype & MBTYPE_DELETED ? 1 : 0;
+    return mboxlist_update_entry_full(mbentry->name, NULL, NULL, silent);
 }
 
 EXPORTED int mboxlist_deletelock(const mbentry_t *mbentry)
