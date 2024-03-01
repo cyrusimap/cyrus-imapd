@@ -65,30 +65,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub run_cyr_info
-{
-    my ($self, @args) = @_;
-
-    my $filename = $self->{instance}->{basedir} . "/cyr_info.out";
-
-    $self->{instance}->run_command({
-            cyrus => 1,
-            redirects => { stdout => $filename },
-        },
-        'cyr_info',
-        # we get -C for free
-        '-M', $self->{instance}->_master_conf(),
-        @args
-    );
-
-    open RESULTS, '<', $filename
-        or die "Cannot open $filename for reading: $!";
-    my @res = readline(RESULTS);
-    close RESULTS;
-
-    return @res;
-}
-
 sub bogus_test_info_conf
 { # XXX - defaults changed, and .conf file contains default fields now
     my ($self) = @_;
@@ -108,7 +84,7 @@ sub bogus_test_info_conf
             substr($b, 0, index($b, ':'))
         } @imapd_conf;
 
-    my @output = $self->run_cyr_info('conf');
+    my @output = $self->{instance}->run_cyr_info('conf');
 
     @output = sort {
             substr($a, 0, index($a, ':'))
@@ -125,7 +101,7 @@ sub test_info_lint
 
     xlog $self, "test 'cyr_info conf-lint' in the simplest case";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
     $self->assert_deep_equals([], \@output);
 }
 
@@ -140,7 +116,7 @@ sub test_info_lint_junk
 
     xlog $self, "test 'cyr_info conf-lint' with junk in the config";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
     $self->assert_deep_equals(["trust_fund: street art\n"], \@output);
 }
 
@@ -160,7 +136,7 @@ sub test_info_lint_channels
 
     xlog $self, "test 'cyr_info conf-lint' with channel-specific sync config";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
 
     $self->assert_deep_equals(
         [ sort(
@@ -199,7 +175,7 @@ sub test_info_lint_partitions
 
     xlog $self, "test 'cyr_info conf-lint' with partitions configured";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
 
     $self->assert_deep_equals(
         [ sort(
