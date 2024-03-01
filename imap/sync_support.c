@@ -1024,13 +1024,19 @@ static int sync_sieve_validate(struct index_record *record,
         sieve_script_t *s = NULL;
         char *err = NULL;
 
-        r = sieve_script_parse_string(NULL,
-                                      msg_base + body->header_size, &err, &s);
+        // XXX: if mmap is a multiple of 4096 bytes, we can read past the
+	// end of the mmap - the string won't be correctly NULL terminated
+        char *script = xstrndup(msg_base + body->header_size, msg_len - body->header_size);
+        r = sieve_script_parse_string(NULL, script, &err, &s);
+        free(script);
         sieve_script_free(&s);
 
         if (r == SIEVE_OK) {
             // create the record now to avoid a re-parse in sync_append_copyfile
             message_create_record(record, body);
+        }
+        else if (err) {
+            syslog(LOG_ERR, "sieve script parse error uid=%u: %s", record->uid, err);
         }
     }
 
