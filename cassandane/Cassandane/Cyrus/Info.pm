@@ -67,38 +67,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub run_cyr_info
-{
-    my ($self, @args) = @_;
-
-    my $filename = $self->{instance}->{basedir} . "/cyr_info.out";
-
-    $self->{instance}->run_command({
-            cyrus => 1,
-            redirects => { stdout => $filename },
-        },
-        'cyr_info',
-        # we get -C for free
-        '-M', $self->{instance}->_master_conf(),
-        @args
-    );
-
-    open RESULTS, '<', $filename
-        or die "Cannot open $filename for reading: $!";
-    my @res = readline(RESULTS);
-    close RESULTS;
-
-    if ($args[0] eq 'proc') {
-        # if we see any of our fake daemons, no we didn't
-        my @fakedaemons = qw(fakesaslauthd fakeldapd);
-        my $pattern = q{\b(?:} . join(q{|}, @fakedaemons) . q{)\b};
-        my $re = qr{$pattern};
-        @res = grep { $_ !~ m/$re/ } @res;
-    }
-
-    return @res;
-}
-
 sub test_conf
 {
     my ($self) = @_;
@@ -121,7 +89,7 @@ sub test_conf
     close $fh;
 
     my %cyr_info_conf;
-    foreach my $line ($self->run_cyr_info('conf')) {
+    foreach my $line ($self->{instance}->run_cyr_info('conf')) {
         chomp $line;
         my ($name, $value) = split /\s*:\s*/, $line, 2;
         if (Cassandane::Config::is_bitfield($name)) {
@@ -158,7 +126,7 @@ sub test_conf_all
     close $fh;
 
     my %cyr_info_conf;
-    foreach my $line ($self->run_cyr_info('conf-all')) {
+    foreach my $line ($self->{instance}->run_cyr_info('conf-all')) {
         chomp $line;
         my ($name, $value) = split /\s*:\s*/, $line, 2;
 
@@ -187,7 +155,7 @@ sub test_conf_default
     # in here, but we can at least make sure it runs without crashing
     # and its output looks reasonably sane
 
-    foreach my $line ($self->run_cyr_info('conf-default')) {
+    foreach my $line ($self->{instance}->run_cyr_info('conf-default')) {
         chomp $line;
         my ($name, $value) = split /\s*:\s*/, $line, 2;
 
@@ -208,7 +176,7 @@ sub test_lint
 
     xlog $self, "test 'cyr_info conf-lint' in the simplest case";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
     $self->assert_deep_equals([], \@output);
 }
 
@@ -223,7 +191,7 @@ sub test_lint_junk
 
     xlog $self, "test 'cyr_info conf-lint' with junk in the config";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
     $self->assert_deep_equals(["trust_fund: street art\n"], \@output);
 }
 
@@ -243,7 +211,7 @@ sub test_lint_channels
 
     xlog $self, "test 'cyr_info conf-lint' with channel-specific sync config";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
 
     $self->assert_deep_equals(
         [ sort(
@@ -282,7 +250,7 @@ sub test_lint_partitions
 
     xlog $self, "test 'cyr_info conf-lint' with partitions configured";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
 
     $self->assert_deep_equals(
         [ sort(
@@ -299,7 +267,7 @@ sub test_proc_services
     my ($self) = @_;
 
     # no clients => no service daemons => no processes
-    my @output = $self->run_cyr_info('proc');
+    my @output = $self->{instance}->run_cyr_info('proc');
     $self->assert_num_equals(0, scalar @output);
 
     # master spawns service processes when clients connect to them
@@ -317,7 +285,7 @@ sub test_proc_services
     $self->assert_num_gte(1, scalar @clients);
 
     # five clients => five service daemons => five processes
-    @output = $self->run_cyr_info('proc');
+    @output = $self->{instance}->run_cyr_info('proc');
     $self->assert_num_equals(scalar @clients, scalar @output);
 
     # log clients out one at a time, expect proc count to decrease
@@ -325,7 +293,7 @@ sub test_proc_services
         my $old = shift @clients;
         $old->logout();
 
-        @output = $self->run_cyr_info('proc');
+        @output = $self->{instance}->run_cyr_info('proc');
         $self->assert_num_equals(scalar @clients, scalar @output);
     }
 }
@@ -345,7 +313,7 @@ sub test_proc_starts
     # starts up.  if they fork themselves and hang around (like idled
     # does) then that's their business, but master can't and doesn't
     # track them
-    my @output = $self->run_cyr_info('proc');
+    my @output = $self->{instance}->run_cyr_info('proc');
 
     $self->assert_num_equals(0, scalar @output);
 }
@@ -374,12 +342,12 @@ sub test_proc_periodic_events_slow
     my $observations = 3;
     while ($observations > 0) {
         # event should have fired and be running
-        my @output = $self->run_cyr_info('proc');
+        my @output = $self->{instance}->run_cyr_info('proc');
         $self->assert_num_equals(1, scalar @output);
 
         # wait for it to finish and check again
         sleep $sleeper_time;
-        @output = $self->run_cyr_info('proc');
+        @output = $self->{instance}->run_cyr_info('proc');
         $self->assert_num_equals(0, scalar @output);
 
         # skip final wait if we're done
@@ -412,17 +380,17 @@ sub test_proc_scheduled_events
     $self->{instance}->start();
 
     # event process should not be running at startup
-    my @output = $self->run_cyr_info('proc');
+    my @output = $self->{instance}->run_cyr_info('proc');
     $self->assert_num_equals(0, scalar @output);
 
     # should be running at the scheduled time (with a little slop)
     sleep 2 + $at - time;
-    @output = $self->run_cyr_info('proc');
+    @output = $self->{instance}->run_cyr_info('proc');
     $self->assert_num_equals(1, scalar @output);
 
     # should not be running after we expect it to have finished
     sleep $sleeper_time;
-    @output = $self->run_cyr_info('proc');
+    @output = $self->{instance}->run_cyr_info('proc');
     $self->assert_num_equals(0, scalar @output);
 }
 
@@ -450,7 +418,7 @@ sub test_proc_daemons
     my $observations = 3;
     my %lastpid = map {; "sleeper$_" => 0 } (1 .. $daemons);
     while ($observations > 0) {
-        my @output = $self->run_cyr_info('proc');
+        my @output = $self->{instance}->run_cyr_info('proc');
 
         # always exactly one process per daemon
         $self->assert_num_equals($daemons, scalar @output);
