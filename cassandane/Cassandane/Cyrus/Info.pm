@@ -65,30 +65,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub run_cyr_info
-{
-    my ($self, @args) = @_;
-
-    my $filename = $self->{instance}->{basedir} . "/cyr_info.out";
-
-    $self->{instance}->run_command({
-            cyrus => 1,
-            redirects => { stdout => $filename },
-        },
-        'cyr_info',
-        # we get -C for free
-        '-M', $self->{instance}->_master_conf(),
-        @args
-    );
-
-    open RESULTS, '<', $filename
-        or die "Cannot open $filename for reading: $!";
-    my @res = readline(RESULTS);
-    close RESULTS;
-
-    return @res;
-}
-
 sub test_conf
 {
     my ($self) = @_;
@@ -111,7 +87,7 @@ sub test_conf
     close $fh;
 
     my %cyr_info_conf;
-    foreach my $line ($self->run_cyr_info('conf')) {
+    foreach my $line ($self->{instance}->run_cyr_info('conf')) {
         chomp $line;
         my ($name, $value) = split /\s*:\s*/, $line, 2;
         if (Cassandane::Config::is_bitfield($name)) {
@@ -148,7 +124,7 @@ sub test_conf_all
     close $fh;
 
     my %cyr_info_conf;
-    foreach my $line ($self->run_cyr_info('conf-all')) {
+    foreach my $line ($self->{instance}->run_cyr_info('conf-all')) {
         chomp $line;
         my ($name, $value) = split /\s*:\s*/, $line, 2;
 
@@ -177,7 +153,7 @@ sub test_conf_default
     # in here, but we can at least make sure it runs without crashing
     # and its output looks reasonably sane
 
-    foreach my $line ($self->run_cyr_info('conf-default')) {
+    foreach my $line ($self->{instance}->run_cyr_info('conf-default')) {
         chomp $line;
         my ($name, $value) = split /\s*:\s*/, $line, 2;
 
@@ -198,7 +174,7 @@ sub test_lint
 
     xlog $self, "test 'cyr_info conf-lint' in the simplest case";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
     $self->assert_deep_equals([], \@output);
 }
 
@@ -213,7 +189,7 @@ sub test_lint_junk
 
     xlog $self, "test 'cyr_info conf-lint' with junk in the config";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
     $self->assert_deep_equals(["trust_fund: street art\n"], \@output);
 }
 
@@ -233,7 +209,7 @@ sub test_lint_channels
 
     xlog $self, "test 'cyr_info conf-lint' with channel-specific sync config";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
 
     $self->assert_deep_equals(
         [ sort(
@@ -272,7 +248,7 @@ sub test_lint_partitions
 
     xlog $self, "test 'cyr_info conf-lint' with partitions configured";
 
-    my @output = $self->run_cyr_info('conf-lint');
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
 
     $self->assert_deep_equals(
         [ sort(
