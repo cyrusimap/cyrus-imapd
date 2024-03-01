@@ -421,23 +421,20 @@ sub test_sigterm
     my $store = $svc->create_store(folder => 'INBOX');
     my $talk = $store->get_client();
 
-    # User logged in SESSIONID=<0604061-1337148251-29539-1>
-    my $rem = $talk->get_response_code('remainder');
-    my (undef, $start, $imapd_pid, undef) =
-        ($rem =~ m/SESSIONID=<([^-]+)-(\d+)-(\d+)-(\d+)/);
-    # cyrus switched pid and start at one point - the start will ALWAYS
-    # be larger than the pid, so....
-    ($imapd_pid, $start) = ($start, $imapd_pid) if ($start < $imapd_pid);
-    $self->assert_not_null($imapd_pid);
-    $imapd_pid = 0 + $imapd_pid;
-    $self->assert($imapd_pid > 1);
-    xlog $self, "PID of imapd process is $imapd_pid";
-
     $store->_select();
 
     xlog $self, "Sending the IDLE command";
     $store->idle_begin()
         or die "IDLE failed: $@";
+
+    # procinfo: pid SP servicename SP host [SP user] [SP mailbox] [SP cmdname]
+    my $procinfo = join '', $self->{instance}->run_cyr_info('proc');
+    my ($imapd_pid, undef) =
+        ($procinfo =~ m/^(\d+) imap (.+) cassandane user.cassandane Idle$/);
+    $self->assert_not_null($imapd_pid);
+    $imapd_pid = 0 + $imapd_pid;
+    $self->assert($imapd_pid > 1);
+    xlog $self, "PID of imapd process is $imapd_pid";
 
     xlog $self, "Poll for any unsolicited response - should be none";
     my $r = $store->idle_response({}, 0);

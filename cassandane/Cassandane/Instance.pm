@@ -2680,4 +2680,36 @@ sub read_mailboxes_db
     return $records;
 }
 
+sub run_cyr_info
+{
+    my ($self, @args) = @_;
+
+    my $filename = $self->{basedir} . "/cyr_info.out";
+
+    $self->run_command({
+            cyrus => 1,
+            redirects => { stdout => $filename },
+        },
+        'cyr_info',
+        # we get -C for free
+        '-M', $self->_master_conf(),
+        @args
+    );
+
+    open RESULTS, '<', $filename
+        or die "Cannot open $filename for reading: $!";
+    my @res = readline(RESULTS);
+    close RESULTS;
+
+    if ($args[0] eq 'proc') {
+        # if we see any of our fake daemons, no we didn't
+        my @fakedaemons = qw(fakesaslauthd fakeldapd);
+        my $pattern = q{\b(?:} . join(q{|}, @fakedaemons) . q{)\b};
+        my $re = qr{$pattern};
+        @res = grep { $_ !~ m/$re/ } @res;
+    }
+
+    return @res;
+}
+
 1;
