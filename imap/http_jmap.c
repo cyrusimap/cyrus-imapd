@@ -1022,6 +1022,7 @@ static int jmap_upload(struct transaction_t *txn)
     const char **hdr;
     time_t now = time(NULL);
     struct appendstate as;
+    char *accountid = NULL;
     char *normalisedtype = NULL;
     int rawmessage = 0;
     struct conversations_state *cstate = NULL;
@@ -1041,14 +1042,16 @@ static int jmap_upload(struct transaction_t *txn)
 
     if (datalen > (size_t) my_jmap_settings.limits[MAX_SIZE_UPLOAD]) {
         txn->error.desc = "JSON upload byte size exceeds maxSizeUpload";
-        return HTTP_CONTENT_TOO_LARGE;
+        ret = HTTP_CONTENT_TOO_LARGE;
+        goto done;
     }
 
     /* Resource must be {accountId}/ with no trailing path */
-    char *accountid = xstrdup(txn->req_tgt.resource);
+    accountid = xstrdup(txn->req_tgt.resource);
     char *slash = strchr(accountid, '/');
     if (!slash || *(slash + 1) != '\0') {
         ret = HTTP_NOT_FOUND;
+        txn->error.desc = "unknown uploadUrl";
         goto done;
     }
     *slash = '\0';
@@ -1058,6 +1061,7 @@ static int jmap_upload(struct transaction_t *txn)
         syslog(LOG_ERR, "jmap_upload: can't open conversations db for %s: %s",
                accountid, error_message(r));
         ret = HTTP_SERVER_ERROR;
+        txn->error.desc = "can't open upload conversations db";
         goto done;
     }
 
@@ -1066,6 +1070,7 @@ static int jmap_upload(struct transaction_t *txn)
         syslog(LOG_ERR, "jmap_upload: can't open upload collection for %s: %s",
                accountid, error_message(r));
         ret = HTTP_NOT_FOUND;
+        txn->error.desc = "can't open upload collection";
         goto done;
     }
 
@@ -1197,8 +1202,15 @@ wrotebody:
         append_abort(&as);
         syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
-        ret = HTTP_SERVER_ERROR;
-        txn->error.desc = "append_fromstage() failed";
+        if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {
+            /* XXX  Should never happen, but DTRT anyways */
+            ret = HTTP_NO_STORAGE;
+            txn->error.desc = "Mailbox is over quota";
+        }
+        else {
+            ret = HTTP_SERVER_ERROR;
+            txn->error.desc = "append_fromstage() failed";
+        }
         goto done;
     }
 
@@ -1223,6 +1235,8 @@ wrotebody:
     json_object_set_new(resp, "size", json_integer(datalen));
     json_object_set_new(resp, "expires", json_string(datestr));
     json_object_set_new(resp, "type", json_string(normalisedtype));
+
+    ret = HTTP_CREATED;
 
 done:
     free(normalisedtype);
@@ -1250,11 +1264,29 @@ done:
     // checkpoint before replying
     sync_checkpoint(httpd_in);
 
-    /* Output the JSON object */
-    if (resp)
-        ret = json_response(HTTP_CREATED, txn, resp);
+    if (!resp) {
+        /* Create Problem Details Object */
+        const char *type, *limit;
 
-    return ret;
+        if (ret == HTTP_CONTENT_TOO_LARGE) {
+            type = "urn:ietf:params:jmap:error:limit";
+            limit = "maxSizeUpload";
+        }
+        else {
+            type = "about:blank";
+            limit = NULL;
+        }
+
+        resp = json_pack("{s:s s:s* s:s s:i s:s}",
+                         "type", type,
+                         "limit", limit,
+                         "title", error_message(ret) + 4,
+                         "status", atoi(error_message(ret)),
+                         "detail", txn->error.desc);
+    }
+
+    /* Output the JSON object */
+    return json_response(ret, txn, resp);
 }
 
 /* Handle a GET on the session endpoint */

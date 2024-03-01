@@ -66,6 +66,7 @@ sub new
     $config->set(caldav_realm => 'Cassandane',
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
+                 jmap_max_size_upload => '1k',
                  httpallowcompress => 'no');
 
     return $class->SUPER::new({
@@ -996,6 +997,56 @@ sub test_get_session_rename_race
     }
     $self->assert_str_equals('503', $RawResponse->{status});
     $self->assert_not_null($RawResponse->{headers}{'retry-after'});
+}
+
+sub test_blob_upload_too_large
+    :min_version_3_9 :needs_component_jmap :JMAPExtensions
+{
+    my $self = shift;
+    my $jmap = $self->{jmap};
+
+    xlog "Assert Problem Details report";
+    my $httpReq = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => 'X' x 1025,
+    };
+    my $httpRes = $jmap->ua->post($jmap->uploaduri('cassandane'), $httpReq);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($httpReq, $httpRes);
+    }
+    $self->assert_str_equals("413", $httpRes->{status});
+    my $res = eval { decode_json($httpRes->{content}) };
+    $self->assert_str_equals("413", $res->{status});
+    $self->assert_str_equals("Content Too Large", $res->{title});
+    $self->assert_str_equals("urn:ietf:params:jmap:error:limit", $res->{type});
+    $self->assert_str_equals("maxSizeUpload", $res->{limit});
+}
+
+sub test_blob_upload_bad_url
+    :min_version_3_9 :needs_component_jmap :JMAPExtensions
+{
+    my $self = shift;
+    my $jmap = $self->{jmap};
+
+    xlog "Assert Problem Details report";
+    my $httpReq = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => 'Hello World',
+    };
+    my $httpRes = $jmap->ua->post($jmap->uploaduri('cassandane') . 'X', $httpReq);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($httpReq, $httpRes);
+    }
+    $self->assert_str_equals("404", $httpRes->{status});
+    my $res = eval { decode_json($httpRes->{content}) };
+    $self->assert_str_equals("404", $res->{status});
+    $self->assert_str_equals("Not Found", $res->{title});
+    $self->assert_str_equals("about:blank", $res->{type});
+    $self->assert_str_equals("unknown uploadUrl", $res->{detail});
 }
 
 1;
