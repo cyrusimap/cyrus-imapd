@@ -39,7 +39,7 @@ LINE: while ($_ = shift @lines) {
 
     my $in_heredoc;
 
-    TESTLINE: while ($_ = shift @lines) {
+    TESTLINE: while (defined($_ = shift @lines)) {
       push @test_buffer, $_;
 
       if (/<<\s?(['"])?EOF/) {
