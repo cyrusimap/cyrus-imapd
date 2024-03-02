@@ -27,7 +27,15 @@ LINE: while ($_ = shift @lines) {
     my $file = $1 =~ s/_/-/gr;
     say $file;
 
-    my @test_buffer = $_;
+    my @test_buffer;
+
+    while (@buffer && $buffer[-1] =~ /^#/) {
+      push @test_buffer, pop @buffer;
+    }
+
+    @test_buffer = reverse @test_buffer if @test_buffer;
+
+    push @test_buffer, $_;
 
     my $in_heredoc;
 
