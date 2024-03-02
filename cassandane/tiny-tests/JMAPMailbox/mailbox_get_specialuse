@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_get_specialuse
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Archive", "(USE (\\Archive))") || die;
+    $imaptalk->create("INBOX.Drafts", "(USE (\\Drafts))") || die;
+    $imaptalk->create("INBOX.Spam", "(USE (\\Junk))") || die;
+    $imaptalk->create("INBOX.Sent", "(USE (\\Sent))") || die;
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))") || die;
+
+    xlog $self, "get mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Mailbox/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $inbox = $m{"Inbox"};
+    my $archive = $m{"Archive"};
+    my $drafts = $m{"Drafts"};
+    my $junk = $m{"Spam"};
+    my $sent = $m{"Sent"};
+    my $trash = $m{"Trash"};
+
+    $self->assert_str_equals("Archive", $archive->{name});
+    $self->assert_str_equals("archive", $archive->{role});
+
+    $self->assert_str_equals("Drafts", $drafts->{name});
+    $self->assert_null($drafts->{parentId});
+    $self->assert_str_equals("drafts", $drafts->{role});
+
+    $self->assert_str_equals("Spam", $junk->{name});
+    $self->assert_null($junk->{parentId});
+    $self->assert_str_equals("junk", $junk->{role});
+
+    $self->assert_str_equals("Sent", $sent->{name});
+    $self->assert_null($sent->{parentId});
+    $self->assert_str_equals("sent", $sent->{role});
+
+    $self->assert_str_equals("Trash", $trash->{name});
+    $self->assert_null($trash->{parentId});
+    $self->assert_str_equals("trash", $trash->{role});
+}

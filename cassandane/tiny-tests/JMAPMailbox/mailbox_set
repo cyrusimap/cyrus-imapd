@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "get inbox";
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals("Inbox", $inbox->{name});
+
+    my $state = $res->[0][1]{state};
+
+    xlog $self, "create mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "foo",
+                            role => undef
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{created});
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get mailbox $id";
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]->{id});
+
+    my $mbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals("foo", $mbox->{name});
+    $self->assert_null($mbox->{parentId});
+    $self->assert_null($mbox->{role});
+    $self->assert_num_equals(10, $mbox->{sortOrder});
+    $self->assert_equals(JSON::true, $mbox->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::true, $mbox->{myRights}->{mayAddItems});
+    $self->assert_equals(JSON::true, $mbox->{myRights}->{mayRemoveItems});
+    $self->assert_equals(JSON::true, $mbox->{myRights}->{mayCreateChild});
+    $self->assert_equals(JSON::true, $mbox->{myRights}->{mayRename});
+    $self->assert_equals(JSON::true, $mbox->{myRights}->{mayDelete});
+    $self->assert_num_equals(0, $mbox->{totalEmails});
+    $self->assert_num_equals(0, $mbox->{unreadEmails});
+    $self->assert_num_equals(0, $mbox->{totalThreads});
+    $self->assert_num_equals(0, $mbox->{unreadThreads});
+
+    xlog $self, "update mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { update => { $id => {
+                            name => "bar",
+                            sortOrder => 20
+             }}}, "R1"]
+    ]);
+
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    xlog $self, "get mailbox $id";
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]->{id});
+    $mbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals("bar", $mbox->{name});
+    $self->assert_num_equals(20, $mbox->{sortOrder});
+
+    xlog $self, "destroy mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { destroy => [ $id ] }, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "get mailbox $id";
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
+}
