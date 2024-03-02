@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replication
+    :needs_component_httpd :needs_component_replication
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+
+    my $ABookId = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($ABookId);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    my $uid = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+    my $href = "$ABookId/card.ics";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$uid
+N:Gump;Forrest;;Mr.
+FN;FOO=bar:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+    my $response = $CardDAV->Request('GET', $href);
+    my $value = $response->{content};
+    $self->assert_matches(qr/$uid/, $value);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $card =~ s/;FOO=bar:Forrest Gump/:/;
+
+    $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $card =~ s/REV:/NICKNAME:Captain\r\nREV:/;
+
+    $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $CardDAV->DeleteContact($href);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $CardDAV->DeleteAddressBook($ABookId);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+}
