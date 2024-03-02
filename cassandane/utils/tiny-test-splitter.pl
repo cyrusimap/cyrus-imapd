@@ -28,10 +28,22 @@ LINE: while ($_ = shift @lines) {
 
     my @test_buffer = $_;
 
-    while ($_ = shift @lines) {
+    my $in_heredoc;
+
+    TESTLINE: while ($_ = shift @lines) {
       push @test_buffer, $_;
 
-      if (/^}$/ && (!@lines || $lines[0] =~ /^$/)) {
+      if (/<<\s?(['"])?EOF/) {
+        $in_heredoc = 1;
+        next TESTLINE;
+      }
+
+      if (/^EOF$/m) {
+        undef $in_heredoc;
+        next TESTLINE;
+      }
+
+      if (!$in_heredoc && /^}$/ && (!@lines || $lines[0] =~ /^$/)) {
         open my $fh, '>', "tiny-tests/$prefix/$file"
           or die "can't open $file: $!";
         print {$fh} "#!perl\nuse Cassandane::Tiny;\n\n", @test_buffer;
