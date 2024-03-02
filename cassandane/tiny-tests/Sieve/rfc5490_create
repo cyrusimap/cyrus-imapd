@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_rfc5490_create
+    :min_version_3_0
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing the \"fileinto :create\" syntax";
+
+    my $talk = $self->{store}->get_client();
+
+    my $hitfolder = "INBOX.newfolder";
+    my $missfolder = "INBOX";
+
+    xlog $self, "Install the sieve script";
+    my $scriptname = 'lazySusan';
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "mailbox"];
+if header :comparator "i;ascii-casemap" :is "Subject" "quinoa"  {
+    fileinto :create "$hitfolder";
+}
+EOF
+    );
+
+    my @cases = (
+        { subject => 'quinoa', filedto => $hitfolder },
+        { subject => 'QUINOA', filedto => $hitfolder },
+        { subject => 'Quinoa', filedto => $hitfolder },
+        { subject => 'QuinoA', filedto => $hitfolder },
+        { subject => 'qUINOa', filedto => $hitfolder },
+        { subject => 'selvage', filedto => $missfolder },
+    );
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    foreach my $case (@cases)
+    {
+        xlog $self, "Deliver a message with subject \"$case->{subject}\"";
+        my $msg = $self->{gen}->generate(subject => $case->{subject});
+        $msg->set_attribute(uid => $uid{$case->{filedto}});
+        $uid{$case->{filedto}}++;
+        $self->{instance}->deliver($msg);
+        $exp{$case->{filedto}}->{$case->{subject}} = $msg;
+    }
+
+    xlog $self, "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}
