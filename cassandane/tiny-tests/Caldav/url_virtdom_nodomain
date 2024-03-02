@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_url_virtdom_nodomain
+    :VirtDomains :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "create calendar";
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    xlog $self, "fetch again";
+    my $Calendar = $CalDAV->GetCalendar($CalendarId);
+    $self->assert_not_null($Calendar);
+
+    xlog $self, "check that the href has no domain";
+    $self->assert_str_equals("/dav/calendars/user/cassandane/$CalendarId/", $Calendar->{href});
+}

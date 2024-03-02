@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_rfc6638_3_2_2_2_attendee_create
+    :needs_component_httpd
+{
+    my ($self) = @_;
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
+    $self->assert_not_null($CalendarId);
+
+    xlog $self, "agent <default>";
+    {
+        my $uuid = $CalDAV->genuuid();
+        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
+ORGANIZER:MAILTO:test1\@example.com
+EOF
+        $self->assert_caldav_notified(
+            { recipient => "test1\@example.com", method => 'REPLY' },
+        );
+    }
+
+    xlog $self, "agent SERVER";
+    {
+        my $uuid = $CalDAV->genuuid();
+        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
+ORGANIZER;SCHEDULE-AGENT=SERVER:MAILTO:test1\@example.com
+EOF
+        $self->assert_caldav_notified(
+            { recipient => "test1\@example.com", method => 'REPLY' },
+        );
+    }
+
+    xlog $self, "agent CLIENT";
+    {
+        my $uuid = $CalDAV->genuuid();
+        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
+ORGANIZER;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
+EOF
+        $self->assert_caldav_notified();
+    }
+
+    xlog $self, "agent NONE";
+    {
+        my $uuid = $CalDAV->genuuid();
+        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
+ORGANIZER;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
+EOF
+        $self->assert_caldav_notified();
+    }
+}

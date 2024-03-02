@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_user_rename
+    :AllowMoves :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "create calendar";
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    xlog $self, "fetch again";
+    my $Calendar = $CalDAV->GetCalendar($CalendarId);
+    $self->assert_not_null($Calendar);
+
+    xlog $self, "check name matches";
+    $self->assert_str_equals('foo', $Calendar->{name});
+
+    xlog $self, "rename user";
+    $admintalk->rename("user.cassandane", "user.newuser");
+
+    my $service = $self->{instance}->get_service("http");
+    my $newtalk = Net::CalDAVTalk->new(
+        user => 'newuser',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "fetch as new user $CalendarId";
+    my $NewCalendar = $newtalk->GetCalendar($CalendarId);
+    $self->assert_not_null($NewCalendar);
+
+    xlog $self, "check new name stuck";
+    $self->assert_str_equals($NewCalendar->{name}, 'foo');
+}
