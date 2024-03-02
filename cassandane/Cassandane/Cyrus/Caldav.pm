@@ -38,7 +38,7 @@
 #
 
 package Cassandane::Cyrus::Caldav;
-use strict;
+use v5.26.0; # strict + indented here-docs
 use warnings;
 use DateTime;
 use JSON::XS;
@@ -55,49 +55,53 @@ use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 use utf8;
 
-my $MELBOURNE = <<EOF;
-BEGIN:VCALENDAR
-BEGIN:VTIMEZONE
-TZID:Australia/Melbourne
-BEGIN:STANDARD
-TZOFFSETFROM:+1100
-RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
-DTSTART:20080406T030000
-TZNAME:AEST
-TZOFFSETTO:+1000
-END:STANDARD
-BEGIN:DAYLIGHT
-TZOFFSETFROM:+1000
-RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
-DTSTART:20081005T020000
-TZNAME:AEDT
-TZOFFSETTO:+1100
-END:DAYLIGHT
-END:VTIMEZONE
-END:VCALENDAR
-EOF
+sub MELBOURNE {
+  return <<~'EOF';
+    BEGIN:VCALENDAR
+    BEGIN:VTIMEZONE
+    TZID:Australia/Melbourne
+    BEGIN:STANDARD
+    TZOFFSETFROM:+1100
+    RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+    DTSTART:20080406T030000
+    TZNAME:AEST
+    TZOFFSETTO:+1000
+    END:STANDARD
+    BEGIN:DAYLIGHT
+    TZOFFSETFROM:+1000
+    RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+    DTSTART:20081005T020000
+    TZNAME:AEDT
+    TZOFFSETTO:+1100
+    END:DAYLIGHT
+    END:VTIMEZONE
+    END:VCALENDAR
+    EOF
+}
 
-my $NEW_YORK = <<EOF;
-BEGIN:VCALENDAR
-BEGIN:VTIMEZONE
-TZID:America/New_York
-BEGIN:DAYLIGHT
-TZNAME:EDT
-TZOFFSETFROM:-0500
-TZOFFSETTO:-0400
-DTSTART:20070311T020000
-RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
-END:DAYLIGHT
-BEGIN:STANDARD
-TZNAME:EST
-TZOFFSETFROM:-0400
-TZOFFSETTO:-0500
-DTSTART:20071104T020000
-RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
-END:STANDARD
-END:VTIMEZONE
-END:VCALENDAR
-EOF
+sub NEW_YORK {
+  return <<~'EOF';
+    BEGIN:VCALENDAR
+    BEGIN:VTIMEZONE
+    TZID:America/New_York
+    BEGIN:DAYLIGHT
+    TZNAME:EDT
+    TZOFFSETFROM:-0500
+    TZOFFSETTO:-0400
+    DTSTART:20070311T020000
+    RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+    END:DAYLIGHT
+    BEGIN:STANDARD
+    TZNAME:EST
+    TZOFFSETFROM:-0400
+    TZOFFSETTO:-0500
+    DTSTART:20071104T020000
+    RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+    END:STANDARD
+    END:VTIMEZONE
+    END:VCALENDAR
+    EOF
+}
 
 sub new
 {
@@ -2005,7 +2009,7 @@ sub test_freebusy_floating
 
     my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timeZone => $MELBOURNE});
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timeZone => $self->MELBOURNE});
     $self->assert_not_null($CalendarId);
 
     $CalDAV->NewEvent($CalendarId, {
@@ -2026,13 +2030,15 @@ sub test_freebusy_floating
     $self->assert_str_equals('2015-02-01T01:00:00', $data->[1]{start});
     $self->assert_num_equals(2, scalar @$data);
 
+    my $new_york = $self->NEW_YORK;
+
     # Change floating time zone on the calendar
     my $xml = <<EOF;
 <?xml version="1.0" encoding="UTF-8"?>
 <D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:set>
     <D:prop>
-      <C:calendar-timezone>$NEW_YORK</C:calendar-timezone>
+      <C:calendar-timezone>$new_york</C:calendar-timezone>
     </D:prop>
   </D:set>
 </D:propertyupdate>
