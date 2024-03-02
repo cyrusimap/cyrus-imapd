@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_using_message
+{
+    my ($self) = @_;
+
+    xlog $self, "test increasing usage of the MESSAGE quota resource as messages are added";
+
+    $self->_set_quotaroot('user.cassandane');
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "set ourselves a basic limit";
+    $self->_set_limits(message => 50000);
+    $self->_check_usages(message => 0);
+
+    $talk->create("INBOX.sub") || die "Failed to create subfolder";
+
+    # append some messages
+    my %expecteds = ();
+    my $expected = 0;
+    foreach my $folder ("INBOX", "INBOX.sub")
+    {
+        $expecteds{$folder} = 0;
+        $self->{store}->set_folder($folder);
+
+        for (1..10)
+        {
+            my $msg = $self->make_message("Message $_");
+            $expecteds{$folder}++;
+            $expected++;
+            $self->_check_usages(message => $expected);
+        }
+    }
+
+    # delete subfolder
+    $talk->delete("INBOX.sub") || die "Failed to delete subfolder";
+    $expected -= $expecteds{"INBOX.sub"};
+    $self->_check_usages(message => $expected);
+
+    # delete messages
+    $talk->select("INBOX");
+    $talk->store('1:*', '+flags', '(\\deleted)');
+    $talk->close();
+    $expected -= delete($expecteds{"INBOX"});
+    $self->assert_num_equals(0, $expected);
+    $self->_check_usages(message => $expected);
+}
