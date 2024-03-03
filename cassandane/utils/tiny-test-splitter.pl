@@ -68,6 +68,16 @@ LINE: while ($_ = shift @lines) {
   push @buffer, $_;
 }
 
+pop @buffer while $buffer[-1] !~ /\S/;
+
+die "output file does not end in magic true value!\n"
+  unless $buffer[-1] eq "1;\n";
+
+splice @buffer, -2, 0, (
+  "\n",
+  "use Cassandane::Tiny::Loader 'tiny-tests/$prefix';\n",
+);
+
 open my $outfile, '>', $filename
   or die "can't open $filename for writing: $!";
 
