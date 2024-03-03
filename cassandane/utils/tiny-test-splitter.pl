@@ -1,11 +1,40 @@
 #!/usr/bin/perl
-use v5.20.0;
+use v5.26.0;
 use warnings;
 
 use File::Basename qw(fileparse);
 
 my $file;
 my @buffer;
+
+if (!@ARGV or !-e $ARGV[0]) {
+  die <<~'EOF';
+  Greetings!  You've run the tiny test splitter.  This program exists to split
+  big Cassandane test classes into lots of little test files.  The primary
+  benefit of this is that you'll avoid conflicts when many peopled add or edit
+  tests.  Eventually, this program won't need to exist, so its construction is
+  a little shaky, but at least there's this notice!
+
+  Run this program from ./cassandane like this:
+
+    ./utils/tiny-test-splitter Cassandane/Cyrus/SomeClass.pm
+
+  That will edit SomeClass.pl, removing all the test subroutines and adding, at
+  the end, a `use` statement to load all the tiny test files.  The tiny test
+  files will be present in ./tiny-tests/SomeClass.
+
+  After doing that, run the tests with:
+
+    ./testrunner.pl SomeClass
+
+  Everything should still pass!  If it doesn't, debug things.  The most common
+  problem is that the tiny tests use variables (like $foo or @bar) from
+  SomeClass.pm -- that won't work, and you'll want to replace them with
+  methods.
+
+  It it does pass, `git add tiny-tests/SomeClass` and commit!  Good job!
+  EOF
+}
 
 my $filename = shift @ARGV;
 
@@ -21,6 +50,9 @@ open my $infile, '<', $filename
 my @lines = <$infile>;
 
 close $infile or die "error reading $infile: $!";
+
+die "$filename appears to use Cassandane::Tiny::Loader already!\n"
+  if grep {; /use Cassandane::Tiny::Loader/ } @lines;
 
 LINE: while ($_ = shift @lines) {
   if (/^sub test_(\S+)/) {
