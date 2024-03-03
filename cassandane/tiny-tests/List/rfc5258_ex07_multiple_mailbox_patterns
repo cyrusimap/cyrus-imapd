@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_rfc5258_ex07_multiple_mailbox_patterns
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'create' => 'Drafts' ],
+        [ 'create' => [qw(
+            Sent Sent/March2004 Sent/December2003 Sent/August2004
+        )] ],
+        [ 'create' => [qw( Unlisted Unlisted/Foo )] ],
+    ]);
+
+    my $data = $imaptalk->list("", [qw( INBOX Drafts Sent/% )]);
+
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [ '\\HasNoChildren' ],
+        'Drafts' => [ '\\HasNoChildren' ],
+        'Sent/August2004' => [ '\\HasNoChildren' ],
+        'Sent/December2003' => [ '\\HasNoChildren' ],
+        'Sent/March2004' => [ '\\HasNoChildren' ],
+    });
+}
