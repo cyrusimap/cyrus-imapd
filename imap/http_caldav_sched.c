@@ -1801,20 +1801,6 @@ static void update_attendee_status(icalcomponent *ical, strarray_t *onrecurids,
     }
 }
 
-static icaltimetype get_historical_cutoff()
-{
-    int age = config_getduration(IMAPOPT_CALDAV_HISTORICAL_AGE, 'd');
-    icaltimetype cutoff;
-
-    if (age < 0) return icaltime_null_time();
-
-    /* Set cutoff to current time -age days */
-    cutoff = icaltime_current_time_with_zone(icaltimezone_get_utc_timezone());
-    icaltime_adjust(&cutoff, 0, 0, 0, -age);
-
-    return cutoff;
-}
-
 static int icalcomponent_is_historical(icalcomponent *comp, icaltimetype cutoff)
 {
     if (icaltime_is_null_time(cutoff)) return 0;
@@ -2150,7 +2136,7 @@ static void schedule_full_update(const char *cal_ownerid, const char *sched_user
 
 /* sched_request() helper
  * handles scheduling for a single attendee */
-static void schedule_one_attendee(const char *cal_ownerid, const char *sched_userid,
+extern void schedule_one_attendee(const char *cal_ownerid, const char *sched_userid,
                                   const strarray_t *schedule_addresses,
                                   const char *organizer, const char *attendee,
                                   icaltimetype h_cutoff,
@@ -2502,7 +2488,7 @@ void sched_request(const char *cal_ownerid, const char *sched_userid,
     add_attendees(oldical, organizer, hide_attendees, &attendees);
     add_attendees(newical, organizer, hide_attendees, &attendees);
 
-    icaltimetype h_cutoff = get_historical_cutoff();
+    icaltimetype h_cutoff = caldav_get_historical_cutoff();
 
     hash_iter *it = hash_table_iter(&attendees);
     while (hash_iter_next(it)) {
@@ -2941,7 +2927,7 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
 
     /* otherwise we need to decline for each sub event and then we'll still
      * send the accepts if any */
-    icaltimetype h_cutoff = get_historical_cutoff();
+    icaltimetype h_cutoff = caldav_get_historical_cutoff();
 
     int i;
     for (i = 0; i < strarray_size(schedule_addresses); i++) {
