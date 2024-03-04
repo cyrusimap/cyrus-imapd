@@ -175,9 +175,9 @@ sub put_script
     ]);
 
     my $res = $self->{jmap}->CallMethods([
-        ['Blob/upload', {
+        ['Blob/set', {
             create => {
-               "A" => { data => [{'data:asText' => $script}] }
+               "A" => { 'data:asText' => $script }
             }
          }, "R0"],
         ['SieveScript/set', {
