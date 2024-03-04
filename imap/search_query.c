@@ -648,7 +648,6 @@ static int _subquery_run_one_folder(search_query_t *query,
             }
 
             memset(&folder->esearch, 0, sizeof(folder->esearch));
-            folder->esearch.min_uid = state->last_uid + 1;
         }
 
         /* we have a new UID that needs to be merged in */
@@ -658,7 +657,7 @@ static int _subquery_run_one_folder(search_query_t *query,
         folder->esearch.all_count++;
 
         /* track first and last for MIN/MAX queries */
-        if (im->uid < folder->esearch.min_uid) {
+        if (!folder->esearch.min_uid || im->uid < folder->esearch.min_uid) {
             folder->esearch.min_uid = im->uid;
             folder->esearch.first_modseq = im->modseq;
         }
