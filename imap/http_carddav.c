@@ -562,9 +562,19 @@ static void my_carddav_shutdown(void)
 static int carddav_parse_path(const char *path, struct request_target_t *tgt,
                               const char **resultstr)
 {
-    return calcarddav_parse_path(path, tgt,
-                                 config_getstring(IMAPOPT_ADDRESSBOOKPREFIX),
-                                 resultstr);
+    int r = calcarddav_parse_path(path, tgt,
+                                  config_getstring(IMAPOPT_ADDRESSBOOKPREFIX),
+                                  resultstr);
+    if (r) return r;
+
+    if (!tgt->resource &&
+        !strncmpsafe(tgt->collection,
+                     DEFAULT_ADDRBOOK "/", strlen(DEFAULT_ADDRBOOK)+1)) {
+        /* Can't delete default addressbook */
+        tgt->allow &= ~ALLOW_DELETE;
+    }
+
+    return 0;
 }
 
 /* Store the vCard data in the specified addressbook/resource */
