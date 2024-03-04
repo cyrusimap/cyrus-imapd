@@ -83,6 +83,40 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub uidonly_cmd
+{
+    my $self = shift;
+    my $imaptalk = shift;
+    my $cmd = shift;
+
+    my %fetched;
+    my %handlers =
+    (
+        uidfetch => sub
+        {
+            my (undef, $items, $uid) = @_;
+
+            if (ref($items) ne 'HASH') {
+                # IMAPTalk < 4.06. Convert the key/value list into a hash
+                my %hash;
+                my $kvlist = $imaptalk->_next_atom();
+                while (@$kvlist) {
+                    my ($key, $val) = (shift @$kvlist, shift @$kvlist);
+                    $hash{lc($key)} = $val;
+                }
+                $items = \%hash;
+            }
+
+            $fetched{$uid} = $items;
+        },
+    );
+
+    $imaptalk->_imap_cmd($cmd, 0, \%handlers, @_);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    return %fetched;
+}
+
 use Cassandane::Tiny::Loader 'tiny-tests/UIDonly';
 
 1;

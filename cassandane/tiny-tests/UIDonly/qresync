@@ -33,21 +33,19 @@ sub test_qresync
     $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
     $self->assert_num_equals(1, $res->{uidonly});
 
-    xlog "attenpt to QResync mailbox with message sequence map";
+    xlog "attempt to QResync mailbox with message sequence map";
     $imaptalk->unselect();
     $imaptalk->select("INBOX", "(QRESYNC ($uidvalidity 0 1 (1 1)))" => 1);
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
 
     xlog "QResync mailbox";
-    $imaptalk->unselect();
-    $imaptalk->select("INBOX", "(QRESYNC ($uidvalidity 0 1))" => 1);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $res = $imaptalk->get_response_code('uidfetch');
+    my %fetched = $self->uidonly_cmd($imaptalk, 'SELECT',
+                                     "INBOX", "(QRESYNC ($uidvalidity 0 1))");
+    $self->assert(exists $fetched{'1'});
     # make sure UID isn't in the response
-    $self->assert_not_null($res);
-    $self->assert_num_equals(4, scalar @{$res});
-    $self->assert_str_equals('FLAGS', $res->[0]);
-    $self->assert_str_equals('MODSEQ', $res->[2]);
+    $self->assert(not exists $fetched{'1'}->{uid});
+    $self->assert(exists $fetched{'1'}->{flags});
+    $self->assert(exists $fetched{'1'}->{modseq});
 }
 
 1;
