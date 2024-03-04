@@ -1450,4 +1450,27 @@ EOF
     $self->assert_matches(qr/2500 members/, $value);
 }
 
+sub test_delete_default_addressbook
+    :min_version_3_6 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+
+    my %Headers = (
+      'Authorization' => $CardDAV->auth_header()
+    );
+
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+
+    my $href = $CardDAV->request_url($Id);
+    my $res = $CardDAV->ua->request('DELETE', $href, { headers => \%Headers });
+    $self->assert_num_equals(204, $res->{status});
+
+    $href = $CardDAV->request_url('Default');
+    $res = $CardDAV->ua->request('DELETE', $href, { headers => \%Headers });
+    $self->assert_num_equals(405, $res->{status});
+}
+
 1;
