@@ -79,7 +79,7 @@
  * changes to backend_version() in backend.c.
  */
 #define MAILBOX_MINOR_VERSION   19
-#define MAILBOX_CACHE_MINOR_VERSION 11
+#define MAILBOX_CACHE_MINOR_VERSION 12
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
