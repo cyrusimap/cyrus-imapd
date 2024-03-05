@@ -7259,11 +7259,11 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
         jmap_wantprop(props, "bcc") ||
         jmap_wantprop(props, "subject") ||
         jmap_wantprop(props, "sentAt")) {
-        const struct body *part;
+        const struct body *part = NULL;
         if (msg->rfc822part) {
             part = msg->rfc822part->subpart;
         }
-        else {
+        if (!part) {
             r = _cyrusmsg_need_part0(msg);
             if (r) return r;
             part = msg->part0;
