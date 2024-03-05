@@ -301,7 +301,7 @@ fail:
  */
 static int parseaddr_domain(char **inp, char **domainp, char **commentp, int *invalid)
 {
-    int c;
+    u_char c;
     char *src = *inp;
     char *dst;
     char *cdst;
