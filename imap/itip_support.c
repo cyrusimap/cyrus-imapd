@@ -609,10 +609,9 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                                 icalproperty_get_decoded_calendaraddress(prop));
              prop = icalcomponent_get_next_invitee(comp));
         if (!prop) {
-            /* Attendee added themselves to this recurrence */
-            assert(icalproperty_isa(att) == ICAL_ATTENDEE_PROPERTY);
-            prop = icalproperty_clone(att);
-            icalcomponent_add_property(comp, prop);
+            /* Don't allow party crashing */
+            attendee = NULL;
+            goto done;
         }
 
         /* Set PARTSTAT */
