@@ -935,8 +935,7 @@ static int _create_upload_collection(const char *accountid,
                 httpd_userid, mailbox_acl(*mailboxp), newacl);
 
         /* ok, change the mailboxes database */
-        r = mboxlist_sync_setacls(mbentry->name, newacl,
-                                  mailbox_modseq_dirty(*mailboxp));
+        r = mboxlist_setacls(mbentry->name, newacl, mailbox_modseq_dirty(*mailboxp), /*silent*/0);
         if (r) {
             syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
                    mbentry->name, error_message(r));

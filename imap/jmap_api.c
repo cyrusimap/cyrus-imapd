@@ -2856,9 +2856,9 @@ static int set_upload_rights(const char *accountid)
     free_hash_table(&user_access, NULL);
 
     /* ok, change the mailboxes database */
-    r = mboxlist_sync_setacls(mailbox_name(mbox), newacl, mailbox_modseq_dirty(mbox));
+    r = mboxlist_setacls(mailbox_name(mbox), newacl, mailbox_modseq_dirty(mbox), /*silent*/0);
     if (r) {
-        syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+        syslog(LOG_ERR, "mboxlist_setacls(%s) failed: %s",
                mailbox_name(mbox), error_message(r));
     }
     else {
@@ -2962,9 +2962,9 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     hash_enumerate_sorted(&user_access, add_useracls, &newacl, cmpstringp_raw);
 
     /* ok, change the mailboxes database */
-    r = mboxlist_sync_setacls(mailbox_name(mbox), newacl, mailbox_modseq_dirty(mbox));
+    r = mboxlist_setacls(mailbox_name(mbox), newacl, mailbox_modseq_dirty(mbox), /*silent*/0);
     if (r) {
-        syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+        syslog(LOG_ERR, "mboxlist_setacls(%s) failed: %s",
                mailbox_name(mbox), error_message(r));
     }
     else {

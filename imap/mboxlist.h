@@ -283,7 +283,7 @@ int mboxlist_setacl(const struct namespace *namespace, const char *name,
 
 /* Change all ACLs on mailbox */
 int mboxlist_updateacl_raw(const char *name, const char *acl);
-int mboxlist_sync_setacls(const char *name, const char *acl, modseq_t foldermodseq);
+int mboxlist_setacls(const char *name, const char *acl, modseq_t foldermodseq, int silent);
 int mboxlist_update_foldermodseq(const char *name, modseq_t foldermodseq);
 
 int mboxlist_set_racls(int enabled);

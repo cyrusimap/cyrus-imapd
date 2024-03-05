@@ -1316,7 +1316,9 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
 
 EXPORTED int mboxlist_delete(const mbentry_t *mbentry)
 {
-    return mboxlist_update_entry(mbentry->name, NULL, NULL);
+    // removing an already deleted entry is silent
+    int silent = mbentry->mbtype & MBTYPE_DELETED ? 1 : 0;
+    return mboxlist_update_entry_full(mbentry->name, NULL, NULL, silent);
 }
 
 EXPORTED int mboxlist_deletelock(const mbentry_t *mbentry)
@@ -2431,7 +2433,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
             newmbentry->createdmodseq = mailbox->i.createdmodseq;
             newmbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
         }
-        r = mboxlist_update(newmbentry, /*localonly*/1);
+        r = mboxlist_update_full(newmbentry, /*localonly*/1, silent);
 
         /* any other updated intermediates get the same modseq */
         if (!r && !keep_intermediaries) {
@@ -2450,7 +2452,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     else {
         /* delete entry (including DELETED.* mailboxes, no need
          * to keep that rubbish around) */
-        r = mboxlist_update_entry(name, NULL, 0);
+        r = mboxlist_update_entry_full(name, NULL, 0, silent);
         if (r) {
             xsyslog(LOG_ERR, "DBERROR: error deleting",
                              "mailbox=<%s> error=<%s>",
@@ -3334,7 +3336,7 @@ EXPORTED int mboxlist_updateacl_raw(const char *name, const char *newacl)
     }
     mailbox_close(&mailbox);
 
-    if (!r) r = mboxlist_sync_setacls(name, newacl, foldermodseq);
+    if (!r) r = mboxlist_setacls(name, newacl, foldermodseq, /*silent*/0);
 
     mboxname_release(&namespacelock);
     return r;
@@ -3352,7 +3354,7 @@ EXPORTED int mboxlist_updateacl_raw(const char *name, const char *newacl)
  *
  */
 EXPORTED int
-mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodseq)
+mboxlist_setacls(const char *name, const char *newacl, modseq_t foldermodseq, int silent)
 {
     // the namespacelock will protect us from all races on the local mailboxes.db
     // so we can just read away and know it won't change under us.
@@ -3381,7 +3383,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl, modseq_t foldermodse
     if (mbentry->foldermodseq < foldermodseq)
         mbentry->foldermodseq = foldermodseq;
 
-    r = mboxlist_update_entry_full(name, mbentry, NULL, /*silent*/1);
+    r = mboxlist_update_entry_full(name, mbentry, NULL, silent);
 
     if (r) {
         xsyslog(LOG_ERR, "DBERROR: error updating acl",
