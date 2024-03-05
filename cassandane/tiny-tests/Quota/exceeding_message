@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_exceeding_message
+{
+    my ($self) = @_;
+
+    xlog $self, "test exceeding the MESSAGE quota limit";
+
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "set a low limit";
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_limits(message => 10);
+    $self->_check_usages(message => 0);
+
+    xlog $self, "adding messages to get just below the limit";
+    my %msgs;
+    for (1..10)
+    {
+        $msgs{$_} = $self->make_message("Message $_");
+    }
+    xlog $self, "check that the messages are all in the mailbox";
+    $self->check_messages(\%msgs);
+    xlog $self, "check that the usage is just below the limit";
+    $self->_check_usages(message => 10);
+
+    xlog $self, "add a message that exceeds the limit";
+    my $overmsg = eval { $self->make_message("Message 11") };
+    # As opposed to storage checking, which is currently done after receiving t
+    # (LITERAL) mail, message count checking is performed right away. This earl
+    # NO response while writing the LITERAL triggered a die in early versions
+    # of IMAPTalk, leaving the completion response undefined.
+    my $ex = $@;
+    if ($ex) {
+        $self->assert($ex =~ m/over quota/i);
+    }
+    else {
+        $self->assert_str_equals('no', $talk->get_last_completion_response());
+        $self->assert($talk->get_last_error() =~ m/over quota/i);
+    }
+
+    xlog $self, "check that the exceeding message is not in the mailbox";
+    $self->_check_usages(message => 10);
+    $self->check_messages(\%msgs);
+}

@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_inbox_altnamespace_no_intermediates
+    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace :min_version_3_5
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    foreach my $Folder ("user/cassandane/INBOX/sub", "user/cassandane/AEARLY",
+                        "user/cassandane/sub2", "user/cassandane/sub2/achild",
+                        "user/cassandane/INBOX/very/deep/one",
+                        "user/cassandane/not/so/deep",
+                        # stuff you can't see
+                        "user/cassandane/INBOX",
+                        "user/cassandane/inbox",
+                        "user/cassandane/inbox/subnobody") {
+        $admintalk->create($Folder);
+        $admintalk->setacl($Folder, 'cassandane' => 'lrswipkxtecd');
+    }
+
+    my $data = $imaptalk->list("", "*");
+
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => '\\HasChildren',
+        'INBOX/sub' => '\\HasNoChildren',
+        'INBOX/very' => '\\HasChildren',
+        'INBOX/very/deep' => '\\HasChildren',
+        'INBOX/very/deep/one' => '\\HasNoChildren',
+        'AEARLY' => '\\HasNoChildren',
+        'not' => '\\HasChildren',
+        'not/so' => '\\HasChildren',
+        'not/so/deep' => '\\HasNoChildren',
+        'sub2' => '\\HasChildren',
+        'sub2/achild' => '\\HasNoChildren',
+        'Alt Folders/INBOX' => '\\HasNoChildren \\Noinferiors',
+        'Alt Folders/inbox' => '\\HasChildren',
+        'Alt Folders/inbox/subnobody' => '\\HasNoChildren',
+    });
+
+    my $data2 = $imaptalk->list("", "%");
+
+    $self->assert_mailbox_structure($data2, '/', {
+        'INBOX' => '\\HasChildren',
+        'AEARLY' => '\\HasNoChildren',
+        'not' => '\\HasChildren',
+        'sub2' => '\\HasChildren',
+        'Alt Folders' => '\\HasChildren \\Noselect',
+    });
+
+    my $data3 = $imaptalk->list("", "INBOX/%");
+
+    $self->assert_mailbox_structure($data3, '/', {
+        'INBOX/sub' => '\\HasNoChildren',
+        'INBOX/very' => '\\HasChildren',
+    });
+}

@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_creationids
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create and get contact group and contact";
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {create => { "c1" => { firstName => "foo", lastName => "last1" }, }}, "R2"],
+        ['ContactGroup/set', {create => { "g1" => {name => "group1", contactIds => ["#c1"]} }}, "R2"],
+        ['Contact/get', {ids => ["#c1"]}, "R3"],
+        ['ContactGroup/get', {ids => ["#g1"]}, "R4"],
+    ]);
+    my $contact = $res->[2][1]{list}[0];
+    $self->assert_str_equals("foo", $contact->{firstName});
+
+    my $group = $res->[3][1]{list}[0];
+    $self->assert_str_equals("group1", $group->{name});
+
+    $self->assert_str_equals($contact->{id}, $group->{contactIds}[0]);
+}

@@ -1,0 +1,155 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_changes
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $state;
+    my $res;
+    my %m;
+    my $inbox;
+    my $foo;
+    my $drafts;
+
+    xlog $self, "get mailbox list";
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+    %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $inbox = $m{"Inbox"}->{id};
+    $self->assert_not_null($inbox);
+
+    xlog $self, "get mailbox updates (expect error)";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => 0 }, "R1"]]);
+    $self->assert_str_equals("cannotCalculateChanges", $res->[0][1]->{type});
+
+    xlog $self, "get mailbox updates (expect no changes)";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{updatedProperties});
+
+    xlog $self, "create mailbox via IMAP";
+    $imaptalk->create("INBOX.foo")
+        or die "Cannot create mailbox INBOX.foo: $@";
+
+    xlog $self, "get mailbox list";
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $foo = $m{"foo"}->{id};
+    $self->assert_not_null($foo);
+
+    xlog $self, "get mailbox updates";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_str_equals($foo, $res->[0][1]{created}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{updatedProperties});
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "create drafts mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $drafts = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($drafts);
+
+    xlog $self, "get mailbox updates";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_str_equals($drafts, $res->[0][1]{created}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{updatedProperties});
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "rename mailbox foo to bar";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { update => { $foo => {
+                            name => "bar",
+                            sortOrder => 20
+             }}}, "R1"]
+    ]);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
+
+    xlog $self, "get mailbox updates";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($foo, $res->[0][1]{updated}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{updatedProperties});
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "delete mailbox bar";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', {
+                    destroy => [ $foo ],
+             }, "R1"]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+
+    xlog $self, "rename mailbox drafts to stfard";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', {
+                    update => { $drafts => { name => "stfard" } },
+             }, "R1"]
+    ]);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
+
+    xlog $self, "get mailbox updates, limit to 1";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state, maxChanges => 1 }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($foo, $res->[0][1]{destroyed}[0]);
+    $self->assert_null($res->[0][1]{updatedProperties});
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "get mailbox updates, limit to 1";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state, maxChanges => 1 }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($drafts, $res->[0][1]{updated}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{updatedProperties});
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "get mailbox updates (expect no changes)";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{updatedProperties});
+}
