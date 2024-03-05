@@ -132,6 +132,13 @@ extern int isched_send(struct caldav_sched_param *sparam, const char *recipient,
 
 extern int sched_busytime_query(struct transaction_t *txn,
                                 struct mime_type_t *mime, icalcomponent *comp);
+extern void schedule_one_attendee(const char *cal_ownerid, const char *sched_userid,
+                                  const strarray_t *schedule_addresses,
+                                  const char *organizer, const char *attendee,
+                                  icaltimetype h_cutoff,
+                                  icalcomponent *oldical, icalcomponent *newical,
+                                  enum sched_mechanism mech);
+
 extern void sched_request(const char *cal_ownerid, const char *sched_userid,
                           const strarray_t *schedule_addresses,
                           const char *organizer,

@@ -150,4 +150,6 @@ extern int caldav_is_secretarymode(const char *mboxname);
 extern int caldav_init_jmapcalendar(const char *userid, struct mailbox *mailbox);
 #endif
 
+extern icaltimetype caldav_get_historical_cutoff();
+
 #endif /* HTTP_CALDAV_H */

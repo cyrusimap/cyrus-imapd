@@ -1849,4 +1849,18 @@ HIDDEN int caldav_init_jmapcalendar(const char *userid, struct mailbox *mailbox)
     return r;
 }
 
-#endif
+#endif /* WITH_JMAP */
+
+EXPORTED icaltimetype caldav_get_historical_cutoff()
+{
+    int age = config_getduration(IMAPOPT_CALDAV_HISTORICAL_AGE, 'd');
+    icaltimetype cutoff;
+
+    if (age < 0) return icaltime_null_time();
+
+    /* Set cutoff to current time -age days */
+    cutoff = icaltime_current_time_with_zone(icaltimezone_get_utc_timezone());
+    icaltime_adjust(&cutoff, 0, 0, 0, -age);
+
+    return cutoff;
+}

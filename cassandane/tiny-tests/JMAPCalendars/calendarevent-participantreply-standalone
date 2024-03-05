@@ -121,6 +121,10 @@ sub test_calendarevent_participantreply_standalone
 
     my ($maj, $min) = Cassandane::Instance->get_version();
     if ($maj > 3 || ($maj == 3 && $min >= 9)) {
+        xlog $self, "verify no other update requests from organizer";
+        $imip = $imips[2];
+        $self->assert_null($imip);
+
         xlog $self, "actually update attendee status on the event";
         $res = $jmap->CallMethods([['CalendarEvent/set', {
             update => {
