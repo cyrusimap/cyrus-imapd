@@ -7491,6 +7491,12 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
             /* Open the DAV DB corresponding to the mailbox */
             fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
+            if (!fctx->davdb) {
+                syslog(LOG_ERR, "dav_open(%s) failed", mailbox_name(fctx->mailbox));
+                xml_add_response(fctx, HTTP_SERVER_ERROR,
+                                 0, error_message(r), NULL);
+                goto next;
+            }
 
             /* Find message UID for the resource */
             rparams->davdb.lookup_resource(fctx->davdb, fctx->mbentry,
