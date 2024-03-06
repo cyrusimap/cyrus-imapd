@@ -207,7 +207,7 @@ are listed with ``<none>''.
 
 { "altprefix", "Alt Folders", STRING, "3.0.0" }
 /* Alternative INBOX spellings that can't be accessed in altnamespace
-   otherwise go under here */
+   otherwise go under here. */
 
 { "annotation_db", "twoskip", STRINGLIST("skiplist", "twoskip", "zeroskip"), "3.1.6" }
 /* The cyrusdb backend to use for mailbox annotations. */
@@ -561,7 +561,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    will be kept indefinitely.
 .PP
    For backward compatibility, if no unit is specified, days is
-   assumed.  */
+   assumed. */
 
 { "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.1.6" }
 /* The cyrusdb backend to use for the backup locations database. */
@@ -662,8 +662,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "calendar_minimum_alarm_interval", "5m", DURATION, "3.8.0" }
 /* The minimum allowed interval between alarms for a recurring event.
    Primarily used to suppress alarms for MINUTELY and SECONDLY recurrences.
-   The default is 5 minutes.  The minimum value is 0, which will
-   allow all alarms. */
+   The minimum value is 0, which will allow all alarms. */
 
 { "carddav_allowaddmember", 0, SWITCH, "3.1.3" }
 /* Enable support for POST add-member on the CardDAV server. */
@@ -742,7 +741,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    assumed. */
 
 { "conversations_keep_existing", 1, SWITCH, "3.3.0" }
-/* during conversations cleanup, don't clean up if there are still existing emails
+/* During conversations cleanup, don't clean up if there are still existing emails
    with one of the mentioned CIDs. */
 
 { "conversations_max_thread", 100, INT, "3.1.1" }
@@ -751,7 +750,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "conversations_max_guidrecords", 5000, INT, "3.3.0" }
 /* maximum records with the same guid.  This is just a sanity check to stop the same
-   email being added and removed over and over, so the default is 5000 */
+   email being added and removed over and over. */
 
 { "conversations_max_guidexists", 100, INT, "3.3.0" }
 /* maximum records with the same guid.  This maps to "labels", so with the default
@@ -878,8 +877,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "delete_unsubscribe", 0, SWITCH, "3.0.0" }
 /* Whether to also unsubscribe from mailboxes when they are deleted.
    Note that this behaviour contravenes RFC 3501 section 6.3.9, but
-   may be useful for avoiding user/client software confusion.
-   The default is 'no'. */
+   may be useful for avoiding user/client software confusion. */
 
 { "deleteright", "c", STRING, "2.3.17" }
 /* Deprecated - only used for backwards compatibility with existing
@@ -890,12 +888,12 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "disable_user_namespace", 0, SWITCH, "2.5.0" }
 /* Preclude list command on user namespace.  If set to 'yes', the
    LIST response will never include any other user's mailbox.  Admin
-   users will always see all mailboxes.  The default is 'no' */
+   users will always see all mailboxes. */
 
 { "disable_shared_namespace", 0, SWITCH, "2.5.0" }
 /* Preclude list command on shared namespace.  If set to 'yes', the
    LIST response will never include any non-user mailboxes.  Admin
-   users will always see all mailboxes.  The default is 'no' */
+   users will always see all mailboxes. */
 
 { "disconnect_on_vanished_mailbox", 0, SWITCH, "2.3.17" }
 /* If enabled, IMAP/POP3/NNTP clients will be disconnected by the
@@ -1114,8 +1112,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "httptimeout", "5m", DURATION, "3.1.8" }
 /* Set the length of the HTTP server's inactivity autologout timer.
-   The default is 5 minutes.  The minimum value is 0, which will
-   disable persistent connections.
+   The minimum value is 0, which will disable persistent connections.
 .PP
    For backwards compatibility, if no unit is specified, minutes
    is assumed. */
@@ -1387,20 +1384,20 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, support the JMAP vacation extension. */
 
 { "jmapuploadfolder", "#jmap", STRING, "3.1.1" }
-/* the name of the folder for JMAP uploads (#jmap) */
+/* The name of the folder for JMAP uploads. */
 
 { "jmapsubmission_deleteonsend", 1, SWITCH, "3.1.8" }
 /* If enabled (the default) then delete the EmailSubmission as soon as the email
  * has been sent. */
 
 { "jmapsubmissionfolder", "#jmapsubmission", STRING, "3.1.8" }
-/* the name of the folder for JMAP Submissions (#jmapsubmission) */
+/* The name of the folder for JMAP Submissions. */
 
 { "jmappushsubscriptionfolder", "#jmappushsubscription", STRING, "3.1.8" }
-/* the name of the folder for JMAP Push Subscriptions (#jmappushsubscription) */
+/* The name of the folder for JMAP Push Subscriptions. */
 
 { "jmapnotificationfolder", "#jmapnotification", STRING, "3.3.0" }
-/* the name of the folder for JMAP notifications (#jmapnotification) */
+/* The name of the folder for JMAP notifications. */
 
 { "iolog", 0, SWITCH, "2.5.0" }
 /* Should cyrus output I/O log entries. */
@@ -1645,7 +1642,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Timeout used during a lmtp transaction to a remote backend (e.g. in a
    murder environment).  Can be used to prevent hung lmtpds on proxy hosts
    when a backend server becomes unresponsive during a lmtp transaction.
-   The default is 5 minutes - change to zero for infinite.
+   Change to zero for infinite.
 .PP
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
@@ -2117,11 +2114,10 @@ If all partitions are over that limit, this feature is not used anymore.
 
 { "prometheus_update_freq", "10s", DURATION, "3.1.8" }
 /* Frequency in at which promstatsd should re-collate its statistics
-   report.  The minimum value is 1 second, the default is 10 seconds.
+   report.  The minimum value is 1 second.
 .PP
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
-   */
 
 { "prometheus_stats_dir", NULL, STRING, "3.1.2" }
 /* Directory to use for gathering prometheus statistics.  If specified,
@@ -2629,7 +2625,7 @@ product version in the capabilities
    (e.g., "regex"). */
 
 { "sieve_folder", "#sieve", STRING, "3.6.0" }
-/* The name of the folder for storing Sieve scripts (#sieve) */
+/* The name of the folder for storing Sieve scripts. */
 
 { "sieve_maxscriptsize", "32K", BYTESIZE, "3.8.0" }
 /* Maximum size any sieve script can be, enforced at submission by
@@ -2686,7 +2682,7 @@ product version in the capabilities
 
 { "anysievefolder", 0, SWITCH, "2.5.0" }
 /* It must be "yes" in order to permit the autocreation of any INBOX subfolder
-   requested by a sieve filter, through the "fileinto" action. (default = no) */
+   requested by a sieve filter, through the "fileinto" action. */
 
 { "singleinstancestore", 1, SWITCH, "2.3.17" }
 /* If enabled, imapd, lmtpd and nntpd attempt to only write one copy
