@@ -895,6 +895,7 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
+                        "%s%s%s"
                         "%s%s%s",
 
                         session_id(),
@@ -923,7 +924,11 @@ static void imapd_log_client_behavior(void)
 
                         client_behavior.did_searchres   ? " searchres=<1>"    : "",
                         client_behavior.did_uidonly     ? " uidonly=<1>"      : "",
-                        client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "");
+                        client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "",
+
+                        client_behavior.did_scan        ? " scan=<1>"         : "",
+                        client_behavior.did_xlist       ? " xlist=<1>"        : "",
+                        client_behavior.did_xmove       ? " xmove=<1>"        : "");
 }
 
 static void imapd_reset(void)
@@ -2052,6 +2057,11 @@ static void cmdloop(void)
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/1);
+
+                if (cmdname[0] == 'x')
+                    client_behavior.did_move = 1;
+                else
+                    client_behavior.did_xmove = 1;
 
                 prometheus_increment(CYRUS_IMAP_COPY_TOTAL);
             } else goto badcmd;
@@ -7337,8 +7347,6 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     char *copyuid = NULL;
     mbentry_t *mbentry = NULL;
 
-    if (ismove) client_behavior.did_move = 1;
-
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
     r = mlookup(NULL, NULL, intname, &mbentry);
 
@@ -9103,6 +9111,11 @@ static void cmd_list(char *tag, struct listargs *listargs)
 {
     clock_t start = clock();
     char mytime[100];
+
+    if (listargs->cmd == LIST_CMD_XLIST)
+        client_behavior.did_xlist = 1;
+    else if (listargs->scan)
+        client_behavior.did_scan = 1;
 
     if (listargs->sel & LIST_SEL_REMOTE) {
         if (!config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS)) {

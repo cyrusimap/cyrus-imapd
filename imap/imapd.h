@@ -447,25 +447,30 @@ enum {
 extern struct protstream *imapd_out, *imapd_in;
 
 struct client_behavior_registry {
-    unsigned int did_annotate     : 1;   /* used SETANNOTATION or FETCH-ed ANNOTATION */
-    unsigned int did_binary       : 1;   /* fetched BINARY or APPEND literal8  */
-    unsigned int did_catenate     : 1;   /* used CATENATE on APPEND  */
-    unsigned int did_condstore    : 1;   /* gave CONDSTORE on SELECT */
-    unsigned int did_compress     : 1;   /* started COMPRESS */
-    unsigned int did_idle         : 1;   /* used IDLE */
-    unsigned int did_imap4rev2    : 1;   /* used ENABLE IMAP4rev2  */
-    unsigned int did_metadata     : 1;   /* called GETMETADATA or SETMETADATA */
-    unsigned int did_multisearch  : 1;   /* called ESEARCH */
-    unsigned int did_move         : 1;   /* used MOVE */
-    unsigned int did_notify       : 1;   /* used NOTIFY */
-    unsigned int did_partial      : 1;   /* used SEARCH/FETCH PARTIAL */
-    unsigned int did_preview      : 1;   /* fetched PREVIEW */
-    unsigned int did_qresync      : 1;   /* gave QRESYNC on SELECT */
-    unsigned int did_savedate     : 1;   /* fetched SAVEDATE */
-    unsigned int did_searchres    : 1;   /* used SAVE on SEARCH */
-    unsigned int did_replace      : 1;   /* used REPLACE */
-    unsigned int did_uidonly      : 1;   /* used ENABLE UIDONLY  */
-    unsigned int did_utf8_accept  : 1;   /* used ENABLE UTF8=ACCEPT  */
+    uint32_t did_annotate     : 1;   /* used SETANNOTATION or FETCH-ed ANNOTATION */
+    uint32_t did_binary       : 1;   /* fetched BINARY or APPEND literal8  */
+    uint32_t did_catenate     : 1;   /* used CATENATE on APPEND  */
+    uint32_t did_condstore    : 1;   /* gave CONDSTORE on SELECT */
+    uint32_t did_compress     : 1;   /* started COMPRESS */
+    uint32_t did_idle         : 1;   /* used IDLE */
+    uint32_t did_imap4rev2    : 1;   /* used ENABLE IMAP4rev2  */
+    uint32_t did_metadata     : 1;   /* called GETMETADATA or SETMETADATA */
+    uint32_t did_multisearch  : 1;   /* called ESEARCH */
+    uint32_t did_move         : 1;   /* used MOVE */
+    uint32_t did_notify       : 1;   /* used NOTIFY */
+    uint32_t did_partial      : 1;   /* used SEARCH/FETCH PARTIAL */
+    uint32_t did_preview      : 1;   /* fetched PREVIEW */
+    uint32_t did_qresync      : 1;   /* gave QRESYNC on SELECT */
+    uint32_t did_savedate     : 1;   /* fetched SAVEDATE */
+    uint32_t did_searchres    : 1;   /* used SAVE on SEARCH */
+    uint32_t did_replace      : 1;   /* used REPLACE */
+    uint32_t did_uidonly      : 1;   /* used ENABLE UIDONLY  */
+    uint32_t did_utf8_accept  : 1;   /* used ENABLE UTF8=ACCEPT  */
+
+    /* non-standard - track for possible deprecation */
+    uint32_t did_scan         : 1;   /* used SCAN  */
+    uint32_t did_xlist        : 1;   /* used XLIST  */
+    uint32_t did_xmove        : 1;   /* used XMOVE  */
 };
 
 #endif /* INCLUDED_IMAPD_H */
