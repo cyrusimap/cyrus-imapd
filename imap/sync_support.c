@@ -1012,41 +1012,39 @@ static int sync_sieve_validate(struct index_record *record,
                                struct sync_msgid_list *part_list)
 {
     struct sync_msgid *item = sync_msgid_lookup(part_list, &record->guid);
-    FILE *f = NULL;
-    struct body *body = NULL;
-    const char *msg_base = NULL;
-    size_t msg_len;
+    const char *err = NULL;
     int r = SIEVE_OK;
+    int fd;
     
-    if (!(item && item->fname && (f = fopen(item->fname, "r")))) return r;
+    if (!(item && item->fname && (fd = open(item->fname, O_RDONLY)) != -1)) {
+        r = IMAP_IOERROR;
+    }
+    else {
+        struct buf buf = BUF_INITIALIZER;
+        const char *sep;
 
-    if (!message_parse_file(f, &msg_base, &msg_len, &body, item->fname)) {
-        sieve_script_t *s = NULL;
-        char *err = NULL;
-
-        // XXX: if mmap is a multiple of 4096 bytes, we can read past the
-	// end of the mmap - the string won't be correctly NULL terminated
-        char *script = xstrndup(msg_base + body->header_size, msg_len - body->header_size);
-        r = sieve_script_parse_string(NULL, script, &err, &s);
-        free(script);
-        sieve_script_free(&s);
-
-        if (r == SIEVE_OK) {
-            // create the record now to avoid a re-parse in sync_append_copyfile
-            message_create_record(record, body);
+        buf_refresh_mmap(&buf, 1, fd, item->fname, MAP_UNKNOWN_LEN, NULL);
+        sep = strstr(buf_cstring(&buf), "\r\n\r\n");  // find header/body separator
+        if (!sep) {
+            r = IMAP_MESSAGE_NOBLANKLINE;
         }
-        else if (err) {
-            syslog(LOG_ERR, "sieve script parse error uid=%u: %s", record->uid, err);
+        else {
+            const char *script = sep + 4;  // skip to body
+            sieve_script_t *s = NULL;
+
+            r = sieve_script_parse_string(NULL, script, (char **) &err, &s);
+            sieve_script_free(&s);
         }
+
+        buf_free(&buf);
+        close(fd);
     }
 
-    if (body) {
-        message_free_body(body);
-        free(body);
-    }
+    if (r != SIEVE_OK) {
+        if (!err) err = error_message(r);
 
-    map_free(&msg_base, &msg_len);
-    fclose(f);
+        syslog(LOG_ERR, "sieve script parse error uid=%u: %s", record->uid, err);
+    }
 
     return r;
 }
@@ -2205,7 +2203,7 @@ int sync_append_copyfile(struct mailbox *mailbox,
 
     if (!item || !item->fname)
         r = IMAP_IOERROR;
-    else if (!record->cache_version)  // don't parse again if we validated Sieve
+    else
         r = message_parse(item->fname, record);
 
     if (r) {
