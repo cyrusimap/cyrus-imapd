@@ -1,0 +1,50 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.2.12 Release Notes
+===============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.12/cyrus-imapd-3.2.12.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.12/cyrus-imapd-3.2.12.tar.gz.sig
+
+.. _relnotes-3.2.12-changes:
+
+Changes since 3.2.11
+====================
+
+Build changes
+-------------
+
+* Fixed: Cassandane tests now pass on Debian Bookworm
+* PCRE2 is now supported and detected with pkg-config.  If both PCRE and PCRE2
+  are available, the older PCRE will be preferred.  To force use of PCRE2 in
+  this situation, run configure with the ``--disable-pcre`` option.  Please
+  note that on Debian-based systems, PCRE (the old one, no longer maintained)
+  is called "pcre3".  Yes, this is confusing.
+* Fixed :issue:`4770`: missing include when ssl unavailable (thanks Дилян
+  Палаузов)
+
+Bug fixes
+---------
+
+* Fixed :issue:`4123`: XS Perl modules failed to compile against Perl 5.36
+* Fixed :issue:`4309`: incorrect error code used for JMAP
+  invalidResultReference errors
+* Fixed :issue:`4439`: murder frontends now proxy GETMETADATA correctly
+  (thanks Stéphane GAUBERT)
+* Fixed :issue:`4440`: uninitialized value warning from :cyrusman:`cyradm(8)`
+  ``listmailbox`` command (thanks Stéphane GAUBERT)
+* Fixed :issue:`4465`: missing calls to ``mailbox_iter_done()`` (thanks Дилян
+  Палаузов)
+* Fixed :issue:`4717`: pop3d now avoids splitting ``".\r\n"`` across packet
+  boundaries, which can confuse some clients
+* Fixed :issue:`4756`: potential uninitialized access in extract_convdata
+
+Other changes
+-------------
+
+* Fixed :issue:`4558`: better cyrusdb / ``ctl_cyrusdb -r`` UX
+* Fixed :issue:`4790`: some man pages were missing from distribution tarballs
+  (thanks Jakob Gahde)
