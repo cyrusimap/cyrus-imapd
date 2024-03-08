@@ -272,15 +272,15 @@ normal:
         r = fd = open(sfile, O_RDONLY, 0644);
         if (r == -1 && errno == ENOENT) {
             /* tell the admin what they need to do! */
-            xsyslog(LOG_INFO, "skipstamp is missing, have you run `ctl_cyrusdb -r`?",
-                              "filename=<%s>", sfile);
+            syslog(LOG_INFO, "%s is missing, have you run `ctl_cyrusdb -r`?",
+                             sfile);
         }
 
         if (r != -1) r = retry_read(fd, &net32_time, 4);
 
         if (r == -1) {
-            xsyslog(LOG_ERR, "DBERROR: skipstamp unreadable, assuming the worst",
-                             "filename=<%s>", sfile);
+            syslog(LOG_ERR, "DBERROR: %s unreadable, assuming the worst",
+                            sfile);
             /* "assuming the worst" means recovery will run for every skiplist
              * database every time it's opened, because we can't determine that
              * it doesn't need it.
