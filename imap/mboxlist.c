@@ -3133,11 +3133,13 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     int mode = ACL_MODE_SET;
     int isusermbox = 0;
     int isidentifiermbox = 0;
-    int anyoneuseracl = 1;
+    int anyoneuseracl = config_getswitch(IMAPOPT_ANYONEUSERACL);
+    int isanyone = !strcmp(identifier, "anyone");
     int ensure_owner_rights = 0;
     int mask;
     const char *mailbox_owner = NULL;
     char *newacl = NULL;
+    mbname_t *idname = NULL;
 
     init_internal();
 
@@ -3145,20 +3147,22 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     // so we can just read away and know it won't change under us.
     struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
 
-    /* round trip identifier to potentially strip domain */
-    mbname_t *idname = mbname_from_userid(identifier);
-    /* XXX - enforce cross domain restrictions */
-    identifier = mbname_userid(idname);
+    // not "anyone" or a group - do some username normalisation
+    if (!isanyone && strncmp(identifier, "group:", 6)) {
+        /* round trip identifier to potentially strip domain */
+        idname = mbname_from_userid(identifier);
+        /* XXX - enforce cross domain restrictions */
+        identifier = mbname_userid(idname);
+
+        /* checks if the identifier is the mailbox owner */
+        if (mboxname_userownsmailbox(identifier, name))
+            isidentifiermbox = 1;
+    }
 
     /* checks if the mailbox belongs to the user who is trying to change the
        access rights */
     if (mboxname_userownsmailbox(userid, name))
         isusermbox = 1;
-    anyoneuseracl = config_getswitch(IMAPOPT_ANYONEUSERACL);
-
-    /* checks if the identifier is the mailbox owner */
-    if (mboxname_userownsmailbox(identifier, name))
-        isidentifiermbox = 1;
 
     /* who is the mailbox owner? */
     if (isusermbox) {
@@ -3190,7 +3194,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
         }
     }
 
-    if (!isadmin && !anyoneuseracl && !strncmp(identifier, "anyone", 6)) {
+    if (isanyone && !isadmin && !anyoneuseracl) {
         r = IMAP_PERMISSION_DENIED;
         goto done;
     }
