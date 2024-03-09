@@ -685,13 +685,8 @@ sub _sc_list {
   $w = $ll if $w > $ll;
   my $n = int($ll / $w);
   my $c;
-  for ($l = 0; $l < int((@l + $n - 1) / $n); $l++) {
-    for ($c = 0; $c < @l; $c += int((@l + $n - 1) / $n)) {
-      if ($l + $c < @l) {
-        $lfh->[1]->print($l[$l + $c], ' ' x ($w + 1 - length($l[$l + $c])));
-      }
-    }
-    $lfh->[1]->print("\n");
+  for (@l) {
+    $lfh->[1]->print("$_","\n");
   }
   0;
 }
