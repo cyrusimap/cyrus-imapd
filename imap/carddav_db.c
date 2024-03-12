@@ -1422,6 +1422,7 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
     strarray_t emails = STRARRAY_INITIALIZER;
     strarray_t member_uids = STRARRAY_INITIALIZER;
     vcardproperty *prop;
+    char *propval = NULL;
 
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
@@ -1433,7 +1434,8 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
          * So, we use vcardproperty_get_value_as_string_r() here instead
          * and manage the memory ourselves.
          */
-        char *propval = vcardproperty_get_value_as_string_r(prop);
+        free(propval);
+        propval = vcardproperty_get_value_as_string_r(prop);
         const char *userid = "";
 
         if (!propval) continue;
@@ -1526,8 +1528,6 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
         default:
             break;
         }
-
-        free(propval);
     }
 
     int r;
@@ -1550,6 +1550,7 @@ done:
     strarray_fini(&values);
     strarray_fini(&emails);
     strarray_fini(&member_uids);
+    free(propval);
 
     return r;
 }
