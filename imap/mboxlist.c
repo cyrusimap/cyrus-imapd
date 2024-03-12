@@ -1165,7 +1165,7 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
     mbentry_t *oldi = NULL;
     int r = 0;
     struct txn *mytid = NULL;
-    const char *dbname = mbname_dbname(mbname);
+    char *dbname = mbname_dbname(mbname);
 
     /* make sure the name is locked first - NOTE, this doesn't guarantee ordering
      * on the I key since we can't tell to lock that (and may be accessing two) so
@@ -1311,6 +1311,7 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
     mboxlist_entry_free(&oldi);
     buf_free(&key);
     mbname_free(&mbname);
+    free(dbname);
     return r;
 }
 
