@@ -770,13 +770,10 @@ include_HEADERS = \
 	lib/arrayu64.h \
 	lib/assert.h \
 	lib/auth.h \
-	lib/auth_pts.h \
 	lib/bitvector.h \
 	lib/bloom.h \
 	lib/bsearch.h \
-	lib/bufarray.h \
 	lib/charset.h \
-	lib/chartable.h \
 	lib/command.h \
 	lib/crc32.h \
 	lib/cyr_lock.h \
@@ -815,9 +812,9 @@ include_HEADERS = \
 	lib/stristr.h \
 	lib/times.h \
 	lib/tok.h \
-	lib/vparse.h \
 	lib/wildmat.h \
 	lib/xmalloc.h \
+	lib/xsha1.h \
 	lib/xunlink.h
 
 nodist_include_HEADERS = \
@@ -827,6 +824,7 @@ nobase_include_HEADERS = sieve/sieve_interface.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
 noinst_HEADERS += \
+	lib/bufarray.h \
 	lib/byteorder.h \
 	lib/gai.h \
 	lib/libconfig.h \
@@ -834,7 +832,7 @@ noinst_HEADERS += \
 	lib/prot.h \
 	lib/ptrarray.h \
 	lib/util.h \
-	lib/xsha1.h \
+	lib/vparse.h \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h \
 	lib/xstrnchr.h
@@ -1509,11 +1507,13 @@ lib_libcyrus_la_SOURCES = \
 	lib/auth_krb.c \
 	lib/auth_krb5.c \
 	lib/auth_pts.c \
+	lib/auth_pts.h \
 	lib/auth_unix.c \
 	lib/bitvector.c \
 	lib/bloom.c \
 	lib/bsearch.c \
 	lib/charset.c \
+	lib/chartable.h \
 	lib/command.c \
 	lib/cyr_qsort_r.c \
 	lib/cyrusdb.c \
@@ -1598,13 +1598,11 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/util.c \
 	lib/vparse.c \
 	lib/xmalloc.c \
+	lib/xsha1.c \
 	lib/xstrlcat.c \
 	lib/xstrlcpy.c \
 	lib/xstrnchr.c \
 	lib/xunlink.c
-if !HAVE_SSL
-lib_libcyrus_min_la_SOURCES += lib/xsha1.c
-endif
 if IPV6_noGETADDRINFO
 lib_libcyrus_min_la_SOURCES += lib/getaddrinfo.c
 endif
