@@ -1538,13 +1538,14 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
             { NULL,            SQLITE_NULL,    { .s = NULL             } } };
 
         r = sqldb_exec(carddavdb->db, CMD_DELETE_JSCARDCACHE, bval, NULL, NULL);
-        if (r) return r;
+        if (r) goto done;
     }
     r = carddav_write(carddavdb, cdata);
     if (!r) r = carddav_write_emails(carddavdb,
                                      cdata->dav.rowid, &emails, ispinned);
     if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
 
+done:
     buf_free(&nicknames);
     strarray_fini(&values);
     strarray_fini(&emails);
