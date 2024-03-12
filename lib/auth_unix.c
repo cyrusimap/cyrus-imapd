@@ -72,19 +72,14 @@ static struct auth_state auth_anonymous = {
  */
 static int mymemberof(const struct auth_state *auth_state, const char *identifier)
 {
-    int i;
-
     if (!auth_state) auth_state = &auth_anonymous;
 
     if (strcmp(identifier, "anyone") == 0) return 1;
 
     if (strcmp(identifier, auth_state->userid) == 0) return 3;
 
-    if (strncmp(identifier, "group:", 6) != 0) return 0;
+    if (!strncmp(identifier, "group:", 6) && strarray_find(&auth_state->groups, identifier+6, 0) >= 0) return 2;
 
-    for (i=0; i<auth_state->groups.count ; i++) {
-        if (strcmp(identifier+6, auth_state->groups.data[i]) == 0) return 2;
-    }
     return 0;
 }
 
