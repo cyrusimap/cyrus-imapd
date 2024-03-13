@@ -10,7 +10,7 @@ sub test_enotify
 require ["enotify"];
 
 notify "https://cyrusimap.org/notifiers/updatecal";
-notify "mailto:foo@example.com";
+notify :message "Hello World!" "mailto:foo@example.com";
 EOF
         );
 
@@ -24,4 +24,5 @@ EOF
 
     $self->assert_not_null($updatecal);
     $self->assert_not_null($mailto);
+    $self->assert_matches(qr/Hello World!/, $mailto->{MESSAGE});
 }
