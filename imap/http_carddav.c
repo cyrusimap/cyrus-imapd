@@ -631,15 +631,18 @@ static int carddav_store_resource(struct transaction_t *txn,
 
         switch (vcardproperty_isa(prop)) {
         case VCARD_VERSION_PROPERTY:
-            version = xstrdup(propval);
+            if (!version)
+                version = xstrdup(propval);
             break;
 
         case VCARD_UID_PROPERTY:
-            uid = xstrdup(propval);
+            if (!uid)
+                uid = xstrdup(propval);
             break;
 
         case VCARD_FN_PROPERTY:
-            fullname = xstrdup(propval);
+            if (!fullname)
+                fullname = xstrdup(propval);
             break;
 
         default:
@@ -1494,11 +1497,13 @@ static int carddav_put(struct transaction_t *txn, void *obj,
             break;
 
         case VCARD_UID_PROPERTY:
-            uid = xstrdup(propval);
+            if (!uid)
+                uid = xstrdup(propval);
             break;
 
         case VCARD_FN_PROPERTY:
-            fullname = xstrdup(propval);
+            if (!fullname)
+                fullname = xstrdup(propval);
             break;
 
         default:
