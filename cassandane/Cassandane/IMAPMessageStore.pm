@@ -83,7 +83,7 @@ sub new
 
 sub connect
 {
-    my ($self) = @_;
+    my ($self, %params) = @_;
 
     # if already successfully connected, do nothing
     return
@@ -115,6 +115,7 @@ sub connect
                       Pedantic => 1,
                       PreserveINBOX => 1,
                       Uid => 0,
+                      NoLiteralPlus => delete $params{NoLiteralPlus} || 0,
                   )
             or die "Cannot connect to '$self->{host}:$self->{port}': $@";
     }
@@ -129,6 +130,7 @@ sub connect
                       Pedantic => 1,
                       PreserveINBOX => 1,
                       Uid => 0,
+                      NoLiteralPlus => delete $params{NoLiteralPlus} || 0,
                   )
             or die "Cannot connect to server: $@";
     }
@@ -323,9 +325,9 @@ sub remove
 
 sub get_client
 {
-    my ($self) = @_;
+    my ($self, %params) = @_;
 
-    $self->connect();
+    $self->connect(%params);
     return $self->{client};
 }
 
