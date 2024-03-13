@@ -48,6 +48,7 @@
 
 #include "sqldb.h"
 #include "mailbox.h"
+#include "mboxlist.h"
 #include <libical/ical.h>
 
 enum alarm_type {
@@ -84,10 +85,10 @@ int caldav_alarm_sync_nextcheck(struct mailbox *mailbox,
                                 const struct index_record *record);
 
 /* delete all alarms matching the event */
-int caldav_alarm_delete_record(const char *mboxname, uint32_t uid);
+int caldav_alarm_delete_record(const mbentry_t *mbentry, uint32_t uid);
 
 /* delete entire mailbox's alarms */
-int caldav_alarm_delete_mailbox(const char *mboxname);
+int caldav_alarm_delete_mailbox(struct mailbox *mailbox);
 
 /* delete all alarms for a user */
 int caldav_alarm_delete_user(const char *userid);

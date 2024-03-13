@@ -99,4 +99,6 @@ int user_run_with_lock(const char *userid, int (*cb)(void *), void *rock);
 int user_sharee_renameacls(const struct namespace *namespace,
                            const char *olduser, const char *newuser);
 
+char *user_get_inboxid(const char *userid);
+
 #endif
