@@ -743,3 +743,19 @@ EXPORTED int user_isreplicaonly(const char *userid)
     free(path);
     return file_exists;
 }
+
+EXPORTED char *user_get_inboxid(const char *userid)
+{
+    mbentry_t *mbentry = NULL;
+    char *inbox = mboxname_user_mbox(userid, NULL);
+    char *inboxid = NULL;
+
+    mboxlist_lookup_allow_all(inbox, &mbentry, NULL);
+    if (mbentry) {
+        inboxid = xstrdup(mbentry->uniqueid);
+        mboxlist_entry_free(&mbentry);
+    }
+    free(inbox);
+
+    return inboxid;
+}
