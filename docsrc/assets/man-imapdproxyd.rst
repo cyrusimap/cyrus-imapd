@@ -8,7 +8,7 @@ Synopsis
 .. parsed-literal::
 
     **imapd** [ **-C** *config-file* ] [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
-        [ **-s** ] [ **-N** ] [ **-p** *ssf* ]
+        [ **-s** ] [ **-P** ] [ **-N** ] [ **-p** *ssf* ]
 
 Description
 ===========
@@ -70,6 +70,10 @@ Options
 
     Serve IMAP over SSL (imaps).  All data to and from **imapd** is
     encrypted using the Secure Sockets Layer.
+
+.. option:: -P
+
+    Tell **imapd** to expect a PROXY protocol header from the sender.
 
 .. option:: -N
 

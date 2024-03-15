@@ -16,7 +16,7 @@ Synopsis
 .. parsed-literal::
 
     **httpd** [ **-C** *config-file* ] [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
-        [ **-s** ] [ **-p** *ssf* ] [ **-q** ]
+        [ **-s** ] [ **-P** ] [ **-p** *ssf* ] [ **-q** ]
 
 Description
 ===========
@@ -61,6 +61,10 @@ Options
 
     Serve HTTP over SSL (https).  All data to and from **httpd**
     is encrypted using the Secure Sockets Layer.
+
+.. option:: -P
+
+    Tell **httpd** to expect a PROXY protocol header from the sender.
 
 .. option:: -p  ssf
 

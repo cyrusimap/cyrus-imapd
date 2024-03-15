@@ -7,7 +7,8 @@ Synopsis
         [ **-a** *userid* ] [ **-u** *userid* ] [ **-k** *num* ] [ **-l** *num* ]
         [ **-r** *realm* ] [ **-f** *file* ] [ **-n** *num* ] [ **-s** ] [ **-q** ]
         [ **-c** ] [ **-i** ] [ **-z** ] [ **-v** ] [ **-I** *file* ] [ **-x** *file* ]
-        [ **-X** *file* ] [ **-w** *passwd* ] [ **-o** *option*\ =\ *value* ] *hostname*
+        [ **-X** *file* ] [ **-w** *passwd* ] [ **-o** *option*\ =\ *value* ]
+        [ **-H** *client-ip* ] *hostname*
 
 Description
 ===========
@@ -132,6 +133,11 @@ Options
 .. option:: -o option=value, --sasl-option=option=value
 
     Set the SASL *option* to *value*.
+
+.. option:: -H client-ip
+
+    Enable the HAPROXY protocol and send the specified client IP
+    address in a v1 header.
 
 Examples
 ========

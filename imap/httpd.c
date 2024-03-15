@@ -825,7 +825,7 @@ int service_init(int argc __attribute__((unused)),
 
     mboxevent_setnamespace(&httpd_namespace);
 
-    while ((opt = getopt(argc, argv, "sp:q")) != EOF) {
+    while ((opt = getopt(argc, argv, "sp:qP")) != EOF) {
         switch(opt) {
         case 's': /* https (do TLS right away) */
             https = 1;
@@ -837,6 +837,10 @@ int service_init(int argc __attribute__((unused)),
 
         case 'p': /* external protection */
             extprops_ssf = atoi(optarg);
+            break;
+
+        case 'P': /* expect haproxy protocol header */
+            haproxy_protocol = 1;
             break;
 
         default:

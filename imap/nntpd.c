@@ -425,7 +425,7 @@ int service_init(int argc __attribute__((unused)),
     /* setup for sending IMAP IDLE notifications */
     idle_init();
 
-    while ((opt = getopt(argc, argv, "srfp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "srfp:P")) != EOF) {
         switch(opt) {
         case 's': /* nntps (do starttls right away) */
             nntps = 1;
@@ -446,6 +446,10 @@ int service_init(int argc __attribute__((unused)),
 
         case 'p': /* external protection */
             extprops_ssf = atoi(optarg);
+            break;
+
+        case 'P': /* expect haproxy protocol header */
+            haproxy_protocol = 1;
             break;
 
         default:

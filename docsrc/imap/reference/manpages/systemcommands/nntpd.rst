@@ -16,7 +16,7 @@ Synopsis
 .. parsed-literal::
 
     **nntpd** [ **-C** *config-file* ] [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
-        [ **-s** ] [ **-r** ] [ **-f** ] [ **-p** *ssf* ]
+        [ **-s** ] [ **-P** ] [ **-r** ] [ **-f** ] [ **-p** *ssf* ]
 
 Description
 ===========
@@ -72,6 +72,10 @@ Options
 
     Serve NNTP over SSL (https).  All data to and from **nntpd**
     is encrypted using the Secure Sockets Layer.
+
+.. option:: -P
+
+    Tell **nntpd** to expect a PROXY protocol header from the sender.
 
 .. option:: -r
 
