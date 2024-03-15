@@ -4607,7 +4607,7 @@ done:
 /*
  *  Remove a quota root
  */
-EXPORTED int mboxlist_unsetquota(const char *root)
+EXPORTED int mboxlist_unsetquota(const char *root, int silent)
 {
     struct quota q;
     int r=0;
@@ -4645,7 +4645,7 @@ EXPORTED int mboxlist_unsetquota(const char *root)
         buf_free(&item);
     }
 
-    r = quota_deleteroot(root, 0);
+    r = quota_deleteroot(root, silent);
     quota_changelockrelease();
 
     if (!r) sync_log_quota(root);

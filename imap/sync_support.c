@@ -2478,7 +2478,7 @@ int sync_apply_reserve(struct dlist *kl,
 int sync_apply_unquota(struct dlist *kin,
                        struct sync_state *sstate __attribute__((unused)))
 {
-    return mboxlist_unsetquota(kin->sval);
+    return mboxlist_unsetquota(kin->sval, /*silent*/1);
 }
 
 int sync_apply_quota(struct dlist *kin,
