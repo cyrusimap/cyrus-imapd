@@ -2732,7 +2732,8 @@ static void usage(char *prog, char *prot)
     if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "pop3") ||
         !strcasecmp(prot, "nntp") || !strcasecmp(prot, "smtp") ||
         !strcasecmp(prot, "http") || !strcasecmp(prot, "sieve"))
-        printf("  -H ip    : Enable the HAPROXY protocol and send the specified client IP address in a v1 header\n");
+        printf("  -H ip    : Enable the HAPROXY protocol and send the specified client IP address in a v1 header.\n"
+               "             If the address is 0.0.0.0, a v2 header with LOCAL command will be sent\n");
 
     printf("  -c       : enable challenge prompt callbacks\n"
            "             (enter one-time password instead of secret pass-phrase)\n");
@@ -3164,14 +3165,31 @@ int main(int argc, char **argv)
         pout = prot_new(sock, 1);
 
         if (haproxy_clientip) {
-            /* send a PROXY protocol v1 header */
-            const char *localport = strchr(localip, ';');
-            const char *remoteport = strchr(remoteip, ';');
+            if (!strcmp("0.0.0.0", haproxy_clientip)) {
+                /* send a PROXY protocol v2 header with LOCAL command */
+                struct {
+                    uint8_t sig[12];
+                    uint8_t ver_cmd;
+                    uint8_t fam;
+                    uint16_t len;
+                } v2hdr = {
+                    "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A",
+                    (0x02 << 4) /* VER2 */ | 0x00 /* LOCAL  */,
+                    (0x01 << 4) /* INET */ | 0x01 /* STREAM */,
+                    0
+                };
+                prot_write(pout, (char *) &v2hdr, sizeof(v2hdr));
+            }
+            else {
+                /* send a PROXY protocol v1 header */
+                const char *localport = strchr(localip, ';');
+                const char *remoteport = strchr(remoteip, ';');
 
-            prot_printf(pout, "PROXY TCP4 %s %.*s %s %s\r\n",
-                        haproxy_clientip,
-                        (int) (remoteport - remoteip), localip,
-                        localport+1, remoteport+1);
+                prot_printf(pout, "PROXY TCP4 %s %.*s %s %s\r\n",
+                            haproxy_clientip,
+                            (int) (remoteport - remoteip), localip,
+                            localport+1, remoteport+1);
+            }
             prot_flush(pout);
         }
 

@@ -137,7 +137,8 @@ Options
 .. option:: -H client-ip
 
     Enable the HAPROXY protocol and send the specified client IP
-    address in a v1 header.
+    address in a v1 header.  If the address is 0.0.0.0, a v2 header
+    with LOCAL command will be sent.
 
 Examples
 ========
