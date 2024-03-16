@@ -11128,7 +11128,7 @@ static int _card_set_create(jmap_req_t *req,
     card = vcardcomponent_vanew(VCARD_VCARD_COMPONENT,
                                 vcardproperty_new_version(VCARD_VERSION_40),
                                 vcardproperty_new_uid(uid),
-                                0);
+                                NULL);
 
     /* we need to create and append a record */
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mboxname)) {
@@ -11401,7 +11401,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     vcard = vcardcomponent_vanew(VCARD_VCARD_COMPONENT,
                                  vcardproperty_new_version(VCARD_VERSION_40),
                                  vcardproperty_new_uid(uid),
-                                 0);
+                                 NULL);
 
     *item = json_object();
 
