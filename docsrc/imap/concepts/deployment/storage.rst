@@ -969,11 +969,3 @@ chunks, which may not be what you require at that moment.
 .. _Cluster LVM: https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Logical_Volume_Manager_Administration/LVM_Cluster_Overview.html
 .. _dm-cache: http://en.wikipedia.org/wiki/Dm-cache
 .. _Kolab Systems AG: https://kolabsys.com
-
-.. glossary::
-        MTBF
-            Mean Time Between Failures
-
-.. glossary::
-        HBA
-            Host Bus Adapter - connects a host system (computer) to other network and storage devices
