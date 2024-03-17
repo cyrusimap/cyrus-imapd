@@ -162,7 +162,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`2617`
 
     HTTP Authentication: Basic and Digest Access Authentication,
-    updated by :rfc:`7615`, :rfc:`7616`, :rfc:`7617`.
+    updated by :rfc:`7616`, :rfc:`7617`, :rfc:`9110`.
+
+    .. NOTE::
+
+        RFC 6331 declares DIGEST-MD5 as Historic.
 
 :rfc:`2817`
 
@@ -179,10 +183,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`2822`
 
     Internet Message Format
-
-:rfc:`2831`
-
-    Using Digest Authentication as a SASL Mechanism
 
 :rfc:`2920`
 
@@ -767,7 +767,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`7615`
 
     HTTP Authentication-Info and Proxy-Authentication-Info Response
-    Header Fields
+    Header Fields, obsoleted by :rfc:`9110`.
 
 :rfc:`7616`
 

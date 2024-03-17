@@ -91,10 +91,8 @@
 
 /* SASL usage based on availability */
 #if defined(SASL_NEED_HTTP) && defined(SASL_HTTP_REQUEST)
-  #define HTTP_DIGEST_MECH "DIGEST-MD5"
   #define SASL_USAGE_FLAGS (SASL_NEED_HTTP | SASL_SUCCESS_DATA)
 #else
-  #define HTTP_DIGEST_MECH NULL  /* not supported by our SASL version */
   #define SASL_USAGE_FLAGS SASL_SUCCESS_DATA
 #endif /* SASL_NEED_HTTP */
 
@@ -183,12 +181,11 @@ struct auth_scheme_t {
 /* Auth scheme identifiers */
 enum {
     AUTH_BASIC        = (1<<0),
-    AUTH_DIGEST       = (1<<1),
-    AUTH_SPNEGO       = (1<<2),
-    AUTH_NTLM         = (1<<3),
-    AUTH_BEARER       = (1<<4),
-    AUTH_SCRAM_SHA1   = (1<<5),
-    AUTH_SCRAM_SHA256 = (1<<6)
+    AUTH_SPNEGO       = (1<<1),
+    AUTH_NTLM         = (1<<2),
+    AUTH_BEARER       = (1<<3),
+    AUTH_SCRAM_SHA1   = (1<<4),
+    AUTH_SCRAM_SHA256 = (1<<5)
 };
 
 /* Auth scheme flags */
