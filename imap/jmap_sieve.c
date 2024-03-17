@@ -147,7 +147,8 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
     }
 
     json_object_set_new(settings->server_capabilities,
-            JMAP_SIEVE_EXTENSION, json_object());
+            JMAP_SIEVE_EXTENSION,
+            json_pack("{s:s+}", "implementation", "Cyrus Sieve ", CYRUS_VERSION));
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         for (mp = jmap_sieve_methods_nonstandard; mp->name; mp++) {
