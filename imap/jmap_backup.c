@@ -776,7 +776,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
                                              vcardproperty_new_prodid(_prodid),
                                              vcardproperty_new_uid(makeuuid()),
                                              vcardproperty_new_fn(buf_cstring(&crock->buf)),
-                                             0);
+                                             NULL);
 
                     crock->group_vcard = gcard;
                 }
