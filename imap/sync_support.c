@@ -5576,32 +5576,34 @@ static int renumber_one_record(const struct index_record *mp,
 
 static const char *make_flags(struct mailbox *mailbox, struct index_record *record)
 {
-    static char buf[4096];
+    static struct buf buf = BUF_INITIALIZER;
     const char *sep = "";
     int flag;
 
+    buf_reset(&buf);
+
     if (record->system_flags & FLAG_DELETED) {
-        snprintf(buf, 4096, "%s\\Deleted", sep);
+        buf_printf(&buf, "%s\\Deleted", sep);
         sep = " ";
     }
     if (record->system_flags & FLAG_ANSWERED) {
-        snprintf(buf, 4096, "%s\\Answered", sep);
+        buf_printf(&buf, "%s\\Answered", sep);
         sep = " ";
     }
     if (record->system_flags & FLAG_FLAGGED) {
-        snprintf(buf, 4096, "%s\\Flagged", sep);
+        buf_printf(&buf, "%s\\Flagged", sep);
         sep = " ";
     }
     if (record->system_flags & FLAG_DRAFT) {
-        snprintf(buf, 4096, "%s\\Draft", sep);
+        buf_printf(&buf, "%s\\Draft", sep);
         sep = " ";
     }
     if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        snprintf(buf, 4096, "%s\\Expunged", sep);
+        buf_printf(&buf, "%s\\Expunged", sep);
         sep = " ";
     }
     if (record->system_flags & FLAG_SEEN) {
-        snprintf(buf, 4096, "%s\\Seen", sep);
+        buf_printf(&buf, "%s\\Seen", sep);
         sep = " ";
     }
 
@@ -5611,11 +5613,11 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
             continue;
         if (!(record->user_flags[flag/32] & (1<<(flag&31))))
             continue;
-        snprintf(buf, 4096, "%s%s", sep, mailbox->h.flagname[flag]);
+        buf_printf(&buf, "%s%s", sep, mailbox->h.flagname[flag]);
         sep = " ";
     }
 
-    return buf;
+    return buf_cstring(&buf);
 }
 
 static void log_record(const char *name, struct mailbox *mailbox,
