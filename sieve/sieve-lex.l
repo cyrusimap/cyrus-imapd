@@ -407,7 +407,7 @@ ws              [ \t]+
                                   /* RFC 5228: With the exceptions of strings
                                      and comments, the language is limited to
                                      US-ASCII characters. */
-                                  if (!isascii(yytext[0])) {
+                                  if (yytext[0] & ~0x7f) {
                                       sieveerror(sscript, "non-ASCII character");
                                   }
                                   return yytext[0];
