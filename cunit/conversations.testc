@@ -412,7 +412,8 @@ static void test_folder_rename(void)
                         &ecounts1,
                         /*size*/10, /*counts*/NULL,
                         /*modseq*/1,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     int f2 = conversation_folder_number(state, FOLDER2, 1);
     struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
@@ -422,7 +423,8 @@ static void test_folder_rename(void)
                         &ecounts2,
                         /*size*/20, /*counts*/NULL,
                         /*modseq*/8,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     conv->subject = xstrdup("☃");
 
@@ -526,7 +528,8 @@ static void test_folders(void)
                         &ecounts1,
                         /*size*/0, counts,
                         /*modseq*/4,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     /* make sure the data we just passed to conversation_update()
      * is present in the structure */
@@ -594,7 +597,8 @@ static void test_folders(void)
                         &ecounts2,
                         /*size*/0, counts,
                         /*modseq*/7,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     CU_ASSERT_EQUAL((conv->flags & CONV_ISDIRTY), CONV_ISDIRTY);
     CU_ASSERT_EQUAL(conv->num_records, 2);
@@ -630,7 +634,8 @@ static void test_folders(void)
                         &ecounts3,
                         /*size*/0, counts,
                         /*modseq*/55,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     CU_ASSERT_EQUAL((conv->flags & CONV_ISDIRTY), CONV_ISDIRTY);
     CU_ASSERT_EQUAL(conv->num_records, 3);
@@ -750,7 +755,8 @@ static void test_folders(void)
                         &ecountsneg1,
                         /*size*/0, counts,
                         /*modseq*/56,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     CU_ASSERT_EQUAL(conv->num_records, 2);
     CU_ASSERT_EQUAL(conv->exists, 1);
@@ -866,7 +872,8 @@ static void test_folder_ordering(void)
                         &ecounts1,
                         /*size*/0, counts,
                         /*modseq*/1,
-                        /*createdmodseq*/0);
+                        /*createdmodseq*/0,
+                        /*silent*/0);
 
     /* add folders out of order */
     struct emailcounts ecounts3 = { f3, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
@@ -875,7 +882,8 @@ static void test_folder_ordering(void)
                         &ecounts3,
                         /*size*/0, counts,
                         /*modseq*/55,
-                        /*createdmodseq*/0);
+                        /*createdmodseq*/0,
+                        /*silent*/0);
 
     /* save and reload here just to be sure */
     r = conversation_save(state, C_CID, conv);
@@ -892,7 +900,8 @@ static void test_folder_ordering(void)
                         &ecounts2,
                         /*size*/0, counts,
                         /*modseq*/7,
-                        /*createdmodseq*/0);
+                        /*createdmodseq*/0,
+                        /*silent*/0);
 
     CU_ASSERT_EQUAL((conv->flags & CONV_ISDIRTY), CONV_ISDIRTY);
 
@@ -1019,7 +1028,8 @@ static void __test_senders(void)
                         /*exists*/1, /*unseen*/0,
                         /*size*/0, counts,
                         /*modseq*/1,
-                        /*createdmodseq*/0);
+                        /*createdmodseq*/0,
+                        /*silent*/0);
 
     /* there's no function for getting sender data, oh well */
     sender1 = conv->senders;
@@ -1215,7 +1225,8 @@ static void test_dump(void)
                                 &ecounts,
                                 /*size*/0, /*counts*/NULL,
                                 /*modseq*/100,
-                                /*createdmodseq*/0);
+                                /*createdmodseq*/0,
+                                /*silent*/0);
         }
         r = conversation_save(state, cid, conv);
         CU_ASSERT_EQUAL(r, 0);
