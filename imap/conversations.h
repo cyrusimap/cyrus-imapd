@@ -330,13 +330,14 @@ extern int conversations_update_record(struct conversations_state *cstate,
                                        const struct index_record *old,
                                        struct index_record *new_,
                                        int allowrenumber,
-                                       int ignorelimits);
+                                       int ignorelimits,
+				       int silent);
 
 extern int conversation_update(struct conversations_state *state,
                                 conversation_t *conv,
                                 struct emailcounts *ecounts,
                                 ssize_t delta_size, int *delta_counts,
-                                modseq_t modseq, modseq_t createdmodseq);
+                                modseq_t modseq, modseq_t createdmodseq, int silent);
 extern conv_folder_t *conversation_find_folder(struct conversations_state *state,
                                                conversation_t *,
                                                const char *mboxname);

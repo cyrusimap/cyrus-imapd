@@ -144,7 +144,7 @@ static char *conversations_path(mbname_t *mbname)
         return NULL;
     // deleted mailboxes don't have a conversations database
     if (mbname_isdeleted(mbname))
-	return NULL;
+        return NULL;
     if (convdir)
         return strconcat(convdir, "/", mbname_userid(mbname), ".", suff, (char *)NULL);
     return mboxname_conf_getpath(mbname, suff);
@@ -1818,7 +1818,7 @@ static void conversations_thread_sort(conversation_t *conv)
 static void conversation_update_thread(conversation_t *conv,
                                        const struct message_guid *guid,
                                        time_t internaldate,
-				       modseq_t createdmodseq,
+                                       modseq_t createdmodseq,
                                        int delta_exists)
 {
     conv_thread_t *thread, **nextp = &conv->thread;
@@ -2436,7 +2436,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                          const struct index_record *old,
                                          struct index_record *new,
                                          int allowrenumber,
-                                         int ignorelimits)
+                                         int ignorelimits,
+                                         int silent)
 {
     conversation_t *conv = NULL;
     size_t delta_exists = 0;
@@ -2460,9 +2461,9 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
          * a removal and re-add, so cache gets parsed and msgids
          * updated */
         if (old->cid != new->cid) {
-            r = conversations_update_record(cstate, mailbox, old, NULL, 0, ignorelimits);
+            r = conversations_update_record(cstate, mailbox, old, NULL, 0, ignorelimits, silent);
             if (r) return r;
-            return conversations_update_record(cstate, mailbox, NULL, new, 0, ignorelimits);
+            return conversations_update_record(cstate, mailbox, NULL, new, 0, ignorelimits, silent);
         }
     }
 
@@ -2637,7 +2638,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     r = conversation_update(cstate, conv, &ecounts,
                             delta_size, delta_counts,
-                            modseq, record->createdmodseq);
+                            modseq, record->createdmodseq, silent);
     if (r) goto done;
 
     r = conversation_save(cstate, record->cid, conv);
@@ -2653,7 +2654,7 @@ done:
 EXPORTED int conversation_update(struct conversations_state *state,
                          conversation_t *conv, struct emailcounts *ecounts,
                          ssize_t delta_size, int *delta_counts,
-                         modseq_t modseq, modseq_t createdmodseq)
+                         modseq_t modseq, modseq_t createdmodseq, int silent)
 {
     conv_folder_t *folder = conversation_get_folder(conv, ecounts->foldernum, /*create*/1);
 
@@ -2832,7 +2833,7 @@ EXPORTED int conversation_update(struct conversations_state *state,
 
         }
 
-        if (status.threadmodseq < modseq) {
+        if (!silent && status.threadmodseq < modseq) {
             status.threadmodseq = modseq;
             dirty = 1;
         }

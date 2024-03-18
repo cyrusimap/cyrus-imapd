@@ -4345,7 +4345,7 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
 
     int ignorelimits = new ? new->ignorelimits : 1;
     return conversations_update_record(cstate, mailbox, old, new,
-                                       /*allowrenumber*/1, ignorelimits);
+                                       /*allowrenumber*/1, ignorelimits, mailbox->silentchanges);
 }
 
 
@@ -6103,7 +6103,7 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
         struct index_record copyrecord = *record;
         copyrecord.silentupdate = silent;
         r = conversations_update_record(cstate, mailbox, NULL, &copyrecord, 1,
-                                        /*ignorelimits*/1);
+                                        /*ignorelimits*/1, silent);
         if (r) break;
 
         if (copyrecord.cid == record->cid)
@@ -6113,7 +6113,7 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
 
         /* remove this record again */
         r = conversations_update_record(cstate, mailbox, &copyrecord, NULL, 0,
-                                        /*ignorelimits*/1);
+                                        /*ignorelimits*/1, silent);
         if (r) break;
 
         /* we had a cid change, so rewrite will try to correct the counts, so we
@@ -6121,7 +6121,7 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
         struct index_record oldrecord = *record;
         /* add the old record that's going away */
         r = conversations_update_record(cstate, mailbox, NULL, &oldrecord, 0,
-                                        /*ignorelimits*/1);
+                                        /*ignorelimits*/1, silent);
         if (r) break;
 
         /* and finally to the update that will reverse those two actions again */
@@ -6149,7 +6149,8 @@ static int mailbox_delete_conversations(struct mailbox *mailbox)
             continue;
 
         r = conversations_update_record(cstate, mailbox, record, NULL,
-                                        /*allowrenumber*/0, /*ignorelimits*/1);
+                                        /*allowrenumber*/0, /*ignorelimits*/1,
+					mailbox->silentchanges);
         if (r) break;
     }
     mailbox_iter_done(&iter);
