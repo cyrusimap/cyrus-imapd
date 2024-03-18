@@ -3661,7 +3661,8 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     mrock.exists = 0;
     mrock.flags = sstate->flags;
 
-    r = mboxlist_usermboxtree(userid, NULL, sync_mailbox_byentry, &mrock, MBOXTREE_DELETED|MBOXTREE_INTERMEDIATES);
+    int mflags = MBOXTREE_DELETED|MBOXTREE_INTERMEDIATES|MBOXTREE_TOMBSTONES;
+    r = mboxlist_usermboxtree(userid, NULL, sync_mailbox_byentry, &mrock, mflags);
     if (r) goto bail;
 
     for (qr = quotaroots->head; qr; qr = qr->next) {
@@ -6635,7 +6636,6 @@ static int do_folders(struct sync_client_state *sync_cs,
     struct sync_rename_list *rename_folders;
     struct sync_reserve_list *reserve_list;
     struct sync_folder *mfolder, *rfolder;
-    const char *part;
     uint32_t batchsize = 0;
 
     if (flags & SYNC_FLAG_BATCH) {
@@ -6663,7 +6663,7 @@ static int do_folders(struct sync_client_state *sync_cs,
         rfolder->mark = 1;
 
         /* does it need a rename? partition change is a rename too */
-        part = topart ? topart : mfolder->part;
+        const char *part = topart ? topart : mfolder->part;
         if (strcmp(mfolder->name, rfolder->name) || (rfolder->part && strcmpsafe(part, rfolder->part))) {
             sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
                                  mfolder->name, part, mfolder->uidvalidity);
@@ -6674,14 +6674,13 @@ static int do_folders(struct sync_client_state *sync_cs,
      * and remove all entries related to that user from both lists */
 
     /* Delete folders on server which no longer exist on client */
-    if (flags & SYNC_FLAG_DELETE_REMOTE) {
-        for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
-            if (rfolder->mark) continue;
+    for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
+        if (rfolder->mark) continue;
 
-            mbentry_t *tombstone = NULL;
-            r = mboxlist_lookup_allow_all(rfolder->name, &tombstone, NULL);
-
-            if (r == 0 && (tombstone->mbtype & MBTYPE_DELETED) == MBTYPE_DELETED) {
+        mbentry_t *tombstone = NULL;
+        r = mboxlist_lookup_by_uniqueid(rfolder->uniqueid, &tombstone, NULL);
+        if (r == 0) {
+            if (tombstone->mbtype & MBTYPE_DELETED) {
                 mboxlist_entry_free(&tombstone);
                 r = sync_do_folder_delete(sync_cs, rfolder->name);
                 if (r) {
@@ -6691,12 +6690,18 @@ static int do_folders(struct sync_client_state *sync_cs,
                 }
             }
             else {
+                /* we've found a rename! */
+                const char *part = topart ? topart : tombstone->partition;
+                sync_rename_list_add(rename_folders, tombstone->uniqueid, rfolder->name,
+                                     tombstone->name, part, tombstone->uidvalidity);
                 mboxlist_entry_free(&tombstone);
-                syslog(LOG_ERR, "%s: no tombstone for deleted mailbox %s (%s)",
-                                __func__, rfolder->name, error_message(r));
-
-                /* XXX copy the missing local mailbox back from the replica? */
             }
+        }
+        else {
+            mboxlist_entry_free(&tombstone);
+            syslog(LOG_ERR, "%s: no tombstone for deleted mailbox %s (%s)",
+                            __func__, rfolder->name, error_message(r));
+            /* XXX copy the missing local mailbox back from the replica? */
         }
     }
 
@@ -6880,11 +6885,6 @@ redo:
         if (r) goto done;
     }
 
-    /* we don't want to delete remote folders which weren't found locally,
-     * because we may be racing with a rename, and we don't want to lose
-     * the remote files.  A real delete will always have inserted a
-     * UNMAILBOX anyway */
-    flags &= ~SYNC_FLAG_DELETE_REMOTE;
     r = do_folders(sync_cs, mboxname_list, topart, replica_folders, flags);
 
     if (r == IMAP_AGAIN) {
@@ -6946,18 +6946,23 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
     struct mboxinfo *info = (struct mboxinfo *)rock;
     int r = 0;
 
-    /* XXX - check for deleted? */
-
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE &&
         !(info->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
         /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
         return 0;
     }
 
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-        sync_name_list_add(info->mboxlist, mbentry->name);
-        return 0;
+    mbentry_t *mbentry_byid = NULL;
+    if (!mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &mbentry_byid, NULL)) {
+        int i;
+        for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
+            const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
+            sync_name_list_add(info->mboxlist, histitem->name);
+        }
+        mboxlist_entry_free(&mbentry_byid);
     }
+
+    sync_name_list_add(info->mboxlist, mbentry->name);
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
@@ -6974,8 +6979,6 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
 
     if (info->quotalist && mailbox_quotaroot(mailbox))
         sync_name_list_add(info->quotalist, mailbox_quotaroot(mailbox));
-
-    sync_name_list_add(info->mboxlist, mbentry->name);
 
 done:
     mailbox_close(&mailbox);
@@ -7029,14 +7032,18 @@ static int do_user_main(struct sync_client_state *sync_cs,
     info.quotalist = sync_name_list_create();
     info.flags = sync_cs->flags;
 
-    r = mboxlist_usermboxtree(userid, NULL, do_mailbox_info, &info, MBOXTREE_DELETED);
+    int mflags = MBOXTREE_DELETED|MBOXTREE_INTERMEDIATES|MBOXTREE_TOMBSTONES;
+    r = mboxlist_usermboxtree(userid, NULL, do_mailbox_info, &info, mflags);
 
-    /* we know all the folders present on the master, so it's safe to delete
-     * anything not mentioned here on the replica - at least until we get
-     * real tombstones */
+    /* We are also looking for renames, so add not only all the folders on the master,
+     * but also any folder names from the replica */
+    struct sync_folder *rfolder;
+    for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
+        sync_name_list_add(info.mboxlist, rfolder->name);
+    }
+
     int flags = sync_cs->flags;
-    flags |= SYNC_FLAG_DELETE_REMOTE;
-    if (!r) r = do_folders(sync_cs, info.mboxlist, topart, replica_folders, flags);
+    if (!r) r = sync_do_mailboxes(sync_cs, info.mboxlist, topart, flags);
     if (!r) r = sync_do_user_quota(sync_cs, info.quotalist, replica_quota);
 
     sync_name_list_free(&info.mboxlist);
