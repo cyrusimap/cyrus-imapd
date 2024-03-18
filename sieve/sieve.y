@@ -167,7 +167,7 @@ extern void sieverestart(FILE *f);
 
 %name-prefix "sieve"
 %defines
-%destructor  { free_tree($$);     } commands command action control thenelse elsif block ftags ikttags
+%destructor  { free_tree($$);     } commands command action control thenelse elsif block ktags ftags rtags stags vtags flagtags ahtags dhtags ntags itags sntags imiptags ikttags
 %destructor  { free_testlist($$); } testlist tests
 %destructor  { free_test($$);     } test
 %destructor  { strarray_free($$); } optstringlist stringlist strings string1
@@ -458,6 +458,7 @@ block: '{' commands '}'          { $$ = $2; }
 /* INCLUDE tagged arguments */
 itags: /* empty */               { $$ = new_command(B_INCLUDE, sscript); }
         | itags location         {
+                                     $$ = $1;
                                      if ($$->u.inc.location != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_CONFLICTING_TAGS,
@@ -467,6 +468,7 @@ itags: /* empty */               { $$ = new_command(B_INCLUDE, sscript); }
                                      $$->u.inc.location = $2;
                                  }
         | itags ONCE             {
+                                     $$ = $1;
                                      if ($$->u.inc.once != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -476,6 +478,7 @@ itags: /* empty */               { $$ = new_command(B_INCLUDE, sscript); }
                                      $$->u.inc.once = INC_ONCE_MASK;
                                  }
         | itags OPTIONAL         {
+                                     $$ = $1;
                                      if ($$->u.inc.optional != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -664,6 +667,7 @@ rtags: /* empty */               {
                                  }
         | rtags copy
         | rtags LIST             {
+                                     $$ = $1;
                                      if ($$->u.r.list++) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -676,6 +680,7 @@ rtags: /* empty */               {
                                      }
                                  }
         | rtags delbytags        {
+                                     $$ = $1;
                                      if (!supported(SIEVE_CAPA_REDIR_DELBY)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
@@ -683,6 +688,7 @@ rtags: /* empty */               {
                                      }
                                  }
         | rtags dsntags          {
+                                     $$ = $1;
                                      if (!supported(SIEVE_CAPA_REDIR_DSN)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
@@ -792,6 +798,7 @@ dsntags:  DSNNOTIFY string       {
 /* SET tagged arguments */
 stags: /* empty */               { $$ = new_command(B_SET, sscript); }
         | stags mod40            {
+                                     $$ = $1;
                                      if ($$->u.s.modifiers & BFV_MOD40_MASK) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MULTIPLE_TAGS,
@@ -801,6 +808,7 @@ stags: /* empty */               { $$ = new_command(B_SET, sscript); }
                                      $$->u.s.modifiers |= $2;
                                  }
         | stags mod30            {
+                                     $$ = $1;
                                      if ($$->u.s.modifiers & BFV_MOD30_MASK) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MULTIPLE_TAGS,
@@ -810,6 +818,7 @@ stags: /* empty */               { $$ = new_command(B_SET, sscript); }
                                      $$->u.s.modifiers |= $2;
                                  }
         | stags mod20            {
+                                     $$ = $1;
                                      if ($$->u.s.modifiers & BFV_MOD20_MASK) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MULTIPLE_TAGS,
@@ -819,6 +828,7 @@ stags: /* empty */               { $$ = new_command(B_SET, sscript); }
                                      $$->u.s.modifiers |= $2;
                                  }
         | stags mod15            {
+                                     $$ = $1;
                                      if ($$->u.s.modifiers & BFV_MOD15_MASK) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MULTIPLE_TAGS,
@@ -828,6 +838,7 @@ stags: /* empty */               { $$ = new_command(B_SET, sscript); }
                                      $$->u.s.modifiers |= $2;
                                  }
         | stags mod10            {
+                                     $$ = $1;
                                      if ($$->u.s.modifiers & BFV_MOD10_MASK) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MULTIPLE_TAGS,
@@ -886,6 +897,7 @@ vtags: /* empty */               {
                                      fccfolder = &($$->u.v.fcc.t.folder);
                                  }
         | vtags DAYS NUMBER      {
+                                     $$ = $1;
                                      if ($$->u.v.seconds != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -895,6 +907,7 @@ vtags: /* empty */               {
                                      $$->u.v.seconds = $3 * DAY2SEC;
                                  }
         | vtags SECONDS NUMBER   {
+                                     $$ = $1;
                                      if (!supported(SIEVE_CAPA_VACATION_SEC)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
@@ -909,6 +922,7 @@ vtags: /* empty */               {
                                      $$->u.v.seconds = $3;
                                  }
         | vtags SUBJECT string   {
+                                     $$ = $1;
                                      if ($$->u.v.subject != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -919,6 +933,7 @@ vtags: /* empty */               {
                                      $$->u.v.subject = $3;
                                  }
         | vtags FROM string      {
+                                     $$ = $1;
                                      if ($$->u.v.from != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -931,6 +946,7 @@ vtags: /* empty */               {
 
         | vtags ADDRESSES stringlist
                                  {
+                                     $$ = $1;
                                      if ($$->u.v.addresses != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -941,6 +957,7 @@ vtags: /* empty */               {
                                      $$->u.v.addresses = $3;
                                  }
         | vtags MIME             {
+                                     $$ = $1;
                                      if ($$->u.v.mime != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -950,6 +967,7 @@ vtags: /* empty */               {
                                      $$->u.v.mime = 1;
                                  }
         | vtags HANDLE string    {
+                                     $$ = $1;
                                      if ($$->u.v.handle != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -996,6 +1014,7 @@ flagaction: SETFLAG              { $$ = B_SETFLAG;    }
 /* SET/ADD/REMOVEFLAG tagged arguments - $0 refers to flagaction */
 flagtags: /* empty */            { $$ = new_command($<nval>0, sscript); }
         | flagtags string        {
+                                     $$ = $1;
                                      if ($$->u.fl.variable != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_ARG,
@@ -1016,6 +1035,7 @@ flagtags: /* empty */            { $$ = new_command($<nval>0, sscript); }
 /* ADDHEADER tagged arguments */
 ahtags: /* empty */              { $$ = new_command(B_ADDHEADER, sscript); }
         | ahtags LAST            {
+                                     $$ = $1;
                                      if ($$->u.ah.index < 0) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1055,6 +1075,7 @@ ntags: /* empty */               {
                                      fccfolder = &($$->u.n.fcc.t.folder);
                                  }
         | ntags FROM string      {
+                                     $$ = $1;
                                      if ($$->u.n.from != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1067,6 +1088,7 @@ ntags: /* empty */               {
 
         | ntags IMPORTANCE priority
                                  {
+                                     $$ = $1;
                                      if ($$->u.n.priority != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1076,6 +1098,7 @@ ntags: /* empty */               {
                                      $$->u.n.priority = $3;
                                  }
         | ntags MESSAGE string   {
+                                     $$ = $1;
                                      if ($$->u.n.message != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1088,6 +1111,7 @@ ntags: /* empty */               {
 
         | ntags OPTIONS stringlist
                                  {
+                                     $$ = $1;
                                      if ($$->u.n.options != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1116,6 +1140,7 @@ sntags: /* empty */              {
                                      mailboxid = &($$->u.sn.f.t.mailboxid);
                                  }
         | sntags MAILBOX string  {
+                                     $$ = $1;
                                      if ($$->u.sn.f.t.folder != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1131,6 +1156,7 @@ sntags: /* empty */              {
 
         | sntags ADDFLAGS stringlist
                                  {
+                                     $$ = $1;
                                      if ($$->u.sn.addflags != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1147,6 +1173,7 @@ sntags: /* empty */              {
                                  }
         | sntags REMOVEFLAGS stringlist
                                  {
+                                     $$ = $1;
                                      if ($$->u.sn.removeflags != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1163,6 +1190,7 @@ sntags: /* empty */              {
                                  }
         | sntags WEEKDAYS weekdaylist
                                  {
+                                     $$ = $1;
                                      if ($$->u.sn.days != 0) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1172,6 +1200,7 @@ sntags: /* empty */              {
                                      $$->u.sn.days = $3;
                                  }
         | sntags TZID string     {
+                                     $$ = $1;
                                      if ($$->u.sn.tzid != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1222,6 +1251,7 @@ time: STRING                     { $$ = verify_time(sscript, $1); }
 /* PROCESSIMIP tagged arguments */
 imiptags: /* empty */            { $$ = new_command(B_PROCESSIMIP, sscript); }
         | imiptags INVITESONLY   {
+                                     $$ = $1;
                                      if ($$->u.imip.invites_only) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1244,6 +1274,7 @@ imiptags: /* empty */            { $$ = new_command(B_PROCESSIMIP, sscript); }
                                  }
 
         | imiptags UPDATESONLY   {
+                                     $$ = $1;
                                      if ($$->u.imip.updates_only) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1267,6 +1298,7 @@ imiptags: /* empty */            { $$ = new_command(B_PROCESSIMIP, sscript); }
 
         | imiptags DELETECANCELED
                                  {
+                                     $$ = $1;
                                      if ($$->u.imip.delete_canceled) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1283,6 +1315,7 @@ imiptags: /* empty */            { $$ = new_command(B_PROCESSIMIP, sscript); }
                                  }
         | imiptags CALENDARID string
                                  {
+                                     $$ = $1;
                                      if ($$->u.imip.calendarid != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1300,6 +1333,7 @@ imiptags: /* empty */            { $$ = new_command(B_PROCESSIMIP, sscript); }
                                  }
         | imiptags OUTCOME string
                                  {
+                                     $$ = $1;
                                      if ($$->u.imip.outcome_var != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1315,6 +1349,7 @@ imiptags: /* empty */            { $$ = new_command(B_PROCESSIMIP, sscript); }
                                      $$->u.imip.outcome_var = $3;
                                  }
         | imiptags ERRSTR string {
+                                     $$ = $1;
                                      if ($$->u.imip.errstr_var != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,

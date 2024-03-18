@@ -1012,7 +1012,7 @@ static int sync_sieve_validate(struct index_record *record,
                                struct sync_msgid_list *part_list)
 {
     struct sync_msgid *item = sync_msgid_lookup(part_list, &record->guid);
-    const char *err = NULL;
+    char *parse_err = NULL;
     int r = SIEVE_OK;
     int fd;
     
@@ -1032,7 +1032,7 @@ static int sync_sieve_validate(struct index_record *record,
             const char *script = sep + 4;  // skip to body
             sieve_script_t *s = NULL;
 
-            r = sieve_script_parse_string(NULL, script, (char **) &err, &s);
+            r = sieve_script_parse_string(NULL, script, &parse_err, &s);
             sieve_script_free(&s);
         }
 
@@ -1041,10 +1041,12 @@ static int sync_sieve_validate(struct index_record *record,
     }
 
     if (r != SIEVE_OK) {
-        if (!err) err = error_message(r);
+        const char *err = parse_err ? parse_err : error_message(r);
 
         syslog(LOG_ERR, "sieve script parse error uid=%u: %s", record->uid, err);
     }
+
+    free(parse_err);
 
     return r;
 }
