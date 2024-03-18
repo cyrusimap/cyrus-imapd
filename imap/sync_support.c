@@ -6684,7 +6684,7 @@ static int do_folders(struct sync_client_state *sync_cs,
                 mboxlist_entry_free(&tombstone);
                 r = sync_do_folder_delete(sync_cs, rfolder->name);
                 if (r) {
-                    syslog(LOG_ERR, "sync_do_folder_delete(): failed: %s '%s'",
+                    syslog(LOG_ERR, "SYNCERROR: sync_do_folder_delete(): failed: %s (%s)",
                                     rfolder->name, error_message(r));
                     goto bail;
                 }
@@ -6699,8 +6699,8 @@ static int do_folders(struct sync_client_state *sync_cs,
         }
         else {
             mboxlist_entry_free(&tombstone);
-            syslog(LOG_ERR, "%s: no tombstone for deleted mailbox %s (%s)",
-                            __func__, rfolder->name, error_message(r));
+            syslog(LOG_NOTICE, "SYNCNOTICE: no tombstone for deleted mailbox %s (%s)",
+                               rfolder->name, error_message(r));
             /* XXX copy the missing local mailbox back from the replica? */
         }
     }
@@ -6727,7 +6727,7 @@ static int do_folders(struct sync_client_state *sync_cs,
             r = folder_rename(sync_cs, item->oldname, item->newname, item->part,
                               item->uidvalidity);
             if (r) {
-                syslog(LOG_ERR, "do_folders(): failed to rename: %s -> %s ",
+                syslog(LOG_ERR, "SYNCERROR: do_folders(): failed to rename: %s -> %s ",
                        item->oldname, item->newname);
                 goto bail;
             }
@@ -6742,7 +6742,7 @@ static int do_folders(struct sync_client_state *sync_cs,
             const char *name = "unknown";
             if (item2) name = item2->oldname;
             syslog(LOG_ERR,
-                   "do_folders(): failed to order folders correctly at %s", name);
+                   "SYNCERROR: do_folders(): failed to order folders correctly at %s", name);
             r = IMAP_AGAIN;
             goto bail;
         }
@@ -6759,13 +6759,11 @@ static int do_folders(struct sync_client_state *sync_cs,
 
     for (mfolder = master_folders->head; mfolder; mfolder = mfolder->next) {
         if (mfolder->mark) continue;
-        /* NOTE: rfolder->name may now be wrong, but we're guaranteed that
-         * it was successfully renamed above, so just use mfolder->name for
-         * all commands */
         rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
+	/* rfolder may not exist, so we use mfolder->name here */
         r = sync_do_update_mailbox(sync_cs, mfolder, rfolder, topart, reserve_list);
         if (r) {
-            syslog(LOG_ERR, "do_folders(): update failed: %s '%s'",
+            syslog(LOG_ERR, "SYNCERROR: do_folders(): update failed: %s '%s'",
                    mfolder->name, error_message(r));
             goto bail;
         }
