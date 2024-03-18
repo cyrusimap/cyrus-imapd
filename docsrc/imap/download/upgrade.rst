@@ -559,6 +559,12 @@ upgrade all your back end servers first. This can be done one at a time.
 
 Upgrade your mupdate master and front ends last.
 
+Please note that you will be unable to set ANNOTATION-STORAGE or MAILBOX
+quotas (formerly known as X-ANNOTATION-STORAGE and X-NUM_FOLDERS) in a
+mixed-version murder environment until your frontends are upgraded to 3.10
+(or later).  Upgraded frontends know how to negotiate with older backends, but
+older frontends do not know how to negotiate with newer backends.
+
 If you wish to use XFER to transfer mailboxes from an existing backend to your
 new 3.10 backend, you should first upgrade your existing backends to 3.8, 3.6.1,
 3.4.5, 3.2.11, or 3.0.18.  These releases contain a patch such that XFER will
