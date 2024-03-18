@@ -755,7 +755,7 @@ static int _email_matchmime_convkeyword(struct convmatch *convmatch,
     if (!strcasecmp(flag, "\\Seen")) {
         num = 0;
     }
-    else if (!convmatch->cstate->counted_flags) {
+    else if (!convmatch->cstate || !convmatch->cstate->counted_flags) {
         num = -1;
     }
     else {
