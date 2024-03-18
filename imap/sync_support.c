@@ -2478,7 +2478,7 @@ int sync_apply_reserve(struct dlist *kl,
 int sync_apply_unquota(struct dlist *kin,
                        struct sync_state *sstate __attribute__((unused)))
 {
-    return mboxlist_unsetquota(kin->sval);
+    return mboxlist_unsetquota(kin->sval, /*silent*/1);
 }
 
 int sync_apply_quota(struct dlist *kin,
@@ -2838,7 +2838,7 @@ int sync_apply_mailbox(struct dlist *kin,
             mbentry.createdmodseq = createdmodseq;
             mbentry.foldermodseq = foldermodseq;
 
-            unsigned flags = MBOXLIST_CREATE_SYNC;
+            unsigned flags = MBOXLIST_CREATE_SYNC | MBOXLIST_CREATE_KEEP_INTERMEDIARIES;
             if (sstate->flags & SYNC_FLAG_LOCALONLY)
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 
@@ -2900,7 +2900,7 @@ int sync_apply_mailbox(struct dlist *kin,
             mbentry.createdmodseq = createdmodseq;
             mbentry.foldermodseq = foldermodseq;
 
-            unsigned flags = MBOXLIST_CREATE_SYNC;
+            unsigned flags = MBOXLIST_CREATE_SYNC | MBOXLIST_CREATE_KEEP_INTERMEDIARIES;
             if (sstate->flags & SYNC_FLAG_LOCALONLY)
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 

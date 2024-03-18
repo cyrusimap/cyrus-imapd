@@ -395,7 +395,7 @@ int mboxlist_changesub(const char *name, const char *userid,
 int mboxlist_setquotas(const char *root,
                        quota_t newquotas[QUOTA_NUMRESOURCES],
                        modseq_t modseq, int force);
-int mboxlist_unsetquota(const char *root);
+int mboxlist_unsetquota(const char *root, int silent);
 
 /* handle interemediates */
 int mboxlist_update_intermediaries(const char *mboxname, int mbtype, modseq_t modseq);

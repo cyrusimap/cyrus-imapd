@@ -881,7 +881,7 @@ EXPORTED int undump_mailbox(const char *mbname,
     c = getword(pin, &data);
     if (!strcmp(data.s, "NIL")) {
         /* Remove any existing quotaroot */
-        mboxlist_unsetquota(mbname);
+        mboxlist_unsetquota(mbname, /*silent*/0);
     } else if (sscanf(data.s, QUOTA_T_FMT, &quotalimit) == 1) {
         /* quota will actually be applied later */
         newquotas[QUOTA_STORAGE] = quotalimit;
