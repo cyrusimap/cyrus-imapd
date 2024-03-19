@@ -1,0 +1,96 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_deliveredto
+    :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $rawMessage = <<'EOF';
+From: <from@local>
+To: to@local
+Bcc: bcc@local
+X-Delivered-To: x-delivered-to@local
+Subject: msg1
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+msg1
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    $rawMessage = <<'EOF';
+From: <from@local>
+To: to@local
+Bcc: bcc@local
+X-Original-Delivered-To: x-original-delivered-to@local
+X-Delivered-To: x-delivered-to@local
+Subject: msg2
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+msg2
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    $rawMessage = <<'EOF';
+From: <from@local>
+To: to@local
+Subject: msg3
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+msg3
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $rawMessage) || die $@;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => { },
+            sort => [{
+                property => 'subject',
+            }],
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['subject', 'deliveredTo'],
+        }, 'R2'],
+    ], $using);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+
+    # This test assumes that Email/get returns the emails in order
+    # of the ids property request argument.
+
+    $self->assert_str_equals('msg1', $res->[1][1]{list}[0]{subject});
+    $self->assert_str_equals('x-delivered-to@local',
+        $res->[1][1]{list}[0]{deliveredTo});
+
+    $self->assert_str_equals('msg2', $res->[1][1]{list}[1]{subject});
+    $self->assert_str_equals('x-original-delivered-to@local',
+        $res->[1][1]{list}[1]{deliveredTo});
+
+    $self->assert_str_equals('msg3', $res->[1][1]{list}[2]{subject});
+    $self->assert_null($res->[1][1]{list}[2]{deliveredTo});
+}
