@@ -908,6 +908,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP4 Extension: Message Preview Generation
 
+:rfc:`9042`
+
+    Sieve Email Filtering: Delivery by MAILBOXID
+
 :rfc:`9051`
 
     Internet Message Access Protocol (IMAP) - version 4rev2
@@ -931,9 +935,9 @@ draft-ietf-extra-imap-inprogress
 
    IMAP4 Response Code for Command Progress Notifications
 
-draft-ietf-extra-sieve-mailboxid
+draft-ietf-extra-jmapaccess
 
-    Sieve Email Filtering: delivery by mailboxid
+   The JMAPACCESS Extension for IMAP
 
 draft-ietf-extra-sieve-snooze
 

@@ -202,6 +202,7 @@ static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 static int imapd_tls_required = 0; /* is tls required? */
 static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
 static int imapd_compress_done = 0; /* have we done a successful compress? */
+static const char *imapd_jmapaccess_url = NULL;
 static const char *plaintextloginalert = NULL;
 static int ignorequota = 0;
 static int sync_sieve_mailbox_enabled = 0;
@@ -416,7 +417,7 @@ static struct capa_struct base_capabilities[] = {
       { .statep = &imapd_idle_enabled }                       },
     { "IMAPSIEVE=",            0, /* not implemented */ { 0 } }, /* RFC 6785 */
     { "INPROGRESS",            CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-inprogress */
-    { "JMAPACCESS",            0, /* not implemented */ { 0 } }, /* draft-ietf-extra-jmapaccess */
+    { "JMAPACCESS",            0, /* just a respcode */ { 0 } }, /* draft-ietf-extra-jmapaccess */
     { "LANGUAGE",              0, /* not implemented */ { 0 } }, /* RFC 5255 */
     { "LIST-EXTENDED",         CAPA_POSTAUTH,           { 0 } }, /* RFC 5258 */
     { "LIST-METADATA",         CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-list-metadata */
@@ -1075,6 +1076,8 @@ int service_init(int argc, char **argv, char **envp)
 #ifdef HAVE_ZLIB
     imapd_compress_allowed = 1;
 #endif
+
+    imapd_jmapaccess_url = config_getstring(IMAPOPT_JMAPACCESS_URL);
 
     /* setup for sending IMAP IDLE/NOTIFY notifications */
     if ((imapd_idle_enabled = idle_enabled())) {
@@ -2917,6 +2920,12 @@ static void authentication_success(const char *tag, int ssf, const char *reply)
 
     /* authstate already created by mysasl_proxy_policy() */
     imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
+
+    if (imapd_jmapaccess_url) {
+        prot_printf(imapd_out, "* OK [JMAPACCESS \"%s\"] %s\r\n",
+                    imapd_jmapaccess_url,
+                    "This server is also accessible via JMAP, see RFC8620");
+    }
 
     prot_printf(imapd_out, "%s OK", tag);
     if (!ssf) {
