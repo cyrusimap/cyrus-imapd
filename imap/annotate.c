@@ -3621,7 +3621,8 @@ static int annotation_set_mailboxopt(annotate_state_t *state,
         mailbox_index_dirty(mailbox);
         mailbox_modseq_dirty(mailbox);
         mailbox->i.options = newopts;
-        mboxlist_update_foldermodseq(mailbox_name(mailbox), mailbox->i.highestmodseq);
+        if (!state->silent)
+            mboxlist_update_foldermodseq(mailbox_name(mailbox), mailbox->i.highestmodseq);
     }
 
     return 0;
@@ -3652,7 +3653,8 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
         mailbox_index_dirty(mailbox);
         mailbox_modseq_dirty(mailbox);
         mailbox->i.pop3_show_after = date;
-        mboxlist_update_foldermodseq(mailbox_name(mailbox), mailbox->i.highestmodseq);
+        if (!state->silent)
+            mboxlist_update_foldermodseq(mailbox_name(mailbox), mailbox->i.highestmodseq);
     }
 
     return 0;
@@ -4022,6 +4024,7 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
 {
     struct rename_rock *rrock = (struct rename_rock *) rock;
     int r = 0;
+    int silent = rrock->oldmailbox->silentchanges;
 
     if (rrock->newmailbox &&
         /* snoozed MUST only appear on one copy of a message */
@@ -4036,14 +4039,14 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
             newuserid = rrock->newuserid;
         }
         r = write_entry(rrock->newmailbox, rrock->newuid, entry, newuserid,
-                        value, /*ignorequota*/0, /*silent*/0, NULL, /*maywrite*/1);
+                        value, /*ignorequota*/0, silent, NULL, /*maywrite*/1);
     }
 
     if (!rrock->copy && !r) {
         /* delete existing entry */
         struct buf dattrib = BUF_INITIALIZER;
         r = write_entry(rrock->oldmailbox, uid, entry, userid, &dattrib,
-                        /*ignorequota*/0, /*silent*/0, NULL, /*maywrite*/1);
+                        /*ignorequota*/0, silent, NULL, /*maywrite*/1);
     }
 
     return r;
