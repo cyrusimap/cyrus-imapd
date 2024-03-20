@@ -612,6 +612,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
     /* char *uniqueid; */
     json_object_set_new(jobj, "uniqueid", json_string(mbentry->uniqueid));
 
+    /* char *inboxid; */
+    json_object_set_new(jobj, "inboxid", json_string(mbentry->inboxid));
+
     /* char *legacy_specialuse; */
     json_object_set_new(jobj, "legacy_specialuse",
                               json_string(mbentry->legacy_specialuse));
