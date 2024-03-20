@@ -1408,12 +1408,18 @@ sub _detect_core_program
     my $lines = 0;
     my $prog;
 
+    my $bindir_pattern = qr{
+        \/
+        (?:bin|sbin|libexec)
+        \/
+    }x;
+
     open STRINGS, '-|', ('strings', '-a', $core)
         or die "Cannot run strings on $core: $!";
     while (<STRINGS>)
     {
         chomp;
-        if (m/\/bin\//)
+        if (m/$bindir_pattern/)
         {
             $prog = $_;
             last;
