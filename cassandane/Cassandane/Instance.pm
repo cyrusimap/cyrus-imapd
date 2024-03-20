@@ -1426,12 +1426,17 @@ sub _detect_core_program
     return $prog;
 }
 
-sub _check_cores
+sub find_cores
 {
     my ($self) = @_;
-
     my $coredir = $self->{basedir} . '/conf/cores';
-    my $ncores = 0;
+
+    my $cassini = Cassandane::Cassini->instance();
+    my $core_pattern = $cassini->val('cassandane', 'core_pattern',
+                                     '^core.*?(?:\.\d+)?$');
+    $core_pattern = qr{$core_pattern};
+
+    my @cores;
 
     return unless -d $coredir;
     opendir CORES, $coredir
@@ -1439,11 +1444,11 @@ sub _check_cores
     while ($_ = readdir CORES)
     {
         next if m/^\./;
-        next unless m/^core(\.\d+)?$/;
+        next unless m/$core_pattern/;
         my $core = "$coredir/$_";
         next if -z $core;
         chmod(0644, $core);
-        $ncores++;
+        push @cores, $core;
 
         my $prog = _detect_core_program($core);
 
@@ -1456,9 +1461,15 @@ sub _check_cores
     }
     closedir CORES;
 
-    return "Core files found in $coredir" if $ncores;
+    return @cores;
+}
 
-    return;
+sub _check_cores
+{
+    my ($self) = @_;
+    my $coredir = $self->{basedir} . '/conf/cores';
+
+    return "Core files found in $coredir" if scalar $self->find_cores();
 }
 
 sub _check_sanity
