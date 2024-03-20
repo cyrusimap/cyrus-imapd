@@ -702,7 +702,9 @@ static int carddav_store_resource(struct transaction_t *txn,
     spool_replace_header(xstrdup("Content-Type"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
+    buf_setcstr(&txn->buf, "attachment");
+    charset_write_mime_param(&txn->buf, 1, MIME_MAX_HEADER_LENGTH,
+            "filename", resource);
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
@@ -821,7 +823,9 @@ static int carddav_store_resource(struct transaction_t *txn,
     spool_replace_header(xstrdup("Content-Type"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
+    buf_setcstr(&txn->buf, "attachment");
+    charset_write_mime_param(&txn->buf, 1, MIME_MAX_HEADER_LENGTH,
+            "filename", resource);
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
