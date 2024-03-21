@@ -1872,7 +1872,7 @@ static Xapian::Query *query_new_type(const xapian_db_t *db __attribute__((unused
     return new Xapian::Query(q);
 }
 
-static Xapian::Query* xapian_query_new_match_cjk(const xapian_db_t *db, const char *str, const char *prefix)
+static Xapian::Query* xapian_query_new_match_word_break(const xapian_db_t *db, const char *str, const char *prefix)
 {
     Xapian::Query *q = new Xapian::Query {db->parser->parse_query(
             str,
@@ -1948,7 +1948,7 @@ xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *
         // Don't stem queries for Thaana codepage (0780) or higher.
         for (const unsigned char *p = (const unsigned char *)str; *p; p++) {
             if (*p > 221) //has highbit
-                return xapian_query_new_match_cjk(db, str, prefix);
+                return xapian_query_new_match_word_break(db, str, prefix);
         }
 
         // Stemable codepage.
