@@ -1918,7 +1918,7 @@ static Xapian::Query* xapian_query_new_match_word_break(const xapian_db_t *db, c
     return q;
 }
 
-EXPORTED Xapian::Query *
+static Xapian::Query *
 xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *str)
 {
     const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
@@ -1955,12 +1955,7 @@ xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *
         Xapian::TermGenerator::stem_strategy stem_strategy =
             get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
 
-        Xapian::Query *qq = query_new_textmatch(db, str, prefix, stem_strategy);
-        if (qq->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
-            delete qq;
-            qq = NULL;
-        }
-        return qq;
+        return query_new_textmatch(db, str, prefix, stem_strategy);
 
     } catch (const Xapian::Error &err) {
         xsyslog(LOG_ERR, "IOERROR: caught exception",
@@ -2008,6 +2003,12 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
         free(mystr);
         charset_free(&utf8);
     }
+
+    if (q && q->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
+        delete q;
+        q = NULL;
+    }
+
     return (xapian_query_t*) q;
 }
 
