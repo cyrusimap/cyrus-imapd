@@ -3563,6 +3563,9 @@ static int getliteralsize(const char *p, int c, size_t maxsize,
 {
     int isnowait = 0;
     uint32_t num;
+    static int lminus = -1;
+
+    if (lminus == -1) lminus = config_getswitch(IMAPOPT_LITERALMINUS);
 
     /* Check for literal8 */
     if (*p == '~') {
@@ -3583,6 +3586,15 @@ static int getliteralsize(const char *p, int c, size_t maxsize,
     }
 
     if (*p == '+') {
+        /* LITERAL- says maximum size is 4096! */
+        if (lminus && num > 4096) {
+            /* Fail per RFC 7888, Section 4, choice 2 */
+            fatal(error_message(IMAP_LITERAL_MINUS_TOO_LARGE), EX_IOERR);
+        }
+        if (num > maxsize) {
+            /* Fail per RFC 7888, Section 4, choice 2 */
+            fatal(error_message(IMAP_MESSAGE_TOOBIG), EX_IOERR);
+        }
         isnowait++;
         p++;
     }
