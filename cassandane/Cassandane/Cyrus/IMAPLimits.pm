@@ -59,6 +59,7 @@ $email =~ s/\r?\n/\r\n/gs;
 
 my $toobig_email = $email . "X" x 100;
 
+# Check that we got an untagged BYE [TOOBIG] response
 sub assert_bye_toobig
 {
     my ($self, $store) = @_;
@@ -79,11 +80,11 @@ sub assert_bye_toobig
         }
     };
 
-    # Check that we got a BYE [TOOBIG] response
     $store->idle_response($handlers, 1);
     $self->assert_num_equals(1, $got_toobig);
 }
 
+# Send a command and expect an untagged BYE [TOOBIG] response
 sub assert_cmd_bye_toobig
 {
     my $self = shift;
@@ -97,28 +98,37 @@ sub assert_cmd_bye_toobig
     $self->assert_bye_toobig();
 }
 
-sub assert_cmd_no_toobig
+# Check that we got a tagged NO [TOOBIG] response
+sub assert_no_toobig
 {
-    my $self = shift;
-    my $talk = shift;
-    my $cmd = shift;
+    my ($self, $talk) = @_;
 
     my $got_toobig = 0;
     my $handlers =
     {
         'no' => sub
         {
-            # Pick out the [TOOBIG] response code
             my (undef, $resp) = @_;
             $got_toobig = 1 if (uc($resp->[0]) eq '[TOOBIG]');
         }
     };
 
-    $talk->_imap_cmd($cmd, 0, $handlers, @_);
+    eval {
+        $talk->_parse_response($handlers);
+    };
 
-    # Check that we got a NO [TOOBIG] response
-    $self->assert_str_equals('no', $talk->get_last_completion_response());
     $self->assert_num_equals(1, $got_toobig);
+}
+
+# Send a command and expect a tagged NO [TOOBIG] response
+sub assert_cmd_no_toobig
+{
+    my $self = shift;
+    my $talk = shift;
+    my $cmd = shift;
+
+    $talk->_send_cmd($cmd, @_);
+    $self->assert_no_toobig($talk);
 }
 
 sub new
@@ -503,6 +513,7 @@ sub test_maxmessagesize_nosync_literal
     my $talk = $self->{store}->get_client();
     # Do this by brute force until we have IMAPTalk v4.06+
     $talk->_imap_socket_out($talk->{CmdId}++ . " APPEND INBOX {101+}\015\012");
+    $self->assert_no_toobig($talk);
     $self->assert_bye_toobig();
 }
 
@@ -512,6 +523,7 @@ sub test_literal_minus
 
     my $talk = $self->{store}->get_client();
     $talk->_imap_socket_out($talk->{CmdId}++ . " APPEND INBOX {4097+}\015\012");
+    $self->assert_no_toobig($talk);
     $self->assert_bye_toobig();
 }
 
