@@ -3780,7 +3780,7 @@ static int isokflag(char *s, int *isseen)
     }
 }
 
-static int getliteralsize(const char *p, int c, size_t maxsize,
+static int getliteralsize(const char *tag, const char *p, int c, size_t maxsize,
                           unsigned *size, int *binary, const char **parseerr)
 
 {
@@ -3812,10 +3812,14 @@ static int getliteralsize(const char *p, int c, size_t maxsize,
         /* LITERAL- says maximum size is 4096! */
         if (lminus && num > 4096) {
             /* Fail per RFC 7888, Section 4, choice 2 */
+            prot_printf(imapd_out, "%s NO %s\r\n", tag,
+                        error_message(IMAP_LITERAL_MINUS_TOO_LARGE));
             fatal(error_message(IMAP_LITERAL_MINUS_TOO_LARGE), EX_IOERR);
         }
         if (num > maxsize) {
             /* Fail per RFC 7888, Section 4, choice 2 */
+            prot_printf(imapd_out, "%s NO %s\r\n", tag,
+                        error_message(IMAP_MESSAGE_TOOBIG));
             fatal(error_message(IMAP_MESSAGE_TOOBIG), EX_IOERR);
         }
         isnowait++;
@@ -3845,8 +3849,8 @@ static int getliteralsize(const char *p, int c, size_t maxsize,
     return 0;
 }
 
-static int catenate_text(FILE *f, size_t maxsize, unsigned *totalsize, int *binary,
-                         const char **parseerr)
+static int catenate_text(const char *tag, FILE *f, size_t maxsize,
+                         unsigned *totalsize, int *binary, const char **parseerr)
 {
     int c;
     static struct buf arg;
@@ -3858,7 +3862,8 @@ static int catenate_text(FILE *f, size_t maxsize, unsigned *totalsize, int *bina
     c = getword(imapd_in, &arg);
 
     /* Read size from literal */
-    r = getliteralsize(arg.s, c, maxsize - *totalsize, &size, binary, parseerr);
+    r = getliteralsize(tag, arg.s, c, maxsize - *totalsize,
+                       &size, binary, parseerr);
     if (r) return r;
 
     /* Catenate message part to stage */
@@ -4004,7 +4009,8 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
     return r;
 }
 
-static int append_catenate(FILE *f, const char *cur_name, size_t maxsize, unsigned *totalsize,
+static int append_catenate(const char *tag, FILE *f, const char *cur_name,
+                           size_t maxsize, unsigned *totalsize,
                            int *binary, const char **parseerr, const char **url)
 {
     int c, r = 0;
@@ -4018,7 +4024,7 @@ static int append_catenate(FILE *f, const char *cur_name, size_t maxsize, unsign
         }
 
         if (!strcasecmp(arg.s, "TEXT")) {
-            int r1 = catenate_text(f, maxsize, totalsize, binary, parseerr);
+            int r1 = catenate_text(tag, f, maxsize, totalsize, binary, parseerr);
             if (r1) return r1;
 
             /* if we see a SP, we're trying to catenate more than one part */
@@ -4295,13 +4301,14 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
 
             /* Catenate the message part(s) to stage */
             size = 0;
-            r = append_catenate(curstage->f, cur_name, maxmsgsize, &size,
+            r = append_catenate(tag, curstage->f, cur_name, maxmsgsize, &size,
                                 &(curstage->binary), &parseerr, &url);
             if (r) goto done;
         }
         else {
             /* Read size from literal */
-            r = getliteralsize(arg.s, c, maxmsgsize, &size, &(curstage->binary), &parseerr);
+            r = getliteralsize(tag, arg.s, c, maxmsgsize,
+                               &size, &(curstage->binary), &parseerr);
             if (!r && size == 0) r = IMAP_ZERO_LENGTH_LITERAL;
             if (r) goto done;
 
