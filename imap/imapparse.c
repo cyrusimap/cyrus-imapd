@@ -74,7 +74,7 @@ EXPORTED int getword(struct protstream *in, struct buf *buf)
         }
         buf_putc(buf, c);
         if (config_maxword && buf_len(buf) > config_maxword) {
-            fatal("[TOOBIG] Word too long", EX_IOERR);
+            fatal("[TOOBIG] Word too long", EX_PROTOCOL);
         }
     }
 }
@@ -138,7 +138,7 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
             }
             buf_putc(buf, c);
             if (config_maxquoted && buf_len(buf) > config_maxquoted) {
-                fatal("[TOOBIG] Quoted value too long", EX_IOERR);
+                fatal("[TOOBIG] Quoted value too long", EX_PROTOCOL);
             }
         }
 
@@ -157,11 +157,11 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
             /* LITERAL- says maximum size is 4096! */
             if (lminus && len > 4096) {
                 /* Fail per RFC 7888, Section 4, choice 2 */
-                fatal(error_message(IMAP_LITERAL_MINUS_TOO_LARGE), EX_IOERR);
+                fatal(error_message(IMAP_LITERAL_MINUS_TOO_LARGE), EX_PROTOCOL);
             }
             if (config_maxliteral && len >= 0 && (unsigned) len > config_maxliteral) {
                 /* Fail per RFC 7888, Section 4, choice 2 */
-                fatal(error_message(IMAP_LITERAL_TOO_LARGE), EX_IOERR);
+                fatal(error_message(IMAP_LITERAL_TOO_LARGE), EX_PROTOCOL);
             }
             isnowait++;
             c = prot_getc(pin);
@@ -225,7 +225,7 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                 }
                 buf_putc(buf, c);
                 if (config_maxword && buf_len(buf) > config_maxword) {
-                    fatal("[TOOBIG] Word too long", EX_IOERR);
+                    fatal("[TOOBIG] Word too long", EX_PROTOCOL);
                 }
                 c = prot_getc(pin);
             }
@@ -284,7 +284,7 @@ EXPORTED int getint32(struct protstream *pin, int32_t *num)
     /* INT_MAX == 2147483647 */
     while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
         if (result > 214748364 || (result == 214748364 && (c > '7')))
-            fatal("num too big", EX_IOERR);
+            fatal("num too big", EX_PROTOCOL);
         result = result * 10 + c - '0';
         gotchar = 1;
     }
@@ -337,7 +337,7 @@ EXPORTED int getuint32(struct protstream *pin, uint32_t *num)
     /* UINT_MAX == 4294967295U */
     while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
         if (result > 429496729 || (result == 429496729 && (c > '5')))
-            fatal("num too big", EX_IOERR);
+            fatal("num too big", EX_PROTOCOL);
         result = result * 10 + c - '0';
         gotchar = 1;
     }
@@ -361,7 +361,7 @@ EXPORTED int getint64(struct protstream *pin, int64_t *num)
     /* LLONG_MAX == 9223372036854775807LL */
     while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
         if (result > 922337203685477580LL || (result == 922337203685477580LL && (c > '7')))
-            fatal("num too big", EX_IOERR);
+            fatal("num too big", EX_PROTOCOL);
         result = result * 10 + c - '0';
         gotchar = 1;
     }
@@ -414,7 +414,7 @@ EXPORTED int getuint64(struct protstream *pin, uint64_t *num)
     /* ULLONG_MAX == 18446744073709551615ULL */
     while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
         if (result > 1844674407370955161ULL || (result == 1844674407370955161ULL && (c > '5')))
-            fatal("num too big", EX_IOERR);
+            fatal("num too big", EX_PROTOCOL);
         result = result * 10 + c - '0';
         gotchar = 1;
     }
@@ -766,7 +766,7 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
 
         if (searchargs->maxargssize_mark &&
             prot_bytes_in(pin) > searchargs->maxargssize_mark) {
-            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+            fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_PROTOCOL);
         }
 
     } while (c == ' ');
@@ -1546,7 +1546,7 @@ static int get_search_criterion(struct protstream *pin,
 
     if (base->maxargssize_mark &&
         prot_bytes_in(pin) > base->maxargssize_mark) {
-        fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_IOERR);
+        fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_PROTOCOL);
     }
 
     if (!keep_charset)
