@@ -65,6 +65,10 @@ ec IMAP_QUOTA_EXCEEDED,
 ec IMAP_MESSAGE_TOO_LARGE,
    "Message size exceeds fixed limit"
 
+# Same as IMAP_MESSAGE_TOO_LARGE, but with TOOBIG response code
+ec IMAP_MESSAGE_TOOBIG,
+   "[TOOBIG] Message size exceeds fixed limit"
+
 ec IMAP_LITERAL_MINUS_TOO_LARGE,
    "[TOOBIG] Non-synchronizing literal size exceeds 4K"
 
