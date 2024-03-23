@@ -451,8 +451,6 @@ struct auth_scheme_t auth_schemes[] = {
     { AUTH_SCRAM_SHA1, "SCRAM-SHA-1", "SCRAM-SHA-1",
       AUTH_NEED_PERSIST | AUTH_SERVER_FIRST | AUTH_BASE64 |
       AUTH_REALM_PARAM | AUTH_DATA_PARAM },
-    { AUTH_NTLM, "NTLM", "NTLM",
-      AUTH_NEED_PERSIST | AUTH_BASE64 },
     { AUTH_BEARER, "Bearer", NULL,
       AUTH_SERVER_FIRST | AUTH_REALM_PARAM },
       AUTH_SCHEME_BASIC,
@@ -4302,7 +4300,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         httpd_authstate = auth_newstate(user);
     }
     else {
-        /* SASL-based authentication (SCRAM_*, Digest, Negotiate, NTLM) */
+        /* SASL-based authentication (SCRAM_*, Digest, Negotiate) */
         const char *serverout = NULL;
         unsigned int serveroutlen = 0;
         unsigned int auth_params_len = 0;

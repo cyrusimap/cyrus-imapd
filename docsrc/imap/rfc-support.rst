@@ -959,8 +959,6 @@ draft-murchison-lmtp-ignorequota
 
     LMTP Service Extension for Ignoring Recipient Quotas
 
-[MS-NTHT]   NTLM Over HTTP Protocol Specification
-
 draft-ietf-sieve-regex
 
     Sieve Email Filtering -- Regular Expression Extension
