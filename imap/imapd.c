@@ -1090,7 +1090,7 @@ int service_init(int argc, char **argv, char **envp)
     apns_enabled =
       (events & EVENT_APPLEPUSHSERVICE) && config_getstring(IMAPOPT_APS_TOPIC);
 
-    while ((opt = getopt(argc, argv, "Np:sq")) != EOF) {
+    while ((opt = getopt(argc, argv, "Np:sqP")) != EOF) {
         switch (opt) {
         case 's': /* imaps (do starttls right away) */
             imaps = 1;
@@ -1109,6 +1109,9 @@ int service_init(int argc, char **argv, char **envp)
             break;
         case 'q': /* don't enforce quotas */
             ignorequota = 1;
+            break;
+        case 'P': /* expect haproxy protocol header */
+            haproxy_protocol = 1;
             break;
         default:
             break;

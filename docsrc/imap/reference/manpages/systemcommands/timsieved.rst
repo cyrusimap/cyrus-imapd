@@ -17,7 +17,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **timsieved** [ **-C** *config-file* ]
+    **timsieved** [ **-C** *config-file* ] [ **-P** ]
 
 Description
 ===========
@@ -39,6 +39,10 @@ Options
 .. program:: timsieved
 
 .. option:: -C config-file
+
+.. option:: -P
+
+    Tell **timsievedd** to expect a PROXY protocol header from the sender.
 
     |cli-dash-c-text|
 

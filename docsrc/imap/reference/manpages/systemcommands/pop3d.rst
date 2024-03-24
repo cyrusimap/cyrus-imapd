@@ -16,7 +16,7 @@ Synopsis
 .. parsed-literal::
 
     **pop3d** [ **-C** *config-file* ] [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
-        [ **-s** ] [ **-k** ] [ **-p** *ssf* ]
+        [ **-s** ] [ **-P** ] [ **-k** ] [ **-p** *ssf* ]
 
 Description
 ===========
@@ -63,6 +63,10 @@ Options
 
     Serve POP3 over SSL (pop3s).  All data to and from **pop3d** is
     encrypted using the Secure Sockets Layer.
+
+.. option:: -P
+
+    Tell **httpd** to expect a PROXY protocol header from the sender.
 
 .. option:: -k
 

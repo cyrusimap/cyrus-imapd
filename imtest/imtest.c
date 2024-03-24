@@ -837,12 +837,11 @@ static sasl_security_properties_t *make_secprops(int min,int max)
  * Initialize SASL and set necessary options
  */
 static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
-                     unsigned flags)
+                     unsigned flags, char localip[], char remoteip[])
 {
     int saslresult;
     sasl_security_properties_t *secprops=NULL;
     socklen_t addrsize;
-    char localip[60], remoteip[60];
     struct sockaddr_storage saddr_l;
     struct sockaddr_storage saddr_r;
 
@@ -859,7 +858,6 @@ static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
 
     if(iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60))
         return IMTEST_FAIL;
-
 
     /* client new connection */
 #if defined(SASL_NEED_HTTP) && defined(SASL_HTTP_REQUEST)
@@ -1433,9 +1431,10 @@ static void interactive(struct protocol_t *protocol, char *filename)
 
                 if (unauth) {
                     /* Reset auth and connection state (other than TLS) */
+                    char localip[60], remoteip[60];
                     sasl_dispose(&conn);
                     if (init_sasl(protocol->service, NULL,
-                                  0, 128, 0) != IMTEST_OK) {
+                                  0, 128, 0, localip, remoteip) != IMTEST_OK) {
                         imtest_fatal("SASL initialization");
                     }
                     unauth = 0;
@@ -2721,6 +2720,12 @@ static void usage(char *prog, char *prot)
                prot);
     }
 #endif /* HAVE_ZLIB */
+    if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "pop3") ||
+        !strcasecmp(prot, "nntp") || !strcasecmp(prot, "smtp") ||
+        !strcasecmp(prot, "http") || !strcasecmp(prot, "sieve"))
+        printf("  -H ip    : Enable the HAPROXY protocol and send the specified client IP address in a v1 header.\n"
+               "             If the address is 0.0.0.0, a v2 header with LOCAL command will be sent\n");
+
     printf("  -c       : enable challenge prompt callbacks\n"
            "             (enter one-time password instead of secret pass-phrase)\n");
     printf("  -n       : number of auth attempts (default=1)\n");
@@ -2864,6 +2869,8 @@ int main(int argc, char **argv)
     int reauth = 1;
     int dochallenge = 0, noinitresp = 0;
     char *val;
+    char localip[60], remoteip[60];
+    const char *haproxy_clientip = NULL;
 
 #undef WITH_SSL_ONLY
 
@@ -2880,13 +2887,14 @@ int main(int argc, char **argv)
 
     /* keep this in alphabetical order */
     static const char short_options[] =
-        "?I:P:X:a:cf:hik:l:m:n:o:p:qr:st:u:vw:x:z";
+        "?I:P:X:H:a:cf:hik:l:m:n:o:p:qr:st:u:vw:x:z";
 
     static const struct option long_options[] = {
         /* n.b. -? is duplicated as -h */
         { "pidfile", required_argument, NULL, 'I' },
         { "protocol", required_argument, NULL, 'P' },
         /* n.b. -X is duplicated as -x */
+        { "haproxy-clientip", required_argument, NULL, 'H' },
         { "authname", required_argument, NULL, 'a' },
         { "do-challenge", no_argument, NULL, 'c' },
         { "input-filename", required_argument, NULL, 'f' },
@@ -2917,6 +2925,9 @@ int main(int argc, char **argv)
         switch (opt) {
         case 'P':
             prot = optarg;
+            break;
+        case 'H':
+            haproxy_clientip = optarg;
             break;
         case 'q':
 #ifdef HAVE_ZLIB
@@ -3136,13 +3147,42 @@ int main(int argc, char **argv)
         if (protocol->sasl_cmd.parse_success) flags += SASL_SUCCESS_DATA;
 
         if (init_sasl(protocol->service, servername,
-                      minssf, maxssf, flags) != IMTEST_OK) {
+                      minssf, maxssf, flags, localip, remoteip) != IMTEST_OK) {
             imtest_fatal("SASL initialization");
         }
 
         /* set up the prot layer */
         pin = prot_new(sock, 0);
         pout = prot_new(sock, 1);
+
+        if (haproxy_clientip) {
+            if (!strcmp("0.0.0.0", haproxy_clientip)) {
+                /* send a PROXY protocol v2 header with LOCAL command */
+                struct {
+                    uint8_t sig[12];
+                    uint8_t ver_cmd;
+                    uint8_t fam;
+                    uint16_t len;
+                } v2hdr = {
+                    "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A",
+                    (0x02 << 4) /* VER2 */ | 0x00 /* LOCAL  */,
+                    (0x01 << 4) /* INET */ | 0x01 /* STREAM */,
+                    0
+                };
+                prot_write(pout, (char *) &v2hdr, sizeof(v2hdr));
+            }
+            else {
+                /* send a PROXY protocol v1 header */
+                const char *localport = strchr(localip, ';');
+                const char *remoteport = strchr(remoteip, ';');
+
+                prot_printf(pout, "PROXY TCP4 %s %.*s %s %s\r\n",
+                            haproxy_clientip,
+                            (int) (remoteport - remoteip), localip,
+                            localport+1, remoteport+1);
+            }
+            prot_flush(pout);
+        }
 
 #ifdef HAVE_SSL
         if (dossl==1) {

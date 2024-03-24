@@ -46,6 +46,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include <sysexits.h>
 #include <syslog.h>
 #include <sys/statvfs.h>
@@ -119,6 +120,7 @@ EXPORTED size_t config_search_maxsize;
 EXPORTED int config_httpprettytelemetry;
 EXPORTED int config_take_globallock;
 EXPORTED char *config_skip_userlock;
+EXPORTED int haproxy_protocol = 0;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
@@ -1046,65 +1048,233 @@ EXPORTED char *find_msgid(char *str, char **rem)
     return NULL;
 }
 
+#define IPBUF_SIZE (NI_MAXHOST+NI_MAXSERV+2)
+static char lipbuf[IPBUF_SIZE], ripbuf[IPBUF_SIZE];
+static struct sockaddr_storage from, to;
+static const char v2sig[12] = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";
+
+/* XXX  This function is mostly lifted directly from:
+ *
+ * https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt
+ */
+static void read_proxy_hdr(int s,
+                           struct sockaddr **localsock,
+                           struct sockaddr **remotesock,
+                           const char **localip, const char **remoteip)
+{
+    union {
+        struct {
+            char line[108];
+        } v1;
+        struct {
+            uint8_t sig[12];
+            uint8_t ver_cmd;
+            uint8_t fam;
+            uint16_t len;
+            union {
+                struct {  /* for TCP/UDP over IPv4, len = 12 */
+                    uint32_t src_addr;
+                    uint32_t dst_addr;
+                    uint16_t src_port;
+                    uint16_t dst_port;
+                } ip4;
+                struct {  /* for TCP/UDP over IPv6, len = 36 */
+                    uint8_t  src_addr[16];
+                    uint8_t  dst_addr[16];
+                    uint16_t src_port;
+                    uint16_t dst_port;
+                } ip6;
+                struct {  /* for AF_UNIX sockets, len = 216 */
+                    uint8_t src_addr[108];
+                    uint8_t dst_addr[108];
+                } unx;
+            } addr;
+        } v2;
+    } hdr;
+
+    int size, ret;
+
+    do {
+        ret = recv(s, &hdr, sizeof(hdr), MSG_PEEK);
+    } while (ret == -1 && errno == EINTR);
+
+    if (ret == -1) goto error;
+
+    if (ret >= 16 && memcmp(&hdr.v2, v2sig, 12) == 0 &&
+        (hdr.v2.ver_cmd & 0xF0) == 0x20) {
+        size = 16 + ntohs(hdr.v2.len);
+        if (ret < size) {
+            ret = -1; /* truncated or too large header */
+            goto error;
+        }
+
+        switch (hdr.v2.ver_cmd & 0xF) {
+        case 0x01: /* PROXY command */
+            switch (hdr.v2.fam) {
+            case 0x11:  /* TCPv4 */
+                ((struct sockaddr_in *) &from)->sin_family = AF_INET;
+                ((struct sockaddr_in *) &from)->sin_addr.s_addr =
+                    hdr.v2.addr.ip4.src_addr;
+                ((struct sockaddr_in *) &from)->sin_port =
+                    hdr.v2.addr.ip4.src_port;
+                ((struct sockaddr_in *) &to)->sin_family = AF_INET;
+                ((struct sockaddr_in *) &to)->sin_addr.s_addr =
+                    hdr.v2.addr.ip4.dst_addr;
+                ((struct sockaddr_in *) &to)->sin_port =
+                    hdr.v2.addr.ip4.dst_port;
+                *remotesock = (struct sockaddr *) &from;
+                *localsock  = (struct sockaddr *) &to;
+                goto done;
+            case 0x21:  /* TCPv6 */
+                ((struct sockaddr_in6 *) &from)->sin6_family = AF_INET6;
+                memcpy(&((struct sockaddr_in6 *) &from)->sin6_addr,
+                       hdr.v2.addr.ip6.src_addr, 16);
+                ((struct sockaddr_in6 *) &from)->sin6_port =
+                    hdr.v2.addr.ip6.src_port;
+                ((struct sockaddr_in6 *) &to)->sin6_family = AF_INET6;
+                memcpy(&((struct sockaddr_in6 *) &to)->sin6_addr,
+                       hdr.v2.addr.ip6.dst_addr, 16);
+                ((struct sockaddr_in6 *) &to)->sin6_port =
+                    hdr.v2.addr.ip6.dst_port;
+                *remotesock = (struct sockaddr *) &from;
+                *localsock  = (struct sockaddr *) &to;
+                goto done;
+            }
+            /* unsupported protocol, keep local connection address */
+            break;
+        case 0x00: /* LOCAL command */
+            /* keep local connection address for LOCAL */
+            break;
+        default:
+            ret = -1; /* not a supported command */
+            goto error;
+        }
+    }
+    else if (ret >= 8 && memcmp(hdr.v1.line, "PROXY", 5) == 0) {
+        char *end = memchr(hdr.v1.line, '\r', ret - 1);
+        char *proto = NULL;
+        uint16_t lport, rport;
+        int n;
+
+        if (!end || end[1] != '\n') {
+            ret = -1; /* partial or invalid header */
+            goto error;
+        }
+
+        *end = '\0'; /* terminate the string to ease parsing */
+        size = end + 2 - hdr.v1.line; /* skip header + CRLF */
+        /* parse the V1 header using favorite address parsers like inet_pton.
+         * return -1 upon error, or simply fall through to accept.
+         */
+        n = sscanf(hdr.v1.line, "PROXY %ms %s %s %hu %hu",
+                   &proto, ripbuf, lipbuf, &rport, &lport);
+        if (n == 5) {
+            if (!strcmp(proto, "TCP4")) {
+                ((struct sockaddr_in *) &from)->sin_family = AF_INET;
+                ((struct sockaddr_in *) &from)->sin_port = rport;
+                inet_pton(AF_INET, ripbuf,
+                          &((struct sockaddr_in *) &from)->sin_addr);
+                *remotesock = (struct sockaddr *) &from;
+            }
+            else if (!strcmp(proto, "TCP6")) {
+                ((struct sockaddr_in6 *) &from)->sin6_family = AF_INET6;
+                ((struct sockaddr_in6 *) &from)->sin6_port = rport;
+                inet_pton(AF_INET6, ripbuf,
+                          &((struct sockaddr_in6 *) &from)->sin6_addr);
+                *remotesock = (struct sockaddr *) &from;
+            }
+        }
+        free(proto);
+
+        if (*remotesock) {
+            size_t len = strlen(lipbuf);
+            snprintf(lipbuf + len, sizeof(lipbuf) - len, ";%hu", lport);
+            len = strlen(ripbuf);
+            snprintf(ripbuf + len, sizeof(ripbuf) - len, ";%hu", rport);
+            *localip  = lipbuf;
+            *remoteip = ripbuf;
+        }
+        else {
+            /* Wrong protocol */
+            ret = -1;
+            goto error;
+        }
+    }
+    else {
+        /* Wrong protocol */
+        ret = -1;
+        goto error;
+    }
+
+ done:
+    /* we need to consume the appropriate amount of data from the socket */
+    do {
+        ret = recv(s, &hdr, size, 0);
+    } while (ret == -1 && errno == EINTR);
+
+ error:
+    if (ret < 0) fatal("unable to read PROXY protocol header", EX_IOERR);
+}
+
 /*
  * Get name of client host on socket 's'.
  * Also returns local IP port and remote IP port on inet connections.
  */
 EXPORTED const char *get_clienthost(int s, const char **localip, const char **remoteip)
 {
-#define IPBUF_SIZE (NI_MAXHOST+NI_MAXSERV+2)
     socklen_t salen;
-    struct sockaddr_storage localaddr, remoteaddr;
-    struct sockaddr *localsock = (struct sockaddr *)&localaddr;
-    struct sockaddr *remotesock = (struct sockaddr *)&remoteaddr;
+    struct sockaddr *localsock  = NULL;
+    struct sockaddr *remotesock = NULL;
     static struct buf clientbuf = BUF_INITIALIZER;
-    static char lipbuf[IPBUF_SIZE], ripbuf[IPBUF_SIZE];
     char hbuf[NI_MAXHOST];
-    int niflags;
 
     buf_reset(&clientbuf);
     *localip = *remoteip = NULL;
 
     /* determine who we're talking to */
 
-    salen = sizeof(struct sockaddr_storage);
-    if (getpeername(s, remotesock, &salen) == 0 &&
-        (remotesock->sa_family == AF_INET ||
-         remotesock->sa_family == AF_INET6)) {
-        /* connected to an internet socket */
-        if (getnameinfo(remotesock, salen,
-                        hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-            buf_printf(&clientbuf, "%s ", hbuf);
-        }
+    if (haproxy_protocol)
+        read_proxy_hdr(s, &localsock, &remotesock, localip, remoteip);
 
-        niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-        if (remotesock->sa_family == AF_INET6)
-            niflags |= NI_WITHSCOPEID;
-#endif
-        if (getnameinfo(remotesock, salen,
-                        hbuf, sizeof(hbuf), NULL, 0, niflags) != 0) {
-            strlcpy(hbuf, "unknown", sizeof(hbuf));
-        }
-        buf_printf(&clientbuf, "[%s]", hbuf);
-
+    if (!remotesock) {
+        remotesock = (struct sockaddr *) &from;
         salen = sizeof(struct sockaddr_storage);
+
+        if (!(getpeername(s, remotesock, &salen) == 0 &&
+              (remotesock->sa_family == AF_INET ||
+               remotesock->sa_family == AF_INET6))) {
+            /* we're not connected to an internet socket! */
+            return UNIX_SOCKET;
+        }
+    }
+
+    /* connected to an internet socket */
+    salen = sizeof(struct sockaddr_storage);
+    if (getnameinfo(remotesock, salen,
+                    hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+        buf_printf(&clientbuf, "%s ", hbuf);
+    }
+
+    if (!*remoteip) {
+        if (iptostring(remotesock, salen, ripbuf, sizeof(ripbuf)) == 0) {
+            *remoteip = ripbuf;
+        } else {
+            strlcpy(ripbuf, "unknown", sizeof(ripbuf));
+        }
+    }
+
+    buf_printf(&clientbuf, "[%.*s]", (int) strcspn(ripbuf, ";"), ripbuf);
+
+    if (!*localip) {
+        localsock = (struct sockaddr *) &to;
+
         if (getsockname(s, localsock, &salen) == 0) {
-            /* set the ip addresses here */
-            if (iptostring(localsock, salen,
-                          lipbuf, sizeof(lipbuf)) == 0) {
+            if (iptostring(localsock, salen, lipbuf, sizeof(lipbuf)) == 0) {
                 *localip = lipbuf;
-            }
-            if (iptostring(remotesock, salen,
-                          ripbuf, sizeof(ripbuf)) == 0) {
-                *remoteip = ripbuf;
             }
         } else {
             fatal("can't get local addr", EX_SOFTWARE);
         }
-    } else {
-        /* we're not connected to an internet socket! */
-        buf_setcstr(&clientbuf, UNIX_SOCKET);
     }
 
     return buf_cstring(&clientbuf);
