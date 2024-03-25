@@ -861,7 +861,7 @@ static int migrate_cb(const char *sievedir,
     return SIEVEDIR_OK;
 }
 
-EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr)
+EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr, int silent)
 {
     const char *sievedir = user_sieve_path(userid);
     struct stat sbuf;
@@ -905,9 +905,11 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
         mbentry.name = (char *) mboxname;
         mbentry.mbtype = MBTYPE_SIEVE;
 
+	int flags = silent ? MBOXLIST_CREATE_SYNC : 0;
+
         r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
                                    1/*isadmin*/, userid, NULL/*auth_state*/,
-                                   0/*flags*/, &mailbox);
+                                   flags, &mailbox);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                    mboxname, error_message(r));
@@ -935,6 +937,7 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
                    mboxname, error_message(r));
             goto done;
         }
+	(*mailboxptr)->silentchanges = 1;
     }
 
   done:

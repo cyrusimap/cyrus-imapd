@@ -322,7 +322,7 @@ static int jmap_vacation_get(jmap_req_t *req)
         goto done;
     }
 
-    r = sieve_ensure_folder(req->accountid, &mailbox);
+    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
     if (r) goto done;
 
     mailbox_unlock_index(mailbox, NULL);
@@ -561,7 +561,7 @@ static int jmap_vacation_set(struct jmap_req *req)
     jmap_set_parse(req, &parser, vacation_props, NULL, NULL, &set, &jerr);
     if (jerr) goto done;
 
-    r = sieve_ensure_folder(req->accountid, &mailbox);
+    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
     if (r) goto done;
 
     db = sievedb_open_userid(req->accountid);
