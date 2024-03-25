@@ -92,7 +92,28 @@ sub set_up
                 $res = Plack::Response->new(200);
                 $res->content_type('application/json');
                 $res->body(encode_json({ otheruser => [ "group:group co",
-                                                        "group:group c" ] }));
+                                                        "group:group o" ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:group c') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:group c' => [ "cassandane" ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:group co') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:group co' => [ "cassandane",
+                                                               "otheruser" ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:group o') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:group o' => [ "otheruser" ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:foo') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:foo' => [ ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:this group name has spaces') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:this group name has spaces' => [ ] }));
             } else {
                 $res = Plack::Response->new(404);
             }
