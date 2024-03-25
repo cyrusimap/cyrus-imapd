@@ -933,7 +933,7 @@ int sync_sieve_activate(const char *userid, const char *bcname)
         return IMAP_INTERNAL;
     }
 
-    r = sieve_ensure_folder(userid, &mailbox);
+    r = sieve_ensure_folder(userid, &mailbox, /*silent*/1);
     if (r) {
         syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
         goto done;
@@ -980,7 +980,7 @@ int sync_sieve_delete(const char *userid, const char *fname)
         return IMAP_INTERNAL;
     }
 
-    r = sieve_ensure_folder(userid, &mailbox);
+    r = sieve_ensure_folder(userid, &mailbox, /*silent*/1);
     if (r) {
         syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
         goto done;
@@ -3502,7 +3502,7 @@ int sync_sieve_upload(const char *userid, const char *fname,
         goto done;
     }
 
-    r = sieve_ensure_folder(userid, &mailbox);
+    r = sieve_ensure_folder(userid, &mailbox, /*silent*/1);
     if (r) {
         syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
         goto done;
@@ -3825,6 +3825,7 @@ int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate)
     if (*mboxname) {
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (r) goto done;
+	mailbox->silentchanges = 1;
         r = sync_mailbox_version_check(&mailbox);
         if (r) goto done;
         r = annotate_state_set_mailbox(astate, mailbox);
@@ -3883,6 +3884,7 @@ int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate)
     if (*mboxname) {
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (r) goto done;
+	mailbox->silentchanges = 1;
         r = sync_mailbox_version_check(&mailbox);
         if (r) goto done;
         r = annotate_state_set_mailbox(astate, mailbox);
@@ -4180,6 +4182,8 @@ int sync_apply_expunge(struct dlist *kin,
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto done;
 
+    mailbox->silentchanges = 1;
+
     /* don't want to expunge the wrong mailbox! */
     if (strcmp(mailbox_uniqueid(mailbox), uniqueid)) {
         r = IMAP_MAILBOX_MOVED;
@@ -4392,6 +4396,8 @@ int sync_restore_mailbox(struct dlist *kin,
                mboxname, error_message(r));
         return r;
     }
+
+    mailbox->silentchanges = 1;
 
     /* XXX what if we've opened a deleted mailbox? */
 
@@ -5986,6 +5992,8 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     }
     if (r) goto done;
 
+    /* this runs on the master, so not silent changes */
+
     part_list = sync_reserve_partlist(reserve_list, mailbox_partition(mailbox));
 
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
@@ -6228,6 +6236,8 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     }
     else if (r)
         goto done;
+
+    mailbox->silentchanges = 1;
 
     if (!topart) topart = mailbox_partition(mailbox);
 
@@ -7025,7 +7035,7 @@ static int do_user_main(struct sync_client_state *sync_cs,
 
 #ifdef USE_SIEVE
     /* Force migration of sieve scripts into #sieve mailbox */
-    r = sieve_ensure_folder(userid, NULL);
+    r = sieve_ensure_folder(userid, NULL, /*silent*/1);
 #endif
 
     info.mboxlist = sync_name_list_create();

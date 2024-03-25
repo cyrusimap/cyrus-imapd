@@ -271,7 +271,7 @@ static int jmap_sieve_get(jmap_req_t *req)
         goto done;
     }
 
-    r = sieve_ensure_folder(req->accountid, &mailbox);
+    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
     if (r) goto done;
 
     mailbox_unlock_index(mailbox, NULL);
@@ -796,7 +796,7 @@ static int jmap_sieve_set(struct jmap_req *req)
 
     if (jerr) goto done;
 
-    r = sieve_ensure_folder(req->accountid, &mailbox);
+    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
     if (r) goto done;
 
     buf_printf(&buf, MODSEQ_FMT, mailbox->i.highestmodseq);
@@ -1110,7 +1110,7 @@ static int jmap_sieve_query(jmap_req_t *req)
         }
     }
 
-    r = sieve_ensure_folder(req->accountid, &mailbox);
+    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
     if (r) goto done;
 
     mailbox_unlock_index(mailbox, NULL);
