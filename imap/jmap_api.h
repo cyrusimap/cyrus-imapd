@@ -425,11 +425,16 @@ extern json_t *jmap_changes_reply(struct jmap_changes *changes);
 struct jmap_copy {
     /* Request arguments */
     const char *from_account_id;
+    const char *if_from_in_state;
+    const char *if_in_state;
     json_t *create;
     int blob_copy;
     int on_success_destroy_original;
+    const char *destroy_from_if_in_state;
 
     /* Response fields */
+    char *old_state;
+    char *new_state;
     json_t *created;
     json_t *not_created;
 };
