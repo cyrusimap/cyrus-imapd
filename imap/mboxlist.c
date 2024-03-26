@@ -2299,6 +2299,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     int keep_intermediaries = flags & MBOXLIST_DELETE_KEEP_INTERMEDIARIES;
     int silent = flags & MBOXLIST_DELETE_SILENT;
     int unprotect_specialuse = flags & MBOXLIST_DELETE_UNPROTECT_SPECIALUSE;
+    int isentirely = flags & MBOXLIST_DELETE_ENTIRELY;
 
     init_internal();
 
@@ -2421,7 +2422,20 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     }
     if (r && !force) goto done;
 
-    if (!isremote && !mboxname_isdeletedmailbox(name, NULL)) {
+    /* delete underlying mailbox */
+    if (!isremote && mailbox) {
+        /* only on a real delete do we delete from the remote end as well */
+        sync_log_unmailbox(mailbox_name(mailbox));
+        mboxevent_extract_mailbox(mboxevent, mailbox);
+        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox_name(mailbox), 1);
+
+        r = mailbox_delete(&mailbox);
+        /* abort event notification */
+        if (r && mboxevent)
+            mboxevent_free(&mboxevent);
+    }
+
+    if (!isremote && !isentirely && !mboxname_isdeletedmailbox(name, NULL)) {
         /* store a DELETED marker */
         int haschildren = mboxlist_haschildren(name);
         mbentry_t *newmbentry = mboxlist_entry_create();
@@ -2463,21 +2477,6 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         }
         if (r && !force) goto done;
     }
-
-
-    /* delete underlying mailbox */
-    if (!isremote && mailbox) {
-        /* only on a real delete do we delete from the remote end as well */
-        sync_log_unmailbox(mailbox_name(mailbox));
-        mboxevent_extract_mailbox(mboxevent, mailbox);
-        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox_name(mailbox), 1);
-
-        r = mailbox_delete(&mailbox);
-        /* abort event notification */
-        if (r && mboxevent)
-            mboxevent_free(&mboxevent);
-    }
-
 
  done:
     mailbox_close(&mailbox);
