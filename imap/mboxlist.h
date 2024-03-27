@@ -240,6 +240,8 @@ int mboxlist_createmailboxlock(const mbentry_t *mbentry,
 #define MBOXLIST_DELETE_SILENT              (1<<4)
 /* unprotect_specialuse ignores the specialuse_protect config */
 #define MBOXLIST_DELETE_UNPROTECT_SPECIALUSE (1<<5)
+/* for sync_reset - wipe everything */
+#define MBOXLIST_DELETE_ENTIRELY             (1<<6)
 /* delayed delete */
 /* Translate delete into rename */
 /* prepare MailboxDelete notification if mboxevent is not NULL */

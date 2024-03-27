@@ -155,17 +155,13 @@ static int reset_single(const char *userid)
     for (i = mblist->count; i; i--) {
         const char *name = strarray_nth(mblist, i-1);
 	int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT |
-		       MBOXLIST_DELETE_LOCALONLY;
+		       MBOXLIST_DELETE_LOCALONLY | MBOXLIST_DELETE_ENTIRELY;
         r = mboxlist_deletemailbox(name, 1, sync_userid, sync_authstate,
                                    NULL, delflags);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             printf("skipping already removed mailbox %s\n", name);
         }
         else if (r) goto fail;
-        /* XXX - cheap and nasty hack around actually cleaning up the entry */
-        r = mboxlist_deleteremote(name, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
-        if (r) goto fail;
     }
 
     if (mbentry) r = user_deletedata(mbentry, 1);

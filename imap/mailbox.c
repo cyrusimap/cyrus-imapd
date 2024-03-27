@@ -6568,7 +6568,7 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
             mbentry_t *tempmb = oldmailbox->mbentry;
             oldmailbox->local_cstate = newcstate;
             oldmailbox->mbentry = newmbentry;
-            r = mailbox_add_conversations(oldmailbox, /*silent*/0);
+            r = mailbox_add_conversations(oldmailbox, oldmailbox->silentchanges);
             oldmailbox->mbentry = tempmb;
             oldmailbox->local_cstate = tempcs;
         }
@@ -6685,7 +6685,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
         if (oldcstate)
             r = mailbox_delete_conversations(oldmailbox);
         if (!r && newcstate)
-            r = mailbox_add_conversations(newmailbox, /*silent*/0);
+            r = mailbox_add_conversations(newmailbox, newmailbox->silentchanges);
     }
     if (r) goto fail;
 
