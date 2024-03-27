@@ -135,6 +135,7 @@ static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
 static int apns_enabled = 0;
+static size_t maxsize = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -907,6 +908,9 @@ int service_init(int argc, char **argv, char **envp)
     protin = protgroup_new(2);
 
     prometheus_increment(CYRUS_IMAP_READY_LISTENERS);
+
+    maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE) * 1024;
+    if (!maxsize) maxsize = UINT32_MAX;
 
     return 0;
 }
@@ -3825,8 +3829,6 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
     const char *parseerr = NULL, *url = NULL;
     struct appendstage *curstage;
     mbentry_t *mbentry = NULL;
-    size_t maxsize = config_getint(IMAPOPT_MAXMESSAGESIZE) * 1024;
-    if (!maxsize) maxsize = UINT32_MAX;
 
     memset(&appendstate, 0, sizeof(struct appendstate));
 
