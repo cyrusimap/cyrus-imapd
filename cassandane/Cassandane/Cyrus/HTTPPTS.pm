@@ -93,6 +93,16 @@ sub set_up
                 $res->content_type('application/json');
                 $res->body(encode_json({ otheruser => [ "group:group co",
                                                         "group:group c" ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:group c') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:group co' => [ "cassandane",
+                                                               "otheruser" ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:group co') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:group co' => [ "cassandane",
+                                                               "otheruser" ] }));
             } else {
                 $res = Plack::Response->new(404);
             }

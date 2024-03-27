@@ -1018,8 +1018,11 @@ static int user_can_read(const strarray_t *aclbits, const char *user)
     return 0;
 }
 
-static int mboxlist_update_raclmodseq(const char *acluser)
+static int mboxlist_update_raclmodseq(const char *acluser, strarray_t *touched_users)
 {
+    if (strarray_find(touched_users, acluser, 0) >= 0) return 0;
+    strarray_add(touched_users, acluser);
+
     char *acluserinbox = mboxname_user_mbox(acluser, NULL);
     mbentry_t *raclmbentry = NULL;
     if (mboxlist_lookup(acluserinbox, &raclmbentry, NULL) == 0) {
@@ -1031,6 +1034,30 @@ static int mboxlist_update_raclmodseq(const char *acluser)
     return 0;
 }
 
+static int mboxlist_update_raclmodseq_wrapper(const char *acluser,
+                                              strarray_t *touched_users)
+{
+    // not a group, just update it
+    if (strncmp(acluser, "group:", 6))
+        return mboxlist_update_raclmodseq(acluser, touched_users);
+
+    // XXX: do we want to make the authstate handler smarter here, using
+    // the same channel (user => group list) to also smuggle (group => user list)
+    // data the other way
+    struct auth_state *groupstate = auth_newstate(acluser);
+    strarray_t *members = auth_groups(groupstate);
+    int r = 0;
+    int i;
+    for (i = 0; i < strarray_size(members); i++) {
+        r = mboxlist_update_raclmodseq(strarray_nth(members, i), touched_users);
+	if (r) break;
+    }
+
+    strarray_free(members);
+    auth_freestate(groupstate);
+    return r;
+}
+
 static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
                                 const mbentry_t *newmbentry, struct txn **txn, int silent)
 {
@@ -1038,6 +1065,7 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
     struct buf buf = BUF_INITIALIZER;
     strarray_t *oldusers = NULL;
     strarray_t *newusers = NULL;
+    strarray_t *touched_users = strarray_new();
     int i;
     int r = 0;
 
@@ -1063,7 +1091,7 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
             mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_delete(mbdb, buf.s, buf.len, txn, /*force*/1);
             if (r) goto done;
-            if (!silent) mboxlist_update_raclmodseq(acluser);
+            if (!silent) mboxlist_update_raclmodseq_wrapper(acluser, touched_users);
         }
     }
 
@@ -1077,13 +1105,14 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
             mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);
             if (r) goto done;
-            if (!silent) mboxlist_update_raclmodseq(acluser);
+            if (!silent) mboxlist_update_raclmodseq_wrapper(acluser, touched_users);
         }
     }
 
  done:
     strarray_free(oldusers);
     strarray_free(newusers);
+    strarray_free(touched_users);
     free(userid);
     buf_free(&buf);
     return r;
