@@ -2013,25 +2013,49 @@ HIDDEN void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,
             continue;
         }
 
-        /* blobIds */
-        else if (copy->blob_copy &&
-                 !strcmp(key, "blobIds") && json_is_array(arg)) {
-            struct buf buf = BUF_INITIALIZER;
-            json_t *id;
-            size_t i;
-            json_array_foreach(arg, i, id) {
-                if (!json_is_string(id)) {
-                    buf_printf(&buf, "blobIds[%zu]", i);
-                    jmap_parser_invalid(parser, buf_cstring(&buf));
-                    buf_reset(&buf);
+        else if (copy->blob_copy) {
+            /* blobIds */
+            if (!strcmp(key, "blobIds") && json_is_array(arg)) {
+                struct buf buf = BUF_INITIALIZER;
+                json_t *id;
+                size_t i;
+                json_array_foreach(arg, i, id) {
+                    if (!json_is_string(id)) {
+                        buf_printf(&buf, "blobIds[%zu]", i);
+                        jmap_parser_invalid(parser, buf_cstring(&buf));
+                        buf_reset(&buf);
+                    }
+                    else json_array_append(copy->create, id);
                 }
-                else json_array_append(copy->create, id);
+            }
+
+            else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
+                jmap_parser_invalid(parser, key);
+            }
+        }
+
+        /* ifFromInState */
+        else if (!strcmp(key, "ifFromInState")) {
+            if (json_is_string(arg)) {
+                copy->if_from_in_state = json_string_value(arg);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "ifFromInState");
+            }
+        }
+
+        /* ifInState */
+        else if (!strcmp(key, "ifInState")) {
+            if (json_is_string(arg)) {
+                copy->if_in_state = json_string_value(arg);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "ifInState");
             }
         }
 
         /* create */
-        else if (!copy->blob_copy &&
-                 !strcmp(key, "create") && json_is_object(arg)) {
+        else if (!strcmp(key, "create") && json_is_object(arg)) {
             jmap_parser_push(parser, "create");
             const char *creation_id;
             json_t *obj;
@@ -2050,9 +2074,19 @@ HIDDEN void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,
         }
 
         /* onSuccessDestroyOriginal */
-        else if (!copy->blob_copy && !strcmp(key, "onSuccessDestroyOriginal") &&
+        else if (!strcmp(key, "onSuccessDestroyOriginal") &&
                  json_is_boolean(arg)) {
             copy->on_success_destroy_original = json_boolean_value(arg);
+        }
+
+        /* destroyFromIfInState */
+        else if (!strcmp(key, "destroyFromIfInState")) {
+            if (json_is_string(arg)) {
+                copy->destroy_from_if_in_state = json_string_value(arg);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "destroyFromIfInState");
+            }
         }
 
         else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
@@ -2075,6 +2109,8 @@ HIDDEN void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,
 
 HIDDEN void jmap_copy_fini(struct jmap_copy *copy)
 {
+    free(copy->old_state);
+    free(copy->new_state);
     json_decref(copy->create);
     json_decref(copy->created);
     json_decref(copy->not_created);
@@ -2085,6 +2121,9 @@ HIDDEN json_t *jmap_copy_reply(struct jmap_copy *copy)
     json_t *res = json_object();
     json_object_set_new(res, "fromAccountId",
                         json_string(copy->from_account_id));
+    json_object_set_new(res, "oldState",
+                        copy->old_state ? json_string(copy->old_state) : json_null());
+    json_object_set_new(res, "newState", json_string(copy->new_state));
     json_object_set(res, copy->blob_copy ? "copied" : "created",
                     json_object_size(copy->created) ?
                     copy->created : json_null());
