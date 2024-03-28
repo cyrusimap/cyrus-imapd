@@ -93,6 +93,16 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub skip_check
+{
+    my ($self) = @_;
+
+    # XXX skip all tests from this suite in verbose mode for now -- see
+    # XXX detailed comment on put_submission below
+    my $reason = "test would hang in verbose mode";
+    return get_verbose() ? $reason : undef;
+}
+
 sub _random_vevent
 {
     my ($self) = @_;

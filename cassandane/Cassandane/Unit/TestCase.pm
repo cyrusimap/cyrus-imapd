@@ -172,6 +172,22 @@ sub filter
             return 1 if $method !~ m/_slow$/;
             return;
         },
+        skip_runtime_check => sub
+        {
+            # To use: add a skip_check method to your test suite that
+            # implements logic to determine whether some test should run or
+            # not (perhaps by examining $self->{_name}).  Return undef if
+            # the test should run, or a message explaining why the test is
+            # being skipped
+            return if not $self->can('skip_check');
+            my $reason = $self->skip_check();
+            if ($reason) {
+                xlog "$self->{_name} will be skipped:",
+                     "skip_check said '$reason'";
+                return 1;
+            }
+            return;
+        },
     };
 }
 
