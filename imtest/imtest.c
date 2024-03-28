@@ -2703,7 +2703,7 @@ static void usage(char *prog, char *prot)
     else if (!strcasecmp(prot, "nntp"))
         printf("             (\"user\" for AUTHINFO USER/PASS\n");
     else if (!strcasecmp(prot, "http"))
-        printf("             (\"basic\", \"digest\", \"negotiate\")\n");
+        printf("             (\"basic\", \"negotiate\")\n");
     printf("  -f file  : pipe file into connection after authentication\n");
     printf("  -r realm : realm\n");
 #ifdef HAVE_SSL

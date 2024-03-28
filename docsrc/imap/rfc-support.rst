@@ -159,15 +159,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Using TLS with IMAP, POP3 and ACAP
 
-:rfc:`2617`
-
-    HTTP Authentication: Basic and Digest Access Authentication,
-    updated by :rfc:`7616`, :rfc:`7617`, :rfc:`9110`.
-
-    .. NOTE::
-
-        RFC 6331 declares DIGEST-MD5 as Historic.
-
 :rfc:`2817`
 
     HTTP Upgrading to TLS Within HTTP/1.1
@@ -767,11 +758,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`7615`
 
     HTTP Authentication-Info and Proxy-Authentication-Info Response
-    Header Fields, obsoleted by :rfc:`9110`.
-
-:rfc:`7616`
-
-    HTTP Digest Access Authentication
+    Header Fields
 
 :rfc:`7617`
 

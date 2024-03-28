@@ -458,7 +458,7 @@ static int login(struct backend *s, const char *userid,
                         serverin = base64;
                     }
 
-                    /* SASL mech (SCRAM-*, Digest, Negotiate) */
+                    /* SASL mech (SCRAM-*, Negotiate) */
                     r = sasl_client_step(s->saslconn, serverin, serverinlen,
                                          NULL,          /* no prompts */
                                          &clientout, &clientoutlen);

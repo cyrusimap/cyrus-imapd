@@ -4300,7 +4300,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         httpd_authstate = auth_newstate(user);
     }
     else {
-        /* SASL-based authentication (SCRAM_*, Digest, Negotiate) */
+        /* SASL-based authentication (SCRAM_*, Negotiate) */
         const char *serverout = NULL;
         unsigned int serveroutlen = 0;
         unsigned int auth_params_len = 0;
