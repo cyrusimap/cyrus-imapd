@@ -2572,7 +2572,7 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
 
                             /* Trim leading and trailing BWS */
                             while (strchr(" \t", *++value));
-                            val_len = strcspn(value, ", \t");
+                            val_len = strcspn(value, ", \t\r\n");
 
                             /* Check known parameters */
                             if (!strncmp("sid", token, tok_len)) {
@@ -2703,7 +2703,7 @@ static void usage(char *prog, char *prot)
     else if (!strcasecmp(prot, "nntp"))
         printf("             (\"user\" for AUTHINFO USER/PASS\n");
     else if (!strcasecmp(prot, "http"))
-        printf("             (\"basic\", \"negotiate\")\n");
+        printf("             (\"basic\", \"negotiate\", \"scram-sha-1\", \"scram-sha-256\")\n");
     printf("  -f file  : pipe file into connection after authentication\n");
     printf("  -r realm : realm\n");
 #ifdef HAVE_SSL
