@@ -13840,7 +13840,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     msgrecord_t *src_mr = NULL;
     char *src_mboxname = NULL;
     int r = 0;
-    char *blob_id = NULL;
+    char blob_id[JMAP_BLOBID_SIZE];
     json_t *new_keywords = NULL;
     json_t *jmailboxids = json_copy(json_object_get(copy_email, "mailboxIds"));
 
@@ -13926,11 +13926,11 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     struct message_guid guid;
     r = msgrecord_get_guid(src_mr, &guid);
     if (r) goto done;
-    blob_id = xstrdup(message_guid_encode(&guid));
+    jmap_set_blobid(&guid, blob_id);
 
     /* Check if email already exists in to_account */
     struct _email_exists_rock data = { req, 0 };
-    conversations_guid_foreach(req->cstate, blob_id, _email_exists_cb, &data);
+    conversations_guid_foreach(req->cstate, blob_id+1, _email_exists_cb, &data);
     if (data.exists) {
         *err = json_pack("{s:s s:s}", "type", "alreadyExists", "existingId", email_id);
         goto done;
@@ -14000,7 +14000,6 @@ done:
         *err = jmap_server_error(r);
     }
     free(src_mboxname);
-    free(blob_id);
     strarray_fini(&dst_mboxnames);
     if (src_mr) msgrecord_unref(&src_mr);
     mailbox_close(&src_mbox);
