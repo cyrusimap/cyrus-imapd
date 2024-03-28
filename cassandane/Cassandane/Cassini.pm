@@ -129,6 +129,11 @@ sub new
         die "couldn't find a cassandane.ini file";
     }
 
+    # pre-validate cassandane.core_pattern early -- if the configured
+    # pattern is invalid the qr// will crash out
+    my $core_pattern = $self->val('cassandane', 'core_pattern');
+    $core_pattern = qr{$core_pattern} if $core_pattern;
+
     $instance = $self
         unless defined $instance;
     return $self;
