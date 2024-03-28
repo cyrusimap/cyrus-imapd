@@ -1872,7 +1872,7 @@ static Xapian::Query *query_new_type(const xapian_db_t *db __attribute__((unused
     return new Xapian::Query(q);
 }
 
-static Xapian::Query* xapian_query_new_match_cjk(const xapian_db_t *db, const char *str, const char *prefix)
+static Xapian::Query* xapian_query_new_match_word_break(const xapian_db_t *db, const char *str, const char *prefix)
 {
     Xapian::Query *q = new Xapian::Query {db->parser->parse_query(
             str,
@@ -1918,7 +1918,7 @@ static Xapian::Query* xapian_query_new_match_cjk(const xapian_db_t *db, const ch
     return q;
 }
 
-EXPORTED Xapian::Query *
+static Xapian::Query *
 xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *str)
 {
     const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
@@ -1948,19 +1948,14 @@ xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *
         // Don't stem queries for Thaana codepage (0780) or higher.
         for (const unsigned char *p = (const unsigned char *)str; *p; p++) {
             if (*p > 221) //has highbit
-                return xapian_query_new_match_cjk(db, str, prefix);
+                return xapian_query_new_match_word_break(db, str, prefix);
         }
 
         // Stemable codepage.
         Xapian::TermGenerator::stem_strategy stem_strategy =
             get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
 
-        Xapian::Query *qq = query_new_textmatch(db, str, prefix, stem_strategy);
-        if (qq->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
-            delete qq;
-            qq = NULL;
-        }
-        return qq;
+        return query_new_textmatch(db, str, prefix, stem_strategy);
 
     } catch (const Xapian::Error &err) {
         xsyslog(LOG_ERR, "IOERROR: caught exception",
@@ -2008,6 +2003,12 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
         free(mystr);
         charset_free(&utf8);
     }
+
+    if (q && q->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
+        delete q;
+        q = NULL;
+    }
+
     return (xapian_query_t*) q;
 }
 
