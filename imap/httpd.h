@@ -182,10 +182,9 @@ struct auth_scheme_t {
 enum {
     AUTH_BASIC        = (1<<0),
     AUTH_SPNEGO       = (1<<1),
-    AUTH_NTLM         = (1<<2),
-    AUTH_BEARER       = (1<<3),
-    AUTH_SCRAM_SHA1   = (1<<4),
-    AUTH_SCRAM_SHA256 = (1<<5)
+    AUTH_BEARER       = (1<<2),
+    AUTH_SCRAM_SHA1   = (1<<3),
+    AUTH_SCRAM_SHA256 = (1<<4)
 };
 
 /* Auth scheme flags */
