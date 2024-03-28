@@ -226,7 +226,7 @@ If the ``loginuseacl`` configuration option is turned on, than any Kerberos iden
 Shared Secrets Logins
 =====================
 
-Some mechanisms require the user and the server to share a secret (generally a password) that can be used for comparison without actually passing the password in the clear across the network. For these mechanism (such as CRAM-MD5 and DIGEST-MD5), you will need to supply a source of passwords, such as the sasldb (which is described more fully in the :ref:`Cyrus SASL distribution <cyrussasl:sasl-index>`)
+The SCRAM mechanisms require the user and the server to share a secret (generally a password) that can be used for comparison without actually passing the password in the clear across the network. For these mechanisms, you will need to supply a source of passwords, such as the sasldb (which is described more fully in the :ref:`Cyrus SASL distribution <cyrussasl:sasl-index>`).
 
 Quotas
 ******

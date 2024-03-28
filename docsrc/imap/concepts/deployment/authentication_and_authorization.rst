@@ -32,7 +32,7 @@ The most common set of credentials is a *username* and *password*, but other for
 
 In the case of usernames and passwords though, the exchange and verification of the credentials is at the basis of its security. Sending plain text usernames and passwords over the wire would not allow any application to verify the source of the credentials is actually the user --- who is supposed to be the only party to know the unique combination of username and password.
 
-To obfuscate the login credentials, authentication can be encrypted with CRAM-MD5 or DIGEST-MD5, but this requires the server to have a copy of the original, plain text password. The password in this case becomes the shared secret.
+To obfuscate the login credentials, authentication can be encrypted with SCRAM, but this requires the server to have a copy of the original, plain text password. The password in this case becomes the shared secret.
 
 Another method is to allow the plain text username and password to be transmitted over the wire, but ensure Transport Layer Security (TLS) or the more implicit Secure Socket Layer (SSL). The plain text password can now be used to compare it against a SQL database, bind to an LDAP database, attempt PAM authentication with, etc.
 
