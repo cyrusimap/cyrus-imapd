@@ -381,8 +381,10 @@ static int create_managedattach(struct jmapical_ctx *jmapctx,
     buf_printf(&preamble, "Date: %s\r\n", now);
     buf_appendcstr(&preamble, "Content-Type: application/octet-stream\r\n");
     buf_printf(&preamble, "Content-Length: %zu\r\n", buf_len(&getblobctx.blob));
-    buf_printf(&preamble, "Content-Disposition: attachment; filename=\"%s\"\r\n",
-            blobid[0] == 'G' ? blobid + 1 : blobid);
+    buf_printf(&preamble, "Content-Disposition: attachment");
+    charset_write_mime_param(&preamble, 1, MIME_MAX_HEADER_LENGTH,
+            "filename", blobid[0] == 'G' ? blobid + 1 : blobid);
+    buf_appendcstr(&preamble, "\r\n");
     buf_appendcstr(&preamble, "MIME-Version: 1.0\r\n");
 
     fwrite(buf_base(&preamble), buf_len(&preamble), 1, fp);
