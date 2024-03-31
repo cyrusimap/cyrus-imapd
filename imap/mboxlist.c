@@ -1018,19 +1018,14 @@ static int user_can_read(const strarray_t *aclbits, const char *user)
     return 0;
 }
 
-static int mboxlist_update_raclmodseq(const char *acluser, strarray_t *touched_users)
+EXPORTED int mboxlist_update_raclmodseq(const char *userid)
 {
-    if (strarray_find(touched_users, acluser, 0) >= 0) return 0;
-    strarray_add(touched_users, acluser);
-
-    char *acluserinbox = mboxname_user_mbox(acluser, NULL);
-    mbentry_t *raclmbentry = NULL;
-    if (mboxlist_lookup(acluserinbox, &raclmbentry, NULL) == 0) {
-        mboxname_nextraclmodseq(acluserinbox, 0);
-        sync_log_mailbox(acluserinbox);
+    char *inbox = mboxname_user_mbox(userid, NULL);
+    if (mboxlist_lookup(inbox, NULL, NULL) == 0) {
+        mboxname_nextraclmodseq(inbox, 0);
+        sync_log_mailbox(inbox);
     }
-    mboxlist_entry_free(&raclmbentry);
-    free(acluserinbox);
+    free(inbox);
     return 0;
 }
 
@@ -1038,8 +1033,11 @@ static int mboxlist_update_raclmodseq_wrapper(const char *acluser,
                                               strarray_t *touched_users)
 {
     // not a group, just update it
-    if (strncmp(acluser, "group:", 6))
-        return mboxlist_update_raclmodseq(acluser, touched_users);
+    if (strncmp(acluser, "group:", 6)) {
+        if (strarray_find(touched_users, acluser, 0) >= 0) return 0;
+        strarray_add(touched_users, acluser);
+        return mboxlist_update_raclmodseq(acluser);
+    }
 
     // XXX: do we want to make the authstate handler smarter here, using
     // the same channel (user => group list) to also smuggle (group => user list)
@@ -1049,7 +1047,10 @@ static int mboxlist_update_raclmodseq_wrapper(const char *acluser,
     int r = 0;
     int i;
     for (i = 0; i < strarray_size(members); i++) {
-        r = mboxlist_update_raclmodseq(strarray_nth(members, i), touched_users);
+	const char *member = strarray_nth(members, i);
+        if (strarray_find(touched_users, member, 0) >= 0) return 0;
+        strarray_add(touched_users, member);
+        r = mboxlist_update_raclmodseq(member);
 	if (r) break;
     }
 
