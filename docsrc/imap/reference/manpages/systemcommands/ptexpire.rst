@@ -15,7 +15,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **ptexpire** [**-C** *filename*] [**-E** *seconds*]
+    **ptexpire** [**-C** *filename*] [**-E** *seconds*] [ *username* ...]
 
 Description
 ===========
@@ -23,6 +23,9 @@ Description
 The **ptexpire** program sweeps the ``ptscache_db`` database, deleting
 entries older than the expiry duration, which defaults to 5400 seconds
 (3 hours).  The expiry duration can be changed with the **-E** option.
+
+Alternatively, if it's passed a list of usernames it deletes just those
+usernames, immediately.
 
 **ptexpire** |default-conf-text|
 
