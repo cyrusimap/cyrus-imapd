@@ -163,10 +163,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     HTTP Upgrading to TLS Within HTTP/1.1
 
-:rfc:`2818`
-
-    HTTP Over TLS
-
 :rfc:`2821`
 
     Simple Mail Transfer Protocol
@@ -698,34 +694,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     IMAP Extensions: Quick Flag Changes Resynchronization (CONDSTORE)
     and Quick Mailbox Resynchronization (QRESYNC)
 
-:rfc:`7230`
-
-    Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing
-
-:rfc:`7231`
-
-    Hypertext Transfer Protocol (HTTP/1.1): Semantics and Content
-
-:rfc:`7232`
-
-    Hypertext Transfer Protocol (HTTP/1.1): Conditional Requests
-
-:rfc:`7233`
-
-    Hypertext Transfer Protocol (HTTP/1.1): Range Requests
-
-:rfc:`7234`
-
-    Hypertext Transfer Protocol (HTTP/1.1): Caching
-
-:rfc:`7235`
-
-    Hypertext Transfer Protocol (HTTP/1.1): Authentication
-
-:rfc:`7238`
-
-    The Hypertext Transfer Protocol Status Code 308 (Permanent Redirect)
-
 :rfc:`7239`
 
     Forwarded HTTP Extension
@@ -751,14 +719,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     Non-Gregorian Recurrence Rules in the Internet Calendaring and
     Scheduling Core Object Specification (iCalendar)
 
-:rfc:`7540`
-
-    Hypertext Transfer Protocol Version 2 (HTTP/2)
-
 :rfc:`7615`
 
     HTTP Authentication-Info and Proxy-Authentication-Info Response
-    Header Fields
+    Header Fields, obsoleted by :rfc:`9110`
 
 :rfc:`7617`
 
@@ -770,7 +734,8 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`7694`
 
-    Hypertext Transfer Protocol (HTTP) Client-Initiated Content-Encoding
+    Hypertext Transfer Protocol (HTTP) Client-Initiated Content-Encoding,
+    obsoleted by :rfc:`9110`
 
 :rfc:`7725`
 
@@ -902,6 +867,22 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`9051`
 
     Internet Message Access Protocol (IMAP) - version 4rev2
+
+:rfc:`9110`
+
+    HTTP Semantics
+
+:rfc:`9111`
+
+    HTTP Caching
+
+:rfc:`9112`
+
+    HTTP/1.1
+
+:rfc:`9113`
+
+    HTTP/2
 
 :rfc:`9208`
 
