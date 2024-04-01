@@ -265,20 +265,23 @@ static struct auth_state *myauthstate(const char *identifier, size_t size,
         }
     }
 
-    /* fill in our new state structure */
-    *dsize = sizeof(struct auth_state) + (ngroups * sizeof(struct auth_ident));
-    newstate = (struct auth_state *) xzmalloc(*dsize);
+    // allow returning NULL for group lookups that aren't found
+    if (code == 200 || strncmp(canon_id, "group:", 6)) {
+        /* fill in our new state structure */
+        *dsize = sizeof(struct auth_state) + (ngroups * sizeof(struct auth_ident));
+        newstate = (struct auth_state *) xzmalloc(*dsize);
 
-    strlcpy(newstate->userid.id, canon_id, sizeof(newstate->userid.id));
-    newstate->userid.hash = strhash(canon_id);
-    newstate->ngroups = ngroups;
-    newstate->mark = time(0);
+        strlcpy(newstate->userid.id, canon_id, sizeof(newstate->userid.id));
+        newstate->userid.hash = strhash(canon_id);
+        newstate->ngroups = ngroups;
+        newstate->mark = time(0);
 
-    /* store group list in contiguous array for easy storage in the database */
-    for (i = 0; i < newstate->ngroups; i++) {
-        const char *name = json_string_value(json_array_get(groups, i));
-        strlcpy(newstate->groups[i].id, name, sizeof(newstate->groups[i].id));
-        newstate->groups[i].hash = strhash(name);
+        /* store group list in contiguous array for easy storage in the database */
+        for (i = 0; i < newstate->ngroups; i++) {
+            const char *name = json_string_value(json_array_get(groups, i));
+            strlcpy(newstate->groups[i].id, name, sizeof(newstate->groups[i].id));
+            newstate->groups[i].hash = strhash(name);
+        }
     }
 
     buf_free(&resp_body.payload);
