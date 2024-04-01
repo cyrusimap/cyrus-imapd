@@ -62,6 +62,7 @@ sub new
         ldap_domain_base_dn => "ou=domains,o=cyrus",
         ldap_user_attribute => "uid",
         ldap_member_attribute => "memberof",
+        ldap_group_hasmember_attribute => "hasmember",
         ldap_sasl => "no",
         auth_mech => 'pts',
         pts_module => 'ldap',
@@ -216,7 +217,7 @@ sub test_list_groupaccess_noracl
 }
 
 sub test_list_groupaccess_racl
-    :needs_dependency_ldap :ReverseACLs :min_version_3_1 :NoAltNamespace
+    :needs_dependency_ldap :ReverseACLs :min_version_3_1 :NoAltNamespace :Conversations
 {
     my ($self) = @_;
 
@@ -227,10 +228,15 @@ sub test_list_groupaccess_racl
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
 
+    my $precounters = $self->{store}->get_counters();
+
     $admintalk->setacl("user.otheruser.groupaccess",
                        "group:group co", "lrswipkxtecdn");
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
+
+    my $postcounters = $self->{store}->get_counters();
+    $self->assert_num_not_equals($precounters->{raclmodseq}, $postcounters->{raclmodseq}, "RACL modseq changed");
 
     if (get_verbose()) {
         $self->{instance}->run_command(
