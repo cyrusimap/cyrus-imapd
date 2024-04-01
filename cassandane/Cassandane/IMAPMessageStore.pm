@@ -526,4 +526,43 @@ sub idle_end
     $talk->{CmdId}++;
 }
 
+sub get_counters
+{
+    my ($self) = @_;
+    my $KEY = "/private/vendor/cmu/cyrus-imapd/usercounters";
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
+    my $talk = $self->get_client();
+
+    my $counters1 = $talk->getmetadata("", $KEY);
+    my $counters = $counters1->{''}{$KEY};
+    #"3 22 20 16 22 0 20 14 22 0 1571356860")
+
+
+    my ($v1, $all1, $mail1, $cal1, $card1, $notes1, $mailfolders1, $calfolders1, $cardfolders1, $notesfolders1, $quota1, $racl1, $valid1, $nothing1) = split / /, $counters;
+
+    if ($maj < 3 || $maj == 3 && $min == 0) {
+        # 3.0 and earlier did not have quotamodseq or raclmodseq, but
+        # uidvalidity was still the last field
+        $valid1 = $quota1;
+        $quota1 = undef;
+    }
+
+    return {
+	version => $v1,
+	highestmodseq => $all1,
+	mailmodseq => $mail1,
+	calendarmodseq => $cal1,
+	contactsmodseq => $card1,
+	notesmodseq => $notes1,
+	mailfoldersmodseq => $mailfolders1,
+	calendarfoldersmodseq => $calfolders1,
+	contactsfoldersmodseq => $cardfolders1,
+	notesfoldersmodseq => $notesfolders1,
+	quotamodseq => $quota1,
+	raclmodseq => $racl1,
+	uidvalidity => $valid1,
+    };
+}
+
 1;
