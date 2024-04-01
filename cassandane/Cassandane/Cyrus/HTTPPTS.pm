@@ -241,7 +241,7 @@ sub test_list_groupaccess_noracl
 }
 
 sub test_list_groupaccess_racl
-    :ReverseACLs :min_version_3_7 :NoAltNamespace
+    :ReverseACLs :min_version_3_7 :NoAltNamespace :Conversations
 {
     my ($self) = @_;
 
@@ -252,10 +252,15 @@ sub test_list_groupaccess_racl
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
 
+    my $precounters = $self->{store}->get_counters();
+
     $admintalk->setacl("user.otheruser.groupaccess",
                        "group:group co", "lrswipkxtecdn");
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
+
+    my $postcounters = $self->{store}->get_counters();
+    $self->assert_num_not_equals($precounters->{raclmodseq}, $postcounters->{raclmodseq}, "RACL modseq changed");
 
     if (get_verbose()) {
         $self->{instance}->run_command(
