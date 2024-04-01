@@ -45,6 +45,7 @@ Install and configure Cassandane
 
    .. code-block:: bash
 
+        sudo cpan -i AnyEvent Config::IniFiles Data::GUID Digest::CRC File::Slurp IO::File::fcntl IO::Socket::INET6 Net::Server::PreForkSimple News::NNTPClient Plack::Loader Types::Standard Unix::Syslog XML::Generator XML::Simple
         sudo cpan -i Tie::DataUUID
         sudo cpan -i XML::Spice
         sudo cpan -i XML::Fast
@@ -58,6 +59,10 @@ Install and configure Cassandane
         sudo cpan -i Net::CalDAVTalk
         sudo cpan -i Mail::JMAPTalk
         sudo cpan -i Math::Int64
+
+   With recent perl versions ``Test::Unit::TestRunner`` cannot be installed with ``cpan``.  Download
+   the package and apply the changes from https://sources.debian.org/patches/libtest-unit-perl/0.25-7/
+   before installing it.
 
 3. Build Cassandane's binary components
 
