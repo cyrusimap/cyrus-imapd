@@ -1050,14 +1050,7 @@ static int ptsmodule_make_authstate_attribute(
             *dsize = sizeof(struct auth_state) +
                 (numvals * sizeof(struct auth_ident));
             *newstate = xzmalloc(*dsize);
-            if (*newstate == NULL) {
-                *reply = "no memory";
-                rc = PTSM_FAIL;
-                goto done;
-            }
-
             (*newstate)->ngroups = numvals;
-            (*newstate)->userid.id[0] = '\0';
             for (i = 0; i < numvals; i++) {
                 unsigned int j;
                 char **rdn = NULL;
@@ -1086,14 +1079,6 @@ static int ptsmodule_make_authstate_attribute(
                     if(!*newstate) {
                         *dsize = sizeof(struct auth_state);
                         *newstate = xzmalloc(*dsize);
-
-                        if (*newstate == NULL) {
-                            *reply = "no memory";
-                            rc = PTSM_FAIL;
-                            goto done;
-                        }
-
-                        (*newstate)->ngroups = 0;
                     }
 
                     size=strlen(vals[0]);
@@ -1107,16 +1092,9 @@ static int ptsmodule_make_authstate_attribute(
         }
     }
 
-    if(!*newstate) {
+    if (!*newstate) {
         *dsize = sizeof(struct auth_state);
         *newstate = xzmalloc(*dsize);
-        if (*newstate == NULL) {
-            *reply = "no memory";
-            rc = PTSM_FAIL;
-            goto done;
-        }
-        (*newstate)->ngroups = 0;
-        (*newstate)->userid.id[0] = '\0';
     }
 
     /* fill in the rest of our new state structure */
@@ -1204,13 +1182,6 @@ static int ptsmodule_make_authstate_filter(
     *dsize = sizeof(struct auth_state) + (n * sizeof(struct auth_ident));
 
     *newstate = xzmalloc(*dsize);
-
-    if (*newstate == NULL) {
-        *reply = "no memory";
-        rc = PTSM_FAIL;
-        goto done;
-    }
-
     (*newstate)->ngroups = n;
     strcpy((*newstate)->userid.id, canon_id);
     (*newstate)->userid.hash = strhash(canon_id);
@@ -1416,15 +1387,8 @@ static int ptsmodule_make_authstate_group(
         goto done;
     }
 
-    *dsize = sizeof(struct auth_state) +
-             (n * sizeof(struct auth_ident));
+    *dsize = sizeof(struct auth_state);
     *newstate = xzmalloc(*dsize);
-    if (*newstate == NULL) {
-        *reply = "no memory";
-        rc = PTSM_FAIL;
-        goto done;
-    }
-    (*newstate)->ngroups = 0;
     strcpy((*newstate)->userid.id, canon_id);
     (*newstate)->userid.hash = strhash(canon_id);
     (*newstate)->mark = time(0);
