@@ -43,6 +43,7 @@
 #ifndef INCLUDED_IMPARSE_H
 #define INCLUDED_IMPARSE_H
 
+#include <stdint.h>
 typedef struct {
     uint32_t low;
     uint32_t high;
