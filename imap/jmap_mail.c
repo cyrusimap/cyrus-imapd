@@ -7199,6 +7199,21 @@ static int _email_get_meta(jmap_req_t *req,
         json_object_set_new(email, "createdModseq", json_integer(rock.modseq));
     }
 
+    if (jmap_wantprop(props, "deliveredTo")) {
+        struct buf buf = BUF_INITIALIZER;
+        json_t *jval = json_null();
+        if (!_cyrusmsg_need_msg(msg)) {
+            if (!message_get_deliveredto(msg->_m, &buf)) {
+                buf_trim(&buf);
+                if (buf_len(&buf)) {
+                    jval = json_string(buf_cstring(&buf));
+                }
+            }
+        }
+        json_object_set_new(email, "deliveredTo", jval);
+        buf_free(&buf);
+    }
+
 done:
     return r;
 }
@@ -8372,6 +8387,11 @@ static const jmap_property_t email_props[] = {
         "createdModseq",
         JMAP_MAIL_EXTENSION,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "deliveredTo",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
     },
     { NULL, NULL, 0 }
 };
