@@ -544,10 +544,10 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
     buf_appendcstr(&msgbuf, "Content-Transfer-Encoding: base64\r\n");
     buf_appendcstr(&msgbuf, "\r\n");
 
-    charset_encode_mimebody(NULL, strlen(ical_str), NULL, &outlen,
+    charset_b64encode_mimebody(NULL, strlen(ical_str), NULL, &outlen,
                             NULL, 1 /* wrap */);
     buf_ensure(&tmpbuf, outlen);
-    charset_encode_mimebody(ical_str, strlen(ical_str),
+    charset_b64encode_mimebody(ical_str, strlen(ical_str),
                             (char *) buf_base(&tmpbuf), &outlen,
                             NULL, 1 /* wrap */);
     buf_appendmap(&msgbuf, buf_base(&tmpbuf), outlen);

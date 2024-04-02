@@ -3570,11 +3570,11 @@ static int _blob_to_card(struct jmap_req *req,
 
     /* Pre-flight base64 encoder to determine length */
     size_t len64 = 0;
-    charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
+    charset_b64encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
 
     /* Now encode the blob */
     encbuf = xzmalloc(len64+1);
-    charset_encode_mimebody(base, len, encbuf, &len64, NULL, 0 /* no wrap */);
+    charset_b64encode_mimebody(base, len, encbuf, &len64, NULL, 0 /* no wrap */);
     base = encbuf;
 
     /* (Re)write vCard property */
@@ -9926,12 +9926,12 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
 
             /* Pre-flight base64 encoder to determine length */
             size_t len64 = 0;
-            charset_encode_mimebody(NULL, len, NULL,
+            charset_b64encode_mimebody(NULL, len, NULL,
                                     &len64, NULL, 0 /* no wrap */);
 
             /* Now encode the blob */
             buf_ensure(&buf, len64+1);
-            charset_encode_mimebody(base, len,
+            charset_b64encode_mimebody(base, len,
                                     (char *) buf_base(&buf) + buf_len(&buf),
                                     &len64, NULL, 0 /* no wrap */);
             buf_truncate(&buf, buf_len(&buf) + len64);
