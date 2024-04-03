@@ -11265,6 +11265,10 @@ static int _card_set_create(jmap_req_t *req,
 
         json_object_set_new(item, "cyrusimap.org:size",
                             json_integer(record.size - record.header_size));
+
+        char *xhref = jmap_xhref(mboxname, resourcename);
+        json_object_set_new(item, "cyrusimap.org:href", json_string(xhref));
+        free(xhref);
     }
 
 done:

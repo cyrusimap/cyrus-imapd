@@ -33,7 +33,6 @@ sub test_card_set_create_basic
     my $prodid = '-//Example Corp.//CardDAV Client//EN';
     my $name = 'Mr. John Q. Public, Esq.';
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "$abookid/$id.vcf";
 
     my $res = $jmap->CallMethods([
         ['ContactCard/set', {
@@ -55,6 +54,7 @@ sub test_card_set_create_basic
     $self->assert_not_null($res->[0][1]{created}{1});
     $self->assert_not_null($res->[0][1]{created}{1}{id});
 
+    my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
     $res = $carddav->Request('GET', $href, '',
                              'Accept' => 'text/vcard; version=4.0');
 

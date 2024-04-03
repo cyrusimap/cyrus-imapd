@@ -23,7 +23,7 @@ sub test_card_get_v4
     # Second N suffix removed due to vparse bug
     # PROP-IDs added so we can easily compare the results
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "Default/$id.vcf";
+    my $href = "Default/test.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:4.0

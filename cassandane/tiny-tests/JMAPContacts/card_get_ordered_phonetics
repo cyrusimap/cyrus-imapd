@@ -21,7 +21,7 @@ sub test_card_get_ordered_phonetics
     );
 
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "Default/$id.vcf";
+    my $href = "Default/test.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:4.0

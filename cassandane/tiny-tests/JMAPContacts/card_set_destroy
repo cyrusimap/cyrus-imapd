@@ -20,7 +20,7 @@ sub test_card_set_destroy
     );
 
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "Default/$id.vcf";
+    my $href = "Default/test.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
@@ -38,12 +38,18 @@ EOF
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
     my $res = $jmap->CallMethods([
+        ['ContactCard/get', { }, 'R1']
+    ]);
+    my $cardId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($cardId);
+
+    $res = $jmap->CallMethods([
         ['ContactCard/set', {
-            destroy => [$id]
+            destroy => [$cardId]
         }, 'R1']
     ]);
 
-    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+    $self->assert_str_equals($cardId, $res->[0][1]{destroyed}[0]);
 
     $res = $jmap->CallMethods([
         ['ContactCard/get', {
