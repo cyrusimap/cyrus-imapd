@@ -32,7 +32,7 @@ sub test_card_set_create_basic
     my $created = $now->strftime('%Y-%m-%dT%H:%M:%SZ');
     my $prodid = '-//Example Corp.//CardDAV Client//EN';
     my $name = 'Mr. John Q. Public, Esq.';
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $id = 'urn:uuid:ae2640cc-234a-4dd9-95cc-3106258445b9';
 
     my $res = $jmap->CallMethods([
         ['ContactCard/set', {

@@ -11170,10 +11170,19 @@ static int _card_set_create(jmap_req_t *req,
         goto done;
     }
 
+    // Create vCard component
     card = vcardcomponent_vanew(VCARD_VCARD_COMPONENT,
                                 vcardproperty_new_version(VCARD_VERSION_40),
-                                vcardproperty_new_uid(uid),
                                 NULL);
+
+    // Add UID property
+    vcardproperty *uidprop = vcardproperty_new_uid(uid);
+    xmlURIPtr xuri = xmlParseURI(uid);
+    if (!xuri || !xuri->scheme) {
+        vcardproperty_set_value(uidprop, vcardvalue_new_text(uid));
+    }
+    xmlFreeURI(xuri);
+    vcardcomponent_add_property(card, uidprop);
 
     /* we need to create and append a record */
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mboxname)) {
