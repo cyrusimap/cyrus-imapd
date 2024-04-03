@@ -950,7 +950,7 @@ static int export_addressbook(struct transaction_t *txn,
             unsigned version =
                 (vcardcomponent_get_version(vcard) == VCARD_VERSION_40) ? 4 : 3;
 
-            if (version != want_ver) {
+            if (version != want_ver || want_ver == 4) {
                 if (want_ver == 4) vcard_to_v4_x(vcard);
                 else vcard_to_v3_x(vcard);
             }
@@ -979,7 +979,7 @@ static int export_addressbook(struct transaction_t *txn,
                 vparse_get_entry(vcard, NULL, "version");
             unsigned version = (ventry && ventry->v.value[0] == '4') ? 4 : 3;
 
-            if (version != want_ver) {
+            if (version != want_ver || want_ver == 4) {
                 if (want_ver == 4) vcard_to_v4(vcard);
                 else vcard_to_v3(vcard);
             }
@@ -1336,7 +1336,7 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
         struct carddav_data *cdata = (struct carddav_data *) data;
         unsigned want_ver = (mime && mime->version[0] == '4') ? 4 : 3;
 
-        if (cdata->version != want_ver) {
+        if (cdata->version != want_ver || want_ver == 4) {
             /* Translate between vCard versions */
             *obj = record_to_vcard_x(mailbox, record);
             if (want_ver == 4) vcard_to_v4_x(*obj);
@@ -1726,7 +1726,7 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
         struct carddav_data *cdata = (struct carddav_data *) data;
         unsigned want_ver = (mime && mime->version[0] == '4') ? 4 : 3;
 
-        if (cdata->version != want_ver) {
+        if (cdata->version != want_ver || want_ver == 4) {
             /* Translate between vCard versions */
             *obj = record_to_vcard(mailbox, record);
             if (want_ver == 4) vcard_to_v4(*obj);
@@ -2224,7 +2224,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 
         want_ver = (out_type->version[0] == '4') ? 4 : 3;
 
-        if (cdata->version != want_ver) {
+        if (cdata->version != want_ver || want_ver == 4) {
             /* Translate between vCard versions */
             vcard = fctx->obj;
 
@@ -2334,7 +2334,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 
         want_ver = (out_type->version[0] == '4') ? 4 : 3;
 
-        if (cdata->version != want_ver) {
+        if (cdata->version != want_ver || want_ver == 4) {
             /* Translate between vCard versions */
             vcard = fctx->obj;
 
