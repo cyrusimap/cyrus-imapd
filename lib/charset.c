@@ -3782,9 +3782,9 @@ EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, i
 static const char base_64[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
-                                       char *retval, size_t *outlen,
-                                       int *outlines, int wrap)
+EXPORTED char *charset_b64encode_mimebody(const char *msg_base, size_t len,
+                                          char *retval, size_t *outlen,
+                                          int *outlines, int wrap)
 {
     const unsigned char *s;
     unsigned char s0, s1, s2;

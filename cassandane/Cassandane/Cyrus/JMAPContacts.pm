@@ -49,10 +49,12 @@ use Data::Dumper;
 use Storable 'dclone';
 use File::Basename;
 use File::Copy;
+use Cwd qw(abs_path getcwd);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 use charnames ':full';
 

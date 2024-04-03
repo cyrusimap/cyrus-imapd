@@ -10549,11 +10549,11 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
             encoding = "BASE64";
             size_t len64 = 0;
             /* Pre-flight encoder to determine length */
-            charset_encode_mimebody(NULL, content_size, NULL, &len64, NULL, 1 /* wrap */);
+            charset_b64encode_mimebody(NULL, content_size, NULL, &len64, NULL, 1 /* wrap */);
             if (len64) {
                 /* Now encode the body */
                 encbuf = xmalloc(len64);
-                charset_encode_mimebody(content, content_size, encbuf, &len64, NULL, 1 /* wrap */);
+                charset_b64encode_mimebody(content, content_size, encbuf, &len64, NULL, 1 /* wrap */);
             }
             content = encbuf;
             content_size = len64;

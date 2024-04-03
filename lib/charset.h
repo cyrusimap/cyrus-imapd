@@ -137,9 +137,9 @@ extern int charset_searchfile(const char *substr, comp_pat *pat,
 extern const char *charset_decode_mimebody(const char *msg_base, size_t len,
                                            int encoding, char **retval,
                                            size_t *outlen);
-extern char *charset_encode_mimebody(const char *msg_base, size_t len,
-                                     char *retval, size_t *outlen,
-                                     int *outlines, int wrap);
+extern char *charset_b64encode_mimebody(const char *msg_base, size_t len,
+                                        char *retval, size_t *outlen,
+                                        int *outlines, int wrap);
 extern char *charset_qpencode_mimebody(const char *msg_base, size_t len,
                                        int force_quote, size_t *outlen);
 extern char *charset_to_utf8cstr(const char *msg_base, size_t len, charset_t charset, int encoding);

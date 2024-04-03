@@ -1548,7 +1548,7 @@ static void test_encode_mimebody(void)
         size_t wantlen = strlen(want); \
         size_t preflight_outlen = 0xffee; \
         int preflight_outlines = 0x1234; \
-        char *preflight_retval = charset_encode_mimebody(NULL, inlen, NULL, \
+        char *preflight_retval = charset_b64encode_mimebody(NULL, inlen, NULL, \
             &preflight_outlen, &preflight_outlines, wrap); \
         CU_ASSERT_PTR_NULL(preflight_retval); \
         CU_ASSERT_EQUAL(wantlen, preflight_outlen); \
@@ -1556,7 +1556,7 @@ static void test_encode_mimebody(void)
         char *retval = malloc(preflight_outlen); \
         size_t encode_outlen = 0x1234; \
         int encode_outlines = 0xffee; \
-        char *encode_retval = charset_encode_mimebody(in, inlen, \
+        char *encode_retval = charset_b64encode_mimebody(in, inlen, \
                 retval, &encode_outlen, &encode_outlines, wrap); \
         CU_ASSERT_PTR_EQUAL(retval, encode_retval); \
         CU_ASSERT_EQUAL(wantlen, encode_outlen); \

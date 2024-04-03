@@ -1955,7 +1955,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
         int b64_lines, delta;
 
         /* Determine encoded size */
-        charset_encode_mimebody(NULL, body->content_size, NULL,
+        charset_b64encode_mimebody(NULL, body->content_size, NULL,
                                 &b64_size, NULL, 1 /* wrap */);
 
         delta = b64_size - body->content_size;
@@ -1968,7 +1968,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
                 msg->len - s_offset);
 
         /* Encode content into buffer at current position */
-        charset_encode_mimebody(msg->base + s_offset + delta,
+        charset_b64encode_mimebody(msg->base + s_offset + delta,
                                 body->content_size,
                                 (char*) msg->base + s_offset,
                                 NULL, &b64_lines, 1 /* wrap */);

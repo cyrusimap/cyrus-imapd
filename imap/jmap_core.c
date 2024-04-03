@@ -617,9 +617,9 @@ static int jmap_blob_get(jmap_req_t *req)
             if (want_base64) {
                 if (len) {
                     size_t len64 = 0;
-                    charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
+                    charset_b64encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
                     char *encbuf = xzmalloc(len64+1);
-                    charset_encode_mimebody(base, len, encbuf, &len64, NULL, 0 /* no wrap */);
+                    charset_b64encode_mimebody(base, len, encbuf, &len64, NULL, 0 /* no wrap */);
                     json_object_set_new(item, "data:asBase64", json_stringn(encbuf, len64));
                     free(encbuf);
                 }
@@ -639,7 +639,7 @@ static int jmap_blob_get(jmap_req_t *req)
                 md5((unsigned char *)base, len, data);
                 size_t len64 = 24;
                 char output[24];
-                charset_encode_mimebody((char *)data, 16, output, &len64, NULL, 0 /* no wrap */);
+                charset_b64encode_mimebody((char *)data, 16, output, &len64, NULL, 0 /* no wrap */);
                 json_object_set_new(item, "digest:md5", json_stringn(output, 24));
             }
 
@@ -649,7 +649,7 @@ static int jmap_blob_get(jmap_req_t *req)
                 xsha1((unsigned char *)base, len, data);
                 size_t len64 = 28;
                 char output[28];
-                charset_encode_mimebody((char *)data, 20, output, &len64, NULL, 0 /* no wrap */);
+                charset_b64encode_mimebody((char *)data, 20, output, &len64, NULL, 0 /* no wrap */);
                 json_object_set_new(item, "digest:sha", json_stringn(output, 28));
             }
 
@@ -660,7 +660,7 @@ static int jmap_blob_get(jmap_req_t *req)
                 xsha256((unsigned char *)base, len, data);
                 size_t len64 = 44;
                 char output[44];
-                charset_encode_mimebody((char *)data, 32, output, &len64, NULL, 0 /* no wrap */);
+                charset_b64encode_mimebody((char *)data, 32, output, &len64, NULL, 0 /* no wrap */);
                 json_object_set_new(item, "digest:sha-256", json_stringn(output, 44));
             }
 
