@@ -44,6 +44,7 @@
 #include <config.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
+#include <libxml/uri.h>
 
 #include "vcard_support.h"
 #include "syslog.h"
@@ -362,11 +363,28 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
     buf_free(&buf);
 }
 
+static int vcard_value_is_uri(const char *val)
+{
+    if (!val) return 0;
+    xmlURIPtr xuri = xmlParseURI(val);
+    int is_uri = xuri && xuri->scheme;
+    xmlFreeURI(xuri);
+    return is_uri;
+}
+
 EXPORTED void vcard_to_v4(struct vparse_card *vcard)
 {
     struct vparse_entry *ventry, *next;
     struct vparse_param *vparam;
     struct buf buf = BUF_INITIALIZER;
+    int is_v4 = 0;
+
+    ventry = vparse_get_entry(vcard->objects, NULL, "VERSION");
+    if (ventry) {
+        char *val = vparse_get_value(ventry);
+        is_v4 = !strcmpsafe("4.0", val);
+        free(val);
+    }
 
     for (ventry = vcard->objects->properties; ventry; ventry = next) {
         const char *name = ventry->name;
@@ -377,7 +395,7 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
         if (!name) continue;
         if (!propval) continue;
 
-        if (!strcasecmp(name, "version")) {
+        if (!is_v4 && !strcasecmp(name, "version")) {
             /* Set proper VERSION */
             vparse_set_value(ventry, "4.0");
         }
@@ -388,7 +406,7 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
                 /* uri -> uri (default) */
                 vparse_delete_params(ventry, "value");
             }
-            else if (strncmp(propval, "urn:uuid:", 9)) {
+            else if (!is_v4 && strncmp(propval, "urn:uuid:", 9)) {
                 /* text (default) -> uuid URN */
                 buf_setcstr(&buf, "urn:uuid:");
                 buf_appendcstr(&buf, propval);
@@ -401,7 +419,12 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
                  !strcasecmp(name, "sound")) {
             /* Rewrite KEY, LOGO, PHOTO, SOUND properties */
             vparam = vparse_get_param(ventry, "value");
-            if (!vparam || strcasecmp(vparam->value, "uri")) {
+
+            if ((!vparam && !is_v4) ||
+                (vparam && strcasecmp(vparam->value, "uri")) ||
+                vparse_get_param(ventry, "encoding") ||
+                vparse_get_param(ventry, "type") ||
+                !vcard_value_is_uri(propval)) {
                 /* Rewrite 'b' encoded value as data: URI */
                 buf_setcstr(&buf, "data:");
 
@@ -698,6 +721,10 @@ EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
 {
     vcardproperty *prop, *next;
     struct buf buf = BUF_INITIALIZER;
+    int is_v4 = 0;
+
+    prop = vcardcomponent_get_first_property(vcard, VCARD_VERSION_PROPERTY);
+    is_v4 = prop && vcardproperty_get_version(prop) == VCARD_VERSION_40;
 
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop; prop = next) {
@@ -709,8 +736,10 @@ EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
 
         switch (vcardproperty_isa(prop)) {
         case VCARD_VERSION_PROPERTY:
-            /* Set proper VERSION */
-            vcardproperty_set_version(prop, VCARD_VERSION_40);
+            if (!is_v4) {
+                /* Set proper VERSION */
+                vcardproperty_set_version(prop, VCARD_VERSION_40);
+            }
             break;
 
         case VCARD_UID_PROPERTY:
@@ -721,7 +750,7 @@ EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
                 /* uri -> uri (default) */
                 vcardproperty_remove_parameter_by_ref(prop, param);
             }
-            else if (strncmp(propval, "urn:uuid:", 9)) {
+            else if (!is_v4 && strncmp(propval, "urn:uuid:", 9)) {
                 /* text (default) -> uuid URN */
                 buf_setcstr(&buf, "urn:uuid:");
                 buf_appendcstr(&buf, propval);
@@ -746,7 +775,13 @@ EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
 
             param = vcardproperty_get_first_parameter(prop,
                                                       VCARD_VALUE_PARAMETER);
-            if (!param || vcardparameter_get_value(param) != VCARD_VALUE_URI) {
+            if ((!param && !is_v4) ||
+                (param && vcardparameter_get_value(param) != VCARD_VALUE_URI) ||
+                vcardproperty_get_first_parameter(prop,
+                                                  VCARD_ENCODING_PARAMETER) ||
+                vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER) ||
+                !vcard_value_is_uri(vcardproperty_get_value_as_string(prop))) {
+
                 /* Rewrite 'b' encoded value as data: URI */
                 buf_setcstr(&buf, "data:");
 
