@@ -21,7 +21,6 @@ sub test_card_set_create_localizations_bad
     );
 
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "Default/$id.vcf";
 
     my $res = $jmap->CallMethods([
         ['ContactCard/set', {
