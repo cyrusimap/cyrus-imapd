@@ -108,14 +108,19 @@ sub test_imap_admins_virtdomains
     my ($self) = @_;
 
     my $domainadmin = 'admin@uhoh.org';
+    my $defaultdomain = $self->{instance}->{config}->get('defaultdomain')
+                        // 'internal';
+    my $defdomadmin = "admin\@$defaultdomain";
 
     $self->{instance}->create_user($domainadmin);
     my $imap = $self->{instance}->get_service('imap');
     my $domainadminstore = $imap->create_store(username => $domainadmin);
+    my $defdomadminstore = $imap->create_store(username => $defdomadmin);
 
     my $admintalk = $self->{adminstore}->get_client();
     my $imapadmintalk = $self->{imapadminstore}->get_client();
     my $domainadmintalk = $domainadminstore->get_client();
+    my $defdomadmintalk = $defdomadminstore->get_client();
     my $talk = $self->{store}->get_client();
 
     # we should be able to reconstruct as 'admin', because although
@@ -143,6 +148,12 @@ sub test_imap_admins_virtdomains
                              $domainadmintalk->get_last_completion_response());
     $self->assert_matches(qr/permission denied/i,
                           $domainadmintalk->get_last_error());
+
+    # we should be able to reconstruct as admin@$defaultdomain, because
+    # we treat bare username and username@defaultdomain as equivalent
+    $res = $defdomadmintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
+    $self->assert_str_equals('ok',
+                             $defdomadmintalk->get_last_completion_response());
 }
 
 1;
