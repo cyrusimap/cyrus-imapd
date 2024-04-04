@@ -1228,8 +1228,10 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     /* Since we use the iCalendar UID in the resource name,
        this param may be long and needs to get properly split per RFC 2231 */
     buf_setcstr(&txn->buf, "attachment");
-    charset_write_mime_param(&txn->buf, /*extended*/1, MIME_MAX_HEADER_LENGTH,
-                             "filename", resource);
+    charset_append_mime_param(&txn->buf,
+                              CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
+                              "filename",
+                              resource);
 
     if (sched_tag) buf_printf(&txn->buf, ";\r\n\tschedule-tag=%s", sched_tag);
     if (tzbyref) buf_printf(&txn->buf, ";\r\n\ttz-by-ref=true");
