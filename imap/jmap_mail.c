@@ -9759,12 +9759,14 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
     if (json_is_string(jdisposition) && !have_disp_header) {
         /* Build Content-Disposition header */
         part->disposition = xstrdup(json_string_value(jdisposition));
-        buf_setcstr(&buf, part->disposition);
+        const char *hdrprefix = "Content-Disposition: ";
+        buf_setcstr(&buf, hdrprefix);
+        buf_appendcstr(&buf, part->disposition);
         if (part->filename) {
-            charset_write_mime_param(&buf, /*extended*/1,
-                                     strlen("Content-Disposition") + buf_len(&buf),
-                                     "filename", part->filename);
+            charset_append_mime_param(
+                &buf, CHARSET_PARAM_XENCODE, "filename", part->filename);
         }
+        buf_remove(&buf, 0, strlen(hdrprefix));
         _headers_add_new(&part->headers,
                 _header_make("Content-Disposition", "disposition", &buf, parser));
     }
@@ -9774,12 +9776,14 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
     else if (jname) {
         /* Make Content-Disposition header */
         part->disposition = xstrdup("attachment");
-        buf_printf(&buf, "attachment");
+        const char *hdrprefix = "Content-Disposition: ";
+        buf_setcstr(&buf, hdrprefix);
+        buf_appendcstr(&buf, "attachment");
         if (part->filename) {
-            charset_write_mime_param(&buf, /*extended*/1,
-                                     strlen("Content-Disposition") + buf_len(&buf),
-                                     "filename", part->filename);
+            charset_append_mime_param(
+                &buf, CHARSET_PARAM_XENCODE, "filename", part->filename);
         }
+        buf_remove(&buf, 0, strlen(hdrprefix));
         _headers_add_new(&part->headers,
                 _header_make("Content-Disposition", "name", &buf, parser));
     }
@@ -9826,7 +9830,8 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
             /* Make boundary */
             part->boundary = _mime_make_boundary();
         }
-        buf_reset(&buf);
+        const char *hdrprefix = "Content-Type: ";
+        buf_setcstr(&buf, hdrprefix);
         buf_printf(&buf, "%s/%s", part->type, part->subtype);
         buf_lcase(&buf);
 
@@ -9836,9 +9841,8 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         }
 
         if (part->filename) {
-            charset_write_mime_param(&buf, /*extended*/0,
-                                     strlen("Content-Type") + buf_len(&buf),
-                                     "name", part->filename);
+            charset_append_mime_param(
+                &buf, CHARSET_PARAM_QENCODE, "name", part->filename);
         }
 
         if (part->boundary) {
@@ -9864,6 +9868,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
             }
         }
 
+        buf_remove(&buf, 0, strlen(hdrprefix));
         _headers_add_new(&part->headers,
                 _header_make("Content-Type", "type", &buf, parser));
     }

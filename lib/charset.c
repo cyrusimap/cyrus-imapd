@@ -4449,15 +4449,15 @@ const char QSTRINGCHAR[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
-EXPORTED void charset_write_mime_param(struct buf *buf, int extended, size_t cur_len,
-                                       const char *name, const char *value)
+EXPORTED void charset_append_mime_param(struct buf *buf, unsigned flags,
+                                        const char *name, const char *value)
 {
     struct buf valbuf = BUF_INITIALIZER;
     int is_qstring = 1;
     const char *p;
     char *xvalue = NULL;
-
-    cur_len += strlen(name) + 4;
+    unsigned extended = flags & CHARSET_PARAM_XENCODE;
+    size_t before_val_len = buf_len(buf) + strlen(name) + 4;
 
     /* Check if param value can be encoded as quoted string */
     for (p = value; *p && is_qstring; p++) {
@@ -4480,7 +4480,7 @@ EXPORTED void charset_write_mime_param(struct buf *buf, int extended, size_t cur
     }
     else if (!extended &&
              (!is_qstring ||
-              cur_len + buf_len(&valbuf) > MIME_MAX_HEADER_LENGTH)) {
+              before_val_len + buf_len(&valbuf) > MIME_MAX_HEADER_LENGTH)) {
         /* RFC 2047 encode */
         xvalue = charset_encode_mimeheader(value, 0, /*qpencode*/1);
     }
@@ -4489,7 +4489,8 @@ EXPORTED void charset_write_mime_param(struct buf *buf, int extended, size_t cur
     }
 
     /* Attempt to stuff param in one line */
-    if (cur_len + strlen(xvalue) < MIME_MAX_HEADER_LENGTH) {
+    if (!(flags & CHARSET_PARAM_NEWLINE) &&
+        before_val_len + strlen(xvalue) < MIME_MAX_HEADER_LENGTH) {
         if (extended && !is_qstring)
             buf_printf(buf, "; %s*=%s", name, xvalue);
         else

@@ -1269,8 +1269,10 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     /* Since we use the vCard UID in the resource name,
        this param may be long and needs to get properly split per RFC 2231 */
     struct buf value = BUF_INITIALIZER;
-    charset_write_mime_param(&value, /*extended*/1, MIME_MAX_HEADER_LENGTH,
-                             "filename", resource);
+    charset_append_mime_param(&value,
+                              CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
+                              "filename",
+                              resource);
     fprintf(f, "Content-Disposition: inline%s\r\n", buf_cstring(&value));
     buf_free(&value);
 
