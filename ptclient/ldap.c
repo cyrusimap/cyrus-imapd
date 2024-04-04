@@ -116,6 +116,7 @@ typedef struct _ptsm {
     const char      *group_filter;
     const char      *group_base;
     int             group_scope;
+    const char      *groupmember_attribute;
 
     /* Used for domain name space -> root dn discovery */
     const char      *domain_base_dn;
@@ -416,11 +417,9 @@ static void myinit(void)
 
     ptsm->member_filter = config_getstring(IMAPOPT_LDAP_MEMBER_FILTER);
     ptsm->member_base = config_getstring(IMAPOPT_LDAP_MEMBER_BASE);
-    ptsm->member_attribute = (config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) ?
-        config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE));
-
-    ptsm->user_attribute = (config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE) ?
-        config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE));
+    ptsm->member_attribute = config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE);
+    ptsm->user_attribute = config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE);
+    ptsm->groupmember_attribute = config_getstring(IMAPOPT_LDAP_GROUPMEMBER_ATTRIBUTE);
 
     p = config_getstring(IMAPOPT_LDAP_GROUP_SCOPE);
     if (!strcasecmp(p, "one")) {
@@ -1387,11 +1386,29 @@ static int ptsmodule_make_authstate_group(
         goto done;
     }
 
-    *dsize = sizeof(struct auth_state);
+    // there must be one
+    entry = ldap_first_entry(ptsm->ld, res);
+    int numvals = 0;
+    if (ptsm->groupmember_attribute) {
+        vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->groupmember_attribute);
+        numvals = ldap_count_values(vals);
+    }
+
+    // now fetch the list of members!
+
+    *dsize = sizeof(struct auth_state) + (numvals * sizeof(struct auth_ident));
     *newstate = xzmalloc(*dsize);
+    (*newstate)->ngroups = numvals;
     strcpy((*newstate)->userid.id, canon_id);
     (*newstate)->userid.hash = strhash(canon_id);
     (*newstate)->mark = time(0);
+    int i;
+    for (i = 0; i < numvals; i++) {
+        char **rdn = ldap_explode_rdn(vals[i], 1);
+        strlcat((*newstate)->groups[i].id, rdn[0], sizeof((*newstate)->groups[i].id));
+        (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+        ldap_value_free(rdn);
+    }
 
     rc = PTSM_OK;
 
