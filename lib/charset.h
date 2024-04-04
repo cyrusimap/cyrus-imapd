@@ -194,13 +194,12 @@ struct char_counts {
  * in the first INT32_MAX bytes of data. */
 extern struct char_counts charset_count_validutf8(const char *data, size_t datalen);
 
-/* Encode and append a MIME parameter 'name' and 'value' to 'buf'.
- * RFC 2231 encoding is used if 'extended' != 0.  Otherwise RFC 2047 'Q' is used.
- * 'cur_len' specifies the current length of the header field which is used
- * in determining if/when to insert folding whitespace before the parameter.
- */
-extern void charset_write_mime_param(struct buf *buf, int extended, size_t cur_len,
-                                     const char *name, const char *value);
+/* Encode and append a MIME parameter 'name' and 'value' to 'buf' */
+#define CHARSET_PARAM_QENCODE 0 // use RFC 2047 encoding
+#define CHARSET_PARAM_XENCODE 1 // use RFC 2231 encoding
+#define CHARSET_PARAM_NEWLINE (1<<1) // force newline before parameter
+extern void charset_append_mime_param(struct buf *buf, unsigned flags,
+                                      const char *name, const char *value);
 
 /* Transform the UTF-8 string 's' of length 'len' into
  * a titlecased, canonicalized, NULL-terminated UTF-8 string
