@@ -9047,7 +9047,6 @@ struct emailpart {
     /* Mandatory fields */
     struct headers headers;       /* raw headers */
     /* Optional fields */
-    json_t *jpart;                /* original EmailBodyPart JSON object */
     json_t *jbody;                /* EmailBodyValue for text bodies */
     char *blob_id;                /* blobId to dump contents from */
     ptrarray_t subparts;          /* array of emailpart pointers */
@@ -9069,7 +9068,6 @@ static void _emailpart_fini(struct emailpart *part)
         free(subpart);
     }
     ptrarray_fini(&part->subparts);
-    json_decref(part->jpart);
     json_decref(part->jbody);
     _headers_fini(&part->headers);
     free(part->type);
@@ -9656,7 +9654,6 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
 
     struct buf buf = BUF_INITIALIZER;
     struct emailpart *part = xzmalloc(sizeof(struct emailpart));
-    part->jpart = json_incref(jpart);
 
     json_t *jval;
 
