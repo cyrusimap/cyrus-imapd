@@ -96,8 +96,11 @@ sub _test_core_files_with_size
     # expect there's exactly one core
     $self->assert_num_equals(1, scalar @cores);
 
+    my $cassini = Cassandane::Cassini->instance();
+    my $core_pattern = $cassini->get_core_pattern();
+
     my $core = shift @cores;
-    if ($core =~ m/(\d+)$/) {
+    if ($core =~ m/$core_pattern/ && $1) {
         # if there's a pid in the filename, check it
         $self->assert_num_equals($pid, $1);
     }

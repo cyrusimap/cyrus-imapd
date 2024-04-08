@@ -98,8 +98,10 @@
 # Perl regular expression to match core file names on your system.
 # The default should match typical default setups, but if you have
 # configured something unusual in sysctl kernel.core_pattern, you
-# should configure this to a regex that will match it.
-##core_pattern = ^core.*?(?:\.\d+)?$
+# should configure this to a regex that will match it.  The first
+# capture group (if present) will be used to identify the pid the
+# core file came from.
+##core_pattern = ^core.*?(?:\.(\d+))?$
 
 # This section describes configurable properties of Valgrind.
 [valgrind]

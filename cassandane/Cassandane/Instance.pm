@@ -1438,9 +1438,7 @@ sub find_cores
     my $coredir = $self->{basedir} . '/conf/cores';
 
     my $cassini = Cassandane::Cassini->instance();
-    my $core_pattern = $cassini->val('cassandane', 'core_pattern',
-                                     '^core.*?(?:\.\d+)?$');
-    $core_pattern = qr{$core_pattern};
+    my $core_pattern = $cassini->get_core_pattern();
 
     my @cores;
 

@@ -243,4 +243,13 @@ sub get_section
     return \%params;
 }
 
+sub get_core_pattern
+{
+    my ($self) = @_;
+
+    my $core_pattern = $self->val('cassandane', 'core_pattern',
+                                  '^core.*?(?:\.(\d+))?$');
+    return qr{$core_pattern};
+}
+
 1;
