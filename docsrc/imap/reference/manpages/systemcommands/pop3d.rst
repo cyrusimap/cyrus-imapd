@@ -16,7 +16,7 @@ Synopsis
 .. parsed-literal::
 
     **pop3d** [ **-C** *config-file* ] [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
-        [ **-s** ] [ **-k** ] [ **-p** *ssf* ]
+        [ **-H** ] [ **-s** ] [ **-k** ] [ **-p** *ssf* ]
 
 Description
 ===========
@@ -58,6 +58,10 @@ Options
 .. option:: -D
 
     Run external debugger specified in debug_command.
+
+.. option:: -H
+
+    Tell **httpd** to expect a HAProxy protocol header from the sender.
 
 .. option:: -s
 

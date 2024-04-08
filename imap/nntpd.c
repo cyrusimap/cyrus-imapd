@@ -425,8 +425,12 @@ int service_init(int argc __attribute__((unused)),
     /* setup for sending IMAP IDLE notifications */
     idle_init();
 
-    while ((opt = getopt(argc, argv, "srfp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "Hsrfp:")) != EOF) {
         switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
         case 's': /* nntps (do starttls right away) */
             nntps = 1;
             if (!tls_enabled()) {

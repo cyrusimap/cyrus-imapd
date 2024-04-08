@@ -275,8 +275,12 @@ int service_main(int argc, char **argv,
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 360);
 
-    while ((opt = getopt(argc, argv, "a")) != EOF) {
+    while ((opt = getopt(argc, argv, "Ha")) != EOF) {
         switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
         case 'a':
             mylmtp.preauth = 1;
             break;

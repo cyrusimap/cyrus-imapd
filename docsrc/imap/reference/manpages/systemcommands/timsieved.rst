@@ -17,7 +17,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **timsieved** [ **-C** *config-file* ]
+    **timsieved** [ **-C** *config-file* ] [ **-H** ]
 
 Description
 ===========
@@ -39,6 +39,10 @@ Options
 .. program:: timsieved
 
 .. option:: -C config-file
+
+.. option:: -H
+
+    Tell **timsievedd** to expect a HAProxy protocol header from the sender.
 
     |cli-dash-c-text|
 

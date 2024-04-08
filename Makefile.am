@@ -1037,6 +1037,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/duplicate.h \
 	imap/global.c \
 	imap/global.h \
+	imap/haproxy.c \
+	imap/haproxy.h \
 	imap/http_client.c \
 	imap/http_client.h \
 	imap/idle.c \

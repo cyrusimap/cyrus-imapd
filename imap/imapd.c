@@ -1090,8 +1090,11 @@ int service_init(int argc, char **argv, char **envp)
     apns_enabled =
       (events & EVENT_APPLEPUSHSERVICE) && config_getstring(IMAPOPT_APS_TOPIC);
 
-    while ((opt = getopt(argc, argv, "Np:sq")) != EOF) {
+    while ((opt = getopt(argc, argv, "HNp:sq")) != EOF) {
         switch (opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
         case 's': /* imaps (do starttls right away) */
             imaps = 1;
             if (!tls_enabled()) {

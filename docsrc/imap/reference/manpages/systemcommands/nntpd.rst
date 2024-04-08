@@ -16,7 +16,7 @@ Synopsis
 .. parsed-literal::
 
     **nntpd** [ **-C** *config-file* ] [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
-        [ **-s** ] [ **-r** ] [ **-f** ] [ **-p** *ssf* ]
+        [ **-H** ] [ **-s** ] [ **-r** ] [ **-f** ] [ **-p** *ssf* ]
 
 Description
 ===========
@@ -67,6 +67,10 @@ Options
 .. option:: -D
 
     Run external debugger specified in debug_command.
+
+.. option:: -H
+
+    Tell **nntpd** to expect a HAProxy protocol header from the sender.
 
 .. option:: -s
 

@@ -821,8 +821,12 @@ int service_init(int argc __attribute__((unused)),
 
     mboxevent_setnamespace(&httpd_namespace);
 
-    while ((opt = getopt(argc, argv, "sp:q")) != EOF) {
+    while ((opt = getopt(argc, argv, "Hsp:q")) != EOF) {
         switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
         case 's': /* https (do TLS right away) */
             https = 1;
             break;
