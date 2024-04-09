@@ -1701,7 +1701,6 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     imapurl_toURL(&url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
 
-    buf_free(&url);
     free(extname);
 
     FILL_STRING_PARAM(event, EVENT_MBTYPE,
@@ -1811,7 +1810,6 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     imapurl_toURL(&url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, buf_release(&url));
 
-    buf_free(&url);
     free(extname);
 }
 
