@@ -39,6 +39,7 @@ sub test_email_query_attachments
                       attachments => [{
                               blobId => $data->{blobId},
                               name => "logo.gif",
+                              type => 'image/gif',
                       }],
                       keywords => { '$draft' => JSON::true },
                   },
@@ -54,6 +55,7 @@ sub test_email_query_attachments
                       attachments => [{
                               blobId => $data->{blobId},
                               name => "somethingelse.gif",
+                              type => 'image/gif',
                       }],
                       keywords => { '$draft' => JSON::true },
                   },
