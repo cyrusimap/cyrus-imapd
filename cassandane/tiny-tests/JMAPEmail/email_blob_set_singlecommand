@@ -82,6 +82,7 @@ EOF
                     attachments => [{
                         blobId => '#img',
                         name => "logo.gif",
+                        type => 'image/gif',
                     }],
                     keywords => { '$draft' => JSON::true },
       } } }, 'R1'],

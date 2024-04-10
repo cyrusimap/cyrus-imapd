@@ -37,6 +37,7 @@ sub test_email_query_attachmentname
                       attachments => [{
                               blobId => $data->{blobId},
                               name => "R\N{LATIN SMALL LETTER U WITH DIAERESIS}bezahl.txt",
+                              type => 'image/gif',
                       }],
                       keywords => { '$draft' => JSON::true },
                   },
