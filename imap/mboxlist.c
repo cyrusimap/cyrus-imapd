@@ -3107,6 +3107,78 @@ static int mboxlist_have_admin_rights(const char *rights) {
     return have_admin_access;
 }
 
+EXPORTED int mboxlist_set_usergroup(const char *userid, const char *group, int val, int silent)
+{
+    struct buf fwd = BUF_INITIALIZER;
+    struct buf rev = BUF_INITIALIZER;
+    struct txn *tid = NULL;
+    int r = 0;
+
+    init_internal();
+
+    buf_setcstr(&fwd, "UG");
+    buf_appendcstr(&fwd, userid);
+    buf_putc(&fwd, ACL_RECORDSEP_CHAR);
+    buf_appendcstr(&fwd, group);
+    buf_setcstr(&rev, "UG");
+    buf_appendcstr(&rev, group);
+    buf_putc(&rev, ACL_RECORDSEP_CHAR);
+    buf_appendcstr(&rev, userid);
+    if (val) {
+        if (!r) r = cyrusdb_store(mbdb, buf_base(&fwd), buf_len(&fwd), "", 0, &tid);
+        if (!r) r = cyrusdb_store(mbdb, buf_base(&rev), buf_len(&rev), "", 0, &tid);
+    }
+    else {
+        if (!r) r = cyrusdb_delete(mbdb, buf_base(&fwd), buf_len(&fwd), &tid, /*force*/1);
+        if (!r) r = cyrusdb_delete(mbdb, buf_base(&rev), buf_len(&rev), &tid, /*force*/1);
+    }
+    buf_free(&fwd);
+    buf_free(&rev);
+
+    if (r) {
+        cyrusdb_abort(mbdb, tid);
+        return IMAP_IOERROR;
+    }
+
+    cyrusdb_commit(mbdb, tid);
+
+    if (!silent)
+        r = mboxlist_update_raclmodseq(userid);
+
+    return r;
+}
+
+struct _usergroup_rock {
+   size_t prefixlen;
+   strarray_t *sa;
+};
+
+static int _usergroup_add(void *rock,
+                          const char *key,
+                          size_t keylen,
+                          const char *val __attribute__((unused)),
+                          size_t vallen __attribute__((unused)))
+{
+    struct _usergroup_rock *urock = (struct _usergroup_rock *)rock;
+    char *item = xstrndup(key + urock->prefixlen, keylen - urock->prefixlen);
+    strarray_appendm(urock->sa, item);
+    return 0;
+}
+
+EXPORTED int mboxlist_lookup_usergroups(const char *item, strarray_t *dest)
+{
+    init_internal();
+    struct buf prefix = BUF_INITIALIZER;
+    buf_setcstr(&prefix, "UG");
+    buf_appendcstr(&prefix, item);
+    buf_putc(&prefix, ACL_RECORDSEP_CHAR);
+    struct _usergroup_rock urock = { buf_len(&prefix), dest };
+    int r = cyrusdb_foreach(mbdb, buf_base(&prefix), buf_len(&prefix),
+                    NULL, _usergroup_add, &urock, 0);
+    buf_free(&prefix);
+    return r;
+}
+
 /*
  * Change the ACL for mailbox 'name' so that 'identifier' has the
  * rights enumerated in the string 'rights'.  If 'rights' is the null
