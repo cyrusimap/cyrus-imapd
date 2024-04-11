@@ -13236,6 +13236,57 @@ static int msgimport_checkacl_cb(const mbentry_t *mbentry, void *xrock)
     return 0;
 }
 
+static time_t _email_import_parse_received_at(const char *blob, size_t blob_len)
+{
+    message_t *msg = message_new_from_data(blob, blob_len);
+    struct buf buf = BUF_INITIALIZER;
+    time_t received_at = 0;
+    enum message_format format =  MESSAGE_DECODED | MESSAGE_TRIM;
+
+    if (!msg)
+        goto done;
+
+    if (!message_get_field(msg, "X-Deliveredinternaldate", format, &buf)) {
+        buf_appendcstr(&buf, "\r\n");
+        const char *hdr = buf_cstring(&buf);
+        char *val = NULL;
+        message_parse_string(hdr, &val);
+        if (time_from_rfc822(val, &received_at) < 0)
+            received_at = 0;
+        xzfree(val);
+    }
+
+    if (!received_at && !message_get_field(msg, "Received", format, &buf)) {
+        buf_appendcstr(&buf, "\r\n");
+        const char *hdr = buf_cstring(&buf);
+        char *val = NULL;
+        do {
+            message_parse_received_date(hdr, &val);
+            if (time_from_rfc822(val, &received_at) < 0)
+                received_at = 0;
+            hdr = strchr(hdr, '\n');
+            if (hdr)
+                hdr = strchr(hdr + 1, ':');
+            xzfree(val);
+        } while (!received_at && hdr++);
+    }
+
+    if (!received_at && !message_get_field(msg, "Date", format, &buf)) {
+        buf_appendcstr(&buf, "\r\n");
+        const char *hdr = buf_cstring(&buf);
+        char *val = NULL;
+        message_parse_string(hdr, &val);
+        if (time_from_rfc822(val, &received_at) < 0)
+            received_at = 0;
+        xzfree(val);
+    }
+
+done:
+    message_unref(&msg);
+    buf_free(&buf);
+    return received_at;
+}
+
 static void _email_import(jmap_req_t *req,
                           json_t *jemail_import,
                           json_t **new_email,
@@ -13356,26 +13407,14 @@ gotrecord:
 
     /* set receivedAt property */
     time_t internaldate = 0;
-    const char *received_at = json_string_value(json_object_get(jemail_import, "receivedAt"));
+    const char *received_at =
+        json_string_value(json_object_get(jemail_import, "receivedAt"));
     if (received_at) {
         time_from_iso8601(received_at, &internaldate);
     }
     else {
-        /* check for Received and Date Header */
-        struct body *mybody = xzmalloc(sizeof(struct body));
-        r = message_parse_mapped(buf_base(&content), buf_len(&content), mybody, NULL);
-        if (!r) {
-            const char *date = mybody->received_date ?
-                mybody->received_date : mybody->date;
-            if (date) {
-                time_t t = 0;
-                if (time_from_rfc822(date, &t) > 0) {
-                    internaldate = t;
-                }
-            }
-        }
-        message_free_body(mybody);
-        free(mybody);
+        internaldate = _email_import_parse_received_at(buf_base(&content),
+                                                       buf_len(&content));
     }
     if (!internaldate)
         internaldate = time(NULL);

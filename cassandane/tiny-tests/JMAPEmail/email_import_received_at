@@ -48,6 +48,25 @@ sub test_email_import_received_at
         desc => 'not set',
         wantSentAt => undef,
         wantReceivedAt => undef,
+    }, {
+        desc => 'receivedAt from first valid Received header',
+        headers => "Date: Sat, 1 Jan 2022 01:00:00 +1100\r\n" .
+                   "Received: from rcv1 ([192.168.0.1]) by bar (Baz); invalid datetime\r\n" .
+                   "Received: from rcv2 ([192.168.0.2]) by tux (Qux); Sat, 13 Aug 2022 12:01:10 -0200\r\n" .
+                   "Received: from rcv3 ([192.168.0.3]) by baz (Hkl); Sat, 13 Aug 2022 12:00:45 -0200\r\n",
+        wantSentAt => '2022-01-01T01:00:00+11:00',
+        wantReceivedAt => '2022-08-13T14:01:10Z',
+        skipVersionBefore => qw(3,9),
+    }, {
+        desc => 'receivedAt from X-DeliveredInternalDate header',
+        headers => "Date: Sat, 1 Jan 2022 01:00:00 +1100\r\n" .
+                   "Received: from rcv1 ([192.168.0.2]) by tux (Qux); Sat, 13 Aug 2022 12:01:10 -0200\r\n" .
+                   "Received: from rcv2 ([192.168.0.3]) by baz (Hkl); Sat, 13 Aug 2022 12:00:45 -0200\r\n" .
+                   "X-DeliveredInternalDate: Mon, 15 Aug 2022 13:00:45 -0200\r\n",
+                   ,
+        wantSentAt => '2022-01-01T01:00:00+11:00',
+        wantReceivedAt => '2022-08-15T15:00:45Z',
+        skipVersionBefore => qw(3,9),
     });
 
     while (my ($i, $tc) = each @testCases) {
