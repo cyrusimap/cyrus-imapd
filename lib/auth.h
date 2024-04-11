@@ -66,6 +66,9 @@ extern struct auth_mech auth_unix;
 extern struct auth_mech auth_pts;
 extern struct auth_mech auth_krb;
 extern struct auth_mech auth_krb5;
+extern struct auth_mech auth_mboxgroups;
+
+extern void register_mboxgroups_cb(int (*l)(const char *, strarray_t *));
 
 /* auth_canonifyid: canonify the given identifier and return a pointer
  *                  to a static buffer with the canonified ID, or NULL on

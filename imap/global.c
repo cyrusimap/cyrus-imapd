@@ -435,6 +435,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     ical_support_init();
 #endif
 
+    register_mboxgroups_cb(mboxlist_lookup_usergroups);
+
     return 0;
 }
 
