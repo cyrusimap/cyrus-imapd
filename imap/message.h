@@ -201,6 +201,8 @@ extern void message_parse_disposition(const char *hdr, char **hdpr, struct param
 
 extern void message_parse_charset_params(const struct param *params, charset_t *c_ptr);
 
+extern void message_parse_received_date(const char *hdr, char **hdrp);
+
 /* NOTE - scribbles on its input */
 extern void message_parse_env_address(char *str, struct address *addr);
 
