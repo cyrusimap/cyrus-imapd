@@ -1827,7 +1827,7 @@ static int snooze(void *ac,
         uint64_t t = arrayu64_nth(sn->times, i);
 
         buf_reset(sd->buf);
-        buf_printf(sd->buf, "%02lu:%02lu:%02lu",
+        buf_printf(sd->buf, "%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64,
                    t / 3600, (t % 3600) / 60, t % 60);
         json_array_append_new(jtimes, json_string(buf_cstring(sd->buf)));
     }
