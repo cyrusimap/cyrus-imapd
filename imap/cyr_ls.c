@@ -181,7 +181,10 @@ static void long_list(struct stat *statp)
 
     strftime(datestr, 13, datefmt, localtime(&(statp->st_ctime)));
 
-    printf("%c%c%c%c%c%c%c%c%c%c %" PRIuMAX " %-8s %-8s % 10ld %s ",
+    /* XXX statp->st_size should use OFF_T_FMT not PRIi64, but our FMT
+     * XXX macros don't allow setting flags
+     */
+    printf("%c%c%c%c%c%c%c%c%c%c %" PRIuMAX " %-8s %-8s % 10" PRIi64 " %s ",
            S_ISDIR(statp->st_mode) ? 'd' : '-',
            (statp->st_mode & S_IRUSR) ? 'r' : '-',
            (statp->st_mode & S_IWUSR) ? 'w' : '-',
@@ -194,7 +197,7 @@ static void long_list(struct stat *statp)
            (statp->st_mode & S_IXOTH) ? 'x' : '-',
            (uintmax_t) statp->st_nlink, // int size differs by platform
            pwd->pw_name, grp->gr_name,
-           statp->st_size, datestr);
+           (int64_t) statp->st_size, datestr);
 }
 
 struct list_opts {

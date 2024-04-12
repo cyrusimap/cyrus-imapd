@@ -243,7 +243,7 @@ static int frame_recv_cb(nghttp2_session *session,
 
         buf_reset(logbuf);
         buf_printf(logbuf, "<" TIME_T_FMT "<", time(NULL));   /* timestamp */
-        write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
+        retry_write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
     }
 
     switch (frame->hd.type) {
@@ -257,7 +257,7 @@ static int frame_recv_cb(nghttp2_session *session,
                 spool_enum_hdrcache(txn->req_hdrs,            /* header fields */
                                     &log_cachehdr, logbuf);
                 buf_appendcstr(logbuf, "\r\n");               /* CRLF */
-                write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
+                retry_write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
             }
 
             /* Examine request */
@@ -302,8 +302,8 @@ static int frame_recv_cb(nghttp2_session *session,
 
         if (txn->conn->logfd != -1) {
             /* telemetry log */
-            write(txn->conn->logfd, buf_base(&txn->req_body.payload),
-                  buf_len(&txn->req_body.payload));
+            retry_write(txn->conn->logfd, buf_base(&txn->req_body.payload),
+                        buf_len(&txn->req_body.payload));
         }
 
         if (txn->meth != METH_CONNECT) {
@@ -584,7 +584,7 @@ static void begin_resp_headers(struct transaction_t *txn, long code)
 
         buf_reset(logbuf);
         buf_printf(logbuf, ">" TIME_T_FMT ">", time(NULL));  /* timestamp */
-        write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
+        retry_write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
     }
 
     if (code) simple_hdr(txn, ":status", "%.3s", error_message(code));
@@ -627,7 +627,7 @@ static void add_resp_header(struct transaction_t *txn,
             }
             WRITEV_ADD_TO_IOVEC(iov, niov, nv->value, nv->valuelen);
             WRITEV_ADD_TO_IOVEC(iov, niov, "\r\n", 2);
-            writev(txn->conn->logfd, iov, niov);
+            retry_writev(txn->conn->logfd, iov, niov);
         }
     }
 }
@@ -646,7 +646,7 @@ static int end_resp_headers(struct transaction_t *txn, long code)
 
     if (txn->conn->logfd != -1) {
         /* telemetry log */
-        write(txn->conn->logfd, "\r\n", 2);
+        retry_write(txn->conn->logfd, "\r\n", 2);
     }
 
     switch (code) {
@@ -741,7 +741,7 @@ static int resp_body_chunk(struct transaction_t *txn,
         WRITEV_ADD_TO_IOVEC(iov, niov,
                             buf_base(logbuf), buf_len(logbuf));
         WRITEV_ADD_TO_IOVEC(iov, niov, data, datalen);
-        writev(txn->conn->logfd, iov, niov);
+        retry_writev(txn->conn->logfd, iov, niov);
     }
 
     /* NOTE: The protstream that we use as the data source MUST remain
