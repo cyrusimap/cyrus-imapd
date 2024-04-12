@@ -129,6 +129,7 @@ static void test_icalrecurrenceset_get_utc_timespan(void)
     struct buf buf = BUF_INITIALIZER;
     struct testcase *tc;
     for (tc = tcs; tc->icalstr; tc++) {
+        char *start, *end;
         // fprintf(stderr, "%s: %s\n", __func__, tc->desc);
         buf_setcstr(&buf, tc->icalstr);
         icalcomponent *ical = ical_string_as_icalcomponent(&buf);
@@ -136,9 +137,13 @@ static void test_icalrecurrenceset_get_utc_timespan(void)
         unsigned _recurring = 0;
         struct icalperiodtype span = icalrecurrenceset_get_utc_timespan(ical,
                 ICAL_VEVENT_COMPONENT, NULL, &_recurring, NULL, NULL);
-        CU_ASSERT_STRING_EQUAL(icaltime_as_ical_string(span.start), tc->start);
-        CU_ASSERT_STRING_EQUAL(icaltime_as_ical_string(span.end), tc->end);
+        start = icaltime_as_ical_string_r(span.start);
+        end = icaltime_as_ical_string_r(span.end);
+        CU_ASSERT_STRING_EQUAL(start, tc->start);
+        CU_ASSERT_STRING_EQUAL(end, tc->end);
         CU_ASSERT_EQUAL(_recurring, tc->recurring);
+        free(start);
+        free(end);
         icalcomponent_free(ical);
     }
     buf_free(&buf);
