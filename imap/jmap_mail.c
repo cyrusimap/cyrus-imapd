@@ -3388,7 +3388,7 @@ static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state 
                     else {
                         // most likely guidsearch_rank_clause must be
                         // updated to reject this unsupported flag
-                        syslog(LOG_ERR, "%s: ignoring unsupported flag: %0lx",
+                        syslog(LOG_ERR, "%s: ignoring unsupported flag: %0" PRIx64,
                                 __func__, e->value.u);
                     }
                 }

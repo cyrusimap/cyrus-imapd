@@ -518,12 +518,12 @@ static void get_searchparts(const char *key, const char *val, void *rock)
 
             buf_setcstr(&buf, basedir);
             buf_appendcstr(&buf, XAPIAN_DIRNAME);
-            if (gen) buf_printf(&buf, ".%lu", gen);
+            if (gen) buf_printf(&buf, ".%" PRIu64, gen);
             strarray_append(srock->oldpaths, buf_cstring(&buf));
 
             buf_setcstr(&buf, val);
             buf_printf(&buf, FNAME_USERDIR "%s" XAPIAN_DIRNAME, srock->userpath);
-            if (gen) buf_printf(&buf, ".%lu", gen);
+            if (gen) buf_printf(&buf, ".%" PRIu64, gen);
             strarray_append(srock->newpaths, buf_cstring(&buf));
         }
     }

@@ -418,7 +418,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
             "From: %s\r\n"
             "Subject: JMAP EmailSubmission for %s\r\n"
             "Content-Type: message/rfc822\r\n"
-            "Content-Length: %ld\r\n"
+            "Content-Length: " SIZE_T_FMT "\r\n"
             "%s: ", datestr, from,
             json_string_value(json_object_get(emailsubmission, "emailId")),
             msglen, JMAP_SUBMISSION_HDR);
