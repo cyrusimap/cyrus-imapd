@@ -61,17 +61,17 @@ Names can be qualified
 
     Here are some examples:
 
-        * ``cyradm> create user.lukecage@example.net`` - create a user
-        * ``cyradm> create user.mercedesknight@example.net`` - create another user
-        * ``cyradm> setquota user.lukecage@example.net 50000`` - define a quota
-        * ``cyradm> setaclmailbox user.lukecage@example.net mercedesknight@example.net read`` - give Mercedes Knight read access to Luke Cage's mailbox
+        * ``cyradm> create user/lukecage@example.net`` - create a user
+        * ``cyradm> create user/mercedesknight@example.net`` - create another user
+        * ``cyradm> setquota user/lukecage@example.net 50000`` - define a quota
+        * ``cyradm> setaclmailbox user/lukecage@example.net mercedesknight@example.net read`` - give Mercedes Knight read access to Luke Cage's mailbox
         * ``cyradm> listmailbox *@example.net`` - list all mailboxes in the example.net domain
 
 Each mailbox exists in only one domain
 
 Domains are mutually exclusive
     Users only have access to mailboxes within their own domain (intra-domain).  The following
-    example will not work: ``setacl user.mercedesknight@herdomain.com
+    example will not work: ``setacl user/mercedesknight@herdomain.com
     lukecage@hisdomain.com read``.
 
 Global and Domain admins
@@ -213,11 +213,11 @@ specifying mailboxes outside of the ``defaultdomain``.  Examples
 
 To create a new INBOX for user 'test' in ``defaultdomain``::
 
-    cm user.test
+    cm user/test
 
 To create a new INBOX for user 'test' in domain 'example.com'::
 
-    cm user.test@example.com
+    cm user/test@example.com
 
 To list all mailboxes in domain 'example.com'::
 
