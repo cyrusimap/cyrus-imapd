@@ -198,8 +198,13 @@ void time_restore(void)
 /* call the real libc function */
 static int real_gettimeofday(struct timeval *tv, ...)
 {
+#if defined(__USE_TIME_BITS64)
+    extern int __gettimeofday64(struct timeval *, ...);
+    return __gettimeofday64(tv, NULL);
+#else
     extern int __gettimeofday(struct timeval *, ...);
     return __gettimeofday(tv, NULL);
+#endif
 }
 
 /* provide a function to hide the libc weak alias */
