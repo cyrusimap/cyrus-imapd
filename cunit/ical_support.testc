@@ -130,6 +130,8 @@ static void test_icalrecurrenceset_get_utc_timespan(void)
     for (i = 0; i < n_tcs; i++) {
         const struct testcase *tc = &tcs[i];
         char *start, *end;
+        fprintf(stderr, "%s: trying test %u '%s'...\n", __func__, i, tc->desc);
+        fflush(stderr);
         buf_setcstr(&buf, tc->icalstr);
         icalcomponent *ical = ical_string_as_icalcomponent(&buf);
         CU_ASSERT_PTR_NOT_NULL(ical);
@@ -144,6 +146,8 @@ static void test_icalrecurrenceset_get_utc_timespan(void)
         free(start);
         free(end);
         icalcomponent_free(ical);
+        fprintf(stderr, "%s: okay\n", __func__);
+        fflush(stderr);
     }
     buf_free(&buf);
 
