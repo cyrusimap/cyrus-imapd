@@ -122,15 +122,14 @@ static void test_icalrecurrenceset_get_utc_timespan(void)
         "20160928T160000Z",
         "20170228T170000Z",
         1
-    }, {
-        NULL, NULL, NULL, NULL, 0
     }};
+    const size_t n_tcs = sizeof(tcs) / sizeof(tcs[0]);
 
     struct buf buf = BUF_INITIALIZER;
-    struct testcase *tc;
-    for (tc = tcs; tc->icalstr; tc++) {
+    unsigned i;
+    for (i = 0; i < n_tcs; i++) {
+        const struct testcase *tc = &tcs[i];
         char *start, *end;
-        // fprintf(stderr, "%s: %s\n", __func__, tc->desc);
         buf_setcstr(&buf, tc->icalstr);
         icalcomponent *ical = ical_string_as_icalcomponent(&buf);
         CU_ASSERT_PTR_NOT_NULL(ical);
