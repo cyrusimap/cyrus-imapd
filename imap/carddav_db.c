@@ -1477,15 +1477,8 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
                       vcardproperty_get_first_parameter(prop,
                                                         VCARD_TYPE_PARAMETER))) {
                 vcardenumarray *types = vcardparameter_get_type(param);
-                size_t i;
-                for (i = 0; i < vcardenumarray_size(types); i++) {
-                    const vcardenumarray_element *type =
-                        vcardenumarray_element_at(types, i);
-                    if (!strcasecmpsafe(type->xvalue, "pref")) {
-                        ispref = 1;
-                        break;
-                    }
-                }
+                vcardenumarray_element pref = { .val = VCARD_TYPE_PREF };
+                if (vcardenumarray_find(types, &pref) >= 0) ispref = 1;
             }
             strarray_appendm(&emails, propval);
             strarray_append(&emails, ispref ? "1" : "");
