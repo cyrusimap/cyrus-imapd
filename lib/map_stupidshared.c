@@ -49,6 +49,7 @@
 #include <syslog.h>
 
 #include "map.h"
+#include "slowio.h"
 #include "xmalloc.h"
 
 EXPORTED const char map_method_desc[] = "stupidshared";
@@ -104,6 +105,8 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
         fatal(buf, EX_IOERR);
     }
     *len = newlen;
+
+    slowio_maybe_delay_read(newlen);
 }
 
 /*

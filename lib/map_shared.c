@@ -49,6 +49,7 @@
 #include <syslog.h>
 
 #include "map.h"
+#include "slowio.h"
 #include "xmalloc.h"
 
 #define SLOP (8*1024)
@@ -109,6 +110,8 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
         fatal(buf, EX_IOERR);
     }
     *len = newlen;
+
+    slowio_maybe_delay_read(newlen);
 }
 
 /*
