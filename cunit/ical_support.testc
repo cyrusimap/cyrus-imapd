@@ -132,24 +132,39 @@ static void test_icalrecurrenceset_get_utc_timespan(void)
         char *start, *end;
         fprintf(stderr, "%s: trying test %u '%s'...\n", __func__, i, tc->desc);
         fflush(stderr);
+
         buf_setcstr(&buf, tc->icalstr);
+        fprintf(stderr, "%s: creating icalcomponent...\n", __func__);
         icalcomponent *ical = ical_string_as_icalcomponent(&buf);
+        fprintf(stderr, "%s: okay, ical=%p\n", __func__, ical);
         CU_ASSERT_PTR_NOT_NULL(ical);
+
+        fprintf(stderr, "%s: computing span...\n", __func__);
         unsigned _recurring = 0;
         struct icalperiodtype span = icalrecurrenceset_get_utc_timespan(ical,
                 ICAL_VEVENT_COMPONENT, NULL, &_recurring, NULL, NULL);
+        fprintf(stderr, "%s: okay, span.start.month=%d span.end.month=%d\n",
+                        __func__, span.start.month, span.end.month);
+
+        fprintf(stderr, "%s: converting to strings...\n", __func__);
         start = icaltime_as_ical_string_r(span.start);
         end = icaltime_as_ical_string_r(span.end);
+        fprintf(stderr, "%s: okay, start='%s', end='%s'\n", __func__, start, end);
+
         CU_ASSERT_STRING_EQUAL(start, tc->start);
         CU_ASSERT_STRING_EQUAL(end, tc->end);
         CU_ASSERT_EQUAL(_recurring, tc->recurring);
+
+        fprintf(stderr, "%s: finished, freeing temporaries...\n", __func__);
         free(start);
         free(end);
         icalcomponent_free(ical);
-        fprintf(stderr, "%s: okay\n", __func__);
+
+        fprintf(stderr, "%s: %s okay\n", __func__, tc->desc);
         fflush(stderr);
     }
     buf_free(&buf);
 
     free(eternitystr);
 }
+/* vim: set ft=c: */
