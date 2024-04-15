@@ -66,6 +66,7 @@
 #include "charset.h"
 #include "cyr_lock.h"
 #include "gmtoff.h"
+#include "haproxy.h"
 #include "iptostring.h"
 #include "global.h"
 #include "ical_support.h"
@@ -119,6 +120,7 @@ EXPORTED size_t config_search_maxsize;
 EXPORTED int config_httpprettytelemetry;
 EXPORTED int config_take_globallock;
 EXPORTED char *config_skip_userlock;
+EXPORTED int haproxy_protocol = 0;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
@@ -1054,13 +1056,14 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
 {
 #define IPBUF_SIZE (NI_MAXHOST+NI_MAXSERV+2)
     socklen_t salen;
-    struct sockaddr_storage localaddr, remoteaddr;
+    struct sockaddr_storage localaddr = { 0 }, remoteaddr = { 0 };
     struct sockaddr *localsock = (struct sockaddr *)&localaddr;
     struct sockaddr *remotesock = (struct sockaddr *)&remoteaddr;
     static struct buf clientbuf = BUF_INITIALIZER;
     static char lipbuf[IPBUF_SIZE], ripbuf[IPBUF_SIZE];
     char hbuf[NI_MAXHOST];
     int niflags;
+    int r = 0;
 
     buf_reset(&clientbuf);
     *localip = *remoteip = NULL;
@@ -1068,7 +1071,16 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
     /* determine who we're talking to */
 
     salen = sizeof(struct sockaddr_storage);
-    if (getpeername(s, remotesock, &salen) == 0 &&
+
+    if (haproxy_protocol && haproxy_read_hdr(s, localsock, remotesock) != 0) {
+        fatal("unable to read HAProxy protocol header", EX_IOERR);
+    }
+
+    if (remotesock->sa_family == PF_UNSPEC) {
+        r = getpeername(s, remotesock, &salen);
+    }
+
+    if (r == 0 &&
         (remotesock->sa_family == AF_INET ||
          remotesock->sa_family == AF_INET6)) {
         /* connected to an internet socket */
@@ -1089,7 +1101,12 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
         buf_printf(&clientbuf, "[%s]", hbuf);
 
         salen = sizeof(struct sockaddr_storage);
-        if (getsockname(s, localsock, &salen) == 0) {
+
+        if (localsock->sa_family == PF_UNSPEC) {
+            r = getsockname(s, localsock, &salen);
+        }
+
+        if (r == 0) {
             /* set the ip addresses here */
             if (iptostring(localsock, salen,
                           lipbuf, sizeof(lipbuf)) == 0) {

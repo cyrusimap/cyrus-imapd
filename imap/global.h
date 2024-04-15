@@ -185,6 +185,7 @@ extern int config_httpprettytelemetry;
 extern int charset_flags;
 extern int charset_snippet_flags;
 extern size_t config_search_maxsize;
+extern int haproxy_protocol;
 
 /* Session ID */
 extern void session_new_id(void);

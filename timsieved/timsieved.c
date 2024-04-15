@@ -207,15 +207,27 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-EXPORTED int service_init(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
+EXPORTED int service_init(int argc, char **argv,
                  char **envp __attribute__((unused)))
 {
+    int opt;
+
     global_sasl_init(1, 1, mysasl_cb);
 
     /* build interpreter for compiling */
     interp = sieve_build_nonexec_interp();
     if (interp == NULL) shut_down(EX_SOFTWARE);
+
+    while ((opt = getopt(argc, argv, "H")) != EOF) {
+        switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
+        default:
+            break;
+        }
+    }
 
     return 0;
 }

@@ -409,8 +409,7 @@ static void popd_reset(void)
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
  */
-int service_init(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
+int service_init(int argc, char **argv,
                  char **envp __attribute__((unused)))
 {
     int r;
@@ -437,8 +436,12 @@ int service_init(int argc __attribute__((unused)),
 
     mboxevent_setnamespace(&popd_namespace);
 
-    while ((opt = getopt(argc, argv, "skp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "Hskp:")) != EOF) {
         switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
         case 's': /* pop3s (do starttls right away) */
             pop3s = 1;
             if (!tls_enabled()) {
