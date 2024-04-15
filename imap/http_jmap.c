@@ -1158,7 +1158,7 @@ static int jmap_upload(struct transaction_t *txn)
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
-    fprintf(f, "Content-Type: %s\r\n", normalisedtype);
+    fputs("Content-Type: application/octet-stream\r\n", f);
 
     int domain = data_domain(data, datalen);
     switch (domain) {
