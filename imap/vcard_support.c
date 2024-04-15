@@ -50,6 +50,7 @@
 #include "syslog.h"
 
 #include "global.h"
+#include "hash.h"
 
 EXPORTED struct vparse_card *vcard_parse_string(const char *str)
 {
@@ -564,7 +565,7 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
                 const vcardenumarray_element *subtype =
                     vcardenumarray_element_at(subtypes, i);
 
-                if (subtype->xvalue && strcasecmp(subtype->xvalue, "PREF")) {
+                if (subtype->xvalue) {
                     buf_setcstr(&buf, subtype->xvalue);
                     break;
                 }
@@ -595,10 +596,39 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
     return _prop_decode_value(data, value, content_type, guid);
 }
 
+struct preferred_prop {
+    vcardproperty *prop;
+    int level;
+};
+
+static void add_type_pref(const char *key __attribute__((unused)),
+                          void *data, void *rock __attribute__((unused)))
+{
+    vcardenumarray_element pref = { .val = VCARD_TYPE_PREF };
+    vcardproperty *prop = ((struct preferred_prop *) data)->prop;
+    vcardparameter *param =
+        vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
+    vcardenumarray *types;
+
+    if (param) {
+        types = vcardparameter_get_type(param);
+    }
+    else {
+        types = vcardenumarray_new(1);
+        param = vcardparameter_new_type(types);
+        vcardproperty_add_parameter(prop, param);
+    }
+    vcardenumarray_append(types, &pref);
+}
+
 EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
 {
     vcardproperty *prop, *next;
     struct buf buf = BUF_INITIALIZER;
+    struct hash_table pref_table = HASH_TABLE_INITIALIZER;
+
+    /* Create hash table of preferred properties */
+    construct_hash_table(&pref_table, 10, 1);
 
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop; prop = next) {
@@ -608,6 +638,35 @@ EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
         vcardparameter *param;
 
         next = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY);
+
+        buf_reset(&buf);
+
+        /* Replace MEDIATYPE with TYPE=<subtype> */
+        param = vcardproperty_get_first_parameter(prop, VCARD_MEDIATYPE_PARAMETER);
+        if (param) {
+            buf_setcstr(&buf, vcardparameter_get_mediatype(param));
+            vcardproperty_remove_parameter_by_ref(prop, param);
+        }
+
+        /* Find most preferred properties (lowest PREF) */
+        param = vcardproperty_get_first_parameter(prop, VCARD_PREF_PARAMETER);
+        if (param) {
+            int level = vcardparameter_get_pref(param);
+            const char *prop_name = vcardproperty_get_property_name(prop);
+            struct preferred_prop *pp = hash_lookup(prop_name, &pref_table);
+
+            if (!pp) {
+                pp = xmalloc(sizeof(struct preferred_prop));
+                hash_insert(prop_name, pp, &pref_table);
+                pp->level = INT_MAX;
+            }
+            if (level < pp->level) {
+                pp->prop = prop;
+                pp->level = level;
+            }
+
+            vcardproperty_remove_parameter_by_ref(prop, param);
+        }
 
         switch (vcardproperty_isa(prop)) {
         case VCARD_VERSION_PROPERTY:
@@ -648,8 +707,8 @@ EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
                 size_t typelen = 0;
 
                 if (base64) {
-                    vcardproperty_add_parameter(prop,
-                                                vcardparameter_new_encoding(VCARD_ENCODING_B));
+                    param = vcardparameter_new_encoding(VCARD_ENCODING_B);
+                    vcardproperty_add_parameter(prop, param);
 
                     data = base64 + 7;
                     typelen = base64 - type;
@@ -659,37 +718,69 @@ EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
                 }
 
                 if (typelen) {
-                    const char *subtype;
-
                     buf_setmap(&buf, type, typelen);
-                    subtype = strchr(buf_ucase(&buf), '/');
-                    if (subtype) {
-                        vcardenumarray *array = vcardenumarray_new(1);
-                        vcardenumarray_element e =
-                            {  VCARD_TYPE_X, subtype+1 };
-
-                        vcardenumarray_append(array, &e);
-                        vcardproperty_add_parameter(prop,
-                                                    vcardparameter_new_type(array));
-                    }
                 }
 
-                buf_setcstr(&buf, data ? data+1 : "");
                 vcardproperty_set_value_from_string(prop,
-                                                    buf_cstring(&buf), "NO");
+                                                    data ? data + 1 : "", "NO");
             }
-            else if ((param =
-                      vcardproperty_get_first_parameter(prop,
-                                                        VCARD_MEDIATYPE_PARAMETER))) {
-                /* Rename MEDIATYPE parameter */
-                vcardenumarray *array = vcardenumarray_new(1);
-                vcardenumarray_element e =
-                    { VCARD_TYPE_X, vcardparameter_get_mediatype(param) };
+            else {
+                param = vcardparameter_new_value(VCARD_VALUE_URI);
+                vcardproperty_add_parameter(prop, param);
+            }
 
-                vcardenumarray_append(array, &e);
-                vcardproperty_add_parameter(prop,
-                                            vcardparameter_new_type(array));
-                vcardproperty_remove_parameter_by_ref(prop, param);
+            if (buf_len(&buf)) {
+                /* Add TYPE=<subtype> parameter */
+                const char *subtype = strchr(buf_ucase(&buf), '/');
+
+                if (subtype) {
+                    vcardenumarray_element type = { .xvalue = subtype + 1 };
+                    vcardenumarray *types;
+
+                    param =
+                        vcardproperty_get_first_parameter(prop,
+                                                          VCARD_TYPE_PARAMETER);
+                    if (param) {
+                        types = vcardparameter_get_type(param);
+                    }
+                    else {
+                        types = vcardenumarray_new(1);
+                        param = vcardparameter_new_type(types);
+                        vcardproperty_add_parameter(prop, param);
+                    }
+                    vcardenumarray_append(types, &type);
+                }
+            }
+            break;
+
+        case VCARD_GEO_PROPERTY:
+            /* Rewrite GEO property from geo: uri to lat;lat */
+            if (!strncmp(propval, "geo:", 4)) {
+                const char *lat = propval + 4;
+                const char *lon = strchr(lat, ',');
+                vcardgeotype geo = { 0 };
+
+                if (lon) {
+                    buf_setmap(&buf, lat, lon - lat);
+                    geo.coords.lat = buf_cstring(&buf);
+                    geo.coords.lon = ++lon;
+                }
+                else {
+                    geo.coords.lat = lat;
+                    geo.coords.lon = "";
+                }
+
+                vcardproperty_set_geo(prop, geo);
+            }
+            break;
+
+        case VCARD_TEL_PROPERTY:
+            /* Rewrite TEL property from tel: uri to text */
+            if (!strncmp(propval, "tel:", 4)) {
+                buf_setcstr(&buf, propval + 4);
+                vcardproperty_set_tel(prop, buf_cstring(&buf));
+                vcardproperty_remove_parameter_by_kind(prop,
+                                                       VCARD_VALUE_PARAMETER);
             }
             break;
 
@@ -714,6 +805,10 @@ EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
         }
     }
 
+    /* Add TYPE=pref parameter to preferred properties */
+    hash_enumerate(&pref_table, &add_type_pref, NULL);
+
+    free_hash_table(&pref_table, free);
     buf_free(&buf);
 }
 
@@ -731,8 +826,29 @@ EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
         const char *propval = vcardproperty_get_value_as_string(prop);
         const char *str = NULL;
         vcardparameter *param;
+        vcardenumarray *types = NULL;
 
         next = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY);
+
+        buf_reset(&buf);
+
+        /* Replace TYPE=pref with PREF=1 */
+        param = vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
+        if (param) {
+            vcardenumarray_element pref = { .val = VCARD_TYPE_PREF };
+            ssize_t i;
+
+            types = vcardparameter_get_type(param);
+            i = vcardenumarray_find(types, &pref);
+            if (i >= 0) {
+                vcardproperty_add_parameter(prop, vcardparameter_new_pref(1));
+                vcardenumarray_remove_element_at(types, i);
+                if (!vcardenumarray_size(types)) {
+                    vcardproperty_remove_parameter_by_ref(prop, param);
+                    types = NULL;
+                }
+            }
+        }
 
         switch (vcardproperty_isa(prop)) {
         case VCARD_VERSION_PROPERTY:
@@ -773,6 +889,29 @@ EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
         case VCARD_SOUND_PROPERTY:
             if (!str) str = "audio/";
 
+            if (types) {
+                /* Replace TYPE=subtype with MEDIATYPE or data:<mediatype>
+                 *
+                 * XXX  We assume that the first VCARD_TYPE_X is the subtype
+                 */
+                for (size_t i = 0; i < vcardenumarray_size(types); i++) {
+                    const vcardenumarray_element *type =
+                        vcardenumarray_element_at(types, i);
+
+                    if (type->xvalue) {
+                        buf_setcstr(&buf, str);
+                        buf_appendcstr(&buf, type->xvalue);
+                        buf_lcase(&buf);
+
+                        vcardenumarray_remove_element_at(types, i);
+                        if (!vcardenumarray_size(types)) {
+                            vcardproperty_remove_parameter_by_ref(prop, param);
+                        }
+                        break;
+                    }
+                }
+            }
+
             param = vcardproperty_get_first_parameter(prop,
                                                       VCARD_VALUE_PARAMETER);
             if (!is_v4 &&
@@ -780,28 +919,13 @@ EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
                  vcardproperty_get_first_parameter(prop,
                                                    VCARD_ENCODING_PARAMETER) ||
                  !vcard_value_is_uri(propval))) {
+ 
+                /* Rewrite 'b' encoded value as data: uri */
+                buf_insertcstr(&buf, 0, "data:");
 
-                /* Rewrite 'b' encoded value as data: URI */
-                buf_setcstr(&buf, "data:");
-
-                param = vcardproperty_get_first_parameter(prop,
-                                                          VCARD_TYPE_PARAMETER);
-                if (param) {
-                    vcardenumarray *array = vcardparameter_get_type(param);
-                    const vcardenumarray_element *e =
-                        vcardenumarray_element_at(array, 0);
-
-                    if (e->xvalue) {
-                        buf_appendcstr(&buf, str);
-                        buf_appendcstr(&buf, e->xvalue);
-                        buf_lcase(&buf);
-                    }
-
-                    vcardproperty_remove_parameter_by_ref(prop, param);
-                }
-
-                param = vcardproperty_get_first_parameter(prop,
-                                                          VCARD_ENCODING_PARAMETER);
+                param =
+                    vcardproperty_get_first_parameter(prop,
+                                                      VCARD_ENCODING_PARAMETER);
                 if (param) {
                     if (vcardparameter_get_encoding(param) == VCARD_ENCODING_B) {
                         buf_appendcstr(&buf, ";base64");
@@ -814,20 +938,23 @@ EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
                 vcardproperty_set_value_from_string(prop,
                                                     buf_cstring(&buf), "NO");
             }
-            else if ((param =
-                      vcardproperty_get_first_parameter(prop,
-                                                        VCARD_TYPE_PARAMETER))) {
-                /* Rename TYPE parameter */
-                vcardenumarray *array = vcardparameter_get_type(param);
-                const vcardenumarray_element *e =
-                    vcardenumarray_element_at(array, 0);
+            else if (buf_len(&buf)) {
+                /* Add MEDIATYPE parameter */
+                param = vcardparameter_new_mediatype(buf_cstring(&buf));
+                vcardproperty_add_parameter(prop, param);
+            }
+            break;
 
-                if (e->xvalue) {
-                    buf_setcstr(&buf, e->xvalue);
-                    vcardproperty_add_parameter(prop,
-                                                vcardparameter_new_mediatype(buf_ucase(&buf)));
-                    vcardproperty_remove_parameter_by_ref(prop, param);
-                }
+        case VCARD_GEO_PROPERTY:
+            /* Rewrite GEO property as geo: uri */
+            if (strncmp(propval, "geo:", 4)) {
+                vcardgeotype geo = vcardproperty_get_geo(prop);
+
+                buf_printf(&buf, "geo:%s,%s", geo.coords.lat, geo.coords.lon);
+                geo.uri = buf_cstring(&buf);
+                vcardproperty_set_geo(prop, geo);
+                vcardproperty_remove_parameter_by_kind(prop,
+                                                       VCARD_VALUE_PARAMETER);
             }
             break;
 
