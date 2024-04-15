@@ -128,7 +128,6 @@ static void message_parse_params(const char *hdr, struct param **paramp);
 static void message_fold_params(struct param **paramp);
 static void message_parse_language(const char *hdr, struct param **paramp);
 static void message_parse_rfc822space(const char **s);
-static void message_parse_received_date(const char *hdr, char **hdrp);
 
 static void message_parse_multipart(struct msg *msg,
                                     struct body *body,
@@ -1987,7 +1986,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
     body_add_content_guid(msg->base + s_offset, body);
 }
 
-static void message_parse_received_date(const char *hdr, char **hdrp)
+EXPORTED void message_parse_received_date(const char *hdr, char **hdrp)
 {
   char *curp, *hdrbuf = 0;
 
