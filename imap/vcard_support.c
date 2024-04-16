@@ -775,12 +775,11 @@ EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
 
             param = vcardproperty_get_first_parameter(prop,
                                                       VCARD_VALUE_PARAMETER);
-            if ((!param && !is_v4) ||
-                (param && vcardparameter_get_value(param) != VCARD_VALUE_URI) ||
-                vcardproperty_get_first_parameter(prop,
-                                                  VCARD_ENCODING_PARAMETER) ||
-                vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER) ||
-                !vcard_value_is_uri(vcardproperty_get_value_as_string(prop))) {
+            if (!is_v4 &&
+                ((param && vcardparameter_get_value(param) != VCARD_VALUE_URI) ||
+                 vcardproperty_get_first_parameter(prop,
+                                                   VCARD_ENCODING_PARAMETER) ||
+                 !vcard_value_is_uri(propval))) {
 
                 /* Rewrite 'b' encoded value as data: URI */
                 buf_setcstr(&buf, "data:");
