@@ -1945,18 +1945,33 @@ xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *
             return query_new_type(db, prefix, str);
         }
 
-        // Don't stem queries for Thaana codepage (0780) or higher.
+        // Match unstructured search parts
+
+        static Xapian::Query *q = NULL;
+
+        int need_word_break = 0;
         for (const unsigned char *p = (const unsigned char *)str; *p; p++) {
-            if (*p > 221) //has highbit
-                return xapian_query_new_match_word_break(db, str, prefix);
+            // Use ICU word break for Thaana codepage (0780) or higher.
+            if (*p > 221) {
+                need_word_break = 1;
+                break;
+            }
         }
 
-        // Stemable codepage.
-        Xapian::TermGenerator::stem_strategy stem_strategy =
-            get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
+        if (need_word_break) {
+            q = xapian_query_new_match_word_break(db, str, prefix);
+        }
+        else {
+            Xapian::TermGenerator::stem_strategy stem_strategy =
+                get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
+            q = query_new_textmatch(db, str, prefix, stem_strategy);
+        }
+        if (q && q->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
+            delete q;
+            q = NULL;
+        }
 
-        return query_new_textmatch(db, str, prefix, stem_strategy);
-
+        return q;
     } catch (const Xapian::Error &err) {
         xsyslog(LOG_ERR, "IOERROR: caught exception",
                          "exception=<%s>",
@@ -2002,11 +2017,6 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
         }
         free(mystr);
         charset_free(&utf8);
-    }
-
-    if (q && q->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
-        delete q;
-        q = NULL;
     }
 
     return (xapian_query_t*) q;
