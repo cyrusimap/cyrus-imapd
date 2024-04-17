@@ -1,9 +1,10 @@
 BasedOnStyle: LLVM
-# not supported in v7.0.1: AllowShortBlocksOnASingleLine: Empty
-# not supported in v7.0.1: AllowShortIfStatementsOnASingleLine: WithoutElse
-AllowShortIfStatementsOnASingleLine: true
+AlignAfterOpenBracket: Align
+AlignArrayOfStructures: Left
+AllowShortBlocksOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: WithoutElse
 AllowShortLoopsOnASingleLine: true
-BinPackArguments: false
+BinPackArguments: true
 BraceWrapping:
   BeforeElse:      true
 BreakBeforeBraces: Stroustrup
