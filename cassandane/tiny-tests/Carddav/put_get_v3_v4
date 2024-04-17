@@ -34,13 +34,25 @@ ORG:Bubba Gump Shrimp Co.
 TITLE:Shrimp Man
 REV:2008-04-24T19:52:43Z
 GEO:$lat;$lon
-TEL;TYPE=pref,work,voice:$tel
+TEL;TYPE=pref,foo,work:$tel
 EMAIL;TYPE=pref:$email1
 EMAIL:$email2
 TZ:-05:00
 TZ;VALUE=TEXT:$tzid
 END:VCARD
 EOF
+
+    # patterns for matching parameters
+    my $typesep = "(,|;TYPE=)";  # either comma-separated values or separate params
+    my $binary = "ENCODING=[B|b]";
+    my $utcoff = "[U|u][T|t][C|c]-[O|o][F|f][F|f][S|s][E|e][T|t]";
+    my $video = "[V|v][I|i][D|d][E|e][O|o]";
+    my $work = "[W|w][O|o][R|r][K|k]";
+    my $pref = "[P|p][R|r][E|e][F|f]";
+    my $text = "[T|t][E|e][X|x][T|t]";
+    my $uri = "[U|u][R|r][I|i]";
+    my $gif = "[G|g][I|i][F|f]";
+    my $mp3 = "[M|m][P|p]3";
 
     my %Headers = (
       'Content-Type' => 'text/vcard',
@@ -60,21 +72,22 @@ EOF
     my $newcard = $response->{content};
     $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
     $self->assert_matches(qr/UID:urn:uuid:$uid/, $newcard);
-    $self->assert_matches(qr/PHOTO;TYPE=(VIDEO|video):data:image\/gif;base64,$photo/,
+    $self->assert_matches(qr/PHOTO;TYPE=$video:data:image\/gif;base64,$photo/,
                           $newcard);
     $self->assert_matches(qr/LOGO;MEDIATYPE=image\/jpeg:$logo/, $newcard);
-    $self->assert_matches(qr/GEO(;VALUE=URI)?:geo:$lat,$lon/, $newcard);
-    $self->assert_matches(qr/TEL;TYPE=(WORK|work),(VOICE|VOICE);PREF=1:/, $newcard);
+    $self->assert_matches(qr/GEO(;VALUE=$uri)?:geo:$lat,$lon/, $newcard);
+    $self->assert_matches(qr/TEL;TYPE=foo$typesep$work;PREF=1:/, $newcard);
     $self->assert_matches(qr/EMAIL;PREF=1:$email1/, $newcard);
     $self->assert_matches(qr/EMAIL:$email2/, $newcard);
-    $self->assert_matches(qr/TZ;VALUE=UTC-OFFSET:-0500/, $newcard);
-    $self->assert_matches(qr/TZ(;VALUE=TEXT)?:$tzid/, $newcard);
+    $self->assert_matches(qr/TZ;VALUE=$utcoff:-0500/, $newcard);
+    $self->assert_matches(qr/TZ(;VALUE=$text)?:$tzid/, $newcard);
 
     xlog $self, "PUT same vCard as v4 with some edits";
     $newcard =~ s|END:|SOUND;MEDIATYPE=audio/mp3:data:;base64,$sound\r\nEND:|;
     $newcard =~ s/:$tel/;VALUE=URL:tel:$tel/;
     $newcard =~ s/EMAIL;PREF=1:/EMAIL;PREF=2:/;
     $newcard =~ s/:$email2/;PREF=1:$email2/;
+#    $newcard =~ s/-0500/-05/;  #not supported by libicalvcard yet
     $newcard =~ s/TZ;VALUE=TEXT:/TZ:/;
 
     $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
@@ -91,15 +104,15 @@ EOF
     $newcard = $response->{content};
     $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
     $self->assert_matches(qr/UID:$uid/, $newcard);
-    $self->assert_matches(qr/PHOTO;TYPE=(VIDEO|video),(GIF|gif);ENCODING=[bB]:$photo/,
+    $self->assert_matches(qr/PHOTO;TYPE=$video(,$gif)?;$binary(;TYPE=$gif)?:$photo/,
                           $newcard);
-    $self->assert_matches(qr/LOGO;VALUE=URI;TYPE=JPEG:$logo/, $newcard);
-    $self->assert_matches(qr/SOUND;ENCODING=[bB];TYPE=(MP3|mp3):$sound/, $newcard);
+    $self->assert_matches(qr/LOGO;VALUE=$uri;TYPE=JPEG:$logo/, $newcard);
+    $self->assert_matches(qr/SOUND;$binary;TYPE=$mp3:$sound/, $newcard);
     $self->assert_matches(qr/GEO:$lat;$lon/, $newcard);
-    $self->assert_matches(qr/TEL;TYPE=(WORK|work),(VOICE|voice),(PREF|pref):$tel/,
+    $self->assert_matches(qr/TEL;TYPE=foo$typesep$work$typesep$pref:$tel/,
                           $newcard);
     $self->assert_matches(qr/EMAIL:$email1/, $newcard);
-    $self->assert_matches(qr/EMAIL;TYPE=(PREF|pref):$email2/, $newcard);
-    $self->assert_matches(qr/TZ(;VALUE=UTC-OFFSET)?:-0500/, $newcard);
-    $self->assert_matches(qr/TZ;VALUE=TEXT:$tzid/, $newcard);
+    $self->assert_matches(qr/EMAIL;TYPE=$pref:$email2/, $newcard);
+    $self->assert_matches(qr/TZ(;VALUE=$utcoff)?:-05(:)?00/, $newcard);
+    $self->assert_matches(qr/TZ;VALUE=$text:$tzid/, $newcard);
 }

@@ -90,6 +90,8 @@ extern void vcard_to_v4_x(vcardcomponent *vcard);
 extern const char *vcardproperty_get_xparam_value(vcardproperty *prop,
                                                   const char *name);
 
+extern void vcardproperty_add_type_parameter(vcardproperty *prop,
+                                             vcardenumarray_element *type);
 #endif /* HAVE_LIBICALVCARD */
 
 #endif /* VCARD_SUPPORT_H */

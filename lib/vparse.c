@@ -684,6 +684,11 @@ EXPORTED void vparse_free_entry(struct vparse_entry *entry)
     _free_entry(entry);
 }
 
+EXPORTED void vparse_free_param(struct vparse_param *param)
+{
+    _free_param(param);
+}
+
 EXPORTED void vparse_fillpos(struct vparse_state *state, struct vparse_errorpos *pos)
 {
     int l = 1;

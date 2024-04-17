@@ -272,20 +272,95 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
     return _prop_decode_value(data, value, content_type, guid);
 }
 
+struct preferred_prop {
+    void *prop;  // either vparse_entry* or vcardproperty*
+    int level;
+};
+
+static void check_pref(void *prop, const char *name, int level,
+                       struct hash_table *pref_table)
+{
+    struct preferred_prop *pp = hash_lookup(name, pref_table);
+
+    if (!pp) {
+        pp = xmalloc(sizeof(struct preferred_prop));
+        hash_insert(name, pp, pref_table);
+        pp->level = INT_MAX;
+    }
+    if (level < pp->level) {
+        pp->prop = prop;
+        pp->level = level;
+    }
+}
+
+static void add_type_pref(const char *key __attribute__((unused)),
+                          void *data, void *rock __attribute__((unused)))
+{
+    int is_ventry = !!rock;
+
+    if (is_ventry) {
+        struct vparse_entry *ventry = ((struct preferred_prop *) data)->prop;
+
+        vparse_add_param(ventry, "TYPE", "pref");
+    }
+#ifdef HAVE_LIBICALVCARD
+    else {
+        vcardenumarray_element pref = { .val = VCARD_TYPE_PREF };
+        vcardproperty *prop = ((struct preferred_prop *) data)->prop;
+
+        vcardproperty_add_type_parameter(prop, &pref);
+    }
+#endif
+}
+
 EXPORTED void vcard_to_v3(struct vparse_card *vcard)
 {
     struct vparse_entry *ventry, *next;
     struct vparse_param *vparam;
     struct buf buf = BUF_INITIALIZER;
+    struct hash_table pref_table = HASH_TABLE_INITIALIZER;
+
+    /* Create hash table of preferred properties */
+    construct_hash_table(&pref_table, 10, 1);
+
 
     for (ventry = vcard->objects->properties; ventry; ventry = next) {
         const char *name = ventry->name;
         const char *propval = ventry->v.value;
+        struct vparse_param **paramp = &ventry->params;
 
         next = ventry->next;
 
         if (!name) continue;
         if (!propval) continue;
+
+        buf_reset(&buf);
+
+        /* Find the most preferred properties (lowest PREF)
+         *   AND
+         * Replace MEDIATYPE with TYPE=<subtype>
+         */
+        while (*paramp) {
+            vparam = *paramp;
+
+            if (!strcasecmpsafe(vparam->name, "pref") ||
+                !strcasecmpsafe(vparam->name, "mediatype")) {
+
+                if (strchr("Pp", vparam->name[0])) {
+                    check_pref(ventry, name, atoi(vparam->value), &pref_table);
+                }
+                else {
+                    buf_setcstr(&buf, vparam->value);
+                }
+
+                *paramp = vparam->next;
+                vparam->next = NULL;
+                vparse_free_param(vparam);
+            }
+            else {
+                paramp = &vparam->next;
+            }
+        }
 
         if (!strcasecmp(name, "version")) {
             /* Set proper VERSION */
@@ -317,36 +392,68 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
                 /* Rewrite data: URI as 'b' encoded value */
                 const char *type = propval + 5;
                 const char *base64 = strstr(type, ";base64,");
-                const char *data = NULL;
+                const char *data = "";
                 size_t typelen = 0;
 
                 if (base64) {
                     vparse_add_param(ventry, "ENCODING", "b");
 
-                    data = base64 + 7;
+                    data = base64 + 8;
                     typelen = base64 - type;
                 }
                 else if ((data = strchr(type, ','))) {
-                    typelen = data - type;
+                    typelen = data++ - type;
                 }
 
                 if (typelen) {
-                    const char *subtype;
-
                     buf_setmap(&buf, type, typelen);
-                    subtype = strchr(buf_ucase(&buf), '/');
-                    if (subtype) {
-                        vparse_add_param(ventry, "TYPE", subtype+1);
-                    }
                 }
 
-                buf_setcstr(&buf, data ? data+1 : "");
+                /* Reset the property value to just the binary data */
+                memmove(ventry->v.value, data, strlen(data) + 1); // include NUL
+            }
+            else {
+                vparse_add_param(ventry, "VALUE", "uri");
+            }
+
+            if (buf_len(&buf)) {
+                /* Add TYPE=<subtype> parameter */
+                const char *subtype = strchr(buf_ucase(&buf), '/');
+
+                if (subtype) {
+                    vparse_add_param(ventry, "TYPE", subtype + 1);
+                }
+            }
+        }
+        else if (!strcasecmp(name, "geo")) {
+            /* Rewrite GEO property */
+            if (!strncmp(propval, "geo:", 4)) {
+                buf_setcstr(&buf, propval+4);
+                buf_replace_char(&buf, ',', ';');
                 vparse_set_value(ventry, buf_cstring(&buf));
             }
-            else if ((vparam = vparse_get_param(ventry, "mediatype"))) {
-                /* Rename MEDIATYPE parameter */
-                free(vparam->name);
-                vparam->name = xstrdup("type");
+        }
+        else if (!strcasecmp(name, "tz")) {
+            /* Rewrite TZ property */
+            vparam = vparse_get_param(ventry, "value");
+            if (!vparam) {
+                vparse_add_param(ventry, "VALUE", "text");
+            }
+            else if (!strcasecmpsafe(vparam->value, "utc-offset")) {
+                unsigned hour, min = 0;
+                char sign;
+                sscanf(propval, "%c%02d%02d)", &sign, &hour, &min);
+                buf_printf(&buf, "%c%02d:%02d", sign, hour, min);
+                vparse_set_value(ventry, buf_cstring(&buf));
+                vparse_delete_params(ventry, "value");
+            }
+        }
+        else if (!strcasecmp(name, "tel")) {
+            /* Rewrite TEL property from tel: uri to text */
+            if (!strncmp(propval, "tel:", 4)) {
+                buf_setcstr(&buf, propval + 4);
+                vparse_set_value(ventry, buf_cstring(&buf));
+                vparse_delete_params(ventry, "value");
             }
         }
         else if (!strcasecmp(name, "kind")) {
@@ -361,6 +468,10 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
         }
     }
 
+    /* Add TYPE=pref parameter to preferred properties */
+    hash_enumerate(&pref_table, &add_type_pref, (void *) 1);
+
+    free_hash_table(&pref_table, free);
     buf_free(&buf);
 }
 
@@ -372,6 +483,14 @@ static int vcard_value_is_uri(const char *val)
     xmlFreeURI(xuri);
     return is_uri;
 }
+
+static const char *known_types[] = {
+    "WORK", "HOME", "TEXT", "VOICE", "FAX", "CELL", "VIDEO", "PAGER", "TEXTPHONE",
+    "CONTACT", "ACQUAINTANCE", "FRIEND", "MET", "CO-WORKER", "COLLEAGUE",
+    "CO-RESIDENT", "NEIGHBOR", "CHILD", "PARENT", "SIBLING", "SPOUSE", "KIN",
+    "MUSE", "CRUSH", "DATE", "SWEETHEART", "ME", "AGENT", "EMERGENCY", "PREF",
+    "MAIN-NUMBER", "BILLING", "DELIVERY", NULL
+};
 
 EXPORTED void vcard_to_v4(struct vparse_card *vcard)
 {
@@ -390,11 +509,47 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
     for (ventry = vcard->objects->properties; ventry; ventry = next) {
         const char *name = ventry->name;
         const char *propval = ventry->v.value;
+        struct vparse_param **paramp = &ventry->params;
+        struct vparse_param *type = NULL;
 
         next = ventry->next;
 
         if (!name) continue;
         if (!propval) continue;
+
+        buf_reset(&buf);
+
+        while (*paramp) {
+            vparam = *paramp;
+
+            /* Replace TYPE=pref with PREF=1
+             *   AND
+             * Replace TYPE=subtype with MEDIATYPE or data:<mediatype>
+             *
+             * XXX  We assume that the first unknown TYPE is the subtype
+             */
+            if (vparam->value && !strcasecmpsafe(vparam->name, "type")) {
+                const char **val = known_types;
+
+                for (; *val && strcasecmp(*val, vparam->value); val++);
+                if (!*val) {
+                    *paramp = vparam->next;
+                    vparam->next = NULL;
+                    type = vparam;
+                    continue;
+                }
+                else if (!strcmp(*val, "PREF")) {
+                    *paramp = vparam->next;
+                    vparam->next = NULL;
+                    vparse_free_param(vparam);
+
+                    vparse_add_param(ventry, "PREF", "1");
+                    continue;
+                }
+            }
+
+            paramp = &vparam->next;
+        }
 
         if (!is_v4 && !strcasecmp(name, "version")) {
             /* Set proper VERSION */
@@ -419,31 +574,30 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
                  !strcasecmp(name, "photo") ||
                  !strcasecmp(name, "sound")) {
             /* Rewrite KEY, LOGO, PHOTO, SOUND properties */
+            if (type) {
+                switch (toupper(name[0])) {
+                case 'K':
+                    buf_appendcstr(&buf, lcase(type->value));
+                    break;
+                case 'S':
+                    buf_printf(&buf, "audio/%s", lcase(type->value));
+                    break;
+                default:
+                    buf_printf(&buf, "image/%s", lcase(type->value));
+                    break;
+                }
+
+                vparse_free_param(type);
+                type = NULL;
+            }
+
             vparam = vparse_get_param(ventry, "value");
 
-            if ((!vparam && !is_v4) ||
-                (vparam && strcasecmp(vparam->value, "uri")) ||
+            if ((vparam && strcasecmp(vparam->value, "uri")) ||
                 vparse_get_param(ventry, "encoding") ||
-                vparse_get_param(ventry, "type") ||
                 !vcard_value_is_uri(propval)) {
                 /* Rewrite 'b' encoded value as data: URI */
-                buf_setcstr(&buf, "data:");
-
-                vparam = vparse_get_param(ventry, "type");
-                if (vparam && vparam->value) {
-                    switch (toupper(name[0])) {
-                    case 'K':
-                        buf_appendcstr(&buf, lcase(vparam->value));
-                        break;
-                    case 'S':
-                        buf_printf(&buf, "audio/%s", lcase(vparam->value));
-                        break;
-                    default:
-                        buf_printf(&buf, "image/%s", lcase(vparam->value));
-                        break;
-                    }
-                }
-                vparse_delete_params(ventry, "type");
+                buf_insertcstr(&buf, 0, "data:");
 
                 vparam = vparse_get_param(ventry, "encoding");
                 if (vparam && !strcasecmpsafe(vparam->value, "b")) {
@@ -454,10 +608,35 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
                 buf_printf(&buf, ",%s", propval);
                 vparse_set_value(ventry, buf_cstring(&buf));
             }
-            else if ((vparam = vparse_get_param(ventry, "type"))) {
-                /* Rename TYPE parameter */
-                free(vparam->name);
-                vparam->name = xstrdup("mediatype");
+            else {
+                vparse_delete_params(ventry, "value");
+
+                if (buf_len(&buf)) {
+                    /* Add MEDIATYPE parameter */
+                    vparse_add_param(ventry, "MEDIATYPE", buf_cstring(&buf));
+                }
+            }
+        }
+        else if (!strcasecmp(name, "geo")) {
+            /* Rewrite GEO property */
+            if (strncmp(propval, "geo:", 4)) {
+                buf_setcstr(&buf, "geo:");
+                buf_appendcstr(&buf, propval);
+                buf_replace_char(&buf, ';', ',');
+                vparse_set_value(ventry, buf_cstring(&buf));
+            }
+        }
+        else if (!strcasecmp(name, "TZ")) {
+            /* Rewrite TZ property */
+            vparam = vparse_get_param(ventry, "value");
+            if (!vparam) {
+                buf_setcstr(&buf, propval);
+                buf_replace_all(&buf, ":", "");
+                vparse_set_value(ventry, buf_cstring(&buf));
+                vparse_add_param(ventry, "VALUE", "utc-offset");
+            }
+            else if (!strcasecmpsafe(vparam->value, "text")) {
+                vparse_delete_params(ventry, "value");
             }
         }
         else if (!strncasecmp(name, "x-addressbookserver-", 20)) {
@@ -466,6 +645,12 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
 
             free(ventry->name);
             ventry->name = newname;
+        }
+
+        if (type) {
+            /* Unused TYPE parameter - insert it back into the list */
+            type->next = ventry->params;
+            ventry->params = type;
         }
     }
 
@@ -596,31 +781,6 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
     return _prop_decode_value(data, value, content_type, guid);
 }
 
-struct preferred_prop {
-    vcardproperty *prop;
-    int level;
-};
-
-static void add_type_pref(const char *key __attribute__((unused)),
-                          void *data, void *rock __attribute__((unused)))
-{
-    vcardenumarray_element pref = { .val = VCARD_TYPE_PREF };
-    vcardproperty *prop = ((struct preferred_prop *) data)->prop;
-    vcardparameter *param =
-        vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
-    vcardenumarray *types;
-
-    if (param) {
-        types = vcardparameter_get_type(param);
-    }
-    else {
-        types = vcardenumarray_new(1);
-        param = vcardparameter_new_type(types);
-        vcardproperty_add_parameter(prop, param);
-    }
-    vcardenumarray_append(types, &pref);
-}
-
 EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
 {
     vcardproperty *prop, *next;
@@ -642,7 +802,8 @@ EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
         buf_reset(&buf);
 
         /* Replace MEDIATYPE with TYPE=<subtype> */
-        param = vcardproperty_get_first_parameter(prop, VCARD_MEDIATYPE_PARAMETER);
+        param = vcardproperty_get_first_parameter(prop,
+                                                  VCARD_MEDIATYPE_PARAMETER);
         if (param) {
             buf_setcstr(&buf, vcardparameter_get_mediatype(param));
             vcardproperty_remove_parameter_by_ref(prop, param);
@@ -651,20 +812,8 @@ EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
         /* Find most preferred properties (lowest PREF) */
         param = vcardproperty_get_first_parameter(prop, VCARD_PREF_PARAMETER);
         if (param) {
-            int level = vcardparameter_get_pref(param);
-            const char *prop_name = vcardproperty_get_property_name(prop);
-            struct preferred_prop *pp = hash_lookup(prop_name, &pref_table);
-
-            if (!pp) {
-                pp = xmalloc(sizeof(struct preferred_prop));
-                hash_insert(prop_name, pp, &pref_table);
-                pp->level = INT_MAX;
-            }
-            if (level < pp->level) {
-                pp->prop = prop;
-                pp->level = level;
-            }
-
+            check_pref(prop, vcardproperty_get_property_name(prop),
+                       vcardparameter_get_pref(param), &pref_table);
             vcardproperty_remove_parameter_by_ref(prop, param);
         }
 
@@ -703,26 +852,25 @@ EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
                 /* Rewrite data: URI as 'b' encoded value */
                 const char *type = propval + 5;
                 const char *base64 = strstr(type, ";base64,");
-                const char *data = NULL;
+                const char *data = "";
                 size_t typelen = 0;
 
                 if (base64) {
                     param = vcardparameter_new_encoding(VCARD_ENCODING_B);
                     vcardproperty_add_parameter(prop, param);
 
-                    data = base64 + 7;
+                    data = base64 + 8;
                     typelen = base64 - type;
                 }
                 else if ((data = strchr(type, ','))) {
-                    typelen = data - type;
+                    typelen = data++ - type;
                 }
 
                 if (typelen) {
                     buf_setmap(&buf, type, typelen);
                 }
 
-                vcardproperty_set_value_from_string(prop,
-                                                    data ? data + 1 : "", "NO");
+                vcardproperty_set_value_from_string(prop, data, "NO");
             }
             else {
                 param = vcardparameter_new_value(VCARD_VALUE_URI);
@@ -735,20 +883,8 @@ EXPORTED void vcard_to_v3_x(vcardcomponent *vcard)
 
                 if (subtype) {
                     vcardenumarray_element type = { .xvalue = subtype + 1 };
-                    vcardenumarray *types;
 
-                    param =
-                        vcardproperty_get_first_parameter(prop,
-                                                          VCARD_TYPE_PARAMETER);
-                    if (param) {
-                        types = vcardparameter_get_type(param);
-                    }
-                    else {
-                        types = vcardenumarray_new(1);
-                        param = vcardparameter_new_type(types);
-                        vcardproperty_add_parameter(prop, param);
-                    }
-                    vcardenumarray_append(types, &type);
+                    vcardproperty_add_type_parameter(prop, &type);
                 }
             }
             break;
@@ -914,11 +1050,10 @@ EXPORTED void vcard_to_v4_x(vcardcomponent *vcard)
 
             param = vcardproperty_get_first_parameter(prop,
                                                       VCARD_VALUE_PARAMETER);
-            if (!is_v4 &&
-                ((param && vcardparameter_get_value(param) != VCARD_VALUE_URI) ||
-                 vcardproperty_get_first_parameter(prop,
-                                                   VCARD_ENCODING_PARAMETER) ||
-                 !vcard_value_is_uri(propval))) {
+            if ((param && vcardparameter_get_value(param) != VCARD_VALUE_URI) ||
+                vcardproperty_get_first_parameter(prop,
+                                                  VCARD_ENCODING_PARAMETER) ||
+                !vcard_value_is_uri(propval)) {
  
                 /* Rewrite 'b' encoded value as data: uri */
                 buf_insertcstr(&buf, 0, "data:");
@@ -992,6 +1127,24 @@ EXPORTED const char *vcardproperty_get_xparam_value(vcardproperty *prop,
     }
 
     return NULL;
+}
+
+EXPORTED void vcardproperty_add_type_parameter(vcardproperty *prop,
+                                               vcardenumarray_element *type)
+{
+    vcardenumarray *types;
+    vcardparameter *param =
+        vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
+
+    if (param) {
+        types = vcardparameter_get_type(param);
+    }
+    else {
+        types = vcardenumarray_new(1);
+        param = vcardparameter_new_type(types);
+        vcardproperty_add_parameter(prop, param);
+    }
+    vcardenumarray_append(types, type);
 }
 
 #endif /* HAVE_LIBVCARDVCARD */
