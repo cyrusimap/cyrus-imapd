@@ -471,6 +471,10 @@ magic(ConversationMaxThread10 => sub {
     my $self = shift;
     $self->config_set('conversation_max_thread' => 10);
 });
+magic(SlowIO => sub {
+    my $self = shift;
+    $self->config_set('debug_slowio' => 'yes');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
