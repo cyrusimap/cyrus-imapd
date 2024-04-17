@@ -58,6 +58,7 @@
 #include "lib/map.h"
 #include "lib/proc.h"
 #include "lib/signals.h"
+#include "lib/slowio.h"
 #include "lib/strarray.h"
 #include "lib/util.h"
 #include "lib/xmalloc.h"
@@ -359,6 +360,8 @@ static void backupd_reset(void)
     saslprops.ssf = 0;
 
     backup_cleanup_staging_path();
+
+    slowio_reset();
 }
 
 static void dobanner(void)

@@ -65,6 +65,7 @@
 
 #include "auth.h"
 #include "libconfig.h"
+#include "slowio.h"
 #include "xmalloc.h"
 #include "imap/backend.h"
 #include "imap/global.h"
@@ -285,6 +286,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     sieved_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
     cmdloop();
+
+    slowio_reset();
 
     /* never reaches */
     exit(EX_SOFTWARE);

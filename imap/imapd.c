@@ -105,6 +105,7 @@
 #include "prometheus.h"
 #include "quota.h"
 #include "seen.h"
+#include "slowio.h"
 #include "statuscache.h"
 #include "sync_log.h"
 #include "sync_support.h"
@@ -1052,6 +1053,8 @@ static void imapd_reset(void)
     saslprops_reset(&saslprops);
 
     clear_id();
+
+    slowio_reset();
 }
 
 /*

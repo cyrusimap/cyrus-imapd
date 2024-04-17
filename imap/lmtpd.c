@@ -90,6 +90,7 @@
 #include "prometheus.h"
 #include "prot.h"
 #include "proxy.h"
+#include "slowio.h"
 #include "sync_support.h"
 #include "telemetry.h"
 #include "times.h"
@@ -325,6 +326,8 @@ int service_main(int argc, char **argv,
     }
 
     prometheus_increment(CYRUS_LMTP_READY_LISTENERS);
+
+    slowio_reset();
 
     return 0;
 }

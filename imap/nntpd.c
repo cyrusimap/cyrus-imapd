@@ -96,6 +96,7 @@
 #include "proxy.h"
 #include "retry.h"
 #include "times.h"
+#include "slowio.h"
 #include "smtpclient.h"
 #include "spool.h"
 #include "sync_support.h"
@@ -384,6 +385,8 @@ static void nntp_reset(void)
     nntp_exists = 0;
     nntp_current = 0;
     did_capabilities = 0;
+
+    slowio_reset();
 }
 
 /*
