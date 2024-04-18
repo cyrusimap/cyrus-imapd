@@ -6218,6 +6218,14 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
                     const char *type = NULL, *val = NULL;
 
                     switch (e->val) {
+                    case VCARD_TYPE_PREF:
+                        if (param_flags & ALLOW_PREF_PARAM) {
+                            /* v3 TYPE=PREF */
+                            json_object_set_new(obj, "pref", json_integer(1));
+                            continue;
+                        }
+                        break;
+
                     case VCARD_TYPE_HOME:
                         val = "private";
 
@@ -6248,14 +6256,8 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
                         break;
 
                     default:
-                        if (!e->xvalue && prop_kind == VCARD_RELATED_PROPERTY) {
+                        if (prop_kind == VCARD_RELATED_PROPERTY) {
                             type = "relation";
-                        }
-                        else if ((param_flags & ALLOW_PREF_PARAM) &&
-                            !strcasecmpsafe(e->xvalue, "PREF")) {
-                            /* v3 TYPE=PREF */
-                            json_object_set_new(obj, "pref", json_integer(1));
-                            continue;
                         }
                         break;
                     }
