@@ -123,7 +123,7 @@ sub test_xrename
 }
 
 sub test_copy
-    :SlowIO :NoAltNameSpace
+    :SlowIO :needs_component_slowio :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -159,7 +159,7 @@ sub test_copy
 }
 
 sub test_search
-    :SlowIO :NoAltNameSpace
+    :SlowIO :needs_component_slowio :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -190,7 +190,7 @@ sub test_search
 }
 
 sub test_esearch_selected
-    :SlowIO :NoAltNameSpace
+    :SlowIO :needs_component_slowio :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -222,7 +222,7 @@ sub test_esearch_selected
 }
 
 sub test_esearch_multiple
-    :SlowIO :NoAltNameSpace
+    :SlowIO :needs_component_slowio :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -268,7 +268,7 @@ sub test_esearch_multiple
 }
 
 sub test_sort
-    :SlowIO :NoAltNameSpace
+    :SlowIO :needs_component_slowio :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -300,7 +300,7 @@ sub test_sort
 }
 
 sub test_thread
-    :SlowIO :NoAltNameSpace
+    :SlowIO :needs_component_slowio :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -332,7 +332,7 @@ sub test_thread
 }
 
 sub test_rename
-    :SlowIO :NoAltNameSpace
+    :SlowIO :needs_component_slowio :NoAltNameSpace
 {
     my ($self) = @_;
 

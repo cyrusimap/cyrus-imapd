@@ -822,8 +822,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    This is mainly useful for regression testing the sync_client -a switch. */
 
 { "debug_slowio", 0, SWITCH, "UNRELEASED" }
-/* If enabled, I/O operations will be artificially slowed down.  This is
-   mainly useful for testing certain edge case handling. */
+/* If enabled, I/O operations will be artificially slowed down.  This option
+   has no effect unless Cyrus was compiled with the --enable-debug-slowio
+   configure argument.  This is mainly useful for testing certain edge case
+   handling. */
 
 { "debug_writefail_guid", NULL, STRING, "3.6.0" }
 /* If set, any arriving message with this guid will fail as if the underlying

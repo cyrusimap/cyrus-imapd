@@ -2238,6 +2238,17 @@ fi
 AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
 
 dnl
+dnl Enable/disable I/O throttling (for testing)
+dnl
+AC_ARG_ENABLE(debug-slowio,
+        [AS_HELP_STRING([--enable-debug-slowio], [enable I/O throttling])])
+AS_IF(
+    [test "x$enable_debug_slowio" = "xyes"],
+    [AC_DEFINE(ENABLE_DEBUG_SLOWIO,[],
+        [Build with slowio support])]
+)
+
+dnl
 dnl Enable/disable cyrusdb benchmarks.
 dnl
 AC_ARG_ENABLE(cyrusdb-benchmarks,
