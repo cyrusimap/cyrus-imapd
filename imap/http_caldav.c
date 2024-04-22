@@ -930,7 +930,7 @@ static modseq_t caldav_get_modseq(struct mailbox *mailbox,
         int r;
 
         /* Parse the userdata and fetch the modseq */
-        dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+        dlist_parsemap(&dl, 1, buf_base(&userdata), buf_len(&userdata));
         dlist_getnum64(dl, "MODSEQ", &modseq);
         dlist_free(&dl);
         buf_free(&userdata);
@@ -2435,7 +2435,7 @@ static void personalize_and_add_defaultalarms(struct mailbox *mailbox,
 
     if (namespace_calendar.allow & ALLOW_USERDATA) {
         if (caldav_is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
-            dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+            dlist_parsemap(&dl, 1, buf_base(&userdata), buf_len(&userdata));
             icalcomponent_add_personal_data_from_dl(ical, dl);
             usedefaultalerts = caldav_get_usedefaultalerts(dl, mailbox, record, &ical);
         }
@@ -6878,7 +6878,7 @@ static int propfind_caldav_alarms(const xmlChar *name, xmlNsPtr ns,
      * Now, CalDAV default alarms are stored as any other dead
      * DAV property again. */
     struct dlist *dl = NULL;
-    if (dlist_parsemap(&dl, 1, 0, buf_base(&attrib), buf_len(&attrib)) == 0) {
+    if (dlist_parsemap(&dl, 1, buf_base(&attrib), buf_len(&attrib)) == 0) {
         const char *content = NULL;
         if (dlist_getatom(dl, "CONTENT", &content)) {
             icalcomponent *ical = icalparser_parse_string(content);

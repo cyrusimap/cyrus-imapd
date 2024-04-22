@@ -1924,7 +1924,7 @@ struct dlist *sync_parseline(struct protstream *in, int isarchive)
     struct dlist *dl = NULL;
     int c;
 
-    c = dlist_parse(&dl, 1, isarchive, 0, in);
+    c = dlist_parse(&dl, 1, isarchive, in);
 
     /* end line - or fail */
     if (c == '\r') c = prot_getc(in);
@@ -2397,7 +2397,7 @@ redo:
         /* Attempt to reserve this message */
         mailbox_msg_path = mailbox_record_fname(mailbox, record);
         stage_msg_path = dlist_reserve_path(part, record->internal_flags & FLAG_INTERNAL_ARCHIVED,
-                                            0, &record->guid);
+                                            &record->guid);
 
         /* check that the sha1 of the file on disk is correct */
         struct index_record record2;
@@ -4984,7 +4984,7 @@ static int sync_readcache(struct sync_client_state *sync_cs, const char *mboxnam
     if (r) return r;
 
 
-    dlist_parsemap(klp, 0, 0, base, len);
+    dlist_parsemap(klp, 0, base, len);
 
     // we need the name so the parser can parse it
     if (*klp) (*klp)->name = xstrdup("MAILBOX");

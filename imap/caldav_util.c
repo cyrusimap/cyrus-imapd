@@ -172,7 +172,7 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
         struct dlist *dl;
 
         /* Parse the userdata and fetch the validators */
-        dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+        dlist_parsemap(&dl, 1, buf_base(&userdata), buf_len(&userdata));
 
         if (etag) {
             struct message_guid *userdata_guid;
@@ -1619,7 +1619,7 @@ static int caldav_bump_defaultalarms_mailbox(struct mailbox *mailbox)
                                       httpd_userid, &userdata);
             if (buf_len(&userdata)) {
                 /* Parse the userdata and fetch the validators */
-                dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+                dlist_parsemap(&dl, 1, buf_base(&userdata), buf_len(&userdata));
                 if (caldav_get_usedefaultalerts(dl, mailbox, record, NULL)) {
                     bv_set(&data.bump, record->uid);
                 }

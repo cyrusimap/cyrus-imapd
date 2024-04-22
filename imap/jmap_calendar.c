@@ -2328,7 +2328,7 @@ static int _calendarevent_getblob_cb(const char *mailbox __attribute__((unused))
     /* Parse the value and fetch the patch */
     struct dlist *dl;
     const char *vpatchstr = NULL;
-    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    dlist_parsemap(&dl, 1, buf_base(value), buf_len(value));
     dlist_getatom(dl, "VPATCH", &vpatchstr);
     if (vpatchstr) {
         /* Write VPATCH blob */
@@ -10426,7 +10426,7 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
                 uid, error_message(r));
         goto done;
     }
-    r = dlist_parsemap(&dl, 1, 0, body->description, strlen(body->description));
+    r = dlist_parsemap(&dl, 1, body->description, strlen(body->description));
     if (r) {
         xsyslog(LOG_ERR, "can't parse description", "uid=%d error=%s",
                 uid, error_message(r));
@@ -10797,7 +10797,7 @@ static int sharenotif_match(message_t *msg, struct notifsearch_entry *entry, voi
         if (r) return 0;
 
         struct dlist *dl;
-        r = dlist_parsemap(&dl, 1, 0, body->description, strlen(body->description));
+        r = dlist_parsemap(&dl, 1, body->description, strlen(body->description));
         if (r) return 0;
 
         int matches = 0;
@@ -11053,7 +11053,7 @@ static json_t *eventnotif_tojmap(jmap_req_t *req,
         const struct body *body;
         if (!message_get_cachebody(msg, &body)) {
             struct dlist *dl = NULL;
-            if (!dlist_parsemap(&dl, 1, 0, body->description,
+            if (!dlist_parsemap(&dl, 1, body->description,
                         strlen(body->description))) {
                 const char *mboxname;
                 if (dlist_getatom(dl, "M", &mboxname)) {
@@ -11244,7 +11244,7 @@ static int eventnotif_match(message_t *msg, struct notifsearch_entry *entry, voi
         struct dlist *dl = NULL;
         const struct body *body;
         if (!message_get_cachebody(msg, &body)) {
-            if (!dlist_parsemap(&dl, 1, 0, body->description,
+            if (!dlist_parsemap(&dl, 1, body->description,
                         strlen(body->description))) {
                 dlist_getatom(dl, "M", &mboxname);
                 dlist_getatom(dl, "ID", &ical_uid);
