@@ -19,6 +19,9 @@ Synopsis
 Description
 ===========
 
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
+
 **backupd** is the Cyrus Backups server.  It accepts Cyrus replication protocol
 commands on its standard input and responds on its standard output.  It MUST be
 invoked by :cyrusman:`master(8)` with those descriptors attached to a

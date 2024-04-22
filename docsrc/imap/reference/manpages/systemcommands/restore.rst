@@ -20,6 +20,9 @@ Synopsis
 Description
 ===========
 
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
+
 **restore** is a tool for restoring messages and mailboxes from a Cyrus backup
 to a Cyrus IMAP server.  It must be run from the server containing the backup
 storage.
