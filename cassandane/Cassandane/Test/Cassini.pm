@@ -210,7 +210,6 @@ sub test_environment_override
         'gdb.sync_server' => 'yes',
         'gdb.lmtpd' => 'yes',
         'gdb.timsieved' => 'yes',
-        'gdb.backupd' => 'yes',
         'config.sasl_mech_list' => 'PLAIN LOGIN',
         'config.debug_command' => '@prefix@/utils/gdbtramp %s %d',
         'caldavtalk.basedir' => '',
