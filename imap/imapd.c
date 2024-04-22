@@ -572,8 +572,6 @@ static void cmd_xstats(char *tag);
 
 static void cmd_xapplepushservice(const char *tag,
                                   struct applepushserviceargs *applepushserviceargs);
-static void cmd_xbackup(const char *tag, const char *mailbox,
-                        const char *channel);
 
 #ifdef HAVE_SSL
 static void cmd_urlfetch(char *tag);
@@ -2618,31 +2616,7 @@ static void cmdloop(void)
             break;
 
         case 'X':
-            if (!strcmp(cmd.s, "Xbackup")) {
-                if (readonly) goto noreadonly;
-                int havechannel = 0;
-
-                if (!config_getswitch(IMAPOPT_XBACKUP_ENABLED))
-                    goto badcmd;
-
-                /* user */
-                if (c != ' ') goto missingargs;
-                c = getastring(imapd_in, imapd_out, &arg1);
-
-                /* channel */
-                if (c == ' ') {
-                    havechannel = 1;
-                    c = getword(imapd_in, &arg2);
-                    if (c == EOF) goto missingargs;
-                }
-
-                if (!IS_EOL(c, imapd_in)) goto extraargs;
-
-                cmd_xbackup(tag.s, arg1.s, havechannel ? arg2.s : NULL);
-
-                prometheus_increment(CYRUS_IMAP_XBACKUP_TOTAL);
-            }
-            else if (!strcmp(cmd.s, "Xfer")) {
+            if (!strcmp(cmd.s, "Xfer")) {
                 if (readonly) goto noreadonly;
                 int havepartition = 0;
 
@@ -5799,149 +5773,6 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
 
  freeargs:
     fetchargs_fini(&fetchargs);
-}
-
-static int do_xbackup(const char *channel,
-                      const ptrarray_t *list)
-{
-    int partial_success = 0;
-    int mbox_count = 0;
-    int i, r = 0;
-    struct sync_client_state sync_cs = SYNC_CLIENT_STATE_INITIALIZER;
-
-    sync_cs.servername = sync_get_config(channel, "sync_host");
-    sync_cs.channel = channel;
-
-    syslog(LOG_INFO, "XBACKUP: connecting to server '%s' for channel '%s'",
-                     sync_cs.servername, channel);
-
-    r = sync_connect(&sync_cs);
-    if (r) {
-        syslog(LOG_ERR, "XBACKUP: failed to connect to server '%s' for channel '%s'",
-                        sync_cs.servername, channel);
-        return r;
-    }
-
-    for (i = 0; i < list->count; i++) {
-        const mbname_t *mbname = ptrarray_nth(list, i);
-        if (!mbname) continue;
-        const char *userid = mbname_userid(mbname);
-        const char *intname = mbname_intname(mbname);
-        const char *extname = mbname_extname(mbname, &imapd_namespace, NULL);
-
-        if (userid) {
-            syslog(LOG_INFO, "XBACKUP: replicating user %s", userid);
-
-            r = sync_do_user(&sync_cs, userid, NULL);
-        }
-        else {
-            struct sync_name_list *mboxname_list = sync_name_list_create();
-
-            syslog(LOG_INFO, "XBACKUP: replicating mailbox %s", intname);
-            sync_name_list_add(mboxname_list, intname);
-
-            r = sync_do_mailboxes(&sync_cs, mboxname_list, NULL, sync_cs.flags);
-            mbox_count++;
-            sync_name_list_free(&mboxname_list);
-        }
-
-        if (r) {
-            prot_printf(imapd_out, "* NO %s %s (%s)\r\n",
-                        userid ? "USER" : "MAILBOX",
-                        userid ? userid : extname,
-                        error_message(r));
-        }
-        else {
-            partial_success++;
-            prot_printf(imapd_out, "* OK %s %s\r\n",
-                        userid ? "USER" : "MAILBOX",
-                        userid ? userid : extname);
-        }
-        prot_flush(imapd_out);
-
-        /* send RESTART after each user, or 1000 mailboxes */
-        if (!r && i < list->count - 1 && (userid || mbox_count >= 1000)) {
-            mbox_count = 0;
-
-            r = sync_do_restart(&sync_cs);
-            if (r) goto done;
-        }
-    }
-
-    /* send a final RESTART */
-    sync_do_restart(&sync_cs);
-
-    if (partial_success) r = 0;
-
-done:
-    sync_disconnect(&sync_cs);
-    free(sync_cs.backend);
-
-    return r;
-}
-
-static int xbackup_addmbox(struct findall_data *data, void *rock)
-{
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
-    ptrarray_t *list = (ptrarray_t *) rock;
-
-    /* Only add shared mailboxes or user INBOXes */
-    if (!mbname_localpart(data->mbname) ||
-        (!mbname_isdeleted(data->mbname) &&
-         !strarray_size(mbname_boxes(data->mbname)))) {
-
-        ptrarray_append(list, mbname_dup(data->mbname));
-    }
-
-    return 0;
-}
-
-/* Parse and perform an XBACKUP command. */
-void cmd_xbackup(const char *tag,
-                 const char *mailbox,
-                 const char *channel)
-{
-    ptrarray_t list = PTRARRAY_INITIALIZER;
-    int i, r;
-
-    /* admins only please */
-    if (!imapd_userisadmin && !imapd_userisproxyadmin) {
-        r = IMAP_PERMISSION_DENIED;
-        goto done;
-    }
-
-    if (!config_getswitch(IMAPOPT_XBACKUP_ENABLED)) {
-        /* shouldn't get here, but just in case */
-        r = IMAP_PERMISSION_DENIED;
-        goto done;
-    }
-
-    mboxlist_findall(NULL, mailbox, 1, NULL, NULL, xbackup_addmbox, &list);
-
-    if (list.count) {
-        r = do_xbackup(channel, &list);
-
-        for (i = 0; i < list.count; i++) {
-            mbname_t *mbname = ptrarray_nth(&list, i);
-            if (mbname)
-                mbname_free(&mbname);
-        }
-        ptrarray_fini(&list);
-    }
-    else {
-        r = IMAP_MAILBOX_NONEXISTENT;
-    }
-
-done:
-    imapd_check(NULL, 0);
-
-    if (r) {
-        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-    } else {
-        prot_printf(imapd_out, "%s OK %s\r\n", tag,
-                    error_message(IMAP_OK_COMPLETED));
-    }
 }
 
 #undef PARSE_PARTIAL /* cleanup */
