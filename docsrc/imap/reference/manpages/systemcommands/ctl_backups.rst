@@ -25,6 +25,9 @@ Synopsis
 Description
 ===========
 
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
+
 **ctl_backups** is a tool for performing administrative operations on Cyrus
 backups.
 
