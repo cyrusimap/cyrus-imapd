@@ -59,7 +59,7 @@ Major changes since the 2.5.x series
 *   The ``defaultdomain`` setting in :ref:`imapd.conf <imap-reference-manpages-configs-imapd.conf>`
     now defaults to "internal" (was: NULL)
 
-*   Added experimental backup service.  See :ref:`Cyrus Backups <cyrus-backups>`
+*   Added experimental backup service.  See Cyrus Backups
 
 *   Support for Apple's Push service (XAPPLEPUSH).  See :ref:`Cyrus Eventsource <cyrus-eventsource>`
 
