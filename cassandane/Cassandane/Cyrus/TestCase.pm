@@ -94,7 +94,6 @@ sub new
         replica => 0,
         imapmurder => 0,
         httpmurder => 0,
-        backups => 0,
         start_instances => 1,
         services => [ 'imap' ],
         store => 1,
@@ -253,7 +252,6 @@ magic(CSyncReplication => sub {
 });
 magic(IMAPMurder => sub { shift->want('imapmurder'); });
 magic(HTTPMurder => sub { shift->want('httpmurder'); });
-magic(Backups => sub { shift->want('backups'); });
 magic(AnnotationAllowUndefined => sub {
     shift->config_set(annotation_allow_undefined => 1);
 });
@@ -528,7 +526,6 @@ sub _create_instances
     my $frontend_service_port;
     my $backend1_service_port;
     my $backend2_service_port;
-    my $backupd_port;
 
     $self->{_config} = $self->{_instance_params}->{config} || Cassandane::Config->default();
     $self->{_config} = $self->{_config}->clone();
@@ -586,19 +583,6 @@ sub _create_instances
                 lmtp_admins => 'mailproxy',
                 proxy_authname => 'mailproxy',
                 proxy_password => 'mailproxy',
-            );
-        }
-
-        if ($want->{backups})
-        {
-            $backupd_port = Cassandane::PortManager::alloc("localhost");
-            $conf->set(
-                backup_sync_host => "localhost",
-                backup_sync_port => $backupd_port,
-                backup_sync_authname => 'repluser',
-                backup_sync_password => 'repluser',
-                backup_sync_try_imap => 'no',
-                xbackup_enabled => 'yes',
             );
         }
 
@@ -782,32 +766,6 @@ sub _create_instances
             $self->{backend2}->_setup_for_deliver()
                 if ($want->{deliver});
         }
-
-        if ($want->{backups})
-        {
-            # set up a backup server
-            my $backup_conf = $self->{_config}->clone();
-            $backup_conf->set(
-                temp_path => '@basedir@/tmp',
-                backup_keep_previous => 'yes',
-                'backuppartition-default' => '@basedir@/data/backup',
-            );
-
-            my $cyrus_backup_prefix = $cassini->val('cyrus backup', 'prefix');
-            if (defined $cyrus_backup_prefix and -d $cyrus_backup_prefix) {
-                xlog $self, "backup instance: using [cyrus backup] configuration";
-                $instance_params{installation} = 'backup';
-            }
-
-            $instance_params{description} = "backup server for test $self->{_name}";
-            $instance_params{config} = $backup_conf;
-
-            $self->{backups} = Cassandane::Instance->new(%instance_params,
-                                                         setup_mailbox => 0);
-            $self->{backups}->add_service(name => 'backup',
-                                          port => $backupd_port,
-                                          argv => ['backupd']);
-        }
     }
 
     if ($want->{gen})
@@ -913,8 +871,6 @@ sub _start_instances
         if (defined $self->{backend2});
     $self->{replica}->start()
         if (defined $self->{replica});
-    $self->{backups}->start()
-        if (defined $self->{backups});
 
     $self->{store} = undef;
     $self->{adminstore} = undef;
@@ -1032,16 +988,6 @@ sub tear_down
         };
         push @basedirs, $self->{instance}->get_basedir();
         $self->{instance} = undef;
-    }
-    if (defined $self->{backups})
-    {
-        eval {
-            push @stop_errors, $self->{backups}->stop(
-                no_check_syslog => defined $self->{no_check_syslog}
-            );
-        };
-        push @basedirs, $self->{backups}->get_basedir();
-        $self->{backups} = undef;
     }
     if (defined $self->{backend2})
     {
