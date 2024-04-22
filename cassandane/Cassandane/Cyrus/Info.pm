@@ -230,19 +230,16 @@ sub test_lint_partitions
     $self->config_set(
         # metapartition-, archivepartition- and searchpartition- must
         # correspond with an extant partition-
-        #
-        # backuppartition- is independent
         'partition-good' => '/tmp/pgood',
         'metapartition-good' => '/tmp/mgood',
         'archivepartition-good' => '/tmp/agood',
         'foosearchpartition-good' => '/tmp/sgood',
-        'backuppartition-good' => '/tmp/bgood',
 
         'metapartition-bad' => '/tmp/mbad',
         'archivepartition-bad' => '/tmp/abad',
         'foosearchpartition-bad' => '/tmp/sbad',
 
-        # not actually bad
+        # backuppartition- was deprecated
         'backuppartition-bad' => '/tmp/bbad',
     );
 
@@ -255,6 +252,7 @@ sub test_lint_partitions
     $self->assert_deep_equals(
         [ sort(
             "archivepartition-bad: /tmp/abad\n",
+            "backuppartition-bad: /tmp/bbad\n",
             "foosearchpartition-bad: /tmp/sbad\n",
             "metapartition-bad: /tmp/mbad\n",
         ) ],
