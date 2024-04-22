@@ -29,6 +29,9 @@ Synopsis
 Description
 ===========
 
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
+
 **cyr_backup** is a tool for inspecting the contents of a Cyrus backup.
 
 **cyr_backup** |default-conf-text|

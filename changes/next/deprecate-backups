@@ -1,0 +1,25 @@
+Description:
+
+Deprecates the experimental Cyrus Backups feature
+
+Config changes:
+
+backuppartition-name
+backup_compact_minsize
+backup_compact_maxsize
+backup_compact_work_threshold
+backup_staging_path
+backup_retention
+backup_db
+backup_db_path
+backup_keep_previous
+
+Upgrade instructions:
+
+Deployments that rely on the experimental Cyrus Backup feature should
+start planning for an alternative backup solution, as this feature will
+be removed in the future.
+
+GitHub issue:
+
+None
