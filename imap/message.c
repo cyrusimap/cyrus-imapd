@@ -954,9 +954,12 @@ static int message_parse_headers(struct msg *msg, struct body *body,
                     !strcmpsafe(body->encoding, "BINARY")) {
                     char *p = (char*)
                         stristr(msg->base + body->header_offset +
-                                (next - headers.s) + 27,
+                                (next - headers.s) + 26,
                                 "binary");
-                    memcpy(p, "base64", 6);
+                    if (p)
+                        memcpy(p, "base64", 6);
+                    else
+                        xsyslog(LOG_ERR, "can not patch BINARY CTE header", NULL);
                 }
                 break;
             case RFC822_CONTENT_TYPE:
