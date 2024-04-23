@@ -71,6 +71,7 @@
 #include "util.h"
 #include "auth.h"
 #include "global.h"
+#include "slowio.h"
 #include "tls.h"
 
 #include "imapd.h"
@@ -403,6 +404,8 @@ static void popd_reset(void)
     saslprops_reset(&saslprops);
 
     popd_exists = 0;
+
+    slowio_reset();
 }
 
 /*

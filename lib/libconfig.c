@@ -89,6 +89,7 @@ EXPORTED unsigned config_maxquoted;
 EXPORTED int config_qosmarking;
 EXPORTED int config_debug;
 EXPORTED toggle_debug_cb config_toggle_debug_cb = NULL;
+EXPORTED int config_debug_slowio = 0;
 
 static int config_loaded;
 
@@ -659,6 +660,7 @@ EXPORTED void config_reset(void)
     config_qosmarking = 0;
     config_debug = 0;
     config_toggle_debug_cb = NULL;
+    config_debug_slowio = 0;
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
@@ -881,6 +883,9 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     /* allow debug logging */
     config_debug = config_getswitch(IMAPOPT_DEBUG);
     if (config_toggle_debug_cb) config_toggle_debug_cb();
+
+    /* do we want artificially-slow I/O ops */
+    config_debug_slowio = config_getswitch(IMAPOPT_DEBUG_SLOWIO);
 }
 
 #define GROWSIZE 4096

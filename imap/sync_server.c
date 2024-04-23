@@ -91,6 +91,7 @@
 #include "prot.h"
 #include "quota.h"
 #include "seen.h"
+#include "slowio.h"
 #include "sync_log.h"
 #include "telemetry.h"
 #include "tls.h"
@@ -230,6 +231,8 @@ static void sync_reset(void)
     sync_archive_enabled = 0;
 
     saslprops_reset(&saslprops);
+
+    slowio_reset();
 }
 
 /*

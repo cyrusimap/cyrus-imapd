@@ -78,6 +78,7 @@
 #include "util.h"
 #include "iptostring.h"
 #include "global.h"
+#include "slowio.h"
 #include "tls.h"
 #include "map.h"
 
@@ -778,6 +779,8 @@ static void httpd_reset(struct http_connection *conn)
     saslprops_reset(&saslprops);
 
     session_new_id();
+
+    slowio_reset();
 }
 
 /*

@@ -92,6 +92,7 @@
 #include "mupdate-client.h"
 #include "proc.h"
 #include "quota.h"
+#include "slowio.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -139,6 +140,8 @@ static void smmapd_reset(void)
     cyrus_reset_stdio();
 
     libcyrus_run_delayed();
+
+    slowio_reset();
 }
 
 void shut_down(int code) __attribute__((noreturn));
