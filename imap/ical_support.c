@@ -1198,7 +1198,7 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                     }
                     else if (!recur.count) {
                         /* Recurrence never ends - set end of span to eternity */
-                        span.end =
+                        period.end =
                             icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
 
                         /* Skip RRULE & RDATE expansion */
@@ -1214,7 +1214,7 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                         comp,
                         icaltime_from_timet_with_zone(caldav_epoch, 0, NULL),
                         icaltime_from_timet_with_zone(caldav_eternity, 0, NULL),
-                        utc_timespan_cb, &span);
+                        utc_timespan_cb, &period);
             }
 
             /* Add RRULEs back, if we had removed them before. */
