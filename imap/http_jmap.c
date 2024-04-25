@@ -601,6 +601,9 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
 
         // binary decode if needed
         int encoding = part->charset_enc & 0xff;
+        if (!encoding && part->encoding) {
+            encoding = encoding_lookupname(part->encoding);
+        }
         base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
 
         if (!base) {
