@@ -55,7 +55,7 @@ command in :cyrusman:`cyradm(8)`:
 
 .. parsed-literal::
 
-    localhost> **listaclmamilbox tech/%**
+    localhost> **listaclmailbox tech/%**
     tech/Commits:
       group:tech lrswipkxtea
       anyone lrs
@@ -69,7 +69,7 @@ command in :cyrusman:`cyradm(8)`:
       group:tech lrswipkxtecda
       anyone lrsp
 
-    localhost> **listaclmamilbox user/bovik/%**
+    localhost> **listaclmailbox user/bovik/%**
     user/bovik/Drafts:
       bovik lrswipkxtecda
     user/bovik/Sent:
