@@ -77,6 +77,7 @@
 
 #include "annotate.h"
 #include "assert.h"
+#include "bsearch.h"
 #ifdef WITH_DAV
 #include "caldav_db.h"
 #include "caldav_alarm.h"
@@ -1161,6 +1162,60 @@ EXPORTED const char *mailbox_quotaroot(const struct mailbox *mailbox)
 EXPORTED uint32_t mailbox_uidvalidity(const struct mailbox *mailbox)
 {
     return mailbox->i.uidvalidity;
+}
+
+EXPORTED char *mailbox_visible_users(const struct mailbox *mailbox)
+{
+    const char *aclstr = mailbox_acl(mailbox);
+    const char *p, *q;
+    strarray_t users = STRARRAY_INITIALIZER;
+    static strarray_t *admins = NULL;
+    if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS), NULL, 0);
+
+    p = aclstr;
+
+    while (p && *p) {
+        char *name,*val;
+
+        q = strchr(p, '\t');
+        if (!q) break;
+
+        name = xstrndup(p, q-p);
+        q++;
+
+        p = strchr(q, '\t');
+        if (p) {
+            val = xstrndup(q, p-q);
+            p++;
+        }
+        else
+            val = xstrdup(q);
+
+        // only readable
+        if (!strchr(val, 'r')) goto done;
+        // not admin or special name
+        if (strcmp(name, "anyone")) goto done;
+        if (strcmp(name, "anonymous")) goto done;
+        if (strarray_find(admins, name, 0) >= 0) goto done;
+        // OK, this belongs
+        if (strncmp(name, "group:", 6)) {
+            strarray_appendm(&users, name);
+            name = NULL;
+        }
+        else {
+            mboxlist_lookup_usergroups(name, &users);
+        }
+done:
+        free(name);
+        free(val);
+    }
+
+    strarray_sort(&users, cmpstringp_raw);
+    strarray_uniq(&users);
+    char *res = strarray_join(&users, "\t");
+    strarray_fini(&users);
+
+    return res;
 }
 
 EXPORTED void mailbox_index_dirty(struct mailbox *mailbox)

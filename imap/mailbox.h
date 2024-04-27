@@ -597,6 +597,9 @@ extern uint32_t mailbox_mbtype(const struct mailbox *mailbox);
 extern modseq_t mailbox_foldermodseq(const struct mailbox *mailbox);
 extern uint32_t mailbox_uidvalidity(const struct mailbox *mailbox);
 
+/* caller must free - tab separated lists of userids */
+extern char *mailbox_visible_users(const struct mailbox *mailbox);
+
 struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox);
 struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox);
 struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox);
