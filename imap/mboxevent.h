@@ -129,6 +129,7 @@ enum event_param {
     /* 23 */ EVENT_MBTYPE,
     EVENT_SERVERFQDN,
     EVENT_MAILBOX_ACL,
+    EVENT_VISIBLE_USERS,
     /* 24 */ EVENT_DAV_FILENAME,
     /* 25 */ EVENT_DAV_UID,
     /* 26 */ EVENT_ENVELOPE,
