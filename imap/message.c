@@ -5632,19 +5632,27 @@ EXPORTED int message_extract_cids(message_t *msg,
     int r = extract_convdata(cstate, msg, &msgidlist, cids, &msubj);
     strarray_fini(&msgidlist);
     free(msubj);
+
+    struct buf annotkey = BUF_INITIALIZER;
+    struct buf annotval = BUF_INITIALIZER;
     size_t i;
+
     for (i = 0; i < arrayu64_size(cids); i++) {
         conversation_id_t newcid = 0;
-        struct buf annotkey = BUF_INITIALIZER;
-        struct buf annotval = BUF_INITIALIZER;
+        buf_reset(&annotkey);
+        buf_reset(&annotval);
         buf_printf(&annotkey, "%snewcid/%016llx", IMAP_ANNOT_NS, (conversation_id_t) arrayu64_nth(cids, i));
         annotatemore_lookup(cstate->annotmboxname, buf_cstring(&annotkey), "", &annotval);
-        if (annotval.len == 16) {
+        if (buf_len(&annotval) == 16) {
             const char *p = buf_cstring(&annotval);
             /* we have a new canonical CID */
             parsehex(p, &p, 16, &newcid);
         }
         if (newcid) arrayu64_set(cids, i, newcid);
     }
+
+    buf_free(&annotkey);
+    buf_free(&annotval);
+
     return r;
 }
