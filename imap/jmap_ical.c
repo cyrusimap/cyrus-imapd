@@ -3316,6 +3316,42 @@ virtuallocations_from_ical(icalcomponent *comp)
             buf_free(&buf);
         }
 
+        json_t *features = json_object();
+        for (param = icalproperty_get_first_parameter(prop, ICAL_FEATURE_PARAMETER);
+             param;
+             param = icalproperty_get_next_parameter(prop, ICAL_FEATURE_PARAMETER)) {
+
+            switch (icalparameter_get_feature(param)) {
+            case ICAL_FEATURE_AUDIO:
+                json_object_set_new(features, "audio", json_true());
+                break;
+            case ICAL_FEATURE_CHAT:
+                json_object_set_new(features, "chat", json_true());
+                break;
+            case ICAL_FEATURE_FEED:
+                json_object_set_new(features, "feed", json_true());
+                break;
+            case ICAL_FEATURE_MODERATOR:
+                json_object_set_new(features, "moderator", json_true());
+                break;
+            case ICAL_FEATURE_PHONE:
+                json_object_set_new(features, "phone", json_true());
+                break;
+            case ICAL_FEATURE_SCREEN:
+                json_object_set_new(features, "screen", json_true());
+                break;
+            case ICAL_FEATURE_VIDEO:
+                json_object_set_new(features, "video", json_true());
+                break;
+            case ICAL_FEATURE_X:
+            case ICAL_FEATURE_NONE:;
+            }
+        }
+        if (json_object_size(features)) {
+            json_object_set(loc, "features", features);
+        }
+        json_decref(features);
+
         if (uri) json_object_set(locations, id, loc);
 
         json_decref(loc);
@@ -6863,6 +6899,54 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
         }
         else if (JNOTNULL(jdescription)) {
             jmap_parser_invalid(parser, "description");
+        }
+
+        /* features */
+        json_t *jfeatures = json_object_get(loc, "features");
+        if (json_object_size(jfeatures)) {
+            jmap_parser_push(parser, "features");
+            const char *featurename;
+            json_t *jval;
+            json_object_foreach(jfeatures, featurename, jval) {
+                if (!json_is_true(jval)) {
+                    jmap_parser_invalid(parser, featurename);
+                }
+                else if (!strcasecmp(featurename, "audio")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_AUDIO));
+                }
+                else if (!strcasecmp(featurename, "chat")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_CHAT));
+                }
+                else if (!strcasecmp(featurename, "feed")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_FEED));
+                }
+                else if (!strcasecmp(featurename, "moderator")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_MODERATOR));
+                }
+                else if (!strcasecmp(featurename, "phone")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_PHONE));
+                }
+                else if (!strcasecmp(featurename, "screen")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_SCREEN));
+                }
+                else if (!strcasecmp(featurename, "video")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_VIDEO));
+                }
+                else {
+                    jmap_parser_invalid(parser, featurename);
+                }
+            }
+            jmap_parser_pop(parser);
+        }
+        else if (JNOTNULL(jfeatures)) {
+            jmap_parser_invalid(parser, "features");
         }
 
         icalcomponent_add_property(comp, prop);
