@@ -1266,13 +1266,23 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
 
             /* Expand (remaining) recurrences */
             if (expand) {
+                struct icaltimetype start, end;
+                fprintf(stderr, "%s: computing start/end for utc_timespan_cb\n", __func__);
+                fflush(stderr);
+                start = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
+                end = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+
                 fprintf(stderr, "%s: about to call utc_timespan_cb for each recurrence\n",
                                 __func__);
+                fprintf(stderr, "%s: with start=<%s> end=<%s>\n",
+                                __func__,
+                                icaltime_as_ical_string(start),
+                                icaltime_as_ical_string(end));
                 fflush(stderr);
                 icalcomponent_foreach_recurrence(
                         comp,
-                        icaltime_from_timet_with_zone(caldav_epoch, 0, NULL),
-                        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL),
+                        start,
+                        end,
                         utc_timespan_cb, &period);
                 fprintf(stderr, "%s: finished calls to utc_timespan_cb\n", __func__);
                 fflush(stderr);
