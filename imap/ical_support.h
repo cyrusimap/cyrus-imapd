@@ -84,7 +84,7 @@ extern struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop);
 extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
 extern void icalproperty_set_xparam(icalproperty *prop,
-                                    const char *name, const char *val, int purge);
+                                    const char *name, const char *val, int replace);
 extern const char *icalproperty_get_xparam_value(icalproperty *prop,
                                                  const char *name);
 

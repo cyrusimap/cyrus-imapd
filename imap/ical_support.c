@@ -2366,11 +2366,11 @@ static void icalproperty_remove_xparam(icalproperty *prop, const char *name)
 }
 
 EXPORTED void icalproperty_set_xparam(icalproperty *prop,
-                                      const char *name, const char *val, int purge)
+                                      const char *name, const char *val, int replace)
 {
     icalparameter *param;
 
-    if (purge) icalproperty_remove_xparam(prop, name);
+    if (replace) icalproperty_remove_xparam(prop, name);
 
     param = icalparameter_new(ICAL_X_PARAMETER);
     icalparameter_set_xname(param, name);
