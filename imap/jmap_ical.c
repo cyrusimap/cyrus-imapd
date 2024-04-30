@@ -4484,6 +4484,40 @@ static void jsprops_to_ical(icalcomponent *comp,
     buf_free(&buf);
 }
 
+static void remove_jsprops(icalcomponent *comp, const char *path)
+{
+    icalproperty *prop, *next;
+    size_t path_len = path ? strlen(path) : 0;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+         prop = next) {
+
+        next = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+        if (strcasecmpsafe(icalproperty_get_x_name(prop),
+                           JMAPICAL_XPROP_JSPROP))
+            continue;
+
+        if (path) {
+            int points_to_path = 0;
+
+            const char *jsptr =
+                icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_JSPTR);
+
+            if (!strncasecmpsafe(path, jsptr, path_len) &&
+                (jsptr[path_len] == '/' || jsptr[path_len] == '\0')) {
+                points_to_path = 1;
+            }
+
+            if (!points_to_path)
+                continue;
+        }
+
+        icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
+    }
+}
+
 static int location_is_endtimezone(json_t *loc)
 {
     const char *rel = json_string_value(json_object_get(loc, "relativeTo"));
@@ -6931,6 +6965,7 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
     const char *id;
 
     remove_icalprop(comp, ICAL_CONFERENCE_PROPERTY);
+    remove_jsprops(comp, "virtualLocations");
     if (!JNOTNULL(locations)) {
         return;
     }
