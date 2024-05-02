@@ -955,12 +955,26 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 
                 /* If we're encoding binary, replace "binary"
                    with "base64" in CTE header body */
-                if (msg->encode &&
-                    !strcmpsafe(body->encoding, "BINARY")) {
-                    char *p = (char*)
-                        stristr(msg->base + body->header_offset +
-                                (next - headers.s) + 26,
-                                "binary");
+                if (msg->encode && !strcmpsafe(body->encoding, "BINARY")) {
+                    // Determine the start and end of the CTE header value
+                    const char *hdr_val = msg->base + body->header_offset +
+                                          (next - headers.s) + 26;
+                    const char *hdr_end = hdr_val;
+                    const char *msghdr_end =
+                        msg->base + body->header_offset + body->header_size;
+                    for (; hdr_end < msghdr_end; hdr_end++) {
+                        if (hdr_end[0] == '\r') {
+                            if (hdr_end + 2 < msghdr_end &&
+                                hdr_end[1] == '\n' &&
+                                hdr_end[2] != ' ' && hdr_end[2] != '\t') {
+                                hdr_end += 2;
+                                break;
+                            }
+                        }
+                    }
+                    // Replace header value
+                    char *p =
+                        (char *)strinstr(hdr_val, hdr_end - hdr_val, "binary");
                     if (p)
                         memcpy(p, "base64", 6);
                     else
