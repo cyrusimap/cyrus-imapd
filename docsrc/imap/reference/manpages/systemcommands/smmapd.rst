@@ -24,7 +24,12 @@ Description
 a Cyrus mailbox exists, that it is postable and it is under quota.  It
 accepts commands on its standard input and responds on its standard
 output.  It MUST be invoked by :cyrusman:`master(8)` with those
-descriptors attached to a remote client connection.
+descriptors attached to a remote client connection.  The service ignores
+the userdeny database.  The received queries contain map name followed by
+mailbox, **smmapd** ignores the map name.  Queries with plus addressing return
+*OK* if the user has a mailbox with the name after plus, otherwise the result
+is *NOTFOUND*.  Match for the mailbox after plus is performed case-sensitive,
+for the address before the plus - case-insensitive.
 
 **smmapd** |default-conf-text|
 
