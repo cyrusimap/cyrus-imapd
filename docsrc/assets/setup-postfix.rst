@@ -31,7 +31,7 @@ server and engineer delivery via LMTP.  The following examples show the
     or, if you have enabled smmapd you can automatically track mailboxes with::
 
         postconf -e "virtual_mailbox_domains=hash:/etc/postfix/virtual_recipient_domains"
-        postconf -e "virtual_mailbox_maps=socketmap:unix:/run/cyrus/socket/smmap"
+        postconf -e "virtual_mailbox_maps=socketmap:unix:/run/cyrus/socket/smmap:smmapd"
 
 2.  Optional: Set the concurrency and recipient limits for LMTP delivery to the
     ``virtual`` destination::
