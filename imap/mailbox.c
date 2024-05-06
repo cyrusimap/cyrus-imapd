@@ -3072,9 +3072,10 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
     if (config_auditlog && mailbox->modseq_dirty)
         syslog(LOG_NOTICE, "auditlog: modseq sessionid=<%s> "
                "mailbox=<%s> uniqueid=<%s> highestmodseq=<" MODSEQ_FMT
-               "> deletedmodseq=<" MODSEQ_FMT ">",
+               "> deletedmodseq=<" MODSEQ_FMT "> crcs=<%u/%u>",
             session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
-            mailbox->i.highestmodseq, mailbox->i.deletedmodseq);
+            mailbox->i.highestmodseq, mailbox->i.deletedmodseq,
+            mailbox->i.synccrcs.basic, mailbox->i.synccrcs.annot);
 
     if (mailbox->modseq_dirty) {
         struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_MODSEQ);
