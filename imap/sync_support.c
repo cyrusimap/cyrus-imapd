@@ -3122,8 +3122,13 @@ done:
     /* check the CRC too */
     if (!r && !mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 0))) {
         /* try forcing a recalculation */
-        if (!mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 1)))
+        if (!mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 1))) {
+            xsyslog(LOG_NOTICE, "SYNCNOTICE: CRC error after apply",
+                            "mailbox=<%s> crcs_master=<%u/%u> crcs_replica=<%u/%u>",
+                            mailbox_name(mailbox), synccrcs.basic, synccrcs.annot,
+                            mailbox->i.synccrcs.basic, mailbox->i.synccrcs.annot);
             r = IMAP_SYNC_CHECKSUM;
+        }
     }
 
     mailbox_close(&mailbox);
