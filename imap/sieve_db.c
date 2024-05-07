@@ -905,7 +905,7 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
         mbentry.name = (char *) mboxname;
         mbentry.mbtype = MBTYPE_SIEVE;
 
-	int flags = silent ? MBOXLIST_CREATE_SYNC : 0;
+        int flags = silent ? MBOXLIST_CREATE_SYNC : 0;
 
         r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
                                    1/*isadmin*/, userid, NULL/*auth_state*/,
@@ -937,7 +937,7 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
                    mboxname, error_message(r));
             goto done;
         }
-	(*mailboxptr)->silentchanges = 1;
+        (*mailboxptr)->silentchanges = silent;
     }
 
   done:
