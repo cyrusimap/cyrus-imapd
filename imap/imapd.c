@@ -1553,6 +1553,9 @@ static void cmdloop(void)
             shut_down(0);
         }
 
+        /* ensure group information is fresh */
+        auth_refresh(imapd_authstate);
+
         signals_poll();
 
         if (!prot_error(imapd_in)) {
