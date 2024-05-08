@@ -289,7 +289,7 @@ static void blobid_from_data(struct jmapical_ctx *jmapctx,
                              const char *href)
 {
     // need a real Cyrus message for ATTACH smart blob ids
-    if (!jmapctx->icalsrc.mboxid) return;
+    if (!jmapctx->from_ical.cyrus_msg.mboxid) return;
 
     const char *semcol = strchr(href + 5, ';');
     if (!semcol || strncasecmp(semcol, ";base64,", 8))
@@ -303,8 +303,10 @@ static void blobid_from_data(struct jmapical_ctx *jmapctx,
 
     struct message_guid guid = MESSAGE_GUID_INITIALIZER;
     message_guid_generate(&guid, buf_base(buf), buf_len(buf));
-    jmap_encode_rawdata_blobid('I', jmapctx->icalsrc.mboxid,
-            jmapctx->icalsrc.uid, jmapctx->icalsrc.partid,
+    jmap_encode_rawdata_blobid('I',
+            jmapctx->from_ical.cyrus_msg.mboxid,
+            jmapctx->from_ical.cyrus_msg.uid,
+            jmapctx->from_ical.cyrus_msg.partid,
             NULL, "ATTACH", &guid, blobid);
 }
 
@@ -536,7 +538,7 @@ HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
         caldav_attachment_url(&jmapctx->attachments.url, req->accountid, baseurl, "");
     }
 
-    jmapctx->alert.emailrecipient = _emailalert_recipient(req->userid);
+    jmapctx->to_ical.emailalert_recipient = _emailalert_recipient(req->userid);
 
     if (strarray_size(schedule_addresses)) {
         const char *imipaddr = strarray_nth(schedule_addresses, 0);
@@ -569,7 +571,7 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
 
     json_decref(jmapctx->to_ical.replyto);
 
-    free(jmapctx->alert.emailrecipient);
+    free(jmapctx->to_ical.emailalert_recipient);
     buf_free(&jmapctx->buf);
     free(jmapctx);
 
@@ -3674,7 +3676,8 @@ calendarevent_from_ical(icalcomponent *comp,
 
     /* Read custom timezones */
     if (!jstzones) {
-        myjstzones.no_guess = jmapctx ? jmapctx->timezones.no_guess : 0;
+        myjstzones.no_guess =
+            jmapctx ? jmapctx->from_ical.dont_guess_timezones : 0;
         icalcomponent *ical = icalcomponent_get_parent(comp);
         jstimezones_add_vtimezones(&myjstzones, ical);
         jstzones = &myjstzones;
@@ -6015,7 +6018,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts,
         alarm = jmapical_alert_to_ical(alert, parser, id,
                 icalcomponent_get_summary(comp),
                 icalcomponent_get_description(comp),
-                jmapctx->alert.emailrecipient);
+                jmapctx->to_ical.emailalert_recipient);
 
         if (alarm) icalcomponent_add_component(comp, alarm);
         jmap_parser_pop(parser);
@@ -7173,7 +7176,7 @@ static void timezones_to_ical(icalcomponent *ical,
 
         if (strarray_find(&custom_jstzids, jstzid, 0) < 0) {
             // this timezone is not referenced by any known property
-            if (jmapctx && !jmapctx->timezones.ignore_orphans) {
+            if (jmapctx && !jmapctx->to_ical.ignore_orphan_timezones) {
                 jmap_parser_invalid(parser, jstzid);
             }
             icalcomponent_free(tzcomp);
@@ -7519,7 +7522,8 @@ static void calendarevent_to_ical(icalcomponent *comp,
             *jstzonesp = jstzones = xzmalloc(sizeof(struct jstimezones));
         }
 
-        jstzones->no_guess = jmapctx ? jmapctx->timezones.no_guess : 0;
+        jstzones->no_guess =
+            jmapctx ? jmapctx->from_ical.dont_guess_timezones : 0;
         jstimezones_add_vtimezones(jstzones, ical);
     } else {
         jstzones = *jstzonesp;
