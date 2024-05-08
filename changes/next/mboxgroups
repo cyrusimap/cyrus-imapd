@@ -7,6 +7,7 @@ the mailboxes.db
 Config changes:
 
 adds 'mboxgroups' as a possible value for the auth_mech config option
+adds 'vnd.cmu.visibleUsers' to event_extra_params
 
 
 Upgrade instructions:
