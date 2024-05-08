@@ -7903,7 +7903,7 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
             if (json_array_size(events) > 1) {
                 json_object_set_new(parse.parsed, blobid,
                                     json_pack("{ s:s s:o }",
-                                              "@type", "jsgroup",
+                                              "@type", "Group",
                                               "entries", events));
             }
             else {
