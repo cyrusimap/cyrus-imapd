@@ -289,4 +289,5 @@ HIDDEN struct auth_mech auth_unix =
     &mynewstate,
     &myfreestate,
     &mygroups,
+    NULL, /* refresh */
 };

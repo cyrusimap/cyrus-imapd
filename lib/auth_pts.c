@@ -550,4 +550,5 @@ HIDDEN struct auth_mech auth_pts =
     &mynewstate,
     &myfreestate,
     &mygroups,
+    NULL, /* refresh */
 };

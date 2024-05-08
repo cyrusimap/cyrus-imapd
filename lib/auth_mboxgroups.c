@@ -219,6 +219,13 @@ static strarray_t *mygroups(const struct auth_state *auth_state)
     return strarray_dup(&auth_state->groups);
 }
 
+static void myrefresh(struct auth_state *auth_state)
+{
+    if (!auth_state) return;
+    strarray_truncate(&auth_state->groups, 0);
+    if (our_mboxlookup) our_mboxlookup(auth_state->userid, &auth_state->groups);
+}
+
 EXPORTED void register_mboxgroups_cb(int (*l)(const char *, strarray_t *))
 {
     our_mboxlookup = l;
@@ -233,4 +240,5 @@ HIDDEN struct auth_mech auth_mboxgroups =
     &mynewstate,
     &myfreestate,
     &mygroups,
+    &myrefresh,
 };
