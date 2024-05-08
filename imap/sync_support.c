@@ -605,6 +605,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          modseq_t xconvmodseq,
                                          modseq_t raclmodseq,
                                          modseq_t foldermodseq,
+                                         const char *groups,
                                          int ispartial)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
@@ -637,6 +638,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->xconvmodseq = xconvmodseq;
     result->raclmodseq = raclmodseq;
     result->foldermodseq = foldermodseq;
+    result->groups = xstrdupnull(groups);
     result->ispartial = ispartial;
 
     result->mark     = 0;
@@ -1968,10 +1970,6 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         dlist_setdate(kl, "LAST_APPENDDATE", 0);
         dlist_setdate(kl, "POP3_LAST_LOGIN", remote ? remote->pop3_last_login : 0);
         dlist_setdate(kl, "POP3_SHOW_AFTER", remote ? remote->pop3_show_after : 0);
-        if (remote && remote->xconvmodseq)
-            dlist_setnum64(kl, "XCONVMODSEQ", remote->xconvmodseq);
-        if (remote && remote->raclmodseq)
-            dlist_setnum64(kl, "RACLMODSEQ", remote->raclmodseq);
     }
     else {
         struct synccrcs synccrcs = mailbox_synccrcs(mailbox, /*force*/0);
@@ -1990,8 +1988,20 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
                 dlist_setnum64(kl, "XCONVMODSEQ", xconvmodseq);
         }
         modseq_t raclmodseq = mboxname_readraclmodseq(mailbox_name(mailbox));
-        if (raclmodseq)
+        if (raclmodseq && (!remote || remote->raclmodseq != raclmodseq)) {
+            // only send if different
             dlist_setnum64(kl, "RACLMODSEQ", raclmodseq);
+            char *userid = mboxname_to_userid(mailbox_name(mailbox));
+            strarray_t groups = STRARRAY_INITIALIZER;
+            int r = mboxlist_lookup_usergroups(userid, &groups);
+            if (!r && strarray_size(&groups)) {
+                char *groupstxt = strarray_join(&groups, "\t");
+                dlist_setatom(kl, "USERGROUPS", groupstxt);
+                free(groupstxt);
+            }
+            strarray_fini(&groups);
+            free(userid);
+        }
     }
     dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
     dlist_setatom(kl, "PARTITION", topart);
@@ -2723,6 +2733,7 @@ int sync_apply_mailbox(struct dlist *kin,
     modseq_t xconvmodseq = 0;
     modseq_t raclmodseq = 0;
     modseq_t createdmodseq = 0;
+    const char *groups = NULL;
 
     /* previous state markers */
     modseq_t since_modseq = 0;
@@ -2806,6 +2817,7 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getnum64(kin, "RACLMODSEQ", &raclmodseq);
     dlist_getnum64(kin, "FOLDERMODSEQ", &foldermodseq);
     dlist_getlist(kin, "USERFLAGS", &userflags);
+    dlist_getatom(kin, "USERGROUPS", &groups);
 
     /* Get the CRCs */
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
@@ -3055,6 +3067,32 @@ int sync_apply_mailbox(struct dlist *kin,
         }
     }
 
+    if (groups) {
+        strarray_t mygroups = STRARRAY_INITIALIZER;
+        char *userid = mboxname_to_userid(mboxname);
+        r = mboxlist_lookup_usergroups(userid, &mygroups);
+        if (r) goto done;
+        strarray_t *usergroups = strarray_split(groups, "\t", 0);
+        int i;
+        // add any new
+        for (i = 0; i < strarray_size(usergroups); i++) {
+            const char *group = strarray_nth(usergroups, i);
+            if (strarray_find(&mygroups, group, 0) >= 0) continue;
+            r = mboxlist_set_usergroup(userid, group, /*add*/1, /*silent*/1);
+            if (r) goto done;
+        }
+        // remove any old
+        for (i = 0; i < strarray_size(&mygroups); i++) {
+            const char *group = strarray_nth(&mygroups, i);
+            if (strarray_find(usergroups, group, 0) >= 0) continue;
+            r = mboxlist_set_usergroup(userid, group, /*add*/0, /*silent*/1);
+            if (r) goto done;
+        }
+        strarray_free(usergroups);
+        free(userid);
+        strarray_fini(&mygroups);
+    }
+
     r = sync_mailbox_compare_update(mailbox, kr, 0, part_list);
     if (r) goto done;
 
@@ -3138,7 +3176,7 @@ int sync_apply_mailbox(struct dlist *kin,
         mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox_name(mailbox), uidvalidity);
     }
 
-    if (mailbox_has_conversations(mailbox)) {
+    if (mailbox_has_conversations(mailbox) && xconvmodseq) {
         r = mailbox_update_xconvmodseq(mailbox, xconvmodseq, opt_force);
     }
 
@@ -4681,7 +4719,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                                  0, 0,
                                  0, 0,
                                  NULL, 0,
-                                 0, mbentry->foldermodseq, 0);
+                                 0, mbentry->foldermodseq, NULL, 0);
             mboxlist_entry_free(&mbentry);
             continue;
         }
@@ -4725,6 +4763,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
         modseq_t tomodseq = mailbox->i.highestmodseq;
         int ispartial = 0;
 
+        char *groups = NULL;
+
         if (batchsize && touid - fromuid > batchsize) {
             /* see if we actually need to calculate an intermediate state */
             modseq_t frommodseq = rfolder ? rfolder->highestmodseq : 0;
@@ -4746,7 +4786,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                              mailbox->i.recentuid, mailbox->i.recenttime,
                              mailbox->i.pop3_last_login,
                              mailbox->i.pop3_show_after, NULL, xconvmodseq,
-                             raclmodseq, mailbox_foldermodseq(mailbox), ispartial);
+                             raclmodseq, mailbox_foldermodseq(mailbox), groups, ispartial);
 
 
         part_list = sync_reserve_partlist(reserve_list, topart ? topart : mailbox_partition(mailbox));
@@ -5031,6 +5071,7 @@ static int sync_kl_parse(struct dlist *kin,
             modseq_t xconvmodseq = 0;
             modseq_t raclmodseq = 0;
             modseq_t foldermodseq = 0;
+            const char *groups = NULL;
 
             if (!folder_list) return IMAP_PROTOCOL_BAD_PARAMETERS;
             if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -5052,6 +5093,7 @@ static int sync_kl_parse(struct dlist *kin,
             dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
             dlist_getnum64(kl, "RACLMODSEQ", &raclmodseq);
             dlist_getnum64(kl, "FOLDERMODSEQ", &foldermodseq);
+            dlist_getatom(kl, "USERGROUPS", &groups);
 
             if (dlist_getlist(kl, "ANNOTATIONS", &al))
                 decode_annotations(al, &annots, NULL, NULL);
@@ -5066,7 +5108,7 @@ static int sync_kl_parse(struct dlist *kin,
                                  pop3_last_login,
                                  pop3_show_after, annots,
                                  xconvmodseq, raclmodseq,
-                                 foldermodseq, /*ispartial*/0);
+                                 foldermodseq, groups, /*ispartial*/0);
         }
 
         else {

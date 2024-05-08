@@ -12716,6 +12716,7 @@ static int sync_mailbox(struct xfer_header *xfer,
                          xconvmodseq,
                          raclmodseq,
                          mailbox_foldermodseq(mailbox),
+                         /* groups */ NULL,
                          /* ispartial */0);
     annots = NULL; /* list took ownership */
 
