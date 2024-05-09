@@ -139,8 +139,6 @@ static int sync_sieve_mailbox_enabled = 0;
 static int sync_archive_enabled = 0;
 static struct proc_handle *proc_handle = NULL;
 
-static int opt_force = 0;
-
 /* commands that have specific names */
 static void cmdloop(void);
 static void cmd_authenticate(char *mech, char *resp);
@@ -259,9 +257,6 @@ int service_init(int argc __attribute__((unused)),
         switch(opt) {
         case 'p': /* external protection */
             extprops_ssf = atoi(optarg);
-            break;
-        case 'f':
-            opt_force = 1;
             break;
         default:
             usage();
