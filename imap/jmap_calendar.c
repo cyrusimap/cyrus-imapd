@@ -180,7 +180,7 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
     },
     {
         "CalendarEvent/parse",
-        JMAP_CALENDARS_EXTENSION,
+        JMAP_URN_CALENDARS,
         &jmap_calendarevent_parse,
         JMAP_NEED_CSTATE
     },

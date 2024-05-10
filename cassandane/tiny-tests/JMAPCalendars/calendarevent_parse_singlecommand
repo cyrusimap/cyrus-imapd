@@ -67,7 +67,7 @@ EOF
 
     my $using = [
         'urn:ietf:params:jmap:core',
-        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/blob',
     ];
 
