@@ -57,11 +57,12 @@
 #include "util.h"
 #include "xsha1.h"
 
-#include <unicode/ustring.h>
-#include <unicode/unorm2.h>
-#include <unicode/utf8.h>
 #include <unicode/ubrk.h>
 #include <unicode/ucasemap.h>
+#include <unicode/uidna.h>
+#include <unicode/unorm2.h>
+#include <unicode/ustring.h>
+#include <unicode/utf8.h>
 
 #define U_REPLACEMENT   0xfffd
 
@@ -4612,4 +4613,38 @@ EXPORTED char *unicode_casemap(const char *s, ssize_t slen)
     }
 
     return out;
+}
+
+EXPORTED const char *charset_idna_to_ascii(struct buf *dst, const char *domain)
+{
+    buf_reset(dst);
+
+    UErrorCode uerr = U_ZERO_ERROR;
+    UIDNA *uidna = uidna_openUTS46(UIDNA_DEFAULT, &uerr);
+    if (U_FAILURE(uerr))
+        goto done;
+
+    UIDNAInfo uinfo = UIDNA_INFO_INITIALIZER;
+    uerr = U_ZERO_ERROR;
+    int32_t out_len = uidna_nameToASCII_UTF8(
+        uidna, domain, -1, dst->s, dst->alloc, &uinfo, &uerr);
+
+    if (uerr == U_BUFFER_OVERFLOW_ERROR) {
+        buf_ensure(dst, out_len);
+        UIDNAInfo uinfo2 = UIDNA_INFO_INITIALIZER;
+        uerr = U_ZERO_ERROR;
+        out_len = uidna_nameToASCII_UTF8(uidna, domain, -1, dst->s, dst->alloc,
+                                         &uinfo2, &uerr);
+        buf_truncate(dst, out_len);
+        uinfo = uinfo2;
+    }
+
+    if (U_FAILURE(uerr) || uinfo.errors) {
+        buf_reset(dst);
+        goto done;
+    }
+
+done:
+    uidna_close(uidna);
+    return buf_cstringnull_ifempty(dst);
 }

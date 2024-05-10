@@ -27,7 +27,7 @@ sub test_email_get_utf8_domain
 use utf8;
     $self->assert_deep_equals([{
         name =>  'J. Besteiro',
-        email => 'jb@julián.example.com',
+        email => 'jb@xn--julin-0qa.example.com',
     }], $res->[1][1]{list}[0]{from});
 no utf8;
 
