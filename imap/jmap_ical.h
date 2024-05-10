@@ -129,6 +129,7 @@ struct jmapical_ctx {
         } cyrus_msg;
         int want_icalprops : 1;
         int dont_guess_timezones : 1;
+        int repair_broken_ical : 1;
     } from_ical;
     const strarray_t *schedule_addresses;
 };
