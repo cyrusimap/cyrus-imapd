@@ -951,8 +951,9 @@ static int export_addressbook(struct transaction_t *txn,
                 (vcardcomponent_get_version(vcard) == VCARD_VERSION_40) ? 4 : 3;
 
             if (version != want_ver || want_ver == 4) {
-                if (want_ver == 4) vcard_to_v4_x(vcard);
-                else vcard_to_v3_x(vcard);
+                vcardcomponent_transform(vcard,
+                                         want_ver == 4 ? VCARD_VERSION_40 :
+                                         VCARD_VERSION_30);
             }
 
             if (r++ && *sep) {
@@ -976,7 +977,7 @@ static int export_addressbook(struct transaction_t *txn,
 
         if (vcard) {
             struct vparse_entry *ventry =
-                vparse_get_entry(vcard, NULL, "version");
+                vparse_get_entry(vcard->objects, NULL, "version");
             unsigned version = (ventry && ventry->v.value[0] == '4') ? 4 : 3;
 
             if (version != want_ver || want_ver == 4) {
@@ -1339,8 +1340,9 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
         if (cdata->version != want_ver || want_ver == 4) {
             /* Translate between vCard versions */
             *obj = record_to_vcard_x(mailbox, record);
-            if (want_ver == 4) vcard_to_v4_x(*obj);
-            else vcard_to_v3_x(*obj);
+            vcardcomponent_transform(*obj,
+                                     want_ver == 4 ? VCARD_VERSION_40 :
+                                     VCARD_VERSION_30);
         }
 
         return HTTP_CONTINUE;
@@ -2230,8 +2232,9 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 
             if (!vcard) vcard = fctx->obj = vcard_parse_string_x(data);
 
-            if (want_ver == 4) vcard_to_v4_x(vcard);
-            else vcard_to_v3_x(vcard);
+            vcardcomponent_transform(vcard,
+                                     want_ver == 4 ? VCARD_VERSION_40 :
+                                     VCARD_VERSION_30);
         }
 
         if (strarray_size(partial)) {
