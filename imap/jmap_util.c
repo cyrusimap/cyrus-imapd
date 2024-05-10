@@ -1193,6 +1193,7 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
     const char *groupname = NULL;
     json_t *addresses = json_array();
 
+    struct buf idna_domain = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     while (addr) {
         const char *domain = addr->domain;
@@ -1244,7 +1245,14 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
                 buf_setcstr(&buf, addr->mailbox);
                 if (domain) {
                     buf_putc(&buf, '@');
-                    buf_appendcstr(&buf, domain);
+                    if (charset_idna_to_ascii(&idna_domain, domain)) {
+                        // encode Unicode domain
+                        buf_append(&buf, &idna_domain);
+                    }
+                    else {
+                        // preserve invalid domain
+                        buf_appendcstr(&buf, domain);
+                    }
                 }
                 json_object_set_new(jemailaddr, "email", json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
@@ -1256,6 +1264,7 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
         addr = addr->next;
     }
     buf_free(&buf);
+    buf_free(&idna_domain);
 
     if (form == HEADER_FORM_GROUPEDADDRESSES) {
         if (groupname || json_array_size(addresses)) {
