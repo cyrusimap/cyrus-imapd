@@ -1109,6 +1109,8 @@ static int jmap_upload(struct transaction_t *txn)
         // otherwise we gotta clean up and make it an attachment
         if (ftruncate(fileno(f), 0L) < 0 || fseek(f, 0L, SEEK_SET) < 0) {
             syslog(LOG_ERR, "IOERROR: failed to reset file in JMAP upload");
+            ret = HTTP_SERVER_ERROR;
+            goto done;
         }
     }
 
@@ -1156,7 +1158,7 @@ static int jmap_upload(struct transaction_t *txn)
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
-    fprintf(f, "Content-Type: %s\r\n", normalisedtype);
+    fputs("Content-Type: application/octet-stream\r\n", f);
 
     int domain = data_domain(data, datalen);
     switch (domain) {
