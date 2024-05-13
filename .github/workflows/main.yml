@@ -28,6 +28,7 @@ jobs:
         cpanm IO::File::fcntl
         cpanm Digest::CRC
         cpanm XML::Simple # XXX could be grabbed from apt by docker image
+        cpanm Mail::IMAPTalk # in image, but fetch latest!
     - name: configure and build
       shell: bash
       run: |
@@ -38,6 +39,7 @@ jobs:
       shell: bash
       run: |
         echo "debian" $(cat /etc/debian_version)
+        echo "Mail::IMAPTalk" $(cpanm --info Mail::IMAPTalk)
         /usr/cyrus/libexec/master -V
         /usr/cyrus/sbin/cyr_buildinfo
     - name: update jmap test suite
