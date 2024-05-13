@@ -1944,9 +1944,11 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 {
     struct sync_annot_list *annots = NULL;
     struct mailbox_iter *iter = NULL;
+    struct dlist *ufl = NULL;
     modseq_t xconvmodseq = 0;
     int r = 0;
     int ispartial = local ? local->ispartial : 0;
+    int userflag;
 
     if (!topart) topart = mailbox_partition(mailbox);
 
@@ -2010,6 +2012,13 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 
     encode_annotations(kl, mailbox, NULL, annots);
     sync_annot_list_free(&annots);
+
+    /* always send mailbox userflags */
+    ufl = dlist_newlist(kl, "USERFLAGS");
+    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+        if (mailbox->h.flagname[userflag])
+            dlist_setflag(ufl, "USERFLAG", mailbox->h.flagname[userflag]);
+    }
 
     if (sendsince && remote && remote->highestmodseq) {
         dlist_setnum64(kl, "SINCE_MODSEQ", remote->highestmodseq);
@@ -2722,6 +2731,7 @@ int sync_apply_mailbox(struct dlist *kin,
     struct mailbox *mailbox = NULL;
     struct dlist *kr;
     struct dlist *ka = NULL;
+    struct dlist *userflags = NULL;
     int r;
 
     struct sync_annot_list *mannots = NULL;
@@ -2795,6 +2805,7 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getnum64(kin, "XCONVMODSEQ", &xconvmodseq);
     dlist_getnum64(kin, "RACLMODSEQ", &raclmodseq);
     dlist_getnum64(kin, "FOLDERMODSEQ", &foldermodseq);
+    dlist_getlist(kin, "USERFLAGS", &userflags);
 
     /* Get the CRCs */
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
@@ -3070,6 +3081,26 @@ int sync_apply_mailbox(struct dlist *kin,
         syslog(LOG_ERR, "syncerror: annotations failed to apply to %s",
                mailbox_name(mailbox));
         goto done;
+    }
+
+    /* take all userflags from the master */
+    if (dlist_isatomlist(userflags)) {
+        struct dlist *di;
+
+        for (di = userflags->head; di; di = di->next) {
+            const char *userflag = NULL;
+
+            if (!dlist_toatom(di, &userflag)) continue;
+
+            r = mailbox_user_flag(mailbox, userflag, NULL, /*allow all*/2);
+            if (r) {
+                xsyslog(LOG_ERR, "syncerror: unable to add userflag",
+                                 "mailbox=<%s> userflag=<%s> error=<%s>",
+                                 mailbox_name(mailbox),
+                                 userflag,
+                                 error_message(r));
+            }
+        }
     }
 
     r = sync_mailbox_compare_update(mailbox, kr, 1, part_list);
