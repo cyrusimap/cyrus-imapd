@@ -8466,7 +8466,7 @@ static void _jsunknown_to_vcard(struct jmap_parser *parser,
     vcardproperty *prop =
         vcardproperty_vanew_jsprop(val,
                                    vcardparameter_new_jsptr(ptr),
-                                   0);
+                                   NULL);
 
     vcardcomponent_add_property(card, prop);
     
@@ -9385,7 +9385,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
         prop = vcardproperty_vanew_fn(
             buf_cstring(&buf),
             !fullName ? vcardparameter_new_derived(VCARD_DERIVED_TRUE) : 0,
-            0);
+            NULL);
         vcardcomponent_add_property(card, prop);
 
         if (l10n->lang && *l10n->lang) {
