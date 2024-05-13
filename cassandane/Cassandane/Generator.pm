@@ -352,6 +352,10 @@ sub generate
     $msg->set_attributes(uid => $params->{uid});
     $msg->set_internaldate($params->{date});
 
+    if ($params->{flags}) {
+        $msg->set_attribute(flags => $params->{flags});
+    }
+
     return $msg;
 }
 
