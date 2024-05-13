@@ -4212,13 +4212,8 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
         repair_broken_ical(&myical);
     }
 
-    // Count the total number of components
-    size_t ncomps = 0;
-    for (comp = icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT);
-         comp;
-         comp = icalcomponent_get_next_component(myical, ICAL_VEVENT_COMPONENT)) {
-             ncomps++;
-    }
+    size_t ncomps =
+        icalcomponent_count_components(myical, ICAL_VEVENT_COMPONENT);
 
     if (ncomps < 2) {
         // Fast-path: There's at most one component in the VCALENDAR
