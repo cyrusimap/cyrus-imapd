@@ -180,7 +180,7 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
     },
     {
         "CalendarEvent/parse",
-        JMAP_CALENDARS_EXTENSION,
+        JMAP_URN_CALENDARS,
         &jmap_calendarevent_parse,
         JMAP_NEED_CSTATE
     },
@@ -1510,10 +1510,10 @@ static void setcalendar_parseprops(jmap_req_t *req,
                     /* Parse new alerts */
                     struct jmapical_ctx *jmapctx = jmapical_context_new(req, NULL);
                     setcalendar_parsealerts(parser, "defaultAlertsWithTime",
-                            new_alerts, jmapctx->alert.emailrecipient,
+                            new_alerts, jmapctx->to_ical.emailalert_recipient,
                             &props->defaultalarms_with_time);
                     setcalendar_parsealerts(parser, "defaultAlertsWithoutTime",
-                            new_alerts, jmapctx->alert.emailrecipient,
+                            new_alerts, jmapctx->to_ical.emailalert_recipient,
                             &props->defaultalarms_with_date);
                     jmapical_context_free(&jmapctx);
                 }
@@ -3058,16 +3058,16 @@ static void context_begin_cdata(struct jmapical_ctx *jmapctx,
                                 mbentry_t *mbentry,
                                 struct caldav_data *cdata)
 {
-    jmapctx->icalsrc.mboxid = mbentry->uniqueid;
-    jmapctx->icalsrc.uid = cdata->dav.imap_uid;
-    jmapctx->icalsrc.partid = NULL;
+    jmapctx->from_ical.cyrus_msg.mboxid = mbentry->uniqueid;
+    jmapctx->from_ical.cyrus_msg.uid = cdata->dav.imap_uid;
+    jmapctx->from_ical.cyrus_msg.partid = NULL;
 }
 
 static void context_end_cdata(struct jmapical_ctx *jmapctx)
 {
-    jmapctx->icalsrc.mboxid = NULL;
-    jmapctx->icalsrc.uid = 0;
-    jmapctx->icalsrc.partid = NULL;
+    jmapctx->from_ical.cyrus_msg.mboxid = NULL;
+    jmapctx->from_ical.cyrus_msg.uid = 0;
+    jmapctx->from_ical.cyrus_msg.partid = NULL;
 }
 
 static void getcalendarevents_reduce_participants_internal(json_t *jparticipants,
@@ -5323,13 +5323,15 @@ static int updateevent_apply_patch(jmap_req_t *req,
         }
     }
 
-    // Read old event
+    // Set up conversion context
     struct jmapical_ctx *jmapctx = jmapical_context_new(req,
             update->schedule_addresses);
     jmapctx->to_ical.serverset = update->serverset;
-    jmapctx->timezones.no_guess = 1;
-    jmapctx->timezones.ignore_orphans = 1;
+    jmapctx->from_ical.dont_guess_timezones = 1;
     jmapctx->from_ical.want_icalprops = 1;
+    jmapctx->to_ical.ignore_orphan_timezones = 1;
+
+    // Read old event
     context_begin_cdata(jmapctx, update->mbentry, update->cdata);
     old_event = jmapical_tojmap(myoldical, NULL, jmapctx);
     if (!old_event) {
@@ -7811,21 +7813,26 @@ done:
     return 0;
 }
 
-static int _calendarevent_parseargs_parse(jmap_req_t *req __attribute__((unused)),
+struct calendareventparse_args {
+    hash_table *props;
+    int repair_broken_ical;
+};
+
+static int _calendareventparse_args_parse(jmap_req_t *req,
                                           struct jmap_parser *parser,
                                           const char *key,
                                           json_t *arg,
                                           void *rock)
 {
-    hash_table **props = (hash_table **) rock;
+    struct calendareventparse_args *parseargs = rock;
 
     if (!strcmp(key, "properties")) {
         if (json_is_array(arg)) {
             size_t i;
             json_t *val;
 
-            *props = xzmalloc(sizeof(hash_table));
-            construct_hash_table(*props, json_array_size(arg) + 1, 0);
+            parseargs->props = xzmalloc(sizeof(hash_table));
+            construct_hash_table(parseargs->props, json_array_size(arg) + 1, 0);
             json_array_foreach(arg, i, val) {
                 const char *s = json_string_value(val);
                 if (!s) {
@@ -7834,14 +7841,19 @@ static int _calendarevent_parseargs_parse(jmap_req_t *req __attribute__((unused)
                     jmap_parser_pop(parser);
                     continue;
                 }
-                hash_insert(s, (void*)1, *props);
+                hash_insert(s, (void*)1, parseargs->props);
+            }
+
+            return 1;
+        }
+    }
+    else if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+        if (!strcmp(key, "repairBrokenIcal")) {
+            if (json_is_boolean(arg)) {
+                parseargs->repair_broken_ical = json_boolean_value(arg);
+                return 1;
             }
         }
-        else if (JNOTNULL(arg)) {
-            return 0;
-        }
-
-        return 1;
     }
 
     return 0;
@@ -7851,12 +7863,12 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_parse parse;
-    hash_table *props = NULL;
+    struct calendareventparse_args args = { 0 };
     json_t *err = NULL;
 
     /* Parse request */
     jmap_parse_parse(req, &parser,
-                     &_calendarevent_parseargs_parse, &props, &parse, &err);
+                     &_calendareventparse_args_parse, &args, &parse, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -7865,6 +7877,9 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
     /* Process request */
     jmap_getblob_context_t blob_ctx;
     jmap_getblob_ctx_init(&blob_ctx, NULL, NULL, "text/calendar", 1);
+
+    struct jmapical_ctx *jmapctx = jmapical_context_new(req, NULL);
+    jmapctx->from_ical.repair_broken_ical = args.repair_broken_ical;
 
     json_t *jval;
     size_t i;
@@ -7895,27 +7910,26 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
 
         ical = icalparser_parse_string(buf_cstring(&blob_ctx.blob));
         if (ical) {
-            events = jmapical_tojmap_all(ical, props, NULL);
+            events = jmapical_tojmap_all(ical, args.props, jmapctx);
             icalcomponent_free(ical);
         }
 
-        if (events) {
-            if (json_array_size(events) > 1) {
-                json_object_set_new(parse.parsed, blobid,
-                                    json_pack("{ s:s s:o }",
-                                              "@type", "jsgroup",
-                                              "entries", events));
-            }
-            else {
-                json_object_set(parse.parsed, blobid, json_array_get(events, 0));
-                json_decref(events);
-            }
-        }
-        else {
+        switch (json_array_size(events)) {
+        case 0:
             json_array_append_new(parse.not_parsable, json_string(blobid));
+            json_decref(events);
+            break;
+        case 1:
+            json_object_set(parse.parsed, blobid, json_array_get(events, 0));
+            json_decref(events);
+            break;
+        default:
+            json_object_set_new(parse.parsed, blobid,
+                json_pack("{ s:s s:o }", "@type", "Group", "entries", events));
         }
     }
 
+    jmapical_context_free(&jmapctx);
     jmap_getblob_ctx_fini(&blob_ctx);
 
     /* Build response */
@@ -7924,8 +7938,10 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
 done:
     jmap_parser_fini(&parser);
     jmap_parse_fini(&parse);
-    free_hash_table(props, NULL);
-    free(props);
+    if (args.props) {
+        free_hash_table(args.props, NULL);
+        free(args.props);
+    }
     return 0;
 }
 
@@ -11771,9 +11787,10 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
         }
 
         /* Convert to Event */
-        jmapctx->icalsrc.mboxid = mboxid;
-        jmapctx->icalsrc.uid = uid;
-        jmapctx->icalsrc.partid = partid;
+        jmapctx->from_ical.cyrus_msg.mboxid = mboxid;
+        jmapctx->from_ical.cyrus_msg.uid = uid;
+        jmapctx->from_ical.cyrus_msg.partid = partid;
+        jmapctx->from_ical.repair_broken_ical = 1;
         json_t *jsevents = jmapical_tojmap_all(ical, NULL, jmapctx);
         if (json_array_size(jsevents)) {
             json_object_set_new(jsevents_by_partid, part->part_id, jsevents);

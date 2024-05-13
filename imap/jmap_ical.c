@@ -289,7 +289,7 @@ static void blobid_from_data(struct jmapical_ctx *jmapctx,
                              const char *href)
 {
     // need a real Cyrus message for ATTACH smart blob ids
-    if (!jmapctx->icalsrc.mboxid) return;
+    if (!jmapctx->from_ical.cyrus_msg.mboxid) return;
 
     const char *semcol = strchr(href + 5, ';');
     if (!semcol || strncasecmp(semcol, ";base64,", 8))
@@ -303,8 +303,10 @@ static void blobid_from_data(struct jmapical_ctx *jmapctx,
 
     struct message_guid guid = MESSAGE_GUID_INITIALIZER;
     message_guid_generate(&guid, buf_base(buf), buf_len(buf));
-    jmap_encode_rawdata_blobid('I', jmapctx->icalsrc.mboxid,
-            jmapctx->icalsrc.uid, jmapctx->icalsrc.partid,
+    jmap_encode_rawdata_blobid('I',
+            jmapctx->from_ical.cyrus_msg.mboxid,
+            jmapctx->from_ical.cyrus_msg.uid,
+            jmapctx->from_ical.cyrus_msg.partid,
             NULL, "ATTACH", &guid, blobid);
 }
 
@@ -536,7 +538,7 @@ HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
         caldav_attachment_url(&jmapctx->attachments.url, req->accountid, baseurl, "");
     }
 
-    jmapctx->alert.emailrecipient = _emailalert_recipient(req->userid);
+    jmapctx->to_ical.emailalert_recipient = _emailalert_recipient(req->userid);
 
     if (strarray_size(schedule_addresses)) {
         const char *imipaddr = strarray_nth(schedule_addresses, 0);
@@ -569,7 +571,7 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
 
     json_decref(jmapctx->to_ical.replyto);
 
-    free(jmapctx->alert.emailrecipient);
+    free(jmapctx->to_ical.emailalert_recipient);
     buf_free(&jmapctx->buf);
     free(jmapctx);
 
@@ -3674,7 +3676,8 @@ calendarevent_from_ical(icalcomponent *comp,
 
     /* Read custom timezones */
     if (!jstzones) {
-        myjstzones.no_guess = jmapctx ? jmapctx->timezones.no_guess : 0;
+        myjstzones.no_guess =
+            jmapctx ? jmapctx->from_ical.dont_guess_timezones : 0;
         icalcomponent *ical = icalcomponent_get_parent(comp);
         jstimezones_add_vtimezones(&myjstzones, ical);
         jstzones = &myjstzones;
@@ -4103,29 +4106,123 @@ calendarevent_from_ical(icalcomponent *comp,
     return event;
 }
 
+static void repair_broken_ical(icalcomponent **icalp)
+{
+    icalcomponent *original_ical = *icalp;
+    icalcomponent *myical = NULL;
+    struct buf buf = BUF_INITIALIZER;
+
+    if (icalcomponent_isa(original_ical) == ICAL_VEVENT_COMPONENT) {
+        // Wrap a single VEVENT in a VCALENDAR.
+        myical =
+            icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
+                                icalproperty_new_version("2.0"), (void *)0);
+        icalcomponent_add_component(myical, icalcomponent_clone(original_ical));
+    }
+    else if (icalcomponent_isa(original_ical) == ICAL_XROOT_COMPONENT) {
+        // Ignore all but the first iCalendar object.
+        icalcomponent *comp = icalcomponent_get_first_component(
+            original_ical, ICAL_VCALENDAR_COMPONENT);
+        if (comp) {
+            myical = icalcomponent_clone(comp);
+        }
+    }
+    else myical = original_ical;
+
+    if (icalcomponent_isa(myical) != ICAL_VCALENDAR_COMPONENT ||
+        !icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT)) {
+        // that's just unrepairably broken
+        return;
+    }
+
+    // Assuming that almost all iCalendar data is valid, let's
+    // inspect the iCalendar data in a first pass. If it turns
+    // out to be valid then return early. Only in a second pass
+    // duplicate the in-memory iCalendar tree and rewrite it.
+
+    for (int pass = 1; pass <= 2; pass++) {
+        int needs_rewrite = 0;
+        icalproperty_method method = icalcomponent_get_method(myical);
+
+        if (pass == 2 && myical == original_ical) {
+            // We need to rewrite the iCalendar data but haven't
+            // made a copy of it, yet. Clone it now.
+            myical = icalcomponent_clone(original_ical);
+        }
+
+        icalcomponent *vevent;
+        for (vevent = icalcomponent_get_first_component(myical,
+                    ICAL_VEVENT_COMPONENT);
+             vevent;
+             vevent = icalcomponent_get_next_component(myical,
+                    ICAL_VEVENT_COMPONENT)) {
+
+            // Make sure that the mandatory UID property is set.
+            if (!icalcomponent_get_uid(vevent)) {
+                if (pass == 2) {
+                    // Generate UID property by hashing normalized component
+                    icalcomponent *norm_comp = icalcomponent_clone(vevent);
+                    icalcomponent_normalize_x(norm_comp);
+                    char hexbuf[JMAPICAL_SHA1HEXSTR_LEN];
+                    sha1hexstr(icalcomponent_as_ical_string(norm_comp), hexbuf);
+                    buf_setcstr(&buf, "nouid");
+                    buf_appendcstr(&buf, hexbuf);
+                    icalcomponent_add_property(
+                        vevent, icalproperty_new_uid(buf_cstring(&buf)));
+                    icalcomponent_free(norm_comp);
+                }
+                else needs_rewrite = 1;
+            }
+
+            // Remove METHOD:PUBLISH if no ORGANIZER is set
+            if (method == ICAL_METHOD_PUBLISH &&
+                !icalcomponent_get_first_property(vevent,
+                                                  ICAL_ORGANIZER_PROPERTY)) {
+                if (pass == 2) {
+                    // XXX this resets the property iterator of ical
+                    icalproperty *prop = icalcomponent_get_first_property(myical,
+                            ICAL_METHOD_PROPERTY);
+                    if (prop) {
+                        icalcomponent_remove_property(myical, prop);
+                        icalproperty_free(prop);
+                    }
+                }
+                else needs_rewrite = 1;
+            }
+        }
+
+        if (!needs_rewrite)
+            break;
+    }
+
+    buf_free(&buf);
+    *icalp = myical;
+}
+
 EXPORTED json_t*
 jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
                     struct jmapical_ctx *jmapctx)
 {
+    json_t *jsevents = json_array();
+    icalcomponent *myical = ical;
     icalcomponent *comp;
-    size_t ncomps = 0;
+    struct buf buf = BUF_INITIALIZER;
 
-    // Count the total number of components
-    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-         comp;
-         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-             ncomps++;
+    if (jmapctx && jmapctx->from_ical.repair_broken_ical) {
+        repair_broken_ical(&myical);
     }
+
+    size_t ncomps =
+        icalcomponent_count_components(myical, ICAL_VEVENT_COMPONENT);
 
     if (ncomps < 2) {
         // Fast-path: There's at most one component in the VCALENDAR
-        json_t *jsevents = json_array();
         if (ncomps) {
-            comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+            comp = icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT);
             json_array_append_new(jsevents, calendarevent_from_ical(comp, NULL,
                         props, NULL, NULL, jmapctx));
         }
-        return jsevents;
+        goto done;
     }
 
     /* Group VEVENTs by UID. At most one VEVENT may be the main component,
@@ -4138,11 +4235,9 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
 
     strarray_t uids = STRARRAY_INITIALIZER;
 
-    struct buf buf = BUF_INITIALIZER;
-
-    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+    for (comp = icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT);
          comp;
-         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+         comp = icalcomponent_get_next_component(myical, ICAL_VEVENT_COMPONENT)) {
 
         const char *uid = icalcomponent_get_uid(comp);
         if (!uid) continue;
@@ -4183,8 +4278,6 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
 
     // Convert events by order of appearance in the VCALENDAR.
 
-    json_t *jsevents = json_array();
-
     int i;
     for (i = 0; i < strarray_size(&uids); i++) {
         ptrarray_t *comps = hash_del(strarray_nth(&uids, i), &comps_by_uid);
@@ -4214,8 +4307,12 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
     free_hash_table(&comps_by_uid, NULL);
     free_hash_table(&seen_uidrecurid, NULL);
     strarray_fini(&uids);
-    buf_free(&buf);
 
+done:
+    if (myical && myical != ical) {
+        icalcomponent_free(myical);
+    }
+    buf_free(&buf);
     return jsevents;
 }
 
@@ -6015,7 +6112,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts,
         alarm = jmapical_alert_to_ical(alert, parser, id,
                 icalcomponent_get_summary(comp),
                 icalcomponent_get_description(comp),
-                jmapctx->alert.emailrecipient);
+                jmapctx->to_ical.emailalert_recipient);
 
         if (alarm) icalcomponent_add_component(comp, alarm);
         jmap_parser_pop(parser);
@@ -7173,7 +7270,7 @@ static void timezones_to_ical(icalcomponent *ical,
 
         if (strarray_find(&custom_jstzids, jstzid, 0) < 0) {
             // this timezone is not referenced by any known property
-            if (jmapctx && !jmapctx->timezones.ignore_orphans) {
+            if (jmapctx && !jmapctx->to_ical.ignore_orphan_timezones) {
                 jmap_parser_invalid(parser, jstzid);
             }
             icalcomponent_free(tzcomp);
@@ -7519,7 +7616,8 @@ static void calendarevent_to_ical(icalcomponent *comp,
             *jstzonesp = jstzones = xzmalloc(sizeof(struct jstimezones));
         }
 
-        jstzones->no_guess = jmapctx ? jmapctx->timezones.no_guess : 0;
+        jstzones->no_guess =
+            jmapctx ? jmapctx->from_ical.dont_guess_timezones : 0;
         jstimezones_add_vtimezones(jstzones, ical);
     } else {
         jstzones = *jstzonesp;

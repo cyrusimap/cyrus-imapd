@@ -67,7 +67,7 @@ EOF
 
     my $using = [
         'urn:ietf:params:jmap:core',
-        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/blob',
     ];
 
@@ -96,7 +96,7 @@ EOF
     $self->assert_null($res->[1][1]{parsed}{"#ical1"}{recurrenceRule});
     $self->assert_null($res->[1][1]{parsed}{"#ical1"}{recurrenceOverrides});
 
-    $self->assert_str_equals("jsgroup", $res->[1][1]{parsed}{"#ical2"}{"\@type"});
+    $self->assert_str_equals("Group", $res->[1][1]{parsed}{"#ical2"}{"\@type"});
     $self->assert_num_equals(2, scalar @{$res->[1][1]{parsed}{"#ical2"}{entries}});
     $self->assert_str_equals($id2, $res->[1][1]{parsed}{"#ical2"}{entries}[1]{uid});
     $self->assert_str_equals("Event #2", $res->[1][1]{parsed}{"#ical2"}{entries}[1]{title});

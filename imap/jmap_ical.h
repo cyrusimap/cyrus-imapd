@@ -106,11 +106,6 @@ struct jmapical_ctx {
     jmap_req_t *req;
     struct buf buf;
     struct {
-        const char *mboxid;
-        uint32_t uid;
-        const char *partid;
-    } icalsrc;
-    struct {
         struct buf url;
         const char *baseurl;
         struct webdav_db *db;
@@ -119,21 +114,23 @@ struct jmapical_ctx {
         int err;
     } attachments;
     struct {
-        char *emailrecipient;
-    } alert;
-    struct {
         json_t *serverset;
-        int no_sanitize_timestamps;
-        int allow_method;
         json_t *replyto;
+        char *emailalert_recipient;
+        int ignore_orphan_timezones : 1;
+        int no_sanitize_timestamps : 1;
+        int allow_method : 1;
     } to_ical;
     struct {
-        int want_icalprops;
+        struct {
+            const char *mboxid;
+            uint32_t uid;
+            const char *partid;
+        } cyrus_msg;
+        int want_icalprops : 1;
+        int dont_guess_timezones : 1;
+        int repair_broken_ical : 1;
     } from_ical;
-    struct {
-        int no_guess;
-        int ignore_orphans;
-    } timezones;
     const strarray_t *schedule_addresses;
 };
 
