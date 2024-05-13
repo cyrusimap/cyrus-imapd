@@ -4767,6 +4767,7 @@ done:
                 *errptr = json_pack("{s:s}", "type", "forbidden");
                 break;
             case IMAP_QUOTA_EXCEEDED:
+            case IMAP_NO_OVERQUOTA:
                 *errptr = json_pack("{s:s}", "type", "overQuota");
                 break;
             case IMAP_MESSAGE_TOO_LARGE:
@@ -5800,6 +5801,7 @@ done:
                     break;
                 case HTTP_NO_STORAGE:
                 case IMAP_QUOTA_EXCEEDED:
+                case IMAP_NO_OVERQUOTA:
                     *err = json_pack("{s:s}", "type", "overQuota");
                     break;
                 case IMAP_MESSAGE_TOO_LARGE:
