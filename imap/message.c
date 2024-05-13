@@ -647,7 +647,13 @@ static void message_find_part(struct body *body, const char *section,
             int encoding;
             charset_t charset = CHARSET_UNKNOWN_CHARSET;
             message_parse_charset(body, &encoding, &charset);
-            if (charset == CHARSET_UNKNOWN_CHARSET)
+            if (!strcasecmp(body->type, "text") &&
+                (!strcasecmp(body->subtype, "calendar") ||
+                 !strcasecmp(body->subtype, "vcard"))) {
+                /* override charset for text/calendar and text/vcard */
+                charset = charset_lookupname("utf-8");
+            }
+            else if (charset == CHARSET_UNKNOWN_CHARSET)
                 /* try ASCII */
                 charset = charset_lookupname("us-ascii");
             body->decoded_body = charset_to_utf8cstr(
