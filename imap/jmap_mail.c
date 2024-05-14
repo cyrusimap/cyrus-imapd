@@ -9027,6 +9027,7 @@ done:
                 *err = json_pack("{s:s s:s}", "type", "alreadyExists", "existingId", detail->email_id);
                 break;
             case IMAP_QUOTA_EXCEEDED:
+            case IMAP_NO_OVERQUOTA:
                 *err = json_pack("{s:s}", "type", "overQuota");
                 break;
             case IMAP_MESSAGE_CONTAINSNULL:
@@ -10924,7 +10925,7 @@ static void _email_create(jmap_req_t *req,
 done:
     if (r && *set_err == NULL) {
         syslog(LOG_ERR, "jmap: email_create: %s", error_message(r));
-        if (r == IMAP_QUOTA_EXCEEDED)
+        if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA)
             *set_err = json_pack("{s:s}", "type", "overQuota");
         else
             *set_err = jmap_server_error(r);
