@@ -388,9 +388,73 @@ static int span_compare_range(icaltime_span *span, icaltime_span *range)
     return 0; /* span overlaps range */
 }
 
+static int icalrecur_compare(struct icalrecurrencetype a,
+                             struct icalrecurrencetype b)
+{
+    int cmp = a.freq - b.freq;
+    if (cmp) return cmp;
+
+    cmp = icaltime_compare(a.until, b.until);
+    if (cmp) return cmp;
+
+    cmp = a.count - b.count;
+    if (cmp) return cmp;
+
+    cmp = a.interval - b.interval;
+    if (cmp) return cmp;
+
+    cmp = a.week_start - b.week_start;
+    if (cmp) return cmp;
+
+    cmp = memcmp(a.by_second, b.by_second,
+                 sizeof(a.by_second) / sizeof(a.by_second[0]));
+    if (cmp) return cmp;
+
+    cmp = memcmp(a.by_minute, b.by_minute,
+                 sizeof(a.by_minute) / sizeof(a.by_minute[0]));
+    if (cmp) return cmp;
+
+    cmp = memcmp(a.by_hour, b.by_hour,
+                 sizeof(a.by_hour) / sizeof(a.by_hour[0]));
+    if (cmp) return cmp;
+
+    cmp = memcmp(a.by_day, b.by_day,
+                 sizeof(a.by_day) / sizeof(a.by_day[0]));
+    if (cmp) return cmp;
+
+    cmp = memcmp(a.by_month_day, b.by_month_day,
+                 sizeof(a.by_month_day) / sizeof(a.by_month_day[0]));
+    if (cmp) return cmp;
+
+    cmp = memcmp(a.by_year_day, b.by_year_day,
+                 sizeof(a.by_year_day) / sizeof(a.by_year_day[0]));
+    if (cmp) return cmp;
+
+    cmp = memcmp(a.by_week_no, b.by_week_no,
+                 sizeof(a.by_week_no) / sizeof(a.by_week_no[0]));
+    if (cmp) return cmp;
+
+    cmp = memcmp(a.by_month, b.by_month,
+                 sizeof(a.by_month) / sizeof(a.by_month[0]));
+    if (cmp) return cmp;
+
+    cmp = memcmp(a.by_set_pos, b.by_set_pos,
+                 sizeof(a.by_set_pos) / sizeof(a.by_set_pos[0]));
+    if (cmp) return cmp;
+
+    cmp = strcasecmpsafe(a.rscale, b.rscale);
+    if (cmp) return cmp;
+
+    cmp = a.skip - b.skip;
+    if (cmp) return cmp;
+
+    return 0;
+}
+
 struct multirrule_iterator_entry {
     struct icaltimetype next;
     icalrecur_iterator *icaliter;
+    struct icalrecurrencetype recur;
 };
 
 struct multirrule_iterator {
@@ -406,6 +470,7 @@ static void multirrule_iterator_fini(struct multirrule_iterator *iter)
     size_t i;
     for (i = 0; i < iter->nentries; i++) {
         icalrecur_iterator_free(iter->entries[i].icaliter);
+        free(iter->entries[i].recur.rscale);
     }
     free(iter->entries);
     iter->entries = NULL;
@@ -418,6 +483,13 @@ static void multirrule_iterator_add(struct multirrule_iterator *iter,
                                     icaltimetype dtstart,
                                     icaltimetype range_start)
 {
+    // Ignore duplicate rrules.
+    for (size_t i = 0; i < iter->nentries; i++) {
+        if (!icalrecur_compare(recur, iter->entries[0].recur)) {
+            return;
+        }
+    }
+
     icalrecur_iterator *icaliter = icalrecur_iterator_new(recur, dtstart);
     if (!icaliter) return;
     if (recur.count > 0) {
@@ -434,6 +506,8 @@ static void multirrule_iterator_add(struct multirrule_iterator *iter,
     struct multirrule_iterator_entry *entry = iter->entries + iter->nentries - 1;
     entry->icaliter = icaliter;
     entry->next = icalrecur_iterator_next(entry->icaliter);
+    entry->recur = recur;
+    entry->recur.rscale = xstrdupnull(recur.rscale);
 }
 
 static icaltimetype multirrule_iterator_next(struct multirrule_iterator *iter)
@@ -452,8 +526,14 @@ static icaltimetype multirrule_iterator_next(struct multirrule_iterator *iter)
             min = i;
             next = entry->next;
         }
+        else if (!icaltime_is_null_time(next) && !icaltime_compare(next, entry->next)) {
+            // this iterator produced the same recurrence id as the one
+            // we chose as next recurrence id. forward the iterator.
+            entry->next = icalrecur_iterator_next(entry->icaliter);
+        }
     }
     iter->entries[min].next = icalrecur_iterator_next(iter->entries[min].icaliter);
+
     return next;
 }
 
