@@ -96,7 +96,7 @@ struct dlist {
     char *part; /* so what if we're big! */
 };
 
-const char *dlist_reserve_path(const char *part, int isarchive, int isbackup,
+const char *dlist_reserve_path(const char *part, int isarchive,
                                const struct message_guid *guid);
 
 /* set fields */
@@ -219,11 +219,11 @@ void dlist_print(const struct dlist *dl, int printkeys,
                  struct protstream *out);
 void dlist_printbuf(const struct dlist *dl, int printkeys,
                     struct buf *outbuf);
-int dlist_parse(struct dlist **dlp, int parsekeys, int isarchive, int isbackup,
-                 struct protstream *in);
+int dlist_parse(struct dlist **dlp, int parsekeys, int isarchive,
+                struct protstream *in);
 int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in);
-int dlist_parsemap(struct dlist **dlp, int parsekeys, int isbackup,
+int dlist_parsemap(struct dlist **dlp, int parsekeys,
                    const char *base, unsigned len);
 
 typedef int dlistsax_cb_t(int type, struct dlistsax_data *data);

@@ -34,7 +34,6 @@ One per system:
 * `PTS cache (ptscache.db)`_
 * `STATUS cache (statuscache.db)`_
 * `User Access (user_deny.db)`_
-* `Backups (backups.db)`_
 * `News database (fetchnews.db)`_
 * `Zoneinfo db (zoneinfo.db)`_
 
@@ -208,17 +207,6 @@ record is as follows::
     Data: <Version>TAB<Deny List (comma-separated wildmat patterns)>TAB<Deny Message>
 
 File type can be: `flat`_ (default), `skiplist`_, `sql`_, or `twoskip`_.
-
-.. _imap-concepts-deployment-db-backups:
-
-Backups (backups.db)
---------------------
-
-This database maps userids to the location of their backup files.  It only
-exists on Cyrus Backup servers (compiled with the `--enable-backup` configure
-option).
-
-File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, or `twoskip`_.
 
 .. _imap-concepts-deployment-db-conversations:
 

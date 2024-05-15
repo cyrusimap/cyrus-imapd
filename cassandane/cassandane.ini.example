@@ -159,7 +159,6 @@
 ##sync_server = yes
 ##lmtpd = yes
 ##timsieved = yes
-##backupd = yes
 
 # This section describes the common configuration parameters to set
 # for each test. This overrides the bare hardcoded configuration, and is

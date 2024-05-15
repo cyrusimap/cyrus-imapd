@@ -826,7 +826,7 @@ EXPORTED void icalcomponent_add_personal_data_from_dl(icalcomponent *ical, struc
 EXPORTED void icalcomponent_add_personal_data(icalcomponent *ical, struct buf *userdata)
 {
     struct dlist *dl;
-    dlist_parsemap(&dl, 1, 0, buf_base(userdata), buf_len(userdata));
+    dlist_parsemap(&dl, 1, buf_base(userdata), buf_len(userdata));
     icalcomponent_add_personal_data_from_dl(ical, dl);
     dlist_free(&dl);
 }
@@ -857,7 +857,7 @@ EXPORTED int icalsupport_decode_personal_data(const struct buf *value,
         return -1;
 
     struct dlist *dl;
-    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    dlist_parsemap(&dl, 1, buf_base(value), buf_len(value));
     if (!dl) return -1;
 
     int is_valid = 0;

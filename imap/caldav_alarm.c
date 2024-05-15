@@ -717,7 +717,7 @@ static int has_peruser_alarms_cb(const char *mailbox,
         return 0;
     }
 
-    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    dlist_parsemap(&dl, 1, buf_base(value), buf_len(value));
     const char *strval = NULL;
     if (dlist_getatom(dl, "USEDEFAULTALERTS", &strval)) {
         if (!strcasecmp(strval, "YES")) {
@@ -1187,7 +1187,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     }
 
     /* Extract VPATCH from per-user-cal-data annotation */
-    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    dlist_parsemap(&dl, 1, buf_base(value), buf_len(value));
     vpatch = vpatch_from_peruserdata(dl);
 
     /* Apply VPATCH to a clone of the iCalendar resource */

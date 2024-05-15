@@ -78,15 +78,7 @@ sub _force_db_creations
 {
     my ($self) = @_;
 
-    # create a backups.db -- but only if backups are compiled in!
-    eval {
-        $self->{instance}->_find_binary('ctl_backups');
-
-        xlog $self, "autovivify a backups.db";
-        $self->{instance}->run_command({
-            cyrus => 1,
-        }, 'ctl_backups', 'list');
-    };
+    # nothing currently required here!
 }
 
 sub test_alternate_quotadb_path
