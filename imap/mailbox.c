@@ -4596,7 +4596,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                 xsyslog(LOG_ERR, "IOERROR: client hit per-addressbook exists limit",
                                  "mailbox=<%s>",
                                  mailbox_name(mailbox));
-                return IMAP_NO_OVERQUOTA;
+                return IMAP_QUOTA_EXCEEDED;
             }
         }
         else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_CALENDAR) {
@@ -4605,7 +4605,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                 xsyslog(LOG_ERR, "IOERROR: client hit per-calendar exists limit",
                                  "mailbox=<%s>",
                                  mailbox_name(mailbox));
-                return IMAP_NO_OVERQUOTA;
+                return IMAP_QUOTA_EXCEEDED;
             }
         }
         else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL) {
@@ -4614,7 +4614,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                 xsyslog(LOG_ERR, "IOERROR: client hit per-mailbox exists limit",
                                  "mailbox=<%s>",
                                  mailbox_name(mailbox));
-                return IMAP_NO_OVERQUOTA;
+                return IMAP_QUOTA_EXCEEDED;
             }
         }
         else {
