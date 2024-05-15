@@ -491,7 +491,7 @@ sub test_maxmsg_email_limited
     };
     my $e = $@;
     $self->assert_not_null($e);
-    $self->assert_matches(qr{over.*quota}, $e);
+    $self->assert_matches(qr{Over quota}, $e);
 
     # should have syslogged about it too
     $self->assert_syslog_matches($self->{instance},
