@@ -1,7 +1,7 @@
 
 Description:
 
-Adds support for IMAP JMAPACCESS response code (draft-ietf-extra-jmapaccess).
+Adds support for IMAP JMAPACCESS (draft-ietf-extra-jmapaccess).
 
 
 Config changes:
