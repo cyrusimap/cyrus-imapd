@@ -186,7 +186,6 @@ sub test_restore_mail_full
     ]);
     $self->assert_str_equals($emailId1, $res->[0][1]{destroyed}[0]);
 
-    sleep 1;
     xlog "remove email2 from Inbox";
     $res = $jmap->CallMethods([
         ['Email/set', {
@@ -195,7 +194,9 @@ sub test_restore_mail_full
     ]);
     $self->assert(exists $res->[0][1]{updated}{$emailId2});
 
-    sleep 4;
+    my $mark = time();
+    sleep 2;
+
     xlog "destroy email2, all drafts, 'foo' and 'bar' mailboxes";
     $res = $jmap->CallMethods([
         ['Email/set', {
@@ -241,11 +242,14 @@ sub test_restore_mail_full
     @got = sort @{$res->[2][1]{notFound}};
     $self->assert_deep_equals(\@expect, \@got);
 
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
     xlog "perform a dry-run restoration of mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
             performDryRun => JSON::true,
-            undoPeriod => "PT3S"
+            undoPeriod => $period
          }, "R5.9.4"],
         ['Email/get', {
             ids => ["$emailId1", "$emailId2", "$emailId3", "$emailId4", "$emailId5", "$emailId6",
@@ -269,11 +273,14 @@ sub test_restore_mail_full
     @got = sort @{$res->[1][1]{notFound}};
     $self->assert_deep_equals(\@expect, \@got);
 
+    $diff = time() - $mark;
+    $period = "PT" . $diff . "S";
+
     xlog "restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
             restoreNonDrafts => JSON::false,
-            undoPeriod => "PT3S"
+            undoPeriod => $period
          }, "R6"],
         ['Email/get', {
             ids => ["$emailId1", "$emailId2", "$emailId3", "$emailId4", "$emailId5", "$emailId6",
@@ -282,7 +289,7 @@ sub test_restore_mail_full
          }, "R6.2"],
         ['Backup/restoreMail', {
             restoreDrafts => JSON::false,
-            undoPeriod => "PT3S"
+            undoPeriod => $period
          }, "R6.5"],
         ['Mailbox/get', {
          }, "R7"],
@@ -377,10 +384,13 @@ sub test_restore_mail_full
     @got = sort @{$res->[4][1]{notFound}};
     $self->assert_deep_equals(\@expect, \@got);
 
+    $diff = time() - $mark;
+    $period = "PT" . $diff . "S";
+
     xlog "re-restore mailbox back to same point in time";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
-            undoPeriod => "PT3S"
+            undoPeriod => $period
          }, "R9"],
         ['Email/get', {
             ids => ["$emailId1", "$emailId2", "$emailId3", "$emailId4", "$emailId5", "$emailId6",

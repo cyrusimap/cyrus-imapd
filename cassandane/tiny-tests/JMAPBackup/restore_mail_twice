@@ -53,7 +53,8 @@ sub test_restore_mail_twice
     ]);
 
     # need a gap between move and destroy otherwise we will restore both copies
-    sleep 6;
+    my $mark = time();
+    sleep 2;
 
     xlog "destroy email1";
     $res = $jmap->CallMethods([
@@ -62,10 +63,13 @@ sub test_restore_mail_twice
          }, "R5"],
     ]);
 
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
     xlog "restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
-            undoPeriod => "PT3S"
+            undoPeriod => $period
          }, "R7"],
         ['Email/get', {
             ids => [$emailId1],
@@ -82,10 +86,13 @@ sub test_restore_mail_twice
     $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mailboxIds}{$trash->{id}});
     $self->assert_null($res->[1][1]{list}[0]{mailboxIds}->{$inbox->{id}});
 
+    $diff = time() - $mark;
+    $period = "PT" . $diff . "S";
+
     xlog "try restoring mail again";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
-            undoPeriod => "PT1S"
+            undoPeriod => $period
          }, "R7"],
         ['Email/get', {
             ids => [$emailId1],
@@ -103,7 +110,8 @@ sub test_restore_mail_twice
     $self->assert_null($res->[1][1]{list}[0]{mailboxIds}->{$inbox->{id}});
 
     # need a gap between destroys otherwise we will restore both copies
-    sleep 6;
+    my $mark = time();
+    sleep 2;
 
     xlog "destroy email1 again";
     $res = $jmap->CallMethods([
@@ -112,10 +120,13 @@ sub test_restore_mail_twice
          }, "R5"],
     ]);
 
+    $diff = time() - $mark;
+    $period = "PT" . $diff . "S";
+
     xlog "restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
-            undoPeriod => "PT3S"
+            undoPeriod => $period
          }, "R7"],
         ['Email/get', {
             ids => [$emailId1],

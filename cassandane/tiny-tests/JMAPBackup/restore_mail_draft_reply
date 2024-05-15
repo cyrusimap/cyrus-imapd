@@ -54,7 +54,9 @@ sub test_restore_mail_draft_reply
 
     $self->assert(exists $res->[0][1]->{updated}{$idB});
 
-    sleep 1;
+    my $mark = time();
+    sleep 2;
+
     xlog "destroy 'draft' email";
     $res = $jmap->CallMethods([
         ['Email/set', {
@@ -64,13 +66,16 @@ sub test_restore_mail_draft_reply
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{destroyed}}));
     $self->assert_str_equals($idB, $res->[0][1]{destroyed}[0]);
 
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
     xlog "restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
             verboseLogging => JSON::true,
             restoreDrafts => JSON::true,
             restoreNonDrafts => JSON::false,
-            undoPeriod => "PT1H"
+            undoPeriod => $period
          }, "R7"],
         ['Email/get', {
             ids => ["$idB"],

@@ -39,6 +39,9 @@ sub test_restore_mail_exists
     $self->assert_not_null($emailId1);
     my $emailAt1 = $res->[1][1]{list}[0]{receivedAt};
 
+    my $mark = time();
+    sleep 2;
+
     xlog "create new mailbox";
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
@@ -63,11 +66,13 @@ sub test_restore_mail_exists
          }, "R5"]
     ]);
 
-    sleep 1;
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
     xlog "actually restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
-            undoPeriod => "PT1H"
+            undoPeriod => $period
          }, "R7"],
         ['Email/get', {
             ids => ["$emailId1"],

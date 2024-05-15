@@ -110,7 +110,9 @@ sub test_restore_calendars_all_dryrun
     $self->assert_not_null($id);
     $self->assert(exists $res->[0][1]{created}{'2'});
 
-    sleep 4;
+    my $mark = time();
+    sleep 2;
+
     xlog "update an event title and delete a calendar";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -134,11 +136,14 @@ sub test_restore_calendars_all_dryrun
     # clean notification cache
     $self->{instance}->getnotify();
 
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
     xlog "restore calendars prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreCalendars', {
             performDryRun => JSON::true,
-            undoPeriod => "PT3S",
+            undoPeriod => $period,
             undoAll => JSON::true
          }, "R4"],
         ['CalendarEvent/get', {

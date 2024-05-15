@@ -8,6 +8,9 @@ sub test_restore_mail_submailbox
 
     my $jmap = $self->{jmap};
 
+    my $start = time();
+    sleep 2;
+
     xlog "create mailbox tree";
     my $res = $jmap->CallMethods([
         ['Mailbox/set', {
@@ -57,10 +60,13 @@ sub test_restore_mail_submailbox
     $self->assert_str_equals($bId, $res->[0][1]{destroyed}[1]);
     $self->assert_str_equals($aId, $res->[0][1]{destroyed}[2]);
 
+    my $diff = time() - $start;
+    my $period = "PT" . $diff . "S";
+
     xlog "restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
-            undoPeriod => "PT1H"
+            undoPeriod => $period
          }, "R7"],
         ['Mailbox/get', {
          }, "R8"],
