@@ -368,8 +368,15 @@ static int flush_withattach(search_text_receiver_t *rx,
     ptrarray_t batch = PTRARRAY_INITIALIZER;
     int r = 0;
 
+    // Load messages containing the attachment parts.
+    uint32_t prev_uid = 0;
     for (int i = 0; i < dynarray_size(withattach); i++) {
         struct withattach_record *wa = dynarray_nth(withattach, i);
+
+        if (prev_uid == wa->imap_uid)
+            continue;
+
+        prev_uid = wa->imap_uid;
 
         struct index_record record = {0};
         r = mailbox_find_index_record(mailbox, wa->imap_uid, &record);
