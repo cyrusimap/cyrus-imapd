@@ -206,7 +206,7 @@ static int flush_batch(search_text_receiver_t *rx,
     return r;
 }
 
-struct withattach_record {
+struct attachpart {
     char *fname;
     uint32_t imap_uid;
     char *imap_partid;
@@ -217,9 +217,9 @@ struct withattach_record {
     strarray_t freeme;
 };
 
-static int create_withattach(struct mailbox *mailbox,
+static int create_attachpart(struct mailbox *mailbox,
                              message_t *msg,
-                             dynarray_t *withattach)
+                             dynarray_t *attachparts)
 {
     int created = 0;
     ptrarray_t queue = PTRARRAY_INITIALIZER;
@@ -256,7 +256,7 @@ static int create_withattach(struct mailbox *mailbox,
     while ((body = ptrarray_pop(&queue))) {
         if (index_want_attachextract(body->type, body->subtype)) {
             strarray_t freeme = STRARRAY_INITIALIZER;
-            struct withattach_record wa = {
+            struct attachpart ap = {
                 .fname = xstrdup(fname),
                 .imap_uid = imap_uid,
                 .imap_partid = xstrdupnull(body->part_id),
@@ -268,8 +268,8 @@ static int create_withattach(struct mailbox *mailbox,
                 .axrec.guid = message_guid_clone(&body->content_guid),
             };
 
-            wa.freeme = freeme;
-            dynarray_append(withattach, &wa);
+            ap.freeme = freeme;
+            dynarray_append(attachparts, &ap);
             created = 1;
         }
 
@@ -283,18 +283,18 @@ done:
     return created;
 }
 
-static void free_withattach(dynarray_t *withattach)
+static void free_attachpart(dynarray_t *attachpart)
 {
-    for (int i = 0; i < dynarray_size(withattach); i++) {
-        struct withattach_record *wa = dynarray_nth(withattach, i);
-        free(wa->fname);
-        free(wa->imap_partid);
-        strarray_fini(&wa->freeme);
+    for (int i = 0; i < dynarray_size(attachpart); i++) {
+        struct attachpart *ap = dynarray_nth(attachpart, i);
+        free(ap->fname);
+        free(ap->imap_partid);
+        strarray_fini(&ap->freeme);
     }
-    dynarray_fini(withattach);
+    dynarray_fini(attachpart);
 }
 
-static void warmup_attachextract_cache(dynarray_t *withattach)
+static void warmup_attachextract_cache(dynarray_t *attachparts)
 {
     const char *mapped = NULL;
     size_t mapped_len = 0;
@@ -302,49 +302,49 @@ static void warmup_attachextract_cache(dynarray_t *withattach)
     struct buf buf = BUF_INITIALIZER;
     int fd = -1;
 
-    for (int i = 0; i < dynarray_size(withattach); i++) {
-        struct withattach_record *wa = dynarray_nth(withattach, i);
+    for (int i = 0; i < dynarray_size(attachparts); i++) {
+        struct attachpart *ap = dynarray_nth(attachparts, i);
 
-        if (strcmpsafe(wa->fname, fname)) {
+        if (strcmpsafe(ap->fname, fname)) {
             if (mapped)
                 map_free(&mapped, &mapped_len);
 
             if (fd != -1)
                 close(fd);
 
-            fd = open(wa->fname, O_RDONLY);
+            fd = open(ap->fname, O_RDONLY);
             if (fd == -1) {
                 xsyslog(LOG_WARNING, "could not open message file - ignoring",
-                        "file=<%s>", wa->fname);
+                        "file=<%s>", ap->fname);
                 fname = NULL;
                 continue;
             }
 
             map_refresh(fd, 1, &mapped, &mapped_len,
-                    MAP_UNKNOWN_LEN, wa->fname, NULL);
-            fname = wa->fname;
+                    MAP_UNKNOWN_LEN, ap->fname, NULL);
+            fname = ap->fname;
         }
 
-        if (wa->content_offset + wa->content_size > mapped_len) {
+        if (ap->content_offset + ap->content_size > mapped_len) {
             xsyslog(LOG_ERR, "file size has changed - ignoring",
                     "file=<%s> expect_size=<%zu> have_size=<%zu>",
-                    wa->fname, wa->content_offset + wa->content_size,
+                    ap->fname, ap->content_offset + ap->content_size,
                     mapped_len);
             continue;
         }
 
         struct buf data = BUF_INITIALIZER;
-        buf_init_ro(&data, mapped + wa->content_offset, wa->content_size);
+        buf_init_ro(&data, mapped + ap->content_offset, ap->content_size);
 
-        int r = attachextract_extract(&wa->axrec, &data, wa->encoding, &buf);
+        int r = attachextract_extract(&ap->axrec, &data, ap->encoding, &buf);
         if (!r) {
             xsyslog(LOG_DEBUG, "warmed up attachextract cache for body part",
-                    "file=<%s> imap_partid=<%s>", wa->fname, wa->imap_partid);
+                    "file=<%s> imap_partid=<%s>", ap->fname, ap->imap_partid);
         }
         else {
             xsyslog(LOG_ERR, "failed to warmup attachextract cache for body part",
                     "file=<%s> imap_partid=<%s> err=<%s>",
-                    wa->fname, wa->imap_partid, error_message(r));
+                    ap->fname, ap->imap_partid, error_message(r));
         }
 
         buf_reset(&buf);
@@ -360,30 +360,30 @@ static void warmup_attachextract_cache(dynarray_t *withattach)
     buf_free(&buf);
 }
 
-static int flush_withattach(search_text_receiver_t *rx,
-                            struct mailbox *mailbox,
-                            int flags,
-                            dynarray_t *withattach)
+static int flush_attachparts(search_text_receiver_t *rx,
+                             struct mailbox *mailbox,
+                             int flags,
+                             dynarray_t *attachparts)
 {
     ptrarray_t batch = PTRARRAY_INITIALIZER;
     int r = 0;
 
     // Load messages containing the attachment parts.
     uint32_t prev_uid = 0;
-    for (int i = 0; i < dynarray_size(withattach); i++) {
-        struct withattach_record *wa = dynarray_nth(withattach, i);
+    for (int i = 0; i < dynarray_size(attachparts); i++) {
+        struct attachpart *ap = dynarray_nth(attachparts, i);
 
-        if (prev_uid == wa->imap_uid)
+        if (prev_uid == ap->imap_uid)
             continue;
 
-        prev_uid = wa->imap_uid;
+        prev_uid = ap->imap_uid;
 
         struct index_record record = {0};
-        r = mailbox_find_index_record(mailbox, wa->imap_uid, &record);
+        r = mailbox_find_index_record(mailbox, ap->imap_uid, &record);
         if (r) {
             xsyslog(LOG_WARNING, "could not find index record - ignoring",
                     "mboxname=<%s> imap_uid=<%d> err=<%s>",
-                    mailbox_name(mailbox), wa->imap_uid,
+                    mailbox_name(mailbox), ap->imap_uid,
                     error_message(r));
             continue;
         }
@@ -454,7 +454,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     int r = 0;                  /* Using IMAP_* not SQUAT_* return codes here */
     int is_incomplete = 0;
     ptrarray_t batch = PTRARRAY_INITIALIZER;
-    dynarray_t withattach = DYNARRAY_INITIALIZER(sizeof(struct withattach_record));
+    dynarray_t attachparts = DYNARRAY_INITIALIZER(sizeof(struct attachpart));
     char *mycachedir = NULL;
     struct mailbox *mailbox = *mailboxptr;
     char *mboxname = xstrdup(mailbox_name(mailbox));
@@ -471,7 +471,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     int newlen = 0;
     for (int i = 0; i < ptrarray_size(&batch); i++) {
         message_t *msg = ptrarray_nth(&batch, i);
-        if (create_withattach(mailbox, msg, &withattach)) {
+        if (create_attachpart(mailbox, msg, &attachparts)) {
             message_unref(&msg);
         }
         else ptrarray_set(&batch, newlen++, msg);
@@ -486,7 +486,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         if (r) goto done;
     }
 
-    if (!dynarray_size(&withattach))
+    if (!dynarray_size(&attachparts))
         goto done;
 
     // Release mailbox lock
@@ -508,7 +508,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         attachextract_set_cachedir(mycachedir);
     }
 
-    warmup_attachextract_cache(&withattach);
+    warmup_attachextract_cache(&attachparts);
 
     // Retake mailbox lock
     r = mailbox_open_irl(mboxname, &mailbox);
@@ -530,7 +530,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         attachextract_set_cacheonly(1);
     }
 
-    r = flush_withattach(rx, mailbox, flags, &withattach);
+    r = flush_attachparts(rx, mailbox, flags, &attachparts);
 
     if (!txcacheonly) {
         attachextract_set_cacheonly(0);
@@ -544,7 +544,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
  done:
     *mailboxptr = mailbox;
     ptrarray_fini(&batch);
-    free_withattach(&withattach);
+    free_attachpart(&attachparts);
     free(mycachedir);
     free(mboxname);
     {
