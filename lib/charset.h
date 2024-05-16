@@ -65,6 +65,7 @@
 
 /* RFC 5322, 2.1.1 */
 #define MIME_MAX_HEADER_LENGTH 78
+#define MIME_MAX_LINE_LENGTH 998
 
 #include "util.h"
 #include "xsha1.h"
