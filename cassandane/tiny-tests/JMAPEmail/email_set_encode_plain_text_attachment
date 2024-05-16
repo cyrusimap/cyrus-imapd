@@ -55,7 +55,7 @@ sub test_email_set_encode_plain_text_attachment
         # Cyrus >= 3.9 sanitizes bare LF in inlined text bodies
         xlog $self, "Assert that bare LF in inlined plain text gets expanded to CR LF";
         my $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[1];
-        $self->assert_str_equals(' 7BIT', $subPart->{'header:Content-Transfer-Encoding'});
+        $self->assert_str_equals(' 7bit', $subPart->{'header:Content-Transfer-Encoding'});
         my $subPartBlob = $jmap->Download('cassandane', $subPart->{blobId});
         $self->assert_str_equals("This line ends with a LF\r\nThis line does as well\r\n",
             $subPartBlob->{content});
@@ -64,7 +64,7 @@ sub test_email_set_encode_plain_text_attachment
         # Cyrus pre-3.9 QP-encoded bare LF in inlined text bodies
         xlog $self, "Assert that bare LF in inlined plain text is qp-encoded";
         $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[2];
-        $self->assert_str_equals(' QUOTED-PRINTABLE',
+        $self->assert_str_equals(' quoted-printable',
             $subPart->{'header:Content-Transfer-Encoding'});
         $subPartBlob = $jmap->Download('cassandane', $subPart->{blobId});
         $self->assert_str_equals("This line ends with a LF\nThis line does as well\n",
@@ -73,7 +73,7 @@ sub test_email_set_encode_plain_text_attachment
 
     xlog $self, "Assert that bare LF in attached plain text is kept as-is";
     $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[2];
-    $self->assert_str_equals(' BASE64', $subPart->{'header:Content-Transfer-Encoding'});
+    $self->assert_str_equals(' base64', $subPart->{'header:Content-Transfer-Encoding'});
     $subPartBlob = $jmap->Download('cassandane', $subPart->{blobId});
     $self->assert_str_equals("This line ends with a LF\nThis line does as well\n",
         $subPartBlob->{content});

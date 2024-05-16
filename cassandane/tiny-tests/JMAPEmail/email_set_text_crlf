@@ -10,7 +10,6 @@ sub test_email_set_text_crlf
     my $inboxid = $self->getinbox()->{id};
 
     my $text = "ab\r\ncde\rfgh\nij";
-    my $want = "ab\ncdefgh\nij";
 
     my $email =  {
         mailboxIds => { $inboxid => JSON::true },
@@ -30,5 +29,12 @@ sub test_email_set_text_crlf
     ]);
     my $ret = $res->[1][1]->{list}[0];
     my $got = $ret->{bodyValues}{$ret->{textBody}[0]{partId}}{value};
-    $self->assert_str_equals($want, $got);
+
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min >= 9)) {
+        $self->assert_str_equals("ab\ncde\nfgh\nij", $got);
+    } else {
+        # pre-3.9 Cyrus JMAP discarded bare CR in text bodies
+        $self->assert_str_equals("ab\ncdefgh\nij", $got);
+    }
 }
