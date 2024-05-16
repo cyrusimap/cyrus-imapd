@@ -1,0 +1,739 @@
+#!perl
+use Cassandane::Tiny;
+use Encode qw(decode encode);
+use MIME::Base64 qw(encode_base64);
+
+sub test_email_set_create_encoding
+    :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
+
+    my @textTests = ({
+        desc => 'text/plain without charset',
+        blob => "plain ascii",
+        bodyStructure => {
+            type => 'text/plain',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'text/plain'
+    }, {
+        desc => 'text/plain with charset',
+        blob => "plain ascii",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'us-ascii',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'text/plain; charset=us-ascii'
+    }, {
+        desc => 'text/plain as attachment',
+        blob => "plain ascii",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'us-ascii',
+            disposition => 'attachment',
+        },
+        wantEncoding => 'base64',
+        wantContentType => 'text/plain; charset=us-ascii'
+    }, {
+        desc => 'text/plain UTF-8 without charset from blob',
+        blob => encode('utf-8', "some \N{TOMATO} utf-8"),
+        bodyStructure => {
+            type => 'text/plain',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/charset'],
+        },
+    }, {
+        desc => 'text/plain UTF-8 without charset from EmailBodyValue',
+        bodyValue => encode('utf-8', "some \N{TOMATO} utf-8"),
+        bodyStructure => {
+            type => 'text/plain',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain; charset=utf-8'
+    }, {
+        desc => 'text/plain UTF-8 with charset',
+        blob => encode('utf-8', "some \N{TOMATO} utf-8"),
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'utf-8',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain; charset=utf-8'
+    }, {
+        desc => 'text/xml without charset from blob',
+        blob => '<?xml version="1.0"?><hello/>',
+        bodyStructure => {
+            type => 'text/xml',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'text/xml',
+    }, {
+        desc => 'text/xml without charset from EmailBodyValue',
+        bodyValue => '<?xml version="1.0"?><hello/>',
+        bodyStructure => {
+            type => 'text/xml',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'text/xml',
+    }, {
+        desc => 'text/xml 7bit-safe with latin1 charset',
+        blob => '<?xml version="1.0"?><hello/>',
+        bodyStructure => {
+            type => 'text/xml',
+            charset => 'latin1',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'text/xml; charset=latin1',
+    }, {
+        desc => 'text/xml non-7bit-safe without charset',
+        blob => encode('latin1', "<?xml version=\"1.0\"?><hello>\N{POUND SIGN}</hello>"),
+        bodyStructure => {
+            type => 'text/xml',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/xml',
+    }, {
+        desc => 'text/xml non-7bit-safe with latin1 charset',
+        blob => encode('latin1', "<?xml version=\"1.0\"?><hello>\N{POUND SIGN}</hello>"),
+        bodyStructure => {
+            type => 'text/xml',
+            charset => 'latin1',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/xml; charset=latin1',
+    }, {
+        desc => 'text/plain with ASCII control chars and no charset',
+        blob => "ding \N{U+0007} dong",
+        bodyStructure => {
+            type => 'text/plain',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain',
+    }, {
+        desc => 'text/plain with ASCII control chars and us-ascii charset',
+        blob => "ding \N{U+0007} dong",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'us-ascii',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain; charset=us-ascii',
+    }, {
+        desc => 'text/plain with ASCII control chars as attachment',
+        blob => "ding \N{U+0007} dong",
+        bodyStructure => {
+            type => 'text/plain',
+            disposition => 'attachment',
+        },
+        wantEncoding => 'base64',
+        wantContentType => 'text/plain',
+    }, {
+        desc => 'text/plain with ASCII control chars and utf-8 charset',
+        blob => "ding \N{U+0007} dong",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'utf-8',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain; charset=utf-8',
+    }, {
+        desc => 'text/plain with multi-byte UTF-8 and no charset',
+        blob => "$ to \xc2\xa3",
+        bodyStructure => {
+            type => 'text/plain',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/charset'],
+        },
+    }, {
+        desc => 'text/plain with multi-byte UTF-8 and us-ascii charset',
+        blob => "$ to \xc2\xa3",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'us-ascii',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/charset'],
+        },
+    }, {
+        desc => 'text/plain with multi-byte UTF-8 as attachment',
+        blob => "$ to \xc2\xa3",
+        bodyStructure => {
+            type => 'text/plain',
+            disposition => 'attachment',
+        },
+        wantEncoding => 'base64',
+        wantContentType => 'text/plain',
+    }, {
+        desc => 'text/plain with multi-byte UTF-8 and utf-8 charset',
+        blob => "$ to \xc2\xa3",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'utf-8',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain; charset=utf-8',
+    }, {
+        desc => 'text/plain with invalid UTF-8 and utf-8 charset',
+        blob => "bogus \xe2\x28\xa1 data",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'utf-8',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/charset'],
+        },
+    }, {
+        desc => 'text/plain with invalid UTF-8 as attachment',
+        blob => "bogus \xe2\x28\xa1 data",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'utf-8',
+            disposition => 'attachment',
+        },
+        wantEncoding => 'base64',
+        wantContentType => 'text/plain; charset=utf-8',
+    }, {
+        desc => 'text/plain with overlong MIME line',
+        blob => 'x' x 999,
+        bodyStructure => {
+            type => 'text/plain',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain',
+    }, {
+        desc => 'text/plain with overlong MIME line from EmailBodyValue',
+        bodyValue => "x\r\n" . 'x' x 999 . "\r\n" . 'x',
+        bodyStructure => {
+            type => 'text/plain',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain',
+    }, {
+        desc => 'text/plain with bare CR and LF chars as attachment',
+        blob => "some bare CR\r and LF\n in here",
+        bodyStructure => {
+            type => 'text/plain',
+            disposition => 'attachment',
+        },
+        wantEncoding => 'base64',
+        wantContentType => 'text/plain',
+    }, {
+        desc => 'text/plain with bare CR and LF chars',
+        blob => "some bare CR\r and LF\n in here",
+        bodyStructure => {
+            type => 'text/plain',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'text/plain',
+        wantBlob => "some bare CR\r\n and LF\r\n in here", # gets rewritten
+    }, {
+        desc => 'text/plain with bare CR and LF chars and utf-8 charset',
+        blob => "some bare CR\r and LF\n in here",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'utf-8',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'text/plain; charset=utf-8',
+        wantBlob => "some bare CR\r\n and LF\r\n in here", # gets rewritten
+    }, {
+        desc => 'text/plain with bare CR and LF chars and iso-8859-1 charset',
+        blob => "some bare CR\r and LF\n in here",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'iso-8859-1',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'text/plain; charset=iso-8859-1',
+        wantBlob => "some bare CR\r\n and LF\r\n in here", # gets rewritten
+    }, {
+        desc => 'text/plain with bare CR and LF chars and long MIME lines',
+        blob => "some bare CR\rand LF\n" . ("long" x 250) . "\r\nline",
+        bodyStructure => {
+            type => 'text/plain',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain',
+        wantBlob => "some bare CR\r\nand LF\r\n" . ("long" x 250) . "\r\nline", # gets rewritten
+    }, {
+        desc => 'text/html with NUL char',
+        blob => "<div>\x00</div>",
+        bodyStructure => {
+            type => 'text/html',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/html',
+    }, {
+        desc => 'text/html with NUL char and utf-8 charset',
+        blob => "<div>\x00</div>",
+        bodyStructure => {
+            type => 'text/html',
+            charset => 'utf-8',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/html; charset=utf-8',
+    }, {
+        desc => 'text/html with bare CR and LF chars',
+        blob => "<p>bare CR\r</p><p>bare LF\n</p>",
+        bodyStructure => {
+            type => 'text/html',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/html',
+    });
+
+    my @rfc822Tests = ({
+        desc => 'message/rfc822 with 7bit content',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/plain\r\n" .
+            "\r\n" .
+            "This is a test email.",
+        bodyStructure => {
+            type => 'message/rfc822',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'message/rfc822',
+    }, {
+        desc => 'message/rfc822 with ASCII control char',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/plain\r\n" .
+            "\r\n" .
+            "ding \N{U+0007} dong",
+        bodyStructure => {
+            type => 'message/rfc822',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'message/rfc822',
+    }, {
+        desc => 'message/rfc822 with NUL char',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            "a NUL\x00 char",
+        bodyStructure => {
+            type => 'message/rfc822',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/rfc822 with bare LF',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            "a LF\n char",
+        bodyStructure => {
+            type => 'message/rfc822',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/rfc822 with bare CR',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            "a CR\r char",
+        bodyStructure => {
+            type => 'message/rfc822',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/rfc822 with long MIME line',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            ("long" x 250) . "\r\nline",
+        bodyStructure => {
+            type => 'message/rfc822',
+        },
+        wantEncoding => 'binary',
+        wantContentType => 'message/rfc822',
+    }, {
+        desc => 'message/rfc822 with UTF-8 in body',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            encode('utf-8', "some \N{TOMATO} utf-8"),
+        bodyStructure => {
+            type => 'message/rfc822',
+        },
+        wantEncoding => '8bit',
+        wantContentType => 'message/rfc822',
+    }, {
+        desc => 'message/rfc822 with UTF-8 in header',
+        blob =>
+            "From: " . encode('utf-8', "j\x{00F8}ran\@example.com") . "\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            "hello",
+        bodyStructure => {
+            type => 'message/rfc822',
+        },
+        wantEncoding => '8bit',
+        wantContentType => 'message/rfc822',
+    }, {
+        desc => 'message/partial with 7bit content',
+        blob => "Some partial",
+        bodyStructure => {
+            'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'message/partial; number=2; total=3; id="2Yt4s@example.com"',
+    }, {
+        desc => 'message/partial with NUL char',
+        blob => "Some NUL\x00 partial",
+        bodyStructure => {
+            'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/partial with bare LF char',
+        blob => "Some LF\n partial",
+        bodyStructure => {
+            'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/partial with bare CR char',
+        blob => "Some CR\r partial",
+        bodyStructure => {
+            'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/partial with long MIME line',
+        blob => ("long" x 250) . "\r\nline",
+        bodyStructure => {
+            'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/partial with UTF-8 char',
+        blob => encode('utf-8', "some \N{TOMATO} utf-8"),
+        bodyStructure => {
+            'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/global with 7bit content',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/plain\r\n" .
+            "\r\n" .
+            "This is a test email.",
+        bodyStructure => {
+            type => 'message/global',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'message/global',
+    }, {
+        desc => 'message/global with ASCII control char',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/plain\r\n" .
+            "\r\n" .
+            "ding \N{U+0007} dong",
+        bodyStructure => {
+            type => 'message/global',
+        },
+        wantEncoding => '7bit',
+        wantContentType => 'message/global',
+    }, {
+        desc => 'message/global with NUL char',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            "a NUL\x00 char",
+        bodyStructure => {
+            type => 'message/global',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/global with bare LF',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            "a LF\n char",
+        bodyStructure => {
+            type => 'message/global',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/global with bare CR',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            "a CR\r char",
+        bodyStructure => {
+            type => 'message/global',
+        },
+        wantErr => {
+            type => 'invalidProperties',
+            properties => ['bodyStructure/type'],
+        },
+    }, {
+        desc => 'message/global with long MIME line',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            ("long" x 250) . "\r\nline",
+        bodyStructure => {
+            type => 'message/global',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'message/global',
+    }, {
+        desc => 'message/global with UTF-8 in body',
+        blob =>
+            "From: from\@local\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            encode('utf-8', "some \N{TOMATO} utf-8"),
+        bodyStructure => {
+            type => 'message/global',
+        },
+        wantEncoding => '8bit',
+        wantContentType => 'message/global',
+    }, {
+        desc => 'message/global with UTF-8 in header',
+        blob =>
+            "From: " . encode('utf-8', "j\x{00F8}ran\@example.com") . "\r\n" .
+            "To: to\@local\r\n" .
+            "Subject: Test subject\r\n" .
+            "Date: Wed, 27 Apr 2019 13:21:50 -0500\r\n" .
+            "MIME-Version: 1.0\r\n" .
+            "Content-Type: text/html\r\n" .
+            "\r\n" .
+            "hello",
+        bodyStructure => {
+            type => 'message/global',
+        },
+        wantEncoding => '8bit',
+        wantContentType => 'message/global',
+    }, {
+        desc => 'message/http with NULs, LFs and all the other bogus stuff',
+        blob =>
+            "A NUL\x00 char, LF\n, CR\r,\r\n" .
+            "bogus \xe2\x28\xa1 UTF-8, a\r\n" .
+            ("long" x 250) . "\r\nline",
+        bodyStructure => {
+            type => 'message/http',
+        },
+        wantEncoding => 'base64',
+        wantContentType => 'message/http',
+    });
+
+    my @otherTests = ({
+        desc => 'application/json with 7bit-safe content',
+        blob => '{"hello":"world"}',
+        bodyStructure => {
+            type => 'application/json',
+        },
+        wantEncoding => 'base64',
+        wantContentType => 'application/json',
+    }, {
+        desc => 'application/json with UTF-8 content',
+        blob => encode('utf-8', '{"hello":"' . "\N{WORLD MAP}" . '"}'),
+        bodyStructure => {
+            type => 'application/json',
+        },
+        wantEncoding => 'base64',
+        wantContentType => 'application/json',
+    });
+
+    my @tests = (@textTests, @rfc822Tests, @otherTests);
+
+    while (my ($i, $tc) = each @tests) {
+        my $emailCreationId = "email" . ($i + 1);
+        my $email = {
+            mailboxIds => {
+                '$inbox' => JSON::true
+            },
+            from => [{ email => q{foo@bar} }],
+            subject => $emailCreationId,
+            bodyStructure => $tc->{bodyStructure},
+        };
+
+        my @jmapMethods = (
+            ['Email/set', {
+                create => { $emailCreationId => $email },
+            }, 'createEmail'],
+            ['Email/get', {
+                ids => [ "#$emailCreationId" ],
+                properties => [ 'bodyStructure' ],
+                bodyProperties => [
+                    'header:content-transfer-encoding:asText',
+                    'header:content-type:asText',
+                    'partId',
+                    'blobId',
+                ],
+                fetchAllBodyValues => JSON::true,
+            }, 'getEmail' ]
+        );
+
+        if ($tc->{blob}) {
+            my $blobCreationId = "blob" . ($i + 1);
+            unshift(@jmapMethods,
+                ['Blob/upload', {
+                    create => {
+                        $blobCreationId => {
+                            data => [{
+                                'data:asBase64' => encode_base64($tc->{blob})
+                            }],
+                        },
+                    },
+                }, 'uploadBlob'],
+            );
+            $email->{bodyStructure}{blobId} = "#$blobCreationId",
+        }
+        elsif ($tc->{bodyValue}) {
+            $email->{bodyValues} = { 1 => { value => $tc->{bodyValue} } };
+            $email->{bodyStructure}{partId} = "1";
+        }
+
+        xlog $self, "Create $emailCreationId: $tc->{desc}";
+        my $res = $jmap->CallMethods(\@jmapMethods);
+        my %jmapResponses = map { $_->[2] => $_->[1] } @{$res};
+
+        xlog $self, "Assert test result";
+        if ($tc->{wantErr}) {
+            my $jres = $jmapResponses{createEmail};
+            $self->assert_deep_equals($tc->{wantErr},
+                $jmapResponses{createEmail}{notCreated}{$emailCreationId});
+        } else {
+            my $jres = $jmapResponses{createEmail};
+            $self->assert_not_null($jmapResponses{createEmail}{
+                created}{$emailCreationId});
+
+            xlog $self, "Assert expected encoding and content type";
+            my $gotBodyPart = $jmapResponses{getEmail}{list}[0]{bodyStructure};
+            $self->assert_str_equals($tc->{wantEncoding},
+                $gotBodyPart->{'header:content-transfer-encoding:asText'});
+            $self->assert_str_equals($tc->{wantContentType},
+                $gotBodyPart->{'header:content-type:asText'});
+
+            xlog $self, "Assert blob contents of email body part";
+            $res = $jmap->Download('cassandane', $gotBodyPart->{blobId});
+            if ($tc->{wantBlob}) {
+                # Binary comparison
+                $self->assert_str_equals($tc->{wantBlob}, $res->{content});
+            } elsif ($tc->{blob}) {
+                # Binary comparison
+                $self->assert_str_equals($tc->{blob}, $res->{content});
+            } elsif ($tc->{bodyValue}) {
+                # String comparison
+                $self->assert_str_equals(
+                    $tc->{bodyValue}, decode('utf-8', $res->{content}));
+            }
+
+
+        }
+    }
+}

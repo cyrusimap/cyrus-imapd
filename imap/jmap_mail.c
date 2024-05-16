@@ -489,6 +489,26 @@ static void _headers_from_mime(const char *base, size_t len, struct headers *hea
     message_foreach_header(base, len, _headers_from_mime_cb, headers);
 }
 
+static int _headers_write_mime(struct headers *headers, FILE *fp)
+{
+    json_t *jhdr;
+    size_t i;
+
+    json_array_foreach(headers->raw, i, jhdr) {
+        int r = fputs(json_string_value(json_object_get(jhdr, "name")), fp);
+        if (r != EOF)
+            r = fputs(": ", fp);
+        if (r != EOF)
+            r = fputs(json_string_value(json_object_get(jhdr, "value")), fp);
+        if (r != EOF)
+            r = fputs("\r\n", fp);
+        if (r == EOF)
+            return -1;
+    }
+
+    return 0;
+}
+
 struct header_prop {
     char *lcasename;
     char *name;
@@ -533,7 +553,7 @@ static struct header_prop *_header_parseprop(const char *s)
                 (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
                 &allowed_header_forms);
         hash_insert("content-type",
-                (void*) HEADER_FORM_RAW,
+                (void*) HEADER_FORM_TEXT,
                 &allowed_header_forms);
         hash_insert("comment",
                 (void*) HEADER_FORM_TEXT,
@@ -9044,18 +9064,20 @@ done:
 }
 
 struct emailpart {
-    /* Mandatory fields */
-    struct headers headers;       /* raw headers */
-    /* Optional fields */
-    json_t *jbody;                /* EmailBodyValue for text bodies */
-    char *blob_id;                /* blobId to dump contents from */
+    char *part_id;                /* partId property */
+    char *blob_id;                /* blobId property */
     ptrarray_t subparts;          /* array of emailpart pointers */
+    struct headers headers;       /* raw headers */
+    json_t *jbodyvalue;           /* EmailBodyValue for partId */
     char *type;                   /* Content-Type main type */
     char *subtype;                /* Content-Type subtype */
     char *charset;                /* Content-Type charset parameter */
     char *boundary;               /* Content-Type boundary parameter */
     char *disposition;            /* Content-Disposition without parameters */
     char *filename;               /* Content-Disposition filename parameter */
+    char *cid;                    /* cid property */
+    strarray_t language;          /* language property */
+    char *location;               /* location property */
 };
 
 static void _emailpart_fini(struct emailpart *part)
@@ -9068,7 +9090,7 @@ static void _emailpart_fini(struct emailpart *part)
         free(subpart);
     }
     ptrarray_fini(&part->subparts);
-    json_decref(part->jbody);
+    json_decref(part->jbodyvalue);
     _headers_fini(&part->headers);
     free(part->type);
     free(part->subtype);
@@ -9077,6 +9099,10 @@ static void _emailpart_fini(struct emailpart *part)
     free(part->disposition);
     free(part->filename);
     free(part->blob_id);
+    free(part->part_id);
+    free(part->cid);
+    strarray_fini(&part->language);
+    free(part->location);
 }
 
 struct email {
@@ -9659,8 +9685,12 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
 
     /* partId */
     json_t *jpartId = json_object_get(jpart, "partId");
-    if (JNOTNULL(jpartId) && !json_is_string(jpartId)) {
-        jmap_parser_invalid(parser, "partId");
+    if (JNOTNULL(jpartId)) {
+        const char *part_id = json_string_value(jpartId);
+        if (part_id)
+            part->part_id = xstrdup(part_id);
+        else
+            jmap_parser_invalid(parser, "partId");
     }
 
     /* blobId */
@@ -9679,70 +9709,52 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         jmap_parser_invalid(parser, "size");
     }
 
-    /* Parse headers */
+    /* headers */
     _emailpart_parse_headers(jpart, parser, part);
 
-    /* Parse convenience header properties */
-    int seen_header;
-
     /* cid */
-    json_t *jcid = json_object_get(jpart, "cid");
-    seen_header = _headers_have(&part->headers, "Content-Id");
-    if (json_is_string(jcid) && !seen_header) {
-        const char *cid = json_string_value(jcid);
-        buf_setcstr(&buf, "<");
-        buf_appendcstr(&buf, cid);
-        buf_appendcstr(&buf, ">");
-        _headers_add_new(&part->headers, _header_make("Content-Id", "cid", &buf, parser));
+    jval = json_object_get(jpart, "cid");
+    if (json_is_string(jval) && !_headers_have(&part->headers, "Content-Id")) {
+        part->cid = xstrdup(json_string_value(jval));
     }
-    else if (JNOTNULL(jcid)) {
+    else if (JNOTNULL(jval)) {
         jmap_parser_invalid(parser, "cid");
     }
 
     /* language */
-    json_t *jlanguage = json_object_get(jpart, "language");
-    seen_header = _headers_have(&part->headers, "Content-Language");
-    if (json_is_array(jlanguage) && !seen_header) {
-        strarray_t vals = STRARRAY_INITIALIZER;
+    jval = json_object_get(jpart, "language");
+    if (json_is_array(jval) && !_headers_have(&part->headers, "Content-Language")) {
         size_t i;
-        json_t *jval;
-        struct buf buf = BUF_INITIALIZER;
-        json_array_foreach(jlanguage, i, jval) {
-            const char *lang = json_string_value(jval);
-            if (!lang) {
+        json_t *jlang;
+        json_array_foreach(jval, i, jlang) {
+            const char *lang = json_string_value(jlang);
+            if (lang) {
+                strarray_append(&part->language, lang);
+            }
+            else {
                 jmap_parser_push_index(parser, "language", i, NULL);
                 jmap_parser_invalid(parser, NULL);
                 jmap_parser_pop(parser);
-                continue;
             }
-            buf_setcstr(&buf, lang);
-            if (i < json_array_size(jlanguage) - 1) {
-                buf_putc(&buf, ',');
-            }
-            strarray_append(&vals, buf_cstring(&buf));
         }
-        _headers_add_new(&part->headers, _header_from_strings(&vals, "language", "Content-Language", parser));
-        buf_free(&buf);
-        strarray_fini(&vals);
     }
-    else if (JNOTNULL(jlanguage)) {
+    else if (JNOTNULL(jval)) {
         jmap_parser_invalid(parser, "language");
     }
 
     /* location */
-    json_t *jlocation = json_object_get(jpart, "location");
-    seen_header = _headers_have(&part->headers, "Content-Location");
-    if (json_is_string(jlocation) && !seen_header) {
-        buf_setcstr(&buf, json_string_value(jlocation));
-        _headers_add_new(&part->headers, _header_make("Content-Location", "location", &buf, parser));
+    jval = json_object_get(jpart, "location");
+    if (json_is_string(jval) && !_headers_have(&part->headers, "Content-Location")) {
+        part->location = xstrdup(json_string_value(jval));
     }
-    else if (JNOTNULL(jlocation)) {
+    else if (JNOTNULL(jval)) {
         jmap_parser_invalid(parser, "location");
     }
 
     /* Check Content-Type and Content-Disposition header properties */
     int have_type_header = _headers_have(&part->headers, "Content-Type");
     int have_disp_header = _headers_have(&part->headers, "Content-Disposition");
+
     /* name */
     json_t *jname = json_object_get(jpart, "name");
     if (json_is_string(jname) && !have_type_header && !have_disp_header) {
@@ -9751,39 +9763,16 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
     else if (JNOTNULL(jname)) {
         jmap_parser_invalid(parser, "name");
     }
+
     /* disposition */
     json_t *jdisposition = json_object_get(jpart, "disposition");
     if (json_is_string(jdisposition) && !have_disp_header) {
-        /* Build Content-Disposition header */
         part->disposition = xstrdup(json_string_value(jdisposition));
-        const char *hdrprefix = "Content-Disposition: ";
-        buf_setcstr(&buf, hdrprefix);
-        buf_appendcstr(&buf, part->disposition);
-        if (part->filename) {
-            charset_append_mime_param(
-                &buf, CHARSET_PARAM_XENCODE, "filename", part->filename);
-        }
-        buf_remove(&buf, 0, strlen(hdrprefix));
-        _headers_add_new(&part->headers,
-                _header_make("Content-Disposition", "disposition", &buf, parser));
     }
     else if (JNOTNULL(jdisposition)) {
         jmap_parser_invalid(parser, "disposition");
     }
-    else if (jname) {
-        /* Make Content-Disposition header */
-        part->disposition = xstrdup("attachment");
-        const char *hdrprefix = "Content-Disposition: ";
-        buf_setcstr(&buf, hdrprefix);
-        buf_appendcstr(&buf, "attachment");
-        if (part->filename) {
-            charset_append_mime_param(
-                &buf, CHARSET_PARAM_XENCODE, "filename", part->filename);
-        }
-        buf_remove(&buf, 0, strlen(hdrprefix));
-        _headers_add_new(&part->headers,
-                _header_make("Content-Disposition", "name", &buf, parser));
-    }
+
     /* charset */
     json_t *jcharset = json_object_get(jpart, "charset");
     if (json_is_string(jcharset) && !have_type_header && !JNOTNULL(jpartId)) {
@@ -9792,10 +9781,11 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
     else if (JNOTNULL(jcharset)) {
         jmap_parser_invalid(parser, "charset");
     }
+
     /* type */
     json_t *jtype = json_object_get(jpart, "type");
     if (JNOTNULL(jtype) && json_is_string(jtype) && !have_type_header) {
-                const char *type = json_string_value(jtype);
+        const char *type = json_string_value(jtype);
         struct param *type_params = NULL;
         /* Validate type value */
         message_parse_type(type, &part->type, &part->subtype, &type_params);
@@ -9821,55 +9811,6 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         }
     }
 
-    if (part->type && part->subtype) {
-        /* Build Content-Type header */
-        if (!strcasecmp(part->type, "MULTIPART")) {
-            /* Make boundary */
-            part->boundary = _mime_make_boundary();
-        }
-        const char *hdrprefix = "Content-Type: ";
-        buf_setcstr(&buf, hdrprefix);
-        buf_printf(&buf, "%s/%s", part->type, part->subtype);
-        buf_lcase(&buf);
-
-        if (part->charset) {
-            buf_appendcstr(&buf, "; charset=");
-            buf_appendcstr(&buf, part->charset);
-        }
-
-        if (part->filename) {
-            charset_append_mime_param(
-                &buf, CHARSET_PARAM_QENCODE, "name", part->filename);
-        }
-
-        if (part->boundary) {
-            buf_appendcstr(&buf, ";\r\n boundary=");
-            buf_appendcstr(&buf, part->boundary);
-        }
-
-        if (!strcasecmp(part->type, "MULTIPART") &&
-                !strcasecmp(part->subtype, "RELATED")) {
-            /* RFC 2387 mandates a type parameter */
-            struct emailpart *subpart = ptrarray_nth(&part->subparts, 0);
-            if (subpart) {
-                struct buf reltype = BUF_INITIALIZER;
-                buf_printf(&reltype, "\"%s/%s\"",
-                        subpart->type && subpart->subtype ?
-                        subpart->type : "text",
-                        subpart->type && subpart->subtype ?
-                        subpart->subtype : "plain");
-                buf_lcase(&reltype);
-                buf_appendcstr(&buf, ";\r\n type=");
-                buf_append(&buf, &reltype);
-                buf_free(&reltype);
-            }
-        }
-
-        buf_remove(&buf, 0, strlen(hdrprefix));
-        _headers_add_new(&part->headers,
-                _header_make("Content-Type", "type", &buf, parser));
-    }
-
     /* Validate by type */
     const char *part_id = json_string_value(json_object_get(jpart, "partId"));
     const char *blob_id = jmap_id_string_value(req, json_object_get(jpart, "blobId"));
@@ -9880,7 +9821,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
     if (part_id && !bodyValue)
         jmap_parser_invalid(parser, "partId");
 
-    if (subParts || (part->type && !strcasecmp(part->type, "MULTIPART"))) {
+    if (subParts || !strcasecmpsafe(part->type, "MULTIPART")) {
         /* Must have subParts */
         if (!json_array_size(subParts))
             jmap_parser_invalid(parser, "subParts");
@@ -9891,7 +9832,7 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
         if (blob_id)
             jmap_parser_invalid(parser, "blobId");
     }
-    else if (part_id || (part->type && !strcasecmp(part->type, "TEXT"))) {
+    else if (part_id || !strcasecmpsafe(part->type, "TEXT")) {
         /* Must have a text body as blob or bodyValue */
         if ((bodyValue == NULL) == (blob_id == NULL))
             jmap_parser_invalid(parser, "blobId");
@@ -9920,7 +9861,12 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
     }
 
     /* Finalize part definition */
-    part->jbody = json_incref(bodyValue);
+    if (bodyValue) {
+        json_t *jval = json_object_get(bodyValue, "value");
+        if (json_is_string(jval)) {
+            part->jbodyvalue = json_incref(jval);
+        }
+    }
 
     return part;
 }
@@ -10497,212 +10443,481 @@ static void _parse_email(jmap_req_t *req,
     email->snoozed = snoozed;
 }
 
-static void _emailpart_blob_to_mime(jmap_req_t *req,
-                                    FILE *fp,
-                                    struct emailpart *emailpart,
+static const unsigned MIMEBODY_HAS_ASCII_OR_NONE = 0;
+static const unsigned MIMEBODY_HAS_LONG_LINES = (1 << 0);
+static const unsigned MIMEBODY_HAS_BARE_LF_CR = (1 << 1);
+static const unsigned MIMEBODY_HAS_NON_ASCII = (1 << 2);
+static const unsigned MIMEBODY_HAS_ASCII_CTRL = (1 << 3);
+static const unsigned MIMEBODY_HAS_NUL = (1 << 4);
+
+static unsigned get_mimebody_flags(const char *body, size_t len)
+{
+    // XXX keep this in sync with the enum declaration
+    static const unsigned all_body_flags =
+        MIMEBODY_HAS_ASCII_OR_NONE | MIMEBODY_HAS_LONG_LINES |
+        MIMEBODY_HAS_BARE_LF_CR | MIMEBODY_HAS_NON_ASCII |
+        MIMEBODY_HAS_ASCII_CTRL | MIMEBODY_HAS_NUL;
+
+    unsigned body_flags = MIMEBODY_HAS_ASCII_OR_NONE;
+    size_t line_len = 0;
+    for (size_t i = 0; i < len && body_flags != all_body_flags; i++) {
+        unsigned char c = (unsigned char)body[i];
+        if (c == '\r' && i + 1 < len && body[i + 1] == '\n') {
+            line_len = 0;
+            i += 1;
+            continue;
+        }
+
+        if (++line_len > MIME_MAX_LINE_LENGTH)
+            body_flags |= MIMEBODY_HAS_LONG_LINES;
+
+        if (c == '\r' || c == '\n') {
+            body_flags |= MIMEBODY_HAS_BARE_LF_CR;
+        }
+        else if (c == '\0') {
+            body_flags |= MIMEBODY_HAS_NUL;
+        }
+        else if ((c > 0 && c <= 0x8) || (c >= 0xb && c <= 0x1f) || c == 0x7f) {
+            body_flags |= MIMEBODY_HAS_ASCII_CTRL;
+        }
+        else if (c > 0x7f) {
+            body_flags |= MIMEBODY_HAS_NON_ASCII;
+        }
+    }
+
+    if (line_len > MIME_MAX_LINE_LENGTH)
+        body_flags |= MIMEBODY_HAS_LONG_LINES;
+
+    return body_flags;
+}
+
+static void rewrite_inline_text(const char **bodyp, size_t *body_lenp,
+                                strarray_t *freeme)
+{
+    const char *src_body = *bodyp;
+    size_t src_len = *body_lenp;
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_ensure(&buf, src_len);
+
+    for (size_t i = 0; i < src_len; i++) {
+        unsigned char c = (unsigned char)src_body[i];
+
+        if (c == '\r' && i < src_len - 1 && src_body[i + 1] == '\n') {
+            // Keep CR LF
+            buf_putc(&buf, '\r');
+            buf_putc(&buf, '\n');
+            i += 1;
+        }
+        else if (c == '\n' || c == '\r') {
+            // Expand bare CR or LF to CR LF
+            buf_putc(&buf, '\r');
+            buf_putc(&buf, '\n');
+        }
+        else {
+            // Keep any other octet
+            buf_putc(&buf, src_body[i]);
+        }
+    }
+
+    *body_lenp = buf_len(&buf);
+    char *new_body = buf_release(&buf);
+    strarray_appendm(freeme, new_body);
+    *bodyp = new_body;
+}
+
+static void _emailpart_write_headers(struct emailpart *part, FILE *fp)
+{
+    _headers_write_mime(&part->headers, fp);
+
+    struct buf buf = BUF_INITIALIZER;
+
+    if (part->cid && !_headers_have(&part->headers, "Content-ID")) {
+        buf_setcstr(&buf, "Content-ID: ");
+        buf_appendcstr(&buf, "<");
+        buf_appendcstr(&buf, part->cid);
+        buf_appendcstr(&buf, ">");
+        buf_appendcstr(&buf, "\r\n");
+        fputs(buf_cstring(&buf), fp);
+    }
+
+    if (strarray_size(&part->language) &&
+        !_headers_have(&part->headers, "Content-Language")) {
+        buf_setcstr(&buf, "Content-Language: ");
+        buf_appendcstr(&buf, strarray_nth(&part->language, 0));
+        for (int i = 1; i < strarray_size(&part->language); i++) {
+            buf_appendcstr(&buf, ", ");
+            buf_appendcstr(&buf, strarray_nth(&part->language, i));
+        }
+        buf_appendcstr(&buf, "\r\n");
+        fputs(buf_cstring(&buf), fp);
+    }
+
+    if (part->location && !_headers_have(&part->headers, "Content-Location")) {
+        char *qplocation = charset_encode_mimeheader(part->location,
+                                                     strlen(part->location), 0);
+        buf_setcstr(&buf, "Content-Location: ");
+        buf_appendcstr(&buf, qplocation);
+        buf_appendcstr(&buf, "\r\n");
+        fputs(buf_cstring(&buf), fp);
+        free(qplocation);
+    }
+
+    if ((part->disposition || part->filename) &&
+        !_headers_have(&part->headers, "Content-Disposition")) {
+        buf_setcstr(&buf, "Content-Disposition: ");
+        buf_appendcstr(&buf,
+                       part->disposition ? part->disposition : "attachment");
+        if (part->filename) {
+            charset_append_mime_param(&buf, CHARSET_PARAM_XENCODE, "filename",
+                                      part->filename);
+        }
+        buf_appendcstr(&buf, "\r\n");
+        fputs(buf_cstring(&buf), fp);
+    }
+
+    if (part->type && part->subtype &&
+        !_headers_have(&part->headers, "Content-Type")) {
+        if (!strcasecmp(part->type, "MULTIPART") && !part->boundary)
+            part->boundary = _mime_make_boundary();
+
+        buf_setcstr(&buf, "Content-Type: ");
+        buf_appendcstr(&buf, lcase(part->type));
+        buf_putc(&buf, '/');
+        buf_appendcstr(&buf, lcase(part->subtype));
+
+        if (part->charset) {
+            buf_appendcstr(&buf, "; charset=");
+            buf_appendcstr(&buf, part->charset);
+        }
+
+        if (part->filename) {
+            charset_append_mime_param(&buf, CHARSET_PARAM_QENCODE, "name",
+                                      part->filename);
+        }
+
+        if (part->boundary) {
+            buf_appendcstr(&buf, ";\r\n boundary=");
+            buf_appendcstr(&buf, part->boundary);
+        }
+
+        if (!strcasecmp(part->type, "MULTIPART") &&
+            !strcasecmp(part->subtype, "RELATED")) {
+            /* RFC 2387 mandates a type parameter */
+            struct emailpart *subpart = ptrarray_nth(&part->subparts, 0);
+            if (subpart) {
+                struct buf reltype = BUF_INITIALIZER;
+                buf_printf(&reltype, "\"%s/%s\"",
+                           subpart->type && subpart->subtype ? subpart->type
+                                                             : "text",
+                           subpart->type && subpart->subtype ? subpart->subtype
+                                                             : "plain");
+                buf_lcase(&reltype);
+                buf_appendcstr(&buf, ";\r\n type=");
+                buf_append(&buf, &reltype);
+                buf_free(&reltype);
+            }
+        }
+
+        buf_appendcstr(&buf, "\r\n");
+        fputs(buf_cstring(&buf), fp);
+    }
+
+    buf_free(&buf);
+}
+
+static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
+                                    FILE *fp, struct emailpart *part,
+                                    struct emailpart *parent_part,
                                     json_t *missing_blobs)
 {
-    const char *content = NULL;
-    size_t content_size = 0;
-    const char *src_encoding = NULL;
-    const char *encoding = NULL;
-    char *encbuf = NULL;
-    int r = 0;
+    jmap_getblob_context_t blob = {0};
+    const char *src_body = NULL;
+    size_t src_len = 0;
+    int src_encoding = ENCODING_UNKNOWN;
+    strarray_t freeme = STRARRAY_INITIALIZER;
+    charset_t cs = CHARSET_UNKNOWN_CHARSET;
 
-    /* Find body part containing blob */
-    jmap_getblob_context_t ctx;
-    jmap_getblob_ctx_init(&ctx, NULL, emailpart->blob_id, NULL, 0);
-    r = jmap_getblob(req, &ctx);
-    if (r) goto done;
+    // Determine source content and encoding
+    if (part->blob_id) {
+        jmap_getblob_ctx_init(&blob, NULL, part->blob_id, NULL, 0);
+        int r = jmap_getblob(req, &blob);
+        if (r) {
+            json_array_append_new(missing_blobs, json_string(part->blob_id));
+            goto done;
+        }
+        if (!buf_len(&blob.encoding))
+            buf_setcstr(&blob.encoding, "BINARY");
 
-    /* Fetch blob contents and headers */
-    content = buf_base(&ctx.blob);
-    content_size = buf_len(&ctx.blob);
-
-    /* Determine target encoding */
-    encoding = src_encoding = buf_cstring(&ctx.encoding);
-
-    if (!strcasecmpsafe(emailpart->type, "MESSAGE")) {
-        if (!strcasecmpsafe(src_encoding, "BASE64")) {
-            /* This is a MESSAGE and hence it is only allowed
-             * to be in 7bit, 8bit or binary encoding. Base64
-             * is not allowed, so let's decode the blob and
-             * assume it to be in binary encoding. */
-            encoding = "BINARY";
-            content = charset_decode_mimebody(content, content_size,
-                    ENCODING_BASE64, &encbuf, &content_size);
+        src_body = buf_base(&blob.blob);
+        src_len = buf_len(&blob.blob);
+        src_encoding = encoding_lookupname(buf_cstring(&blob.encoding));
+        if (src_encoding == ENCODING_UNKNOWN) {
+            xsyslog(LOG_ERR, "blob has unknown encoding",
+                    "blob_id=<%s> encoding=<%s>", part->blob_id,
+                    buf_cstring(&blob.encoding));
+            json_array_append_new(missing_blobs, json_string(part->blob_id));
+            goto done;
         }
     }
-    else if (strcasecmpsafe(src_encoding, "QUOTED-PRINTABLE") &&
-             strcasecmpsafe(src_encoding, "BASE64")) {
-        /* Encode text to quoted-printable, if it isn't an attachment */
-        if (!strcasecmpsafe(emailpart->type, "TEXT") &&
-            (!strcasecmpsafe(emailpart->subtype, "PLAIN") ||
-             !strcasecmpsafe(emailpart->subtype, "HTML")) &&
-            (!emailpart->disposition || !strcasecmp(emailpart->disposition, "INLINE"))) {
-            encoding = "QUOTED-PRINTABLE";
-            size_t lenqp = 0;
-            encbuf = charset_qpencode_mimebody(content, content_size, 0, &lenqp);
-            content = encbuf;
-            content_size = lenqp;
+    else if (json_is_string(part->jbodyvalue)) {
+        src_body = json_string_value(part->jbodyvalue);
+        src_len = json_string_length(part->jbodyvalue);
+        src_encoding = ENCODING_NONE;
+    }
+
+    if (src_encoding == ENCODING_UNKNOWN || !src_body) {
+        xsyslog(LOG_ERR, "could not load body",
+                "blob_id=<%s> part_id=<%s>",
+                part->blob_id ? part->blob_id : "null",
+                part->part_id ? part->part_id : "null");
+        jmap_parser_invalid(parser, NULL);
+        goto done;
+    }
+
+    // Determine body media type
+    const char *media_type = part->type;
+    const char *media_subtype = part->subtype;
+
+    if (!media_type || !media_subtype) {
+        if (parent_part && !strcasecmpsafe("multipart", parent_part->type) &&
+            !strcasecmpsafe("digest", parent_part->subtype)) {
+            media_type = "message";
+            media_subtype = "rfc822";
         }
-        /* Encode all other types to base64 */
         else {
-            encoding = "BASE64";
-            size_t len64 = 0;
-            /* Pre-flight encoder to determine length */
-            charset_b64encode_mimebody(NULL, content_size, NULL, &len64, NULL, 1 /* wrap */);
-            if (len64) {
-                /* Now encode the body */
-                encbuf = xmalloc(len64);
-                charset_b64encode_mimebody(content, content_size, encbuf, &len64, NULL, 1 /* wrap */);
+            media_type = "text";
+            media_subtype = "plain";
+        }
+    }
+
+    // Determine transfer encoding
+    const char *content_transfer_encoding = NULL;
+    const char *body = src_body;
+    size_t body_len = src_len;
+    int body_encoding = src_encoding;
+
+    if (!strcasecmp("text", media_type)) {
+        if (!strcasecmpsafe(part->disposition, "attachment")) {
+            content_transfer_encoding = "base64";
+        }
+        else {
+            char *decoderbuf = NULL;
+            body = charset_decode_mimebody(src_body, src_len, src_encoding,
+                                           &decoderbuf, &body_len);
+            if (decoderbuf) {
+                strarray_appendm(&freeme, decoderbuf);
             }
-            content = encbuf;
-            content_size = len64;
+            body_encoding = ENCODING_NONE;
+
+            unsigned body_flags = get_mimebody_flags(body, body_len);
+
+            // Set charset for plain text EmailBodyValues if required
+            if (!part->charset && part->part_id &&
+                !strcasecmp(media_subtype, "plain") &&
+                (body_flags & MIMEBODY_HAS_NON_ASCII)) {
+                part->charset = xstrdup("utf-8");
+            }
+
+            // Validate inline text charset
+            if (part->charset)
+                cs = charset_lookupname(part->charset);
+            else if (!strcasecmp("plain", media_subtype))
+                cs = charset_lookupname("US-ASCII");
+            else
+                cs = CHARSET_UNKNOWN_CHARSET;
+
+            if (!strcasecmp(charset_canon_name(cs), "US-ASCII")) {
+                if (body_flags & MIMEBODY_HAS_NON_ASCII) {
+                    jmap_parser_invalid(parser, "charset");
+                    goto done;
+                }
+            }
+            else if (!strcasecmp(charset_canon_name(cs), "UTF-8")) {
+                struct char_counts utf8_counts =
+                    charset_count_validutf8(body, body_len);
+                if (utf8_counts.invalid) {
+                    jmap_parser_invalid(parser, "charset");
+                    goto done;
+                }
+            }
+
+            // Rewrite inline plain text
+            if (!strcasecmp("plain", media_subtype)) {
+                rewrite_inline_text(&body, &body_len, &freeme);
+                body_flags = get_mimebody_flags(body, body_len);
+            }
+
+            if (body_flags == MIMEBODY_HAS_ASCII_OR_NONE) {
+                content_transfer_encoding = "7bit";
+            }
+            else {
+                content_transfer_encoding = "quoted-printable";
+            }
         }
     }
+    else if (!strcasecmp("message", media_type)) {
+        char *decoderbuf = NULL;
+        body = charset_decode_mimebody(src_body, src_len, src_encoding,
+                                       &decoderbuf, &body_len);
+        if (decoderbuf) {
+            strarray_appendm(&freeme, decoderbuf);
+        }
+        body_encoding = ENCODING_NONE;
 
-    /* Write headers defined by client. */
-    size_t i;
-    json_t *jheader;
-    json_array_foreach(emailpart->headers.raw, i, jheader) {
-        json_t *jval = json_object_get(jheader, "name");
-        const char *name = json_string_value(jval);
-        jval = json_object_get(jheader, "value");
-        const char *value = json_string_value(jval);
-        fprintf(fp, "%s: %s\r\n", name, value);
-    }
+        unsigned body_flags = get_mimebody_flags(body, body_len);
 
-    /* Write encoding header, if required */
-    if (encoding) {
-        fputs("Content-Transfer-Encoding: ", fp);
-        fputs(encoding, fp);
-        fputs("\r\n", fp);
-    }
-    /* Write body */
-    fputs("\r\n", fp);
-    if (content_size) fwrite(content, 1, content_size, fp);
-    free(encbuf);
+        if (!strcasecmp("rfc822", media_subtype)) {
+            if (body_flags & (MIMEBODY_HAS_NUL | MIMEBODY_HAS_BARE_LF_CR)) {
+                jmap_parser_invalid(parser, "type");
+                goto done;
+            }
+            else if (body_flags & MIMEBODY_HAS_LONG_LINES) {
+                content_transfer_encoding = "binary";
+            }
+            else if (body_flags & MIMEBODY_HAS_NON_ASCII) {
+                content_transfer_encoding = "8bit";
+            }
+            else {
+                content_transfer_encoding = "7bit";
+            }
+        }
+        else if (!strcasecmp("global", media_subtype) ||
+                 !strcasecmp("global-delivery-status", media_subtype) ||
+                 !strcasecmp("global-disposition-notification", media_subtype) ||
+                 !strcasecmp("global-headers", media_subtype)) {
+            if (body_flags & (MIMEBODY_HAS_NUL | MIMEBODY_HAS_BARE_LF_CR)) {
+                jmap_parser_invalid(parser, "type");
+                goto done;
+            }
+            else if (body_flags & MIMEBODY_HAS_LONG_LINES) {
+                content_transfer_encoding = "quoted-printable";
+            }
+            else if (body_flags & MIMEBODY_HAS_NON_ASCII) {
+                content_transfer_encoding = "8bit";
+            }
+            else {
+                content_transfer_encoding = "7bit";
+            }
+        }
+        else if (!strcasecmp("delivery-status", media_subtype) ||
+                 !strcasecmp("disposition-notification", media_subtype) ||
+                 !strcasecmp("external-body", media_subtype) ||
+                 !strcasecmp("feedback-report", media_subtype) ||
+                 !strcasecmp("partial", media_subtype) ||
+                 !strcasecmp("tracking-status", media_subtype)) {
 
-done:
-    if (r) json_array_append_new(missing_blobs, json_string(emailpart->blob_id));
-    jmap_getblob_ctx_fini(&ctx);
-}
-
-static void _emailpart_text_to_mime(FILE *fp, struct emailpart *part)
-{
-    json_t *jval = json_object_get(part->jbody, "value");
-    const char *text = json_string_value(jval);
-    size_t len = strlen(text);
-
-    /* Check and sanitise text */
-    int has_long_lines = 0;
-    int is_7bit = 1;
-    const char *p = text;
-    const char *base = text;
-    const char *top = text + len;
-    const char *last_lf = p;
-    struct buf txtbuf = BUF_INITIALIZER;
-    for (p = base; p < top; p++) {
-        /* Keep track of line-length and high-bit bytes */
-        if (p - last_lf > 998)
-            has_long_lines = 1;
-        if (*p == '\n')
-            last_lf = p;
-        if (*p & 0x80)
-            is_7bit = 0;
-        /* Omit CR */
-        if (*p == '\r')
-            continue;
-        /* Expand LF to CRLF */
-        if (*p == '\n')
-            buf_putc(&txtbuf, '\r');
-        buf_putc(&txtbuf, *p);
-    }
-    const char *charset = NULL;
-    if (!is_7bit) charset = "utf-8";
-
-    /* Write headers */
-    size_t i;
-    json_t *jheader;
-    json_array_foreach(part->headers.raw, i, jheader) {
-        json_t *jval = json_object_get(jheader, "name");
-        const char *name = json_string_value(jval);
-        jval = json_object_get(jheader, "value");
-        const char *value = json_string_value(jval);
-        if (!strcasecmp(name, "Content-Type") && charset) {
-            /* Clients are forbidden to set charset on TEXT bodies,
-             * so make sure we properly set the parameter value. */
-            fprintf(fp, "%s: %s;charset=%s\r\n", name, value, charset);
+            if (body_flags &
+                (MIMEBODY_HAS_NUL | MIMEBODY_HAS_BARE_LF_CR |
+                 MIMEBODY_HAS_LONG_LINES | MIMEBODY_HAS_NON_ASCII)) {
+                jmap_parser_invalid(parser, "type");
+                goto done;
+            }
+            else {
+                content_transfer_encoding = "7bit";
+            }
         }
         else {
-            fprintf(fp, "%s: %s\r\n", name, value);
+            content_transfer_encoding = "base64";
         }
-    }
-    /* Write body */
-    if (!is_7bit || has_long_lines) {
-        /* Write quoted printable */
-        size_t qp_len = 0;
-        char *qp_text = charset_qpencode_mimebody(txtbuf.s, txtbuf.len, 1, &qp_len);
-        fputs("Content-Transfer-Encoding: quoted-printable\r\n", fp);
-        fputs("\r\n", fp);
-        fwrite(qp_text, 1, qp_len, fp);
-        free(qp_text);
     }
     else {
-        /*  Write plain */
-        fputs("\r\n", fp);
-        fwrite(buf_cstring(&txtbuf), 1, buf_len(&txtbuf), fp);
+        content_transfer_encoding = "base64";
     }
 
-    buf_free(&txtbuf);
+    // Encode MIME body
+    const char *dst_body = body;
+    size_t dst_len = body_len;
+    int dst_encoding = ENCODING_UNKNOWN;
+
+    if (content_transfer_encoding)
+        dst_encoding = encoding_lookupname(content_transfer_encoding);
+
+    if (dst_encoding == ENCODING_UNKNOWN) {
+        xsyslog(LOG_ERR, "could not determine transfer encoding",
+                "blob_id=<%s> part_id=<%s>",
+                part->blob_id ? part->blob_id : "null",
+                part->part_id ? part->part_id : "null");
+        jmap_parser_invalid(parser, NULL);
+        goto done;
+    }
+
+    if (body_encoding != dst_encoding) {
+        char *decoderbuf = NULL;
+        dst_body = charset_decode_mimebody(body, body_len, body_encoding,
+                                           &decoderbuf, &dst_len);
+        if (decoderbuf) {
+            strarray_appendm(&freeme, decoderbuf);
+        }
+
+        if (dst_encoding == ENCODING_QP) {
+            size_t qp_len = 0;
+            char *qp = charset_qpencode_mimebody(body, body_len, 0, &qp_len);
+            strarray_appendm(&freeme, qp);
+            dst_body = qp;
+            dst_len = qp_len;
+        }
+        else if (dst_encoding == ENCODING_BASE64) {
+            // Pre-flight encoder to determine length
+            size_t b64_len = 0;
+            char *b64 = "";
+            charset_b64encode_mimebody(NULL, body_len, NULL, &b64_len, NULL,
+                                       /*wrap*/ 1);
+            if (b64_len) {
+                // Now encode the body
+                b64 = xmalloc(b64_len);
+                charset_b64encode_mimebody(body, body_len, b64, &b64_len, NULL,
+                                           /*wrap*/ 1);
+                strarray_appendm(&freeme, b64);
+            }
+            dst_body = b64;
+            dst_len = b64_len;
+        }
+    }
+
+    // Write MIME headers and content
+    _emailpart_write_headers(part, fp);
+    fputs("Content-Transfer-Encoding: ", fp);
+    fputs(content_transfer_encoding, fp);
+    fputs("\r\n", fp);
+    fputs("\r\n", fp);
+    if (dst_len)
+        fwrite(dst_body, 1, dst_len, fp);
+
+done:
+    jmap_getblob_ctx_fini(&blob);
+    strarray_fini(&freeme);
+    charset_free(&cs);
 }
 
-static void _emailpart_to_mime(jmap_req_t *req, FILE *fp,
-                               struct emailpart *part,
+static void _emailpart_to_mime(jmap_req_t *req, struct jmap_parser *parser,
+                               FILE *fp, struct emailpart *part,
+                               struct emailpart *parent_part,
                                json_t *missing_blobs)
 {
-    if (part->subparts.count) {
-        /* Write raw headers */
-        size_t i;
-        json_t *jheader;
-        json_array_foreach(part->headers.raw, i, jheader) {
-            json_t *jval = json_object_get(jheader, "name");
-            const char *name = json_string_value(jval);
-            jval = json_object_get(jheader, "value");
-            const char *value = json_string_value(jval);
-            fprintf(fp, "%s: %s\r\n", name, value);
+    if (ptrarray_size(&part->subparts)) {
+        if (!part->type) {
+            part->type = xstrdup("multipart");
+            part->subtype = xstrdup("mixed");
+
+            if (!part->boundary)
+                part->boundary = _mime_make_boundary();
         }
-        /* Write default Content-Type, if not set */
-        if (!_headers_have(&part->headers, "Content-Type")) {
-            part->boundary = _mime_make_boundary();
-            fputs("Content-Type: multipart/mixed;boundary=", fp);
-            fputs(part->boundary, fp);
-            fputs("\r\n", fp);
-        }
-        /* Write sub parts */
-        int j;
-        int is_digest = part->type && !strcasecmp(part->type, "MULTIPART") &&
-                        part->subtype && !strcasecmp(part->subtype, "DIGEST");
-        for (j = 0; j < part->subparts.count; j++) {
-            struct emailpart *subpart = ptrarray_nth(&part->subparts, j);
-            if (is_digest && !subpart->type && subpart->blob_id) {
-                /* multipart/digest changes the default content type of this
-                 * part from text/plain to message/rfc822, so make sure that
-                 * emailpart_blob_to_mime will properly deal with it */
-                subpart->type = xstrdup("MESSAGE");
-                subpart->subtype = xstrdup("RFC822");
-            }
+
+        _emailpart_write_headers(part, fp);
+
+        for (int i = 0; i < ptrarray_size(&part->subparts); i++) {
+            struct emailpart *subpart = ptrarray_nth(&part->subparts, i);
             fprintf(fp, "\r\n--%s\r\n", part->boundary);
-            _emailpart_to_mime(req, fp, subpart, missing_blobs);
+            jmap_parser_push_index(parser, "subParts", i, NULL);
+            _emailpart_to_mime(req, parser, fp, subpart, part, missing_blobs);
+            jmap_parser_pop(parser);
         }
         fprintf(fp, "\r\n--%s--\r\n", part->boundary);
     }
-    else if (part->jbody) {
-        _emailpart_text_to_mime(fp, part);
-    }
-    else if (part->blob_id) {
-        _emailpart_blob_to_mime(req, fp, part, missing_blobs);
+    else {
+        _emailpart_body_to_mime(req, parser, fp, part, parent_part,
+                                missing_blobs);
     }
 }
 
@@ -10761,14 +10976,23 @@ static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
         fprintf(fp, "%s: %s\r\n", name, value);
     }
 
-    json_t *missing_blobs = json_array();
-    if (email->body) _emailpart_to_mime(req, fp, email->body, missing_blobs);
-    if (json_array_size(missing_blobs)) {
-        *err = json_pack("{s:s s:o}", "type", "blobNotFound",
-                "notFound", missing_blobs);
-    }
-    else {
+    /* Write body */
+    if (email->body) {
+        struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+        json_t *missing_blobs = json_array();
+        jmap_parser_push(&parser, "bodyStructure");
+        _emailpart_to_mime(req, &parser, fp, email->body, NULL, missing_blobs);
+        jmap_parser_pop(&parser);
+        if (json_array_size(missing_blobs)) {
+            *err = json_pack(
+                "{s:s s:O}", "type", "blobNotFound", "notFound", missing_blobs);
+        }
+        else if (json_array_size(parser.invalid)) {
+            *err = json_pack("{s:s s:O}", "type", "invalidProperties",
+                    "properties", parser.invalid);
+        }
         json_decref(missing_blobs);
+        jmap_parser_fini(&parser);
     }
 
     return 0;

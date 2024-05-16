@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_set_text_crlf
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :needs_component_sieve :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10,7 +10,6 @@ sub test_email_set_text_crlf
     my $inboxid = $self->getinbox()->{id};
 
     my $text = "ab\r\ncde\rfgh\nij";
-    my $want = "ab\ncdefgh\nij";
 
     my $email =  {
         mailboxIds => { $inboxid => JSON::true },
@@ -30,5 +29,7 @@ sub test_email_set_text_crlf
     ]);
     my $ret = $res->[1][1]->{list}[0];
     my $got = $ret->{bodyValues}{$ret->{textBody}[0]{partId}}{value};
-    $self->assert_str_equals($want, $got);
+
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    $self->assert_str_equals("ab\ncde\nfgh\nij", $got);
 }
