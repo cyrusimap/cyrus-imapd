@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_suppress_duplicates
+    :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Etc/UTC');
+
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%SZ');
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9
+SUMMARY:test
+DTSTART:$start
+SEQUENCE:0
+BEGIN:VALARM
+X-JMAP-ID:displayAlert1
+TRIGGER:PT0S
+ACTION:DISPLAY
+DESCRIPTION:My display alarm
+END:VALARM
+BEGIN:VALARM
+X-JMAP-ID:displayAlert2
+TRIGGER:PT0S
+ACTION:DISPLAY
+DESCRIPTION:My other display alarm
+END:VALARM
+BEGIN:VALARM
+X-JMAP-ID:emailAlert1
+TRIGGER:PT0S
+ACTION:EMAIL
+SUMMARY:My email alarm
+DESCRIPTION:My email alarm description
+ATTENDEE:mailto:emailalarm\@example.com
+END:VALARM
+BEGIN:VALARM
+X-JMAP-ID:emailAlert2
+TRIGGER:PT0S
+ACTION:EMAIL
+SUMMARY:My other email alarm
+DESCRIPTION:My other email alarm description
+ATTENDEE:mailto:other-emailalarm\@example.com
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    $self->{instance}->getnotify();
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch()  + 60);
+
+    $self->assert_alarms(
+        {action => 'display', alarmTime => $start, alertId => 'displayAlert1' },
+        {action => 'email', alarmTime => $start, alertId => 'emailAlert1' },
+    );
+}

@@ -56,6 +56,7 @@
 #include "caldav_util.h"
 #include "cyrusdb.h"
 #include "defaultalarms.h"
+#include "hashset.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"
@@ -511,11 +512,21 @@ static int process_alarm_cb(icalcomponent *comp,
     icalcomponent *alarm;
     icalproperty *prop;
     icalvalue *val;
-
     int alarmno = 0;
+    int keep_processing_recurrences = 1;
+    int suppress_duplicates =
+        config_getswitch(IMAPOPT_CALENDAR_SUPPRESS_DUPLICATE_ALARMS);
+    size_t suppressed_n_duplicates = 0;
+
+    struct alarm_id {
+        icaltimetype alarmtime;
+        icalproperty_action action;
+    };
+
+    struct hashset *seen_alarms = hashset_new(sizeof(struct alarm_id));
 
     /* Skip cancelled events */
-    if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) return 1;
+    if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) goto done;
 
     /* Skip declined events */
     get_schedule_addresses(data->mboxname, data->userid, &sched_addrs);
@@ -533,7 +544,7 @@ static int process_alarm_cb(icalcomponent *comp,
 
             if (!strcasecmpsafe(partstat, "DECLINED")) {
                 strarray_fini(&sched_addrs);
-                return 1;
+                goto done;
             }
         }
     }
@@ -604,6 +615,12 @@ static int process_alarm_cb(icalcomponent *comp,
             prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
             const char *summary =
                 prop ? icalproperty_get_value_as_string(prop) : "[no summary]";
+
+            struct alarm_id alarm_id;
+            memset(&alarm_id, 0, sizeof(struct alarm_id));
+            alarm_id.alarmtime = alarmtime;
+            alarm_id.action = action;
+
             int age = data->now - check;
             if (age > 7200) { // more than 2 hours stale?  Just log it
                 syslog(LOG_ERR, "suppressing alarm aged %d seconds "
@@ -613,6 +630,9 @@ static int process_alarm_cb(icalcomponent *comp,
                        data->mboxname, data->imap_uid,
                        icaltime_as_ical_string(start), alarmno,
                        summary);
+            }
+            else if (!hashset_add(seen_alarms, &alarm_id) && suppress_duplicates) {
+                suppressed_n_duplicates++;
             }
             else {
                 syslog(LOG_NOTICE, "sending alarm at %s for %s %u - %s(%d) %s",
@@ -635,11 +655,20 @@ static int process_alarm_cb(icalcomponent *comp,
             time_t next = data->now + 86400*30;
             if (!data->nextcheck || next < data->nextcheck)
                 data->nextcheck = next;
-            return 0;
+            keep_processing_recurrences = 0;
+            goto done;
         }
     }
 
-    return 1; /* keep going */
+    if (suppressed_n_duplicates) {
+        xsyslog(LOG_INFO, "suppressed duplicate alarms",
+                "mboxname=<%s> imap_uid=<%d> n_duplicates=<%zu>",
+                data->mboxname, data->imap_uid, suppressed_n_duplicates);
+    }
+
+done:
+    hashset_free(&seen_alarms);
+    return keep_processing_recurrences;
 }
 
 static int update_alarmdb(const char *mboxname,
