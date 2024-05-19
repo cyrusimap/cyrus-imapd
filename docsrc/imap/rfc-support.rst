@@ -433,10 +433,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Email Filtering: Subaddress Extension
 
-:rfc:`5235`
-
-    Sieve Email Filtering: Spamtest and Virustest Extensions
-
 :rfc:`5256`
 
     Internet Message Access Protocol - SORT and THREAD Extensions
@@ -557,11 +553,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Extended MKCOL for Web Distributed Authoring and Versioning (WebDAV)
 
-:rfc:`5703`
-
-    Sieve Email Filtering: MIME Part Tests, Iteration, Extraction,
-    Replacement, and Enclosure
-
 :rfc:`5804`
 
     A protocol for Remotely Managing Sieve Scripts
@@ -583,6 +574,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Email Filtering: Delivery Status Notifications and
     Deliver-By Extensions
+
+    .. NOTE::
+
+       envelope-dsn and envelope-deliverby are implemented.  redirect-dsn
+       and redirect-deliverby are not implemented.
 
 :rfc:`6047`
 
@@ -635,10 +631,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`6376`
 
     DomainKeys Identified Mail (DKIM) Signatures
-
-:rfc:`6558`
-
-    Sieve Extension for Converting Messages before Delivery
 
 :rfc:`6455`
 
@@ -968,6 +960,10 @@ RFC Wishlist
 
     Delta encoding in HTTP
 
+:rfc:`5235`
+
+    Sieve Email Filtering: Spamtest and Virustest Extensions
+
 :rfc:`5255`
 
     Internet Message Access Protocol Internationalization
@@ -985,6 +981,11 @@ RFC Wishlist
 
     IMAP4 Extension for Named Searches (Filters)
 
+:rfc:`5703`
+
+    Sieve Email Filtering: MIME Part Tests, Iteration, Extraction,
+    Replacement, and Enclosure
+
 :rfc:`5842`
 
     Binding Extensions to Web Distributed Authoring and Versioning (WebDAV)
@@ -992,6 +993,10 @@ RFC Wishlist
 :rfc:`6468`
 
     Sieve Notification Mechanism: SIP MESSAGE
+
+:rfc:`6558`
+
+    Sieve Extension for Converting Messages before Delivery
 
 :rfc:`6785`
 
