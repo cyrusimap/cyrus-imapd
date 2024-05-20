@@ -8,7 +8,9 @@ sub test_restore_contacts_all
 
     my $jmap = $self->{jmap};
 
-    sleep 4;
+    my $start = time();
+    sleep 2;
+
     xlog "create contacts";
     my $res = $jmap->CallMethods([['Contact/set', {create => {
                         "a" => {firstName => "a", lastName => "a"},
@@ -44,7 +46,9 @@ sub test_restore_contacts_all
 
     my @expect = sort { $a->{firstName} cmp $b->{firstName} } @{$res->[0][1]{list}};
 
-    sleep 4;
+    my $mark = time();
+    sleep 2;
+
     xlog "destroy contact C, update contacts B and D, create contact E";
     $res = $jmap->CallMethods([['Contact/set', {
                     destroy => [$contactC],
@@ -62,9 +66,12 @@ sub test_restore_contacts_all
     my $contactE = $res->[0][1]{created}{"e"}{id};
     my $state = $res->[0][1]{newState};
 
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
     xlog "restore contacts prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
-                    undoPeriod => "PT3S",
+                    undoPeriod => $period,
                     undoAll => JSON::true
                 }, "R5"]]);
     $self->assert_not_null($res);
@@ -124,9 +131,12 @@ sub test_restore_contacts_all
     $self->assert_num_equals(0, scalar @{$res->[1][1]{destroyed}});
     $state = $res->[1][1]{newState};
 
+    $diff = time() - $start;
+    $period = "PT" . $diff . "S";
+
     xlog "restore contacts to before initial creation";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
-                    undoPeriod => "PT7S",
+                    undoPeriod => $period,
                     undoAll => JSON::true
                 }, "R7"]]);
     $self->assert_not_null($res);

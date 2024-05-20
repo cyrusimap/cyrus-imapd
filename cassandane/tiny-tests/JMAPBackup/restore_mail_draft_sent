@@ -54,7 +54,9 @@ sub test_restore_mail_draft_sent
          }, "R5"]
     ]);
 
-    sleep 1;
+    my $mark = time();
+    sleep 2;
+
     xlog "destroy 'Sent' email";
     $res = $jmap->CallMethods([
         ['Email/set', {
@@ -64,12 +66,15 @@ sub test_restore_mail_draft_sent
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{destroyed}}));
     $self->assert_str_equals($emailId, $res->[0][1]{destroyed}[0]);
 
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
     xlog "restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
             restoreDrafts => JSON::true,
             restoreNonDrafts => JSON::true,
-            undoPeriod => "PT1H"
+            undoPeriod => $period
          }, "R7"],
         ['Email/get', {
             ids => ["$emailId"],

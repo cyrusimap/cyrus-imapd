@@ -63,7 +63,9 @@ sub test_restore_mail_simple
          }, "R5"]
     ]);
 
-    sleep 1;
+    my $mark = time();
+    sleep 2;
+
     xlog "destroy 'foo' mailbox";
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
@@ -73,6 +75,9 @@ sub test_restore_mail_simple
     ]);
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{destroyed}}));
     $self->assert_str_equals($fooId, $res->[0][1]{destroyed}[0]);
+
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
 
     xlog "perform a dry-run restoration of mail prior to most recent changes";
     $res = $jmap->CallMethods([
@@ -105,12 +110,15 @@ sub test_restore_mail_simple
     $self->assert_num_equals(0, scalar(@{$res->[2][1]{list}}));
     $self->assert_str_equals("$emailId1", $res->[2][1]{notFound}[0]);
 
+    $diff = time() - $mark;
+    $period = "PT" . $diff . "S";
+
     xlog "actually restore mail prior to most recent changes";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
             restoreDrafts => JSON::false,
             restoreNonDrafts => JSON::true,
-            undoPeriod => "PT1H"
+            undoPeriod => $period
          }, "R7"],
         ['Mailbox/get', {
          }, "R8"],
@@ -140,12 +148,15 @@ sub test_restore_mail_simple
     $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{mailboxIds}{$newFooId});
     $self->assert_null($res->[2][1]{list}[0]{mailboxIds}->{$inboxId});
 
+    $diff = time() - $mark;
+    $period = "PT" . $diff . "S";
+
     xlog "attempt to re-restore mailbox back to same point in time";
     $res = $jmap->CallMethods([
         ['Backup/restoreMail', {
             restoreDrafts => JSON::false,
             restoreNonDrafts => JSON::true,
-            undoPeriod => "PT1H"
+            undoPeriod => $period
          }, "R10"],
         ['Email/get', {
             ids => ["$emailId1"],

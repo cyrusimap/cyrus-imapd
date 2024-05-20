@@ -42,7 +42,8 @@ sub test_restore_calendars_batch_size_bug2
             }}, "R1"]
     ]);
 
-    sleep(1);
+    my $mark = time();
+    sleep 2;
 
     xlog "fetch the id of event 513";
     $res = $jmap->CallMethods([
@@ -73,11 +74,14 @@ sub test_restore_calendars_batch_size_bug2
     ]);
     $self->assert_str_equals($calid, $res->[0][1]{destroyed}[0]);
 
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
     xlog "restore calendar";
     $res = $jmap->CallMethods([
         ['Backup/restoreCalendars', {
             performDryRun => JSON::true,
-            undoPeriod => "PT3S",
+            undoPeriod => $period,
             undoAll => JSON::true
          }, "R4"]
     ]);
