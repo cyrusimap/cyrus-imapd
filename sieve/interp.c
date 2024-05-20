@@ -505,7 +505,7 @@ static const struct sieve_capa_t {
 
     /* MIME Part Handling - RFC 5703 */
     { "enclose",      SIEVE_CAPA_ENCLOSE },
-    { "extracttest",  SIEVE_CAPA_EXTRACT },
+    { "extracttext",  SIEVE_CAPA_EXTRACT },
     { "foreverypart", SIEVE_CAPA_FOREVERYPART },
     { "mime",         SIEVE_CAPA_MIME },
     { "replace",      SIEVE_CAPA_REPLACE },
