@@ -50,6 +50,7 @@ metric counter cyrus_imap_logout_total                  The total number of IMAP
 metric counter cyrus_imap_list_total                    The total number of IMAP LISTs
 metric counter cyrus_imap_lsub_total                    The total number of IMAP LSUBs
 metric counter cyrus_imap_listrights_total              The total number of IMAP LISTRIGHTSs
+metric counter cyrus_imap_move_total                    The total number of IMAP MOVEs
 metric counter cyrus_imap_myrights_total                The total number of IMAP MYRIGHTSs
 metric counter cyrus_imap_mupdatepush_total             The total number of IMAP MUPDATEPUSHs
 metric counter cyrus_imap_replace_total                 The total number of IMAP REPLACEs

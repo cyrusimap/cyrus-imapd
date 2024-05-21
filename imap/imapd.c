@@ -2079,11 +2079,11 @@ static void cmdloop(void)
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/1);
 
                 if (cmdname[0] == 'x')
-                    client_behavior.did_move = 1;
-                else
                     client_behavior.did_xmove = 1;
+                else
+                    client_behavior.did_move = 1;
 
-                prometheus_increment(CYRUS_IMAP_COPY_TOTAL);
+                prometheus_increment(CYRUS_IMAP_MOVE_TOTAL);
             } else goto badcmd;
             break;
 
