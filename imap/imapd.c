@@ -502,7 +502,6 @@ static struct capa_struct base_capabilities[] = {
     { "XCONVERSATIONS",        CAPA_POSTAUTH|CAPA_CONFIG,        /* CY */
       { .config = IMAPOPT_CONVERSATIONS }                     },
     { "XLIST",                 CAPA_POSTAUTH,           { 0 } }, /* NS */
-    { "XMOVE",                 CAPA_POSTAUTH,           { 0 } }, /* NS */
 
 /* keep this to mark the end of the list */
     { 0,                       0,                       { 0 } }
@@ -902,7 +901,7 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s"
-                        "%s%s%s",
+                        "%s%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
@@ -933,8 +932,7 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "",
 
                         client_behavior.did_scan        ? " scan=<1>"         : "",
-                        client_behavior.did_xlist       ? " xlist=<1>"        : "",
-                        client_behavior.did_xmove       ? " xmove=<1>"        : "");
+                        client_behavior.did_xlist       ? " xlist=<1>"        : "");
 }
 
 static void imapd_reset(void)
@@ -2078,10 +2076,7 @@ static void cmdloop(void)
 
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/1);
 
-                if (cmdname[0] == 'x')
-                    client_behavior.did_xmove = 1;
-                else
-                    client_behavior.did_move = 1;
+                client_behavior.did_move = 1;
 
                 prometheus_increment(CYRUS_IMAP_MOVE_TOTAL);
             } else goto badcmd;
@@ -2509,10 +2504,6 @@ static void cmdloop(void)
                     if (readonly) goto noreadonly;
                     goto move;
                 }
-                else if (!strcmp(arg1.s, "xmove")) {
-                    if (readonly) goto noreadonly;
-                    goto move;
-                }
                 else if (!strcmp(arg1.s, "replace")) {
                     if (readonly) goto noreadonly;
                     goto replace;
@@ -2685,13 +2676,6 @@ static void cmdloop(void)
                 if (listargs.pat.count) cmd_list(tag.s, &listargs);
 
                 prometheus_increment(CYRUS_IMAP_LIST_TOTAL);
-            }
-            else if (!strcmp(cmd.s, "Xmove")) {
-                if (readonly) goto noreadonly;
-                if (!imapd_index && !backend_current) goto nomailbox;
-                usinguid = 0;
-                if (c != ' ') goto missingargs;
-                goto move;
             }
             else if (!strcmp(cmd.s, "Xrunannotator")) {
                 if (readonly) goto noreadonly;
