@@ -356,7 +356,6 @@ struct listargs {
     unsigned ret;               /* Return options */
     const char *ref;            /* Reference name */
     strarray_t pat;             /* Mailbox pattern(s) */
-    const char *scan;           /* SCAN content */
     unsigned statusitems;       /* for RETURN STATUS */
     struct getmetadata_options metaopts; /* for RETURN METADATA */
     strarray_t metaitems;       /* for RETURN METADATA */
@@ -469,7 +468,6 @@ struct client_behavior_registry {
     uint32_t did_utf8_accept  : 1;   /* used ENABLE UTF8=ACCEPT  */
 
     /* non-standard - track for possible deprecation */
-    uint32_t did_scan         : 1;   /* used SCAN  */
     uint32_t did_xlist        : 1;   /* used XLIST  */
 };
 
