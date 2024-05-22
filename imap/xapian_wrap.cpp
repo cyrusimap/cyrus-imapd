@@ -1059,30 +1059,48 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
             dbw->term_generator->index_text(Xapian::Utf8Iterator(val), 1, prefix);
         }
         if (addr->domain && strcmp(addr->domain, "unspecified-domain")) {
-            // index reversed domain
-            std::string val;
-            strarray_t *sa = strarray_split(addr->domain, ".", 0);
-            val.reserve(buf_len(part));
-            for (int i = strarray_size(sa) - 1; i >= 0; i--) {
-                val.append(strarray_nth(sa, i));
-                if (i > 0) {
-                    val.append(1, '.');
-                }
-            }
-            strarray_free(sa);
-            add_boolean_nterm(*dbw->document, prefix + "D" + val);
-            // index individual terms
-            dbw->term_generator->set_stemmer(Xapian::Stem());
-            dbw->term_generator->set_stopper(NULL);
-            dbw->term_generator->index_text(Xapian::Utf8Iterator(addr->domain,
-                        strlen(addr->domain)), 1, prefix);
-        }
+            char *utf8_domain = charset_idna_to_utf8(addr->domain);
+            char *puny_domain = charset_idna_to_ascii(addr->domain);
 
-        // index entire addr-spec
-        char *a = address_get_all(addr, /*canon_domain*/1);
-        if (a) {
-            add_boolean_nterm(*dbw->document, prefix + 'A' + std::string(a));
-            free(a);
+            const char *domains[3] = {
+                addr->domain, utf8_domain, puny_domain
+            };
+
+            for (size_t i = 0; i < 3; i++) {
+                if (!domains[i] || (i && !strcasecmp(addr->domain, domains[i])))
+                    continue;
+
+                struct address myaddr = *addr;
+                myaddr.domain = domains[i];
+
+                // index entire addr-spec
+                char *a = address_get_all(&myaddr, /*canon_domain*/1);
+                if (a) {
+                    add_boolean_nterm(*dbw->document, prefix + 'A' + std::string(a));
+                    free(a);
+                }
+
+                // index reversed domain
+                std::string revdomain;
+                strarray_t *sa = strarray_split(myaddr.domain, ".", 0);
+                for (int i = strarray_size(sa) - 1; i >= 0; i--) {
+                    revdomain.append(strarray_nth(sa, i));
+                    if (i > 0) {
+                        revdomain.append(1, '.');
+                    }
+                }
+                strarray_free(sa);
+                add_boolean_nterm(*dbw->document, prefix + "D" + revdomain);
+
+                // index individual terms
+                dbw->term_generator->set_stemmer(Xapian::Stem());
+                dbw->term_generator->set_stopper(NULL);
+                dbw->term_generator->index_text(
+                    Xapian::Utf8Iterator(myaddr.domain), 1, prefix);
+            }
+
+            free(utf8_domain);
+            free(puny_domain);
         }
     }
 
@@ -1648,157 +1666,217 @@ static Xapian::Query *query_new_listid(const xapian_db_t *db,
 
 static Xapian::Query *query_new_email(const xapian_db_t *db,
                                       const char *_prefix,
-                                      const char *str)
+                                      const char *searchstr)
 {
     std::string prefix(_prefix);
 
-    unsigned qpflags = Xapian::QueryParser::FLAG_PHRASE |
-                       Xapian::QueryParser::FLAG_WILDCARD;
+    unsigned queryflags =
+        Xapian::QueryParser::FLAG_PHRASE | Xapian::QueryParser::FLAG_WILDCARD;
 
     db->parser->set_stemmer(Xapian::Stem());
     db->parser->set_stopper(NULL);
     db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
 
-    std::string mystr = Xapian::Unicode::tolower(str);
-    str = mystr.c_str();
+    std::string str = Xapian::Unicode::tolower(searchstr);
+    size_t atsign_pos = str.find('@');
 
-    const char *atsign = strchr(str, '@');
-
-    if (!atsign) {
-        // query free text
-        return new Xapian::Query{db->parser->parse_query(str, qpflags, prefix)};
+    if (atsign_pos == std::string::npos || atsign_pos == str.length() - 1) {
+        // query free text only
+        return new Xapian::Query{
+            db->parser->parse_query(searchstr, queryflags, prefix)};
     }
 
-    Xapian::Query q = Xapian::Query::MatchNothing;
+    // Transform query string into an email address.
+    std::string email;
 
-    // query name and mailbox (unless just searching for '@domain')
-    if (atsign > str) {
-        struct address *addr = NULL;
-        parseaddr_list(str, &addr);
-        if (addr && addr->name) {
-            Xapian::Query qq = db->parser->parse_query(addr->name, qpflags, prefix + 'N');
-            if (q.get_type() != q.LEAF_MATCH_NOTHING) {
-                q &= qq;
-            }
-            else q = qq;
+    // Form local part, optionally preceeded by name.
+    bool have_localpart = false;
+    bool wildcard_localpart = false;
+
+    if (atsign_pos) {
+        email.append(str, 0, atsign_pos);
+    }
+
+    if (!email.empty() && email[email.length() - 1] == '*') {
+        wildcard_localpart = true;
+        email.erase(email.length() - 1, 1);
+    }
+
+    if (!email.empty() && email[email.length() - 1] != '<') {
+        have_localpart = true;
+    }
+    else {
+        if (!email.empty())
+            email.append(1, '<');
+        email.append("xlocalpart");
+    }
+
+    email.append(1, '@');
+
+    // Form domain part.
+    bool have_domain = false;
+    bool wildcard_domain = false;
+    bool subdomain_only = false;
+    std::string domain(str, atsign_pos + 1);
+
+    if (domain.length() && domain[0] == '*') {
+        wildcard_domain = true;
+        domain.erase(0, 1);
+        if (domain.length() && domain[0] == '.') {
+            subdomain_only = true;
+            domain.erase(0, 1);
         }
-        if (addr && addr->mailbox) {
-            // strip the domain from the mailbox
-            std::string mail(addr->mailbox);
-            mail.erase(std::remove_if(mail.begin(), mail.end(), isspace), mail.end());
-            int wildcard = mail[mail.size()-1] == '*';
-            if (wildcard) {
-                mail.resize(mail.size()-1);
-            }
-            if (!mail.empty()) {
-                std::string term(prefix + 'L' + mail);
-                Xapian::Query qq = wildcard ?
-                    Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
-                    Xapian::Query(term);
-                if (q.get_type() != q.LEAF_MATCH_NOTHING) {
-                    q &= qq;
+    }
+
+    if (domain.length() && domain[0] != '>') {
+        have_domain = true;
+        email.append(domain);
+    }
+    else {
+        email.append("xdomain");
+        if (domain.length())
+            email.append(1, '>');
+    }
+
+    // Parse email address.
+    struct address *addr = NULL;
+    parseaddr_list(email.c_str(), &addr);
+
+    if (!addr) {
+        Xapian::Query q = Xapian::Query::MatchNothing;
+        if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
+            // query in legacy format
+            q |= db->parser->parse_query(searchstr, queryflags, prefix);
+        }
+        return new Xapian::Query(q);
+    }
+
+    // Build query
+    if (!have_localpart)
+        addr->mailbox = NULL;
+
+    if (!have_domain)
+        addr->domain = NULL;
+
+    // Build query.
+    std::vector<Xapian::Query> queries;
+
+    if (addr->name) {
+        queries.push_back(
+                db->parser->parse_query(addr->name, queryflags, prefix + 'N'));
+    }
+
+    if (addr->domain) {
+        char *utf8_domain = charset_idna_to_utf8(addr->domain);
+        char *puny_domain = charset_idna_to_ascii(addr->domain);
+
+        const char *domains[3] = {addr->domain, utf8_domain, puny_domain};
+
+        std::vector<Xapian::Query> domain_queries;
+
+        for (size_t i = 0; i < 3; i++) {
+            if (!domains[i] || (i && !strcasecmp(addr->domain, domains[i])))
+                continue;
+
+            struct address myaddr = *addr;
+            myaddr.domain = domains[i];
+
+            if (myaddr.mailbox && !wildcard_localpart && !wildcard_domain) {
+                // Query complete email addresses with A prefix
+                Xapian::Query q = Xapian::Query::MatchNothing;
+                char *a = address_get_all(&myaddr, /*canon_domain*/ 1);
+                if (a) {
+                    std::string term(prefix + 'A' + std::string(a));
+                    q = Xapian::Query(term);
                 }
-                else q = qq;
-            }
-        }
-        // ignore @domain - it's being handled below
-        if (addr) parseaddr_free(addr);
-    }
+                free(a);
 
-    // query domain
-    if (atsign[1]) {
-        std::string domain;
-        const char *dstart = atsign + 1;
-        bool wildcard = *dstart == '*';
-        if (wildcard) dstart++;
-        const char *dend;
-        for (dend = dstart; *dend; dend++) {
-            char c = *dend;
-            if (Uisalnum(c) || c == '-' || c == '[' || c == ']' || c == ':') {
-                continue;
-            }
-            else if (c == '.' && (dend-1 == dstart || dend[-2] != '.')) {
-                continue;
+                if (db->db_versions->lower_bound(16) !=
+                        db->db_versions->begin()) {
+                    // Database version 15 did not index complete addresses
+                    // with A prefix, but rather indexed localpart and domain
+                    // separately, using L and D prefixes.
+                    // This is buggy, as a query for 'foo@bar.com' would
+                    // return a message if it has at least one recipient
+                    // with localpart 'foo' and another recipient has
+                    // domain 'bar.com'.
+                    q = Xapian::Query(
+                            Xapian::Query::OP_OR, q,
+                            Xapian::Query(
+                                Xapian::Query::OP_AND,
+                                Xapian::Query(
+                                    Xapian::Query::OP_VALUE_LE,
+                                    Xapian::valueno(SLOT_INDEXVERSION),
+                                    std::string("15")),
+                                Xapian::Query(Xapian::Query::OP_AND,
+                                    Xapian::Query(prefix + 'L' +
+                                        myaddr.mailbox),
+                                    Xapian::Query(prefix + 'D' +
+                                        myaddr.mailbox))));
+                }
+
+                domain_queries.push_back(q);
             }
             else {
-                break;
-            }
-        }
-        if (dend > dstart) {
-            strarray_t *sa = strarray_nsplit(dstart, dend - dstart, ".", 0);
-            for (int i = strarray_size(sa) - 1; i >= 0; i--) {
-                domain.append(strarray_nth(sa, i));
-                if (i > 0) {
-                    domain.append(1, '.');
+                // Query domain-only and wildcard domains using D prefix.
+                std::string revdomain;
+                strarray_t *sa = strarray_split(myaddr.domain, ".", 0);
+                for (int i = strarray_size(sa) - 1; i >= 0; i--) {
+                    revdomain.append(strarray_nth(sa, i));
+                    if (i > 0) {
+                        revdomain.append(1, '.');
+                    }
+                }
+                strarray_free(sa);
+                if (revdomain.length() && subdomain_only) {
+                    revdomain.append(1, '.');
+                }
+                if (!revdomain.empty()) {
+                    std::string term(prefix + 'D' + revdomain);
+                    Xapian::Query q =
+                        wildcard_domain
+                        ? Xapian::Query(Xapian::Query::OP_WILDCARD,
+                                term)
+                        : Xapian::Query(term);
+                    domain_queries.push_back(q);
                 }
             }
-            strarray_free(sa);
-            if (*dstart == '.') {
-                domain.append(1, '.');
-            }
         }
-        if (!domain.empty()) {
-            std::string term(prefix + 'D' + domain);
-            Xapian::Query qq = wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
-                                          Xapian::Query(term);
-            {
-                // FIXME - temporarily also search for '@' prefix
-                std::string term2(prefix + '@' + domain);
-                Xapian::Query qq2 = wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term2) :
-                                               Xapian::Query(term2);
-                qq |= qq2;
-            }
-            if (q.get_type() != q.LEAF_MATCH_NOTHING) {
-                q &= qq;
-            }
-            else q = qq;
+
+        if (!domain_queries.empty()) {
+            queries.push_back(Xapian::Query(Xapian::Query::OP_OR,
+                        domain_queries.begin(),
+                        domain_queries.end()));
         }
+
+        free(utf8_domain);
+        free(puny_domain);
+
     }
 
-    if (q.get_type() == q.LEAF_MATCH_ALL) {
-        q = Xapian::Query::MatchNothing;
+    if (addr->mailbox && (!addr->domain || wildcard_domain || wildcard_localpart)) {
+        // If we can't query with the A prefix, then query with L prefix.
+        std::string term(prefix + 'L' + addr->mailbox);
+        queries.push_back(
+                wildcard_localpart
+                ? Xapian::Query(Xapian::Query::OP_WILDCARD, term)
+                : Xapian::Query(term));
     }
 
-    // query in legacy format as well!
+    // Build return value.
+    Xapian::Query q = Xapian::Query::MatchNothing;
+
+    if (!queries.empty()) {
+        q |= Xapian::Query(Xapian::Query::OP_AND, queries.begin(),
+                queries.end());
+    }
+
     if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
-        q |= db->parser->parse_query(str, qpflags, prefix);
+        // query in legacy format as well
+        q |= db->parser->parse_query(searchstr, queryflags, prefix);
     }
 
-    // query localpart@domain (ONLY if no wildcards)
-    if ((atsign > str) && atsign[1] && !strchr(str, '*')) {
-        struct address *addr = NULL;
-
-        parseaddr_list(str, &addr);
-        if (addr) {
-            char *a = address_get_all(addr, /*canon_domain*/1);
-            if (a) {
-                // query 'A' term for index >= 16
-                std::string term(prefix + 'A' + std::string(a));
-                Xapian::Query qq =
-                    Xapian::Query(Xapian::Query::OP_AND,
-                                  Xapian::Query(Xapian::Query::OP_VALUE_GE,
-                                                Xapian::valueno(SLOT_INDEXVERSION),
-                                                std::string("16")),
-                                  Xapian::Query(term));
-                if (q.get_type() != q.LEAF_MATCH_NOTHING) {
-                    // otherwise, query 'L' + 'D' terms (as per above)
-                    Xapian::Query qq2 =
-                        Xapian::Query(Xapian::Query::OP_AND,
-                                      Xapian::Query(Xapian::Query::OP_VALUE_LE,
-                                                    Xapian::valueno(SLOT_INDEXVERSION),
-                                                    std::string("15")),
-                                      q);
-                    qq |= qq2;
-                }
-
-                q = qq;
-            }
-
-            parseaddr_free(addr);
-            free(a);
-        }
-    }
-
+    parseaddr_free(addr);
     return new Xapian::Query(q);
 }
 
