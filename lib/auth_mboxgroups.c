@@ -187,9 +187,7 @@ static const char *mycanonifyid(const char *identifier, size_t len)
 }
 
 /*
- * Set the current user to 'identifier'.  'cacheid', if non-null,
- * points to a 16-byte binary key to cache identifier's information
- * with.
+ * Set the current user to 'identifier' and loads any related groups.
  */
 static struct auth_state *mynewstate(const char *identifier)
 {
@@ -219,6 +217,7 @@ static strarray_t *mygroups(const struct auth_state *auth_state)
     return strarray_dup(&auth_state->groups);
 }
 
+/* reloads groups */
 static void myrefresh(struct auth_state *auth_state)
 {
     if (!auth_state) return;
