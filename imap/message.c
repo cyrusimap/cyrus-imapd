@@ -1167,7 +1167,6 @@ static void message_parse_charset(const struct body *body,
             charset_free(&charset);
             charset = CHARSET_UNKNOWN_CHARSET;
         }
-        encoding = ENCODING_NONE;
     }
     else {
         charset_free(&charset);
@@ -3318,6 +3317,20 @@ static void message_read_binarybody(struct body *body, const char **sect,
     n = CACHE_ITEM_BIT32(*sect);
     p = *sect += CACHE_ITEM_SIZE_SKIP;
     if (!n) return;
+
+    if (!strcmp(body->type, "MESSAGE") && !strcmp(body->subtype, "RFC822") &&
+        body->encoding) {
+        // Handle encoded messages.
+        if (!body->charset_enc) {
+            body->charset_enc = encoding_lookupname(body->encoding);
+        }
+        if (cache_version < 13 && body->charset_enc) {
+            // Cache versions < 13 stored the undecoded content size
+            // as decoded content size. Reset to zero and let caller
+            // handle it.
+            body->decoded_content_size = 0;
+        }
+    }
 
     if (!strcmp(body->type, "MESSAGE") && !strcmp(body->subtype, "RFC822") &&
         body->subpart->numparts) {
