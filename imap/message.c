@@ -328,6 +328,13 @@ done:
     return r;
 }
 
+static int body_is_rfc822(const struct body *body)
+{
+    return body && !strcasecmpsafe(body->type, "MESSAGE") &&
+           (!strcasecmpsafe(body->subtype, "RFC822") ||
+            !strcasecmpsafe(body->subtype, "GLOBAL"));
+}
+
 EXPORTED int message_parse(const char *fname, struct index_record *record)
 {
     struct body *body = NULL;
@@ -678,8 +685,7 @@ static void message_find_part(struct body *body, const char *section,
                               msg_base, msg_len, parts, n);
         }
     }
-    else if (!strcmp(body->type, "MESSAGE") &&
-             !strcmp(body->subtype, "RFC822")) {
+    else if (body_is_rfc822(body)) {
         snprintf(nextsection, sizeof(nextsection), "%s.1", section);
         message_find_part(body->subpart, nextsection, content_types,
                           msg_base, msg_len, parts, n);
@@ -806,8 +812,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
             message_parse_multipart(msg, body, boundaries, efname);
         }
     }
-    else if (strcmp(body->type, "MESSAGE") == 0 &&
-        strcmp(body->subtype, "RFC822") == 0) {
+    else if (body_is_rfc822(body)) {
         const char *base = msg->base + msg->offset;
         body->subpart = (struct body *)xzmalloc(sizeof(struct body));
 
@@ -1163,7 +1168,8 @@ static void message_parse_charset(const struct body *body,
         message_parse_charset_params(body->params, &charset);
     }
     else if (!strcmp(body->type, "MESSAGE")) {
-        if (!strcmp(body->subtype, "RFC822")) {
+        if (!strcmp(body->subtype, "RFC822") ||
+            !strcmp(body->subtype, "GLOBAL")) {
             charset_free(&charset);
             charset = CHARSET_UNKNOWN_CHARSET;
         }
@@ -2328,8 +2334,7 @@ EXPORTED void message_write_body(struct buf *buf, const struct body *body,
         buf_putc(buf, ' ');
         buf_printf(buf, "%u", body->content_lines);
     }
-    else if (strcmp(body->type, "MESSAGE") == 0
-             && strcmp(body->subtype, "RFC822") == 0) {
+    else if (body_is_rfc822(body)) {
         /* Message/rfc822 gets a body_msg */
         buf_putc(buf, ' ');
         message_write_envelope(buf, body->subpart);
@@ -2518,8 +2523,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
 {
     int part;
 
-    if (strcmp(body->type, "MESSAGE") == 0
-        && strcmp(body->subtype, "RFC822") == 0) {
+    if (body_is_rfc822(body)) {
         if (body->subpart->numparts) {
             /*
              * Part 0 of a message/rfc822 is the message header/text.
@@ -3229,9 +3233,7 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
             c = getuint32(strm, &body->content_lines);
             if (c == EOF) goto done;
         }
-        else if (!strcmp(body->type, "MESSAGE") &&
-                 !strcmp(body->subtype, "RFC822")) {
-
+        else if (body_is_rfc822(body)) {
             body->subpart = (struct body *) xzmalloc(sizeof(struct body));
 
             /* envelope structure */
@@ -3318,8 +3320,7 @@ static void message_read_binarybody(struct body *body, const char **sect,
     p = *sect += CACHE_ITEM_SIZE_SKIP;
     if (!n) return;
 
-    if (!strcmp(body->type, "MESSAGE") && !strcmp(body->subtype, "RFC822") &&
-        body->encoding) {
+    if (body_is_rfc822(body) && body->encoding) {
         // Handle encoded messages.
         if (!body->charset_enc) {
             body->charset_enc = encoding_lookupname(body->encoding);
@@ -3332,8 +3333,7 @@ static void message_read_binarybody(struct body *body, const char **sect,
         }
     }
 
-    if (!strcmp(body->type, "MESSAGE") && !strcmp(body->subtype, "RFC822") &&
-        body->subpart->numparts) {
+    if (body_is_rfc822(body) && body->subpart->numparts) {
         subpart = body->subpart->subpart;
         body = body->subpart;
     }
@@ -4518,8 +4518,7 @@ badformat:
             body->content_lines = atoi(buf_cstring(&buf));
         }
 
-        else if (!strcmpsafe(body->type, "MESSAGE") &&
-                 !strcmpsafe(body->subtype, "RFC822")) {
+        else if (body_is_rfc822(body)) {
             body->numparts = 1;
             body->subpart = xzmalloc(sizeof(struct body));
 
@@ -4592,8 +4591,7 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
         goto done;
     }
 
-    if (strcmp(body->type, "MESSAGE") == 0
-        && strcmp(body->subtype, "RFC822") == 0) {
+    if (body_is_rfc822(body)) {
 
         if (strcmp(body->subpart->type, "MULTIPART") == 0) {
 

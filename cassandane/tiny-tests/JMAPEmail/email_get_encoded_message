@@ -1,0 +1,147 @@
+#!perl
+use Cassandane::Tiny;
+use MIME::Base64 qw(encode_base64);
+use MIME::QuotedPrint qw(encode_qp);
+
+sub encode_qp_strip_crlf
+{
+    # encode_qp encodes CR in CRLF, so remove CR before encoding
+    my ($string, $eol) = @_;
+    (my $stripped_string = $string) =~ s/\r\n/\n/g;
+    return encode_qp($stripped_string, $eol);
+}
+
+sub test_email_get_encoded_message
+    :needs_component_jmap :NoMunge8Bit :RFC2047_UTF8
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+    my $jmap = $self->{jmap};
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    # Define some MIME message. Its content doesn't matter,
+    # but let's mix an 8bit character in the headers to
+    # make the content transfer encoding actually matter.
+    my $mime8Bit = <<'EOF';
+From: hello@example.com
+To: world@example.com
+Subject: töst
+Date: Thu, 20 May 2004 14:28:51 +0200
+Mime-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+täst
+EOF
+    $mime8Bit =~ s/\r?\n/\r\n/gs;
+    my $mime8BitSize = bytes::length($mime8Bit);
+
+    # Define test cases.
+    my @tests = ({
+        type => 'message/rfc822',
+        encoding => '8bit',
+        body => $mime8Bit,
+    }, {
+        type => 'message/global',
+        encoding => '8bit',
+        body => $mime8Bit,
+    }, {
+        type => 'message/rfc822',
+        encoding => 'base64',
+        body => encode_base64($mime8Bit, "\015\012"),
+    }, {
+        type => 'message/global',
+        encoding => 'base64',
+        body => encode_base64($mime8Bit, "\015\012"),
+    }, {
+        type => 'message/rfc822',
+        encoding => 'quoted-printable',
+        body => encode_qp_strip_crlf($mime8Bit, "\015\012"),
+    }, {
+        type => 'message/global',
+        encoding => 'quoted-printable',
+        body => encode_qp_strip_crlf($mime8Bit, "\015\012"),
+    });
+
+    my $res = $jmap->CallMethods([
+        ['Email/get', { ids => [] }, 'R1']
+    ]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    # Run the tests.
+    while (my ($i, $tc) = each @tests) {
+        my $imapUid = $i + 1;
+        my $testId = "test$imapUid";
+
+        xlog $self, "Testing content-type $tc->{type} and encoding $tc->{encoding}";
+
+        xlog $self, "Delivering test message";
+        my $mime = <<"EOF";
+From: from\@local
+To: to\@local
+Subject: $testId
+Date: Thu, 20 May 2004 14:28:51 +0200
+Content-Type: multipart/mixed; boundary=8c438cf1-a6ac-4d99-b388-b1dfd9550725=_
+Mime-Version: 1.0
+
+--8c438cf1-a6ac-4d99-b388-b1dfd9550725=_
+Content-Type: text/plain; charset=utf-8
+
+test
+
+--8c438cf1-a6ac-4d99-b388-b1dfd9550725=_
+Content-Type: $tc->{type}
+Content-Transfer-Encoding: $tc->{encoding}
+
+$tc->{body}
+--8c438cf1-a6ac-4d99-b388-b1dfd9550725=_--
+EOF
+        $mime =~ s/\r?\n/\r\n/gs;
+
+        my $msg = Cassandane::Message->new();
+        $msg->set_lines(split /\n/, $mime);
+        $self->{instance}->deliver($msg);
+
+        $res = $jmap->CallMethods([
+            ['Email/changes', {
+                sinceState => $state
+            }, 'R1'],
+            ['Email/get', {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name => 'Email/changes',
+                    path => '/created',
+                },
+                properties => ['subject', 'bodyStructure'],
+                bodyProperties => [
+                    'blobId',
+                    'header:content-transfer-encoding:asText',
+                    'partId',
+                    'size',
+                    'type',
+                ],
+            }, 'R2'],
+        ]);
+        $self->assert_str_equals($testId, $res->[1][1]{list}[0]{subject});
+        # Update Email state.
+        $state = $res->[0][1]{newState};
+
+        xlog $self, "Assert Email/get returns expected message";
+        my $bodyPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[1];
+        $self->assert_str_equals("2", $bodyPart->{partId});
+        $self->assert_str_equals($tc->{type}, $bodyPart->{type});
+        $self->assert_str_equals($tc->{encoding},
+            $bodyPart->{'header:content-transfer-encoding:asText'});
+        $self->assert_num_equals($mime8BitSize, $bodyPart->{size});
+
+        xlog $self, "Assert Blob download";
+        $res = $self->download('cassandane', $bodyPart->{blobId});
+        $self->assert_str_equals($mime8Bit, $res->{content});
+
+        # While we are at it let's check IMAP, too.
+        xlog $self, "Assert IMAP FETCH BINARY";
+        $imap->select('INBOX');
+        $res = $imap->fetch($imapUid, '(BINARY[2])');
+        $self->assert_str_equals($mime8Bit, $res->{$imapUid}{binary});
+    }
+}
