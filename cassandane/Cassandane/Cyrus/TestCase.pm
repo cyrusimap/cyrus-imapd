@@ -475,6 +475,10 @@ magic(SlowIO => sub {
     my $self = shift;
     $self->config_set('debug_slowio' => 'yes');
 });
+magic(Mboxgroups => sub {
+    my $self = shift;
+    $self->config_set('auth_mech' => 'mboxgroups');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
