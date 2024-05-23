@@ -196,7 +196,7 @@ static struct auth_state *mynewstate(const char *identifier)
     struct auth_state *newstate;
 
     identifier = mycanonifyid(identifier, 0);
-    if (!identifier) return 0;
+    if (!identifier) return NULL;
 
     newstate = (struct auth_state *)xzmalloc(sizeof(struct auth_state));
 
