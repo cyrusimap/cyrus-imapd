@@ -325,8 +325,8 @@ HIDDEN int jmap_email_hasattachment(const struct body *part,
                 !strcmp(part->subtype, "PDF"))) {
         return 1;
     }
-    else if ((!strcmp(part->type, "MESSAGE") &&
-                !strcmp(part->subtype, "RFC822"))) {
+    else if (!strcmp(part->type, "MESSAGE")) {
+        // any message/* is an attachment
         return 1;
     }
     else if ((!strcmp(part->type, "TEXT") &&

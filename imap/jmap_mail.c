@@ -6718,7 +6718,8 @@ static void _cyrusmsg_init_partids(struct body *body, const char *part_id)
         }
 
         if (!strcmp(body->type, "MESSAGE") &&
-            !strcmp(body->subtype, "RFC822")) {
+            (!strcmp(body->subtype, "RFC822") ||
+             !strcmp(body->subtype, "GLOBAL"))) {
             _cyrusmsg_init_partids(body->subpart, body->part_id);
         }
     }

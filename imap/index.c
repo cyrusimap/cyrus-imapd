@@ -3599,11 +3599,11 @@ void index_fetchmsg(struct index_state *state, const struct buf *msg,
     if (domain != DOMAIN_7BIT) prot_data_boundary(state->out);
 }
 
-static int body_is_rfc822(struct body *body)
+static int body_is_rfc822(const struct body *body)
 {
-    return body &&
-        !strcasecmpsafe(body->type, "MESSAGE") &&
-        !strcasecmpsafe(body->subtype, "RFC822");
+    return body && !strcasecmpsafe(body->type, "MESSAGE") &&
+           (!strcasecmpsafe(body->subtype, "RFC822") ||
+            !strcasecmpsafe(body->subtype, "GLOBAL"));
 }
 
 static struct body *find_part(struct body *body, int32_t part)
@@ -6009,8 +6009,7 @@ static int find_striphtml_parts(message_t *msg, strarray_t *striphtml)
     ptrarray_push(&work, (void*) root);
     const struct body *body;
     while ((body = ptrarray_pop(&work))) {
-        if (!strcmpsafe(body->type, "MESSAGE") &&
-            !strcmpsafe(body->subtype, "RFC822")) {
+        if (body_is_rfc822(body)) {
             ptrarray_push(&submsgs, (void*)body);
         }
         int i;
@@ -6034,8 +6033,7 @@ static int find_striphtml_parts(message_t *msg, strarray_t *striphtml)
                 has_htmlpart = 1;
                 break;
             }
-            else if (!strcmpsafe(body->type, "MESSAGE") &&
-                     !strcmpsafe(body->subtype, "RFC822")) {
+            else if (body_is_rfc822(body)) {
                 continue;
             }
             else if (body->numparts) {
@@ -6060,8 +6058,7 @@ static int find_striphtml_parts(message_t *msg, strarray_t *striphtml)
                     strarray_push(striphtml, body->part_id);
                 }
             }
-            else if (!strcmpsafe(body->type, "MESSAGE") &&
-                     !strcmpsafe(body->subtype, "RFC822")) {
+            else if (body_is_rfc822(body)) {
                 continue;
             }
             else if (body->numparts) {
