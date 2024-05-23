@@ -98,7 +98,6 @@ sub tear_down
 }
 
 sub test_setacl_groupid
-    :min_version_3_7
 {
     my ($self) = @_;
 
@@ -116,7 +115,6 @@ sub test_setacl_groupid
 }
 
 sub test_setacl_groupid_spaces
-    :min_version_3_7
 {
     my ($self) = @_;
 
@@ -147,7 +145,7 @@ sub test_setacl_groupid_spaces
 }
 
 sub test_list_groupaccess_noracl
-    :min_version_3_7 :NoAltNamespace
+    :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -171,7 +169,7 @@ sub test_list_groupaccess_noracl
 }
 
 sub test_list_groupaccess_racl
-    :ReverseACLs :min_version_3_7 :NoAltNamespace
+    :ReverseACLs :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -205,7 +203,6 @@ sub test_list_groupaccess_racl
 }
 
 sub do_test_list_order
-    :min_version_3_7
 {
     my ($self) = @_;
 
@@ -288,14 +285,14 @@ sub do_test_list_order
 }
 
 sub test_list_order_noracl
-    :min_version_3_7 :NoAltNamespace
+    :NoAltNamespace
 {
     my $self = shift;
     return $self->do_test_list_order(@_);
 }
 
 sub test_list_order_racl
-    :ReverseACLs :min_version_3_7 :NoAltNamespace
+    :ReverseACLs :NoAltNamespace
 {
     my $self = shift;
     return $self->do_test_list_order(@_);
