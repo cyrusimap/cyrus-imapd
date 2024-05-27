@@ -9260,6 +9260,9 @@ static json_t *_header_from_addresses(json_t *addrs,
     struct buf buf = BUF_INITIALIZER;
     json_t *ret = NULL;
     strarray_t vals = STRARRAY_INITIALIZER;
+    charset_t utf8 = charset_lookupname("utf-8");
+    charset_conv_t *nfc =
+        charset_conv_new(utf8, CHARSET_KEEPCASE | CHARSET_UNORM_NFC);
 
     json_array_foreach(groups, i, group) {
 
@@ -9275,7 +9278,8 @@ static json_t *_header_from_addresses(json_t *addrs,
         }
 
         if (groupname) {
-            buf_setcstr(&buf, groupname);
+            const char *nfc_groupname = charset_conv_convert(nfc, groupname);
+            buf_setcstr(&buf, nfc_groupname ? nfc_groupname : groupname);
             buf_putc(&buf, ':');
             buf_putc(&buf, ' ');
             strarray_append(&vals, buf_cstring(&buf));
@@ -9336,9 +9340,10 @@ static json_t *_header_from_addresses(json_t *addrs,
             const char *email = json_string_value (jemail);
             if (!name && !email) continue;
 
-            /* Trim whitespace from email */
+            /* Normalize email and trim whitespace */
             if (email) {
-                buf_setcstr(&emailbuf, email);
+                const char *nfc_email = charset_conv_convert(nfc, email);
+                buf_setcstr(&emailbuf, nfc_email ? nfc_email : email);
                 buf_trim(&emailbuf);
                 email = buf_cstring(&emailbuf);
             }
@@ -9380,7 +9385,9 @@ static json_t *_header_from_addresses(json_t *addrs,
                     buf_putc(&buf, '"');
                 }
                 else if (name_type == HIGH_BIT) {
-                    char *xname = charset_encode_mimephrase(name);
+                    const char *nfc_name = charset_conv_convert(nfc, name);
+                    char *xname =
+                        charset_encode_mimephrase(nfc_name ? nfc_name : name);
                     buf_appendcstr(&buf, xname);
                     free(xname);
                 }
@@ -9404,6 +9411,8 @@ static json_t *_header_from_addresses(json_t *addrs,
 
 done:
     if (groups != addrs) json_decref(groups);
+    charset_conv_free(&nfc);
+    charset_free(&utf8);
     strarray_fini(&vals);
     buf_free(&emailbuf);
     buf_free(&buf);
