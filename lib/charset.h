@@ -212,15 +212,10 @@ extern void charset_append_mime_param(struct buf *buf, unsigned flags,
  */
 extern char *unicode_casemap(const char *s, ssize_t len);
 
-/*
- * Convert the string contained in domain using the ToASCII operation
- * for Internationalized Domain Names (RFC 5890).
- * Replaces the contents in 'ascii' buffer with the conversion result, or
- * with the empty string if the domain is not a valid domain name.
- *
- * Returns the zero-terminated conversion result contained in 'ascii', or
- * NULL on error.
- */
-extern const char *charset_idna_to_ascii(struct buf *ascii, const char *domain);
+extern char *charset_idna_to_utf8(const char *domain);
+extern char *charset_idna_to_ascii(const char *domain);
+
+extern void charset_lib_init(void);
+extern void charset_lib_done(void);
 
 #endif /* INCLUDED_CHARSET_H */
