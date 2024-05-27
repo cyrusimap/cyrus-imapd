@@ -1245,9 +1245,11 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
                 buf_setcstr(&buf, addr->mailbox);
                 if (domain) {
                     buf_putc(&buf, '@');
-                    if (charset_idna_to_ascii(&idna_domain, domain)) {
+                    char *idna_domain = charset_idna_to_ascii(domain);
+                    if (idna_domain) {
                         // encode Unicode domain
-                        buf_append(&buf, &idna_domain);
+                        buf_appendcstr(&buf, idna_domain);
+                        xzfree(idna_domain);
                     }
                     else {
                         // preserve invalid domain
