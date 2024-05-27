@@ -293,8 +293,6 @@ extern int index_thread(struct index_state *state, int algorithm,
 extern int index_search(struct index_state *state,
                         struct searchargs *searchargs, int usinguid,
                         struct progress_rock *prock);
-extern int index_scan(struct index_state *state,
-                      const char *contents);
 extern int index_copy(struct index_state *state,
                       char *sequence,
                       int usinguid,
