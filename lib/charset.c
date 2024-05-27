@@ -64,6 +64,22 @@
 #include <unicode/ustring.h>
 #include <unicode/utf8.h>
 
+// for internationalized domain parsing
+static UIDNA *global_uidna = NULL;
+
+EXPORTED void charset_lib_init(void)
+{
+}
+
+EXPORTED void charset_lib_done(void)
+{
+    if (global_uidna) {
+        uidna_close(global_uidna);
+        global_uidna = NULL;
+    }
+}
+
+
 #define U_REPLACEMENT   0xfffd
 
 #define unicode_isvalid(c) \
@@ -4624,36 +4640,51 @@ EXPORTED char *unicode_casemap(const char *s, ssize_t slen)
     return out;
 }
 
-EXPORTED const char *charset_idna_to_ascii(struct buf *dst, const char *domain)
+static char *domain_to_x(const char *domain,
+                         int32_t (*conv)(
+                             const UIDNA *,
+                             const char *,
+                             int32_t,
+                             char *,
+                             int32_t,
+                             UIDNAInfo *,
+                             UErrorCode *))
 {
-    buf_reset(dst);
+    if (!global_uidna) {
+        UErrorCode uerr = U_ZERO_ERROR;
+        global_uidna = uidna_openUTS46(UIDNA_DEFAULT, &uerr);
+        if (U_FAILURE(uerr)) {
+            xsyslog(LOG_ERR, "could not initialize ICU IDNA", "err=<%s>",
+                    u_errorName(uerr));
+            global_uidna = NULL;
+            return NULL;
+        }
+    }
 
-    UErrorCode uerr = U_ZERO_ERROR;
-    UIDNA *uidna = uidna_openUTS46(UIDNA_DEFAULT, &uerr);
-    if (U_FAILURE(uerr))
-        goto done;
+    char *result = NULL;
 
     UIDNAInfo uinfo = UIDNA_INFO_INITIALIZER;
-    uerr = U_ZERO_ERROR;
-    int32_t out_len = uidna_nameToASCII_UTF8(
-        uidna, domain, -1, dst->s, dst->alloc, &uinfo, &uerr);
-
-    if (uerr == U_BUFFER_OVERFLOW_ERROR) {
-        buf_ensure(dst, out_len);
+    UErrorCode uerr = U_ZERO_ERROR;
+    int32_t len = conv(global_uidna, domain, -1, NULL, 0, &uinfo, &uerr);
+    if (!uinfo.errors && uerr == U_BUFFER_OVERFLOW_ERROR && len) {
+        result = xmalloc(len + 1);
         UIDNAInfo uinfo2 = UIDNA_INFO_INITIALIZER;
         uerr = U_ZERO_ERROR;
-        out_len = uidna_nameToASCII_UTF8(uidna, domain, -1, dst->s, dst->alloc,
-                                         &uinfo2, &uerr);
-        buf_truncate(dst, out_len);
-        uinfo = uinfo2;
+        conv(global_uidna, domain, -1, result, len, &uinfo2, &uerr);
+        result[len] = '\0';
+        if (U_FAILURE(uerr) || uinfo2.errors)
+            xzfree(result);
     }
 
-    if (U_FAILURE(uerr) || uinfo.errors) {
-        buf_reset(dst);
-        goto done;
-    }
+    return result;
+}
 
-done:
-    uidna_close(uidna);
-    return buf_cstringnull_ifempty(dst);
+EXPORTED char *charset_idna_to_utf8(const char *domain)
+{
+    return domain_to_x(domain, uidna_nameToUnicodeUTF8);
+}
+
+EXPORTED char *charset_idna_to_ascii(const char *domain)
+{
+    return domain_to_x(domain, uidna_nameToASCII_UTF8);
 }
