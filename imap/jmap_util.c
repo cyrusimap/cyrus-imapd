@@ -993,7 +993,7 @@ EXPORTED json_t *jmap_header_as_raw(const char *raw)
     return json_stringn(raw, len);
 }
 
-static char *_decode_mimeheader(const char *raw)
+static char *decode_and_normalize_mimeheader(const char *raw)
 {
     if (!raw) return NULL;
 
@@ -1012,13 +1012,14 @@ static char *_decode_mimeheader(const char *raw)
         struct buf buf = BUF_INITIALIZER;
         jmap_decode_to_utf8("utf-8", ENCODING_NONE,
                 raw, strlen(raw), 0.0, &buf, &r);
-        if (buf_len(&buf))
-            val = buf_release(&buf);
-        else
-            buf_free(&buf);
+        if (buf_len(&buf)) {
+            val = charset_utf8_normalize(buf_cstring(&buf));
+        }
+        buf_free(&buf);
     }
+
     if (!val) {
-        val = charset_decode_mimeheader(raw, CHARSET_KEEPCASE);
+        val = charset_decode_mimeheader(raw, CHARSET_KEEPCASE | CHARSET_UNORM_NFC);
     }
     return val;
 }
@@ -1044,13 +1045,9 @@ EXPORTED json_t *jmap_header_as_text(const char *raw)
     }
 
     /* Decode header */
-    char *decoded = _decode_mimeheader(trimmed);
+    char *decoded = decode_and_normalize_mimeheader(trimmed);
 
-    /* Convert to Unicode NFC */
-    char *normalized = charset_utf8_normalize(decoded);
-
-    json_t *result = json_string(normalized);
-    free(normalized);
+    json_t *result = json_string(decoded);
     free(decoded);
     free(unfolded);
     return result;
@@ -1189,18 +1186,41 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
     if (!addr) return json_null();
 
     json_t *result = json_array();
-
-    const char *groupname = NULL;
+    char *groupname = NULL;
     json_t *addresses = json_array();
-
-    struct buf idna_domain = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
+
     while (addr) {
+        const char *name = addr->name;
+        const char *mailbox = addr->mailbox;
         const char *domain = addr->domain;
         if (!strcmpsafe(domain, "unspecified-domain")) {
             domain = NULL;
         }
-        if (!addr->name && addr->mailbox && !domain) {
+
+        // Normalize email address.
+        char *decoded_name = NULL;
+        if (name) {
+            if ((decoded_name = decode_and_normalize_mimeheader(name))) {
+                name = decoded_name;
+            }
+        }
+
+        char *nfc_mailbox = NULL;
+        if (mailbox) {
+            if ((nfc_mailbox = charset_utf8_normalize(mailbox))) {
+                mailbox = nfc_mailbox;
+            }
+        }
+
+        char *idna_domain = NULL;
+        if (domain) {
+            if ((idna_domain = charset_idna_to_ascii(domain))) {
+                domain = idna_domain;
+            }
+        }
+
+        if (!name && mailbox && !domain) {
             /* Start of group. */
             if (form == HEADER_FORM_GROUPEDADDRESSES) {
                 if (form == HEADER_FORM_GROUPEDADDRESSES) {
@@ -1212,12 +1232,13 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
                         json_array_append_new(result, group);
                         addresses = json_array();
                     }
-                    groupname = NULL;
+                    xzfree(groupname);
                 }
-                groupname = addr->mailbox;
+                free(groupname);
+                groupname = xstrdup(mailbox);
             }
         }
-        else if (!addr->name && !addr->mailbox) {
+        else if (!name && !mailbox) {
             /* End of group */
             if (form == HEADER_FORM_GROUPEDADDRESSES) {
                 if (groupname || json_array_size(addresses)) {
@@ -1228,33 +1249,21 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
                     json_array_append_new(result, group);
                     addresses = json_array();
                 }
-                groupname = NULL;
+                xzfree(groupname);
             }
         }
         else {
             /* Regular address */
             json_t *jemailaddr = json_object();
-            if (addr->name) {
-                char *tmp = _decode_mimeheader(addr->name);
-                if (tmp) json_object_set_new(jemailaddr, "name", json_string(tmp));
-                free(tmp);
-            } else {
-                json_object_set_new(jemailaddr, "name", json_null());
-            }
-            if (addr->mailbox) {
-                buf_setcstr(&buf, addr->mailbox);
+
+            json_object_set_new(jemailaddr, "name",
+                                name ? json_string(name) : json_null());
+
+            if (mailbox) {
+                buf_setcstr(&buf, mailbox);
                 if (domain) {
                     buf_putc(&buf, '@');
-                    char *idna_domain = charset_idna_to_ascii(domain);
-                    if (idna_domain) {
-                        // encode Unicode domain
-                        buf_appendcstr(&buf, idna_domain);
-                        xzfree(idna_domain);
-                    }
-                    else {
-                        // preserve invalid domain
-                        buf_appendcstr(&buf, domain);
-                    }
+                    buf_appendcstr(&buf, domain);
                 }
                 json_object_set_new(jemailaddr, "email", json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
@@ -1264,9 +1273,12 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
             json_array_append_new(addresses, jemailaddr);
         }
         addr = addr->next;
+
+        xzfree(decoded_name);
+        xzfree(nfc_mailbox);
+        xzfree(idna_domain);
     }
     buf_free(&buf);
-    buf_free(&idna_domain);
 
     if (form == HEADER_FORM_GROUPEDADDRESSES) {
         if (groupname || json_array_size(addresses)) {
@@ -1283,6 +1295,7 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
         result = addresses;
     }
 
+    xzfree(groupname);
     return result;
 }
 
