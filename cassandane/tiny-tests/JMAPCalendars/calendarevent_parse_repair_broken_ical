@@ -148,6 +148,41 @@ STATUS:CONFIRMED
 END:VEVENT
 END:VCALENDAR
 EOF
+    }, {
+        desc => 'Broken VALARMs: bad TRIGGER, no ACTION',
+        wantParsed => {
+            '@type' => 'Event',
+            alerts => {
+                valarmNoAction => {
+                    '@type' => "Alert",
+                    trigger => {
+                        '@type' => "OffsetTrigger",
+                        relativeTo => "start",
+                        offset => "PT0S"
+                    },
+                    action => "display"
+                }
+            },
+	},
+        ical => <<EOF
+BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:0C93810E-C3FE-4ABE-9CB3-2B34B0124BEA
+DTSTART:20220410T150000
+DTEND:20220411T120000
+SUMMARY:test
+BEGIN:VALARM
+X-JMAP-ID:valarmNoAction
+TRIGGER:-PT0M
+END:VALARM
+BEGIN:VALARM
+X-JMAP-ID:valarmBadTrigger
+TRIGGER:-PD
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
     });
 
     for my $tc (@testCases) {
@@ -180,6 +215,9 @@ EOF
             'https://cyrusimap.org/ns/jmap/blob',
         ]);
         $self->assert_not_null($res->[0][1]{created}{ical});
+        if (not grep(/^uid$/, @properties)) {
+            delete $res->[1][1]{parsed}{'#ical'}{uid};
+        }
         $self->assert_deep_equals($tc->{wantParsed},
             $res->[1][1]{parsed}{'#ical'});
     }
