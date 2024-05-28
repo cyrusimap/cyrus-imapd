@@ -9200,6 +9200,8 @@ static json_t *_header_from_text(json_t *jtext,
     /* Parse a Text header into raw form */
     if (json_is_string(jtext)) {
         const char *s = json_string_value(jtext);
+        char *nfc_s = charset_utf8_normalize(s);
+        s = nfc_s ? nfc_s : s;
         char *tmp = charset_encode_mimeheader(s, strlen(s), 0);
         struct buf val = BUF_INITIALIZER;
         /* If text got folded, then the first line of the encoded
@@ -9208,6 +9210,7 @@ static json_t *_header_from_text(json_t *jtext,
          * clients are doing this, this seems not to be an issue and
          * allows us to not start the header value with a line fold. */
         buf_setcstr(&val, tmp);
+        free(nfc_s);
         free(tmp);
         return _header_make(header_name, prop_name, &val, parser);
     }
