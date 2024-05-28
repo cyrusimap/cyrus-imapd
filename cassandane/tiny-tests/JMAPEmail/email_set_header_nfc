@@ -31,7 +31,8 @@ sub test_email_set_header_nfc
                     to => [{
                         email => $nonNfcEmailAddress,
                     }],
-                    'header:x-my-header' => "$nonNfcXHeaderValue",
+                    'header:x-my-header' => $nonNfcXHeaderValue,
+                    'header:x-my-header2:asText' => $nonNfcXHeaderValue,
                     mailboxIds => {
                         '$inbox' => JSON::true,
                     },
@@ -55,6 +56,8 @@ sub test_email_set_header_nfc
                 'header:to',
                 'header:x-my-header:asText',
                 'header:x-my-header',
+                'header:x-my-header2:asText',
+                'header:x-my-header2',
             ],
         }, 'R2'],
     ]);
@@ -67,4 +70,8 @@ sub test_email_set_header_nfc
         $res->[1][1]{list}[0]{'header:x-my-header:asText'});
     $self->assert_str_equals(" $nonNfcXHeaderValue",
         $res->[1][1]{list}[0]{'header:x-my-header'});
+    $self->assert_str_equals($normalizedXHeaderValue,
+        $res->[1][1]{list}[0]{'header:x-my-header2:asText'});
+    $self->assert_str_equals(" =?UTF-8?Q?0.5=C3=85?=",
+        $res->[1][1]{list}[0]{'header:x-my-header2'});
 }
