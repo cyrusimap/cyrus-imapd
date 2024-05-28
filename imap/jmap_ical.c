@@ -4157,6 +4157,29 @@ static void repair_broken_ical(icalcomponent **icalp)
              vevent = icalcomponent_get_next_component(myical,
                     ICAL_VEVENT_COMPONENT)) {
 
+            // Remove VALARM without TRIGGER. Set missing ACTION to DISPLAY.
+            icalcomponent *valarm, *nextvalarm;
+            for (valarm = icalcomponent_get_first_component(vevent, ICAL_VALARM_COMPONENT);
+                 valarm; valarm = nextvalarm) {
+                nextvalarm = icalcomponent_get_next_component(
+                    vevent, ICAL_VALARM_COMPONENT);
+
+                if (!icalcomponent_get_first_property(valarm, ICAL_TRIGGER_PROPERTY)) {
+                    if (pass == 2) {
+                        icalcomponent_remove_component(vevent, valarm);
+                        icalcomponent_free(valarm);
+                    }
+                    else needs_rewrite = 1;
+                }
+                else if (!icalcomponent_get_first_property(valarm, ICAL_ACTION_PROPERTY)) {
+                    if (pass == 2) {
+                        icalcomponent_add_property(valarm,
+                            icalproperty_new_action(ICAL_ACTION_DISPLAY));
+                    }
+                    else needs_rewrite = 1;
+                }
+            }
+
             // Make sure that the mandatory UID property is set.
             if (!icalcomponent_get_uid(vevent)) {
                 if (pass == 2) {
