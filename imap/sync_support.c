@@ -1988,20 +1988,18 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
                 dlist_setnum64(kl, "XCONVMODSEQ", xconvmodseq);
         }
         modseq_t raclmodseq = mboxname_readraclmodseq(mailbox_name(mailbox));
-        if (raclmodseq && (!remote || remote->raclmodseq != raclmodseq)) {
-            // only send if different
+        if (raclmodseq)
             dlist_setnum64(kl, "RACLMODSEQ", raclmodseq);
-            char *userid = mboxname_to_userid(mailbox_name(mailbox));
-            strarray_t groups = STRARRAY_INITIALIZER;
-            int r = mboxlist_lookup_usergroups(userid, &groups);
-            if (!r && strarray_size(&groups)) {
-                char *groupstxt = strarray_join(&groups, "\t");
-                dlist_setatom(kl, "USERGROUPS", groupstxt);
-                free(groupstxt);
-            }
-            strarray_fini(&groups);
-            free(userid);
+        char *userid = mboxname_to_userid(mailbox_name(mailbox));
+        strarray_t groups = STRARRAY_INITIALIZER;
+        int r = mboxlist_lookup_usergroups(userid, &groups);
+        if (!r && strarray_size(&groups)) {
+            char *groupstxt = strarray_join(&groups, "\t");
+            dlist_setatom(kl, "USERGROUPS", groupstxt);
+            free(groupstxt);
         }
+        strarray_fini(&groups);
+        free(userid);
     }
     dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
     dlist_setatom(kl, "PARTITION", topart);
