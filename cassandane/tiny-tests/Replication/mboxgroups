@@ -1,0 +1,116 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mboxgroups
+    :needs_component_replication :Mboxgroups :ReverseACLs
+{
+    my ($self) = @_;
+
+    my $user = 'brandnew';
+    $self->{instance}->create_user($user);
+
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $masterstore = $mastersvc->create_store(username => $user);
+    my $mastertalk = $masterstore->get_client();
+
+    my $adminstore = $mastersvc->create_store(username => 'admin');
+    my $admintalk = $adminstore->get_client();
+
+    $admintalk->_imap_cmd('SETUSERGROUP', 0, '', 'cassandane', 'group:shared');
+    $admintalk->_imap_cmd('SETUSERGROUP', 0, '', 'brandnew', 'group:shared');
+
+    $admintalk->setacl("user.cassandane", "group:shared", "lrs");
+
+    $mastertalk->create("INBOX.Test") || die;
+    $mastertalk->create("INBOX.Test.Sub") || die;
+    $mastertalk->create("INBOX.Test Foo") || die;
+
+    my $ldata = $mastertalk->list("", "*");
+    $self->assert_deep_equals($ldata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX'
+          ],
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX.Test'
+          ],
+          [
+            [
+              '\\HasNoChildren'
+            ],
+            '.',
+            'INBOX.Test.Sub'
+          ],
+          [
+            [
+              '\\HasNoChildren'
+            ],
+            '.',
+            'INBOX.Test Foo'
+          ],
+          [
+            [
+              '\\HasNoChildren'
+            ],
+            '.',
+            'Other Users.cassandane'
+          ],
+    ]);
+
+    # run replication
+    $self->run_replication(user => $user);
+    $self->run_replication(user => 'cassandane');
+    $self->check_replication($user);
+    $self->check_replication('cassandane');
+
+    # verify replica store can see folder
+    my $replicasvc = $self->{replica}->get_service('imap');
+    my $replicastore = $replicasvc->create_store(username => $user);
+    my $replicatalk = $replicastore->get_client();
+
+    my $rdata = $replicatalk->list("", "*");
+    $self->assert_deep_equals($rdata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX'
+          ],
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX.Test'
+          ],
+          [
+            [
+              '\\HasNoChildren'
+            ],
+            '.',
+            'INBOX.Test.Sub'
+          ],
+          [
+            [
+              '\\HasNoChildren'
+            ],
+            '.',
+            'INBOX.Test Foo'
+          ],
+          [
+            [
+              '\\HasNoChildren'
+            ],
+            '.',
+            'Other Users.cassandane'
+          ],
+    ]);
+}
