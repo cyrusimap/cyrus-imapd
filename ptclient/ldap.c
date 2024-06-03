@@ -1270,6 +1270,7 @@ static int ptsmodule_make_authstate_group(
     int rc;
     int n;
     LDAPMessage *res = NULL;
+    LDAPMessage *res2 = NULL;
     LDAPMessage *entry = NULL;
     char **vals = NULL;
     char *attrs[] = {NULL};
@@ -1403,11 +1404,37 @@ static int ptsmodule_make_authstate_group(
     (*newstate)->userid.hash = strhash(canon_id);
     (*newstate)->mark = time(0);
     int i;
+    int j = 0;
     for (i = 0; i < numvals; i++) {
-        char **rdn = ldap_explode_rdn(vals[i], 1);
-        strlcat((*newstate)->groups[i].id, rdn[0], sizeof((*newstate)->groups[i].id));
-        (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
-        ldap_value_free(rdn);
+        if (!ptsm->user_attribute) break; // no user attribute, can't set group members
+        if (res2) {
+            ldap_msgfree(res2);
+            res2 = NULL;
+        }
+        rc = ldap_search_st(ptsm->ld, vals[i], LDAP_SCOPE_BASE, "(objectclass=*)", attrs, 0, &(ptsm->timeout), &res2);
+        if (rc != LDAP_SUCCESS) {
+            *reply = "ldap_search(dn) failed";
+            if (rc == LDAP_SERVER_DOWN) {
+                ldap_unbind(ptsm->ld);
+                ptsm->ld = NULL;
+                rc = PTSM_RETRY;
+            } else
+                rc = PTSM_FAIL;
+            goto done;
+        }
+
+        n = ldap_count_entries(ptsm->ld, res2);
+        if (!n) continue; // no DN record (stale pointer) - skip
+
+        entry = ldap_first_entry(ptsm->ld, res2);
+        char **uvals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->user_attribute);
+        int unumvals = ldap_count_values(uvals);
+        if (!unumvals) continue;  // no user attribute on the DN
+
+        // create a group item
+        strlcat((*newstate)->groups[j].id, uvals[0], sizeof((*newstate)->groups[j].id));
+        (*newstate)->groups[j].hash = strhash((*newstate)->groups[j].id);
+        j++;
     }
 
     rc = PTSM_OK;
@@ -1416,6 +1443,8 @@ done:;
 
     if (res)
         ldap_msgfree(res);
+    if (res2)
+        ldap_msgfree(res2);
     if (filter)
         free(filter);
     if (base)
