@@ -145,3 +145,55 @@ static void test_icalrecurrenceset_get_utc_timespan(void)
 
     free(eternitystr);
 }
+
+static int icalcomponent_myforeach_duplicate_rrule_cb(icalcomponent *comp __attribute__((unused)),
+                                                      icaltimetype start __attribute__((unused)),
+                                                      icaltimetype end __attribute__((unused)),
+                                                      icaltimetype recurid,
+                                                      int is_standalone __attribute__((unused)),
+                                                      void *data)
+{
+    strarray_t *recurids = data;
+    strarray_append(recurids, icaltime_as_ical_string(recurid));
+    return 1;
+}
+
+static void test_icalcomponent_myforeach_duplicate_rrule(void)
+{
+    init_caldav();
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf,
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Foo//Bar//EN\r\n"
+            "CALSCALE:GREGORIAN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:574E2CD0-2D2A-4554-8B63-C7504481D3A9\r\n"
+            "SUMMARY:test\r\n"
+            "DTSTART:20240101T010203Z\r\n"
+            "SEQUENCE:0\r\n"
+            "RRULE:FREQ=DAILY;COUNT=3\r\n"
+            "RRULE:FREQ=DAILY;COUNT=3\r\n"
+            "RRULE:FREQ=WEEKLY;COUNT=2\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR");
+
+    icalcomponent *ical = ical_string_as_icalcomponent(&buf);
+    CU_ASSERT_PTR_NOT_NULL(ical);
+
+    strarray_t recurids = STRARRAY_INITIALIZER;
+    struct icalperiodtype range = ICALPERIODTYPE_INITIALIZER;
+    int r = icalcomponent_myforeach(ical, range, NULL,
+        icalcomponent_myforeach_duplicate_rrule_cb, &recurids);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(strarray_size(&recurids), 4);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&recurids, 0), "20240101T010203Z");
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&recurids, 1), "20240102T010203Z");
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&recurids, 2), "20240103T010203Z");
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&recurids, 3), "20240108T010203Z");
+
+    strarray_fini(&recurids);
+    icalcomponent_free(ical);
+    buf_free(&buf);
+}
