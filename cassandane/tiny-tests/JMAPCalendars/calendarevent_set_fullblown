@@ -65,6 +65,15 @@ sub test_calendarevent_set_fullblown
                 name => 'virtloc1name',
                 description => 'virtloca1description',
                 uri => 'tel:+1-555-555-5555',
+                features => {
+                    audio => JSON::true,
+                    chat => JSON::true,
+                    feed => JSON::true,
+                    moderator => JSON::true,
+                    phone => JSON::true,
+                    screen => JSON::true,
+                    video => JSON::true,
+                },
             },
         },
         links => {

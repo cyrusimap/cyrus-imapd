@@ -3318,6 +3318,42 @@ virtuallocations_from_ical(icalcomponent *comp)
             buf_free(&buf);
         }
 
+        json_t *features = json_object();
+        for (param = icalproperty_get_first_parameter(prop, ICAL_FEATURE_PARAMETER);
+             param;
+             param = icalproperty_get_next_parameter(prop, ICAL_FEATURE_PARAMETER)) {
+
+            switch (icalparameter_get_feature(param)) {
+            case ICAL_FEATURE_AUDIO:
+                json_object_set_new(features, "audio", json_true());
+                break;
+            case ICAL_FEATURE_CHAT:
+                json_object_set_new(features, "chat", json_true());
+                break;
+            case ICAL_FEATURE_FEED:
+                json_object_set_new(features, "feed", json_true());
+                break;
+            case ICAL_FEATURE_MODERATOR:
+                json_object_set_new(features, "moderator", json_true());
+                break;
+            case ICAL_FEATURE_PHONE:
+                json_object_set_new(features, "phone", json_true());
+                break;
+            case ICAL_FEATURE_SCREEN:
+                json_object_set_new(features, "screen", json_true());
+                break;
+            case ICAL_FEATURE_VIDEO:
+                json_object_set_new(features, "video", json_true());
+                break;
+            case ICAL_FEATURE_X:
+            case ICAL_FEATURE_NONE:;
+            }
+        }
+        if (json_object_size(features)) {
+            json_object_set(loc, "features", features);
+        }
+        json_decref(features);
+
         if (uri) json_object_set(locations, id, loc);
 
         json_decref(loc);
@@ -3652,6 +3688,57 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
     strarray_fini(&want_tzids);
 
     return jtimezones;
+}
+
+static void jsprops_from_ical(icalcomponent *comp, json_t **jscompp)
+{
+    json_t *jpatch = json_object();
+
+    // This implements JSPROP as defined in RFC 9555, Section 3.2.1:
+    // It aggregates all JSPROP properties in the component into a
+    // single patch object, then applies the changes only if none
+    // of the patches in the patch object failed.
+    // This might turn out to be too harsh, depending on how well
+    // iCalendar implementations preserve these JSPROP properties.
+    //
+    // In contrast to RFC 9555, this implementation only considers
+    // patches where the patched property has a a vendor-extension
+    // property name, e.g. "example.com:foo", or "bar/example.com:foo".
+
+    icalproperty *prop;
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
+
+        if (strcmpsafe(icalproperty_get_x_name(prop), JMAPICAL_XPROP_JSPROP))
+            continue;
+
+        const char *pname =
+            icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_JSPTR);
+
+        if (!pname)
+            continue;
+
+        // At least one patch segment must have a vendor-extension prefix.
+        const char *col = strchr(pname, ':');
+        if (!col || col == pname || col[1] == '\0')
+            continue;
+
+        json_t *jval = json_loads(icalproperty_get_value_as_string(prop),
+                                  JSON_DECODE_ANY, NULL);
+        if (jval) {
+            json_object_set_new(jpatch, pname, jval);
+        }
+    }
+
+    if (json_object_size(jpatch)) {
+        json_t *jscomp = jmap_patchobject_apply(*jscompp, jpatch, NULL, 0);
+        if (jscomp) {
+            json_decref(*jscompp);
+            *jscompp = jscomp;
+        }
+    }
+
+    json_decref(jpatch);
 }
 
 /* Convert the libical VEVENT comp to a CalendarEvent 
@@ -4096,6 +4183,9 @@ calendarevent_from_ical(icalcomponent *comp,
         }
     }
 
+    /* Apply JSPROP patches */
+    jsprops_from_ical(comp, &event);
+
     if (wantprops) {
         jmap_filterprops(event, wantprops);
     }
@@ -4482,6 +4572,70 @@ static icalproperty *insert_icaltimeprop(icalcomponent *comp,
     }
     icalcomponent_add_property(comp, prop);
     return prop;
+}
+
+static void jsprops_to_ical(icalcomponent *comp,
+                            struct jmap_parser *parser,
+                            json_t *jsobj)
+{
+    struct buf buf = BUF_INITIALIZER;
+    const char *pname;
+    json_t *jval;
+
+    json_object_foreach(jsobj, pname, jval) {
+        // ignore anything but vendor-extension properties
+        if (!strchr(pname, ':')) continue;
+
+        jmap_parser_push(parser, pname);
+
+        icalproperty *xprop = icalproperty_new(ICAL_X_PROPERTY);
+        icalproperty_set_x_name(xprop, JMAPICAL_XPROP_JSPROP);
+        icalproperty_set_xparam(xprop, JMAPICAL_XPARAM_JSPTR,
+                jmap_parser_path(parser, &buf), 1);
+
+        char *textval = json_dumps(jval, JSON_COMPACT|JSON_ENCODE_ANY);
+        icalproperty_set_value_from_string(xprop, textval, "TEXT");
+        free(textval);
+
+        icalcomponent_add_property(comp, xprop);
+        jmap_parser_pop(parser);
+    }
+
+    buf_free(&buf);
+}
+
+static void remove_jsprops(icalcomponent *comp, const char *path)
+{
+    icalproperty *prop, *next;
+    size_t path_len = path ? strlen(path) : 0;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+         prop = next) {
+
+        next = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+        if (strcasecmpsafe(icalproperty_get_x_name(prop),
+                           JMAPICAL_XPROP_JSPROP))
+            continue;
+
+        if (path) {
+            int points_to_path = 0;
+
+            const char *jsptr =
+                icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_JSPTR);
+
+            if (!strncasecmpsafe(path, jsptr, path_len) &&
+                (jsptr[path_len] == '/' || jsptr[path_len] == '\0')) {
+                points_to_path = 1;
+            }
+
+            if (!points_to_path)
+                continue;
+        }
+
+        icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
+    }
 }
 
 static int location_is_endtimezone(json_t *loc)
@@ -6931,6 +7085,7 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
     const char *id;
 
     remove_icalprop(comp, ICAL_CONFERENCE_PROPERTY);
+    remove_jsprops(comp, "virtualLocations");
     if (!JNOTNULL(locations)) {
         return;
     }
@@ -6984,6 +7139,56 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
         else if (JNOTNULL(jdescription)) {
             jmap_parser_invalid(parser, "description");
         }
+
+        /* features */
+        json_t *jfeatures = json_object_get(loc, "features");
+        if (json_object_size(jfeatures)) {
+            jmap_parser_push(parser, "features");
+            const char *featurename;
+            json_t *jval;
+            json_object_foreach(jfeatures, featurename, jval) {
+                if (!json_is_true(jval)) {
+                    jmap_parser_invalid(parser, featurename);
+                }
+                else if (!strcasecmp(featurename, "audio")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_AUDIO));
+                }
+                else if (!strcasecmp(featurename, "chat")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_CHAT));
+                }
+                else if (!strcasecmp(featurename, "feed")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_FEED));
+                }
+                else if (!strcasecmp(featurename, "moderator")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_MODERATOR));
+                }
+                else if (!strcasecmp(featurename, "phone")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_PHONE));
+                }
+                else if (!strcasecmp(featurename, "screen")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_SCREEN));
+                }
+                else if (!strcasecmp(featurename, "video")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_VIDEO));
+                }
+                else {
+                    jmap_parser_invalid(parser, featurename);
+                }
+            }
+            jmap_parser_pop(parser);
+        }
+        else if (JNOTNULL(jfeatures)) {
+            jmap_parser_invalid(parser, "features");
+        }
+
+        jsprops_to_ical(comp, parser, loc);
 
         icalcomponent_add_property(comp, prop);
         jmap_parser_pop(parser);
