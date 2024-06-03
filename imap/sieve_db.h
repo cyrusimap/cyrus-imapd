@@ -151,7 +151,8 @@ int sieve_script_rename(struct mailbox *mailbox,
 int sieve_script_fetch(struct mailbox *mailbox,
                        const struct sieve_data *sdata, struct buf *content);
 
-int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr);
+int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr,
+                        int silent);
 
 int sieve_script_rebuild(const char *userid,
                          const char *sievedir, const char *script);
