@@ -4048,7 +4048,7 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, 0);
 
     /* delete in reverse so INBOX is last */
-    int delflags = MBOXLIST_DELETE_FORCE;
+    int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT;
     if (sstate->flags & SYNC_FLAG_LOCALONLY)
         delflags |= MBOXLIST_DELETE_LOCALONLY;
     for (i = list->count; i; i--) {
