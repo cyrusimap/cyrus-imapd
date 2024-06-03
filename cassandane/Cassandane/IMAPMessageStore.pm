@@ -197,9 +197,20 @@ sub write_message
     my ($self, $msg, %opts) = @_;
 
     my @extra;
+    my @flags;
+
     if ($opts{flags}) {
-        push @extra, '(' . join(' ', @{$opts{flags}}) . ')';
+        push @flags, @{$opts{flags}};
     }
+
+    if ($msg->has_attribute('flags')) {
+        push @flags, @{$msg->get_attribute('flags')};
+    }
+
+    if (@flags) {
+        push @extra, '(' . join(' ', @flags) . ')';
+    }
+
     if ($msg->has_attribute('internaldate')) {
         push @extra, $msg->get_attribute('internaldate');
     }
