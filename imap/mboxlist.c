@@ -3167,6 +3167,7 @@ static int _usergroup_add(void *rock,
 
 EXPORTED int mboxlist_lookup_usergroups(const char *item, strarray_t *dest)
 {
+    if (!item) return 0; // if no userid, no groups can possibly match
     init_internal();
     struct buf prefix = BUF_INITIALIZER;
     buf_setcstr(&prefix, "UG");
