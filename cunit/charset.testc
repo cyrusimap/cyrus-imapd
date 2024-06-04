@@ -952,7 +952,7 @@ static void test_extract(void)
     /* HTML: OMITTAG tags with and without end tags */
     TESTCASE("<hr>Terry<hr> <hr>Richardson</hr>",
         "us-ascii", ENCODING_NONE, "HTML",
-        " TERRY RICHARDSON ");
+        "TERRY RICHARDSON");
 
     /* HTML: non-phrasing tags are replaced with whitespace */
     TESTCASE("hella<br>mlkshk",
@@ -963,7 +963,7 @@ static void test_extract(void)
         "GODARD SYNTH");
     TESTCASE("<div>vinyl</div><div>narwhal</div>",
         "us-ascii", ENCODING_NONE, "HTML",
-        " VINYL NARWHAL ");
+        "VINYL NARWHAL");
 
     /* HTML: quoted tag parameters */
     TESTCASE("<a href=\"foo.html\">leggings</a> <img src\"beer.jpg\">gastropub",
@@ -1041,7 +1041,7 @@ static void test_extract(void)
     /* HTML: naked & is emitted */
     TESTCASE("gentrify&<b>sartorial</b>",
         "us-ascii", ENCODING_NONE, "HTML",
-        "GENTRIFY&SARTORIAL");
+        "GENTRIFY& SARTORIAL");
 
     /* HTML: non-zero length unterminated entities are emitted */
     TESTCASE("tattooed&amp locavore",
@@ -1216,7 +1216,7 @@ static void test_extract(void)
     // quoted attribute value ends without quote
     TESTCASE("<a href=\"url.html>x</a>", "us-ascii", ENCODING_NONE, "HTML", "X");
     // ">" in quoted attribute value is legit, but broken in our parser
-    TESTCASE("<div><img alt=\"x>\" src=\"y\"/></div>", "us-ascii", ENCODING_NONE, "HTML", " \" SRC=\"Y\"/> ");
+    TESTCASE("<div><img alt=\"x>\" src=\"y\"/></div>", "us-ascii", ENCODING_NONE, "HTML", "\" SRC=\"Y\"/>");
 
     /* HTML: extract URLs and alt text from href and img */
     flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
@@ -1227,18 +1227,18 @@ static void test_extract(void)
     TESTCASE("<area href=\"https://foo/bar\"/>", "us-ascii", ENCODING_NONE, "HTML",
         "<HTTPS://FOO/BAR>");
     // "/" in quoted attribute value is legit
-    TESTCASE("<div><img alt=\"letterpress/\" src=\"polaroid.png\">stumptown</div>", "us-ascii", ENCODING_NONE, "HTML", " STUMPTOWN <POLAROID.PNG> (LETTERPRESS/) ");
+    TESTCASE("<div><img alt=\"letterpress/\" src=\"polaroid.png\">stumptown</div>", "us-ascii", ENCODING_NONE, "HTML", "STUMPTOWN <POLAROID.PNG> (LETTERPRESS/)");
     // multiple hrefs in same chunk of text
     TESTCASE("<a href=\"https://foo/bar\"/><a href=\"https://baz/qum\"/>",
              "us-ascii", ENCODING_NONE, "HTML",
-             "<HTTPS://FOO/BAR><HTTPS://BAZ/QUM>");
+             "<HTTPS://FOO/BAR> <HTTPS://BAZ/QUM>");
     TESTCASE("<area href=\"https://foo/bar\"/><area href=\"https://baz/qum\"/>",
              "us-ascii", ENCODING_NONE, "HTML",
-             "<HTTPS://FOO/BAR><HTTPS://BAZ/QUM>");
+             "<HTTPS://FOO/BAR> <HTTPS://BAZ/QUM>");
     // multiple alt tags in same chunk of text
     TESTCASE("<img src='cat.png' alt=\"A cat\"/><img src='dog.png' alt=\"A dog\"/>",
              "us-ascii", ENCODING_NONE, "HTML",
-             "<CAT.PNG> (A CAT)<DOG.PNG> (A DOG)");
+             "<CAT.PNG> (A CAT) <DOG.PNG> (A DOG)");
     // multiple hrefs in same A tag (invalid!)
     TESTCASE("<a href=\"https://foo/bar\" href=\"https://baz/qum\"/>",
              "us-ascii", ENCODING_NONE, "HTML",
