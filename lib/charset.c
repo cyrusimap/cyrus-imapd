@@ -194,6 +194,9 @@ struct striphtml_state {
     /* state stack */
     int depth;
     enum html_state stack[2];
+    /* state for putc */
+    int prev_was_whitespace;
+    int emit_whitespace;
 };
 
 #define CHARSET_ICUBUF_BUFFER_SIZE 4096
@@ -1107,7 +1110,32 @@ static int html_uiserror(uint32_t c)
         if (c2 >= ranges[i].lo && c2 <= ranges[i].hi)
             return 1;
     }
-    return 0;
+    return 0; }
+
+static void html_putc(struct convert_rock *rock, uint32_t c)
+{
+    struct striphtml_state *s = (struct striphtml_state *)rock->state;
+    int is_whitespace = u_isUWhiteSpace(c);
+
+    if (s->emit_whitespace) {
+        // Insert space between two non-whitespace characters.
+        if (!is_whitespace && !s->prev_was_whitespace) {
+            convert_putc(rock->next, ' ');
+            s->prev_was_whitespace = 1;
+        }
+        s->emit_whitespace = 0;
+    }
+    convert_putc(rock->next, c);
+    s->prev_was_whitespace = is_whitespace;
+}
+
+static int html_catn(struct convert_rock *rock, const char *s, size_t len)
+{
+    while (len-- > 0) {
+        html_putc(rock, (unsigned char)*s);
+        s++;
+    }
+    return convert_flush(rock);
 }
 
 static void html_saw_character(struct convert_rock *rock)
@@ -1189,12 +1217,12 @@ static void html_saw_character(struct convert_rock *rock)
         else if (c > 0xffff) {
             /* Hack to handle a small minority of named characters
              * which map to a sequence of two Unicode codepoints. */
-            convert_putc(rock->next, (c>>16) & 0xffff);
-            convert_putc(rock->next, c & 0xffff);
+            html_putc(rock, (c>>16) & 0xffff);
+            html_putc(rock, c & 0xffff);
             return;
         }
     }
-    convert_putc(rock->next, c);
+    html_putc(rock, c);
 }
 
 static const char *html_state_as_string(enum html_state state)
@@ -1264,27 +1292,6 @@ static enum html_state html_top(struct striphtml_state *s)
     return s->stack[s->depth-1];
 }
 
-static int is_phrasing(char *tag)
-{
-    static const char * const phrasing_tags[] = {
-        "a", "q", "cite", "em", "strong", "small",
-        "mark", "dfn", "abbr", "time", "progress",
-        "meter", "code", "var", "samp", "kbd",
-        "sub", "sup", "span", "i", "b", "bdo",
-        "ruby", "ins", "del", "img", "area"
-    };
-    static struct hash_table hash = HASH_TABLE_INITIALIZER;
-
-    if (hash.table == NULL) {
-        unsigned int i;
-        construct_hash_table(&hash, VECTOR_SIZE(phrasing_tags), 0);
-        for (i = 0 ; i < VECTOR_SIZE(phrasing_tags) ; i++)
-            hash_insert(phrasing_tags[i], (void *)1, &hash);
-    }
-
-    return (hash_lookup(lcase(tag), &hash) == (void *)1);
-}
-
 static void html_attr_init(struct striphtml_state *s)
 {
     s->attr.typ = HATTR_NONE;
@@ -1345,13 +1352,13 @@ static int html_attr_have(struct striphtml_state *s, enum html_attr typ)
 }
 
 static void html_attr_cat(struct striphtml_state *s,
-                           struct convert_rock *next,
+                           struct convert_rock *rock,
                            enum html_attr typ)
 {
     if (typ != HATTR_NONE) {
         dynarray_t *val = &s->attr.vals[typ];
         for (int i = 0; i < dynarray_size(val); i++) {
-            convert_putc(next, *((uint32_t*)dynarray_nth(val, i)));
+            html_putc(rock, *((uint32_t*)dynarray_nth(val, i)));
         }
     }
 }
@@ -1401,18 +1408,18 @@ static void html_saw_tag(struct convert_rock *rock)
         if (s->ends & HEND) {
             if (html_attr_have(s, HATTR_HREF)) {
                 if (s->ends == HEND)
-                    convert_putc(rock->next, ' ');
+                    html_putc(rock, ' ');
 
-                convert_putc(rock->next, '<');
-                html_attr_cat(s, rock->next, HATTR_HREF);
-                convert_putc(rock->next, '>');
+                html_putc(rock, '<');
+                html_attr_cat(s, rock, HATTR_HREF);
+                html_putc(rock, '>');
 
                 /* n.b. we only acknowledge img alt when it also has a src */
                 if (html_attr_have(s, HATTR_ALT)) {
-                    convert_putc(rock->next, ' ');
-                    convert_putc(rock->next, '(');
-                    html_attr_cat(s, rock->next, HATTR_ALT);
-                    convert_putc(rock->next, ')');
+                    html_putc(rock, ' ');
+                    html_putc(rock, '(');
+                    html_attr_cat(s, rock, HATTR_ALT);
+                    html_putc(rock, ')');
                 }
             }
 
@@ -1420,9 +1427,8 @@ static void html_saw_tag(struct convert_rock *rock)
             html_attr_reset(s);
         }
 
-        if (!is_phrasing(tag)) {
-            convert_putc(rock->next, ' ');
-        }
+        // Insert whitespace after this tag.
+        s->emit_whitespace = 1;
     }
     /* otherwise, no change */
 }
@@ -1480,7 +1486,7 @@ restart:
             buf_reset(&s->name);
         }
         else {
-            convert_putc(rock->next, c);
+            html_putc(rock, c);
         }
         break;
 
@@ -1502,7 +1508,7 @@ restart:
         }
         else {
             /* naked <, emit it and restart with current character */
-            convert_putc(rock->next, c);
+            html_putc(rock, c);
             html_pop(s);
             goto restart;
         }
@@ -1523,7 +1529,7 @@ restart:
         }
         else {
             /* naked <, emit it and restart with current character */
-            convert_putc(rock->next, c);
+            html_putc(rock, c);
             html_pop(s);
             goto restart;
         }
@@ -1542,7 +1548,7 @@ restart:
         }
         else {
             /* naked & - emit the & and restart */
-            convert_putc(rock->next, '&');
+            html_putc(rock, '&');
             html_go(s, HDATA);
             goto restart;
         }
@@ -1560,8 +1566,8 @@ restart:
         }
         else {
             /* naked &# - emit the &# and restart */
-            convert_putc(rock->next, '&');
-            convert_putc(rock->next, '#');
+            html_putc(rock, '&');
+            html_putc(rock, '#');
             html_go(s, HDATA);
             goto restart;
         }
@@ -1634,7 +1640,7 @@ restart:
         }
         else {
             /* apparently a naked <, emit the < and restart */
-            convert_putc(rock->next, '<');
+            html_putc(rock, '<');
             html_pop(s);
             goto restart;
         }
@@ -1705,11 +1711,11 @@ restart:
             html_saw_tag(rock);
         }
         else if (!html_isspace(c)) {
-            convert_putc(rock->next, '<');
-            convert_catn(rock->next, buf_base(&s->name), buf_len(&s->name));
-            convert_putc(rock->next, '/');
-            convert_putc(rock->next, '/');
-            convert_putc(rock->next, c);
+            html_putc(rock, '<');
+            html_catn(rock, buf_base(&s->name), buf_len(&s->name));
+            html_putc(rock, '/');
+            html_putc(rock, '/');
+            html_putc(rock, c);
             html_pop(s);
             html_go(s, HDATA);
         }
@@ -2130,6 +2136,7 @@ static void striphtml_cleanup(struct convert_rock *rock, int is_free)
         else {
             buf_reset(&s->name);
             html_attr_reset(s);
+            s->prev_was_whitespace = 1;
         }
     }
     if (is_free) basic_free(rock);
@@ -2307,6 +2314,7 @@ struct convert_rock *striphtml_init(int flags, struct convert_rock *next)
     struct striphtml_state *s = xzmalloc(sizeof(struct striphtml_state));
     /* gnb:TODO: if a DOCTYPE is present, sniff it to detect XHTML rules */
     s->keep_angleuri = flags & CHARSET_KEEP_ANGLEURI;
+    s->prev_was_whitespace = 1;
     html_attr_init(s);
     html_push(s, HDATA);
     rock->state = (void *)s;
