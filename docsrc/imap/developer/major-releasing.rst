@@ -150,12 +150,7 @@ series will be 3.8 (and then master will become 3.9).
    The generated documentation will be under the `doc/html/` directory --
    examine it in your browser to make sure all your formatting and such makes
    sense.
-9. Tell Github Actions about the new branch: edit `.github/workflows/main.yml`
-   and add the new branch to the list in the obvious spot.  Does anything else
-   need to be done for this step?  Unknown... figure it out and document it!
-   Also currently unknown whether this needs to happen on the master branch,
-   on the branch itself, or both.  So we do it on both just in case.
-10. XXX maybe missing some stuff here still?
+9. XXX maybe missing some stuff here still?
 
 You can double check your work by looking at what changed last time a new
 stable series was forked:
@@ -204,13 +199,8 @@ too.
    that will be reverted from the new branch after forking -- in that case,
    don't delete those changes files from master.  More on this later.
 5. Update `README.md`.
-6. Tell Github Actions about the new branch: edit `.github/workflows/main.yml`
-   and add the new branch to the list in the obvious spot.  Does anything else
-   need to be done for this step?  Unknown... figure it out and document it!
-   Also currently unknown whether this needs to happen on the master branch,
-   on the branch itself, or both.  So we do it on both just in case.
-7. XXX probably steps missing here too
-8. Make sure the RST changes are good: ``make doc-html``, pay attention
+6. XXX probably steps missing here too
+7. Make sure the RST changes are good: ``make doc-html``, pay attention
    to errors and warnings.
 
 You may think you can do this by cherry-picking your commit from the new
