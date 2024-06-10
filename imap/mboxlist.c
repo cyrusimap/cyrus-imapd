@@ -1035,7 +1035,7 @@ static int mboxlist_update_raclmodseq_wrapper(const char *acluser,
     // not a group, just update it
     if (strncmp(acluser, "group:", 6)) {
         if (strarray_find(touched_users, acluser, 0) >= 0) return 0;
-        strarray_add(touched_users, acluser);
+        strarray_append(touched_users, acluser);
         return mboxlist_update_raclmodseq(acluser);
     }
 
@@ -1047,11 +1047,11 @@ static int mboxlist_update_raclmodseq_wrapper(const char *acluser,
     int r = 0;
     int i;
     for (i = 0; i < strarray_size(members); i++) {
-	const char *member = strarray_nth(members, i);
-        if (strarray_find(touched_users, member, 0) >= 0) return 0;
-        strarray_add(touched_users, member);
+        const char *member = strarray_nth(members, i);
+        if (strarray_find(touched_users, member, 0) >= 0) continue;
+        strarray_append(touched_users, member);
         r = mboxlist_update_raclmodseq(member);
-	if (r) break;
+        if (r) break;
     }
 
     strarray_free(members);
