@@ -51,6 +51,7 @@
 struct auth_mech *auth_mechs[] = {
     &auth_unix,
     &auth_pts,
+    &auth_mboxgroups,
 #ifdef HAVE_KRB
     &auth_krb,
 #endif
@@ -113,4 +114,11 @@ EXPORTED strarray_t *auth_groups(const struct auth_state *auth_state)
     struct auth_mech *auth = auth_fromname();
 
     return auth->groups(auth_state);
+}
+
+EXPORTED void auth_refresh(struct auth_state *auth_state)
+{
+    struct auth_mech *auth = auth_fromname();
+
+    if (auth->refresh) auth->refresh(auth_state);
 }

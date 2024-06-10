@@ -134,6 +134,7 @@ static struct mboxevent event_template =
     /* 23 */ { EVENT_MBTYPE, "vnd.cmu.mbtype", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_SERVERFQDN, "serverFQDN", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MAILBOX_ACL, "vnd.cmu.mailboxACL", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_VISIBLE_USERS, "vnd.cmu.visibleUsers", EVENT_PARAM_STRING, { 0 }, 0 },
     /* 24 */ { EVENT_DAV_FILENAME, "vnd.cmu.davFilename", EVENT_PARAM_STRING, { 0 }, 0 },
     /* 25 */ { EVENT_DAV_UID, "vnd.cmu.davUid", EVENT_PARAM_STRING, { 0 }, 0 },
     /* 26 */ { EVENT_ENVELOPE, "vnd.cmu.envelope", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -576,6 +577,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_MBTYPE:
         return (type & MAILBOX_EVENTS);
     case EVENT_MAILBOX_ACL:
+        return (type & MAILBOX_EVENTS);
+    case EVENT_VISIBLE_USERS:
         return (type & MAILBOX_EVENTS);
     case EVENT_QUOTA_MESSAGES:
         return type & QUOTA_EVENTS;
@@ -1707,6 +1710,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         xstrdup(mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
 
     FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
+    FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
 
     /* mailbox related events also require mailboxID */
     if (event->type & MAILBOX_EVENTS) {

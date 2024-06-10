@@ -290,6 +290,11 @@ int mboxlist_update_foldermodseq(const char *name, modseq_t foldermodseq);
 
 int mboxlist_set_racls(int enabled);
 
+/* user groups */
+int mboxlist_set_usergroup(const char *userid, const char *group, int val, int silent);
+int mboxlist_lookup_usergroups(const char *userid, strarray_t *dest);
+
+
 int mboxlist_cleanup_deletedentries(const mbentry_t *mbentry, time_t mark);
 
 struct findall_data {

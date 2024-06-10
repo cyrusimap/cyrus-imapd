@@ -429,4 +429,5 @@ HIDDEN struct auth_mech auth_krb =
     &mynewstate,
     &myfreestate,
     &mygroups,
+    NULL, /* refresh*/
 };

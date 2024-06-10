@@ -1,6 +1,6 @@
-/* auth_unix.c -- Unix passwd file authorization
+/* auth_mboxgroups.c -- Mailboxes.db groups authentication
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 2024 Fastmail Pty Ltd.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,16 +42,16 @@
 
 #include <config.h>
 #include <stdlib.h>
-#include <pwd.h>
-#include <grp.h>
-#include <ctype.h>
 #include <string.h>
+#include <syslog.h>
 
 #include "auth.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 #include "strarray.h"
 #include "util.h"
+
+static int (*our_mboxlookup)(const char *userid, strarray_t *sa);
 
 struct auth_state {
     char userid[81];
@@ -78,7 +78,7 @@ static int mymemberof(const struct auth_state *auth_state, const char *identifie
 
     if (strcmp(identifier, auth_state->userid) == 0) return 3;
 
-    if (!strncmp(identifier, "group:", 6) && strarray_find(&auth_state->groups, identifier+6, 0) >= 0) return 2;
+    if (strarray_find(&auth_state->groups, identifier, 0) >= 0) return 2;
 
     return 0;
 }
@@ -145,7 +145,6 @@ static const char allowedchars[256] = {
 static const char *mycanonifyid(const char *identifier, size_t len)
 {
     static char retbuf[81];
-    struct group *grp;
     char *p;
     int username_tolower = 0;
 
@@ -164,11 +163,6 @@ static const char *mycanonifyid(const char *identifier, size_t len)
      */
 
     if (!strncmp(retbuf, "group:", 6)) {
-        grp = getgrnam(retbuf+6);
-        if (!grp) return NULL;
-        if (strlen(grp->gr_name) >= sizeof(retbuf)-6)
-                return NULL;
-        strcpy(retbuf+6, grp->gr_name);
         return retbuf;
     }
 
@@ -193,78 +187,21 @@ static const char *mycanonifyid(const char *identifier, size_t len)
 }
 
 /*
- * Set the current user to 'identifier'.  'cacheid', if non-null,
- * points to a 16-byte binary key to cache identifier's information
- * with.
+ * Set the current user to 'identifier' and loads any related groups.
  */
 static struct auth_state *mynewstate(const char *identifier)
 {
     struct auth_state *newstate;
-    struct passwd *pwd;
-    struct group *grp;
-#if defined(HAVE_GETGROUPLIST) && defined(__GLIBC__)
-    gid_t gid, *groupids = NULL;
-    int ret, ngroups = 10, oldngroups;
-#else
-    char **mem;
-#endif
 
     identifier = mycanonifyid(identifier, 0);
-    if (!identifier) return 0;
-    if (!strncmp(identifier, "group:", 6)) return 0;
+    if (!identifier) return NULL;
 
-    newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
+    newstate = (struct auth_state *)xzmalloc(sizeof(struct auth_state));
 
     strcpy(newstate->userid, identifier);
     strarray_init(&newstate->groups);
 
-    if(!libcyrus_config_getswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE))
-        return newstate;
-
-    pwd = getpwnam(identifier);
-
-#if defined(HAVE_GETGROUPLIST) && defined(__GLIBC__)
-    gid = pwd ? pwd->pw_gid : (gid_t) -1;
-
-    /* get the group ids */
-    do {
-        groupids = (gid_t *)xrealloc((gid_t *)groupids,
-                                     ngroups * sizeof(gid_t));
-
-        oldngroups = ngroups; /* copy of ngroups for comparison */
-        ret = getgrouplist(identifier, gid, groupids, &ngroups);
-        /*
-         * This is tricky. We do this as long as getgrouplist tells us to
-         * realloc _and_ the number of groups changes. It tells us to realloc
-         * also in the case of failure...
-         */
-    } while (ret == -1 && ngroups != oldngroups);
-
-    if (ret == -1)
-        goto err;
-
-    while (ngroups--) {
-        if (pwd || groupids[ngroups] != gid) {
-            if ((grp = getgrgid(groupids[ngroups])))
-                strarray_append(&newstate->groups, grp->gr_name);
-        }
-    }
-
-err:
-    if (groupids) free(groupids);
-
-#else /* !HAVE_GETGROUPLIST */
-    setgrent();
-    while ((grp = getgrent())) {
-        for (mem = grp->gr_mem; *mem; mem++) {
-            if (!strcmp(*mem, identifier)) break;
-        }
-
-        if (*mem || (pwd && pwd->pw_gid == grp->gr_gid))
-            strarray_append(&newstate->groups, grp->gr_name);
-    }
-    endgrent();
-#endif /* HAVE_GETGROUPLIST */
+    if (our_mboxlookup) our_mboxlookup(identifier, &newstate->groups);
 
     return newstate;
 }
@@ -280,14 +217,27 @@ static strarray_t *mygroups(const struct auth_state *auth_state)
     return strarray_dup(&auth_state->groups);
 }
 
-HIDDEN struct auth_mech auth_unix =
+/* reloads groups */
+static void myrefresh(struct auth_state *auth_state)
 {
-    "unix",             /* name */
+    if (!auth_state) return;
+    strarray_truncate(&auth_state->groups, 0);
+    if (our_mboxlookup) our_mboxlookup(auth_state->userid, &auth_state->groups);
+}
+
+EXPORTED void register_mboxgroups_cb(int (*l)(const char *, strarray_t *))
+{
+    our_mboxlookup = l;
+}
+
+HIDDEN struct auth_mech auth_mboxgroups =
+{
+    "mboxgroups",             /* name */
 
     &mycanonifyid,
     &mymemberof,
     &mynewstate,
     &myfreestate,
     &mygroups,
-    NULL, /* refresh */
+    &myrefresh,
 };

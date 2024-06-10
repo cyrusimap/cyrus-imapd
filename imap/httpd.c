@@ -2206,7 +2206,9 @@ static void cmdloop(struct http_connection *conn)
         } while (!http_proxy_check_input(conn, &httpd_pipes,
                                          0 /* timeout */));
 
-        
+        /* ensure group information is up to date */
+        auth_refresh(httpd_authstate);
+
         /* Start command timer */
         cmdtime_starttimer();
 

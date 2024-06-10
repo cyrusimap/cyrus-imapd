@@ -1512,6 +1512,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/auth.c \
 	lib/auth_krb.c \
 	lib/auth_krb5.c \
+	lib/auth_mboxgroups.c \
 	lib/auth_pts.c \
 	lib/auth_unix.c \
 	lib/bitvector.c \
