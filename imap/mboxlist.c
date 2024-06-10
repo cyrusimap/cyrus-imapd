@@ -1716,6 +1716,9 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
     char *partition = NULL;
     int r = 0;
 
+    // we don't run this on replicas
+    assert(!config_getswitch(IMAPOPT_REPLICAONLY));
+
     /* not for deleted namespace */
     if (mbname_isdeleted(mbname))
         goto out;
@@ -1965,7 +1968,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
     }
     r = mboxlist_update_entry_full(mboxname, newmbentry, NULL, silent);
 
-    if (!r && !(flags & MBOXLIST_CREATE_KEEP_INTERMEDIARIES)) {
+    if (!r && !silent && !(flags & MBOXLIST_CREATE_KEEP_INTERMEDIARIES)) {
         /* create any missing intermediaries */
         r = mboxlist_update_intermediaries(mboxname, mbtype, newmbentry->foldermodseq);
     }
@@ -2451,7 +2454,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         r = mboxlist_update_full(newmbentry, /*localonly*/1, silent);
 
         /* any other updated intermediates get the same modseq */
-        if (!r && !keep_intermediaries) {
+        if (!r && !silent && !keep_intermediaries) {
             r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype, newmbentry->foldermodseq);
         }
 
@@ -2949,7 +2952,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     if (!r && newmailbox)
         r = mailbox_commit(newmailbox);
 
-    if (!keep_intermediaries) {
+    if (!keep_intermediaries && !silent) {
         if (!r) r = mboxlist_update_intermediaries(oldname, newmbentry->mbtype, newmbentry->foldermodseq);
         if (!r) r = mboxlist_update_intermediaries(newname, newmbentry->mbtype, newmbentry->foldermodseq);
     }
