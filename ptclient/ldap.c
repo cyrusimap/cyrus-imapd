@@ -1429,12 +1429,13 @@ static int ptsmodule_make_authstate_group(
         entry = ldap_first_entry(ptsm->ld, res2);
         char **uvals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->user_attribute);
         int unumvals = ldap_count_values(uvals);
-        if (!unumvals) continue;  // no user attribute on the DN
-
-        // create a group item
-        strlcat((*newstate)->groups[j].id, uvals[0], sizeof((*newstate)->groups[j].id));
-        (*newstate)->groups[j].hash = strhash((*newstate)->groups[j].id);
-        j++;
+        int k;
+        for (k = 0; k < unumvals; k++) {
+            // create a group item
+            strlcat((*newstate)->groups[j].id, uvals[k], sizeof((*newstate)->groups[j].id));
+            (*newstate)->groups[j].hash = strhash((*newstate)->groups[j].id);
+            j++;
+        }
     }
 
     rc = PTSM_OK;
