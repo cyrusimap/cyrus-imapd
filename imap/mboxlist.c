@@ -1716,6 +1716,9 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
     char *partition = NULL;
     int r = 0;
 
+    // we don't run this on replicas
+    assert(!config_getswitch(IMAPOPT_REPLICAONLY));
+
     /* not for deleted namespace */
     if (mbname_isdeleted(mbname))
         goto out;
