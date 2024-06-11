@@ -471,7 +471,6 @@ struct client_behavior_registry {
     /* non-standard - track for possible deprecation */
     uint32_t did_scan         : 1;   /* used SCAN  */
     uint32_t did_xlist        : 1;   /* used XLIST  */
-    uint32_t did_xmove        : 1;   /* used XMOVE  */
 };
 
 #endif /* INCLUDED_IMAPD_H */
