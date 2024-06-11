@@ -2,16 +2,15 @@ name: Cyrus IMAP CI
 
 on:
   push:
+    branches:
+      - master
+      - main
+      - 'cyrus-imapd-*'
   pull_request:
     branches:
       - master
       - main
-      - cyrus-imapd-3.10
-      - cyrus-imapd-3.8
-      - cyrus-imapd-3.6
-      - cyrus-imapd-3.4
-      - cyrus-imapd-3.2
-      - cyrus-imapd-3.0
+      - 'cyrus-imapd-*'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,7 +18,7 @@ jobs:
         image: cyrusimapdocker/cyrus-buster:latest
         options: --sysctl net.ipv6.conf.all.disable_ipv6=0 --init
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: install missing or frequently-updated deps
