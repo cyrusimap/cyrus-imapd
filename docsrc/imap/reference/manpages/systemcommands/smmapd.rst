@@ -8,28 +8,38 @@
 **smmapd**
 ==========
 
-Sendmail socket map daemon
+Sendmail and Postfix socket map daemon
 
 Synopsis
 ========
 
 .. parsed-literal::
 
-    **smmapd** [ **-C** *config-file* ]  [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
+    **smmapd** [ **-C** *config-file* ]  [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ] [**-p**]
 
 Description
 ===========
 
-**smmapd** is a Sendmail socket map daemon which is used to verify that
-a Cyrus mailbox exists, that it is postable and it is under quota.  It
+**smmapd** is a Sendmail and Postfix socket map daemon which is used to verify
+that a Cyrus mailbox exists, that it is postable, it is not blocked for the
+smmapd service in the userdeny database, and it is under quota.  It
 accepts commands on its standard input and responds on its standard
 output.  It MUST be invoked by :cyrusman:`master(8)` with those
-descriptors attached to a remote client connection.  The service ignores
-the userdeny database.  The received queries contain map name followed by
-mailbox, **smmapd** ignores the map name.  Queries with plus addressing return
-*OK* if the user has a mailbox with the name after plus, otherwise the result
-is *NOTFOUND*.  Match for the mailbox after plus is performed case-sensitive,
-for the address before the plus - case-insensitive.
+descriptors attached to a remote client connection.  The received queries
+contain map name followed by mailbox, **smmapd** ignores the map name.
+Queries with plus addressing, when *-p* is not passed, return *OK* when
+the user has a mailbox with the name after plus, otherwise the result
+is *NOTFOUND*.  Match for the mailbox after plus is performed
+case-sensitive, for the address before the plus - depends on
+`lmtp_downcase_rcpt`.
+
+The use case is to verify in Sendmail or Postfix if the destination exists,
+before accepting an email.  Then, if `autocreate_sieve_folders` is set, but
+the folder does not exist yet, **smmapd** will return *NOTFOUND*, unless *-p*
+is passed.  Another use case is to do something in a Sieve script with emails,
+based on plus addressing, without delivering them in the correspondent sub-folder.
+To accept such emails, when the folder with the same name does not exist, *-p* must
+be passed.
 
 **smmapd** |default-conf-text|
 
@@ -56,6 +66,11 @@ Options
 .. option:: -D
 
     Run external debugger specified in debug_command.
+
+.. option:: -p
+
+    Skip plus addressing: everything from `+` until `@`.  When looking up the userdeny
+    database, plus addressing is always skipped, irrespective of this option.
 
 Examples
 ========

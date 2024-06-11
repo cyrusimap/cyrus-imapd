@@ -75,7 +75,6 @@
  */
 
 #include <config.h>
-
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -93,6 +92,7 @@
 #include "proc.h"
 #include "quota.h"
 #include "slowio.h"
+#include "userdeny.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -104,7 +104,9 @@
 const char *BB;
 static int forcedowncase;
 
-extern int optind;
+extern int optind, opterr;
+extern char *optarg;
+static int skipplus;
 
 static struct protstream *map_in, *map_out;
 static const char *smmapd_clienthost;
@@ -175,7 +177,7 @@ EXPORTED void fatal(const char* s, int code)
  */
 int service_init(int argc, char **argv, char **envp)
 {
-    int r;
+    int r, opt;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
     proc_settitle_init(argc, argv, envp);
@@ -190,6 +192,17 @@ int service_init(int argc, char **argv, char **envp)
     if ((r = mboxname_init_namespace(&map_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
+    }
+
+    while ((opt = getopt(argc, argv, "p")) != EOF) {
+        switch(opt) {
+        case 'p':
+            skipplus = 1;
+            break;
+        default:
+            syslog(LOG_ERR, "usage: smmapd [-C <alt_config>] [-U uses] [-T timeout] [-D] [-p]");
+            exit(EX_USAGE);
+        }
     }
 
     return 0;
@@ -242,14 +255,21 @@ static int verify_user(const char *key, struct auth_state *authstate)
 
     mbname_t *mbname = mbname_from_recipient(key, &map_namespace);
 
+    if (skipplus) mbname_set_boxes(mbname, NULL);
     if (forcedowncase) mbname_downcaseuser(mbname);
 
-    /* see if its a shared mailbox address */
+    /* see if it is a shared mailbox address */
     if (!strcmpsafe(mbname_userid(mbname), BB)) {
         mbname_set_localpart(mbname, NULL);
         mbname_set_domain(mbname, NULL);
     }
 
+    char msg[MAX_MAILBOX_PATH+1];
+    if (userdeny(mbname_userid(mbname), config_ident, msg, sizeof(msg))) {
+        prot_printf(map_out, SIZE_T_FMT ":NOTFOUND %s,", 9 + strlen(msg), msg);
+        mbname_free(&mbname);
+        return -1;
+    }
     /*
      * check to see if mailbox exists and we can append to it:
      *
