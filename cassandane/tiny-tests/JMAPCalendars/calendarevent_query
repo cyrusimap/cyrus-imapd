@@ -206,6 +206,48 @@ sub test_calendarevent_query
         wantTotal => 3,
         wantIds => [$eventB1{id}],
         wantFastPath => JSON::false,
+    }, {
+        filter => {
+            operator => 'NOT',
+            conditions => [{
+                blarg => 'foo', # invalid - blarg is not a calevent property
+            }],
+        },
+        wantErr => {
+            type => 'invalidArguments',
+            arguments => [ 'filter/conditions[0]/blarg' ],
+        },
+    }, {
+        filter => {
+            operator => 'NOT',
+            conditions => {  # invalid - object rather than array
+                blarg => 'foo',
+            },
+        },
+        wantErr => {
+            type => 'invalidArguments',
+            arguments => [ 'filter/conditions' ],
+        },
+    }, {
+        filter => {
+            operator => 'NOT',
+            # invalid - no conditions
+        },
+        wantErr => {
+            type => 'invalidArguments',
+            arguments => [ 'filter/conditions' ],
+        },
+    }, {
+        filter => {
+            operator => 'BLARG', # invalid operator
+            conditions => [{
+                after => '2023-01-01T02:00:00',
+            }],
+        },
+        wantErr => {
+            type => 'invalidArguments',
+            arguments => [ 'filter/operator' ],
+        },
     });
 
     for my $tc (@testCases) {
@@ -227,14 +269,19 @@ sub test_calendarevent_query
         $res = $jmap->CallMethods([
             ['CalendarEvent/query', $q, 'R1'],
         ]);
-        my $wantTotal = defined $tc->{wantTotal} ?
-            $tc->{wantTotal} : scalar @{$tc->{wantIds}};
-        $self->assert_num_equals($wantTotal, $res->[0][1]{total});
-        $self->assert_deep_equals($tc->{wantIds}, $res->[0][1]{ids});
+        if ($tc->{wantErr}) {
+            $self->assert_str_equals('error', $res->[0][0]);
+            $self->assert_deep_equals($tc->{wantErr}, $res->[0][1]);
+        } else {
+            my $wantTotal = defined $tc->{wantTotal} ?
+                $tc->{wantTotal} : scalar @{$tc->{wantIds}};
+            $self->assert_num_equals($wantTotal, $res->[0][1]{total});
+            $self->assert_deep_equals($tc->{wantIds}, $res->[0][1]{ids});
 
-        if ($maj > 3 || ($maj == 3 && $min > 8)) {
-            $self->assert_equals($tc->{wantFastPath},
-                $res->[0][1]{debug}{isFastPath});
+            if ($maj > 3 || ($maj == 3 && $min > 8)) {
+                $self->assert_equals($tc->{wantFastPath},
+                    $res->[0][1]{debug}{isFastPath});
+            }
         }
     }
 }
