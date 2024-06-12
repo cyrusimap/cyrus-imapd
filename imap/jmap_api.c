@@ -2231,10 +2231,17 @@ HIDDEN void jmap_filter_parse(jmap_req_t *req, struct jmap_parser *parser,
             jmap_parser_invalid(parser, "operator");
         }
         arg = json_object_get(filter, "conditions");
-        json_array_foreach(arg, i, val) {
-            jmap_parser_push_index(parser, "conditions", i, NULL);
-            jmap_filter_parse(req, parser, val, unsupported, parse_condition, cond_rock, err);
-            jmap_parser_pop(parser);
+        if (json_is_array(arg)) {
+            json_array_foreach(arg, i, val) {
+                jmap_parser_push_index(parser, "conditions", i, NULL);
+                jmap_filter_parse(req, parser, val, unsupported,
+                                  parse_condition, cond_rock, err);
+                jmap_parser_pop(parser);
+            }
+        }
+        else {
+            /* conditions missing or not an array. same error either way */
+            jmap_parser_invalid(parser, "conditions");
         }
     } else if (arg) {
         jmap_parser_invalid(parser, "operator");
