@@ -185,6 +185,7 @@ static void jmap_init(struct buf *serverinfo)
     my_jmap_settings.server_capabilities = json_object();
 
     jmap_core_init(&my_jmap_settings);
+    jmap_quota_init(&my_jmap_settings);
     jmap_mail_init(&my_jmap_settings);
     jmap_mdn_init(&my_jmap_settings);
     jmap_contact_init(&my_jmap_settings);

@@ -132,6 +132,9 @@ extern int quota_findroot(char *ret, size_t retlen, const char *name);
 extern int quota_foreach(const char *prefix, quotaproc_t *proc,
                          void *rock, struct txn **);
 
+extern int quota_foreach_withconversations(const char *prefix, quotaproc_t *proc,
+                                           void *rock, struct txn **);
+
 /* open the quotas db */
 void quotadb_open(const char *fname);
 

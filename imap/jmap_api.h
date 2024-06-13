@@ -57,7 +57,11 @@
 #include "ptrarray.h"
 #include "strarray.h"
 
+#define JMAP_INT_MAX    9007199254740991LL  /*  2^53-1 */
+#define JMAP_INT_MIN    (-JMAP_INT_MAX)     /* -2^53+1 */
+
 #define JMAP_URN_CORE       "urn:ietf:params:jmap:core"
+#define JMAP_URN_QUOTA      "urn:ietf:params:jmap:quota"
 #define JMAP_URN_MAIL       "urn:ietf:params:jmap:mail"
 #define JMAP_URN_SUBMISSION "urn:ietf:params:jmap:submission"
 #define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
@@ -74,7 +78,6 @@
 #define JMAP_MAIL_EXTENSION          "https://cyrusimap.org/ns/jmap/mail"
 #define JMAP_PERFORMANCE_EXTENSION   "https://cyrusimap.org/ns/jmap/performance"
 #define JMAP_DEBUG_EXTENSION         "https://cyrusimap.org/ns/jmap/debug"
-#define JMAP_QUOTA_EXTENSION         "https://cyrusimap.org/ns/jmap/quota"
 #define JMAP_BACKUP_EXTENSION        "https://cyrusimap.org/ns/jmap/backup"
 #define JMAP_NOTES_EXTENSION         "https://cyrusimap.org/ns/jmap/notes"
 #define JMAP_SIEVE_EXTENSION         "https://cyrusimap.org/ns/jmap/sieve"
@@ -233,6 +236,7 @@ extern int jmap_is_using(jmap_req_t *req, const char *capa);
 
 /* Protocol implementations */
 extern void jmap_core_init(jmap_settings_t *settings);
+extern void jmap_quota_init(jmap_settings_t *settings);
 extern void jmap_mail_init(jmap_settings_t *settings);
 extern void jmap_mdn_init(jmap_settings_t *settings);
 extern void jmap_contact_init(jmap_settings_t *settings);
@@ -244,6 +248,7 @@ extern void jmap_sieve_init(jmap_settings_t *settings);
 extern void jmap_admin_init(jmap_settings_t *settings);
 
 extern void jmap_core_capabilities(json_t *account_capabilities);
+extern void jmap_quota_capabilities(json_t *account_capabilities);
 extern void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTopLevel);
 extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
 extern void jmap_mdn_capabilities(json_t *account_capabilities);
