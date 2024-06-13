@@ -192,7 +192,7 @@ sub test_environment_override
         'cassandane.pwcheck' => 'alwaystrue',
         'cassandane.cleanup' => 'no',
         'cassandane.maxworkers' => '1',
-        'cassandane.base_port' => '9100',
+        'cassandane.base_port' => '29100',
         'cassandane.suppress' => '',
         'valgrind.enabled' => 'no',
         'valgrind.binary' => '/usr/bin/valgrind',
