@@ -2279,10 +2279,12 @@ static int list_calendars(struct transaction_t *txn)
 
     /* Sort calendars by displayname */
     qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
+    charset_t utf8 = charset_lookupname("utf-8");
 
     /* Add available calendars with action items */
     for (i = 0; i < lrock.len; i++) {
         struct cal_info *cal = &lrock.cal[i];
+        char *displayname = charset_convert(cal->displayname, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
 
         /* Send a body chunk once in a while */
         if (buf_len(body) > PROT_BUFSIZE) {
@@ -2292,17 +2294,18 @@ static int list_calendars(struct transaction_t *txn)
 
         /* Calendar name */
         buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td>%s%s%s",
+        buf_printf_markup(body, level, "<td id='%i'>%s%s%s", i,
                           (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
-                          cal->displayname,
+                          displayname,
                           (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
+        free(displayname);
 
         /* Supported components list */
         buf_printf_markup(body, level++, "<td>");
         buf_printf_markup(body, level++,
                           "<select multiple name=comp size=3"
-                          " onChange=\"compsetCalendar('%s%s', '%s', this.options)\">",
-                          base_path, cal->shortname, cal->displayname);
+                          " onChange=\"compsetCalendar('%s%s', '%i', this.options)\">",
+                          base_path, cal->shortname, i);
         for (comp = cal_comps; comp->name; comp++) {
             buf_printf_markup(body, level, "<option%s>%s</option>",
                               (cal->types & comp->type) ? " selected" : "",
@@ -2323,9 +2326,9 @@ static int list_calendars(struct transaction_t *txn)
         /* Delete button */
         buf_printf_markup(body, level,
                           "<td><input type=button%s value='Delete'"
-                          " onclick=\"deleteCalendar('%s%s', '%s')\"></td>",
+                          " onclick=\"deleteCalendar('%s%s', '%i')\"></td>",
                           !(cal->flags & CAL_CAN_DELETE) ? " disabled" : "",
-                          base_path, cal->shortname, cal->displayname);
+                          base_path, cal->shortname, i);
 
         /* Public (shared) checkbox */
         buf_printf_markup(body, level,
@@ -2348,6 +2351,7 @@ static int list_calendars(struct transaction_t *txn)
         buf_printf_markup(body, --level, "</tr>");
     }
 
+    charset_free(&utf8);
     free(lrock.cal);
 
     /* Finish list */
