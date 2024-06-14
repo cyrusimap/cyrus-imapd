@@ -92,6 +92,7 @@ sub dump_user {
   for my $folder (@{$info->{MAILBOX}}) {
     next if $folder->{MBOXTYPE}; # don't dump special folders
     my $fi = $self->{sync}->dlwrite("GET", "FULLMAILBOX", $folder->{MBOXNAME});
+    next unless $fi->{MAILBOX};  # folder went away?
     my @emails;
     for my $record (@{$fi->{MAILBOX}[0]{RECORD}||[]}) {
       my $res = $self->{sync}->dlwrite("GET", "FETCH", {
