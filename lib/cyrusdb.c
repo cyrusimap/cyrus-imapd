@@ -335,6 +335,17 @@ EXPORTED int cyrusdb_delete(struct db *db,
     return db->backend->delete_(db->engine, key, keylen, tid, force);
 }
 
+EXPORTED int cyrusdb_lock(struct db *db, struct txn **tid, int flags)
+{
+    if (!db->backend->lock)
+        return CYRUSDB_NOTIMPLEMENTED;
+#ifdef DEBUGDB
+    syslog(LOG_NOTICE, "DEBUGDB lock(%llx, %d)\n", (long long unsigned)db->engine, flags);
+#endif
+    return db->backend->lock(db->engine, tid, flags);
+
+}
+
 EXPORTED int cyrusdb_commit(struct db *db, struct txn *tid)
 {
     if (!db->backend->commit)

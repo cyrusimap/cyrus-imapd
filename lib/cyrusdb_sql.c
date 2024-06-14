@@ -941,6 +941,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_sql =
     &store,
     &delete,
 
+    NULL, /* lock */
     &commit_txn,
     &abort_txn,
 

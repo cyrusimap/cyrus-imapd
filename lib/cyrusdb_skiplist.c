@@ -848,6 +848,11 @@ static int compare_signed(const char *s1, int l1, const char *s2, int l2)
     return 0;
 }
 
+static int mylock(struct dbengine *db, struct txn **mytid, int flags __attribute__((unused)))
+{
+    return lock_or_refresh(db, mytid);
+}
+
 static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
 {
     struct dbengine *db;
@@ -1001,7 +1006,10 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     list_ent->refcount = 1;
     open_db = list_ent;
 
-    return mytid ? lock_or_refresh(db, mytid) : 0;
+    if (mytid)
+        return mylock(db, mytid, /*flags*/0);
+
+    return 0;
 }
 
 static int myclose(struct dbengine *db)
@@ -2486,6 +2494,7 @@ EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
     &store,
     &mydelete,
 
+    &mylock,
     &mycommit,
     &myabort,
 
