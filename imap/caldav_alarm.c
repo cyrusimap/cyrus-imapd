@@ -2045,6 +2045,16 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
     if (config_getswitch(IMAPOPT_REPLICAONLY))
         return 0;
 
+    // temporarily disable alarms
+    const char *suppress_file = config_getstring(IMAPOPT_CALDAV_ALARM_SUPPRESS_FILE);
+    if (suppress_file) {
+        struct stat sbuf;
+        if (!stat(suppress_file, &sbuf)) {
+            syslog(LOG_NOTICE, "NOTICE: suppressing alarms due to existence of %s", suppress_file);
+            return 0;
+        }
+    }
+
     syslog(LOG_DEBUG, "processing alarms");
 
     if (!runtime) {
