@@ -649,7 +649,7 @@ static int savemsg(struct clientdata *cd,
         sprintf(addbody, "<%s%s%s>",
                 rpath, hostname ? "@" : "", hostname ? hostname : "");
         fprintf(f, "Return-Path: %s\r\n", addbody);
-        spool_cache_header(xstrdup("Return-Path"), addbody, m->hdrcache);
+        spool_cache_header("return-path", addbody, m->hdrcache);
     }
 
     /* add a received header */
@@ -700,18 +700,20 @@ static int savemsg(struct clientdata *cd,
         fprintf(f, "%.*s\r\n\t", (int) (fold[i] - p), p);
     }
     fprintf(f, "%s\r\n", p);
-    spool_cache_header(xstrdup("Received"), addbody, m->hdrcache);
+    spool_cache_header("received", addbody, m->hdrcache);
 
     char *sid = xstrdup(session_id());
     fprintf(f, "X-Cyrus-Session-Id: %s\r\n", sid);
-    spool_cache_header(xstrdup("X-Cyrus-Session-Id"), sid, m->hdrcache);
+    spool_cache_header("x-cyrus-session-id", sid, m->hdrcache);
 
     /* add any requested headers */
     if (func->addheaders) {
         struct addheader *h;
         for (h = func->addheaders; h && h->name; h++) {
             fprintf(f, "%s: %s\r\n", h->name, h->body);
-            spool_cache_header(xstrdup(h->name), xstrdup(h->body), m->hdrcache);
+            char *temp = xstrduplcase(h->name);
+            spool_cache_header(temp, xstrdup(h->body), m->hdrcache);
+            free (temp);
         }
     }
 
@@ -737,7 +739,7 @@ static int savemsg(struct clientdata *cd,
         sprintf(m->id, "<cmu-lmtpd-%d-%d-%u@%s>", p, (int) now,
                 msgid_count++, config_servername);
         fprintf(f, "Message-ID: %s\r\n", m->id);
-        spool_cache_header(xstrdup("Message-ID"), xstrdup(m->id), m->hdrcache);
+        spool_cache_header("message-id", xstrdup(m->id), m->hdrcache);
     }
 
     /* get date */
@@ -746,7 +748,7 @@ static int savemsg(struct clientdata *cd,
         addbody = xstrdup(datestr);
         m->date = xstrdup(datestr);
         fprintf(f, "Date: %s\r\n", addbody);
-        spool_cache_header(xstrdup("Date"), addbody, m->hdrcache);
+        spool_cache_header("date", addbody, m->hdrcache);
     }
     else {
         m->date = xstrdup(body[0]);

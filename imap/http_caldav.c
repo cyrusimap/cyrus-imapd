@@ -930,7 +930,7 @@ static int caldav_check_precond(struct transaction_t *txn,
     if (!(precond == HTTP_OK || precond == HTTP_PARTIAL)) return precond;
 
     /* Per RFC 6638, check Schedule-Tag */
-    if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "if-schedule-tag-match"))) {
         /* Special case for Apple 'If-Schedule-Tag-Match:' with no value
          * and also no schedule tag on the record - let that match */
         if (cdata && !stag && !hdr[0][0]) return precond;
@@ -1043,7 +1043,7 @@ static int _scheduling_enabled(struct transaction_t *txn,
     if (!strcasecmp(buf_cstring(&buf), "F"))
         is_enabled = 0;
 
-    const char **hdr = spool_getheader(txn->req_hdrs, "Scheduling-Enabled");
+    const char **hdr = spool_getheader(txn->req_hdrs, "scheduling-enabled");
     if (hdr && !strcasecmp(hdr[0], "F"))
         is_enabled = 0;
 
@@ -1275,7 +1275,7 @@ static void get_schedule_addresses(struct transaction_t *txn,
     struct buf buf = BUF_INITIALIZER;
 
     /* allow override of schedule-address per-message (FM specific) */
-    const char **hdr = spool_getheader(txn->req_hdrs, "Schedule-Address");
+    const char **hdr = spool_getheader(txn->req_hdrs, "schedule-address");
 
     if (hdr) {
         if (!strncasecmp(hdr[0], "mailto:", 7))
@@ -1372,7 +1372,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
             if (_scheduling_enabled(txn, mailbox))
                 sched_request(userid, schedule_address, ical, NULL);
         }
-        else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
+        else if (!(hdr = spool_getheader(txn->req_hdrs, "schedule-reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             schedule_address = xstrdupnull(strarray_nth(&schedule_addresses, 0));
@@ -1424,7 +1424,7 @@ static int export_calendar(struct transaction_t *txn)
 
     /* Check requested MIME type:
        1st entry in caldav_mime_types array MUST be default MIME type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+    if ((hdr = spool_getheader(txn->req_hdrs, "accept")))
         mime = get_accept_type(hdr, caldav_mime_types);
     else mime = caldav_mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
@@ -2109,7 +2109,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         int ret = HTTP_CONTINUE;
 
         /* Check for optional CalDAV-Timezones header */
-        hdr = spool_getheader(txn->req_hdrs, "CalDAV-Timezones");
+        hdr = spool_getheader(txn->req_hdrs, "caldav-timezones");
         if (hdr && !strcmp(hdr[0], "T")) need_tz = 1;
 
         if (cdata->comp_flags.tzbyref) {
@@ -2331,7 +2331,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     if ((return_rep = (get_preferences(txn) & PREFER_REP))) {
         /* Check requested MIME type:
            1st entry in gparams->mime_types array MUST be default MIME type */
-        if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+        if ((hdr = spool_getheader(txn->req_hdrs, "accept")))
             mime = get_accept_type(hdr, caldav_mime_types);
         else mime = caldav_mime_types;
         if (!mime) return HTTP_NOT_ACCEPTABLE;
@@ -2557,7 +2557,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         }
         buf_reset(&txn->buf);
 
-        if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "content-type"))) {
             param = icalproperty_get_first_parameter(aprop,
                                                      ICAL_FMTTYPE_PARAMETER);
             if (param) icalparameter_set_fmttype(param, *hdr);
@@ -2754,7 +2754,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
     struct caldav_sched_param sparam;
 
     /* Check Content-Type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "content-type"))) {
         for (mime = caldav_mime_types; mime->content_type; mime++) {
             if (is_mediatype(mime->content_type, hdr[0])) break;
         }
@@ -4083,7 +4083,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
             if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 
-            if (cdata->organizer && !spool_getheader(txn->req_hdrs, "Allow-Organizer-Change")) {
+            if (cdata->organizer && !spool_getheader(txn->req_hdrs, "allow-organizer-change")) {
                 /* Don't allow ORGANIZER to be changed */
                 if (strcmp(cdata->organizer, organizer)) {
                     txn->error.desc = "Can not change organizer address";
@@ -5401,7 +5401,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
         /* Check for optional CalDAV-Timezones header */
         const char **hdr =
-            spool_getheader(fctx->txn->req_hdrs, "CalDAV-Timezones");
+            spool_getheader(fctx->txn->req_hdrs, "caldav-timezones");
         if (hdr && !strcmp(hdr[0], "T")) need_tz = 1;
         else need_tz = 0;
 
@@ -7289,7 +7289,7 @@ static int report_fb_query(struct transaction_t *txn,
 
     /* Check requested MIME type:
        1st entry in caldav_mime_types array MUST be default MIME type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+    if ((hdr = spool_getheader(txn->req_hdrs, "accept")))
         mime = get_accept_type(hdr, caldav_mime_types);
     else mime = caldav_mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
@@ -7508,7 +7508,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
             buf_printf(&txn->buf, "<%s>", organizer);
             mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
                                                 buf_len(&txn->buf));
-            spool_replace_header(xstrdup("From"), mimehdr, txn->req_hdrs);
+            spool_replace_header("from", mimehdr, txn->req_hdrs);
             buf_reset(&txn->buf);
         }
     }
@@ -7524,22 +7524,22 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
     if (prop) {
         mimehdr = charset_encode_mimeheader(icalproperty_get_summary(prop), 0);
-        spool_replace_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
+        spool_replace_header("subject", mimehdr, txn->req_hdrs);
     }
-    else spool_replace_header(xstrdup("Subject"),
+    else spool_replace_header("subject",
                             xstrdup(icalcomponent_kind_to_string(kind)),
                             txn->req_hdrs);
 
     if (schedule_address) {
         mimehdr = charset_encode_mimeheader(schedule_address, 0);
-        spool_replace_header(xstrdup("X-Schedule-User-Address"),
+        spool_replace_header("x-schedule-user-address",
                              mimehdr, txn->req_hdrs);
     }
 
     time_to_rfc822(icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
                                                utc_zone),
                    datestr, sizeof(datestr));
-    spool_replace_header(xstrdup("Date"), xstrdup(datestr), txn->req_hdrs);
+    spool_replace_header("date", xstrdup(datestr), txn->req_hdrs);
 
     buf_reset(&txn->buf);
 
@@ -7550,7 +7550,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     else {
         buf_printf(&txn->buf, "<%s@%s>", uid, config_servername);
     }
-    spool_replace_header(xstrdup("Message-ID"),
+    spool_replace_header("message-id",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     buf_setcstr(&txn->buf, ICALENDAR_CONTENT_TYPE);
@@ -7559,16 +7559,16 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                    icalproperty_method_to_string(meth));
     }
     buf_printf(&txn->buf, "; component=%s", icalcomponent_kind_to_string(kind));
-    spool_replace_header(xstrdup("Content-Type"),
+    spool_replace_header("content-type",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
     if (sched_tag) buf_printf(&txn->buf, ";\r\n\tschedule-tag=%s", sched_tag);
     if (tzbyref) buf_printf(&txn->buf, ";\r\n\ttz-by-ref=true");
-    spool_replace_header(xstrdup("Content-Disposition"),
+    spool_replace_header("content-disposition",
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
+    spool_remove_header("content-description", txn->req_hdrs);
 
     /* Store the resource */
     ret = dav_store_resource(txn, icalcomponent_as_ical_string(ical), 0,

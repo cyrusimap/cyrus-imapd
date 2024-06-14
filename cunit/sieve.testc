@@ -287,8 +287,10 @@ static void test_comparator(void)
 static int getheader(void *mc, const char *name, const char ***body)
 {
     sieve_test_message_t *msg = (sieve_test_message_t *)mc;
+    char *lcasename = xstrduplcase(name);
 
-    *body = spool_getheader(msg->headers, name);
+    *body = spool_getheader(msg->headers, lcasename);
+    free(lcasename);
     if (!*body)
         return SIEVE_FAIL;
     return SIEVE_OK;

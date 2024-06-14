@@ -577,30 +577,30 @@ static int store_resource(struct transaction_t *txn,
 
     /* Create and cache RFC 5322 header fields for resource */
     mimehdr = charset_encode_mimeheader(fullname, 0);
-    spool_replace_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
+    spool_replace_header("subject", mimehdr, txn->req_hdrs);
 
     /* XXX - validate uid for mime safety? */
     if (strchr(uid, '@')) {
-        spool_replace_header(xstrdup("Message-ID"),
+        spool_replace_header("message-id",
                              xstrdup(uid), txn->req_hdrs);
     }
     else {
         assert(!buf_len(&txn->buf));
         buf_printf(&txn->buf, "<%s@%s>", uid, config_servername);
-        spool_replace_header(xstrdup("Message-ID"),
+        spool_replace_header("message-id",
                              buf_release(&txn->buf), txn->req_hdrs);
     }
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "text/vcard; version=%s; charset=utf-8", version);
-    spool_replace_header(xstrdup("Content-Type"),
+    spool_replace_header("content-type",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
-    spool_replace_header(xstrdup("Content-Disposition"),
+    spool_replace_header("content-disposition",
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
+    spool_remove_header("content-description", txn->req_hdrs);
 
     /* Store the resource */
     struct buf *buf = vcard_as_buf(vcard);
@@ -634,8 +634,8 @@ static int export_addressbook(struct transaction_t *txn)
     struct mime_type_t *mime = NULL;
 
     /* Check requested MIME type:
-       1st entry in caldav_mime_types array MUST be default MIME type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+       1st entry in carddav_mime_types array MUST be default MIME type */
+    if ((hdr = spool_getheader(txn->req_hdrs, "accept")))
         mime = get_accept_type(hdr, carddav_mime_types);
     else mime = carddav_mime_types;
     if (!mime) return HTTP_NOT_ACCEPTABLE;
