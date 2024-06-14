@@ -609,7 +609,7 @@ static int _index_sub(struct backup *backup, struct dlist *dl,
 
     /* set the unsubscribed time if this is an UNSUB */
     if (!strcmp(dl->name, "UNSUB")) {
-        syslog(LOG_DEBUG, "setting unsubscribed to %ld for %s", ts, mboxname);
+        syslog(LOG_DEBUG, "setting unsubscribed to " TIME_T_FMT " for %s", ts, mboxname);
         struct sqldb_bindval *unsubscribed_bval = &bval[2];
         assert(strcmp(unsubscribed_bval->name, ":unsubscribed") == 0);
         unsubscribed_bval->type = SQLITE_INTEGER;
