@@ -3722,7 +3722,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     /* has this record already been replaced?  Don't write anything */
     if (cdata->dav.imap_uid > new->uid) {
         /* remove associated alarms */
-        caldav_alarm_delete_record(cdata->dav.mailbox, new->uid);
+        caldav_alarm_delete_record(&mbentry, new->uid);
 
         r = IMAP_NO_MSGGONE;
         goto done;
@@ -3733,7 +3733,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         if (!cdata->dav.imap_uid) goto done;
 
         /* remove associated alarms */
-        caldav_alarm_delete_record(cdata->dav.mailbox, cdata->dav.imap_uid);
+        caldav_alarm_delete_record(&mbentry, cdata->dav.imap_uid);
 
         /* delete entry */
         r = caldav_delete(caldavdb, cdata->dav.rowid);
@@ -3741,7 +3741,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     else if (cdata->dav.imap_uid == new->uid) {
         if (new->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             /* remove associated alarms */
-            caldav_alarm_delete_record(cdata->dav.mailbox, cdata->dav.imap_uid);
+            caldav_alarm_delete_record(&mbentry, cdata->dav.imap_uid);
         }
         else if (!new->silentupdate) {
             /* make sure record is up to date - see add below for description of
@@ -3767,7 +3767,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
         /* remove old ones */
         if (cdata->dav.imap_uid) {
-            r = caldav_alarm_delete_record(cdata->dav.mailbox, cdata->dav.imap_uid);
+            r = caldav_alarm_delete_record(&mbentry, cdata->dav.imap_uid);
             if (r) goto alarmdone;
         }
 
@@ -4006,13 +4006,13 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
 
     /* remove associated alarms if deleted */
     if (!new || new->internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        r = caldav_alarm_delete_record(mailbox_name(mailbox), new->uid);
+        r = caldav_alarm_delete_record(mailbox->mbentry, new->uid);
     }
 
     /* remove associated alarms if canceled or final */
     else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_JMAPSUBMIT &&
              (new->system_flags & (FLAG_FLAGGED | FLAG_ANSWERED))) {
-        r = caldav_alarm_delete_record(mailbox_name(mailbox), new->uid);
+        r = caldav_alarm_delete_record(mailbox->mbentry, new->uid);
     }
 
     /* touch or create otherwise */
@@ -6243,7 +6243,7 @@ static int mailbox_delete_alarms(struct mailbox *mailbox)
     if (!(mailbox->i.options & OPT_IMAP_HAS_ALARMS))
         return 0;
 
-    return caldav_alarm_delete_mailbox(mailbox_name(mailbox));
+    return caldav_alarm_delete_mailbox(mailbox);
 }
 #endif /* WITH_JMAP */
 
@@ -6261,7 +6261,7 @@ static int mailbox_delete_caldav(struct mailbox *mailbox)
         if (r) return r;
     }
 
-    int r = caldav_alarm_delete_mailbox(mailbox_name(mailbox));
+    int r = caldav_alarm_delete_mailbox(mailbox);
     if (r) return r;
 
     return 0;
