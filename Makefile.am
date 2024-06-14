@@ -532,13 +532,13 @@ noinst_TEXINFOS = com_err/et/com_err.texinfo
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libcyrus_min.pc libcyrus.pc libcyrus_sieve.pc libcyrus_imap.pc
 
+# 	com_err/et/init_et.c  (XXX example only? never used?)
 com_err_et_libcyrus_com_err_la_SOURCES = \
 	com_err/et/com_err.c \
 	com_err/et/com_err.h \
 	com_err/et/error_message.c \
 	com_err/et/error_table.h \
 	com_err/et/et_name.c \
-	com_err/et/init_et.c \
 	com_err/et/internal.h \
 	com_err/et/mit-sipb-copyright.h
 com_err_et_libcyrus_com_err_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
@@ -1361,10 +1361,10 @@ imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 PROMDATAGEN = $(abs_top_srcdir)/imap/promdatagen
 
 imap/promdata.c: imap/promdata.p $(PROMDATAGEN)
-	$(AM_V_GEN)$(PROMDATAGEN) -c $@.NEW $< && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(PROMDATAGEN) -c $@.NEW $< && mv $@.NEW $@
 
 imap/promdata.h: imap/promdata.p $(PROMDATAGEN)
-	$(AM_V_GEN)$(PROMDATAGEN) -h $@.NEW $< && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(PROMDATAGEN) -h $@.NEW $< && mv $@.NEW $@
 
 imap_promstatsd_SOURCES = imap/promstatsd.c imap/mutex_fake.c
 imap_promstatsd_LDADD = $(LD_UTILITY_ADD)
@@ -1422,16 +1422,16 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
 
 imap/rfc822_header.h: imap/rfc822_header.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 
 lib/htmlchar.c: lib/htmlchar.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
 
 lib/htmlchar.h: lib/htmlchar.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 
 imap/mailbox_header_cache.h: imap/mailbox_header_cache.gperf
 	$(AM_V_GEN)gperf --ignore-case --initializer-suffix=,0 -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$$ $< > $@.NEW && mv $@.NEW $@
@@ -1568,13 +1568,13 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(top_srcdir)/lib/charset/*.t \
 	lib/charset/UnicodeData.txt lib/charset/aliases.txt
 	@echo "### Building chartables..."
-	$(AM_V_GEN)perl $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
 	@echo "### Done building chartables."
 
 lib/imapopts.h: lib/imapopts.c
 
 lib/imapopts.c: lib/imapoptions tools/config2header
-	$(AM_V_GEN)$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
 
 imap_cvt_xlist_specialuse_SOURCES = imap/mutex_fake.c imap/cvt_xlist_specialuse.c
 imap_cvt_xlist_specialuse_LDADD = $(LD_UTILITY_ADD)
@@ -1906,19 +1906,19 @@ snapshot::
 
 docsrc/imap/reference/manpages/systemcommands/cyradm.rst: $(top_srcdir)/perl/imap/IMAP/Shell.pm
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst cyradm < $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/perl2rst cyradm < $< > $@.NEW && mv $@.NEW $@
 
 docsrc/imap/reference/manpages/configs/imapd.conf.rst: $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions > $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions > $@
 
 doc/examples/imapd_conf/imapd.conf.sample: $(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions > $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions > $@
 
 docsrc/imap/reference/manpages/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst sieveshell < $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/perl2rst sieveshell < $< > $@.NEW && mv $@.NEW $@
 
 %.1: man/.sphinx-build.stamp
 	@$(MKDIR_P) $(@D)

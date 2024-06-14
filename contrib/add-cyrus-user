@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 #---------------------------------------------------------------------
 # This script was designed to ease adding Cyrus-IMAP users for
