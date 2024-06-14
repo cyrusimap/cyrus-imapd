@@ -652,7 +652,7 @@ static void send_response(struct transaction_t *txn, long code,
     spool_enum_hdrcache(hdrs, &write_cachehdr, txn);
 
     if (!body || !(len = buf_len(body))) {
-        /* Empty body -- use  payload headers from response, if any */
+        /* Empty body -- use payload headers from response, if any */
         const char **hdr;
 
         if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
