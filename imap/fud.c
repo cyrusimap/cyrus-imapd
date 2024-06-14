@@ -145,6 +145,15 @@ void shut_down(int code)
     seen_done();
     closelog();
     cyrus_done();
+
+    /* be nice to remote */
+    shutdown(0, SHUT_RD);
+    shutdown(1, SHUT_RD);
+    shutdown(2, SHUT_RD);
+    close(0);
+    close(1);
+    close(2);
+
     exit(code);
 }
 
