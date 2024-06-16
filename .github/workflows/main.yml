@@ -2,10 +2,6 @@ name: Cyrus IMAP CI
 
 on:
   push:
-    branches:
-      - master
-      - main
-      - 'cyrus-imapd-*'
   pull_request:
     branches:
       - master
