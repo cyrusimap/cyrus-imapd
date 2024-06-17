@@ -6280,8 +6280,9 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     struct dlist *kupload = dlist_newlist(NULL, "MESSAGE");
     annotate_state_t *astate = NULL;
     struct sync_folder_list *myremotes = NULL;
+    int is_repeat = !!(flags & SYNC_FLAG_ISREPEAT);
 
-    if (flags & SYNC_FLAG_ISREPEAT) {
+    if (is_repeat) {
         // we have to fetch the sync_folder again!
         myremotes = sync_folder_list_create();
         struct dlist *mbkl = dlist_newlist(NULL, "MAILBOXES");
@@ -6299,9 +6300,12 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     if (local->mailbox) {
         mailbox = local->mailbox;
     }
-    else {
+    else if (is_repeat) {
         r = mailbox_open_iwl(local->name, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
+    }
+    else {
+        r = mailbox_open_irl(local->name, &mailbox);
     }
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -6332,7 +6336,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     }
 
     /* check that replication stands a chance of succeeding */
-    if (remote && !(flags & SYNC_FLAG_ISREPEAT)) {
+    if (remote && !is_repeat) {
         if (mailbox->i.deletedmodseq > remote->highestmodseq) {
             syslog(LOG_NOTICE, "inefficient replication ("
                    MODSEQ_FMT " > " MODSEQ_FMT ") %s",
@@ -6349,23 +6353,31 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
         xsyslog(LOG_NOTICE, "SYNCNOTICE: uidvalidity higher on replica, updating",
                             "mailbox=<%s> olduidvalidity=<%u> newuidvalidity=<%u>",
                             mailbox_name(mailbox), mailbox->i.uidvalidity, remote->uidvalidity);
+        if (!is_repeat) {
+            r = IMAP_AGAIN;
+            goto done;
+        }
         mailbox_index_dirty(mailbox);
         mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox_name(mailbox), remote->uidvalidity);
     }
 
     /* make sure CRC is updated if we're retrying */
-    if (flags & SYNC_FLAG_ISREPEAT) {
+    if (is_repeat) {
         r = mailbox_index_recalc(mailbox);
         if (r) goto done;
     }
 
     /* bump the raclmodseq if it's higher on the replica */
-    if (remote && remote->raclmodseq) {
+    if (remote && is_repeat && remote->raclmodseq) {
         mboxname_setraclmodseq(mailbox_name(mailbox), remote->raclmodseq);
     }
 
     /* bump the foldermodseq if it's higher on the replica */
     if (remote && remote->foldermodseq > mailbox_foldermodseq(mailbox)) {
+        if (!is_repeat) {
+            r = IMAP_AGAIN;
+            goto done;
+        }
         mboxlist_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), remote->foldermodseq, /*silent*/1);
         mailbox->mbentry->foldermodseq = remote->foldermodseq;
     }
