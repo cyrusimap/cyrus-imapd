@@ -2854,7 +2854,7 @@ static void schedule_full_reply(const char *attendee,
             add_master = 1; // Event might got moved in Google Calendar
 
         /* or it includes new EXDATEs */
-        else {
+        else if (oldmaster) {
             icalproperty *prop =
                 icalcomponent_get_first_property(mastercomp, ICAL_EXDATE_PROPERTY);
             for (; prop; prop = icalcomponent_get_next_property(mastercomp,
