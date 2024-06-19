@@ -1401,6 +1401,38 @@ sub _check_cores
     return;
 }
 
+sub _check_mupdate
+{
+    my ($self) = @_;
+
+    my $mupdate_server = $self->{config}->get('mupdate_server');
+    return if not $mupdate_server; # not in a murder
+
+    my $serverlist = $self->{config}->get('serverlist');
+    return if $serverlist; # don't sync mboxlist on frontends
+
+    # Run ctl_mboxlist -m to sync backend mailboxes with mupdate.
+    #
+    # You typically run this from START, and we do, but at test start
+    # there's no mailboxes yet, so there's nothing to sync, and if
+    # something is broken it probably won't be detected.
+    my $basedir = $self->{basedir};
+    eval {
+        $self->run_command({
+                redirects => { stdout => "$basedir/ctl_mboxlist.out",
+                               stderr => "$basedir/ctl_mboxlist.err",
+                             },
+                cyrus => 1,
+            }, 'ctl_mboxlist', '-m');
+    };
+    if ($@) {
+        my @err = slurp_file("$basedir/ctl_mboxlist.err");
+        chomp for @err;
+        xlog "ctl_mboxlist -m failed: " . Dumper \@err;
+        return "unable to sync local mailboxes with mupdate";
+    }
+}
+
 sub _check_sanity
 {
     my ($self) = @_;
@@ -1539,6 +1571,7 @@ sub stop
     my @errors;
 
     push @errors, $self->_check_sanity();
+    push @errors, $self->_check_mupdate();
 
     xlog "stop $self->{description}: basedir $self->{basedir}";
 
