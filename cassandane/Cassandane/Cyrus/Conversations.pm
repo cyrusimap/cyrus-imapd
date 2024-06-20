@@ -1108,4 +1108,68 @@ sub test_rename_between_users
     $self->assert_str_equals('-', $mfolders->[1]);
 }
 
+#
+# Test user rename without splitting conversations
+#
+sub test_rename_user_nosplitconv
+    :AllowMoves :Replication
+{
+    my ($self) = @_;
+
+    xlog $self, "Test user rename without splitting conversations";
+
+    my %exp;
+
+    # check IMAP server has the XCONVERSATIONS capability
+    my $master_store = $self->{master_store};
+    $self->assert($master_store->get_client()->capability()->{xconversations});
+
+    $master_store->set_fetch_attributes('uid', 'cid', 'basecid');
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating replies";
+    for (1..20) {
+        $exp{"A$_"} = $self->make_message("Re: Message A",
+                                          references => [ $exp{A} ],
+                                          store => $master_store);
+        $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
+    }
+
+    my $talk = $master_store->get_client();
+    $talk->create('foo');
+    $talk->copy('1:*', 'foo');
+
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
+    $self->check_conversations();
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    # Reduce the conversation thread size
+    my $config = $self->{instance}->{config};
+    $config->set(conversations_max_thread => 5);
+    $config->generate($self->{instance}->_imapd_conf());
+
+    $config = $self->{replica}->{config};
+    $config->set(conversations_max_thread => 5);
+    $config->generate($self->{replica}->_imapd_conf());
+
+    # Rename the user
+    my $admintalk = $self->{adminstore}->get_client();
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert(not $admintalk->get_last_error());
+
+    $self->{adminstore}->set_folder("user.newuser");
+    $self->{adminstore}->set_fetch_attributes('uid', 'cid', 'basecid');
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $self->{adminstore});
+    $self->check_conversations();
+
+    $self->run_replication(user => 'newuser');
+    $self->check_replication('newuser');
+}
+
 1;
