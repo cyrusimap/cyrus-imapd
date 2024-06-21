@@ -24,10 +24,12 @@ jobs:
         cpanm Digest::CRC
         cpanm XML::Simple # XXX could be grabbed from apt by docker image
         cpanm Mail::IMAPTalk # in image, but fetch latest!
+    - name: setup git safe directory
+      shell: bash
+      run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
     - name: configure and build
       shell: bash
       run: |
-        git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
         echo "building cyrus version" $(./tools/git-version.sh)
         ./tools/build-with-cyruslibs.sh
     - name: report version information
