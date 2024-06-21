@@ -27,6 +27,15 @@ jobs:
     - name: setup git safe directory
       shell: bash
       run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
+    - name: fetch upstream release tags
+      if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
+      shell: bash
+      run: |
+        git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
+        # n.b. --no-tags does not mean "no tags", it means "no automatic tag
+        # following".  we're explicitly fetching the tags we want, we do not
+        # need every other tag that's reachable from them
+        git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
     - name: configure and build
       shell: bash
       run: |
