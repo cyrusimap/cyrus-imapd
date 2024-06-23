@@ -11,7 +11,6 @@ are required for any host using the listed services:
     nntps     563/tcp  # NNTP over TLS
     imaps     993/tcp  # IMAP over TLS
     pop3s     995/tcp  # POP3 over TLS
-    kpop      1109/tcp # Kerberized Post Office Protocol
     lmtp      2003/tcp # Lightweight Mail Transport Protocol service
     smmap     2004/tcp # Cyrus smmapd (quota check) service
     csync     2005/tcp # Cyrus replication service

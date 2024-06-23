@@ -21,7 +21,7 @@ implementations in that it is run on "sealed" servers,
 where users are not normally permitted to log in.  The mailbox
 database is stored in parts of the filesystem that are private to the
 Cyrus IMAP system.  All user access to mail is through software
-using the IMAP, IMAPS, POP3, POP3S, or KPOP protocols.
+using the IMAP, IMAPS, POP3, POP3S, or JMAP protocols.
 
 <p>The private mailbox database design gives the server large advantages
 in efficiency, scalability, and administrability.  Multiple
@@ -618,8 +618,6 @@ uses the server identity
 "<TT>imap.<VAR>host</VAR>@<VAR>realm</VAR></TT>", where
 "<TT><VAR>host</VAR></TT>" is the first component of the server's host
 name and "<TT><VAR>realm</VAR></TT>" is the server's Kerberos realm.
-When the POP3 server is invoked with the "<TT>-k</TT>" switch, the
-server exports MIT's KPOP protocol instead of generic POP3.
 
 <h3><a name="syslog">The <TT>syslog</TT> facility</a></h3>
 
