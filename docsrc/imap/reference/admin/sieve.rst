@@ -126,9 +126,12 @@ If your server is running, you'll get a message similar to the following one::
     Trying 128.2.10.192...
     Connected to servername.domain.tld.
     Escape character is '^]'.
-    "IMPLEMENTATION" "Cyrus timsieved v1.1.0"
+    "IMPLEMENTATION" "Cyrus timsieved v3.8.3"
+    "VERSION" "1.0"
     "SASL" "ANONYMOUS PLAIN KERBEROS_V4 GSSAPI"
     "SIEVE" "fileinto reject envelope vacation imapflags notify subaddress regex"
+    "NOTIFY" "mailto"
+    "UNAUTHENTICATE"
     OK
 
 Any message other than one similar to the one above means there is a problem.
