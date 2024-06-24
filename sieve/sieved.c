@@ -60,6 +60,7 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <inttypes.h>
+#include <sysexits.h>
 
 #include <string.h>
 
@@ -74,6 +75,8 @@ static void generate_script(bytecode_input_t *d, int len);
 EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
     exit(code);
 }
