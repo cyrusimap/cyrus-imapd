@@ -103,7 +103,7 @@ sub test_card_query_shared
                         contexts => {
                             private => JSON::true
                         },
-                        isOrdered => JSON::false;
+                        isOrdered => JSON::false,
                         components => [
                             {
                                 kind => "name",
