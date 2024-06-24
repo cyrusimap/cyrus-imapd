@@ -76,6 +76,8 @@ EXPORTED void fatal(const char *msg, int err)
 
     cyrus_done();
 
+    if (err != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(err);
 }
 

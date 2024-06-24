@@ -47,6 +47,8 @@
 #include "xmalloc.h"
 #include "assert.h"
 
+extern int config_fatals_abort;
+
 EXPORTED void
 assertionfailed(const char *file, int line, const char *expr)
 {
@@ -54,5 +56,6 @@ assertionfailed(const char *file, int line, const char *expr)
 
     snprintf(buf, sizeof(buf), "Internal error: assertion failed: %s: %d%s%s",
             file, line, expr ? ": " : "", expr ? expr : "");
+    if (config_fatals_abort) abort();
     fatal(buf, EX_SOFTWARE);
 }

@@ -212,6 +212,7 @@ EXPORTED void fatal(const char *msg, int code)
 {
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
     exit(code);
 }
 
