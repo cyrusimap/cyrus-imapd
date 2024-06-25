@@ -26,7 +26,7 @@ sub import {
   for my $test (sort @tests) {
     local $RELOADED;
 
-    unless (eval "package $into; do qq{$test}; 1") {
+    unless (eval "package $into; do qq{$test}; die \$@ if \$@; 1") {
       Carp::confess("tried to load $test but it failed: $@");
     }
 
