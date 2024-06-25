@@ -59,6 +59,7 @@ enum getxstring_flags {
     GXS_LITERAL = (1<<2),   /* result may be {N}literal */
     GXS_NIL     = (1<<3),   /* result may be the special atom NIL */
     GXS_BINARY  = (1<<4),   /* result may contain embedded NULs */
+    GXS_MUPDATE = (1<<5),   /* (non-IMAP) accept LITERAL+ as client */
 
     IMAP_ASTRING = GXS_ATOM|GXS_QUOTED|GXS_LITERAL,
     IMAP_BIN_ASTRING = IMAP_ASTRING|GXS_BINARY,
@@ -70,6 +71,8 @@ enum getxstring_flags {
     /* note: there's some consistency issues here... the special
      * value "NIL" must be quoted to get returned as a string */
     IMAP_NASTRING = GXS_NIL|GXS_ATOM|GXS_QUOTED|GXS_LITERAL,
+
+    MUPDATE_STRING = IMAP_STRING|GXS_MUPDATE,
 };
 
 int getxstring(struct protstream *pin, struct protstream *pout,
@@ -81,6 +84,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 #define getqstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_QSTRING)
 #define getstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_STRING)
 #define getnastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NASTRING)
+#define getmstring(pin, pout, buf) getxstring((pin), (pout), (buf), MUPDATE_STRING)
 #define getcharset(pin, pout, buf) getxstring((pin), (pout), (buf), GXS_ATOM|GXS_QUOTED)
 int getint32(struct protstream *pin, int *num);
 int getint64(struct protstream *pin, int64_t *num);
