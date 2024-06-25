@@ -38,15 +38,19 @@ objectclass: group
 cn: group co
 ou: groups
 o: cyrus
+member: uid=cassandane,dc=internal
+member: uid=otheruser,dc=internal
 
 dn: cn=group c,ou=groups,o=cyrus
 objectclass: group
 cn: group c
 ou: groups
 o: cyrus
+member: uid=cassandane,dc=internal
 
 dn: cn=group o,ou=groups,o=cyrus
 objectclass: group
 cn: group o
 ou: groups
 o: cyrus
+member: uid=otheruser,dc=internal

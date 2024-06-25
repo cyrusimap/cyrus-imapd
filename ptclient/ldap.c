@@ -116,6 +116,7 @@ typedef struct _ptsm {
     const char      *group_filter;
     const char      *group_base;
     int             group_scope;
+    const char      *groupmember_attribute;
 
     /* Used for domain name space -> root dn discovery */
     const char      *domain_base_dn;
@@ -416,11 +417,9 @@ static void myinit(void)
 
     ptsm->member_filter = config_getstring(IMAPOPT_LDAP_MEMBER_FILTER);
     ptsm->member_base = config_getstring(IMAPOPT_LDAP_MEMBER_BASE);
-    ptsm->member_attribute = (config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) ?
-        config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE));
-
-    ptsm->user_attribute = (config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE) ?
-        config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE));
+    ptsm->member_attribute = config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE);
+    ptsm->user_attribute = config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE);
+    ptsm->groupmember_attribute = config_getstring(IMAPOPT_LDAP_GROUPMEMBER_ATTRIBUTE);
 
     p = config_getstring(IMAPOPT_LDAP_GROUP_SCOPE);
     if (!strcasecmp(p, "one")) {
@@ -1050,14 +1049,7 @@ static int ptsmodule_make_authstate_attribute(
             *dsize = sizeof(struct auth_state) +
                 (numvals * sizeof(struct auth_ident));
             *newstate = xzmalloc(*dsize);
-            if (*newstate == NULL) {
-                *reply = "no memory";
-                rc = PTSM_FAIL;
-                goto done;
-            }
-
             (*newstate)->ngroups = numvals;
-            (*newstate)->userid.id[0] = '\0';
             for (i = 0; i < numvals; i++) {
                 unsigned int j;
                 char **rdn = NULL;
@@ -1086,14 +1078,6 @@ static int ptsmodule_make_authstate_attribute(
                     if(!*newstate) {
                         *dsize = sizeof(struct auth_state);
                         *newstate = xzmalloc(*dsize);
-
-                        if (*newstate == NULL) {
-                            *reply = "no memory";
-                            rc = PTSM_FAIL;
-                            goto done;
-                        }
-
-                        (*newstate)->ngroups = 0;
                     }
 
                     size=strlen(vals[0]);
@@ -1107,16 +1091,9 @@ static int ptsmodule_make_authstate_attribute(
         }
     }
 
-    if(!*newstate) {
+    if (!*newstate) {
         *dsize = sizeof(struct auth_state);
         *newstate = xzmalloc(*dsize);
-        if (*newstate == NULL) {
-            *reply = "no memory";
-            rc = PTSM_FAIL;
-            goto done;
-        }
-        (*newstate)->ngroups = 0;
-        (*newstate)->userid.id[0] = '\0';
     }
 
     /* fill in the rest of our new state structure */
@@ -1204,13 +1181,6 @@ static int ptsmodule_make_authstate_filter(
     *dsize = sizeof(struct auth_state) + (n * sizeof(struct auth_ident));
 
     *newstate = xzmalloc(*dsize);
-
-    if (*newstate == NULL) {
-        *reply = "no memory";
-        rc = PTSM_FAIL;
-        goto done;
-    }
-
     (*newstate)->ngroups = n;
     strcpy((*newstate)->userid.id, canon_id);
     (*newstate)->userid.hash = strhash(canon_id);
@@ -1300,6 +1270,7 @@ static int ptsmodule_make_authstate_group(
     int rc;
     int n;
     LDAPMessage *res = NULL;
+    LDAPMessage *res2 = NULL;
     LDAPMessage *entry = NULL;
     char **vals = NULL;
     char *attrs[] = {NULL};
@@ -1416,18 +1387,56 @@ static int ptsmodule_make_authstate_group(
         goto done;
     }
 
-    *dsize = sizeof(struct auth_state) +
-             (n * sizeof(struct auth_ident));
-    *newstate = xzmalloc(*dsize);
-    if (*newstate == NULL) {
-        *reply = "no memory";
-        rc = PTSM_FAIL;
-        goto done;
+    // there must be one
+    entry = ldap_first_entry(ptsm->ld, res);
+    int numvals = 0;
+    if (ptsm->groupmember_attribute) {
+        vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->groupmember_attribute);
+        numvals = ldap_count_values(vals);
     }
-    (*newstate)->ngroups = 0;
+
+    // now fetch the list of members!
+
+    *dsize = sizeof(struct auth_state) + (numvals * sizeof(struct auth_ident));
+    *newstate = xzmalloc(*dsize);
+    (*newstate)->ngroups = numvals;
     strcpy((*newstate)->userid.id, canon_id);
     (*newstate)->userid.hash = strhash(canon_id);
     (*newstate)->mark = time(0);
+    int i;
+    int j = 0;
+    for (i = 0; i < numvals; i++) {
+        if (!ptsm->user_attribute) break; // no user attribute, can't set group members
+        if (res2) {
+            ldap_msgfree(res2);
+            res2 = NULL;
+        }
+        rc = ldap_search_st(ptsm->ld, vals[i], LDAP_SCOPE_BASE, "(objectclass=*)", attrs, 0, &(ptsm->timeout), &res2);
+        if (rc != LDAP_SUCCESS) {
+            *reply = "ldap_search(dn) failed";
+            if (rc == LDAP_SERVER_DOWN) {
+                ldap_unbind(ptsm->ld);
+                ptsm->ld = NULL;
+                rc = PTSM_RETRY;
+            } else
+                rc = PTSM_FAIL;
+            goto done;
+        }
+
+        n = ldap_count_entries(ptsm->ld, res2);
+        if (!n) continue; // no DN record (stale pointer) - skip
+
+        entry = ldap_first_entry(ptsm->ld, res2);
+        char **uvals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->user_attribute);
+        int unumvals = ldap_count_values(uvals);
+        int k;
+        for (k = 0; k < unumvals; k++) {
+            // create a group item
+            strlcat((*newstate)->groups[j].id, uvals[k], sizeof((*newstate)->groups[j].id));
+            (*newstate)->groups[j].hash = strhash((*newstate)->groups[j].id);
+            j++;
+        }
+    }
 
     rc = PTSM_OK;
 
@@ -1435,6 +1444,8 @@ done:;
 
     if (res)
         ldap_msgfree(res);
+    if (res2)
+        ldap_msgfree(res2);
     if (filter)
         free(filter);
     if (base)

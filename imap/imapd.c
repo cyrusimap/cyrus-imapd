@@ -545,6 +545,7 @@ static void cmd_undump(char *tag, char *name);
 static void cmd_xfer(const char *tag, const char *name,
                      const char *toserver, const char *topart);
 static void cmd_rename(char *tag, char *oldname, char *newname, char *partition, int noisy);
+static void cmd_raclmodseq(const char *tag, const char *userid);
 static void cmd_reconstruct(const char *tag, const char *name, int recursive);
 static void getlistargs(char *tag, struct listargs *listargs);
 static void cmd_list(char *tag, struct listargs *listargs);
@@ -2161,6 +2162,13 @@ static void cmdloop(void)
                 cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0, /*noisy*/0);
 
                 /* XXX prometheus_increment(CYRUS_IMAP_RENAME_TOTAL); */
+            } else if(!strcmp(cmd.s, "Raclmodseq")) {
+                if (readonly) goto noreadonly;
+                if (c != ' ') goto missingargs;
+                c = getastring(imapd_in, imapd_out, &arg1);
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
+                cmd_raclmodseq(tag.s, arg1.s);
+
             } else if(!strcmp(cmd.s, "Reconstruct")) {
                 if (readonly) goto noreadonly;
                 recursive = 0;
@@ -8235,6 +8243,25 @@ done:
     free(newextname);
     free(olduser);
     free(newuser);
+}
+
+static void cmd_raclmodseq(const char *tag, const char *userid)
+{
+    int r = 0;
+
+    /* administrators only please */
+    if (!imapd_userisadmin)
+        r = IMAP_PERMISSION_DENIED;
+
+    /* touch the modseq */
+    if (!r) r = mboxlist_update_raclmodseq(userid);
+
+    if (r) {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    } else {
+        prot_printf(imapd_out, "%s OK %s\r\n", tag,
+                    error_message(IMAP_OK_COMPLETED));
+    }
 }
 
 /*

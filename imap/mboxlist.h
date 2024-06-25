@@ -289,6 +289,7 @@ int mboxlist_setacls(const char *name, const char *acl, modseq_t foldermodseq, i
 int mboxlist_update_foldermodseq(const char *name, modseq_t foldermodseq);
 
 int mboxlist_set_racls(int enabled);
+int mboxlist_update_raclmodseq(const char *userid);
 
 /* user groups */
 int mboxlist_set_usergroup(const char *userid, const char *group, int val, int silent);

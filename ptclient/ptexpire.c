@@ -144,9 +144,6 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "ptexpire", 0, 0);
 
-    timenow = time(0);
-    syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",
-           (int)expire_time, (int)timenow);
     syslog(LOG_DEBUG, "ptexpire.c %s", PACKAGE_VERSION);
 
     /* open database */
@@ -163,14 +160,29 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if (tofree) free(tofree);
+    if (optind < argc) {
+        int i;
+        for (i = optind; i < argc; i++) {
+	    const char *userid = argv[i];
+            int r = cyrusdb_delete(ptdb, userid, strlen(userid), /*tid*/NULL, /*force*/0);
+            syslog(LOG_INFO, "Removing cache for %s (%s)", userid,
+                   r == CYRUSDB_OK ? "found" : "not-found");
+        }
+    }
+    else {
+        timenow = time(0);
+        syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",
+               (int)expire_time, (int)timenow);
 
-    /* iterate through db, wiping expired entries */
-    cyrusdb_foreach(ptdb, "", 0, expire_p, expire_cb, ptdb, NULL);
+        /* iterate through db, wiping expired entries */
+        cyrusdb_foreach(ptdb, "", 0, expire_p, expire_cb, ptdb, NULL);
+    }
 
     cyrusdb_close(ptdb);
 
     cyrus_done();
+
+    if (tofree) free(tofree);
 
     syslog(LOG_INFO, "finished");
     return 0;
