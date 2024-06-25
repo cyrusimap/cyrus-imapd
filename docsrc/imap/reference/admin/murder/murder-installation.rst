@@ -201,7 +201,6 @@ The front end SERVICES section should now look like this::
   imaps         cmd="imap -s" listen="imaps" prefork=1
   pop3          cmd="pop3d" listen="pop3" prefork=0
   pop3s         cmd="pop3d -s" listen="pop3s" prefork=0
-  kpop          cmd="pop3d -k" listen="kpop" prefork=0
   nntp          cmd="nntpd" listen="nntp" prefork=0
   nntps         cmd="nntpd -s" listen="nntps" prefork=0
   http          cmd="httpd" listen="http" prefork=0

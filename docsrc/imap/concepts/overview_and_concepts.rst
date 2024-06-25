@@ -405,8 +405,6 @@ uses the server identity
 ``imap.host@realm``, where
 ``host`` is the first component of the server's host
 name and ``realm`` is the server's Kerberos realm.
-When the POP3 server is invoked with the ``-k`` switch, the
-server exports MIT's KPOP protocol instead of generic POP3.
 
 The syslog facility
 *******************

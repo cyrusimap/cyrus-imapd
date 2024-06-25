@@ -17,7 +17,7 @@ from other IMAP server implementations in that it is run on *sealed
 nodes*, where users are not normally permitted to log in. The mailbox
 database is stored in parts of the filesystem that are private to the
 Cyrus IMAP system. All user access to mail is through software using
-the IMAP, IMAPS, POP3, POP3S, KPOP, CalDAV and/or CardDAV protocols.
+the IMAP, IMAPS, POP3, POP3S, JMAP, CalDAV and/or CardDAV protocols.
 
 The private mailbox database design gives the Cyrus IMAP server large
 advantages in efficiency, scalability, and administrability. Multiple
