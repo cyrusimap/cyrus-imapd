@@ -504,6 +504,7 @@ static const char* const header_order[] = {
     "Subject",
     "Comments",
     "Keywords",
+    "X-Mailer",
     "Content-ID",
     "Content-Language",
     "Content-Location",
@@ -11026,9 +11027,9 @@ static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
         header = json_pack("{s:s s:s}", "name", "MIME-Version", "value", "1.0");
         _headers_shift_new(&email->headers, header);
     }
-    if (!_email_have_toplevel_header(email, "user-agent")) {
+    if (!_email_have_toplevel_header(email, "x-mailer")) {
         char *tmp = strconcat("Cyrus-JMAP/", CYRUS_VERSION, NULL);
-        header = json_pack("{s:s s:s}", "name", "User-Agent", "value", tmp);
+        header = json_pack("{s:s s:s}", "name", "X-Mailer", "value", tmp);
         _headers_shift_new(&email->headers, header);
         free(tmp);
     }
