@@ -489,12 +489,84 @@ static void _headers_from_mime(const char *base, size_t len, struct headers *hea
     message_foreach_header(base, len, _headers_from_mime_cb, headers);
 }
 
+static const char* const header_order[] = {
+    "MIME-Version",
+    "Date",
+    "From",
+    "Sender",
+    "Reply-To",
+    "To",
+    "Cc",
+    "Bcc",
+    "Message-ID",
+    "In-Reply-To",
+    "References",
+    "Subject",
+    "Comments",
+    "Keywords",
+    "Content-ID",
+    "Content-Language",
+    "Content-Location",
+    "Content-Disposition",
+    "Content-Type",
+    "Content-Transfer-Encoding"
+};
+
+static int _header_compare_common(const void **va, const void **vb)
+{
+    const char *name_a =
+        json_string_value(json_object_get(*((json_t **)va), "name"));
+    const char *name_b =
+        json_string_value(json_object_get(*((json_t **)vb), "name"));
+
+    static size_t header_order_len =
+        sizeof(header_order) / sizeof(header_order[0]);
+
+    // XXX This uses linear search to determine the order of a given
+    // header name, so the overall effort for sorting is O(n*log n*k)
+    // where k stands for the number of entries in `header_order`.
+    // This is likely to be OK as long as the list is short. Switch
+    // to hashing or binary search if the header list grows.
+
+    int pos_a = -1;
+    for (size_t i = 0; i < header_order_len; i++) {
+        if (!strcasecmp(name_a, header_order[i])) {
+            pos_a = i;
+            break;
+        }
+    }
+
+    int pos_b = -1;
+    for (size_t i = 0; i < header_order_len; i++) {
+        if (!strcasecmp(name_b, header_order[i])) {
+            pos_b = i;
+            break;
+        }
+    }
+
+    if (pos_a == -1 && pos_b == -1)
+        return 0;
+    else if (pos_a == -1)
+        return -1;
+    else if (pos_b == -1)
+        return -1;
+    else
+        return pos_a - pos_b;
+}
+
 static int _headers_write_mime(struct headers *headers, FILE *fp)
 {
     json_t *jhdr;
     size_t i;
 
+    ptrarray_t sorted_headers = PTRARRAY_INITIALIZER;
     json_array_foreach(headers->raw, i, jhdr) {
+        ptrarray_append(&sorted_headers, jhdr);
+    }
+    ptrarray_sort(&sorted_headers, _header_compare_common);
+
+    for (i = 0; i < (size_t) ptrarray_size(&sorted_headers); i++) {
+        jhdr = ptrarray_nth(&sorted_headers, i);
         int r = fputs(json_string_value(json_object_get(jhdr, "name")), fp);
         if (r != EOF)
             r = fputs(": ", fp);
@@ -506,6 +578,7 @@ static int _headers_write_mime(struct headers *headers, FILE *fp)
             return -1;
     }
 
+    ptrarray_fini(&sorted_headers);
     return 0;
 }
 
@@ -10947,7 +11020,6 @@ static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
 {
     struct email *email = rock;
     json_t *header;
-    size_t i;
 
     /* Set mandatory and quasi-mandatory headers */
     if (!_email_have_toplevel_header(email, "mime-version")) {
@@ -10980,14 +11052,7 @@ static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
     }
 
     /* Write headers */
-    json_array_foreach(email->headers.raw, i, header) {
-        json_t *jval;
-        jval = json_object_get(header, "name");
-        const char *name = json_string_value(jval);
-        jval = json_object_get(header, "value");
-        const char *value = json_string_value(jval);
-        fprintf(fp, "%s: %s\r\n", name, value);
-    }
+    _headers_write_mime(&email->headers, fp);
 
     /* Write body */
     if (email->body) {
