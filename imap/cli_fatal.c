@@ -44,6 +44,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <sysexits.h>
 
 #include "global.h"
 #include "xmalloc.h"
@@ -60,5 +61,8 @@ EXPORTED void fatal(const char *message, int code)
     recurse_code = code;
     fprintf(stderr, "fatal error: %s\n", message);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }

@@ -619,6 +619,8 @@ EXPORTED void fatal(const char *s, int code)
     syslog(LOG_ERR, "%s", s);
     shut_down(code);
 
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     /* NOTREACHED */
     exit(code); /* shut up GCC */
 }
