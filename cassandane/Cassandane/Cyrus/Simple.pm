@@ -302,7 +302,7 @@ EOF
     $self->assert_str_equals("test\r\n", $res->{1}{binary});
 }
 
-sub test_fatals_abort
+sub test_fatals_abort_enabled
     :NoStartInstances
 {
     my ($self) = @_;
@@ -333,6 +333,32 @@ sub test_fatals_abort
         # don't barf on it existing during shutdown
         unlink $cores[0];
     }
+}
+
+sub test_fatals_abort_disabled
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set(
+        'fatals_abort' => 'no',
+        'prometheus_enabled' => 'no',
+    );
+    $self->_start_instances();
+
+    my $basedir = $self->{instance}->get_basedir();
+
+    # run `promstatsd -1` without having set up for prometheus, which should
+    # produce a "Prometheus metrics are not being tracked..." fatal error
+    eval {
+        $self->{instance}->run_command({ cyrus => 1 }, 'promstatsd', '-1');
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches(qr{promstatsd pid \d+\) exited with code 78},
+                          $e->{'-text'});
+
+    # post-test sanity checks will complain for us if a core was left behind
 }
 
 1;
