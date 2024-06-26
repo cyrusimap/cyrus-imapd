@@ -127,6 +127,9 @@ EXPORTED void fatal(const char* s, int code)
     prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
     prot_flush(deliver_out);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 

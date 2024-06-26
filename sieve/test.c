@@ -58,6 +58,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sysexits.h>
 
 #include "libconfig.h"
 #include "assert.h"
@@ -880,5 +881,8 @@ int main(int argc, char *argv[])
 EXPORTED void fatal(const char* message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
+
+    if (rc != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(rc);
 }

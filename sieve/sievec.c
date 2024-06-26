@@ -47,6 +47,7 @@
 
 #include "sieve_interface.h"
 #include <syslog.h>
+#include <sysexits.h>
 
 #include "libconfig.h"
 #include "xmalloc.h"
@@ -160,5 +161,7 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
 
-    exit(1);
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
+    exit(code);
 }
