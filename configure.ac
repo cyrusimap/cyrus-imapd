@@ -1821,7 +1821,7 @@ dnl
 dnl see if we're compiling replication support programs
 dnl
 AC_ARG_ENABLE(replication,
-        [AS_HELP_STRING([--enable-replication], [enable replication support (experimental)])],,[enable_replication="no";])
+        [AS_HELP_STRING([--enable-replication], [enable replication support])],,[enable_replication="no";])
 AM_CONDITIONAL([REPLICATION], [test "$enable_replication" != no])
 if test "x$enable_replication" = "xyes"; then
         AC_DEFINE(USE_REPLICATION,[],[Build with replication functionality])
