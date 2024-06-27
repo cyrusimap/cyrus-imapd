@@ -198,6 +198,8 @@ EXPORTED void fatal(const char *s, int code)
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
 
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(EX_TEMPFAIL);
 }
 

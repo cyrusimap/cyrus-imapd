@@ -87,6 +87,8 @@ EXPORTED void fatal(const char *msg, int err)
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
 
+    if (err != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(err);
 }
 
