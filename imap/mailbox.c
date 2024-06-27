@@ -1134,6 +1134,11 @@ EXPORTED const char *mailbox_uniqueid(const struct mailbox *mailbox)
     return mbentry->uniqueid ? mbentry->uniqueid : mailbox->h.uniqueid;
 }
 
+EXPORTED const char *mailbox_inboxid(const struct mailbox *mailbox)
+{
+    return mailbox->mbentry->inboxid;
+}
+
 EXPORTED const char *mailbox_partition(const struct mailbox *mailbox)
 {
     return mailbox->mbentry->partition;
@@ -5861,10 +5866,10 @@ EXPORTED int mailbox_create(const char *name,
     mailbox = create_listitem(lockname);
 
     /* needs to be an exclusive namelock to create a mailbox */
-    char *userid = mboxname_to_userid(name);
+    mbname_t *mbname = mbname_from_intname(name);
+    const char *userid = mbname_userid(mbname);
     int haslock = user_isnamespacelocked(userid);
     assert(haslock == LOCK_EXCLUSIVE);
-    free(userid);
 
     r = mboxname_lock(mailbox->lockname, &mailbox->namelock, LOCK_EXCLUSIVE);
     if (r) {
@@ -5879,6 +5884,22 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->mbentry->acl = xstrdup(acl);
     mailbox->mbentry->mbtype = mbtype;
     mailbox->mbentry->uniqueid = xstrdup(uniqueid);
+
+    if (userid) {
+        // add inboxid to mbentry
+        if (!strarray_size(mbname_boxes(mbname)))
+            mailbox->mbentry->inboxid = xstrdup(uniqueid);
+        else {
+            mbentry_t *usermbentry = NULL;
+            mbname_set_boxes(mbname, NULL);
+            mboxlist_lookup(mbname_intname(mbname), &usermbentry, NULL);
+            if (usermbentry) {
+                mailbox->mbentry->inboxid = xstrdup(usermbentry->uniqueid);
+                mboxlist_entry_free(&usermbentry);
+            }
+        }
+    }
+    mbname_free(&mbname);
 
     // fill out the header too
     mailbox->h.name = xstrdup(name);
