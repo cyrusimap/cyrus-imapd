@@ -115,8 +115,6 @@ SASL Authentication
 
     `Cyrus SASL Plain`_, libsasl2-modules, cyrus-sasl-plain, "yes/no", "Required
     to pass Cyrus IMAP's PLAIN authentication unit tests."
-    `Cyrus SASL MD5`_, libsasl2-modules, cyrus-sasl-md5, "yes/no", "Required to
-    pass Cyrus IMAP's DIGEST-MD5 authentication unit tests."
     `sasl binaries`_, sasl2-bin, sasl2-bin, "no", "Administration tools for
     managing SASL."
     `Kerberos`_, libsasl2-modules-gssapi-mit, krb5-devel, "yes/no", "Development
