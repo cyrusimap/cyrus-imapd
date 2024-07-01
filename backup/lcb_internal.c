@@ -91,7 +91,7 @@ HIDDEN int parse_backup_line(struct protstream *in, time_t *ts,
         goto fail;
     }
 
-    if (kin) *kin = dl;
+    *kin = dl;
     if (cmd) buf_copy(cmd, &buf);
     if (ts) *ts = (time_t) t;
     buf_free(&buf);

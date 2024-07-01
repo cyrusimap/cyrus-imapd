@@ -99,6 +99,7 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
                         time_t ts, off_t start, size_t len);
 
 /* parsing data from backup data stream files */
+__attribute__((nonnull(4)))
 int parse_backup_line(struct protstream *in, time_t *ts,
                       struct buf *cmd, struct dlist **kin);
 
