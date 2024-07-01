@@ -16,7 +16,7 @@ sub test_bulk_import_export
     my $single = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
-UID:$uid1
+UID:$uid3
 N:Gump;Forrest;;Mr.
 FN:Forrest Gump
 ORG:Bubba Gump Shrimp Co.
@@ -29,14 +29,14 @@ EOF
 BEGIN:VCARD
 VERSION:4.0
 NICKNAME:me
-UID:$uid2
+UID;VALUE=TEXT:$uid2
 FN:Cyrus Daboo
 EMAIL:cdaboo\@example.com
 END:VCARD
 BEGIN:VCARD
 VERSION:4.0
 NICKNAME:eric
-UID:$uid3
+UID:urn:uuid:$uid1
 FN:Eric York
 END:VCARD
 EOF
@@ -54,7 +54,7 @@ EOF
     $self->assert_num_equals(207, $res->{status});
 
     my $xml = XMLin($res->{content});
-    $self->assert_str_equals($uid1, $xml->{'D:response'}{'D:propstat'}{'D:prop'}{'CS:uid'});
+    $self->assert_str_equals($uid3, $xml->{'D:response'}{'D:propstat'}{'D:prop'}{'CS:uid'});
 
     xlog $self, "Import multiple vCards";
     $res = $CardDAV->{ua}->request('POST', $CardDAV->request_url($Id), {
@@ -65,14 +65,14 @@ EOF
 
     $xml = XMLin($res->{content});
     $self->assert_str_equals($uid2, $xml->{'D:response'}[0]{'D:propstat'}{'D:prop'}{'CS:uid'});
-    $self->assert_str_equals($uid3, $xml->{'D:response'}[1]{'D:propstat'}{'D:prop'}{'CS:uid'});
+    $self->assert_str_equals("urn:uuid:$uid1", $xml->{'D:response'}[1]{'D:propstat'}{'D:prop'}{'CS:uid'});
 
     xlog $self, "Export the vCards";
     $res = $CardDAV->{ua}->request('GET', $CardDAV->request_url($Id), {
         headers => \%Headers,
     });
     $self->assert_num_equals(200, $res->{status});
-    $self->assert_matches(qr/UID:$uid1\r\nN:Gump/, $res->{content});
+    $self->assert_matches(qr/UID:$uid3\r\nN:Gump/, $res->{content});
     $self->assert_matches(qr/UID:$uid2\r\nFN:Cyrus Daboo/, $res->{content});
-    $self->assert_matches(qr/UID:$uid3\r\nFN:Eric York/, $res->{content});
+    $self->assert_matches(qr/UID:$uid1\r\nFN:Eric York/, $res->{content});
 }
