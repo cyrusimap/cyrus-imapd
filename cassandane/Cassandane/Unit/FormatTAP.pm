@@ -37,100 +37,37 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Unit::Runner;
+package Cassandane::Unit::FormatTAP;
 use strict;
 use warnings;
-use base qw(Test::Unit::Runner);
-use Test::Unit::Result;
-use Benchmark;
+use Data::Dumper;
 use IO::File;
 
 use lib '.';
-use Cassandane::Cassini;
+use base qw(Cassandane::Unit::Formatter);
 
 sub new
 {
-    my ($class) = @_;
-
-    my $cassini = Cassandane::Cassini->instance();
-    my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
-    my $failed_file = "$rootdir/failed";
-    # if we can't write there, we just won't record failed tests!
-
-    return bless {
-        remove_me_in_cassandane_child => 1,
-        formatters => [],
-        failed_fh => IO::File->new($failed_file, 'w'),
-    }, $class;
+    my ($class, $fh) = @_;
+    return $class->SUPER::new($fh);
 }
 
-sub create_test_result
-{
-    my ($self) = @_;
-    $self->{_result} = Test::Unit::Result->new();
-    return $self->{_result};
-}
-
-sub add_formatter
-{
-    my ($self, $formatter) = @_;
-
-    push @{$self->{formatters}}, $formatter;
-}
-
-sub do_run
-{
-    my ($self, $suite) = @_;
-    my $result = $self->create_test_result();
-
-    $result->add_listener($self);
-    foreach my $f (@{$self->{formatters}}) {
-        $result->add_listener($f);
-    }
-
-    my $start_time = new Benchmark();
-    $suite->run($result, $self);
-    my $end_time = new Benchmark();
-
-    foreach my $f (@{$self->{formatters}}) {
-        $f->finished($result, $start_time, $end_time);
-    }
-
-    return $result->was_successful;
-}
-
-sub start_suite { }
-
-sub start_test { }
-
-sub end_test { }
-
-sub add_pass { }
-
-sub record_failed
+sub start_test
 {
     my ($self, $test) = @_;
-    return if not $self->{failed_fh};
-
-    my $suite = ref($test);
-    $suite =~ s/^Cassandane:://;
-
-    my $testname = $test->{"Test::Unit::TestCase_name"};
-    $testname =~ s/^test_//;
-
-    $self->{failed_fh}->print("$suite.$testname\n");
+    $self->_print('.');
 }
 
 sub add_error
 {
-    my ($self, $test) = @_;
-    $self->record_failed($test);
+    my ($self, $test, $exception) = @_;
+    $self->_print('E');
 }
 
 sub add_failure
 {
-    my ($self, $test) = @_;
-    $self->record_failed($test);
+    my ($self, $test, $exception) = @_;
+    $self->_print('F');
 }
 
 1;
