@@ -202,15 +202,16 @@ eval
         my ($plan, $fh) = @_;
         local *__ANON__ = "runner_xml";
 
-        my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
+        my $runner = Cassandane::Unit::RunnerXML->new({
+            directory => $output_dir
+        });
         my @filters = qw(x skip_version skip_missing_features
                          skip_runtime_check
                          enable_wanted_properties);
         push @filters, 'skip_slow' if $plan->{skip_slow};
         push @filters, 'slow_only' if $plan->{slow_only};
         $runner->filter(@filters);
-        $runner->start($plan);
-        return $runner->all_tests_passed();
+        return $runner->do_run($plan, 0);
     };
 };
 if ($@) {

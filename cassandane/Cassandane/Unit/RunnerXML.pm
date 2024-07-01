@@ -38,39 +38,37 @@
 #
 
 package Cassandane::Unit::RunnerXML;
+use strict;
+use warnings;
+use vars qw($VERSION);
 
 use XML::Generator;
 use Time::HiRes qw(time);
 use Sys::Hostname;
 use POSIX qw(strftime);
 
-use strict;
-use warnings;
-use vars qw($VERSION);
-# XXX should this inherit from our own Cassandane::Unit::Runner?
-use base qw(Test::Unit::Runner);
+use lib '.';
+use base qw(Cassandane::Unit::Runner);
 
 # $Id: XML.pm 27 2004-08-24 11:22:24Z andrew $
 $VERSION = '0.1';
 
 sub new {
-    my ($class, $directory, $generator) = @_;
+    my ($class, $params, @args) = @_;
 
-    $generator ||= XML::Generator->new(escape => 'always', pretty => 2);
+    my $self = $class->SUPER::new(@args);
 
-    return bless({directory => $directory, gen => $generator,
-                  all_tests_passed => 1,
-                  classrecs => {}},
-                 $class);
+    $params->{generator} ||= XML::Generator->new(escape => 'always',
+                                                 pretty => 2);
+
+    $self->{directory} = $params->{directory};
+    $self->{gen} = $params->{generator};
+    $self->{classrecs} = {};
+
+    return $self;
 }
 
-sub all_tests_passed {
-    my ($self) = @_;
-
-    return $self->{all_tests_passed};
-}
-
-sub start {
+sub do_run {
     my ($self, $suite) = @_;
 
     my $result = $self->create_test_result();
@@ -78,6 +76,7 @@ sub start {
     my $start_time = time();
     $suite->run($result, $self);
     $self->_emit_xml();
+    return $result->was_successful;
 }
 
 sub _classrec {
@@ -115,7 +114,6 @@ sub add_failure {
     my $cr = $self->_classrec($test);
     my $tr = $self->_testrec($test);
     $cr->{failures}++;
-    $self->{all_tests_passed} = 0;
     push(@{$tr->{child_nodes}},
          $self->{gen}->failure({type => _extype($exception),
                                 message => $exception->get_message()},
@@ -128,7 +126,6 @@ sub add_error {
     my $cr = $self->_classrec($test);
     my $tr = $self->_testrec($test);
     $cr->{errors}++;
-    $self->{all_tests_passed} = 0;
     push(@{$tr->{child_nodes}},
          $self->{gen}->error({type => _extype($exception),
                               message => $exception->get_message()},
