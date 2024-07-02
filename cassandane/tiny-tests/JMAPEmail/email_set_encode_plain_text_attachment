@@ -2,8 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_set_encode_plain_text_attachment
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap
-    :needs_dependency_chardet
+    :needs_component_sieve :needs_component_jmap :needs_dependency_chardet
 {
     my ($self) = @_;
 
@@ -49,8 +48,18 @@ sub test_email_set_encode_plain_text_attachment
             fetchAllBodyValues => JSON::true,
         }, 'R2' ],
     ]);
+
+    xlog $self, "Assert that bare LF in inlined plain text gets expanded to CR LF";
     my $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[1];
-    $self->assert_str_equals(' QUOTED-PRINTABLE', $subPart->{'header:Content-Transfer-Encoding'});
+    $self->assert_str_equals(' 7bit', $subPart->{'header:Content-Transfer-Encoding'});
+    my $subPartBlob = $jmap->Download('cassandane', $subPart->{blobId});
+    $self->assert_str_equals("This line ends with a LF\r\nThis line does as well\r\n",
+        $subPartBlob->{content});
+
+    xlog $self, "Assert that bare LF in attached plain text is kept as-is";
     $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[2];
-    $self->assert_str_equals(' BASE64', $subPart->{'header:Content-Transfer-Encoding'});
+    $self->assert_str_equals(' base64', $subPart->{'header:Content-Transfer-Encoding'});
+    $subPartBlob = $jmap->Download('cassandane', $subPart->{blobId});
+    $self->assert_str_equals("This line ends with a LF\nThis line does as well\n",
+        $subPartBlob->{content});
 }

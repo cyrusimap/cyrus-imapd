@@ -48,6 +48,7 @@
 
 #include "assert.h"
 #include "libcyr_cfg.h"
+#include "charset.h"
 #include "cyrusdb.h"
 #include "xmalloc.h"
 #include "util.h"
@@ -271,6 +272,7 @@ EXPORTED void libcyrus_run_delayed(void)
 
 EXPORTED void libcyrus_init(void)
 {
+    charset_lib_init();
     cyrusdb_init();
 }
 
@@ -278,4 +280,5 @@ EXPORTED void libcyrus_done(void)
 {
     libcyrus_run_delayed();
     cyrusdb_done();
+    charset_lib_done();
 }
