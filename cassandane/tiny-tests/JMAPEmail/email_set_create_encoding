@@ -2,6 +2,9 @@
 use Cassandane::Tiny;
 use Encode qw(decode encode);
 use MIME::Base64 qw(encode_base64);
+use File::Temp qw(tempfile);
+use Clone 'clone';
+use Data::UUID;
 
 sub test_email_set_create_encoding
     :needs_component_jmap
@@ -9,6 +12,10 @@ sub test_email_set_create_encoding
     my ($self) = @_;
     my $jmap = $self->{jmap};
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
+
+    # Optionally persist tests in file.
+    my $writeEmail2MimeTests = 0;
+    my $uuidgen = Data::UUID->new;
 
     my @textTests = ({
         desc => 'text/plain without charset',
@@ -43,13 +50,10 @@ sub test_email_set_create_encoding
         bodyStructure => {
             type => 'text/plain',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/charset'],
-        },
+        wantInvalidProperties => ['bodyStructure/charset'],
     }, {
         desc => 'text/plain UTF-8 without charset from EmailBodyValue',
-        bodyValue => encode('utf-8', "some \N{TOMATO} utf-8"),
+        bodyValue => "some \N{TOMATO} utf-8",
         bodyStructure => {
             type => 'text/plain',
         },
@@ -147,10 +151,7 @@ sub test_email_set_create_encoding
         bodyStructure => {
             type => 'text/plain',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/charset'],
-        },
+        wantInvalidProperties => ['bodyStructure/charset'],
     }, {
         desc => 'text/plain with multi-byte UTF-8 and us-ascii charset',
         blob => "$ to \xc2\xa3",
@@ -158,10 +159,7 @@ sub test_email_set_create_encoding
             type => 'text/plain',
             charset => 'us-ascii',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/charset'],
-        },
+        wantInvalidProperties => ['bodyStructure/charset'],
     }, {
         desc => 'text/plain with multi-byte UTF-8 as attachment',
         blob => "$ to \xc2\xa3",
@@ -187,10 +185,7 @@ sub test_email_set_create_encoding
             type => 'text/plain',
             charset => 'utf-8',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/charset'],
-        },
+        wantInvalidProperties => ['bodyStructure/charset'],
     }, {
         desc => 'text/plain with invalid UTF-8 as attachment',
         blob => "bogus \xe2\x28\xa1 data",
@@ -337,10 +332,7 @@ sub test_email_set_create_encoding
         bodyStructure => {
             type => 'message/rfc822',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/rfc822 with bare LF',
         blob =>
@@ -355,10 +347,7 @@ sub test_email_set_create_encoding
         bodyStructure => {
             type => 'message/rfc822',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/rfc822 with bare CR',
         blob =>
@@ -373,10 +362,7 @@ sub test_email_set_create_encoding
         bodyStructure => {
             type => 'message/rfc822',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/rfc822 with long MIME line',
         blob =>
@@ -439,50 +425,35 @@ sub test_email_set_create_encoding
         bodyStructure => {
             'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/partial with bare LF char',
         blob => "Some LF\n partial",
         bodyStructure => {
             'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/partial with bare CR char',
         blob => "Some CR\r partial",
         bodyStructure => {
             'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/partial with long MIME line',
         blob => ("long" x 250) . "\r\nline",
         bodyStructure => {
             'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/partial with UTF-8 char',
         blob => encode('utf-8', "some \N{TOMATO} utf-8"),
         bodyStructure => {
             'header:content-type' => ' message/partial; number=2; total=3; id="2Yt4s@example.com"',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/global with 7bit content',
         blob =>
@@ -529,10 +500,7 @@ sub test_email_set_create_encoding
         bodyStructure => {
             type => 'message/global',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/global with bare LF',
         blob =>
@@ -547,10 +515,7 @@ sub test_email_set_create_encoding
         bodyStructure => {
             type => 'message/global',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/global with bare CR',
         blob =>
@@ -565,10 +530,7 @@ sub test_email_set_create_encoding
         bodyStructure => {
             type => 'message/global',
         },
-        wantErr => {
-            type => 'invalidProperties',
-            properties => ['bodyStructure/type'],
-        },
+        wantInvalidProperties => ['bodyStructure/type'],
     }, {
         desc => 'message/global with long MIME line',
         blob =>
@@ -650,6 +612,9 @@ sub test_email_set_create_encoding
 
     my @tests = (@textTests, @rfc822Tests, @otherTests);
 
+    # We optionally keep all test input and results in here.
+    my @email2MimeTests;
+
     while (my ($i, $tc) = each @tests) {
         my $emailCreationId = "email" . ($i + 1);
         my $email = {
@@ -657,9 +622,16 @@ sub test_email_set_create_encoding
                 '$inbox' => JSON::true
             },
             from => [{ email => q{foo@bar} }],
-            subject => $emailCreationId,
+            subject => "$tc->{desc} ($emailCreationId)",
             bodyStructure => $tc->{bodyStructure},
         };
+
+        if ($writeEmail2MimeTests) {
+            # Make this email as reproducible as possible.
+            $email->{'header:X-Mailer'} = 'email2MimeTest';
+            $email->{'header:Date'} = 'Thu, 20 Jun 2024 13:28:51 +0200';
+            $email->{messageId} = [$uuidgen->create_str() . '@local'];
+        }
 
         my @jmapMethods = (
             ['Email/set', {
@@ -678,14 +650,14 @@ sub test_email_set_create_encoding
             }, 'getEmail' ]
         );
 
+        my $blobCreationId = "blob" . ($i + 1);
         if ($tc->{blob}) {
-            my $blobCreationId = "blob" . ($i + 1);
             unshift(@jmapMethods,
                 ['Blob/upload', {
                     create => {
                         $blobCreationId => {
                             data => [{
-                                'data:asBase64' => encode_base64($tc->{blob})
+                                'data:asBase64' => encode_base64($tc->{blob}, "")
                             }],
                         },
                     },
@@ -703,10 +675,12 @@ sub test_email_set_create_encoding
         my %jmapResponses = map { $_->[2] => $_->[1] } @{$res};
 
         xlog $self, "Assert test result";
-        if ($tc->{wantErr}) {
+        if ($tc->{wantInvalidProperties}) {
             my $jres = $jmapResponses{createEmail};
-            $self->assert_deep_equals($tc->{wantErr},
-                $jmapResponses{createEmail}{notCreated}{$emailCreationId});
+            $self->assert_deep_equals({
+                    type => 'invalidProperties',
+                    properties => $tc->{wantInvalidProperties},
+                }, $jmapResponses{createEmail}{notCreated}{$emailCreationId});
         } else {
             my $jres = $jmapResponses{createEmail};
             $self->assert_not_null($jmapResponses{createEmail}{
@@ -732,8 +706,43 @@ sub test_email_set_create_encoding
                 $self->assert_str_equals(
                     $tc->{bodyValue}, decode('utf-8', $res->{content}));
             }
-
-
         }
+
+        if ($writeEmail2MimeTests) {
+            my $mimeTest = {
+                id => $emailCreationId,
+                desc => $tc->{desc},
+                email => clone($email)
+            };
+            delete $mimeTest->{email}{mailboxIds};
+            if ($tc->{blob}) {
+                $mimeTest->{blobs} = {
+                    $blobCreationId => encode_base64($tc->{blob}, ""),
+                };
+            }
+            if ($tc->{wantInvalidProperties}) {
+                $mimeTest->{want} = {
+                    invalidProperties => clone($tc->{wantInvalidProperties}),
+                };
+            } else {
+                my $emailBlobId = $jmapResponses{createEmail}{
+                    created}{$emailCreationId}{blobId};
+                my $res = $jmap->Download('cassandane', $emailBlobId);
+                $mimeTest->{want} = {
+                    mimeMessage => encode_base64($res->{content}, "")
+                };
+            }
+            push(@email2MimeTests, $mimeTest);
+        }
+    }
+
+    if (@email2MimeTests) {
+        my $date = DateTime->now()->strftime('%Y%m%d');
+        my ($outfh, $outfname) = tempfile(
+            TEMPLATE => "email_set_create_encoding-$date-XXXXX",
+            DIR =>  $self->{instance}->{basedir} . "/tmp",
+            SUFFIX => '.json');
+        print $outfh JSON->new->pretty->encode(\@email2MimeTests);
+        close $outfh;
     }
 }
