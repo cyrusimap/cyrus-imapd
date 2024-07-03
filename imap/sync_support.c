@@ -3443,7 +3443,6 @@ int sync_sieve_upload(const char *userid, const char *fname,
     snprintf(name, sizeof(name), "%.*s", (int) (ext - fname), fname);
     r = sievedb_lookup_name(db, name, &sdata, 0);
     if (r == CYRUSDB_NOTFOUND) {
-        buf_init_ro(&buf, content, len);
         sdata->name = name;
     }
     else if (r) {
@@ -3451,6 +3450,7 @@ int sync_sieve_upload(const char *userid, const char *fname,
         goto done;
     }
 
+    buf_init_ro(&buf, content, len);
     r = sieve_script_store(mailbox, sdata, &buf);
 
   done:
