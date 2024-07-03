@@ -3241,6 +3241,36 @@ EXPORTED void icalcomponent_set_jmapid(icalcomponent *comp, const char *id)
     icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
     icalcomponent_add_property(comp, prop);
 }
+
+EXPORTED char *icalparameter_get_sanitized_cn_r(icalparameter *param)
+{
+    const char *cn = icalparameter_get_cn(param);
+    if (!cn) return NULL;
+
+    struct buf buf = BUF_INITIALIZER;
+
+    if (strcspn(cn, MIME_TSPECIALS) < strlen(cn)) {
+        struct address *a = NULL;
+        parseaddr_list(cn, &a);
+        if (a && a->name) buf_setcstr(&buf, a->name);
+        parseaddr_free(a);
+    }
+    else {
+        buf_setcstr(&buf, cn);
+    }
+
+    buf_trim(&buf);
+
+    if (buf_cstringnull_ifempty(&buf)) {
+        return buf_release(&buf);
+    }
+    else {
+        buf_free(&buf);
+        return NULL;
+    }
+}
+
 #endif
+
 
 #endif /* HAVE_ICAL */
