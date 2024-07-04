@@ -1,0 +1,106 @@
+#!perl
+use Cassandane::Tiny;
+use Data::UUID;
+
+sub test_calendarevent_get_sanitize_participant_name
+  : needs_component_httpd needs_component_jmap {
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $jmap    = $self->{jmap};
+    my $caldav  = $self->{caldav};
+
+    my @testCases = (
+        {
+            cn       => 'Testy McTest',
+            wantName => 'Testy McTest',
+        },
+        {
+            cn       => 'Testy McTest <Testy McTest>',
+            wantName => 'Testy McTest',
+        },
+        {
+            cn       => 'Testy McTest <mtctest@example.com>',
+            wantName => 'Testy McTest',
+        },
+        {
+            cn       => 'Testy McTest <>',
+            wantName => 'Testy McTest',
+        },
+        {
+            cn       => 'mtctest@example.com',
+            wantName => undef,
+        },
+        {
+            cn       => '<mtctest@example.com>',
+            wantName => undef,
+        },
+        {
+            cn       => '<Testy>',
+            wantName => undef,
+        }
+    );
+
+    my $uuidgen = Data::UUID->new;
+
+    my $res
+      = $jmap->CallMethods([ [ 'CalendarEvent/get', { ids => [], }, 'R1' ] ]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    for my $tc (@testCases) {
+        my $uid  = $uuidgen->create_str;
+        my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Foo//Bar//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:$uid
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART:20240703T153000Z
+DTSTAMP:20240703T153000Z
+SEQUENCE:0
+ORGANIZER;CN=$tc->{cn}:MAILTO:mctest\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+        $caldav->Request(
+            'PUT', "Default/$uid.ics", $ical,
+            'Content-Type' => 'text/calendar'
+        );
+
+        my $res = $jmap->CallMethods([
+            [
+                'CalendarEvent/changes', {
+                    sinceState => $state
+                }, 'R1'
+            ],
+            [
+                'CalendarEvent/get',
+                {
+                    '#ids' => {
+                        resultOf => 'R1',
+                        path     => '/created',
+                        name     => 'CalendarEvent/changes',
+                    },
+                    properties => ['participants'],
+                },
+                'R1'
+            ]
+        ]);
+
+        my $participant
+          = (grep { $_->{roles}{owner} } values %{ $res->[1][1]{list}[0]{participants} })[0];
+        $self->assert_not_null($participant);
+        if ($tc->{wantName}) {
+            $self->assert_str_equals($tc->{wantName}, $participant->{name});
+        } else {
+            $self->assert_null($tc->{wantName});
+        }
+        $state = $res->[1][1]{state};
+    }
+}
+

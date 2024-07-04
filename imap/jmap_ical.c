@@ -2438,11 +2438,11 @@ static json_t *participant_from_ical(icalproperty *prop,
     }
 
     /* name */
-    const char *name = NULL;
     param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
     if (param) {
-        name = icalparameter_get_cn(param);
-        if (name && *name) json_object_set_new(p, "name", json_string(name));
+        char *name = icalparameter_get_sanitized_cn_r(param);
+        if (name) json_object_set_new(p, "name", json_string(name));
+        free(name);
     }
 
     /* kind */
