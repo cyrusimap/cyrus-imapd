@@ -78,6 +78,19 @@ sub add_formatter
     push @{$self->{formatters}}, $formatter;
 }
 
+# this is very similar to Test::Unit::Result's tell_listeners(), except
+# without the annoying crash when the listener doesn't care about the event
+sub tell_formatters
+{
+    my ($self, $method, @args) = @_;
+
+    foreach my $formatter (@{$self->{formatters}}) {
+        if ($formatter->can($method)) {
+            $formatter->$method(@args);
+        }
+    }
+}
+
 sub do_run
 {
     my ($self, $suite) = @_;
