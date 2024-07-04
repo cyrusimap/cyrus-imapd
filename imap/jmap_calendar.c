@@ -4092,11 +4092,17 @@ static int jmap_calendarevent_get(struct jmap_req *req)
 
     if (hashu64_count(&rock.cache_jsevents)) {
         r = caldav_begin(db);
-        if (!r) hashu64_enumerate(&rock.cache_jsevents,
+        if (!r) {
+            hashu64_enumerate(&rock.cache_jsevents,
                 cachecalendarevents_cb, &rock);
-        if (r) caldav_abort(db);
-        else r = caldav_commit(db);
-        if (r) goto done;
+            r = caldav_commit(db);
+        }
+        if (r) {
+            xsyslog(LOG_ERR, "failed to cache calendar events, ignoring error",
+                    "userid=<%s> accountid=<%s> err=<%s>",
+                    req->userid, req->accountid, error_message(r));
+            r = 0;
+        }
     }
 
     /* Build response */
