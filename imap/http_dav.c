@@ -3816,7 +3816,7 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
         return HTTP_BAD_REQUEST;
     }
     else {
-        xmlErrorPtr err = xmlCtxtGetLastError(txn->conn->xml);
+        xmlErrorPtr err = (xmlErrorPtr) xmlCtxtGetLastError(txn->conn->xml);
         if (err) {
             xmlFreeDoc(doc);
             txn->error.desc = err->message;
