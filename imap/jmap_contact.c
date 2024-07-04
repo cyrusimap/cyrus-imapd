@@ -630,6 +630,26 @@ static const jmap_property_t contact_props[] = {
         NULL,
         0
     },
+    {
+        "phoneticFirstName",
+        NULL,
+        0
+    },
+    {
+        "phoneticMiddleName",
+        NULL,
+        0
+    },
+    {
+        "phoneticLastName",
+        NULL,
+        0
+    },
+    {
+        "phoneticCompany",
+        NULL,
+        0
+    },
 
     /* FM extensions */
     {
@@ -1747,6 +1767,30 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             if (label) json_object_set_new(item, "label", json_string(label));
             json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
             json_array_append_new(online, item);
+        }
+        else if (!strncasecmp(entry->name, "x-phonetic-", 11)) {
+            /* Apple supports phonetic properties for names and company */
+            const char *pname = entry->name + 11;
+            if (!strcasecmp(pname, "first-name")) {
+                json_object_set_new(obj, "phoneticFirstName",
+                        jmap_utf8string(entry->v.value));
+            }
+            if (!strcasecmp(pname, "middle-name")) {
+                json_object_set_new(obj, "phoneticMiddleName",
+                        jmap_utf8string(entry->v.value));
+            }
+            else if (!strcasecmp(pname, "last-name")) {
+                json_object_set_new(obj, "phoneticLastName",
+                        jmap_utf8string(entry->v.value));
+            }
+            else if (!strcasecmp(pname, "org")) {
+                // Apple Contacts.app only supports setting
+                // a phonetic company, not a department.
+                // So despite this being an ORG property
+                // it is single-valued in practice.
+                json_object_set_new(obj, "phoneticCompany",
+                        jmap_utf8string(entry->v.value));
+            }
         }
     }
 
@@ -3678,6 +3722,7 @@ static int _json_to_card(struct jmap_req *req,
     int name_is_dirty = 0;
     int has_noncontent = 0;
     int record_is_dirty = 0;
+    struct buf buf = BUF_INITIALIZER;
 
     /* we'll be updating you later anyway... create early so that it's
      * at the top of the card */
@@ -3898,6 +3943,28 @@ static int _json_to_card(struct jmap_req *req,
             }
             record_is_dirty = 1;
         }
+        else if (!strncmp(key, "phonetic", 8)) {
+            const char *pname = NULL;
+            if (!strcmp(key + 8, "FirstName"))
+                pname = "X-PHONETIC-FIRST-NAME";
+            else if (!strcmp(key + 8, "MiddleName"))
+                pname = "X-PHONETIC-MIDDLE-NAME";
+            else if (!strcmp(key + 8, "LastName"))
+                pname = "X-PHONETIC-LAST-NAME";
+            else if (!strcmp(key + 8, "Company"))
+                pname = "X-PHONETIC-ORG";
+
+            if (json_is_string(jval) && pname) {
+                buf_setcstr(&buf, json_string_value(jval));
+                buf_trim(&buf);
+                if (buf_len(&buf)) {
+                    vparse_add_entry(card, NULL, pname, buf_cstring(&buf));
+                }
+            }
+            else if (!pname || JNOTNULL(jval)) {
+                json_array_append_new(invalid, json_string(key));
+            }
+        }
         else {
             json_array_append_new(invalid, json_string(key));
         }
@@ -3913,6 +3980,7 @@ static int _json_to_card(struct jmap_req *req,
     if (!record_is_dirty && has_noncontent)
         return HTTP_NO_CONTENT;  /* no content */
 
+    buf_free(&buf);
     return 0;
 }
 
