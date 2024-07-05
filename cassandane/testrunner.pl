@@ -45,9 +45,9 @@ use File::Slurp;
 
 use lib '.';
 use Cassandane::Util::Setup;
+use Cassandane::Unit::FormatPretty;
 use Cassandane::Unit::FormatTAP;
 use Cassandane::Unit::Runner;
-use Cassandane::Unit::RunnerPretty;
 use Cassandane::Unit::TestPlan;
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
@@ -146,36 +146,22 @@ my %formatters = (
             return Cassandane::Unit::FormatTAP->new($fh);
         },
     },
-);
-my %runners =
-(
-    pretty => sub
-    {
-        my ($plan, $fh) = @_;
-        local *__ANON__ = "runner_pretty";
-        my $runner = Cassandane::Unit::RunnerPretty->new({}, $fh);
-        my @filters = qw(x skip_version skip_missing_features
-                         skip_runtime_check
-                         enable_wanted_properties);
-        push @filters, 'skip_slow' if $plan->{skip_slow};
-        push @filters, 'slow_only' if $plan->{slow_only};
-        $runner->filter(@filters);
-        return $runner->do_run($plan, 0);
+    pretty => {
+        writes_to_stdout => 1,
+        formatter => sub {
+            my ($fh) = @_;
+            return Cassandane::Unit::FormatPretty->new({}, $fh);
+        },
     },
-    prettier => sub
-    {
-        my ($plan, $fh) = @_;
-        local *__ANON__ = "runner_prettier";
-        my $runner = Cassandane::Unit::RunnerPretty->new({quiet=>1}, $fh);
-        my @filters = qw(x skip_version skip_missing_features
-                         skip_runtime_check
-                         enable_wanted_properties);
-        push @filters, 'skip_slow' if $plan->{skip_slow};
-        push @filters, 'slow_only' if $plan->{slow_only};
-        $runner->filter(@filters);
-        return $runner->do_run($plan, 0);
+    prettier => {
+        writes_to_stdout => 1,
+        formatter => sub {
+            my ($fh) = @_;
+            return Cassandane::Unit::FormatPretty->new({quiet=>1}, $fh);
+        },
     },
 );
+my %runners = ();
 
 become_cyrus();
 
@@ -385,7 +371,7 @@ else
     $plan->schedule(@names);
 
     # Run the schedule
-    $want_formats{tap} = 1 if not scalar keys %want_formats;
+    $want_formats{prettier} = 1 if not scalar keys %want_formats;
     my @writes_to_stdout = grep {
         $formatters{$_}->{writes_to_stdout}
     } keys %want_formats;
