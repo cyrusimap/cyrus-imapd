@@ -37,7 +37,7 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Unit::RunnerXML;
+package Cassandane::Unit::FormatXML;
 use strict;
 use warnings;
 use vars qw($VERSION);
@@ -48,9 +48,8 @@ use Sys::Hostname;
 use POSIX qw(strftime);
 
 use lib '.';
-use base qw(Cassandane::Unit::Runner);
+use base qw(Cassandane::Unit::Formatter);
 
-# $Id: XML.pm 27 2004-08-24 11:22:24Z andrew $
 $VERSION = '0.1';
 
 sub new {
@@ -66,17 +65,6 @@ sub new {
     $self->{classrecs} = {};
 
     return $self;
-}
-
-sub do_run {
-    my ($self, $suite) = @_;
-
-    my $result = $self->create_test_result();
-    $result->add_listener($self);
-    my $start_time = time();
-    $suite->run($result, $self);
-    $self->_emit_xml();
-    return $result->was_successful;
 }
 
 sub _classrec {
@@ -96,8 +84,6 @@ sub _testrec {
     return $cr->{testrecs}->{$test->name()} ||=
                 { start_time => 0, node => undef, child_nodes => [] };
 }
-
-sub add_pass {}
 
 sub _extype
 {
@@ -194,6 +180,16 @@ sub _emit_xml {
     }
 }
 
+sub finished
+{
+    my ($self, $result, $start_time, $end_time) = @_;
+
+    # XXX This class does all its own accounting, which is probably
+    # XXX redundant since it doesn't report anything that it couldn't
+    # XXX just get from the usual $result/$start_time/$end_time args.
+    $self->_emit_xml();
+}
+
 sub _xml_filename {
     my ($self, $class) = @_;
 
@@ -202,72 +198,3 @@ sub _xml_filename {
 }
 
 1;
-
-__END__
-
-
-=head1 NAME
-
-Test::Unit::Runner::XML - Generate XML reports from unit test results
-
-=head1 SYNOPSIS
-
-    use Test::Unit::Runner::XML;
-
-    mkdir("test_reports");
-    my $runner = Test::Unit::Runner::XML->new("test-reports");
-    $runner->start($test);
-    exit(!$runner->all_tests_passed());
-
-=head1 DESCRIPTION
-
-Test::Unit::Runner::XML generates XML reports from unit test results. The
-reports are in the same format as those produced by Ant's JUnit task,
-allowing them to be used with Java continuous integration and reporting tools.
-
-=head1 CONSTRUCTOR
-
-    Test::Unit::Runner::XML->new($directory)
-
-Construct a new runner that will write XML reports into $directory
-
-=head1 METHODS
-
-=head2 start
-
-    $runner->start($test);
-
-Run the L<Test::Unit::Test> $test and generate XML reports from the results.
-
-=head2 all_tests_passed
-
-    exit(!$runner->all_tests_passed());
-
-Return true if all tests executed by $runner since it was constructed passed.
-
-=head1 AUTHOR
-
-Copyright (c) 2004 Andrew Eland, E<lt>andrew@andreweland.orgE<gt>.
-
-All rights reserved. This program is free software; you can
-redistribute it and/or modify it under the same terms as Perl itself.
-
-=head1 SEE ALSO
-
-=over 4
-
-=item *
-
-L<Test::Unit>
-
-=item *
-
-L<Test::Unit::TestRunner>
-
-=item *
-
-The Ant JUnit task, http://ant.apache.org/
-
-=cut
-
-

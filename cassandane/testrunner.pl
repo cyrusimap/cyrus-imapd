@@ -47,6 +47,7 @@ use lib '.';
 use Cassandane::Util::Setup;
 use Cassandane::Unit::FormatPretty;
 use Cassandane::Unit::FormatTAP;
+use Cassandane::Unit::FormatXML;
 use Cassandane::Unit::Runner;
 use Cassandane::Unit::TestPlan;
 use Cassandane::Util::Log;
@@ -160,49 +161,34 @@ my %formatters = (
             return Cassandane::Unit::FormatPretty->new({quiet=>1}, $fh);
         },
     },
+    xml => {
+        writes_to_stdout => 0,
+        formatter => sub {
+            my ($fh) = @_;
+            return Cassandane::Unit::FormatXML->new({
+                directory => $output_dir
+            });
+        },
+    },
 );
-my %runners = ();
 
 become_cyrus();
 
-eval
-{
-    require Cassandane::Unit::RunnerXML;
-
-    if ( ! -d $output_dir )
-    {
+eval {
+    if ( ! -d $output_dir ) {
         mkdir($output_dir)
             or die "Cannot make output directory \"$output_dir\": $!\n";
     }
 
-    if (! -w $output_dir )
-    {
+    if (! -w $output_dir ) {
         die "Cannot write to output directory \"$output_dir\"\n";
     }
-
-    $runners{xml} = sub
-    {
-        my ($plan, $fh) = @_;
-        local *__ANON__ = "runner_xml";
-
-        my $runner = Cassandane::Unit::RunnerXML->new({
-            directory => $output_dir
-        });
-        my @filters = qw(x skip_version skip_missing_features
-                         skip_runtime_check
-                         enable_wanted_properties);
-        push @filters, 'skip_slow' if $plan->{skip_slow};
-        push @filters, 'slow_only' if $plan->{slow_only};
-        $runner->filter(@filters);
-        return $runner->do_run($plan, 0);
-    };
 };
 if ($@) {
     my $eval_err = $@;
-    $runners{xml} = sub
-    {
-        print STDERR "Sorry, XML output format not available due to:\n=> $eval_err";
-        return 0;
+    $formatters{xml}->{formatter} = sub {
+        die "Sorry, XML output format not available due to:\n",
+            "=> $eval_err";
     };
 }
 
