@@ -116,6 +116,7 @@ sub new
     $config->set(icalendar_max_size => 100000);
     $config->set(event_extra_params => 'vnd.cmu.davFilename vnd.cmu.davUid');
     $config->set(event_groups => 'calendar');
+    $config->set(imipnotifier => 'imip');
     return $class->SUPER::new({
         config => $config,
         adminstore => 1,
