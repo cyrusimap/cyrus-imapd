@@ -71,6 +71,7 @@ sub new
                  defaultdomain => 'example.com',
                  httpallowcompress => 'no',
                  httpmodules => 'carddav caldav jmap',
+                 imipnotifier => 'imip',
                  icalendar_max_size => 100000,
                  jmap_nonstandard_extensions => 'yes',
                  jmapsubmission_deleteonsend => 'no',
