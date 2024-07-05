@@ -106,6 +106,7 @@ sub new
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
     $config->set(icalendar_max_size => 100000);
+    $config->set(imipnotifier => 'imip');
     return $class->SUPER::new({
         config => $config,
         adminstore => 1,

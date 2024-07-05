@@ -66,6 +66,7 @@ sub new
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
+                 imipnotifier => 'imip',
                  notesmailbox => 'Notes',
                  jmap_nonstandard_extensions => 'yes');
 

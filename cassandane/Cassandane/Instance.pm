@@ -680,6 +680,10 @@ sub _generate_imapd_conf
 {
     my ($self) = @_;
 
+    # Be very careful about setting $self->{config} options in this
+    # function.  Anything that is set here cannot be varied
+    # per test!
+
     if (defined $self->{services}->{http}) {
         my $davhost = $self->{services}->{http}->host;
         if (defined $self->{services}->{http}->port) {
@@ -706,7 +710,6 @@ sub _generate_imapd_conf
         event_notifier => 'pusher',
     );
     if ($cyrus_major_version >= 3) {
-        $self->{config}->set(imipnotifier => 'imip');
         $self->{config}->set_bits('event_groups',
                                   'mailbox message flags calendar');
 

@@ -71,6 +71,7 @@ sub new
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
+                 imipnotifier => 'imip',
                  sync_log => 'yes',
                  jmap_nonstandard_extensions => 'yes',
                  defaultdomain => 'example.com');
